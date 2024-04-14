@@ -5,18 +5,28 @@
 //  Created by Paul Flynn on 4/12/24.
 //
 
-import SwiftUI
+import AuthenticationServices
 import CoreData
+import LocalAuthentication
+import SwiftUI
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
+        animation: .default
+    )
+
     private var items: FetchedResults<Item>
 
     var body: some View {
+        @ObservedObject var amViewModel = AuthenticationManagerViewModel()
+        VStack {
+            Button(action: amViewModel.authenticationManager.signUp) {
+                Text("Sign up")
+            }
+        }
         NavigationView {
             List {
                 ForEach(items) { item in
@@ -29,11 +39,11 @@ struct ContentView: View {
                 .onDelete(perform: deleteItems)
             }
             .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
+                #if os(iOS)
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        EditButton()
+                    }
+                #endif
                 ToolbarItem {
                     Button(action: addItem) {
                         Label("Add Item", systemImage: "plus")
