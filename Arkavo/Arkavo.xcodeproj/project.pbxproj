@@ -17,6 +17,11 @@
 		DA90C1F02BC99D6F00B546C1 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1EF2BC99D6F00B546C1 /* ArkavoTests.swift */; };
 		DA90C1FA2BC99D6F00B546C1 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */; };
 		DA90C1FC2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */; };
+		DAF123922BD0A0660001014C /* conan_opentdf_client.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */; };
+		DAF123942BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */; };
+		DAF123962BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */; };
+		DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */; };
+		DAF1239D2BD0B3230001014C /* OpenTDFManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +56,13 @@
 		DA90C1F52BC99D6F00B546C1 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
+		DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client_libopentdf.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client_libopentdf.xcconfig"; sourceTree = "<group>"; };
+		DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client_libopentdf_debug_arm64.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client_libopentdf_debug_arm64.xcconfig"; sourceTree = "<group>"; };
+		DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Arkavo-Bridging-Header.h"; sourceTree = "<group>"; };
+		DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OpenTDFWrapper.mm; sourceTree = "<group>"; };
+		DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenTDFManager.swift; sourceTree = "<group>"; };
+		DAF4D8802BD0B91F00AEDE99 /* OpenTDFWrapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OpenTDFWrapper.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +93,10 @@
 		346446F71B51C76C122120CB /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */,
+				DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */,
+				DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */,
+				DAF4D8802BD0B91F00AEDE99 /* OpenTDFWrapper.h */,
 				346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */,
 			);
 			path = Services;
@@ -89,6 +105,9 @@
 		DA90C1CC2BC99D6D00B546C1 = {
 			isa = PBXGroup;
 			children = (
+				DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */,
+				DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */,
+				DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */,
 				DA90C1D72BC99D6D00B546C1 /* Arkavo */,
 				DA90C1EE2BC99D6F00B546C1 /* ArkavoTests */,
 				DA90C1F82BC99D6F00B546C1 /* ArkavoUITests */,
@@ -214,6 +233,7 @@
 				TargetAttributes = {
 					DA90C1D42BC99D6D00B546C1 = {
 						CreatedOnToolsVersion = 15.3;
+						LastSwiftMigration = 1530;
 					};
 					DA90C1EA2BC99D6F00B546C1 = {
 						CreatedOnToolsVersion = 15.3;
@@ -250,6 +270,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DAF123922BD0A0660001014C /* conan_opentdf_client.xcconfig in Resources */,
+				DAF123942BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig in Resources */,
+				DAF123962BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig in Resources */,
 				DA90C1E62BC99D6E00B546C1 /* Preview Assets.xcassets in Resources */,
 				DA90C1E22BC99D6E00B546C1 /* Assets.xcassets in Resources */,
 			);
@@ -276,8 +299,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DAF1239D2BD0B3230001014C /* OpenTDFManager.swift in Sources */,
 				DA90C1DE2BC99D6D00B546C1 /* Arkavo.xcdatamodeld in Sources */,
 				DA90C1D92BC99D6D00B546C1 /* ArkavoApp.swift in Sources */,
+				DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */,
 				DA90C1E02BC99D6D00B546C1 /* ContentView.swift in Sources */,
 				DA90C1DB2BC99D6D00B546C1 /* Persistence.swift in Sources */,
 				346449AA9A85FFF634600344 /* AuthenticationManager.swift in Sources */,
@@ -319,6 +344,7 @@
 /* Begin XCBuildConfiguration section */
 		DA90C1FD2BC99D6F00B546C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -436,6 +462,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -468,6 +495,8 @@
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Arkavo/Services/Arkavo-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -478,6 +507,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -510,6 +540,7 @@
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Arkavo/Services/Arkavo-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
