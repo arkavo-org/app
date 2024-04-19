@@ -2,7 +2,7 @@ import Foundation
 
 class OpenTDFManager: NSObject {
     func client() {
-        let wrapper = OpenTDFWrapper()
-        wrapper.exampleMethod()
+        let wrapper = STLTester()
+        wrapper.testSTL()
     }
 }

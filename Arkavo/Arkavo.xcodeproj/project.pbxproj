@@ -18,10 +18,9 @@
 		DA90C1FA2BC99D6F00B546C1 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */; };
 		DA90C1FC2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */; };
 		DAF123922BD0A0660001014C /* conan_opentdf_client.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */; };
-		DAF123942BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */; };
-		DAF123962BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */; };
 		DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */; };
 		DAF1239D2BD0B3230001014C /* OpenTDFManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */; };
+		DAF4D88E2BD20F0600AEDE99 /* STLTester.mm in Sources */ = {isa = PBXBuildFile; fileRef = DAF4D88D2BD20F0600AEDE99 /* STLTester.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,12 +56,12 @@
 		DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
-		DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client_libopentdf.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client_libopentdf.xcconfig"; sourceTree = "<group>"; };
-		DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client_libopentdf_debug_arm64.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client_libopentdf_debug_arm64.xcconfig"; sourceTree = "<group>"; };
 		DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Arkavo-Bridging-Header.h"; sourceTree = "<group>"; };
 		DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OpenTDFWrapper.mm; sourceTree = "<group>"; };
 		DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenTDFManager.swift; sourceTree = "<group>"; };
-		DAF4D8802BD0B91F00AEDE99 /* OpenTDFWrapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OpenTDFWrapper.h; sourceTree = "<group>"; };
+		DAF4D88D2BD20F0600AEDE99 /* STLTester.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = STLTester.mm; sourceTree = "<group>"; };
+		DAF4D88F2BD20FE100AEDE99 /* STLTester.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = STLTester.h; sourceTree = "<group>"; };
+		DAF4D8902BD2108600AEDE99 /* OpenTDFWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OpenTDFWrapper.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,9 +94,11 @@
 			children = (
 				DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */,
 				DAF1239C2BD0B3230001014C /* OpenTDFManager.swift */,
-				DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */,
-				DAF4D8802BD0B91F00AEDE99 /* OpenTDFWrapper.h */,
 				346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */,
+				DAF4D88F2BD20FE100AEDE99 /* STLTester.h */,
+				DAF4D88D2BD20F0600AEDE99 /* STLTester.mm */,
+				DAF4D8902BD2108600AEDE99 /* OpenTDFWrapper.h */,
+				DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -105,8 +106,6 @@
 		DA90C1CC2BC99D6D00B546C1 = {
 			isa = PBXGroup;
 			children = (
-				DAF123952BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig */,
-				DAF123932BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig */,
 				DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */,
 				DA90C1D72BC99D6D00B546C1 /* Arkavo */,
 				DA90C1EE2BC99D6F00B546C1 /* ArkavoTests */,
@@ -271,8 +270,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				DAF123922BD0A0660001014C /* conan_opentdf_client.xcconfig in Resources */,
-				DAF123942BD0A2950001014C /* conan_opentdf_client_libopentdf.xcconfig in Resources */,
-				DAF123962BD0A2C10001014C /* conan_opentdf_client_libopentdf_debug_arm64.xcconfig in Resources */,
 				DA90C1E62BC99D6E00B546C1 /* Preview Assets.xcassets in Resources */,
 				DA90C1E22BC99D6E00B546C1 /* Assets.xcassets in Resources */,
 			);
@@ -305,6 +302,7 @@
 				DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */,
 				DA90C1E02BC99D6D00B546C1 /* ContentView.swift in Sources */,
 				DA90C1DB2BC99D6D00B546C1 /* Persistence.swift in Sources */,
+				DAF4D88E2BD20F0600AEDE99 /* STLTester.mm in Sources */,
 				346449AA9A85FFF634600344 /* AuthenticationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -350,7 +348,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -395,6 +393,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LINK_WITH_STANDARD_LIBRARIES = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -411,7 +410,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -450,6 +449,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LINK_WITH_STANDARD_LIBRARIES = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;

@@ -1,6 +1,16 @@
+//
+//  OpenTDFWrapper.h
+//  Arkavo
+//
+//  Created by Paul Flynn on 4/18/24.
+//
+#ifndef OpenTDFWrapper_h
+#define OpenTDFWrapper_h
+
 #import "Foundation/Foundation.h"
-#include "tdf_client.h"
 
 @interface OpenTDFWrapper : NSObject
 - (void)exampleMethod;
 @end
+
+#endif /* OpenTDFWrapper_h */
