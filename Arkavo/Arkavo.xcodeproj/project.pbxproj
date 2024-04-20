@@ -95,9 +95,17 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = ci_scripts;
+			sourceTree = "<group>";
+		};
 		DA90C1CC2BC99D6D00B546C1 = {
 			isa = PBXGroup;
 			children = (
+				DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */,
 				DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */,
 				DA90C1D72BC99D6D00B546C1 /* Arkavo */,
 				DA90C1EE2BC99D6F00B546C1 /* ArkavoTests */,
