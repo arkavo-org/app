@@ -7,5 +7,8 @@ set -e
 # install conan
 brew install conan
 
+# conan profile
+conan profile detect
+
 # install dependencies
 conan install conanfile.txt --build=missing -g=XcodeDeps
