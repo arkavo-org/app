@@ -5,7 +5,7 @@
 set -e
 
 # install conan
-brew install conan
+brew install --quiet conan
 
 # conan profile
 conan profile detect
