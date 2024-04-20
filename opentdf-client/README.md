@@ -16,6 +16,12 @@ To include a C++ project within a Swift there are a couple of steps to be perfor
 
 ## Setup
 
+Install Conan
+
+```shell
+brew install conan
+```
+
 Conan build the OpenTDF C++ client
 
 ```shell
