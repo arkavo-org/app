@@ -1,0 +1,8 @@
+[requires]
+bzip2/1.0.8
+[generators]
+CMakeDeps
+CMakeToolchain
+[layout]
+cmake_layout
+
