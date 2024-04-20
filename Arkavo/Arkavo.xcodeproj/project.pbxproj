@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		346449AA9A85FFF634600344 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */; };
+		DA2D5BED2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh in Resources */ = {isa = PBXBuildFile; fileRef = DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */; };
 		DA90C1D92BC99D6D00B546C1 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1D82BC99D6D00B546C1 /* ArkavoApp.swift */; };
 		DA90C1DB2BC99D6D00B546C1 /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1DA2BC99D6D00B546C1 /* Persistence.swift */; };
 		DA90C1DE2BC99D6D00B546C1 /* Arkavo.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1DC2BC99D6D00B546C1 /* Arkavo.xcdatamodeld */; };
@@ -40,6 +41,7 @@
 
 /* Begin PBXFileReference section */
 		346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = ci_pre_xcodebuild.sh; sourceTree = "<group>"; };
 		DA90C1D52BC99D6D00B546C1 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA90C1D82BC99D6D00B546C1 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DA90C1DA2BC99D6D00B546C1 /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
@@ -98,6 +100,7 @@
 		DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */ = {
 			isa = PBXGroup;
 			children = (
+				DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */,
 			);
 			path = ci_scripts;
 			sourceTree = "<group>";
@@ -270,6 +273,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DAF123922BD0A0660001014C /* conan_opentdf_client.xcconfig in Resources */,
+				DA2D5BED2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh in Resources */,
 				DA90C1E62BC99D6E00B546C1 /* Preview Assets.xcassets in Resources */,
 				DA90C1E22BC99D6E00B546C1 /* Assets.xcassets in Resources */,
 			);
