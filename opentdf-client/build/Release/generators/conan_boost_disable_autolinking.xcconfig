@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for boost::disable_autolinking
+// Includes all configurations for each dependency
+
+#include "conan_boost_disable_autolinking_release_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_boost_disable_autolinking)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_boost_disable_autolinking)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_boost_disable_autolinking)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_boost_disable_autolinking)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_boost_disable_autolinking)
+
+// Link options for boost_disable_autolinking
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_boost_disable_autolinking)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_boost_disable_autolinking)

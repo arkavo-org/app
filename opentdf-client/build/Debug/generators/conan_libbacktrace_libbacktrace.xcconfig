@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for libbacktrace::libbacktrace
+// Includes all configurations for each dependency
+
+#include "conan_libbacktrace_libbacktrace_debug_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_libbacktrace_libbacktrace)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_libbacktrace_libbacktrace)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_libbacktrace_libbacktrace)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_libbacktrace_libbacktrace)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_libbacktrace_libbacktrace)
+
+// Link options for libbacktrace_libbacktrace
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_libbacktrace_libbacktrace)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_libbacktrace_libbacktrace)

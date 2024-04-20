@@ -10,7 +10,7 @@
 #import "Foundation/Foundation.h"
 
 @interface OpenTDFWrapper : NSObject
-- (void)exampleMethod;
+- (void)client;
 @end
 
 #endif /* OpenTDFWrapper_h */

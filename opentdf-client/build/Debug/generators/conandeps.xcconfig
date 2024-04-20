@@ -1,0 +1,4 @@
+// Conan XcodeDeps generated file
+// Includes all direct dependencies
+
+#include "conan_opentdf_client.xcconfig"

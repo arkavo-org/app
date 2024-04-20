@@ -1,0 +1,1 @@
+. "/Users/paul/Projects/arkavo/app/opentdf-client/build/Release/generators/conanrunenv-release-armv8.sh"

@@ -1,0 +1,11 @@
+PACKAGE_ROOT_boost[config=Release][arch=arm64][sdk=macosx*] = /Users/paul/.conan2/p/b/boost151b7b0b69a27/p
+// Compiler options for boost::math_c99
+SYSTEM_HEADER_SEARCH_PATHS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = 
+GCC_PREPROCESSOR_DEFINITIONS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = 
+OTHER_CFLAGS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = 
+OTHER_CPLUSPLUSFLAGS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = 
+FRAMEWORK_SEARCH_PATHS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = 
+
+// Link options for boost::math_c99
+LIBRARY_SEARCH_PATHS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] = "/Users/paul/.conan2/p/b/boost151b7b0b69a27/p/lib"
+OTHER_LDFLAGS_boost_math_c99[config=Release][arch=arm64][sdk=macosx*] =  -lboost_math_c99  

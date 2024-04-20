@@ -74,8 +74,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     func signIn() {
         // You can implement the sign-in functionality similar to the signUp() method
         // But keep in mind you'll most likely have to use createCredentialAssertionRequest instead of createCredentialRegistrationRequest
-        STLTester().testSTL()
-        OpenTDFWrapper().exampleMethod()
+        OpenTDFWrapper().client()
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization _: ASAuthorization) {

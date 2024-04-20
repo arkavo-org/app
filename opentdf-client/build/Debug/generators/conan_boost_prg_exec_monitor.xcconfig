@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for boost::prg_exec_monitor
+// Includes all configurations for each dependency
+
+#include "conan_boost_prg_exec_monitor_debug_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_boost_prg_exec_monitor)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_boost_prg_exec_monitor)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_boost_prg_exec_monitor)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_boost_prg_exec_monitor)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_boost_prg_exec_monitor)
+
+// Link options for boost_prg_exec_monitor
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_boost_prg_exec_monitor)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_boost_prg_exec_monitor)

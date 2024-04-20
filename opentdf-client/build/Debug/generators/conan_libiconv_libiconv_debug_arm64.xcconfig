@@ -1,0 +1,11 @@
+PACKAGE_ROOT_libiconv[config=Debug][arch=arm64][sdk=macosx*] = /Users/paul/.conan2/p/b/libic9358fd979acfc/p
+// Compiler options for libiconv::libiconv
+SYSTEM_HEADER_SEARCH_PATHS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = 
+GCC_PREPROCESSOR_DEFINITIONS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = 
+OTHER_CFLAGS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = 
+OTHER_CPLUSPLUSFLAGS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = 
+FRAMEWORK_SEARCH_PATHS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = 
+
+// Link options for libiconv::libiconv
+LIBRARY_SEARCH_PATHS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] = "/Users/paul/.conan2/p/b/libic9358fd979acfc/p/lib"
+OTHER_LDFLAGS_libiconv_libiconv[config=Debug][arch=arm64][sdk=macosx*] =  -liconv -lcharset  

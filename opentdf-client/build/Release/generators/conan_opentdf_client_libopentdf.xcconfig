@@ -1,0 +1,30 @@
+// Conan XcodeDeps generated file for opentdf_client::libopentdf
+// Includes all configurations for each dependency
+
+#include "conan_openssl.xcconfig"
+
+#include "conan_boost.xcconfig"
+
+#include "conan_ms_gsl.xcconfig"
+
+#include "conan_libxml2.xcconfig"
+
+#include "conan_jwt_cpp.xcconfig"
+
+#include "conan_nlohmann_json.xcconfig"
+
+#include "conan_zlib.xcconfig"
+
+#include "conan_magic_enum.xcconfig"
+
+#include "conan_opentdf_client_libopentdf_release_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_opentdf_client_libopentdf)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_opentdf_client_libopentdf)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_opentdf_client_libopentdf)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_opentdf_client_libopentdf)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_opentdf_client_libopentdf)
+
+// Link options for opentdf_client_libopentdf
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_opentdf_client_libopentdf)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_opentdf_client_libopentdf)

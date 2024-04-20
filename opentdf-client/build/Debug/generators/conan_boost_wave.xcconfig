@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for boost::wave
+// Includes all configurations for each dependency
+
+#include "conan_boost_wave_debug_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_boost_wave)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_boost_wave)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_boost_wave)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_boost_wave)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_boost_wave)
+
+// Link options for boost_wave
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_boost_wave)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_boost_wave)

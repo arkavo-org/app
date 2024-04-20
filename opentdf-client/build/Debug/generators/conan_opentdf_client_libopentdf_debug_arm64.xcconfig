@@ -1,0 +1,11 @@
+PACKAGE_ROOT_opentdf_client[config=Debug][arch=arm64][sdk=macosx*] = /Users/paul/.conan2/p/b/opentab3bfc240f245/p
+// Compiler options for opentdf_client::libopentdf
+SYSTEM_HEADER_SEARCH_PATHS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = "/Users/paul/.conan2/p/b/opentab3bfc240f245/p/include"
+GCC_PREPROCESSOR_DEFINITIONS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = 
+OTHER_CFLAGS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = 
+OTHER_CPLUSPLUSFLAGS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = 
+FRAMEWORK_SEARCH_PATHS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = 
+
+// Link options for opentdf_client::libopentdf
+LIBRARY_SEARCH_PATHS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] = "/Users/paul/.conan2/p/b/opentab3bfc240f245/p/lib"
+OTHER_LDFLAGS_opentdf_client_libopentdf[config=Debug][arch=arm64][sdk=macosx*] =  -lopentdf_static  

@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for boost::filesystem
+// Includes all configurations for each dependency
+
+#include "conan_boost_filesystem_debug_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_boost_filesystem)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_boost_filesystem)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_boost_filesystem)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_boost_filesystem)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_boost_filesystem)
+
+// Link options for boost_filesystem
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_boost_filesystem)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_boost_filesystem)

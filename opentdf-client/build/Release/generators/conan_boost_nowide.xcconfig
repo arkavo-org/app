@@ -1,0 +1,14 @@
+// Conan XcodeDeps generated file for boost::nowide
+// Includes all configurations for each dependency
+
+#include "conan_boost_nowide_release_arm64.xcconfig"
+
+SYSTEM_HEADER_SEARCH_PATHS = $(inherited) $(SYSTEM_HEADER_SEARCH_PATHS_boost_nowide)
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) $(GCC_PREPROCESSOR_DEFINITIONS_boost_nowide)
+OTHER_CFLAGS = $(inherited) $(OTHER_CFLAGS_boost_nowide)
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(OTHER_CPLUSPLUSFLAGS_boost_nowide)
+FRAMEWORK_SEARCH_PATHS = $(inherited) $(FRAMEWORK_SEARCH_PATHS_boost_nowide)
+
+// Link options for boost_nowide
+LIBRARY_SEARCH_PATHS = $(inherited) $(LIBRARY_SEARCH_PATHS_boost_nowide)
+OTHER_LDFLAGS = $(inherited) $(OTHER_LDFLAGS_boost_nowide)
