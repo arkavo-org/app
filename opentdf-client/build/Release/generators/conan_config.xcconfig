@@ -1,4 +1,0 @@
-// Includes both the toolchain and the dependencies
-// files if they exist
-
-#include "conandeps.xcconfig"

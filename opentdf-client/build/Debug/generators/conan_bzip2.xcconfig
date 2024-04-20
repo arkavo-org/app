@@ -1,4 +1,0 @@
-// Conan XcodeDeps generated file
-// Includes all components for the package
-
-#include "conan_bzip2_bzip2.xcconfig"

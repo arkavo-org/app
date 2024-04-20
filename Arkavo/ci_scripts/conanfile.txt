@@ -3,5 +3,6 @@ opentdf-client/1.5.6
 [generators]
 CMakeDeps
 CMakeToolchain
+XcodeDeps
 [layout]
 cmake_layout

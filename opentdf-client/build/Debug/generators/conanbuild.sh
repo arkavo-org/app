@@ -1,1 +1,0 @@
-. "/Users/paul/Projects/arkavo/app/opentdf-client/build/Debug/generators/conanbuildenv-debug-armv8.sh"

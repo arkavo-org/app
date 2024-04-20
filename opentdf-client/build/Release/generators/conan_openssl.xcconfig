@@ -1,6 +1,0 @@
-// Conan XcodeDeps generated file
-// Includes all components for the package
-
-#include "conan_openssl_crypto.xcconfig"
-
-#include "conan_openssl_ssl.xcconfig"
