@@ -27,7 +27,7 @@ struct ContentView: View {
                 Text("Sign up")
             }
             Button(action: amViewModel.authenticationManager.signIn) {
-                Text("Sign in")
+                Text("Sign in & Encrypt")
             }
         }
         NavigationView {

@@ -14,11 +14,13 @@ conan version
 conan profile detect --force
 
 # install bzip2 (it fails in Xcode Cloud, so try it first)
-conan install bzip2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
+#conan install bzip2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
 
 # install libxml2 (it fails in Xcode Cloud, so try it second)
-conan install libxml2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
+#conan install libxml2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
 
-# install dependencies Release and Debug
-conan install conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
-conan install conanfile.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
+# install dependencies Release and Debug for macOS and iOS
+#conan install conanfile.txt --profile conanprofile_macos.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
+#conan install conanfile.txt --profile conanprofile_macos.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
+conan install conanfile.txt --profile conanprofile_ios.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
+conan install conanfile.txt --profile conanprofile_ios.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
