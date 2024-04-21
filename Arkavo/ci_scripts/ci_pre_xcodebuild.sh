@@ -19,5 +19,6 @@ conan install bzip2_conanfile.txt --settings build_type=Release --build=missing 
 # install libxml2 (it fails in Xcode Cloud, so try it second)
 conan install libxml2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
 
-# install dependencies
+# install dependencies Release and Debug
 conan install conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
+conan install conanfile.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
