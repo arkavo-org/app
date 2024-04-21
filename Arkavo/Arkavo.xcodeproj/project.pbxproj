@@ -407,6 +407,7 @@
 		};
 		DA90C1FE2BC99D6F00B546C1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -657,7 +658,7 @@
 				DA90C1FE2BC99D6F00B546C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		DA90C1FF2BC99D6F00B546C1 /* Build configuration list for PBXNativeTarget "Arkavo" */ = {
 			isa = XCConfigurationList;
@@ -666,7 +667,7 @@
 				DA90C2012BC99D6F00B546C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		DA90C2022BC99D6F00B546C1 /* Build configuration list for PBXNativeTarget "ArkavoTests" */ = {
 			isa = XCConfigurationList;
@@ -675,7 +676,7 @@
 				DA90C2042BC99D6F00B546C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		DA90C2052BC99D6F00B546C1 /* Build configuration list for PBXNativeTarget "ArkavoUITests" */ = {
 			isa = XCConfigurationList;
@@ -684,7 +685,7 @@
 				DA90C2072BC99D6F00B546C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 

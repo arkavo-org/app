@@ -15,17 +15,12 @@ cd Arkavo/ci_scripts
 ./ci_pre_xcodebuild.sh
 ```
 
-Run to build Debug dependencies
-
-```shell
-cd Arkavo/ci_scripts
-conan install conanfile.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
-```
-
-Add `conan_opentdf_client.xcconfig` from `build/Debug/generators`
+Add `conan_opentdf_client.xcconfig` as resource from `build/Debug/generators`
 
 You will have to change `conan_opentdf_client_libopentdf.xcconfig`.  
 Remove the three libraries not found (TODO figure a fix for this)
+
+Update Arkavo project Configurations "Based on Configuration File" to `conan_opentdf_client`
 
 ### General process to add C++ library
 
