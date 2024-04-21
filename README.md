@@ -8,14 +8,24 @@ _for the Apple ecosystem_
 - GitHub source  https://github.com/opentdf/client-cpp
 - ConanCenter  https://conan.io/center/recipes/opentdf-client
 
-Run script to download and build dependencies
+Run script to download and build Release dependencies
 
 ```shell
 cd Arkavo/ci_scripts
 ./ci_pre_xcodebuild.sh
 ```
 
+Run to build Debug dependencies
+
+```shell
+cd Arkavo/ci_scripts
+conan install conanfile.txt --settings build_type=Debug --build=missing --output-folder=../../opentdf-client
+```
+
 Add `conan_opentdf_client.xcconfig` from `build/Debug/generators`
+
+You will have to change `conan_opentdf_client_libopentdf.xcconfig`.  
+Remove the three libraries not found (TODO figure a fix for this)
 
 ### General process to add C++ library
 
