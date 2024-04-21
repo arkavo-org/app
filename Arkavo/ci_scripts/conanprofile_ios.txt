@@ -1,0 +1,11 @@
+[settings]
+os=iOS
+os.version=17.0
+os.sdk=iphoneos
+arch=armv8
+compiler=apple-clang
+# match the Apple Clang version in Xcode
+compiler.version=15
+# match the C++ dialect in Xcode
+compiler.cppstd=gnu23
+compiler.libcxx=libc++
