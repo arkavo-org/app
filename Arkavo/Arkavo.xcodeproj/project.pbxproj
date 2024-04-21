@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		346449AA9A85FFF634600344 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */; };
+		DA2D5BED2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh in Resources */ = {isa = PBXBuildFile; fileRef = DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */; };
 		DA90C1D92BC99D6D00B546C1 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1D82BC99D6D00B546C1 /* ArkavoApp.swift */; };
 		DA90C1DB2BC99D6D00B546C1 /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1DA2BC99D6D00B546C1 /* Persistence.swift */; };
 		DA90C1DE2BC99D6D00B546C1 /* Arkavo.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1DC2BC99D6D00B546C1 /* Arkavo.xcdatamodeld */; };
@@ -17,6 +18,7 @@
 		DA90C1F02BC99D6F00B546C1 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1EF2BC99D6F00B546C1 /* ArkavoTests.swift */; };
 		DA90C1FA2BC99D6F00B546C1 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */; };
 		DA90C1FC2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */; };
+		DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +40,7 @@
 
 /* Begin PBXFileReference section */
 		346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = ci_pre_xcodebuild.sh; sourceTree = "<group>"; };
 		DA90C1D52BC99D6D00B546C1 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA90C1D82BC99D6D00B546C1 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DA90C1DA2BC99D6D00B546C1 /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
@@ -51,6 +54,10 @@
 		DA90C1F52BC99D6F00B546C1 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA90C1F92BC99D6F00B546C1 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DA90C1FB2BC99D6F00B546C1 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client/build/Debug/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
+		DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Arkavo-Bridging-Header.h"; sourceTree = "<group>"; };
+		DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OpenTDFWrapper.mm; sourceTree = "<group>"; };
+		DAF4D8902BD2108600AEDE99 /* OpenTDFWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OpenTDFWrapper.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,14 +88,27 @@
 		346446F71B51C76C122120CB /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				DAF123972BD0AC670001014C /* Arkavo-Bridging-Header.h */,
 				346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */,
+				DAF4D8902BD2108600AEDE99 /* OpenTDFWrapper.h */,
+				DAF123982BD0AC670001014C /* OpenTDFWrapper.mm */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */ = {
+			isa = PBXGroup;
+			children = (
+				DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */,
+			);
+			path = ci_scripts;
 			sourceTree = "<group>";
 		};
 		DA90C1CC2BC99D6D00B546C1 = {
 			isa = PBXGroup;
 			children = (
+				DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */,
+				DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */,
 				DA90C1D72BC99D6D00B546C1 /* Arkavo */,
 				DA90C1EE2BC99D6F00B546C1 /* ArkavoTests */,
 				DA90C1F82BC99D6F00B546C1 /* ArkavoUITests */,
@@ -214,6 +234,7 @@
 				TargetAttributes = {
 					DA90C1D42BC99D6D00B546C1 = {
 						CreatedOnToolsVersion = 15.3;
+						LastSwiftMigration = 1530;
 					};
 					DA90C1EA2BC99D6F00B546C1 = {
 						CreatedOnToolsVersion = 15.3;
@@ -250,6 +271,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA2D5BED2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh in Resources */,
 				DA90C1E62BC99D6E00B546C1 /* Preview Assets.xcassets in Resources */,
 				DA90C1E22BC99D6E00B546C1 /* Assets.xcassets in Resources */,
 			);
@@ -278,6 +300,7 @@
 			files = (
 				DA90C1DE2BC99D6D00B546C1 /* Arkavo.xcdatamodeld in Sources */,
 				DA90C1D92BC99D6D00B546C1 /* ArkavoApp.swift in Sources */,
+				DAF123992BD0AC670001014C /* OpenTDFWrapper.mm in Sources */,
 				DA90C1E02BC99D6D00B546C1 /* ContentView.swift in Sources */,
 				DA90C1DB2BC99D6D00B546C1 /* Persistence.swift in Sources */,
 				346449AA9A85FFF634600344 /* AuthenticationManager.swift in Sources */,
@@ -319,7 +342,9 @@
 /* Begin XCBuildConfiguration section */
 		DA90C1FD2BC99D6F00B546C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */;
 			buildSettings = {
+				"ADDITIONAL_SDKS[arch=*]" = "";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -351,6 +376,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -369,6 +395,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LINK_WITH_STANDARD_LIBRARIES = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -412,6 +439,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -424,6 +452,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LINK_WITH_STANDARD_LIBRARIES = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -436,10 +465,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -466,10 +497,13 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Arkavo/Services/Arkavo-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Debug;
 		};
@@ -478,10 +512,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -508,10 +544,12 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Arkavo/Services/Arkavo-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
 		};
@@ -522,6 +560,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
@@ -545,6 +584,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
@@ -567,6 +607,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
@@ -589,6 +630,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.4;
