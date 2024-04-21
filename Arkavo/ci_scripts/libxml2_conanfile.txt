@@ -1,0 +1,9 @@
+[requires]
+libxml2/2.11.6
+[generators]
+CMakeDeps
+CMakeToolchain
+XcodeDeps
+[layout]
+cmake_layout
+
