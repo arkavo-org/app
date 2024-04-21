@@ -11,7 +11,7 @@ brew install --quiet conan cmake
 conan version
 
 # conan profile
-#conan profile detect --force
+conan profile detect --force
 
 # install bzip2 (it fails in Xcode Cloud, so try it first)
 #conan install bzip2_conanfile.txt --settings build_type=Release --build=missing --output-folder=../../opentdf-client
