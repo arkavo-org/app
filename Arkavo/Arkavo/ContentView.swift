@@ -22,21 +22,27 @@ struct ContentView: View {
 
     var body: some View {
         @ObservedObject var amViewModel = AuthenticationManagerViewModel()
-        VStack {
+        HStack {
             Button(action: amViewModel.authenticationManager.signUp) {
                 Text("Sign up")
             }
+            Text("|")
             Button(action: amViewModel.authenticationManager.signIn) {
-                Text("Sign in & Encrypt")
+                Text("Sign in")
+            }
+            Text("|")
+            Button(action: removeAllItems) {
+                Text("Remove all")
             }
         }
+        
         NavigationView {
             List {
                 ForEach(items) { item in
                     NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
+                        Text(cipherFormatter.string(from: item.dataVector))
                     } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
+                        Text(OpenTDFWrapper().decrypt(item.dataVector))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -53,20 +59,22 @@ struct ContentView: View {
                     }
                 }
             }
-            Text("Select an item")
+            Text("Select an item to decrypt")
         }
+    }
+
+    private func removeAllItems() {
+        deleteItems(offsets: IndexSet(0..<items.count))
     }
 
     private func addItem() {
         withAnimation {
             let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+            newItem.dataVector = OpenTDFWrapper().encrypt(randomString(length: 7))
 
             do {
                 try viewContext.save()
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
                 let nsError = error as NSError
                 fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
             }
@@ -89,12 +97,19 @@ struct ContentView: View {
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
+struct HexDataFormatter {
+    func string(from data: Data?) -> String {
+        guard let data = data else { return "" }
+        return data.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+private let cipherFormatter = HexDataFormatter()
+
+func randomString(length: Int) -> String {
+    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    return String((0..<length).map{ _ in letters.randomElement()! })
+}
 
 #Preview {
     ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)

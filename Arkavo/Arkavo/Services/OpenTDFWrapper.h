@@ -11,6 +11,8 @@
 
 @interface OpenTDFWrapper : NSObject
 - (void)client;
+- (NSData *)encrypt:(NSString *)input;
+- (NSString *)decrypt:(NSData *)input;
 @end
 
 #endif /* OpenTDFWrapper_h */
