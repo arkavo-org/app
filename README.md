@@ -1,26 +1,31 @@
 # Arkavo app
 _for the Apple ecosystem_
 
-## Development
+## Development by contributor
 
 ### Setup OpenTDF client.
 
 - GitHub source  https://github.com/opentdf/client-cpp
 - ConanCenter  https://conan.io/center/recipes/opentdf-client
 
-Run script to download and build Release dependencies
+Run script to download and build dependencies. Also used in Xcode Cloud build.
 
 ```shell
 cd Arkavo/ci_scripts
 ./ci_pre_xcodebuild.sh
 ```
 
-Add `conan_opentdf_client.xcconfig` as resource from `build/Debug/generators`
+#### Xcode project configuration
 
-You will have to change `conan_opentdf_client_libopentdf.xcconfig`.  
-Remove the three libraries not found (TODO figure a fix for this)
+- Verify `conan_opentdf_client.xcconfig` as resource from `build/Debug/generators`
+- Verify Arkavo project Configurations "Based on Configuration File" to `conan_opentdf_client`
 
-Update Arkavo project Configurations "Based on Configuration File" to `conan_opentdf_client`
+### Command line build
+
+```shell
+cd Arkavo
+xcodebuild clean build analyze -arch arm64
+```
 
 ### General process to add C++ library
 

@@ -40,6 +40,9 @@
 
 /* Begin PBXFileReference section */
 		346444CB0B17F78B0E1C9D46 /* AuthenticationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA208A902BD8907300396DDA /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client/build/Release/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
+		DA208A912BD8908F00396DDA /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client-ios/build/Release/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
+		DA208A922BD890B000396DDA /* conan_opentdf_client.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = conan_opentdf_client.xcconfig; path = "../opentdf-client-ios/build/Debug/generators/conan_opentdf_client.xcconfig"; sourceTree = "<group>"; };
 		DA2D5BEC2BD34BB800F1EC1F /* ci_pre_xcodebuild.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = ci_pre_xcodebuild.sh; sourceTree = "<group>"; };
 		DA90C1D52BC99D6D00B546C1 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA90C1D82BC99D6D00B546C1 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
@@ -107,6 +110,9 @@
 		DA90C1CC2BC99D6D00B546C1 = {
 			isa = PBXGroup;
 			children = (
+				DA208A902BD8907300396DDA /* conan_opentdf_client.xcconfig */,
+				DA208A912BD8908F00396DDA /* conan_opentdf_client.xcconfig */,
+				DA208A922BD890B000396DDA /* conan_opentdf_client.xcconfig */,
 				DA2D5BEB2BD34B1600F1EC1F /* ci_scripts */,
 				DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */,
 				DA90C1D72BC99D6D00B546C1 /* Arkavo */,
@@ -344,7 +350,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */;
 			buildSettings = {
-				"ADDITIONAL_SDKS[arch=*]" = "";
+				"ADDITIONAL_SDKS[arch=arm64e]" = "";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -389,6 +395,10 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64e]" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -402,6 +412,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				XROS_DEPLOYMENT_TARGET = 1.1;
@@ -410,8 +421,9 @@
 		};
 		DA90C1FE2BC99D6F00B546C1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DAF123912BD0A0660001014C /* conan_opentdf_client.xcconfig */;
+			baseConfigurationReference = DA208A902BD8907300396DDA /* conan_opentdf_client.xcconfig */;
 			buildSettings = {
+				"ADDITIONAL_SDKS[arch=arm64e]" = "";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -450,6 +462,10 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64e]" = (
+					"$(inherited)",
+					"$(GCC_PREPROCESSOR_DEFINITIONS_opentdf_client_libopentdf)",
+				);
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -462,6 +478,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				XROS_DEPLOYMENT_TARGET = 1.1;
 			};
