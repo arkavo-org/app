@@ -6,11 +6,9 @@
 //
 #ifndef OpenTDFWrapper_h
 #define OpenTDFWrapper_h
-
 #import "Foundation/Foundation.h"
 
 @interface OpenTDFWrapper : NSObject
-- (void)client;
 - (NSData *)encrypt:(NSString *)input;
 - (NSString *)decrypt:(NSData *)input;
 @end
