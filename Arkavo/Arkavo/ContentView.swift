@@ -11,6 +11,8 @@ import LocalAuthentication
 import SwiftUI
 
 struct ContentView: View {
+
+    var tdfWrapper = OpenTDFWrapper()
     @Environment(\.managedObjectContext) private var viewContext
 
     @FetchRequest(
@@ -42,7 +44,7 @@ struct ContentView: View {
                     NavigationLink {
                         Text(cipherFormatter.string(from: item.dataVector))
                     } label: {
-                        Text(OpenTDFWrapper().decrypt(item.dataVector))
+                        Text(tdfWrapper.decrypt(item.dataVector))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -70,7 +72,7 @@ struct ContentView: View {
     private func addItem() {
         withAnimation {
             let newItem = Item(context: viewContext)
-            newItem.dataVector = OpenTDFWrapper().encrypt(randomString(length: 7))
+            newItem.dataVector = tdfWrapper.encrypt(randomString(length: 7))
 
             do {
                 try viewContext.save()
