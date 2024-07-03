@@ -1,7 +1,0 @@
-[requires]
-opentdf-client/1.5.6
-[generators]
-XcodeDeps
-XcodeToolchain
-[layout]
-cmake_layout

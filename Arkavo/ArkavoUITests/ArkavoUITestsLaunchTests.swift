@@ -2,7 +2,7 @@
 //  ArkavoUITestsLaunchTests.swift
 //  ArkavoUITests
 //
-//  Created by Paul Flynn on 4/12/24.
+//  Created by Paul Flynn on 7/2/24.
 //
 
 import XCTest
@@ -17,6 +17,7 @@ final class ArkavoUITestsLaunchTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
         app.launch()
