@@ -632,7 +632,7 @@
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = revision;
-				revision = bf7d190f870345bba45b0cc9697e14ee8f301194;
+				revision = 43c2e1fb5497b67c2836342fd24c38153053a180;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

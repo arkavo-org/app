@@ -1,0 +1,14 @@
+{
+  "originHash" : "7efd00919183b3a280d965b8e31b44e054a856c705952e51a84326aac877cc29",
+  "pins" : [
+    {
+      "identity" : "opentdfkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/OpenTDFKit",
+      "state" : {
+        "revision" : "43c2e1fb5497b67c2836342fd24c38153053a180"
+      }
+    }
+  ],
+  "version" : 3
+}

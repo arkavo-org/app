@@ -93,3 +93,6 @@ iOSInjectionProject/
 /.cache/
 .idea
 /Arkavo/.fleet/
+.DS_Store
+.idea/app.iml
+.idea/vcs.xml
