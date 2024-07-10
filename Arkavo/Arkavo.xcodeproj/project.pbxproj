@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA95A43A2C3DF611007409D5 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA95A4392C3DF60F007409D5 /* City.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ContentView.swift */; };
@@ -36,6 +37,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DA95A4392C3DF60F007409D5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -99,6 +101,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA95A4392C3DF60F007409D5 /* City.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC1F9E82C34DA7000499631 /* ContentView.swift */,
 				DAC1F9EA2C34DA7000499631 /* Item.swift */,
@@ -272,6 +275,7 @@
 			files = (
 				DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */,
 				DAC1F9EB2C34DA7000499631 /* Item.swift in Sources */,
+				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -632,7 +636,7 @@
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = revision;
-				revision = 43c2e1fb5497b67c2836342fd24c38153053a180;
+				revision = a2205ec1b7941fe340879e78eab46a819511f10d;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

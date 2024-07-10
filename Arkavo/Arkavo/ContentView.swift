@@ -8,45 +8,91 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [Item]
     let webSocket = KASWebSocket(kasUrl: URL(string: "wss://kas.arkavo.net")!)
-    
+    let nanoTDFManager = NanoTDFManager()
+    @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     @State private var position = MapCameraPosition.region(MKCoordinateRegion(
 // Columbia 39.21579° N, 76.86180° W
 // Virtru   38.90059° N, 77.04209° W
         center: CLLocationCoordinate2D(latitude: 38.90059, longitude: -77.04209),
-        span: MKCoordinateSpan(latitudeDelta: 25, longitudeDelta: 25)
+        span: MKCoordinateSpan(latitudeDelta: 12, longitudeDelta: 12)
     ))
     @State private var cities: [City] = []
     @State private var showingCities: [City] = []
+    @State private var nanoCities: [NanoTDF] = []
    
     var body: some View {
         NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            #if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            #endif
-            .toolbar {
-                #if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                #endif
-                ToolbarItem {
+            VStack {
+                VStack {
                     Button(action: loadGeoJSON) {
-                        Label("Add Item", systemImage: "plus")
+                        Label("Prepare", systemImage: "pencil")
+                    }
+                    Button(action: createNanoCities) {
+                        Label("Nano", systemImage: "network")
                     }
                     Button(action: animateCities) {
-                        Label("Add Item", systemImage: "minus")
+                        Label("Display", systemImage: "eye")
                     }
+                    Button(action: addItem) {
+                        Label("Add", systemImage: "plus")
+                    }
+#if os(iOS)
+                    EditButton()
+#endif
                 }
+                List {
+                    ForEach(items) { item in
+                        NavigationLink {
+                            Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
+                        } label: {
+                            Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                        }
+                    }
+                    .onDelete(perform: deleteItems)
+                }
+                .onAppear {
+                    webSocket.setKASPublicKeyCallback{ publicKey in
+                        print("setKASPublicKeyCallback")
+                        kasPublicKey = publicKey
+                    }
+                    webSocket.setRewrapCallback { id, symmetricKey in
+                        print("id in \(id)")
+                        let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id)
+                        nanoTDFManager.removeNanoTDF(withIdentifier: id)
+                        guard symmetricKey != nil else {
+                            print("DENY")
+                            // DENY
+                            return
+                        }
+                        do {
+                            let payload = try nanoCity?.getPayloadPlaintext(symmetricKey: symmetricKey!)
+                            guard payload != nil else {
+                                print("payload decrypt failed")
+                                return
+                            }
+                            let city = City.deserialize(from: payload!)
+                            guard city != nil else {
+                                print("city deserialize failed")
+                                return
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
+                                showingCities.append(city!)
+                                // FIXME id
+                                //                            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration(for: city!)) {
+                                //                                showingCities.removeAll { $0.id == city.id }
+                                //                            }
+                            }
+                        } catch {
+                            print("getPayloadPlaintext failed")
+                        }
+                    }
+                    webSocket.connect()
+                    webSocket.sendPublicKey()
+                    webSocket.sendKASKeyMessage()
+                }
+#if os(macOS)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+#endif
             }
         } detail: {
             ZStack {
@@ -64,7 +110,7 @@ struct ContentView: View {
                     Spacer()
                     Text("Cities shown: \(showingCities.count)")
                         .padding()
-                        .background(Color.white.opacity(0.7))
+                        .background(Color.black.opacity(0.7))
                         .cornerRadius(10)
                 }
             }
@@ -73,37 +119,70 @@ struct ContentView: View {
     
     private func loadGeoJSON() {
         print("Loading GeoJSON...")
-        // This is a placeholder function. In a real app, you'd parse actual GeoJSON data.
-        let sampleCities = [
-            City(name: "San Francisco", coordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194), population: 873965),
-            City(name: "Los Angeles", coordinate: CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437), population: 3898747),
-            City(name: "San Diego", coordinate: CLLocationCoordinate2D(latitude: 32.7157, longitude: -117.1611), population: 1386932),
-            City(name: "Columbia", coordinate: CLLocationCoordinate2D(latitude: 39.21579, longitude: -77.04209), population: 100000)
-        ]
-        
-        cities = sampleCities
-        animateCities()
+        cities = generateTwoThousandActualCities()
         print("Cities loaded: \(cities.count)")
     }
     
-    private func animateCities() {
-        print("Loading GeoJSON...")
+    private func createNanoCities() {
+        print("Nanoing Cities...")
+        guard kasPublicKey != nil else {
+            print("KAS public key")
+            return
+        }
+        let dispatchGroup = DispatchGroup()
+        let queue = DispatchQueue(label: "com.arkavo.nanoTDFCreation", attributes: .concurrent)
+        
         for city in cities {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
-                showingCities.append(city)
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration(for: city)) {
-                    showingCities.removeAll { $0.id == city.id }
+            dispatchGroup.enter()
+            queue.async {
+                do {
+                    let serializedCity = city.serialize()
+                    let kasRL = ResourceLocator(protocolEnum: .wss, body: "kas.arkavo.net")
+                    let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
+                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
+                    var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
+                    
+                    let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
+                    
+                    DispatchQueue.main.async {
+                        self.nanoCities.append(nanoTDF)
+                        dispatchGroup.leave()
+                    }
+                } catch {
+                    print("Error creating nanoTDF for \(city.name): \(error)")
+                    dispatchGroup.leave()
                 }
             }
+        }
+        
+        dispatchGroup.notify(queue: .main) {
+            print("Cities nanoed: \(self.nanoCities.count)")
+        }
+    }
+    
+    private func animateCities() {
+        print("Rewrapping...")
+        for nanoCity in nanoCities {
+            let id = nanoCity.header.ephemeralPublicKey
+            nanoTDFManager.addNanoTDF(nanoCity, withIdentifier: id)
+            webSocket.sendRewrapMessage(header: nanoCity.header)
+            print("id out \(id)")
+//            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
+//                showingCities.append(city)
+//                
+//                DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration(for: city)) {
+//                    showingCities.removeAll { $0.id == city.id }
+//                }
+//            }
         }
     }
     
     private func animationDuration(for city: City) -> Double {
         // Base duration on population. Adjust these values as needed.
-        let baseDuration = 2.0
-        let populationFactor = Double(city.population) / 1_000_000.0 // Cities with 1 million+ get longer durations
-        return baseDuration + (populationFactor * 3.0) // Max duration of 5 seconds for very large cities
+        0.4
+//        let baseDuration = 1.0
+//        let populationFactor = Double(city.population) / 1_000_000.0 // Cities with 1 million+ get longer durations
+//        return baseDuration + (populationFactor * 5) // Max duration of 5 seconds for very large cities
     }
     
     private func addItem() {
@@ -148,52 +227,39 @@ struct ContentView: View {
     }
 }
 
-struct City: Identifiable {
-    let id = UUID()
-    let name: String
-    let coordinate: CLLocationCoordinate2D
-    let population: Int
-}
-
-struct CityLabel: View {
-    let name: String
-    let population: Int
-    
-    @State private var opacity: Double = 0
-    @State private var scale: CGFloat = 0.5
-    
-    var body: some View {
-        Text(name)
-            .font(.system(size: fontSize))
-            .foregroundColor(.blue)
-            .opacity(opacity)
-            .scaleEffect(scale)
-            .onAppear {
-                withAnimation(.easeInOut(duration: animationDuration)) {
-                    opacity = 1
-                    scale = 1
-                }
-                withAnimation(.easeInOut(duration: animationDuration).delay(animationDuration * 0.5)) {
-                    opacity = 0
-                    scale = maxScale
-                }
-            }
-    }
-    
-    private var animationDuration: Double {
-        Double(population) / 500_000.0 + 1.0 // 1 second for small cities, up to 5+ seconds for large ones
-    }
-    
-    private var fontSize: CGFloat {
-        CGFloat(population) / 100_000.0 + 12 // 12pt for small cities, larger for bigger ones
-    }
-    
-    private var maxScale: CGFloat {
-        (CGFloat(population) / 500_000.0) + 1.5 // 1.5x for small cities, larger for bigger ones
-    }
-}
-
 #Preview {
     ContentView()
         .modelContainer(for: Item.self, inMemory: true)
+}
+
+class NanoTDFManager {
+    private var nanoTDFs: [Data: NanoTDF] = [:]
+    private var count: Int = 0
+
+    func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
+        nanoTDFs[identifier] = nanoTDF
+        count += 1
+    }
+
+    func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
+        nanoTDFs[identifier]
+    }
+
+    func updateNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
+        nanoTDFs[identifier] = nanoTDF
+    }
+
+    func removeNanoTDF(withIdentifier identifier: Data) {
+        if nanoTDFs.removeValue(forKey: identifier) != nil {
+            count -= 1
+        }
+    }
+
+    func isEmpty() -> Bool {
+        return nanoTDFs.isEmpty
+    }
+
+    func getCount() -> Int {
+        return count
+    }
 }
