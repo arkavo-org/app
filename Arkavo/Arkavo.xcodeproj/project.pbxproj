@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
+		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
+		DA284D652C3F6B2D00CCF7EC /* CityLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D642C3F6B2800CCF7EC /* CityLabel.swift */; };
+		DA95A43A2C3DF611007409D5 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA95A4392C3DF60F007409D5 /* City.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ContentView.swift */; };
@@ -36,6 +40,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
+		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
+		DA284D642C3F6B2800CCF7EC /* CityLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityLabel.swift; sourceTree = "<group>"; };
+		DA95A4392C3DF60F007409D5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -99,6 +107,9 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA284D642C3F6B2800CCF7EC /* CityLabel.swift */,
+				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
+				DA95A4392C3DF60F007409D5 /* City.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC1F9E82C34DA7000499631 /* ContentView.swift */,
 				DAC1F9EA2C34DA7000499631 /* Item.swift */,
@@ -120,6 +131,7 @@
 		DAC1F9F92C34DA7100499631 /* ArkavoTests */ = {
 			isa = PBXGroup;
 			children = (
+				DA284D622C3F682200CCF7EC /* CityTests.swift */,
 				DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */,
 			);
 			path = ArkavoTests;
@@ -271,8 +283,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */,
+				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DAC1F9EB2C34DA7000499631 /* Item.swift in Sources */,
+				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
+				DA284D652C3F6B2D00CCF7EC /* CityLabel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -280,6 +295,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */,
 				DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -361,6 +377,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -416,6 +433,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -632,7 +650,7 @@
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = revision;
-				revision = 43c2e1fb5497b67c2836342fd24c38153053a180;
+				revision = a2205ec1b7941fe340879e78eab46a819511f10d;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

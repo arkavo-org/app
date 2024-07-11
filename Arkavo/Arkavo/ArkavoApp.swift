@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct ArkavoApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -28,5 +29,15 @@ struct ArkavoApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background {
+                // Close any open WebSockets
+                NotificationCenter.default.post(name: .closeWebSockets, object: nil)
+            }
+        }
     }
+}
+
+extension Notification.Name {
+    static let closeWebSockets = Notification.Name("CloseWebSockets")
 }
