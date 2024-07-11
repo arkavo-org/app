@@ -6,20 +6,28 @@ import OpenTDFKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var items: [Item]
-    let webSocket = KASWebSocket(kasUrl: URL(string: "wss://kas.arkavo.net")!)
+    @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
-    @State private var position = MapCameraPosition.region(MKCoordinateRegion(
-// Columbia 39.21579° N, 76.86180° W
-// Virtru   38.90059° N, 77.04209° W
-        center: CLLocationCoordinate2D(latitude: 38.90059, longitude: -77.04209),
-        span: MKCoordinateSpan(latitudeDelta: 12, longitudeDelta: 12)
-    ))
+    // Columbia 39.21579° N, 76.86180° W
+    // Virtru   38.90059° N, 77.04209° W
+    @State private var cameraPosition = MapCameraPosition.camera(
+        MapCamera(
+            centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            distance: 20000000,
+            heading: 0,
+            pitch: 0
+        )
+    )
     @State private var cities: [City] = []
-    @State private var showingCities: [City] = []
+    @State private var mapUpdateTrigger = UUID()
+    @State private var cityCount = 0
     @State private var nanoCities: [NanoTDF] = []
-   
+    @State private var nanoTime: TimeInterval = 0
+    @State private var annotations: [CityAnnotation] = []
+     
     var body: some View {
         NavigationSplitView {
             VStack {
@@ -33,7 +41,7 @@ struct ContentView: View {
                     Button(action: animateCities) {
                         Label("Display", systemImage: "eye")
                     }
-                    Button(action: addItem) {
+                    Button(action: loadRandomCities) {
                         Label("Add", systemImage: "plus")
                     }
 #if os(iOS)
@@ -51,14 +59,12 @@ struct ContentView: View {
                     .onDelete(perform: deleteItems)
                 }
                 .onAppear {
-                    webSocket.setKASPublicKeyCallback{ publicKey in
-                        print("setKASPublicKeyCallback")
+                    webSocketManager.setKASPublicKeyCallback{ publicKey in
                         kasPublicKey = publicKey
                     }
-                    webSocket.setRewrapCallback { id, symmetricKey in
-                        print("id in \(id)")
-                        let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id)
-                        nanoTDFManager.removeNanoTDF(withIdentifier: id)
+                    webSocketManager.setRewrapCallback { id, symmetricKey in
+                        let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id!)
+                        nanoTDFManager.removeNanoTDF(withIdentifier: id!)
                         guard symmetricKey != nil else {
                             print("DENY")
                             // DENY
@@ -70,25 +76,23 @@ struct ContentView: View {
                                 print("payload decrypt failed")
                                 return
                             }
-                            let city = City.deserialize(from: payload!)
-                            guard city != nil else {
-                                print("city deserialize failed")
-                                return
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
-                                showingCities.append(city!)
-                                // FIXME id
-                                //                            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration(for: city!)) {
-                                //                                showingCities.removeAll { $0.id == city.id }
-                                //                            }
+                            let city = try City.deserialize(from: payload!)
+                            // Immediately display the city
+                            DispatchQueue.main.async {
+                                self.addCityAnnotation(city)
+                                
+                                // Remove the city after 0.5 seconds
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    self.removeCityAnnotation(city)
+                                }
                             }
                         } catch {
                             print("getPayloadPlaintext failed")
                         }
                     }
-                    webSocket.connect()
-                    webSocket.sendPublicKey()
-                    webSocket.sendKASKeyMessage()
+                    webSocketManager.connect()
+                    webSocketManager.sendPublicKey()
+                    webSocketManager.sendKASKeyMessage()
                 }
 #if os(macOS)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 200)
@@ -96,32 +100,88 @@ struct ContentView: View {
             }
         } detail: {
             ZStack {
-                Map(position: $position) {
-                    ForEach(showingCities) { city in
-                        Annotation(city.name, coordinate: city.coordinate) {
-                            CityLabel(name: city.name, population: city.population)
-                        }
+                Map(position: $cameraPosition, interactionModes: .all) {
+                    ForEach(annotations) { annotation in
+//                        Annotation(annotation.city.name, coordinate: annotation.city.clCoordinate) {
+//                            CityLabel(name: annotation.city.name, population: annotation.city.population)
+//                        }
+                        Marker(annotation.city.name, coordinate: annotation.city.clCoordinate)
                     }
                 }
-                .mapStyle(.imagery)
-                .edgesIgnoringSafeArea(.all)
-                
+                .id(mapUpdateTrigger)
+                .mapStyle(.imagery(elevation: .realistic))
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            let delta = value.translation
+                            withAnimation {
+                                cameraPosition = MapCameraPosition.camera(
+                                    MapCamera(
+                                        centerCoordinate: CLLocationCoordinate2D(
+                                            latitude: 0,
+                                            longitude: 0
+                                        ),
+                                        distance: 2000000000,
+                                        heading: delta.width,
+                                        pitch: delta.height
+                                    )
+                                )
+                            }
+                        }
+                )
                 VStack {
                     Spacer()
-                    Text("Cities shown: \(showingCities.count)")
-                        .padding()
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(10)
+                    VStack {
+                        if !nanoCities.isEmpty {
+                            Text("City Nano count: \(nanoCities.count)")
+                        }
+                        if nanoTime > 0 {
+                            Text("City Data Nano Time: \(String(format: "%.2f", nanoTime)) seconds")
+                        }
+                    }
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
                 }
             }
         }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background {
+                webSocketManager.close()
+            }
+        }
+        .onDisappear {
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+    
+    private func addCityAnnotation(_ city: City) {
+        let annotation = CityAnnotation(city: city)
+        annotations.append(annotation)
+        cityCount += 1
+    }
+
+    private func removeCityAnnotation(_ city: City) {
+        annotations.removeAll { $0.city.id == city.id }
+        cityCount -= 1
     }
     
     private func loadGeoJSON() {
-        print("Loading GeoJSON...")
+        print("Generating Cities...")
         cities = generateTwoThousandActualCities()
         print("Cities loaded: \(cities.count)")
     }
+    
+    private func loadRandomCities() {
+        nanoTime = 0
+        nanoCities = []
+        print("Generating new random cities...")
+        let newCities = generateRandomCities(count: 200)
+        cities.append(contentsOf: newCities)
+        print("New cities added: \(newCities.count)")
+        print("Total cities: \(cities.count)")
+    }
+    
     
     private func createNanoCities() {
         print("Nanoing Cities...")
@@ -129,6 +189,7 @@ struct ContentView: View {
             print("KAS public key")
             return
         }
+        let startTime = Date()
         let dispatchGroup = DispatchGroup()
         let queue = DispatchQueue(label: "com.arkavo.nanoTDFCreation", attributes: .concurrent)
         
@@ -136,8 +197,8 @@ struct ContentView: View {
             dispatchGroup.enter()
             queue.async {
                 do {
-                    let serializedCity = city.serialize()
-                    let kasRL = ResourceLocator(protocolEnum: .wss, body: "kas.arkavo.net")
+                    let serializedCity = try city.serialize()
+                    let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")
                     let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
                     let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
                     var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
@@ -156,7 +217,10 @@ struct ContentView: View {
         }
         
         dispatchGroup.notify(queue: .main) {
+            let endTime = Date()
+            self.nanoTime = endTime.timeIntervalSince(startTime)
             print("Cities nanoed: \(self.nanoCities.count)")
+            print("Time taken: \(self.nanoTime) seconds")
         }
     }
     
@@ -165,53 +229,24 @@ struct ContentView: View {
         for nanoCity in nanoCities {
             let id = nanoCity.header.ephemeralPublicKey
             nanoTDFManager.addNanoTDF(nanoCity, withIdentifier: id)
-            webSocket.sendRewrapMessage(header: nanoCity.header)
-            print("id out \(id)")
-//            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 0...2)) {
-//                showingCities.append(city)
-//                
-//                DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration(for: city)) {
-//                    showingCities.removeAll { $0.id == city.id }
-//                }
-//            }
+            webSocketManager.sendRewrapMessage(header: nanoCity.header)
         }
     }
     
-    private func animationDuration(for city: City) -> Double {
-        // Base duration on population. Adjust these values as needed.
-        0.4
-//        let baseDuration = 1.0
-//        let populationFactor = Double(city.population) / 1_000_000.0 // Cities with 1 million+ get longer durations
-//        return baseDuration + (populationFactor * 5) // Max duration of 5 seconds for very large cities
-    }
-    
     private func addItem() {
-            let plaintext = "Keep this message secret".data(using: .utf8)!
-            webSocket.setRewrapCallback { identifier, symmetricKey in
-                defer {
-                    print("END setRewrapCallback")
-                }
-                print("BEGIN setRewrapCallback")
-                print("Received Rewrapped Symmetric key: \(String(describing: symmetricKey))")
-            }
-            webSocket.setKASPublicKeyCallback { publicKey in
-                let kasRL = ResourceLocator(protocolEnum: .http, body: "localhost:8080")
-                let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: publicKey, curve: .secp256r1)
-                let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "localhost/123")
-                var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-                do {
-                    // create
-                    let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: plaintext)
-                    print("Encryption successful")
-                    webSocket.sendRewrapMessage(header: nanoTDF.header)
-                } catch {
-                    print("Error creating nanoTDF: \(error)")
-                }
-            }
-            webSocket.connect()
-            webSocket.sendPublicKey()
-            webSocket.sendKASKeyMessage()
+            let _ = "Keep this message secret".data(using: .utf8)!
+//            let kasRL = ResourceLocator(protocolEnum: .http, body: "localhost:8080")
+//            let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: publicKey, curve: .secp256r1)
+//            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "localhost/123")
+//            var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
+//
+//            do {
+//                // create
+//                let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: plaintext)
+//                print("Encryption successful")
+//            } catch {
+//                print("Error creating nanoTDF: \(error)")
+//            }
         withAnimation {
             let newItem = Item(timestamp: Date())
             modelContext.insert(newItem)
