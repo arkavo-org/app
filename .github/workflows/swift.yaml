@@ -32,7 +32,7 @@ jobs:
 
       - name: Build
         env:
-          scheme: ${{ 'default' }}
+          scheme: "Arkavo"
         run: |
           cd Arkavo
           if [ $scheme = default ]; then scheme=$(cat default); fi
