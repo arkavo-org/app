@@ -15,6 +15,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Remove Package.resolved
+        run: rm -f Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
       - name: Set Default Scheme
         run: |
           cd Arkavo
