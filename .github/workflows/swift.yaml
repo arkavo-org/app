@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Change to Xcode project directory
-        run: cd Arkavo
+        run: |
+          cd Arkavo
+          ls -l
 
       - name: Set Default Scheme
         run: |
