@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
 		DA284D652C3F6B2D00CCF7EC /* CityLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D642C3F6B2800CCF7EC /* CityLabel.swift */; };
@@ -40,6 +41,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA03B45A2C40C1EA00C68162 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
 		DA284D642C3F6B2800CCF7EC /* CityLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityLabel.swift; sourceTree = "<group>"; };
@@ -107,6 +110,8 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA03B45A2C40C1EA00C68162 /* Info.plist */,
+				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA284D642C3F6B2800CCF7EC /* CityLabel.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA95A4392C3DF60F007409D5 /* City.swift */,
@@ -284,6 +289,7 @@
 			files = (
 				DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
+				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAC1F9EB2C34DA7000499631 /* Item.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
@@ -453,6 +459,7 @@
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Arkavo/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -491,6 +498,7 @@
 				DEVELOPMENT_TEAM = 496RA8CKPQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Arkavo/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
