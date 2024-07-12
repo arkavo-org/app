@@ -1,4 +1,3 @@
-import SwiftUICore
 import CoreLocation
 import SwiftUI
 
