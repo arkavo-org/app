@@ -18,11 +18,12 @@ struct ContentView: View {
     @State private var cityCount = 0
     @State private var nanoCities: [NanoTDF] = []
     @State private var nanoTime: TimeInterval = 0
-    @State private var annotations: [CityAnnotation] = []
     @ObservedObject var amViewModel = AuthenticationManagerViewModel()
     @StateObject private var annotationManager = AnnotationManager()
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var inProcessCount = 0
+    @State private var continentClusters: [String: [City]] = [:]
+    @State private var annotations: [AnnotationItem] = []
     
     var body: some View {
         #if os(iOS)
@@ -97,8 +98,14 @@ struct ContentView: View {
     private var mapContent: some View {
         ZStack {
             Map(position: $cameraPosition, interactionModes: .all) {
-                ForEach(annotationManager.annotations) { annotation in
-                    Marker(annotation.city.name, coordinate: annotation.city.clCoordinate)
+                ForEach(annotations) { item in
+                    if item.isCluster {
+                        Annotation(item.name, coordinate: item.coordinate) {
+                            ClusterAnnotationView(count: item.count, continent: item.name)
+                        }
+                    } else {
+                        Marker(item.name, coordinate: item.coordinate)
+                    }
                 }
             }
             .mapStyle(.imagery(elevation: .realistic))
@@ -138,29 +145,7 @@ struct ContentView: View {
         )
         .padding()
     }
-    
-//    private var cityInfoOverlay: some View {
-//        VStack {
-//            if nanoTDFManager.processDuration > 0 {
-//                Text("Decrypt (Rewrap) time: \(String(format: "%.2f", nanoTDFManager.processDuration)) seconds")
-//            }
-//            Text("Decrypt (Rewrap) count: \(nanoTDFManager.inProcessCount)")
-//            if nanoTime > 0 {
-//                Text("Encrypt time: \(String(format: "%.2f", nanoTime)) seconds")
-//            }
-//            if !nanoCities.isEmpty {
-//                Text("Nano count: \(nanoCities.count)")
-//            }
-//            if cities.count > 0 {
-//                Text("City count: \(cities.count)")
-//            }
-//        }
-//        .padding()
-//        .background(Color.black.opacity(0.7))
-//        .cornerRadius(10)
-//        .padding()
-//    }
-    
+
     #if os(iOS)
     private var controlsMenu: some View {
         Menu {
@@ -214,9 +199,12 @@ struct ContentView: View {
                 let city = try City.deserialize(from: payload)
                 
                 DispatchQueue.main.async {
-                    self.addCityAnnotation(city)
+                    self.addCityToCluster(city)
+                    self.updateAnnotations()
+                    
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        self.removeCityAnnotation(city)
+                        self.removeCityFromCluster(city)
+                        self.updateAnnotations()
                     }
                 }
             } catch {
@@ -311,6 +299,40 @@ struct ContentView: View {
                 modelContext.delete(items[index])
             }
         }
+    }
+    
+    private func addCityToCluster(_ city: City) {
+        if continentClusters[city.continent] == nil {
+            continentClusters[city.continent] = []
+        }
+        continentClusters[city.continent]?.append(city)
+        cityCount += 1
+    }
+    
+    private func removeCityFromCluster(_ city: City) {
+        continentClusters[city.continent]?.removeAll { $0.id == city.id }
+        cityCount -= 1
+    }
+
+    private func updateAnnotations() {
+        annotations = continentClusters.flatMap { (continent, cities) -> [AnnotationItem] in
+            if cities.count > 50 {
+                let centerCoordinate = calculateCenterCoordinate(for: cities)
+                return [AnnotationItem(coordinate: centerCoordinate, name: continent, count: cities.count, isCluster: true)]
+            } else {
+                return cities.map { city in
+                    AnnotationItem(coordinate: city.clCoordinate, name: city.name, count: 1, isCluster: false)
+                }
+            }
+        }
+        mapUpdateTrigger = UUID()
+    }
+
+    private func calculateCenterCoordinate(for cities: [City]) -> CLLocationCoordinate2D {
+        let totalLat = cities.reduce(0.0) { $0 + $1.coordinate.latitude }
+        let totalLon = cities.reduce(0.0) { $0 + $1.coordinate.longitude }
+        let count = Double(cities.count)
+        return CLLocationCoordinate2D(latitude: totalLat / count, longitude: totalLon / count)
     }
 }
 
@@ -418,4 +440,58 @@ class AnnotationManager: ObservableObject {
             self.annotations.removeAll { $0.id == city.id }
         }
     }
+}
+
+struct ClusterAnnotationView: View {
+    let count: Int
+    let continent: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.blue.opacity(0.7))
+                .frame(width: 50, height: 50)
+            VStack {
+                Text("\(count)")
+                    .font(.system(size: 14, weight: .bold))
+                Text(continent)
+                    .font(.system(size: 10))
+            }
+            .foregroundColor(.white)
+        }
+    }
+}
+
+struct CityAnnotationView: View {
+    let city: City
+
+    var body: some View {
+        VStack {
+            Image(systemName: "mappin.circle.fill")
+                .foregroundColor(.red)
+                .font(.title)
+            Text(city.name)
+                .font(.caption)
+                .fixedSize()
+        }
+    }
+}
+
+struct IdentifiableMapAnnotation: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let content: AnyView
+
+    init<Content: View>(coordinate: CLLocationCoordinate2D, @ViewBuilder content: () -> Content) {
+        self.coordinate = coordinate
+        self.content = AnyView(content())
+    }
+}
+
+struct AnnotationItem: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let name: String
+    let count: Int
+    let isCluster: Bool
 }
