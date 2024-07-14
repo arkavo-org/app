@@ -9,10 +9,10 @@ struct CityInfoOverlay: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("City Information")
+            Text("nanoTDF info")
                 .font(.headline)
                 .padding(.bottom, 4)
-            InfoRow(label: "City count", value: "\(citiesCount)")
+            InfoRow(label: "GeoJSON count", value: "\(citiesCount)")
             InfoRow(label: "Encrypt time", value: String(format: "%.2f s", nanoTime))
             InfoRow(label: "Nano count", value: "\(nanoCitiesCount)")
             InfoRow(label: "Decrypt time", value: String(format: "%.2f s", decryptTime))

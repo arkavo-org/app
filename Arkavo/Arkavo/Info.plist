@@ -2,18 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>org.arkavo.Arkavo</string>
-            </array>
-        </dict>
-    </array>
-    <key>ASWebAuthenticationSessionWebBrowserSessionEnabled</key>
-    <true/>
-    <key>NSFaceIDUsageDescription</key>
-    <string>We use Face ID for secure authentication.</string>
+	<key>ASWebAuthenticationSessionWebBrowserSessionEnabled</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>org.arkavo.Arkavo</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

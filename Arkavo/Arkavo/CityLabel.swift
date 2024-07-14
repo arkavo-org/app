@@ -6,43 +6,6 @@ struct CityAnnotation: Identifiable {
     public let city: City
 }
 
-public struct CityLabel: View {
-    let name: String
-    let population: Int
-    
-    @State private var opacity: Double = 0
-    @State private var isVisible: Bool = false
-    
-    public var body: some View {
-        
-        Text("\(population)")
-            .font(.system(size: fontSize))
-            .foregroundColor(.blue)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.easeInOut(duration: animationDuration).repeatForever(autoreverses: true)) {
-                    isVisible.toggle()
-                }
-            }
-            .onChange(of: isVisible) { newValue in
-                withAnimation(.easeInOut(duration: animationDuration)) {
-                    opacity = newValue ? 1 : 0
-                }
-            }
-    }
-    
-    private var animationDuration: Double {
-        Double(population) / 2_000_000.0 + 1.0 // 1 second for small cities, up to 5+ seconds for large ones
-    }
-    
-    private var fontSize: CGFloat {
-        let baseSize: CGFloat = 8 // Smaller base size
-        let scaleFactor: CGFloat = CGFloat(population) / 1_000_000.0 // Adjust scaling factor
-        let calculatedSize = baseSize + scaleFactor
-        return min(calculatedSize, 14) // Cap maximum size at 14
-    }
-}
-
 func generateRandomCities(count: Int) -> [City] {
     var cities: [City] = []
     
