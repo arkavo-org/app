@@ -13,21 +13,17 @@ struct ContentView: View {
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
-    @State private var cameraPosition = MapCameraPosition.camera(
-        MapCamera(
-            centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-            distance: 20000000,
-            heading: 0,
-            pitch: 0
-        )
-    )
     @State private var cities: [City] = []
     @State private var mapUpdateTrigger = UUID()
     @State private var cityCount = 0
     @State private var nanoCities: [NanoTDF] = []
     @State private var nanoTime: TimeInterval = 0
-    @State private var annotations: [CityAnnotation] = []
     @ObservedObject var amViewModel = AuthenticationManagerViewModel()
+    @StateObject private var annotationManager = AnnotationManager()
+    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var inProcessCount = 0
+    @State private var continentClusters: [String: [City]] = [:]
+    @State private var annotations: [AnnotationItem] = []
     
     var body: some View {
         #if os(iOS)
@@ -102,11 +98,16 @@ struct ContentView: View {
     private var mapContent: some View {
         ZStack {
             Map(position: $cameraPosition, interactionModes: .all) {
-                ForEach(annotations) { annotation in
-                    Marker(annotation.city.name, coordinate: annotation.city.clCoordinate)
+                ForEach(annotations) { item in
+                    if item.isCluster {
+                        Annotation(item.name, coordinate: item.coordinate) {
+                            ClusterAnnotationView(count: item.count, continent: item.name)
+                        }
+                    } else {
+                        Marker(item.name, coordinate: item.coordinate)
+                    }
                 }
             }
-            .id(mapUpdateTrigger)
             .mapStyle(.imagery(elevation: .realistic))
             .gesture(mapDragGesture)
             
@@ -135,23 +136,16 @@ struct ContentView: View {
     }
     
     private var cityInfoOverlay: some View {
-        VStack {
-            if nanoTime > 0 {
-                Text("Encrypt: \(String(format: "%.2f", nanoTime)) seconds")
-            }
-            if !nanoCities.isEmpty {
-                Text("Nano count: \(nanoCities.count)")
-            }
-            if cities.count > 0 {
-                Text("Data count: \(cities.count)")
-            }
-        }
-        .padding()
-        .background(Color.black.opacity(0.7))
-        .cornerRadius(10)
+        CityInfoOverlay(
+            nanoTime: nanoTime,
+            nanoCitiesCount: nanoCities.count,
+            citiesCount: cities.count,
+            decryptTime: nanoTDFManager.processDuration,
+            decryptCount: nanoTDFManager.inProcessCount
+        )
         .padding()
     }
-    
+
     #if os(iOS)
     private var controlsMenu: some View {
         Menu {
@@ -193,37 +187,38 @@ struct ContentView: View {
     private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
         guard let id = id, let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
         nanoTDFManager.removeNanoTDF(withIdentifier: id)
-        
+
         guard let symmetricKey = symmetricKey else {
             print("DENY")
             return
         }
         
-        do {
-            let payload = try nanoCity.getPayloadPlaintext(symmetricKey: symmetricKey)
-            let city = try City.deserialize(from: payload)
-            
-            DispatchQueue.main.async {
-                self.addCityAnnotation(city)
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let payload = try nanoCity.getPayloadPlaintext(symmetricKey: symmetricKey)
+                let city = try City.deserialize(from: payload)
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                    self.removeCityAnnotation(city)
+                DispatchQueue.main.async {
+                    self.addCityToCluster(city)
+                    self.updateAnnotations()
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.removeCityFromCluster(city)
+                        self.updateAnnotations()
+                    }
                 }
+            } catch {
+                print("getPayloadPlaintext failed: \(error)")
             }
-        } catch {
-            print("getPayloadPlaintext failed: \(error)")
         }
     }
 
     private func addCityAnnotation(_ city: City) {
-        let annotation = CityAnnotation(city: city)
-        annotations.append(annotation)
-        cityCount += 1
+        annotationManager.addAnnotation(city)
     }
     
     private func removeCityAnnotation(_ city: City) {
-        annotations.removeAll { $0.city.id == city.id }
-        cityCount -= 1
+        annotationManager.removeAnnotation(city)
     }
     
     private func loadGeoJSON() {
@@ -278,8 +273,6 @@ struct ContentView: View {
         dispatchGroup.notify(queue: .main) {
             let endTime = Date()
             self.nanoTime = endTime.timeIntervalSince(startTime)
-            print("Cities nanoed: \(self.nanoCities.count)")
-            print("Time taken: \(self.nanoTime) seconds")
         }
     }
 
@@ -294,18 +287,6 @@ struct ContentView: View {
 
     private func addItem() {
         let _ = "Keep this message secret".data(using: .utf8)!
-//            let kasRL = ResourceLocator(protocolEnum: .http, body: "localhost:8080")
-//            let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: publicKey, curve: .secp256r1)
-//            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "localhost/123")
-//            var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-//
-//            do {
-//                // create
-//                let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: plaintext)
-//                print("Encryption successful")
-//            } catch {
-//                print("Error creating nanoTDF: \(error)")
-//            }
         withAnimation {
             let newItem = Item(timestamp: Date())
             modelContext.insert(newItem)
@@ -319,6 +300,40 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func addCityToCluster(_ city: City) {
+        if continentClusters[city.continent] == nil {
+            continentClusters[city.continent] = []
+        }
+        continentClusters[city.continent]?.append(city)
+        cityCount += 1
+    }
+    
+    private func removeCityFromCluster(_ city: City) {
+        continentClusters[city.continent]?.removeAll { $0.id == city.id }
+        cityCount -= 1
+    }
+
+    private func updateAnnotations() {
+        annotations = continentClusters.flatMap { (continent, cities) -> [AnnotationItem] in
+            if cities.count > 50 {
+                let centerCoordinate = calculateCenterCoordinate(for: cities)
+                return [AnnotationItem(coordinate: centerCoordinate, name: continent, count: cities.count, isCluster: true)]
+            } else {
+                return cities.map { city in
+                    AnnotationItem(coordinate: city.clCoordinate, name: city.name, count: 1, isCluster: false)
+                }
+            }
+        }
+        mapUpdateTrigger = UUID()
+    }
+
+    private func calculateCenterCoordinate(for cities: [City]) -> CLLocationCoordinate2D {
+        let totalLat = cities.reduce(0.0) { $0 + $1.coordinate.latitude }
+        let totalLon = cities.reduce(0.0) { $0 + $1.coordinate.longitude }
+        let count = Double(cities.count)
+        return CLLocationCoordinate2D(latitude: totalLat / count, longitude: totalLon / count)
+    }
 }
 
 #Preview {
@@ -326,35 +341,62 @@ struct ContentView: View {
         .modelContainer(for: Item.self, inMemory: true)
 }
 
-class NanoTDFManager {
+class NanoTDFManager: ObservableObject {
     private var nanoTDFs: [Data: NanoTDF] = [:]
-    private var count: Int = 0
+    @Published private(set) var count: Int = 0
+    @Published private(set) var inProcessCount: Int = 0
+    @Published private(set) var processDuration: TimeInterval = 0
+    
+    private var processTimer: Timer?
+    private var processStartTime: Date?
 
     func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
         nanoTDFs[identifier] = nanoTDF
         count += 1
+        updateInProcessCount(inProcessCount + 1)
     }
 
     func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
         nanoTDFs[identifier]
     }
 
-    func updateNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
-        nanoTDFs[identifier] = nanoTDF
-    }
-
     func removeNanoTDF(withIdentifier identifier: Data) {
         if nanoTDFs.removeValue(forKey: identifier) != nil {
             count -= 1
+            updateInProcessCount(inProcessCount - 1)
         }
+    }
+
+    private func updateInProcessCount(_ newCount: Int) {
+        if newCount > 0 && inProcessCount == 0 {
+            startProcessTimer()
+        } else if newCount == 0 && inProcessCount > 0 {
+            stopProcessTimer()
+        }
+        inProcessCount = newCount
+    }
+
+    private func startProcessTimer() {
+        print("startProcessTimer")
+        processStartTime = Date()
+        processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self = self, let startTime = self.processStartTime else { return }
+            print("processDuration \(Date().timeIntervalSince(startTime))")
+        }
+    }
+
+    private func stopProcessTimer() {
+        print("stopProcessTimer")
+        guard let startTime = self.processStartTime else { return }
+        self.processDuration = Date().timeIntervalSince(startTime)
+        print("processDuration \(processDuration)")
+        processTimer?.invalidate()
+        processTimer = nil
+        processStartTime = nil
     }
 
     func isEmpty() -> Bool {
         return nanoTDFs.isEmpty
-    }
-
-    func getCount() -> Int {
-        return count
     }
 }
 
@@ -381,3 +423,75 @@ struct ItemListView: View {
     }
 }
 #endif
+
+class AnnotationManager: ObservableObject {
+    @Published var annotations: [CityAnnotation] = []
+    
+    func addAnnotation(_ city: City) {
+        DispatchQueue.main.async {
+            if !self.annotations.contains(where: { $0.id == city.id }) {
+                self.annotations.append(CityAnnotation(city: city))
+            }
+        }
+    }
+    
+    func removeAnnotation(_ city: City) {
+        DispatchQueue.main.async {
+            self.annotations.removeAll { $0.id == city.id }
+        }
+    }
+}
+
+struct ClusterAnnotationView: View {
+    let count: Int
+    let continent: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.blue.opacity(0.7))
+                .frame(width: 50, height: 50)
+            VStack {
+                Text("\(count)")
+                    .font(.system(size: 14, weight: .bold))
+                Text(continent)
+                    .font(.system(size: 10))
+            }
+            .foregroundColor(.white)
+        }
+    }
+}
+
+struct CityAnnotationView: View {
+    let city: City
+
+    var body: some View {
+        VStack {
+            Image(systemName: "mappin.circle.fill")
+                .foregroundColor(.red)
+                .font(.title)
+            Text(city.name)
+                .font(.caption)
+                .fixedSize()
+        }
+    }
+}
+
+struct IdentifiableMapAnnotation: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let content: AnyView
+
+    init<Content: View>(coordinate: CLLocationCoordinate2D, @ViewBuilder content: () -> Content) {
+        self.coordinate = coordinate
+        self.content = AnyView(content())
+    }
+}
+
+struct AnnotationItem: Identifiable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let name: String
+    let count: Int
+    let isCluster: Bool
+}

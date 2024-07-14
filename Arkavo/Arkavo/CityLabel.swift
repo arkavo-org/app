@@ -3,7 +3,7 @@ import SwiftUI
 
 struct CityAnnotation: Identifiable {
     let id = UUID()
-    let city: City
+    public let city: City
 }
 
 public struct CityLabel: View {
