@@ -612,7 +612,7 @@ struct AnnotationItem: Identifiable {
     let isCluster: Bool
 }
 
-extension WebSocketConnectionState: @retroactive CustomStringConvertible {
+extension WebSocketConnectionState: CustomStringConvertible {
     public var description: String {
         switch self {
         case .disconnected: return "Disconnected"
