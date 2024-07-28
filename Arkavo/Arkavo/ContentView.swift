@@ -121,6 +121,7 @@ struct ContentView: View {
                     .pickerStyle(SegmentedPickerStyle())
                     .onChange(of: selectedAccountIndex) { oldValue, newValue in
                         print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
                         resetWebSocketManager()
                     }
                 }
@@ -221,6 +222,7 @@ struct ContentView: View {
     #endif
 
     private func initialSetup() {
+        amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
     }
@@ -254,7 +256,13 @@ struct ContentView: View {
                 }
             }
             .store(in: &cancellables)
-        webSocketManager.setupWebSocket()
+        let token = amViewModel.authenticationManager.createJWT()
+        if token != nil {
+            webSocketManager.setupWebSocket(token: token!)
+        }
+        else {
+            print("createJWT token nil")
+        }
         webSocketManager.connect()
     }
 
@@ -286,7 +294,7 @@ struct ContentView: View {
                     self.addCityToCluster(city)
                     self.updateAnnotations()
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         self.removeCityFromCluster(city)
                         self.updateAnnotations()
                     }
@@ -338,7 +346,8 @@ struct ContentView: View {
                     let serializedCity = try city.serialize()
                     let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")
                     let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
-                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
+//                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
+                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: city.continent)
                     var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
                     let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
@@ -504,6 +513,7 @@ struct ItemListView: View {
                     .pickerStyle(SegmentedPickerStyle())
                     .onChange(of: selectedAccountIndex) { oldValue, newValue in
                         print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+//                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
                         onAccountChange(newValue)
                     }
                 }

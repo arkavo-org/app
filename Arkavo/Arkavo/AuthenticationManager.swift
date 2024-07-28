@@ -1,5 +1,6 @@
-import AuthenticationServices
 import Foundation
+import AuthenticationServices
+import CryptoKit
 
 #if canImport(UIKit)
 import UIKit
@@ -20,29 +21,27 @@ class AuthenticationManagerViewModel: ObservableObject {
 }
 
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    private var currentChallenge: String?
-    private var rawChallenge: Data?
-    private var sessionCookie: HTTPCookie?
+    @Published var currentAccount: String?
     
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         print("presentationAnchor called")
         
-        #if os(iOS)
+#if os(iOS)
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
         else {
             fatalError("No window found in the current window scene")
         }
         return window
-        #elseif os(macOS)
+#elseif os(macOS)
         guard let window = NSApplication.shared.windows.first
         else {
             fatalError("No window found in the application")
         }
         return window
-        #else
+#else
         fatalError("Unsupported platform")
-        #endif
+#endif
     }
     
     func signUp(accountName: String) {
@@ -57,15 +56,12 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("Either challenge or userID is nil.")
                 return
             }
-            // Store the raw challenge data
-            self.rawChallenge = challengeData
-            print("Raw challenge data: \(challengeData.map { String(format: "%02hhx", $0) }.joined())")
-            
-            // Store the challenge as a base64 encoded string
-            self.currentChallenge = challengeData.base64URLEncodedString()
-            print("Received challenge (base64): \(self.currentChallenge ?? "nil")")
-            print("Received challenge: \(self.currentChallenge ?? "nil")")
-            let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(challenge: challengeData, name: accountName, userID: userIDData)
+            print("signUp challengeData \(challengeData)")
+            let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(
+                challenge: challengeData,
+                name: accountName,
+                userID: userIDData
+            )
             let controller = ASAuthorizationController(authorizationRequests: [publicKeyCredentialRequest])
             controller.delegate = self
             controller.presentationContextProvider = self
@@ -81,20 +77,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         
-        session.dataTask(with: request) { [weak self] data, response, error in
+        session.dataTask(with: request) { data, response, error in
             if let error = error {
                 print("Error fetching registration options: \(error.localizedDescription)")
                 completion(nil, nil)
                 return
-            }
-            
-            if let httpResponse = response as? HTTPURLResponse,
-               let fields = httpResponse.allHeaderFields as? [String: String] {
-                let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
-                if let cookie = cookies.first(where: { $0.name == "authnz-rs" }) {
-                    self?.sessionCookie = cookie
-                    print("Received session cookie: \(cookie)")
-                }
             }
             
             if let data = data {
@@ -105,9 +92,18 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                        let userDict = publicKey["user"] as? [String: Any],
                        let userIDStr = userDict["id"] as? String
                     {
-                        let challenge = challengeStr.data(using: .utf8)
-                        let accountID = userIDStr.data(using: .utf8)
-                        completion(challenge, accountID)
+                        print("Received challenge: \(challengeStr)")
+                        print("Received userID: \(userIDStr)")
+                        
+                        if let challengeStrData = Data(base64Encoded: challengeStr.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/").padding(toLength: ((challengeStr.count+3)/4)*4, withPad: "=", startingAt: 0)),
+                           let userIDStrData = Data(base64Encoded: userIDStr.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/").padding(toLength: ((challengeStr.count+3)/4)*4, withPad: "=", startingAt: 0))
+                        {
+                            completion(challengeStrData, userIDStrData)
+                        } else {
+                            print("Unable to decode challengeStr")
+                            completion(nil, nil)
+                        }
+                        
                     } else {
                         print("Received data is not JSON or the format is not as expected: \(data)")
                         completion(nil, nil)
@@ -148,27 +144,13 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // cookie
-//        if let cookie = sessionCookie {
-//            request.setValue(cookie.value, forHTTPHeaderField: "Cookie")
-//            print("Sending cookie: \(cookie.name)=\(cookie.value)")
-//        }
         // Decode the clientDataJSON to verify the challenge
         if let clientDataJSONString = String(data: credential.rawClientDataJSON, encoding: .utf8),
            let clientDataJSON = try? JSONSerialization.jsonObject(with: credential.rawClientDataJSON, options: []) as? [String: Any],
            let challenge = clientDataJSON["challenge"] as? String {
             print("Client data JSON: \(clientDataJSONString)")
             print("Extracted challenge: \(challenge)")
-            print("Stored challenge: \(currentChallenge ?? "nil")")
-            
-            if challenge != currentChallenge {
-                print("Warning: Challenge mismatch")
-            } else {
-                print("Challenge match confirmed")
-            }
         }
-        // Print raw challenge data again for comparison
-        print("Raw challenge data (for comparison): \(rawChallenge?.map { String(format: "%02hhx", $0) }.joined() ?? "nil")")
         let parameters: [String: Any] = [
             "id": credential.credentialID.base64URLEncodedString(),
             "rawId": credential.credentialID.base64URLEncodedString(),
@@ -216,6 +198,55 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 }
             }
         }.resume()
+    }
+
+    func createJWT() -> String? {
+        guard let account = currentAccount else {
+            print("No account available to create JWT")
+            return nil
+        }
+
+        // Create JWT header
+        let header = ["alg": "HS256", "typ": "JWT"]
+        
+        // Create JWT payload
+        let payload: [String: Any] = [
+            "sub": account,
+            "exp": Int(Date().addingTimeInterval(3600).timeIntervalSince1970),
+            "iat": Int(Date().timeIntervalSince1970),
+            "iss": "Arkavo App",
+            "aud": ["kas.arkavo.net"],
+        ]
+
+        // Encode header and payload
+        guard let headerData = try? JSONSerialization.data(withJSONObject: header),
+              let payloadData = try? JSONSerialization.data(withJSONObject: payload) else {
+            print("Failed to encode header or payload")
+            return nil
+        }
+
+        let headerString = headerData.base64EncodedString().replacingOccurrences(of: "=", with: "")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+        let payloadString = payloadData.base64EncodedString().replacingOccurrences(of: "=", with: "")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+
+        // Create signature
+        let signatureInput = "\(headerString).\(payloadString)"
+        // In a real-world scenario, you'd use a secure way to store and retrieve this key
+        let key = SymmetricKey(size: .bits256)
+        let signature = HMAC<SHA256>.authenticationCode(for: Data(signatureInput.utf8), using: key)
+        let signatureString = Data(signature).base64EncodedString().replacingOccurrences(of: "=", with: "")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+
+        // Combine all parts
+        return "\(headerString).\(payloadString).\(signatureString)"
+    }
+
+    func updateAccount(_ newAccount: String) {
+        currentAccount = newAccount
     }
 }
 

@@ -11,17 +11,17 @@ class WebSocketManager: ObservableObject {
     @Published private(set) var connectionState: WebSocketConnectionState = .disconnected
     @Published var lastError: String?
     private var cancellables = Set<AnyCancellable>()
-    
     private var kasPublicKeyCallback: ((P256.KeyAgreement.PublicKey) -> Void)?
     private var rewrapCallback: ((Data, SymmetricKey?) -> Void)?
 
     init() {
-        setupWebSocket()
     }
-
-    func setupWebSocket() {
+    
+    func setupWebSocket(token: String) {
         let url = URL(string: "wss://kas.arkavo.net")!
-        webSocket = KASWebSocket(kasUrl: url)
+        print("Connecting to: \(url)")
+        print("Token: \(token)")
+        webSocket = KASWebSocket(kasUrl: url, token: token)
         
         // Set the callbacks on the new webSocket instance
         if let kasCallback = kasPublicKeyCallback {
