@@ -72,7 +72,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
     
     func registrationOptions(accountName: String, completion: @escaping (Data?, Data?) -> Void) {
-        let url = URL(string: "https://webauthn.arkavo.net/challenge/\(accountName)")!
+        let url = URL(string: "https://webauthn.arkavo.net/register/\(accountName)")!
         let session = URLSession.shared
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -117,15 +117,173 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         .resume()
     }
     
-    func signIn() {
-        // Handle successful signIn
+    func signIn(accountName: String) {
+        guard !accountName.isEmpty else {
+            print("Account name cannot be empty")
+            return
+        }
+        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "webauthn.arkavo.net")
+        
+        authenticationOptions(accountName: accountName) { result in
+            switch result {
+            case .success(let challengeData):
+                print("signIn challengeData \(challengeData.base64EncodedString())")
+                let assertionRequest = provider.createCredentialAssertionRequest(challenge: challengeData)
+                
+                let controller = ASAuthorizationController(authorizationRequests: [assertionRequest])
+                controller.delegate = self
+                controller.presentationContextProvider = self
+                DispatchQueue.main.async {
+                    controller.performRequests()
+                }
+            case .failure(let error):
+                print("Failed to get authentication options: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    // Notify the user of the error
+                }
+            }
+        }
+    }
+    
+    func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
+        let url = URL(string: "https://webauthn.arkavo.net/authenticate/\(accountName)")!
+        let session = URLSession.shared
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        session.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error fetching authentication options: \(error.localizedDescription)")
+                completion(.failure(error))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"])))
+                return
+            }
+            
+            print("HTTP Status Code: \(httpResponse.statusCode)")
+            
+            guard let data = data else {
+                completion(.failure(NSError(domain: "DataError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"])))
+                return
+            }
+            
+            if (200...299).contains(httpResponse.statusCode) {
+                do {
+                    if let challenge = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                       let publicKey = challenge["publicKey"] as? [String: Any],
+                       let challengeStr = publicKey["challenge"] as? String {
+                        print("Received challenge: \(challengeStr)")
+                        
+                        // Convert base64url to base64
+                        let base64 = challengeStr
+                            .replacingOccurrences(of: "-", with: "+")
+                            .replacingOccurrences(of: "_", with: "/")
+                        let padding = String(repeating: "=", count: base64.count % 4)
+                        let base64Padded = base64 + padding
+                        
+                        if let challengeData = Data(base64Encoded: base64Padded) {
+                            completion(.success(challengeData))
+                        } else {
+                            print("Failed to decode challenge: \(challengeStr)")
+                            completion(.failure(NSError(domain: "ChallengeError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unable to decode challenge string"])))
+                        }
+                    } else {
+                        completion(.failure(NSError(domain: "JSONError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unexpected JSON structure"])))
+                    }
+                } catch {
+                    print("Failed to parse JSON data. Error: \(error)")
+                    completion(.failure(error))
+                }
+            } else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                completion(.failure(NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
+            }
+        }.resume()
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         print("Authorization completed successfully")
         if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration {
             sendRegistrationDataToServer(credential: credential)
+        } else if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
+            sendAuthenticationDataToServer(credential: credential)
         }
+    }
+    
+    private func sendAuthenticationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) {
+        print("sendAuthenticationDataToServer")
+        let url = URL(string: "https://webauthn.arkavo.net/authenticate")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let parameters: [String: Any] = [
+            "id": credential.credentialID.base64URLEncodedString(),
+            "rawId": credential.credentialID.base64URLEncodedString(),
+            "response": [
+                "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+                "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
+                "signature": credential.signature.base64URLEncodedString(),
+                "userHandle": credential.userID.base64URLEncodedString()
+            ],
+            "type": "public-key"
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+            print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+        } catch {
+            print("Error creating JSON data: \(error)")
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending authentication data: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("Invalid response type")
+                return
+            }
+            
+            print("HTTP Status Code: \(httpResponse.statusCode)")
+            
+            if (200...299).contains(httpResponse.statusCode) {
+                print("Authentication successful")
+                if let data = data, !data.isEmpty {
+                    // Try to parse the response as JSON if there's data
+                    do {
+                        if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                            print("Parsed JSON response: \(jsonResult)")
+                            // Handle any additional server response data here
+                        }
+                    } catch {
+                        print("Failed to parse JSON data. Error: \(error)")
+                    }
+                } else {
+                    print("No data in response body, but authentication was successful")
+                }
+                
+                DispatchQueue.main.async {
+                    // Update UI or app state to reflect successful authentication
+                    self.currentAccount = credential.userID.base64EncodedString()
+                    // Notify the user of successful authentication
+                }
+            } else {
+                print("Authentication failed with status code: \(httpResponse.statusCode)")
+                if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                    print("Server response: \(responseString)")
+                }
+                DispatchQueue.main.async {
+                    // Notify the user of authentication failure
+                }
+            }
+        }.resume()
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
@@ -140,7 +298,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     
     private func sendRegistrationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) {
         print("sendRegistrationDataToServer")
-        let url = URL(string: "https://webauthn.arkavo.net/register_finish")!
+        let url = URL(string: "https://webauthn.arkavo.net/register")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -176,6 +334,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 return
             }
             
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("Invalid response type")
+                return
+            }
+            
             guard let data = data else {
                 print("No data received from server")
                 return
@@ -185,16 +348,25 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("HTTP Status Code: \(httpResponse.statusCode)")
             }
             
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("Server response: \(responseString)")
-                
+            if (200...299).contains(httpResponse.statusCode) {
                 // Try to parse the response as JSON
                 do {
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         print("Parsed JSON response: \(jsonResult)")
+                        // Handle successful registration here
+                        DispatchQueue.main.async {
+                            self.currentAccount = jsonResult["username"] as? String
+                            // Notify the user of successful registration
+                        }
                     }
                 } catch {
                     print("Failed to parse JSON data. Error: \(error)")
+                }
+            } else {
+                print("Registration failed with status code: \(httpResponse.statusCode)")
+                // Handle registration failure
+                DispatchQueue.main.async {
+                    // Notify the user of registration failure
                 }
             }
         }.resume()

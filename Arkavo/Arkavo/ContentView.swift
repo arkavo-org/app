@@ -108,7 +108,8 @@ struct ContentView: View {
                 Button("Sign Up") {
                     amViewModel.authenticationManager.signUp(accountName: selectedAccount)
                 }
-                Button("Sign In", action: amViewModel.authenticationManager.signIn)
+                Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
+                }
             }
             Section(header: Text("Account")) {
                 VStack(alignment: .leading, spacing: 10) {
