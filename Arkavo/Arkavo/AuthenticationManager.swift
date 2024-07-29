@@ -17,11 +17,23 @@ typealias MyWindow = NSWindow
 #endif
 
 class AuthenticationManagerViewModel: ObservableObject {
-    @Published var authenticationManager = AuthenticationManager()
+    @Published var authenticationManager: AuthenticationManager
+    
+    init(baseURL: URL) {
+        self.authenticationManager = AuthenticationManager(baseURL: baseURL)
+    }
 }
 
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     @Published var currentAccount: String?
+    private let baseURL: URL
+    private let relyingPartyIdentifier: String
+    
+    init(baseURL: URL) {
+        self.baseURL = baseURL
+        self.relyingPartyIdentifier = baseURL.host ?? "webauthn.arkavo.net"
+        super.init()
+    }
     
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         print("presentationAnchor called")
@@ -49,7 +61,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Account name cannot be empty")
             return
         }
-        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "webauthn.arkavo.net")
+        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
         registrationOptions(accountName: accountName) { [weak self] challenge, userID in
             guard let self = self else { return }
             guard let challengeData = challenge, let userIDData = userID else {
@@ -72,7 +84,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
     
     func registrationOptions(accountName: String, completion: @escaping (Data?, Data?) -> Void) {
-        let url = URL(string: "https://webauthn.arkavo.net/register/\(accountName)")!
+        let url = baseURL.appendingPathComponent("register/\(accountName)")
         let session = URLSession.shared
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -146,7 +158,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
     
     func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
-        let url = URL(string: "https://webauthn.arkavo.net/authenticate/\(accountName)")!
+        let url = baseURL.appendingPathComponent("authenticate/\(accountName)")
         let session = URLSession.shared
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -215,7 +227,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     
     private func sendAuthenticationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) {
         print("sendAuthenticationDataToServer")
-        let url = URL(string: "https://webauthn.arkavo.net/authenticate")!
+        let url = baseURL.appendingPathComponent("authenticate")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -298,7 +310,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     
     private func sendRegistrationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) {
         print("sendRegistrationDataToServer")
-        let url = URL(string: "https://webauthn.arkavo.net/register")!
+        let url = baseURL.appendingPathComponent("register")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

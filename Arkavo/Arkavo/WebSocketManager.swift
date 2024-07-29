@@ -14,9 +14,6 @@ class WebSocketManager: ObservableObject {
     private var kasPublicKeyCallback: ((P256.KeyAgreement.PublicKey) -> Void)?
     private var rewrapCallback: ((Data, SymmetricKey?) -> Void)?
 
-    init() {
-    }
-    
     func setupWebSocket(token: String) {
         let url = URL(string: "wss://kas.arkavo.net")!
         print("Connecting to: \(url)")

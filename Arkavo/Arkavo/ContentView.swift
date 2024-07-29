@@ -19,7 +19,7 @@ struct ContentView: View {
     @State private var cityCount = 0
     @State private var nanoCities: [NanoTDF] = []
     @State private var nanoTime: TimeInterval = 0
-    @ObservedObject var amViewModel = AuthenticationManagerViewModel()
+    @ObservedObject var amViewModel = AuthenticationManagerViewModel(baseURL: URL(string: "https://webauthn.arkavo.net")!)
     @StateObject private var annotationManager = AnnotationManager()
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var inProcessCount = 0
@@ -197,7 +197,9 @@ struct ContentView: View {
                 Button("Sign Up") {
                     amViewModel.authenticationManager.signUp(accountName: selectedAccount)
                 }
-                Button("Sign In", action: amViewModel.authenticationManager.signIn)
+                Button("Sign In") {
+                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                }
             }
         } label: {
             Image(systemName: "gear")
