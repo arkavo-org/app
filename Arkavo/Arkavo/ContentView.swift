@@ -4,6 +4,7 @@ import MapKit
 import CryptoKit
 import AuthenticationServices
 import LocalAuthentication
+import Combine
 import OpenTDFKit
 
 struct ContentView: View {
@@ -18,12 +19,20 @@ struct ContentView: View {
     @State private var cityCount = 0
     @State private var nanoCities: [NanoTDF] = []
     @State private var nanoTime: TimeInterval = 0
-    @ObservedObject var amViewModel = AuthenticationManagerViewModel()
+    @ObservedObject var amViewModel = AuthenticationManagerViewModel(baseURL: URL(string: "https://webauthn.arkavo.net")!)
     @StateObject private var annotationManager = AnnotationManager()
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var inProcessCount = 0
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
+    // connection
+    @State private var cancellables = Set<AnyCancellable>()
+    @State private var isReconnecting = false
+    @State private var hasInitialConnection = false
+    // account
+    @State private var selectedAccount: String = "main"
+    @State private var selectedAccountIndex = 0
+    private let accountOptions = ["Main", "Alt", "Private"]
     
     var body: some View {
         #if os(iOS)
@@ -38,22 +47,43 @@ struct ContentView: View {
         NavigationStack {
             ZStack {
                 mapContent
-                
-                VStack {
+                VStack() {
                     HStack {
                         controlsMenu
                         Spacer()
                         itemListButton
                     }
                     .padding()
-                    
+//                    ++++++++++++++ Connection debug
+//                    Spacer()
+//                    Section(header: Text("Status")) {
+//                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
+//                        if let error = webSocketManager.lastError {
+//                            Text("Error: \(error)")
+//                                .foregroundColor(.red)
+//                        }
+//                        if isReconnecting {
+//                            ProgressView()
+//                        } else {
+//                            Button("Reconnect") {
+//                                resetWebSocketManager()
+//                            }
+//                            .buttonStyle(.bordered)
+//                        }
+//                        if let kasPublicKey = kasPublicKey {
+//                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
+//                                .font(.caption)
+//                                .lineLimit(1)
+//                                .truncationMode(.tail)
+//                        }
+//                    }
                     Spacer()
                     cityInfoOverlay
                 }
             }
             .ignoresSafeArea(edges: .all)
         }
-        .onAppear(perform: setupWebSocketManager)
+        .onAppear(perform: initialSetup)
     }
     #else
     private var macOSLayout: some View {
@@ -62,7 +92,7 @@ struct ContentView: View {
         } detail: {
             mapContent
         }
-        .onAppear(perform: setupWebSocketManager)
+        .onAppear(perform: initialSetup)
     }
     
     private var sidebarContent: some View {
@@ -73,21 +103,30 @@ struct ContentView: View {
                 Button("Display", action: animateCities)
                 Button("Add", action: loadRandomCities)
             }
-            
+            Spacer()
             Section("Authentication") {
-                Button("Sign Up", action: amViewModel.authenticationManager.signUp)
-                Button("Sign In", action: amViewModel.authenticationManager.signIn)
+                Button("Sign Up") {
+                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                }
+                Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
+                }
             }
-            
-            Section("Items") {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+            Section(header: Text("Account")) {
+                VStack(alignment: .leading, spacing: 10) {
+                    
+                    Picker("", selection: $selectedAccountIndex) {
+                        ForEach(0..<accountOptions.count, id: \.self) { index in
+                            Text(accountOptions[index]).tag(index)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                        resetWebSocketManager()
                     }
                 }
-                .onDelete(perform: deleteItems)
+                .padding(.vertical)
             }
         }
         .listStyle(SidebarListStyle())
@@ -153,9 +192,15 @@ struct ContentView: View {
             Button("Nano", action: createNanoCities)
             Button("Display", action: animateCities)
             Button("Add", action: loadRandomCities)
-            Divider()
-            Button("Sign Up", action: amViewModel.authenticationManager.signUp)
-            Button("Sign In", action: amViewModel.authenticationManager.signIn)
+            Spacer()
+            Section("Authentication") {
+                Button("Sign Up") {
+                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                }
+                Button("Sign In") {
+                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                }
+            }
         } label: {
             Image(systemName: "gear")
                 .padding()
@@ -165,7 +210,12 @@ struct ContentView: View {
     }
     
     private var itemListButton: some View {
-        NavigationLink(destination: ItemListView(items: items, deleteItems: deleteItems)) {
+        NavigationLink(destination: ItemListView(
+            items: items,
+            deleteItems: deleteItems,
+            selectedAccountIndex: $selectedAccountIndex,
+            onAccountChange: { _ in resetWebSocketManager() }
+        )) {
             Image(systemName: "list.bullet")
                 .padding()
                 .background(Color.black.opacity(0.5))
@@ -174,16 +224,61 @@ struct ContentView: View {
     }
     #endif
 
-    private func setupWebSocketManager() {
-        webSocketManager.setKASPublicKeyCallback { publicKey in
-            kasPublicKey = publicKey
-        }
-        webSocketManager.setRewrapCallback(callback: handleRewrapCallback)
-        webSocketManager.connect()
-        webSocketManager.sendPublicKey()
-        webSocketManager.sendKASKeyMessage()
+    private func initialSetup() {
+        amViewModel.authenticationManager.updateAccount(accountOptions[0])
+        setupCallbacks()
+        setupWebSocketManager()
     }
 
+    private func setupCallbacks() {
+        webSocketManager.setKASPublicKeyCallback { publicKey in
+            DispatchQueue.main.async {
+                print("Received KAS Public Key")
+                self.kasPublicKey = publicKey
+            }
+        }
+        
+        webSocketManager.setRewrapCallback { id, symmetricKey in
+            handleRewrapCallback(id: id, symmetricKey: symmetricKey)
+        }
+    }
+    
+    private func setupWebSocketManager() {
+        // Subscribe to connection state changes
+        webSocketManager.$connectionState
+            .sink { state in
+                if state == .connected && !hasInitialConnection {
+                    DispatchQueue.main.async {
+                        print("Initial connection established. Sending public key and KAS key message.")
+                        self.webSocketManager.sendPublicKey()
+                        self.webSocketManager.sendKASKeyMessage()
+                        self.hasInitialConnection = true
+                    }
+                } else if state == .disconnected {
+                    self.hasInitialConnection = false
+                }
+            }
+            .store(in: &cancellables)
+        let token = amViewModel.authenticationManager.createJWT()
+        if token != nil {
+            webSocketManager.setupWebSocket(token: token!)
+        }
+        else {
+            print("createJWT token nil")
+        }
+        webSocketManager.connect()
+    }
+
+    private func resetWebSocketManager() {
+        isReconnecting = true
+        hasInitialConnection = false
+        webSocketManager.close()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // Increased delay to 1 second
+            self.setupWebSocketManager()
+            self.isReconnecting = false
+        }
+    }
+    
     private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
         guard let id = id, let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
         nanoTDFManager.removeNanoTDF(withIdentifier: id)
@@ -202,7 +297,7 @@ struct ContentView: View {
                     self.addCityToCluster(city)
                     self.updateAnnotations()
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         self.removeCityFromCluster(city)
                         self.updateAnnotations()
                     }
@@ -254,7 +349,8 @@ struct ContentView: View {
                     let serializedCity = try city.serialize()
                     let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")
                     let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
-                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
+//                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
+                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: city.continent)
                     var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
                     let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
@@ -377,7 +473,6 @@ class NanoTDFManager: ObservableObject {
     }
 
     private func startProcessTimer() {
-        print("startProcessTimer")
         processStartTime = Date()
         processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self = self, let startTime = self.processStartTime else { return }
@@ -404,18 +499,42 @@ class NanoTDFManager: ObservableObject {
 struct ItemListView: View {
     let items: [Item]
     let deleteItems: (IndexSet) -> Void
+    @Binding var selectedAccountIndex: Int
+    let accountOptions = ["Main", "Alt", "Private"]
+    var onAccountChange: (Int) -> Void
 
     var body: some View {
         List {
-            ForEach(items) { item in
-                NavigationLink {
-                    Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                } label: {
-                    Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+            Section(header: Text("Account")) {
+                VStack(alignment: .leading, spacing: 10) {
+                    
+                    Picker("", selection: $selectedAccountIndex) {
+                        ForEach(0..<accountOptions.count, id: \.self) { index in
+                            Text(accountOptions[index]).tag(index)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+//                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                        onAccountChange(newValue)
+                    }
                 }
+                .padding(.vertical)
             }
-            .onDelete(perform: deleteItems)
+
+            Section(header: Text("Items")) {
+                ForEach(items) { item in
+                    NavigationLink {
+                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
+                    } label: {
+                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                    }
+                }
+                .onDelete(perform: deleteItems)
+            }
         }
+        .listStyle(GroupedListStyle())
         .navigationTitle("Items")
         .toolbar {
             EditButton()
@@ -494,4 +613,14 @@ struct AnnotationItem: Identifiable {
     let name: String
     let count: Int
     let isCluster: Bool
+}
+
+extension WebSocketConnectionState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .disconnected: return "Disconnected"
+        case .connecting: return "Connecting"
+        case .connected: return "Connected"
+        }
+    }
 }
