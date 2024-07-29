@@ -56,6 +56,50 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 #endif
     }
     
+    private func handleServerResponse<T: Decodable>(
+        data: Data?,
+        response: URLResponse?,
+        error: Error?,
+        successMessage: String,
+        failureMessage: String,
+        completion: @escaping (Result<T, Error>) -> Void
+    ) {
+        if let error = error {
+            print("\(failureMessage): \(error.localizedDescription)")
+            completion(.failure(error))
+            return
+        }
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            let error = NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"])
+            completion(.failure(error))
+            return
+        }
+        
+        print("HTTP Status Code: \(httpResponse.statusCode)")
+        
+        guard let data = data else {
+            let error = NSError(domain: "DataError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"])
+            completion(.failure(error))
+            return
+        }
+        
+        if (200...299).contains(httpResponse.statusCode) {
+            do {
+                let decodedData = try JSONDecoder().decode(T.self, from: data)
+                print(successMessage)
+                completion(.success(decodedData))
+            } catch {
+                print("Failed to parse JSON data. Error: \(error)")
+                completion(.failure(error))
+            }
+        } else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            let error = NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            completion(.failure(error))
+        }
+    }
+    
     func signUp(accountName: String) {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
@@ -85,48 +129,28 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     
     func registrationOptions(accountName: String, completion: @escaping (Data?, Data?) -> Void) {
         let url = baseURL.appendingPathComponent("register/\(accountName)")
-        let session = URLSession.shared
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        let request = URLRequest(url: url)
         
-        session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error fetching registration options: \(error.localizedDescription)")
-                completion(nil, nil)
-                return
-            }
-            
-            if let data = data {
-                do {
-                    if let challenge = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                       let publicKey = challenge["publicKey"] as? [String: Any],
-                       let challengeStr = publicKey["challenge"] as? String,
-                       let userDict = publicKey["user"] as? [String: Any],
-                       let userIDStr = userDict["id"] as? String
-                    {
-                        print("Received challenge: \(challengeStr)")
-                        print("Received userID: \(userIDStr)")
-                        
-                        if let challengeStrData = Data(base64Encoded: challengeStr.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/").padding(toLength: ((challengeStr.count+3)/4)*4, withPad: "=", startingAt: 0)),
-                           let userIDStrData = Data(base64Encoded: userIDStr.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/").padding(toLength: ((challengeStr.count+3)/4)*4, withPad: "=", startingAt: 0))
-                        {
-                            completion(challengeStrData, userIDStrData)
-                        } else {
-                            print("Unable to decode challengeStr")
-                            completion(nil, nil)
-                        }
-                        
-                    } else {
-                        print("Received data is not JSON or the format is not as expected: \(data)")
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            self?.handleServerResponse(
+                data: data,
+                response: response,
+                error: error,
+                successMessage: "Registration options retrieved successfully",
+                failureMessage: "Error fetching registration options",
+                completion: { (result: Result<RegistrationOptionsResponse, Error>) in
+                    switch result {
+                    case .success(let response):
+                        let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64())
+                        let userIDData = Data(base64Encoded: response.publicKey.user.id.base64URLToBase64())
+                        completion(challengeData, userIDData)
+                    case .failure(let error):
+                        print("Failed to get registration options: \(error.localizedDescription)")
                         completion(nil, nil)
                     }
-                } catch {
-                    print("Failed to parse JSON data. \(error)")
-                    completion(nil, nil)
                 }
-            }
-        }
-        .resume()
+            )
+        }.resume()
     }
     
     func signIn(accountName: String) {
@@ -159,60 +183,28 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     
     func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
         let url = baseURL.appendingPathComponent("authenticate/\(accountName)")
-        let session = URLSession.shared
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        let request = URLRequest(url: url)
         
-        session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error fetching authentication options: \(error.localizedDescription)")
-                completion(.failure(error))
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"])))
-                return
-            }
-            
-            print("HTTP Status Code: \(httpResponse.statusCode)")
-            
-            guard let data = data else {
-                completion(.failure(NSError(domain: "DataError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"])))
-                return
-            }
-            
-            if (200...299).contains(httpResponse.statusCode) {
-                do {
-                    if let challenge = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                       let publicKey = challenge["publicKey"] as? [String: Any],
-                       let challengeStr = publicKey["challenge"] as? String {
-                        print("Received challenge: \(challengeStr)")
-                        
-                        // Convert base64url to base64
-                        let base64 = challengeStr
-                            .replacingOccurrences(of: "-", with: "+")
-                            .replacingOccurrences(of: "_", with: "/")
-                        let padding = String(repeating: "=", count: base64.count % 4)
-                        let base64Padded = base64 + padding
-                        
-                        if let challengeData = Data(base64Encoded: base64Padded) {
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            self?.handleServerResponse(
+                data: data,
+                response: response,
+                error: error,
+                successMessage: "Authentication options retrieved successfully",
+                failureMessage: "Error fetching authentication options",
+                completion: { (result: Result<AuthenticationOptionsResponse, Error>) in
+                    switch result {
+                    case .success(let response):
+                        if let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64()) {
                             completion(.success(challengeData))
                         } else {
-                            print("Failed to decode challenge: \(challengeStr)")
                             completion(.failure(NSError(domain: "ChallengeError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unable to decode challenge string"])))
                         }
-                    } else {
-                        completion(.failure(NSError(domain: "JSONError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unexpected JSON structure"])))
+                    case .failure(let error):
+                        completion(.failure(error))
                     }
-                } catch {
-                    print("Failed to parse JSON data. Error: \(error)")
-                    completion(.failure(error))
                 }
-            } else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                completion(.failure(NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
-            }
+            )
         }.resume()
     }
     
@@ -434,11 +426,44 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
 }
 
+struct AuthenticationOptionsResponse: Decodable {
+    let publicKey: PublicKeyAuthenticationOptions
+}
+
+struct RegistrationOptionsResponse: Decodable {
+    let publicKey: PublicKeyRegistrationOptions
+}
+
+struct PublicKeyAuthenticationOptions: Decodable {
+    let challenge: String
+}
+
+struct PublicKeyRegistrationOptions: Decodable {
+    let challenge: String
+    let user: User
+}
+
+struct User: Decodable {
+    let id: String
+}
+
 extension Data {
     func base64URLEncodedString() -> String {
         return base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+extension String {
+    func base64URLToBase64() -> String {
+        var base64 = self
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        if base64.count % 4 != 0 {
+            base64.append(String(repeating: "=", count: 4 - base64.count % 4))
+        }
+        return base64
     }
 }
