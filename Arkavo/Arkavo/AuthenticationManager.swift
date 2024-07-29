@@ -238,9 +238,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-            print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+            // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
         } catch {
-            print("Error creating JSON data: \(error)")
+            print("Error creating authentication JSON data: \(error)")
             return
         }
         
@@ -254,8 +254,6 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("Invalid response type")
                 return
             }
-            
-            print("HTTP Status Code: \(httpResponse.statusCode)")
             
             if (200...299).contains(httpResponse.statusCode) {
                 print("Authentication successful")
@@ -326,9 +324,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-            print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+            // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
         } catch {
-            print("Error creating JSON data: \(error)")
+            print("Error creating registration JSON data: \(error)")
             return
         }
         
@@ -364,7 +362,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                         }
                     }
                 } catch {
-                    print("Failed to parse JSON data. Error: \(error)")
+                    // currently empty
+                    // print("Failed to parse JSON data. Error: \(error)")
                 }
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")
