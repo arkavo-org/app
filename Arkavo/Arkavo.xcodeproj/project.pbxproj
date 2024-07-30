@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
+		DA0FEC422C58766F00C0A010 /* SecureStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* SecureStream.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
 		DA284D652C3F6B2D00CCF7EC /* CityLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D642C3F6B2800CCF7EC /* CityLabel.swift */; };
@@ -16,7 +17,6 @@
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ContentView.swift */; };
-		DAC1F9EB2C34DA7000499631 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9EA2C34DA7000499631 /* Item.swift */; };
 		DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9EC2C34DA7100499631 /* Assets.xcassets */; };
 		DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */; };
 		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
@@ -43,6 +43,7 @@
 
 /* Begin PBXFileReference section */
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA0FEC402C586DF700C0A010 /* SecureStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStream.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
 		DA284D642C3F6B2800CCF7EC /* CityLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityLabel.swift; sourceTree = "<group>"; };
@@ -51,7 +52,6 @@
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		DAC1F9EA2C34DA7000499631 /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		DAC1F9EC2C34DA7100499631 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Arkavo.entitlements; sourceTree = "<group>"; };
 		DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -111,17 +111,17 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA0FEC402C586DF700C0A010 /* SecureStream.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
-				DA284D642C3F6B2800CCF7EC /* CityLabel.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA95A4392C3DF60F007409D5 /* City.swift */,
+				DA284D642C3F6B2800CCF7EC /* CityLabel.swift */,
+				DA8A058D2C43582200826542 /* CityInfoOverlay.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC1F9E82C34DA7000499631 /* ContentView.swift */,
-				DAC1F9EA2C34DA7000499631 /* Item.swift */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
-				DA8A058D2C43582200826542 /* CityInfoOverlay.swift */,
 			);
 			path = Arkavo;
 			sourceTree = "<group>";
@@ -288,10 +288,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA0FEC422C58766F00C0A010 /* SecureStream.swift in Sources */,
 				DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
-				DAC1F9EB2C34DA7000499631 /* Item.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DA284D652C3F6B2D00CCF7EC /* CityLabel.swift in Sources */,

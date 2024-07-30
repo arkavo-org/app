@@ -1,10 +1,3 @@
-//
-//  ArkavoApp.swift
-//  Arkavo
-//
-//  Created by Paul Flynn on 7/2/24.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -13,7 +6,7 @@ struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            SecureStreamModel.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
