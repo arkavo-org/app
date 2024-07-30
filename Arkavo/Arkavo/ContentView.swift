@@ -468,54 +468,6 @@ class NanoTDFManager: ObservableObject {
     }
 }
 
-#if os(iOS)
-struct ItemListView: View {
-    let items: [Item]
-    let deleteItems: (IndexSet) -> Void
-    @Binding var selectedAccountIndex: Int
-    let accountOptions = ["Main", "Alt", "Private"]
-    var onAccountChange: (Int) -> Void
-
-    var body: some View {
-        List {
-            Section(header: Text("Account")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    
-                    Picker("", selection: $selectedAccountIndex) {
-                        ForEach(0..<accountOptions.count, id: \.self) { index in
-                            Text(accountOptions[index]).tag(index)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-//                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                        onAccountChange(newValue)
-                    }
-                }
-                .padding(.vertical)
-            }
-
-            Section(header: Text("Items")) {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-        }
-        .listStyle(GroupedListStyle())
-        .navigationTitle("Items")
-        .toolbar {
-            EditButton()
-        }
-    }
-}
-#endif
-
 class AnnotationManager: ObservableObject {
     @Published var annotations: [CityAnnotation] = []
     
