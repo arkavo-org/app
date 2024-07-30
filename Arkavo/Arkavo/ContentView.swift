@@ -10,10 +10,11 @@ import OpenTDFKit
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @Query private var items: [Item]
+    // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    // map
     @State private var cities: [City] = []
     @State private var mapUpdateTrigger = UUID()
     @State private var cityCount = 0
@@ -33,6 +34,9 @@ struct ContentView: View {
     @State private var selectedAccount: String = "main"
     @State private var selectedAccountIndex = 0
     private let accountOptions = ["Main", "Alt", "Private"]
+    // SecureStream
+    @Query private var secureStreams: [SecureStreamModel]
+    @StateObject private var secureStreamModel = SecureStreamModel(stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID()))
     
     var body: some View {
         #if os(iOS)
@@ -51,7 +55,6 @@ struct ContentView: View {
                     HStack {
                         controlsMenu
                         Spacer()
-                        itemListButton
                     }
                     .padding()
 //                    ++++++++++++++ Connection debug
@@ -203,20 +206,6 @@ struct ContentView: View {
             }
         } label: {
             Image(systemName: "gear")
-                .padding()
-                .background(Color.black.opacity(0.5))
-                .clipShape(Circle())
-        }
-    }
-    
-    private var itemListButton: some View {
-        NavigationLink(destination: ItemListView(
-            items: items,
-            deleteItems: deleteItems,
-            selectedAccountIndex: $selectedAccountIndex,
-            onAccountChange: { _ in resetWebSocketManager() }
-        )) {
-            Image(systemName: "list.bullet")
                 .padding()
                 .background(Color.black.opacity(0.5))
                 .clipShape(Circle())
@@ -380,22 +369,6 @@ struct ContentView: View {
             webSocketManager.sendRewrapMessage(header: nanoCity.header)
         }
     }
-
-    private func addItem() {
-        let _ = "Keep this message secret".data(using: .utf8)!
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
-        }
-    }
     
     private func addCityToCluster(_ city: City) {
         if continentClusters[city.continent] == nil {
@@ -434,7 +407,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .modelContainer(for: SecureStreamModel.self, inMemory: true)
 }
 
 class NanoTDFManager: ObservableObject {
@@ -494,54 +467,6 @@ class NanoTDFManager: ObservableObject {
         return nanoTDFs.isEmpty
     }
 }
-
-#if os(iOS)
-struct ItemListView: View {
-    let items: [Item]
-    let deleteItems: (IndexSet) -> Void
-    @Binding var selectedAccountIndex: Int
-    let accountOptions = ["Main", "Alt", "Private"]
-    var onAccountChange: (Int) -> Void
-
-    var body: some View {
-        List {
-            Section(header: Text("Account")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    
-                    Picker("", selection: $selectedAccountIndex) {
-                        ForEach(0..<accountOptions.count, id: \.self) { index in
-                            Text(accountOptions[index]).tag(index)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-//                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                        onAccountChange(newValue)
-                    }
-                }
-                .padding(.vertical)
-            }
-
-            Section(header: Text("Items")) {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-        }
-        .listStyle(GroupedListStyle())
-        .navigationTitle("Items")
-        .toolbar {
-            EditButton()
-        }
-    }
-}
-#endif
 
 class AnnotationManager: ObservableObject {
     @Published var annotations: [CityAnnotation] = []
