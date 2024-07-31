@@ -22,7 +22,7 @@ struct ContentView: View {
     @State private var nanoTime: TimeInterval = 0
     @ObservedObject var amViewModel = AuthenticationManagerViewModel(baseURL: URL(string: "https://webauthn.arkavo.net")!)
     @StateObject private var annotationManager = AnnotationManager()
-    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
     @State private var inProcessCount = 0
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
@@ -37,6 +37,8 @@ struct ContentView: View {
     // SecureStream
     @Query private var secureStreams: [SecureStreamModel]
     @StateObject private var secureStreamModel = SecureStreamModel(stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID()))
+    // demo
+    @State private var showCityInfoOverlay = false
     
     var body: some View {
         #if os(iOS)
@@ -48,13 +50,47 @@ struct ContentView: View {
     
     #if os(iOS)
     private var iOSLayout: some View {
-        NavigationStack {
+        ZStack {
             ZStack {
                 mapContent
                 VStack() {
                     HStack {
-                        controlsMenu
                         Spacer()
+                        Menu {
+                            Section("Account") {
+                                Picker("", selection: $selectedAccountIndex) {
+                                    ForEach(0..<accountOptions.count, id: \.self) { index in
+                                        Text(accountOptions[index]).tag(index)
+                                    }
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
+                                .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                                    print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                                    amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                                    resetWebSocketManager()
+                                }
+                            }
+                            Section("Authentication") {
+                                Button("Sign Up") {
+                                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                }
+                                Button("Sign In") {
+                                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                }
+                            }
+                            Spacer()
+                            Section("Demo") {
+                                Button("Prepare", action: loadGeoJSON)
+                                Button("Nano", action: createNanoCities)
+                                Button("Display", action: animateCities)
+                                Button("Add", action: loadRandomCities)
+                            }
+                        } label: {
+                            Image(systemName: "gear")
+                                .padding()
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
                     }
                     .padding()
 //                    ++++++++++++++ Connection debug
@@ -81,7 +117,9 @@ struct ContentView: View {
 //                        }
 //                    }
                     Spacer()
-                    cityInfoOverlay
+                    if showCityInfoOverlay {
+                        cityInfoOverlay
+                    }
                 }
             }
             .ignoresSafeArea(edges: .all)
@@ -100,13 +138,19 @@ struct ContentView: View {
     
     private var sidebarContent: some View {
         List {
-            Section("Controls") {
-                Button("Prepare", action: loadGeoJSON)
-                Button("Nano", action: createNanoCities)
-                Button("Display", action: animateCities)
-                Button("Add", action: loadRandomCities)
+            Section("Account") {
+                Picker("", selection: $selectedAccountIndex) {
+                    ForEach(0..<accountOptions.count, id: \.self) { index in
+                        Text(accountOptions[index]).tag(index)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                    print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                    amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                    resetWebSocketManager()
+                }
             }
-            Spacer()
             Section("Authentication") {
                 Button("Sign Up") {
                     amViewModel.authenticationManager.signUp(accountName: selectedAccount)
@@ -114,22 +158,13 @@ struct ContentView: View {
                 Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
                 }
             }
-            Section(header: Text("Account")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    
-                    Picker("", selection: $selectedAccountIndex) {
-                        ForEach(0..<accountOptions.count, id: \.self) { index in
-                            Text(accountOptions[index]).tag(index)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                        resetWebSocketManager()
-                    }
-                }
-                .padding(.vertical)
+            Spacer()
+            Spacer()
+            Section("Demo") {
+                Button("Prepare", action: loadGeoJSON)
+                Button("Nano", action: createNanoCities)
+                Button("Display", action: animateCities)
+                Button("Add", action: loadRandomCities)
             }
         }
         .listStyle(SidebarListStyle())
@@ -155,7 +190,9 @@ struct ContentView: View {
             
             VStack {
                 Spacer()
-                cityInfoOverlay
+                if showCityInfoOverlay {
+                    cityInfoOverlay
+                }
             }
         }
     }
@@ -187,31 +224,6 @@ struct ContentView: View {
         )
         .padding()
     }
-
-    #if os(iOS)
-    private var controlsMenu: some View {
-        Menu {
-            Button("Prepare", action: loadGeoJSON)
-            Button("Nano", action: createNanoCities)
-            Button("Display", action: animateCities)
-            Button("Add", action: loadRandomCities)
-            Spacer()
-            Section("Authentication") {
-                Button("Sign Up") {
-                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
-                }
-                Button("Sign In") {
-                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
-                }
-            }
-        } label: {
-            Image(systemName: "gear")
-                .padding()
-                .background(Color.black.opacity(0.5))
-                .clipShape(Circle())
-        }
-    }
-    #endif
 
     private func initialSetup() {
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
@@ -306,9 +318,8 @@ struct ContentView: View {
     }
     
     private func loadGeoJSON() {
-        print("Generating Cities...")
+        showCityInfoOverlay = true
         cities = generateTwoThousandActualCities()
-        print("Cities loaded: \(cities.count)")
     }
 
     private func loadRandomCities() {
