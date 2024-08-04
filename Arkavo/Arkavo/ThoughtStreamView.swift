@@ -106,16 +106,11 @@ struct ThoughtStreamView: View {
 
              let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: thoughtData)
             
-             // test parseHeader
-             var parser = BinaryParser(data: nanoTDF.toData())
-             try parser.parseHeader()
              // Create and send the NATSMessage
              let natsMessage = NATSMessage(payload: nanoTDF.toData())
              let messageData = natsMessage.toData()
              // test parseHeader
              print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
-             parser = BinaryParser(data: natsMessage.payload)
-             try parser.parseHeader()
 
              webSocketManager.sendCustomMessage(messageData) { error in
                  if let error = error {
@@ -230,39 +225,26 @@ struct ThoughtView: View {
     }
 }
 
-class ThoughtStreamViewModel: ObservableObject {
-    @Published var webSocketManager: WebSocketManager
-    let nanoTDFManager: NanoTDFManager
-    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
-    
-    init(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
-        self.webSocketManager = webSocketManager
-        self.nanoTDFManager = nanoTDFManager
-        self._kasPublicKey = kasPublicKey
-    }
-    
-    func setupCustomMessageHandling() {
-        webSocketManager.setCustomMessageCallback { [weak self] data in
-            self?.handleIncomingThought(data: data)
-        }
-    }
-
-    private func handleIncomingThought(data: Data) {
+actor ThoughtHandler {
+   
+    func handleIncomingThought(data: Data) async {
         // Assuming the incoming data is a NATSMessage
-        let natsMessage = NATSMessage(data: data)
-        print("NATS message payload received: \(natsMessage.payload.base64EncodedString())")
-        print("NATS payload size: \(natsMessage.payload.count)")
+//        print("NATS message payload received: \(natsMessage.payload.base64EncodedString())")
+//        print("NATS payload size: \(natsMessage.payload.count)")
         do {
+            // FIXME copy of data after first byte
+            let subData = data.subdata(in: 1..<data.count)
             // Create a NanoTDF from the payload
-            let parser = BinaryParser(data: natsMessage.payload)
+            let parser = BinaryParser(data: subData)
             let header = try parser.parseHeader()
             let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
             let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
             
             // Use the nanoTDFManager to handle the incoming NanoTDF
             let id = nanoTDF.header.ephemeralPublicKey
-            nanoTDFManager.addNanoTDF(nanoTDF, withIdentifier: id)
-            webSocketManager.sendRewrapMessage(header: nanoTDF.header)
+            print("ephemeralPublicKey: \(id.base64EncodedString())")
+//            nanoTDFManager.addNanoTDF(nanoTDF, withIdentifier: id)
+//            webSocketManager.sendRewrapMessage(header: nanoTDF.header)
             
             // TODO: handle RewrappedKey
             // let decryptedData = try nanoTDF.getPayloadPlaintext(symmetricKey: storedKey)
@@ -273,7 +255,6 @@ class ThoughtStreamViewModel: ObservableObject {
             print("Unexpected error: \(error.localizedDescription)")
         }
     }
-
     private func handleParsingError(_ error: ParsingError) {
         switch error {
         case .invalidFormat:
@@ -304,6 +285,32 @@ class ThoughtStreamViewModel: ObservableObject {
     }
 }
 
+
+class ThoughtStreamViewModel: ObservableObject {
+    @Published var webSocketManager: WebSocketManager
+    let nanoTDFManager: NanoTDFManager
+    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
+    
+    init(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
+        self.webSocketManager = webSocketManager
+        self.nanoTDFManager = nanoTDFManager
+        self._kasPublicKey = kasPublicKey
+    }
+    
+    func setupCustomMessageHandling() {
+        let handler = ThoughtHandler()
+        webSocketManager.setCustomMessageCallback { data in
+            Task {
+                await handler.handleIncomingThought(data: data)
+            }
+        }
+    }
+
+    private func handleIncomingThought(data: Data) {
+
+    }
+}
+
 struct ThoughtStreamView_Previews: PreviewProvider {
     static var previews: some View {
         ThoughtStreamView(
@@ -313,3 +320,57 @@ struct ThoughtStreamView_Previews: PreviewProvider {
         )
     }
 }
+
+//actor DebugDataReader {
+//    private var data: Data
+//    private var cursor: Int
+//
+//    init(data: Data) {
+//        // copy data for debug
+//        self.data = Data(data)
+//        self.cursor = 0
+//        print("First \(min(32, data.count)) bytes of data: \(data.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))")
+//    }
+//
+//    func read(length: Int) -> Data? {
+//        print("read called with length: \(length), cursor: \(cursor), data.count: \(data.count)")
+//        
+//        guard length > 0 else {
+//            print("Error: Attempted to read non-positive length")
+//            return nil
+//        }
+//        
+//        guard cursor >= 0 else {
+//            print("Error: Cursor is negative")
+//            return nil
+//        }
+//        
+//        guard cursor < data.count else {
+//            print("Error: Cursor is beyond data bounds")
+//            return nil
+//        }
+//        
+//        guard cursor + length <= data.count else {
+//            print("Error: Requested range exceeds data bounds")
+//            return nil
+//        }
+//        
+//        let range = cursor..<(cursor + length)
+//        print("Attempting to read range: \(range)")
+//        
+//        let result = data.subdata(in: range)
+//        cursor += length
+//        
+//        print("Read successful. New cursor position: \(cursor)")
+//        return result
+//    }
+//
+//    func resetCursor() {
+//        cursor = 0
+//        print("Cursor reset to 0")
+//    }
+//
+//    func getState() -> (cursor: Int, dataCount: Int) {
+//        return (cursor, data.count)
+//    }
+//}
