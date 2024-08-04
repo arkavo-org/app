@@ -12,7 +12,7 @@ struct CityInfoOverlay: View {
             Text("nanoTDF info")
                 .font(.headline)
                 .padding(.bottom, 4)
-            InfoRow(label: "GeoJSON count", value: "\(citiesCount)")
+            InfoRow(label: "bplist count", value: "\(citiesCount)")
             InfoRow(label: "Encrypt time", value: String(format: "%.2f s", nanoTime))
             InfoRow(label: "Nano count", value: "\(nanoCitiesCount)")
             InfoRow(label: "Decrypt time", value: String(format: "%.2f s", decryptTime))

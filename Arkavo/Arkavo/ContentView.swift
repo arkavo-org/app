@@ -369,6 +369,7 @@ struct ContentView: View {
             print("DENY")
             return
         }
+        // TODO need the nanotdf metadata to say which type
         
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -384,8 +385,11 @@ struct ContentView: View {
                         self.updateAnnotations()
                     }
                 }
+            } catch _ as DecodingError {
+                // Ignore the wrong struct error
+                print("Ignored wrong struct error during deserialization")
             } catch {
-                print("getPayloadPlaintext failed: \(error)")
+                print("Unexpected error: \(error)")
             }
         }
     }
