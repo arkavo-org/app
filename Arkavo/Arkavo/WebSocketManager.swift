@@ -6,6 +6,28 @@ import Foundation
 import Combine
 import CryptoKit
 
+struct NATSMessage {
+    let messageType: Data
+    let payload: Data
+    
+    init(payload: Data) {
+        self.messageType = Data([0x05])
+        self.payload = payload
+    }
+    
+    init(data: Data) {
+        self.messageType = data.prefix(1)
+        self.payload = data.suffix(from: 1)
+    }
+    
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType)
+        data.append(payload)
+        return data
+    }
+}
+
 class WebSocketManager: ObservableObject {
     @Published private(set) var webSocket: KASWebSocket?
     @Published private(set) var connectionState: WebSocketConnectionState = .disconnected
@@ -13,6 +35,7 @@ class WebSocketManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var kasPublicKeyCallback: ((P256.KeyAgreement.PublicKey) -> Void)?
     private var rewrapCallback: ((Data, SymmetricKey?) -> Void)?
+    private var customMessageCallback: ((Data) -> Void)?
 
     func setupWebSocket(token: String) {
         let url = URL(string: "wss://kas.arkavo.net")!
@@ -26,6 +49,9 @@ class WebSocketManager: ObservableObject {
         }
         if let rewrapCB = rewrapCallback {
             webSocket?.setRewrapCallback(rewrapCB)
+        }
+        webSocket?.setCustomMessageCallback { [weak self] data in
+            self?.customMessageCallback?(data)
         }
         
         webSocket?.connectionStatePublisher
@@ -83,5 +109,21 @@ class WebSocketManager: ObservableObject {
             return
         }
         webSocket?.sendRewrapMessage(header: header)
+    }
+    
+    func setCustomMessageCallback(_ callback: @escaping (Data) -> Void) {
+        customMessageCallback = callback
+        webSocket?.setCustomMessageCallback { [weak self] data in
+            self?.customMessageCallback?(data)
+        }
+    }
+
+    func sendCustomMessage(_ message: Data, completion: @escaping (Error?) -> Void) {
+        guard connectionState == .connected else {
+            lastError = "Cannot send custom message: WebSocket not connected"
+            completion(NSError(domain: "WebSocketManager", code: 0, userInfo: [NSLocalizedDescriptionKey: "WebSocket not connected"]))
+            return
+        }
+        webSocket?.sendCustomMessage(message, completion: completion)
     }
 }

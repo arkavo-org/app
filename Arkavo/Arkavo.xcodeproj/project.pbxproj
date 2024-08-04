@@ -675,8 +675,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
-				branch = feature/websocket;
-				kind = branch;
+				kind = revision;
+				revision = 6e0c33bb477cb47cf084d4ff207d757b82d9e6dc;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

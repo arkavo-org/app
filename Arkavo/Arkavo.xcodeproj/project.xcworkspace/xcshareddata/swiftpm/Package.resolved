@@ -6,8 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/OpenTDFKit",
       "state" : {
-        "branch" : "feature/websocket",
-        "revision" : "eec3473fc51543659b703e16ad1b110c4dbc362d"
+        "revision" : "6e0c33bb477cb47cf084d4ff207d757b82d9e6dc"
       }
     }
   ],

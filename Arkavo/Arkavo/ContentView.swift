@@ -59,7 +59,11 @@ struct ContentView: View {
                 if showMap {
                     mapContent
                 } else  {
-                    ThoughtStreamView()
+                    ThoughtStreamView(
+                        webSocketManager: webSocketManager,
+                        nanoTDFManager: nanoTDFManager,
+                        kasPublicKey: $kasPublicKey
+                    )
                 }
                 
                 VStack() {
@@ -171,7 +175,11 @@ struct ContentView: View {
                 if showMap {
                     mapContent
                 } else {
-                    ThoughtStreamView()
+                    ThoughtStreamView(
+                        webSocketManager: webSocketManager,
+                        nanoTDFManager: nanoTDFManager,
+                        kasPublicKey: $kasPublicKey
+                    )
                 }
             }
         }
