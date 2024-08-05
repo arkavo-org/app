@@ -32,7 +32,11 @@ struct ContentView: View {
     private let accountOptions = ["Main", "Alt", "Private"]
     // SecureStream
     @Query private var secureStreams: [SecureStreamModel]
-    @StateObject private var secureStreamModel = SecureStreamModel(stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID()))
+    @StateObject private var secureStreamModel = SecureStreamModel(
+        stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID())
+    )
+    // ThoughtStream
+    @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // demo
     @State private var showCityInfoOverlay = false
     @State private var cities: [City] = []
@@ -59,11 +63,7 @@ struct ContentView: View {
                 if showMap {
                     mapContent
                 } else  {
-                    ThoughtStreamView(
-                        webSocketManager: webSocketManager,
-                        nanoTDFManager: nanoTDFManager,
-                        kasPublicKey: $kasPublicKey
-                    )
+                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
                 }
                 
                 VStack() {
@@ -175,11 +175,7 @@ struct ContentView: View {
                 if showMap {
                     mapContent
                 } else {
-                    ThoughtStreamView(
-                        webSocketManager: webSocketManager,
-                        nanoTDFManager: nanoTDFManager,
-                        kasPublicKey: $kasPublicKey
-                    )
+                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
                 }
             }
         }
@@ -310,6 +306,12 @@ struct ContentView: View {
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
+        // Initialize ThoughtStreamViewModel
+        thoughtStreamViewModel.initialize(
+            webSocketManager: webSocketManager,
+            nanoTDFManager: nanoTDFManager,
+            kasPublicKey: $kasPublicKey
+        )
     }
 
     private func setupCallbacks() {
@@ -362,34 +364,40 @@ struct ContentView: View {
     }
     
     private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
-        guard let id = id, let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
-        nanoTDFManager.removeNanoTDF(withIdentifier: id)
-
-        guard let symmetricKey = symmetricKey else {
+        guard let id = id, let symmetricKey = symmetricKey else {
             print("DENY")
             return
         }
-        // TODO need the nanotdf metadata to say which type
-        
+
+        guard let nanoTDF = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
+        nanoTDFManager.removeNanoTDF(withIdentifier: id)
+
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let payload = try nanoCity.getPayloadPlaintext(symmetricKey: symmetricKey)
-                let city = try City.deserialize(from: payload)
+                let payload = try nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
                 
-                DispatchQueue.main.async {
-                    self.addCityToCluster(city)
-                    self.updateAnnotations()
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                        self.removeCityFromCluster(city)
-                        self.updateAnnotations()
+                // Try to deserialize as a Thought first
+                if let thought = try? Thought.deserialize(from: payload) {
+                    DispatchQueue.main.async {
+                        // Update the ThoughtStreamView
+                        self.thoughtStreamViewModel.receiveThought(thought)
                     }
+                } else if let city = try? City.deserialize(from: payload) {
+                    // If it's not a Thought, try to deserialize as a City
+                    DispatchQueue.main.async {
+                        self.addCityToCluster(city)
+                        self.updateAnnotations()
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            self.removeCityFromCluster(city)
+                            self.updateAnnotations()
+                        }
+                    }
+                } else {
+                    print("Unable to deserialize payload as Thought or City")
                 }
-            } catch _ as DecodingError {
-                // Ignore the wrong struct error
-                print("Ignored wrong struct error during deserialization")
             } catch {
-                print("Unexpected error: \(error)")
+                print("Unexpected error during nanoTDF decryption: \(error)")
             }
         }
     }

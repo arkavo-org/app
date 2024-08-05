@@ -3,43 +3,9 @@ import OpenTDFKit
 import CryptoKit
 
 struct ThoughtStreamView: View {
-    @StateObject private var viewModel: ThoughtStreamViewModel
-    @State private var topThoughts: [Thought] = [
-        Thought.createTextThought("Top thought 1..."),
-        Thought.createTextThought("Top thought 2..."),
-        Thought.createTextThought("Top thought 3..."),
-        Thought.createTextThought("Top thought 4..."),
-        Thought.createTextThought("Top thought 5...")
-    ]
-    @State private var bottomThoughts: [Thought] = [
-        Thought.createTextThought("Bottom thought 1..."),
-        Thought.createTextThought("Bottom thought 2..."),
-        Thought.createTextThought("Bottom thought 3..."),
-        Thought.createTextThought("Bottom thought 4..."),
-        Thought.createTextThought("Bottom thought 5...")
-    ]
+    @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
-    
-    @ObservedObject var webSocketManager: WebSocketManager
-    let nanoTDFManager: NanoTDFManager
-    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
-    
-    init(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
-        _viewModel = StateObject(wrappedValue: ThoughtStreamViewModel(webSocketManager: webSocketManager, nanoTDFManager: nanoTDFManager, kasPublicKey: kasPublicKey))
-        self.webSocketManager = webSocketManager
-        _kasPublicKey = kasPublicKey
-        self.nanoTDFManager = nanoTDFManager
-        
-        // Initialize UI properties for thoughts
-        for i in 0..<5 {
-            topThoughts[i].uiProperties = Thought.UIProperties(offset: Double(i) * 0.2, color: .blue)
-            bottomThoughts[i].uiProperties = Thought.UIProperties(offset: Double(i) * 0.2, color: .green)
-        }
-    }
-    
-    let topColor = Color.blue
-    let bottomColor = Color.green
     
     var body: some View {
         GeometryReader { geometry in
@@ -54,15 +20,15 @@ struct ThoughtStreamView: View {
                     // Thought stream area
                     ZStack {
                         // Flowing thoughts from top
-                        ForEach(topThoughts.indices, id: \.self) { index in
-                            ThoughtView(thought: topThoughts[index],
+                        ForEach(viewModel.topThoughts.indices, id: \.self) { index in
+                            ThoughtView(thought: viewModel.topThoughts[index],
                                         screenHeight: geometry.size.height,
                                         isTopThought: true)
                         }
                         
                         // Flowing thoughts from bottom
-                        ForEach(bottomThoughts.indices, id: \.self) { index in
-                            ThoughtView(thought: bottomThoughts[index],
+                        ForEach(viewModel.bottomThoughts.indices, id: \.self) { index in
+                            ThoughtView(thought: viewModel.bottomThoughts[index],
                                         screenHeight: geometry.size.height,
                                         isTopThought: false)
                         }
@@ -75,7 +41,7 @@ struct ThoughtStreamView: View {
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .focused($isInputFocused)
                         
-                        Button(action: addThought) {
+                        Button(action: sendThought) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .foregroundColor(.blue)
                                 .font(.title)
@@ -88,97 +54,31 @@ struct ThoughtStreamView: View {
             }
         }
         .onAppear {
-            viewModel.setupCustomMessageHandling()
             startThoughtAnimation()
             isInputFocused = false
         }
     }
 
-    private func addThought() {
+    private func sendThought() {
         guard !inputText.isEmpty else { return }
-        guard let kasPublicKey = kasPublicKey else {
-            print("KAS public key not available")
-            return
-        }
-        
         let newThought = Thought.createTextThought(inputText)
-        
-        do {
-            // Serialize the new Thought
-            let serializedThought = try newThought.serialize()
-            
-            // Create a NanoTDF
-            let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-            let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
-            // smart contract
-            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
-            var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-            let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedThought)
-            
-            // Create and send the NATSMessage
-            let natsMessage = NATSMessage(payload: nanoTDF.toData())
-            let messageData = natsMessage.toData()
-            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
-
-            webSocketManager.sendCustomMessage(messageData) { error in
-                if let error = error {
-                    print("Error sending thought: \(error)")
-                } else {
-                    print("Thought sent successfully")
-                    DispatchQueue.main.async {
-                        self.addThoughtToLocalArrays(newThought)
-                    }
-                }
-            }
-
-            // Clear the input field
-            inputText = ""
-        } catch {
-            print("Error creating or serializing NanoTDF: \(error)")
-        }
+        viewModel.sendThought(thought: newThought)
+        inputText = ""
     }
     
     private func startThoughtAnimation() {
-        for i in 0..<topThoughts.count {
+        for i in 0..<viewModel.topThoughts.count {
             withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                topThoughts[i].uiProperties.offset = 1.0
+                viewModel.topThoughts[i].uiProperties.offset = 1.0
             }
         }
-        for i in 0..<bottomThoughts.count {
+        for i in 0..<viewModel.bottomThoughts.count {
             withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                bottomThoughts[i].uiProperties.offset = 1.0
+                viewModel.bottomThoughts[i].uiProperties.offset = 1.0
             }
-        }
-    }
-    
-    private func addThoughtToLocalArrays(_ newThought: Thought) {
-        if topThoughts.count <= bottomThoughts.count {
-            var updatedThought = newThought
-            updatedThought.uiProperties = Thought.UIProperties(offset: 0, color: topColor)
-            topThoughts.insert(updatedThought, at: 0)
-            if topThoughts.count > 5 {
-                topThoughts.removeLast()
-            }
-        } else {
-            var updatedThought = newThought
-            updatedThought.uiProperties = Thought.UIProperties(offset: 0, color: bottomColor)
-            bottomThoughts.insert(updatedThought, at: 0)
-            if bottomThoughts.count > 5 {
-                bottomThoughts.removeLast()
-            }
-        }
-        
-        // Reset offsets for flowing effect
-        for i in 0..<topThoughts.count {
-            topThoughts[i].uiProperties.offset = Double(i) * 0.2
-        }
-        for i in 0..<bottomThoughts.count {
-            bottomThoughts[i].uiProperties.offset = Double(i) * 0.2
         }
     }
 }
-
 
 struct ThoughtView: View {
     let thought: Thought
@@ -214,8 +114,8 @@ actor ThoughtHandler {
     }
     func handleIncomingThought(data: Data) async {
         // Assuming the incoming data is a NATSMessage
-//        print("NATS message payload received: \(natsMessage.payload.base64EncodedString())")
-//        print("NATS payload size: \(natsMessage.payload.count)")
+        print("NATS message received: \(data.base64EncodedString())")
+        print("NATS payload size: \(data.count)")
         do {
             // FIXME copy of data after first byte
             let subData = data.subdata(in: 1..<data.count)
@@ -272,39 +172,106 @@ actor ThoughtHandler {
 
 
 class ThoughtStreamViewModel: ObservableObject {
+    @Published var topThoughts: [Thought] = []
+    @Published var bottomThoughts: [Thought] = []
+    let maxThoughtsPerStream: Int = 5
+    public var thoughtHandler: ThoughtHandler?
+    // nano
     @Published var webSocketManager: WebSocketManager
-    let nanoTDFManager: NanoTDFManager
+    var nanoTDFManager: NanoTDFManager
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
-    private var thoughtHandler: ThoughtHandler?
-    
-    init(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
-        self.webSocketManager = webSocketManager
-        self.nanoTDFManager = nanoTDFManager
-        self._kasPublicKey = kasPublicKey
-        self.thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
+
+    init() {
+        self._kasPublicKey = .constant(nil)  // Temporary binding
+        _webSocketManager = .init(initialValue: WebSocketManager())
+        _kasPublicKey = .constant(nil)
+        nanoTDFManager = NanoTDFManager()
     }
     
-    func setupCustomMessageHandling() {
+    func initialize(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
+            self.webSocketManager = webSocketManager
+        self.webSocketManager = webSocketManager
+        self._kasPublicKey = kasPublicKey
+        self.nanoTDFManager = nanoTDFManager
+        self.thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
         webSocketManager.setCustomMessageCallback { [weak self] data in
+            print("setCustomMessageCallback")
             guard let self = self, let thoughtHandler = self.thoughtHandler else { return }
             Task {
                 await thoughtHandler.handleIncomingThought(data: data)
             }
         }
     }
+    func sendThought(thought: Thought) {
+        guard let kasPublicKey = kasPublicKey else {
+            print("KAS public key not available")
+            return
+        }
+        do {
+            // Serialize the new Thought
+            let serializedThought = try thought.serialize()
+            
+            // Create a NanoTDF
+            let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+            let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+            // smart contract
+            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
+            var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
-    private func handleIncomingThought(data: Data) {
+            let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedThought)
+            
+            // Create and send the NATSMessage
+            let natsMessage = NATSMessage(payload: nanoTDF.toData())
+            let messageData = natsMessage.toData()
+            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
 
+            webSocketManager.sendCustomMessage(messageData) { error in
+                if let error = error {
+                    print("Error sending thought: \(error)")
+                } else {
+                    print("Thought sent successfully")
+                }
+            }
+        } catch {
+            print("Error creating or serializing NanoTDF: \(error)")
+        }
+    }
+    func receiveThought(_ newThought: Thought) {
+        DispatchQueue.main.async {
+            self.addThoughtToLocalArrays(newThought)
+        }
+    }
+    private func addThoughtToLocalArrays(_ newThought: Thought) {
+        if topThoughts.count <= bottomThoughts.count {
+            addThought(newThought, to: &topThoughts, color: .blue)
+        } else {
+            addThought(newThought, to: &bottomThoughts, color: .green)
+        }
+    }
+    
+    private func addThought(_ thought: Thought, to thoughts: inout [Thought], color: Color) {
+        var updatedThought = thought
+        updatedThought.uiProperties = Thought.UIProperties(offset: 0, color: color)
+        
+        thoughts.insert(updatedThought, at: 0)
+        if thoughts.count > maxThoughtsPerStream {
+            thoughts.removeLast()
+        }
+        
+        updateOffsets(for: &thoughts)
+    }
+    
+    private func updateOffsets(for thoughts: inout [Thought]) {
+        for i in 0..<thoughts.count {
+            thoughts[i].uiProperties.offset = Double(i) * 0.2
+        }
     }
 }
 
 struct ThoughtStreamView_Previews: PreviewProvider {
     static var previews: some View {
-        ThoughtStreamView(
-            webSocketManager: WebSocketManager(),
-            nanoTDFManager: NanoTDFManager(),
-            kasPublicKey: .constant(nil)
-        )
+        let viewModel = ThoughtStreamViewModel()
+        ThoughtStreamView(viewModel: viewModel)
     }
 }
 
