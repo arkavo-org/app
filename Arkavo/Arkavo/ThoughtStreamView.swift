@@ -2,6 +2,12 @@ import SwiftUI
 import OpenTDFKit
 import CryptoKit
 
+// Wrapper struct for Thought
+struct ThoughtWrapper: Identifiable {
+    let id = UUID()
+    let thought: Thought
+}
+
 struct ThoughtStreamView: View {
     @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
@@ -20,17 +26,22 @@ struct ThoughtStreamView: View {
                     // Thought stream area
                     ZStack {
                         // Flowing thoughts from top
-                        ForEach(viewModel.topThoughts.indices, id: \.self) { index in
-                            ThoughtView(thought: viewModel.topThoughts[index],
+                        ForEach(Array(viewModel.topThoughts.enumerated()), id: \.element.id) { index, wrapper in
+                            ThoughtView(thought: wrapper.thought,
+                                        index: index,
+                                        totalCount: viewModel.topThoughts.count,
                                         screenHeight: geometry.size.height,
-                                        isTopThought: true)
+                                        isTopThought: true,
+                                        color: .blue)
                         }
                         
-                        // Flowing thoughts from bottom
-                        ForEach(viewModel.bottomThoughts.indices, id: \.self) { index in
-                            ThoughtView(thought: viewModel.bottomThoughts[index],
+                        ForEach(Array(viewModel.bottomThoughts.enumerated()), id: \.element.id) { index, wrapper in
+                            ThoughtView(thought: wrapper.thought,
+                                        index: index,
+                                        totalCount: viewModel.bottomThoughts.count,
                                         screenHeight: geometry.size.height,
-                                        isTopThought: false)
+                                        isTopThought: false,
+                                        color: .green)
                         }
                     }
                     .frame(height: geometry.size.height - 100) // Adjust for input box and keyboard
@@ -54,7 +65,6 @@ struct ThoughtStreamView: View {
             }
         }
         .onAppear {
-            startThoughtAnimation()
             isInputFocused = false
         }
     }
@@ -65,43 +75,39 @@ struct ThoughtStreamView: View {
         viewModel.sendThought(thought: newThought)
         inputText = ""
     }
-    
-    private func startThoughtAnimation() {
-        for i in 0..<viewModel.topThoughts.count {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                viewModel.topThoughts[i].uiProperties.offset = 1.0
-            }
-        }
-        for i in 0..<viewModel.bottomThoughts.count {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                viewModel.bottomThoughts[i].uiProperties.offset = 1.0
-            }
-        }
-    }
 }
 
 struct ThoughtView: View {
     let thought: Thought
+    let index: Int
+    let totalCount: Int
     let screenHeight: CGFloat
     let isTopThought: Bool
+    let color: Color
+    
+    @State private var offset: CGFloat = 0
     
     var body: some View {
         Text(thought.content.first?.content ?? "")
-            .font(.caption)
             .padding(8)
-            .background(thought.uiProperties.color.opacity(0.7))
+            .background(color.opacity(0.7))
             .foregroundColor(.white)
             .clipShape(Capsule())
-            .scaleEffect(1 - thought.uiProperties.offset * 0.5) // Decrease size as it moves to center
-            .opacity(1 - thought.uiProperties.offset) // Fade out as it moves to center
+            .scaleEffect(1 - offset * 0.5)
             .offset(y: calculateYOffset())
+            .onAppear {
+                withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                    offset = 1
+                }
+            }
     }
     
     private func calculateYOffset() -> CGFloat {
-        let visibleHeight = screenHeight - 100 // Adjust for input box and keyboard
+        let visibleHeight = screenHeight - 100
         let startY = isTopThought ? -visibleHeight / 2 : visibleHeight / 2
-        let endY: CGFloat = 0 // Center of the visible area
-        return startY + CGFloat(thought.uiProperties.offset) * (endY - startY)
+        let endY: CGFloat = 0
+        let progress = CGFloat(index) / CGFloat(totalCount - 1)
+        return startY + (endY - startY) * progress * offset
     }
 }
 
@@ -172,9 +178,9 @@ actor ThoughtHandler {
 
 
 class ThoughtStreamViewModel: ObservableObject {
-    @Published var topThoughts: [Thought] = []
-    @Published var bottomThoughts: [Thought] = []
-    let maxThoughtsPerStream: Int = 5
+    @Published var topThoughts: [ThoughtWrapper] = []
+    @Published var bottomThoughts: [ThoughtWrapper] = []
+    let maxThoughtsPerStream: Int = 10
     public var thoughtHandler: ThoughtHandler?
     // nano
     @Published var webSocketManager: WebSocketManager
@@ -238,32 +244,22 @@ class ThoughtStreamViewModel: ObservableObject {
     }
     func receiveThought(_ newThought: Thought) {
         DispatchQueue.main.async {
-            self.addThoughtToLocalArrays(newThought)
+            self.addThought(newThought, toTop: true)
         }
     }
-    private func addThoughtToLocalArrays(_ newThought: Thought) {
-        if topThoughts.count <= bottomThoughts.count {
-            addThought(newThought, to: &topThoughts, color: .blue)
+    
+    func addThought(_ thought: Thought, toTop: Bool) {
+        let wrappedThought = ThoughtWrapper(thought: thought)
+        if toTop {
+            topThoughts.insert(wrappedThought, at: 0)
+            if topThoughts.count > maxThoughtsPerStream {
+                topThoughts.removeLast()
+            }
         } else {
-            addThought(newThought, to: &bottomThoughts, color: .green)
-        }
-    }
-    
-    private func addThought(_ thought: Thought, to thoughts: inout [Thought], color: Color) {
-        var updatedThought = thought
-        updatedThought.uiProperties = Thought.UIProperties(offset: 0, color: color)
-        
-        thoughts.insert(updatedThought, at: 0)
-        if thoughts.count > maxThoughtsPerStream {
-            thoughts.removeLast()
-        }
-        
-        updateOffsets(for: &thoughts)
-    }
-    
-    private func updateOffsets(for thoughts: inout [Thought]) {
-        for i in 0..<thoughts.count {
-            thoughts[i].uiProperties.offset = Double(i) * 0.2
+            bottomThoughts.insert(wrappedThought, at: 0)
+            if bottomThoughts.count > maxThoughtsPerStream {
+                bottomThoughts.removeLast()
+            }
         }
     }
 }
@@ -274,70 +270,3 @@ struct ThoughtStreamView_Previews: PreviewProvider {
         ThoughtStreamView(viewModel: viewModel)
     }
 }
-
-// Extension for UI-specific properties
-extension Thought {
-    struct UIProperties {
-        var offset: Double
-        var color: Color
-    }
-    
-    var uiProperties: UIProperties {
-        get { UIProperties(offset: 0, color: .blue) }
-        set { }
-    }
-}
-
-//actor DebugDataReader {
-//    private var data: Data
-//    private var cursor: Int
-//
-//    init(data: Data) {
-//        // copy data for debug
-//        self.data = Data(data)
-//        self.cursor = 0
-//        print("First \(min(32, data.count)) bytes of data: \(data.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))")
-//    }
-//
-//    func read(length: Int) -> Data? {
-//        print("read called with length: \(length), cursor: \(cursor), data.count: \(data.count)")
-//        
-//        guard length > 0 else {
-//            print("Error: Attempted to read non-positive length")
-//            return nil
-//        }
-//        
-//        guard cursor >= 0 else {
-//            print("Error: Cursor is negative")
-//            return nil
-//        }
-//        
-//        guard cursor < data.count else {
-//            print("Error: Cursor is beyond data bounds")
-//            return nil
-//        }
-//        
-//        guard cursor + length <= data.count else {
-//            print("Error: Requested range exceeds data bounds")
-//            return nil
-//        }
-//        
-//        let range = cursor..<(cursor + length)
-//        print("Attempting to read range: \(range)")
-//        
-//        let result = data.subdata(in: range)
-//        cursor += length
-//        
-//        print("Read successful. New cursor position: \(cursor)")
-//        return result
-//    }
-//
-//    func resetCursor() {
-//        cursor = 0
-//        print("Cursor reset to 0")
-//    }
-//
-//    func getState() -> (cursor: Int, dataCount: Int) {
-//        return (cursor, data.count)
-//    }
-//}
