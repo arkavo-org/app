@@ -120,8 +120,8 @@ actor ThoughtHandler {
     }
     func handleIncomingThought(data: Data) async {
         // Assuming the incoming data is a NATSMessage
-        print("NATS message received: \(data.base64EncodedString())")
-        print("NATS payload size: \(data.count)")
+//        print("NATS message received: \(data.base64EncodedString())")
+//        print("NATS payload size: \(data.count)")
         do {
             // FIXME copy of data after first byte
             let subData = data.subdata(in: 1..<data.count)
@@ -130,16 +130,11 @@ actor ThoughtHandler {
             let header = try parser.parseHeader()
             let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
             let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
-            
             // Use the nanoTDFManager to handle the incoming NanoTDF
             let id = nanoTDF.header.ephemeralPublicKey
-            print("ephemeralPublicKey: \(id.base64EncodedString())")
+//            print("ephemeralPublicKey: \(id.base64EncodedString())")
             nanoTDFManager.addNanoTDF(nanoTDF, withIdentifier: id)
             webSocketManager.sendRewrapMessage(header: nanoTDF.header)
-            
-            // TODO: handle RewrappedKey
-            // let decryptedData = try nanoTDF.getPayloadPlaintext(symmetricKey: storedKey)
-            // let decryptedMessage = String(data: decryptedData, encoding: .utf8)
         } catch let error as ParsingError {
             handleParsingError(error)
         } catch {
@@ -175,7 +170,6 @@ actor ThoughtHandler {
         }
     }
 }
-
 
 class ThoughtStreamViewModel: ObservableObject {
     @Published var topThoughts: [ThoughtWrapper] = []
@@ -229,13 +223,11 @@ class ThoughtStreamViewModel: ObservableObject {
             // Create and send the NATSMessage
             let natsMessage = NATSMessage(payload: nanoTDF.toData())
             let messageData = natsMessage.toData()
-            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
+//            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
 
             webSocketManager.sendCustomMessage(messageData) { error in
                 if let error = error {
                     print("Error sending thought: \(error)")
-                } else {
-                    print("Thought sent successfully")
                 }
             }
         } catch {
