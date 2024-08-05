@@ -20,6 +20,10 @@ struct ArkavoApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+#if os(macOS)
+                .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
+                       minHeight: 600, idealHeight: 800, maxHeight: .infinity)
+#endif
         }
         .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { oldPhase, newPhase in
@@ -28,6 +32,10 @@ struct ArkavoApp: App {
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
             }
         }
+#if os(macOS)
+        .windowStyle(HiddenTitleBarWindowStyle())
+        .defaultSize(width: 1200, height: 800)
+#endif
     }
 }
 

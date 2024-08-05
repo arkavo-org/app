@@ -10,22 +10,18 @@ import OpenTDFKit
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     // map
-    @State private var cities: [City] = []
+    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 35000000, heading: 0, pitch: 0))
+    @State private var showMap = true
     @State private var mapUpdateTrigger = UUID()
-    @State private var cityCount = 0
-    @State private var nanoCities: [NanoTDF] = []
-    @State private var nanoTime: TimeInterval = 0
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
+    // authentication
     @ObservedObject var amViewModel = AuthenticationManagerViewModel(baseURL: URL(string: "https://webauthn.arkavo.net")!)
-    @StateObject private var annotationManager = AnnotationManager()
-    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
-    @State private var inProcessCount = 0
-    @State private var continentClusters: [String: [City]] = [:]
-    @State private var annotations: [AnnotationItem] = []
     // connection
     @State private var cancellables = Set<AnyCancellable>()
     @State private var isReconnecting = false
@@ -36,9 +32,21 @@ struct ContentView: View {
     private let accountOptions = ["Main", "Alt", "Private"]
     // SecureStream
     @Query private var secureStreams: [SecureStreamModel]
-    @StateObject private var secureStreamModel = SecureStreamModel(stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID()))
+    @StateObject private var secureStreamModel = SecureStreamModel(
+        stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID())
+    )
+    // ThoughtStream
+    @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // demo
     @State private var showCityInfoOverlay = false
+    @State private var cities: [City] = []
+    @State private var cityCount = 0
+    @State private var nanoCities: [NanoTDF] = []
+    @State private var nanoTime: TimeInterval = 0
+    @StateObject private var annotationManager = AnnotationManager()
+    @State private var inProcessCount = 0
+    @State private var continentClusters: [String: [City]] = [:]
+    @State private var annotations: [AnnotationItem] = []
     
     var body: some View {
         #if os(iOS)
@@ -52,7 +60,12 @@ struct ContentView: View {
     private var iOSLayout: some View {
         ZStack {
             ZStack {
-                mapContent
+                if showMap {
+                    mapContent
+                } else  {
+                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
+                }
+                
                 VStack() {
                     HStack {
                         Spacer()
@@ -80,6 +93,12 @@ struct ContentView: View {
                             }
                             Spacer()
                             Section("Demo") {
+                                if !showMap {
+                                    Button("Map", action: {
+                                        self.showMap = true
+                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
+                                    })
+                                }
                                 Button("Prepare", action: loadGeoJSON)
                                 Button("Nano", action: createNanoCities)
                                 Button("Display", action: animateCities)
@@ -93,32 +112,53 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-//                    ++++++++++++++ Connection debug
-//                    Spacer()
-//                    Section(header: Text("Status")) {
-//                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
-//                        if let error = webSocketManager.lastError {
-//                            Text("Error: \(error)")
-//                                .foregroundColor(.red)
-//                        }
-//                        if isReconnecting {
-//                            ProgressView()
-//                        } else {
-//                            Button("Reconnect") {
-//                                resetWebSocketManager()
-//                            }
-//                            .buttonStyle(.bordered)
-//                        }
-//                        if let kasPublicKey = kasPublicKey {
-//                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
-//                                .font(.caption)
-//                                .lineLimit(1)
-//                                .truncationMode(.tail)
-//                        }
-//                    }
-                    Spacer()
-                    if showCityInfoOverlay {
-                        cityInfoOverlay
+                    //                    ++++++++++++++ Connection debug
+                    //                    Spacer()
+                    //                    Section(header: Text("Status")) {
+                    //                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
+                    //                        if let error = webSocketManager.lastError {
+                    //                            Text("Error: \(error)")
+                    //                                .foregroundColor(.red)
+                    //                        }
+                    //                        if isReconnecting {
+                    //                            ProgressView()
+                    //                        } else {
+                    //                            Button("Reconnect") {
+                    //                                resetWebSocketManager()
+                    //                            }
+                    //                            .buttonStyle(.bordered)
+                    //                        }
+                    //                        if let kasPublicKey = kasPublicKey {
+                    //                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
+                    //                                .font(.caption)
+                    //                                .lineLimit(1)
+                    //                                .truncationMode(.tail)
+                    //                        }
+                    //                    }
+                    if showMap {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 1.0)) {
+                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400000, heading: 0, pitch: 0))
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                        withAnimation(.smooth(duration: 0.5)) {
+                                            showMap = false
+                                        }
+                                    }
+                                }) {
+                                    Text("Engage!")
+                                        .padding()
+                                        .background(Color.blue)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                }
+                                .padding()
+                            }
+                        }
                     }
                 }
             }
@@ -128,10 +168,16 @@ struct ContentView: View {
     }
     #else
     private var macOSLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
             sidebarContent
         } detail: {
-            mapContent
+            ZStack {
+                if showMap {
+                    mapContent
+                } else {
+                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
+                }
+            }
         }
         .onAppear(perform: initialSetup)
     }
@@ -161,6 +207,12 @@ struct ContentView: View {
             Spacer()
             Spacer()
             Section("Demo") {
+                if !showMap {
+                    Button("Map", action: {
+                        self.showMap = true
+                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
+                    })
+                }
                 Button("Prepare", action: loadGeoJSON)
                 Button("Nano", action: createNanoCities)
                 Button("Display", action: animateCities)
@@ -193,6 +245,31 @@ struct ContentView: View {
                 if showCityInfoOverlay {
                     cityInfoOverlay
                 }
+            }
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: engageAction) {
+                        Text("Engage!")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .padding()
+                }
+            }
+        }
+    }
+    
+    private func engageAction() {
+        withAnimation(.easeInOut(duration: 1.0)) {
+            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400000, heading: 0, pitch: 0))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            withAnimation(.smooth(duration: 0.5)) {
+                showMap = false
             }
         }
     }
@@ -229,6 +306,12 @@ struct ContentView: View {
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
+        // Initialize ThoughtStreamViewModel
+        thoughtStreamViewModel.initialize(
+            webSocketManager: webSocketManager,
+            nanoTDFManager: nanoTDFManager,
+            kasPublicKey: $kasPublicKey
+        )
     }
 
     private func setupCallbacks() {
@@ -281,30 +364,40 @@ struct ContentView: View {
     }
     
     private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
-        guard let id = id, let nanoCity = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
-        nanoTDFManager.removeNanoTDF(withIdentifier: id)
-
-        guard let symmetricKey = symmetricKey else {
+        guard let id = id, let symmetricKey = symmetricKey else {
             print("DENY")
             return
         }
-        
+
+        guard let nanoTDF = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
+        nanoTDFManager.removeNanoTDF(withIdentifier: id)
+
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let payload = try nanoCity.getPayloadPlaintext(symmetricKey: symmetricKey)
-                let city = try City.deserialize(from: payload)
+                let payload = try nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
                 
-                DispatchQueue.main.async {
-                    self.addCityToCluster(city)
-                    self.updateAnnotations()
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                        self.removeCityFromCluster(city)
-                        self.updateAnnotations()
+                // Try to deserialize as a Thought first
+                if let thought = try? Thought.deserialize(from: payload) {
+                    DispatchQueue.main.async {
+                        // Update the ThoughtStreamView
+                        self.thoughtStreamViewModel.receiveThought(thought)
                     }
+                } else if let city = try? City.deserialize(from: payload) {
+                    // If it's not a Thought, try to deserialize as a City
+                    DispatchQueue.main.async {
+                        self.addCityToCluster(city)
+                        self.updateAnnotations()
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            self.removeCityFromCluster(city)
+                            self.updateAnnotations()
+                        }
+                    }
+                } else {
+                    print("Unable to deserialize payload as Thought or City")
                 }
             } catch {
-                print("getPayloadPlaintext failed: \(error)")
+                print("Unexpected error during nanoTDF decryption: \(error)")
             }
         }
     }
