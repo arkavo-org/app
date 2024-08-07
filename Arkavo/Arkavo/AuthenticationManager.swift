@@ -1,26 +1,28 @@
-import Foundation
 import AuthenticationServices
 import CryptoKit
+import Foundation
 
 #if canImport(UIKit)
-import UIKit
-typealias MyApp = UIApplication
+    import UIKit
+
+    typealias MyApp = UIApplication
 #elseif canImport(AppKit)
-import AppKit
-typealias MyApp = NSApplication
+    import AppKit
+
+    typealias MyApp = NSApplication
 #endif
 
 #if os(iOS)
-typealias MyWindow = UIWindow
+    typealias MyWindow = UIWindow
 #elseif os(macOS)
-typealias MyWindow = NSWindow
+    typealias MyWindow = NSWindow
 #endif
 
 class AuthenticationManagerViewModel: ObservableObject {
     @Published var authenticationManager: AuthenticationManager
-    
+
     init(baseURL: URL) {
-        self.authenticationManager = AuthenticationManager(baseURL: baseURL)
+        authenticationManager = AuthenticationManager(baseURL: baseURL)
     }
 }
 
@@ -28,34 +30,34 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     @Published var currentAccount: String?
     private let baseURL: URL
     private let relyingPartyIdentifier: String
-    
+
     init(baseURL: URL) {
         self.baseURL = baseURL
-        self.relyingPartyIdentifier = baseURL.host ?? "webauthn.arkavo.net"
+        relyingPartyIdentifier = baseURL.host ?? "webauthn.arkavo.net"
         super.init()
     }
-    
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+
+    func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
         print("presentationAnchor called")
-        
-#if os(iOS)
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
-        else {
-            fatalError("No window found in the current window scene")
-        }
-        return window
-#elseif os(macOS)
-        guard let window = NSApplication.shared.windows.first
-        else {
-            fatalError("No window found in the application")
-        }
-        return window
-#else
-        fatalError("Unsupported platform")
-#endif
+
+        #if os(iOS)
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
+            else {
+                fatalError("No window found in the current window scene")
+            }
+            return window
+        #elseif os(macOS)
+            guard let window = NSApplication.shared.windows.first
+            else {
+                fatalError("No window found in the application")
+            }
+            return window
+        #else
+            fatalError("Unsupported platform")
+        #endif
     }
-    
+
     private func handleServerResponse<T: Decodable>(
         data: Data?,
         response: URLResponse?,
@@ -64,27 +66,27 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         failureMessage: String,
         completion: @escaping (Result<T, Error>) -> Void
     ) {
-        if let error = error {
+        if let error {
             print("\(failureMessage): \(error.localizedDescription)")
             completion(.failure(error))
             return
         }
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             let error = NSError(domain: "HTTPError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"])
             completion(.failure(error))
             return
         }
-        
+
         print("HTTP Status Code: \(httpResponse.statusCode)")
-        
-        guard let data = data else {
+
+        guard let data else {
             let error = NSError(domain: "DataError", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"])
             completion(.failure(error))
             return
         }
-        
-        if (200...299).contains(httpResponse.statusCode) {
+
+        if (200 ... 299).contains(httpResponse.statusCode) {
             do {
                 let decodedData = try JSONDecoder().decode(T.self, from: data)
                 print(successMessage)
@@ -99,7 +101,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             completion(.failure(error))
         }
     }
-    
+
     func signUp(accountName: String) {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
@@ -107,7 +109,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
         registrationOptions(accountName: accountName) { [weak self] challenge, userID in
-            guard let self = self else { return }
+            guard let self else { return }
             guard let challengeData = challenge, let userIDData = userID else {
                 print("Either challenge or userID is nil.")
                 return
@@ -126,11 +128,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             }
         }
     }
-    
+
     func registrationOptions(accountName: String, completion: @escaping (Data?, Data?) -> Void) {
         let url = baseURL.appendingPathComponent("register/\(accountName)")
         let request = URLRequest(url: url)
-        
+
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
@@ -140,11 +142,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 failureMessage: "Error fetching registration options",
                 completion: { (result: Result<RegistrationOptionsResponse, Error>) in
                     switch result {
-                    case .success(let response):
+                    case let .success(response):
                         let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64())
                         let userIDData = Data(base64Encoded: response.publicKey.user.id.base64URLToBase64())
                         completion(challengeData, userIDData)
-                    case .failure(let error):
+                    case let .failure(error):
                         print("Failed to get registration options: \(error.localizedDescription)")
                         completion(nil, nil)
                     }
@@ -152,27 +154,27 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             )
         }.resume()
     }
-    
+
     func signIn(accountName: String) {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
             return
         }
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "webauthn.arkavo.net")
-        
+
         authenticationOptions(accountName: accountName) { result in
             switch result {
-            case .success(let challengeData):
+            case let .success(challengeData):
                 print("signIn challengeData \(challengeData.base64EncodedString())")
                 let assertionRequest = provider.createCredentialAssertionRequest(challenge: challengeData)
-                
+
                 let controller = ASAuthorizationController(authorizationRequests: [assertionRequest])
                 controller.delegate = self
                 controller.presentationContextProvider = self
                 DispatchQueue.main.async {
                     controller.performRequests()
                 }
-            case .failure(let error):
+            case let .failure(error):
                 print("Failed to get authentication options: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     // Notify the user of the error
@@ -180,11 +182,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             }
         }
     }
-    
+
     func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
         let url = baseURL.appendingPathComponent("authenticate/\(accountName)")
         let request = URLRequest(url: url)
-        
+
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
@@ -194,21 +196,21 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 failureMessage: "Error fetching authentication options",
                 completion: { (result: Result<AuthenticationOptionsResponse, Error>) in
                     switch result {
-                    case .success(let response):
+                    case let .success(response):
                         if let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64()) {
                             completion(.success(challengeData))
                         } else {
                             completion(.failure(NSError(domain: "ChallengeError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unable to decode challenge string"])))
                         }
-                    case .failure(let error):
+                    case let .failure(error):
                         completion(.failure(error))
                     }
                 }
             )
         }.resume()
     }
-    
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         print("Authorization completed successfully")
         if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration {
             sendRegistrationDataToServer(credential: credential)
@@ -216,14 +218,14 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             sendAuthenticationDataToServer(credential: credential)
         }
     }
-    
+
     private func sendAuthenticationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) {
         print("sendAuthenticationDataToServer")
         let url = baseURL.appendingPathComponent("authenticate")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         let parameters: [String: Any] = [
             "id": credential.credentialID.base64URLEncodedString(),
             "rawId": credential.credentialID.base64URLEncodedString(),
@@ -231,11 +233,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
                 "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
                 "signature": credential.signature.base64URLEncodedString(),
-                "userHandle": credential.userID.base64URLEncodedString()
+                "userHandle": credential.userID.base64URLEncodedString(),
             ],
-            "type": "public-key"
+            "type": "public-key",
         ]
-        
+
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
             // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
@@ -243,21 +245,21 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Error creating authentication JSON data: \(error)")
             return
         }
-        
+
         URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
+            if let error {
                 print("Error sending authentication data: \(error.localizedDescription)")
                 return
             }
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("Invalid response type")
                 return
             }
-            
-            if (200...299).contains(httpResponse.statusCode) {
+
+            if (200 ... 299).contains(httpResponse.statusCode) {
                 print("Authentication successful")
-                if let data = data, !data.isEmpty {
+                if let data, !data.isEmpty {
                     // Try to parse the response as JSON if there's data
                     do {
                         if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
@@ -270,7 +272,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 } else {
                     print("No data in response body, but authentication was successful")
                 }
-                
+
                 DispatchQueue.main.async {
                     // Update UI or app state to reflect successful authentication
                     self.currentAccount = credential.userID.base64EncodedString()
@@ -278,7 +280,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 }
             } else {
                 print("Authentication failed with status code: \(httpResponse.statusCode)")
-                if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                if let data, let responseString = String(data: data, encoding: .utf8) {
                     print("Server response: \(responseString)")
                 }
                 DispatchQueue.main.async {
@@ -287,8 +289,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             }
         }.resume()
     }
-    
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
         print("Authorization failed: \(error.localizedDescription)")
         print("Authorization process failed in Authentication Manager.")
         print("Error occurred: ", error)
@@ -297,7 +299,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         // Handle failed authorization
         print("Failed authorization has been handled.")
     }
-    
+
     private func sendRegistrationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) {
         print("sendRegistrationDataToServer")
         let url = baseURL.appendingPathComponent("register")
@@ -307,7 +309,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         // Decode the clientDataJSON to verify the challenge
         if let clientDataJSONString = String(data: credential.rawClientDataJSON, encoding: .utf8),
            let clientDataJSON = try? JSONSerialization.jsonObject(with: credential.rawClientDataJSON, options: []) as? [String: Any],
-           let challenge = clientDataJSON["challenge"] as? String {
+           let challenge = clientDataJSON["challenge"] as? String
+        {
             print("Client data JSON: \(clientDataJSONString)")
             print("Extracted challenge: \(challenge)")
         }
@@ -316,12 +319,12 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             "rawId": credential.credentialID.base64URLEncodedString(),
             "response": [
                 "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
-                "attestationObject": credential.rawAttestationObject!.base64URLEncodedString()
+                "attestationObject": credential.rawAttestationObject!.base64URLEncodedString(),
             ],
             "type": "public-key",
-            "extensions": [:] // Add any extensions if needed
+            "extensions": [:], // Add any extensions if needed
         ]
-        
+
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
             // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
@@ -329,28 +332,28 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Error creating registration JSON data: \(error)")
             return
         }
-        
+
         URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
+            if let error {
                 print("Error sending registration data: \(error.localizedDescription)")
                 return
             }
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("Invalid response type")
                 return
             }
-            
-            guard let data = data else {
+
+            guard let data else {
                 print("No data received from server")
                 return
             }
-            
+
             if let httpResponse = response as? HTTPURLResponse {
                 print("HTTP Status Code: \(httpResponse.statusCode)")
             }
-            
-            if (200...299).contains(httpResponse.statusCode) {
+
+            if (200 ... 299).contains(httpResponse.statusCode) {
                 // Try to parse the response as JSON
                 do {
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
@@ -383,7 +386,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 
         // Create JWT header
         let header = ["alg": "HS256", "typ": "JWT"]
-        
+
         // Create JWT payload
         let payload: [String: Any] = [
             "sub": account,
@@ -395,7 +398,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 
         // Encode header and payload
         guard let headerData = try? JSONSerialization.data(withJSONObject: header),
-              let payloadData = try? JSONSerialization.data(withJSONObject: payload) else {
+              let payloadData = try? JSONSerialization.data(withJSONObject: payload)
+        else {
             print("Failed to encode header or payload")
             return nil
         }
@@ -448,7 +452,7 @@ struct User: Decodable {
 
 extension Data {
     func base64URLEncodedString() -> String {
-        return base64EncodedString()
+        base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
@@ -457,8 +461,7 @@ extension Data {
 
 extension String {
     func base64URLToBase64() -> String {
-        var base64 = self
-            .replacingOccurrences(of: "-", with: "+")
+        var base64 = replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         if base64.count % 4 != 0 {
             base64.append(String(repeating: "=", count: 4 - base64.count % 4))

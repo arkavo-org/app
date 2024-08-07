@@ -1,22 +1,22 @@
-import SwiftUI
-import SwiftData
-import MapKit
-import CryptoKit
 import AuthenticationServices
-import LocalAuthentication
 import Combine
+import CryptoKit
+import LocalAuthentication
+import MapKit
 import OpenTDFKit
+import SwiftData
+import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    
+
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     // map
-    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 35000000, heading: 0, pitch: 0))
+    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 35_000_000, heading: 0, pitch: 0))
     @State private var showMap = true
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
@@ -47,183 +47,183 @@ struct ContentView: View {
     @State private var inProcessCount = 0
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
-    
+
     var body: some View {
         #if os(iOS)
-        iOSLayout
+            iOSLayout
         #else
-        macOSLayout
+            macOSLayout
         #endif
     }
-    
+
     #if os(iOS)
-    private var iOSLayout: some View {
-        ZStack {
+        private var iOSLayout: some View {
             ZStack {
-                if showMap {
-                    mapContent
-                } else  {
-                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                }
-                
-                VStack() {
-                    HStack {
-                        Spacer()
-                        Menu {
-                            Section("Account") {
-                                Picker("", selection: $selectedAccountIndex) {
-                                    ForEach(0..<accountOptions.count, id: \.self) { index in
-                                        Text(accountOptions[index]).tag(index)
-                                    }
-                                }
-                                .pickerStyle(SegmentedPickerStyle())
-                                .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                                    print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                                    amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                                    resetWebSocketManager()
-                                }
-                            }
-                            Section("Authentication") {
-                                Button("Sign Up") {
-                                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
-                                }
-                                Button("Sign In") {
-                                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
-                                }
-                            }
-                            Spacer()
-                            Section("Demo") {
-                                if !showMap {
-                                    Button("Map", action: {
-                                        self.showMap = true
-                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
-                                    })
-                                }
-                                Button("Prepare", action: loadGeoJSON)
-                                Button("Nano", action: createNanoCities)
-                                Button("Display", action: animateCities)
-                                Button("Add", action: loadRandomCities)
-                            }
-                        } label: {
-                            Image(systemName: "gear")
-                                .padding()
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
-                    }
-                    .padding()
-                    //                    ++++++++++++++ Connection debug
-                    //                    Spacer()
-                    //                    Section(header: Text("Status")) {
-                    //                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
-                    //                        if let error = webSocketManager.lastError {
-                    //                            Text("Error: \(error)")
-                    //                                .foregroundColor(.red)
-                    //                        }
-                    //                        if isReconnecting {
-                    //                            ProgressView()
-                    //                        } else {
-                    //                            Button("Reconnect") {
-                    //                                resetWebSocketManager()
-                    //                            }
-                    //                            .buttonStyle(.bordered)
-                    //                        }
-                    //                        if let kasPublicKey = kasPublicKey {
-                    //                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
-                    //                                .font(.caption)
-                    //                                .lineLimit(1)
-                    //                                .truncationMode(.tail)
-                    //                        }
-                    //                    }
+                ZStack {
                     if showMap {
-                        VStack {
+                        mapContent
+                    } else {
+                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+                    }
+
+                    VStack {
+                        HStack {
                             Spacer()
-                            HStack {
-                                Spacer()
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 1.0)) {
-                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400000, heading: 0, pitch: 0))
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                                        withAnimation(.smooth(duration: 0.5)) {
-                                            showMap = false
+                            Menu {
+                                Section("Account") {
+                                    Picker("", selection: $selectedAccountIndex) {
+                                        ForEach(0 ..< accountOptions.count, id: \.self) { index in
+                                            Text(accountOptions[index]).tag(index)
                                         }
                                     }
-                                }) {
-                                    Text("Engage!")
-                                        .padding()
-                                        .background(Color.blue)
-                                        .foregroundColor(.white)
-                                        .cornerRadius(10)
+                                    .pickerStyle(SegmentedPickerStyle())
+                                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                                        resetWebSocketManager()
+                                    }
                                 }
-                                .padding()
+                                Section("Authentication") {
+                                    Button("Sign Up") {
+                                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                    }
+                                    Button("Sign In") {
+                                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                    }
+                                }
+                                Spacer()
+                                Section("Demo") {
+                                    if !showMap {
+                                        Button("Map", action: {
+                                            showMap = true
+                                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
+                                        })
+                                    }
+                                    Button("Prepare", action: loadGeoJSON)
+                                    Button("Nano", action: createNanoCities)
+                                    Button("Send", action: sendCities)
+                                    Button("Add", action: loadRandomCities)
+                                }
+                            } label: {
+                                Image(systemName: "gear")
+                                    .padding()
+                                    .background(Color.black.opacity(0.5))
+                                    .clipShape(Circle())
+                            }
+                        }
+                        .padding()
+                        //                    ++++++++++++++ Connection debug
+                        //                    Spacer()
+                        //                    Section(header: Text("Status")) {
+                        //                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
+                        //                        if let error = webSocketManager.lastError {
+                        //                            Text("Error: \(error)")
+                        //                                .foregroundColor(.red)
+                        //                        }
+                        //                        if isReconnecting {
+                        //                            ProgressView()
+                        //                        } else {
+                        //                            Button("Reconnect") {
+                        //                                resetWebSocketManager()
+                        //                            }
+                        //                            .buttonStyle(.bordered)
+                        //                        }
+                        //                        if let kasPublicKey = kasPublicKey {
+                        //                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
+                        //                                .font(.caption)
+                        //                                .lineLimit(1)
+                        //                                .truncationMode(.tail)
+                        //                        }
+                        //                    }
+                        if showMap {
+                            VStack {
+                                Spacer()
+                                HStack {
+                                    Spacer()
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 1.0)) {
+                                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                            withAnimation(.smooth(duration: 0.5)) {
+                                                showMap = false
+                                            }
+                                        }
+                                    }) {
+                                        Text("Engage!")
+                                            .padding()
+                                            .background(Color.blue)
+                                            .foregroundColor(.white)
+                                            .cornerRadius(10)
+                                    }
+                                    .padding()
+                                }
                             }
                         }
                     }
                 }
+                .ignoresSafeArea(edges: .all)
             }
-            .ignoresSafeArea(edges: .all)
+            .onAppear(perform: initialSetup)
         }
-        .onAppear(perform: initialSetup)
-    }
     #else
-    private var macOSLayout: some View {
-        NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            sidebarContent
-        } detail: {
-            ZStack {
-                if showMap {
-                    mapContent
-                } else {
-                    ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                }
-            }
-        }
-        .onAppear(perform: initialSetup)
-    }
-    
-    private var sidebarContent: some View {
-        List {
-            Section("Account") {
-                Picker("", selection: $selectedAccountIndex) {
-                    ForEach(0..<accountOptions.count, id: \.self) { index in
-                        Text(accountOptions[index]).tag(index)
+        private var macOSLayout: some View {
+            NavigationSplitView(columnVisibility: $sidebarVisibility) {
+                sidebarContent
+            } detail: {
+                ZStack {
+                    if showMap {
+                        mapContent
+                    } else {
+                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                    print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                    amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                    resetWebSocketManager()
-                }
             }
-            Section("Authentication") {
-                Button("Sign Up") {
-                    amViewModel.authenticationManager.signUp(accountName: selectedAccount)
-                }
-                Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
-                }
-            }
-            Spacer()
-            Spacer()
-            Section("Demo") {
-                if !showMap {
-                    Button("Map", action: {
-                        self.showMap = true
-                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40000000, heading: 0, pitch: 0))
-                    })
-                }
-                Button("Prepare", action: loadGeoJSON)
-                Button("Nano", action: createNanoCities)
-                Button("Display", action: animateCities)
-                Button("Add", action: loadRandomCities)
-            }
+            .onAppear(perform: initialSetup)
         }
-        .listStyle(SidebarListStyle())
-        .frame(minWidth: 200)
-    }
+
+        private var sidebarContent: some View {
+            List {
+                Section("Account") {
+                    Picker("", selection: $selectedAccountIndex) {
+                        ForEach(0 ..< accountOptions.count, id: \.self) { index in
+                            Text(accountOptions[index]).tag(index)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                        resetWebSocketManager()
+                    }
+                }
+                Section("Authentication") {
+                    Button("Sign Up") {
+                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                    }
+                    Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
+                    }
+                }
+                Spacer()
+                Spacer()
+                Section("Demo") {
+                    if !showMap {
+                        Button("Map", action: {
+                            showMap = true
+                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
+                        })
+                    }
+                    Button("Prepare", action: loadGeoJSON)
+                    Button("Nano", action: createNanoCities)
+                    Button("Send", action: sendCities)
+                    Button("Add", action: loadRandomCities)
+                }
+            }
+            .listStyle(SidebarListStyle())
+            .frame(minWidth: 200)
+        }
     #endif
-    
+
     private var mapContent: some View {
         ZStack {
             Map(position: $cameraPosition, interactionModes: .all) {
@@ -239,7 +239,7 @@ struct ContentView: View {
             }
             .mapStyle(.imagery(elevation: .realistic))
             .gesture(mapDragGesture)
-            
+
             VStack {
                 Spacer()
                 if showCityInfoOverlay {
@@ -262,10 +262,10 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private func engageAction() {
         withAnimation(.easeInOut(duration: 1.0)) {
-            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400000, heading: 0, pitch: 0))
+            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             withAnimation(.smooth(duration: 0.5)) {
@@ -273,7 +273,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var mapDragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
@@ -282,7 +282,7 @@ struct ContentView: View {
                     cameraPosition = MapCameraPosition.camera(
                         MapCamera(
                             centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                            distance: 2000000000,
+                            distance: 2_000_000_000,
                             heading: delta.width,
                             pitch: delta.height
                         )
@@ -290,9 +290,9 @@ struct ContentView: View {
                 }
             }
     }
-    
+
     private var cityInfoOverlay: some View {
-        CityInfoOverlay(
+        PerformanceInfoOverlay(
             nanoTime: nanoTime,
             nanoCitiesCount: nanoCities.count,
             citiesCount: cities.count,
@@ -318,36 +318,35 @@ struct ContentView: View {
         webSocketManager.setKASPublicKeyCallback { publicKey in
             DispatchQueue.main.async {
                 print("Received KAS Public Key")
-                self.kasPublicKey = publicKey
+                kasPublicKey = publicKey
             }
         }
-        
+
         webSocketManager.setRewrapCallback { id, symmetricKey in
             handleRewrapCallback(id: id, symmetricKey: symmetricKey)
         }
     }
-    
+
     private func setupWebSocketManager() {
         // Subscribe to connection state changes
         webSocketManager.$connectionState
             .sink { state in
-                if state == .connected && !hasInitialConnection {
+                if state == .connected, !hasInitialConnection {
                     DispatchQueue.main.async {
                         print("Initial connection established. Sending public key and KAS key message.")
-                        self.webSocketManager.sendPublicKey()
-                        self.webSocketManager.sendKASKeyMessage()
-                        self.hasInitialConnection = true
+                        webSocketManager.sendPublicKey()
+                        webSocketManager.sendKASKeyMessage()
+                        hasInitialConnection = true
                     }
                 } else if state == .disconnected {
-                    self.hasInitialConnection = false
+                    hasInitialConnection = false
                 }
             }
             .store(in: &cancellables)
         let token = amViewModel.authenticationManager.createJWT()
         if token != nil {
             webSocketManager.setupWebSocket(token: token!)
-        }
-        else {
+        } else {
             print("createJWT token nil")
         }
         webSocketManager.connect()
@@ -358,13 +357,13 @@ struct ContentView: View {
         hasInitialConnection = false
         webSocketManager.close()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // Increased delay to 1 second
-            self.setupWebSocketManager()
-            self.isReconnecting = false
+            setupWebSocketManager()
+            isReconnecting = false
         }
     }
-    
+
     private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
-        guard let id = id, let symmetricKey = symmetricKey else {
+        guard let id, let symmetricKey else {
             print("DENY")
             return
         }
@@ -375,22 +374,22 @@ struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let payload = try nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
-                
+
                 // Try to deserialize as a Thought first
                 if let thought = try? Thought.deserialize(from: payload) {
                     DispatchQueue.main.async {
                         // Update the ThoughtStreamView
-                        self.thoughtStreamViewModel.receiveThought(thought)
+                        thoughtStreamViewModel.receiveThought(thought)
                     }
                 } else if let city = try? City.deserialize(from: payload) {
                     // If it's not a Thought, try to deserialize as a City
                     DispatchQueue.main.async {
-                        self.addCityToCluster(city)
-                        self.updateAnnotations()
-                        
+                        addCityToCluster(city)
+                        updateAnnotations()
+
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            self.removeCityFromCluster(city)
-                            self.updateAnnotations()
+                            removeCityFromCluster(city)
+                            updateAnnotations()
                         }
                     }
                 } else {
@@ -405,11 +404,11 @@ struct ContentView: View {
     private func addCityAnnotation(_ city: City) {
         annotationManager.addAnnotation(city)
     }
-    
+
     private func removeCityAnnotation(_ city: City) {
         annotationManager.removeAnnotation(city)
     }
-    
+
     private func loadGeoJSON() {
         showCityInfoOverlay = true
         cities = generateTwoThousandActualCities()
@@ -449,7 +448,7 @@ struct ContentView: View {
                     let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
 
                     DispatchQueue.main.async {
-                        self.nanoCities.append(nanoTDF)
+                        nanoCities.append(nanoTDF)
                         dispatchGroup.leave()
                     }
                 } catch {
@@ -461,19 +460,26 @@ struct ContentView: View {
 
         dispatchGroup.notify(queue: .main) {
             let endTime = Date()
-            self.nanoTime = endTime.timeIntervalSince(startTime)
+            nanoTime = endTime.timeIntervalSince(startTime)
         }
     }
 
-    private func animateCities() {
-        print("Rewrapping...")
+    private func sendCities() {
+        print("Sending...")
         for nanoCity in nanoCities {
-            let id = nanoCity.header.ephemeralPublicKey
-            nanoTDFManager.addNanoTDF(nanoCity, withIdentifier: id)
-            webSocketManager.sendRewrapMessage(header: nanoCity.header)
+            // Create and send the NATSMessage
+            let natsMessage = NATSMessage(payload: nanoCity.toData())
+            let messageData = natsMessage.toData()
+//            print("City NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
+
+            webSocketManager.sendCustomMessage(messageData) { error in
+                if let error {
+                    print("Error sending thought: \(error)")
+                }
+            }
         }
     }
-    
+
     private func addCityToCluster(_ city: City) {
         if continentClusters[city.continent] == nil {
             continentClusters[city.continent] = []
@@ -481,14 +487,14 @@ struct ContentView: View {
         continentClusters[city.continent]?.append(city)
         cityCount += 1
     }
-    
+
     private func removeCityFromCluster(_ city: City) {
         continentClusters[city.continent]?.removeAll { $0.id == city.id }
         cityCount -= 1
     }
 
     private func updateAnnotations() {
-        annotations = continentClusters.flatMap { (continent, cities) -> [AnnotationItem] in
+        annotations = continentClusters.flatMap { continent, cities -> [AnnotationItem] in
             if cities.count > 50 {
                 let centerCoordinate = calculateCenterCoordinate(for: cities)
                 return [AnnotationItem(coordinate: centerCoordinate, name: continent, count: cities.count, isCluster: true)]
@@ -519,7 +525,7 @@ class NanoTDFManager: ObservableObject {
     @Published private(set) var count: Int = 0
     @Published private(set) var inProcessCount: Int = 0
     @Published private(set) var processDuration: TimeInterval = 0
-    
+
     private var processTimer: Timer?
     private var processStartTime: Date?
 
@@ -541,9 +547,9 @@ class NanoTDFManager: ObservableObject {
     }
 
     private func updateInProcessCount(_ newCount: Int) {
-        if newCount > 0 && inProcessCount == 0 {
+        if newCount > 0, inProcessCount == 0 {
             startProcessTimer()
-        } else if newCount == 0 && inProcessCount > 0 {
+        } else if newCount == 0, inProcessCount > 0 {
             stopProcessTimer()
         }
         inProcessCount = newCount
@@ -552,15 +558,15 @@ class NanoTDFManager: ObservableObject {
     private func startProcessTimer() {
         processStartTime = Date()
         processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self, let startTime = self.processStartTime else { return }
+            guard let self, let startTime = processStartTime else { return }
             print("processDuration \(Date().timeIntervalSince(startTime))")
         }
     }
 
     private func stopProcessTimer() {
         print("stopProcessTimer")
-        guard let startTime = self.processStartTime else { return }
-        self.processDuration = Date().timeIntervalSince(startTime)
+        guard let startTime = processStartTime else { return }
+        processDuration = Date().timeIntervalSince(startTime)
         print("processDuration \(processDuration)")
         processTimer?.invalidate()
         processTimer = nil
@@ -568,13 +574,13 @@ class NanoTDFManager: ObservableObject {
     }
 
     func isEmpty() -> Bool {
-        return nanoTDFs.isEmpty
+        nanoTDFs.isEmpty
     }
 }
 
 class AnnotationManager: ObservableObject {
     @Published var annotations: [CityAnnotation] = []
-    
+
     func addAnnotation(_ city: City) {
         DispatchQueue.main.async {
             if !self.annotations.contains(where: { $0.id == city.id }) {
@@ -582,7 +588,7 @@ class AnnotationManager: ObservableObject {
             }
         }
     }
-    
+
     func removeAnnotation(_ city: City) {
         DispatchQueue.main.async {
             self.annotations.removeAll { $0.id == city.id }
@@ -630,7 +636,7 @@ struct IdentifiableMapAnnotation: Identifiable {
     let coordinate: CLLocationCoordinate2D
     let content: AnyView
 
-    init<Content: View>(coordinate: CLLocationCoordinate2D, @ViewBuilder content: () -> Content) {
+    init(coordinate: CLLocationCoordinate2D, @ViewBuilder content: () -> some View) {
         self.coordinate = coordinate
         self.content = AnyView(content())
     }
@@ -647,9 +653,9 @@ struct AnnotationItem: Identifiable {
 extension WebSocketConnectionState: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .disconnected: return "Disconnected"
-        case .connecting: return "Connecting"
-        case .connected: return "Connected"
+        case .disconnected: "Disconnected"
+        case .connecting: "Connecting"
+        case .connected: "Connected"
         }
     }
 }

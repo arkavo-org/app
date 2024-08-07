@@ -1,11 +1,11 @@
-import Foundation
 import AppIntents
+import Foundation
 import SwiftData
 
 struct SecureStream: AppEntity, Identifiable, Codable {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "SecureStream"
     static var defaultQuery = SecureStreamQuery()
-    
+
     var id: UUID
     var name: String
     var streamDescription: String
@@ -14,33 +14,32 @@ struct SecureStream: AppEntity, Identifiable, Codable {
     var tags: [String]
     var ownerID: UUID
     var contents: [Content]
-    
+
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)")
     }
-    
-    init(id: UUID = UUID(), name: String, streamDescription: String, ownerID: UUID, isPublic: Bool = false) {
+
+    init(id: UUID = UUID(), name: String, streamDescription: String, ownerID: UUID, isPublic _: Bool = false) {
         self.id = id
         self.name = name
         self.streamDescription = streamDescription
-        self.createdAt = Date()
-        self.updatedAt = Date()
-        self.tags = []
+        createdAt = Date()
+        updatedAt = Date()
+        tags = []
         self.ownerID = ownerID
-        self.contents = []
+        contents = []
     }
-    
-  
+
     static var typeDisplayName: String {
-        return "SecureStream"
+        "SecureStream"
     }
-    
-    // TODO revisit metadata
+
+    // TODO: revisit metadata
     mutating func shareContent(type: ContentType, data: ContentData, metadata: [String: String], createdBy userID: UUID) -> Result<Content, ContentError> {
         let newContent = Content(id: UUID(), type: type, data: data, metadata: metadata, createdAt: Date(), createdBy: userID)
         contents.append(newContent)
         updatedAt = Date()
-        
+
         return .success(newContent)
     }
 }
@@ -83,31 +82,31 @@ struct ContentData: Codable {
 final class SecureStreamModel: ObservableObject {
     @Attribute(.unique) var id: UUID
     var stream: SecureStream
-    
+
     init(stream: SecureStream) {
-        self.id = stream.id
+        id = stream.id
         self.stream = stream
     }
 }
 
 struct SecureStreamAppIntent: AppIntent {
     static var title: LocalizedStringResource = "View Secure Stream"
-    
+
     @Parameter(title: "Stream ID")
     var streamIDString: String
-    
+
     init() {}
-    
+
     init(streamID: UUID) {
-        self.streamIDString = streamID.uuidString
+        streamIDString = streamID.uuidString
     }
-    
+
     func perform() async throws -> some IntentResult {
         // Here you would typically use the streamIDString to fetch or manipulate the corresponding SecureStream
         // For now, we'll just return a success result
-        return .result()
+        .result()
     }
-    
+
     static var parameterSummary: some ParameterSummary {
         Summary("View the secure stream with ID \(\.$streamIDString)")
     }
@@ -115,16 +114,16 @@ struct SecureStreamAppIntent: AppIntent {
 
 struct SecureStreamQuery: EntityQuery {
     typealias Entity = SecureStream
-    
-    func entities(for identifiers: [SecureStream.ID]) async throws -> [SecureStream] {
+
+    func entities(for _: [SecureStream.ID]) async throws -> [SecureStream] {
         // Implement this method to fetch SecureStream instances
         // This is just a placeholder implementation
-        return []
+        []
     }
-    
+
     func suggestedEntities() async throws -> [SecureStream] {
         // Implement this method to suggest SecureStream instances
         // This is just a placeholder implementation
-        return []
+        []
     }
 }
