@@ -1,6 +1,6 @@
-import SwiftUI
-import OpenTDFKit
 import CryptoKit
+import OpenTDFKit
+import SwiftUI
 
 // Wrapper struct for Thought
 struct ThoughtWrapper: Identifiable {
@@ -12,7 +12,7 @@ struct ThoughtStreamView: View {
     @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -21,7 +21,7 @@ struct ThoughtStreamView: View {
                                startPoint: .top,
                                endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
-                
+
                 VStack(spacing: 0) {
                     // Thought stream area
                     ZStack {
@@ -34,7 +34,7 @@ struct ThoughtStreamView: View {
                                         isTopThought: true,
                                         color: .blue)
                         }
-                        
+
                         ForEach(Array(viewModel.bottomThoughts.enumerated()), id: \.element.id) { index, wrapper in
                             ThoughtView(thought: wrapper.thought,
                                         index: index,
@@ -45,13 +45,13 @@ struct ThoughtStreamView: View {
                         }
                     }
                     .frame(height: geometry.size.height - 100) // Adjust for input box and keyboard
-                    
+
                     // Input box
                     HStack {
                         TextField("Enter your thought...", text: $inputText)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .focused($isInputFocused)
-                        
+
                         Button(action: sendThought) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .foregroundColor(.blue)
@@ -84,9 +84,9 @@ struct ThoughtView: View {
     let screenHeight: CGFloat
     let isTopThought: Bool
     let color: Color
-    
+
     @State private var offset: CGFloat = 0
-    
+
     var body: some View {
         Text(thought.content.first?.content ?? "")
             .padding(8)
@@ -101,7 +101,7 @@ struct ThoughtView: View {
                 }
             }
     }
-    
+
     private func calculateYOffset() -> CGFloat {
         let visibleHeight = screenHeight - 100
         let startY = isTopThought ? -visibleHeight / 2 : visibleHeight / 2
@@ -118,13 +118,14 @@ actor ThoughtHandler {
         self.nanoTDFManager = nanoTDFManager
         self.webSocketManager = webSocketManager
     }
+
     func handleIncomingThought(data: Data) async {
         // Assuming the incoming data is a NATSMessage
 //        print("NATS message received: \(data.base64EncodedString())")
 //        print("NATS payload size: \(data.count)")
         do {
-            // FIXME copy of data after first byte
-            let subData = data.subdata(in: 1..<data.count)
+            // FIXME: copy of data after first byte
+            let subData = data.subdata(in: 1 ..< data.count)
             // Create a NanoTDF from the payload
             let parser = BinaryParser(data: subData)
             let header = try parser.parseHeader()
@@ -141,6 +142,7 @@ actor ThoughtHandler {
             print("Unexpected error: \(error.localizedDescription)")
         }
     }
+
     private func handleParsingError(_ error: ParsingError) {
         switch error {
         case .invalidFormat:
@@ -182,35 +184,37 @@ class ThoughtStreamViewModel: ObservableObject {
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
 
     init() {
-        self._kasPublicKey = .constant(nil)  // Temporary binding
+        _kasPublicKey = .constant(nil) // Temporary binding
         _webSocketManager = .init(initialValue: WebSocketManager())
         _kasPublicKey = .constant(nil)
         nanoTDFManager = NanoTDFManager()
     }
-    
+
     func initialize(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
-            self.webSocketManager = webSocketManager
         self.webSocketManager = webSocketManager
-        self._kasPublicKey = kasPublicKey
+        self.webSocketManager = webSocketManager
+        _kasPublicKey = kasPublicKey
         self.nanoTDFManager = nanoTDFManager
-        self.thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
+        thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
         webSocketManager.setCustomMessageCallback { [weak self] data in
-            print("setCustomMessageCallback")
-            guard let self = self, let thoughtHandler = self.thoughtHandler else { return }
+            // FIXME this is called frequently
+//            print("setCustomMessageCallback")
+            guard let self, let thoughtHandler else { return }
             Task {
                 await thoughtHandler.handleIncomingThought(data: data)
             }
         }
     }
+
     func sendThought(thought: Thought) {
-        guard let kasPublicKey = kasPublicKey else {
+        guard let kasPublicKey else {
             print("KAS public key not available")
             return
         }
         do {
             // Serialize the new Thought
             let serializedThought = try thought.serialize()
-            
+
             // Create a NanoTDF
             let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
             let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
@@ -219,14 +223,14 @@ class ThoughtStreamViewModel: ObservableObject {
             var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
             let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedThought)
-            
+
             // Create and send the NATSMessage
             let natsMessage = NATSMessage(payload: nanoTDF.toData())
             let messageData = natsMessage.toData()
 //            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
 
             webSocketManager.sendCustomMessage(messageData) { error in
-                if let error = error {
+                if let error {
                     print("Error sending thought: \(error)")
                 }
             }
@@ -234,12 +238,13 @@ class ThoughtStreamViewModel: ObservableObject {
             print("Error creating or serializing NanoTDF: \(error)")
         }
     }
+
     func receiveThought(_ newThought: Thought) {
         DispatchQueue.main.async {
             self.addThought(newThought, toTop: true)
         }
     }
-    
+
     func addThought(_ thought: Thought, toTop: Bool) {
         let wrappedThought = ThoughtWrapper(thought: thought)
         if toTop {

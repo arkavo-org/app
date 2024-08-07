@@ -1,12 +1,12 @@
 import SwiftUI
 
-struct CityInfoOverlay: View {
+struct PerformanceInfoOverlay: View {
     let nanoTime: TimeInterval
     let nanoCitiesCount: Int
     let citiesCount: Int
     let decryptTime: TimeInterval
     let decryptCount: Int
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("nanoTDF info")
@@ -15,7 +15,7 @@ struct CityInfoOverlay: View {
             InfoRow(label: "bplist count", value: "\(citiesCount)")
             InfoRow(label: "Encrypt time", value: String(format: "%.2f s", nanoTime))
             InfoRow(label: "Nano count", value: "\(nanoCitiesCount)")
-            InfoRow(label: "Decrypt time", value: String(format: "%.2f s", decryptTime))
+            InfoRow(label: "Roundtrip time", value: String(format: "%.2f s", decryptTime))
             InfoRow(label: "Decrypt count", value: "\(decryptCount)")
         }
         .padding()
@@ -29,7 +29,7 @@ struct CityInfoOverlay: View {
 struct InfoRow: View {
     let label: String
     let value: String
-    
+
     var body: some View {
         HStack {
             Text(label)
@@ -41,9 +41,9 @@ struct InfoRow: View {
     }
 }
 
-struct CityInfoOverlay_Previews: PreviewProvider {
+struct PerformanceInfoOverlay_Previews: PreviewProvider {
     static var previews: some View {
-        CityInfoOverlay(
+        PerformanceInfoOverlay(
             nanoTime: 0.02,
             nanoCitiesCount: 62,
             citiesCount: 62,

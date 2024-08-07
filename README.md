@@ -1,9 +1,14 @@
 # Arkavo app
 _for the Apple ecosystem_
 
-## Development by contributor
+## Development
 
 ### Dependencies 
 
 - OpenTDFKit https://github.com/arkavo-org/OpenTDFKit.git
-- web3swift https://github.com/web3swift-team/web3swift
+
+### Format
+
+```shell
+swiftformat --swiftversion 6.0 .
+```

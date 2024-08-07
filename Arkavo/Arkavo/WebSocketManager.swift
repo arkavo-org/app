@@ -1,25 +1,22 @@
-import Foundation
 import Combine
 import CryptoKit
+import Foundation
 import OpenTDFKit
-import Foundation
-import Combine
-import CryptoKit
 
 struct NATSMessage {
     let messageType: Data
     let payload: Data
-    
+
     init(payload: Data) {
-        self.messageType = Data([0x05])
+        messageType = Data([0x05])
         self.payload = payload
     }
-    
+
     init(data: Data) {
-        self.messageType = data.prefix(1)
-        self.payload = data.suffix(from: 1)
+        messageType = data.prefix(1)
+        payload = data.suffix(from: 1)
     }
-    
+
     func toData() -> Data {
         var data = Data()
         data.append(messageType)
@@ -42,7 +39,7 @@ class WebSocketManager: ObservableObject {
         print("Connecting to: \(url)")
         print("Token: \(token)")
         webSocket = KASWebSocket(kasUrl: url, token: token)
-        
+
         // Set the callbacks on the new webSocket instance
         if let kasCallback = kasPublicKeyCallback {
             webSocket?.setKASPublicKeyCallback(kasCallback)
@@ -53,7 +50,7 @@ class WebSocketManager: ObservableObject {
         webSocket?.setCustomMessageCallback { [weak self] data in
             self?.customMessageCallback?(data)
         }
-        
+
         webSocket?.connectionStatePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -64,29 +61,29 @@ class WebSocketManager: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
+
     func connect() {
         lastError = nil
         webSocket?.connect()
     }
-    
+
     func close() {
         webSocket?.disconnect()
         cancellables.removeAll()
         webSocket = nil
         connectionState = .disconnected
     }
-    
+
     func setKASPublicKeyCallback(_ callback: @escaping (P256.KeyAgreement.PublicKey) -> Void) {
         kasPublicKeyCallback = callback
         webSocket?.setKASPublicKeyCallback(callback)
     }
-    
+
     func setRewrapCallback(_ callback: @escaping (Data, SymmetricKey?) -> Void) {
         rewrapCallback = callback
         webSocket?.setRewrapCallback(callback)
     }
-    
+
     func sendPublicKey() {
         guard connectionState == .connected else {
             lastError = "Cannot send public key: WebSocket not connected"
@@ -94,7 +91,7 @@ class WebSocketManager: ObservableObject {
         }
         webSocket?.sendPublicKey()
     }
-    
+
     func sendKASKeyMessage() {
         guard connectionState == .connected else {
             lastError = "Cannot send KAS key message: WebSocket not connected"
@@ -102,7 +99,7 @@ class WebSocketManager: ObservableObject {
         }
         webSocket?.sendKASKeyMessage()
     }
-    
+
     func sendRewrapMessage(header: Header) {
         guard connectionState == .connected else {
             lastError = "Cannot send rewrap message: WebSocket not connected"
@@ -110,7 +107,7 @@ class WebSocketManager: ObservableObject {
         }
         webSocket?.sendRewrapMessage(header: header)
     }
-    
+
     func setCustomMessageCallback(_ callback: @escaping (Data) -> Void) {
         customMessageCallback = callback
         webSocket?.setCustomMessageCallback { [weak self] data in
