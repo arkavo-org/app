@@ -49,6 +49,7 @@ struct ThoughtStreamView: View {
                     // Input box
                     HStack {
                         TextField("Enter your thought...", text: $inputText)
+                            .background(Color.black)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .focused($isInputFocused)
 

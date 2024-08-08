@@ -176,8 +176,8 @@ struct ContentView: View {
                     if showMap {
                         mapContent
                     } else {
-//                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                        WordCloudView()
+                        let wordCloudViewModel = WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
+                        WordCloudView(viewModel: wordCloudViewModel)
                     }
                 }
             }
