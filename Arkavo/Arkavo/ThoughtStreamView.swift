@@ -12,60 +12,37 @@ struct ThoughtStreamView: View {
     @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
+    @State private var isSending = false
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background gradient
-                LinearGradient(gradient: Gradient(colors: [Color.gray.opacity(0.2), Color.gray.opacity(0.1)]),
-                               startPoint: .top,
-                               endPoint: .bottom)
-                    .edgesIgnoringSafeArea(.all)
-
-                VStack(spacing: 0) {
-                    // Thought stream area
-                    ZStack {
-                        // Flowing thoughts from top
-                        ForEach(Array(viewModel.topThoughts.enumerated()), id: \.element.id) { index, wrapper in
-                            ThoughtView(thought: wrapper.thought,
-                                        index: index,
-                                        totalCount: viewModel.topThoughts.count,
-                                        screenHeight: geometry.size.height,
-                                        isTopThought: true,
-                                        color: .blue)
-                        }
-
-                        ForEach(Array(viewModel.bottomThoughts.enumerated()), id: \.element.id) { index, wrapper in
-                            ThoughtView(thought: wrapper.thought,
-                                        index: index,
-                                        totalCount: viewModel.bottomThoughts.count,
-                                        screenHeight: geometry.size.height,
-                                        isTopThought: false,
-                                        color: .green)
-                        }
-                    }
-                    .frame(height: geometry.size.height - 100) // Adjust for input box and keyboard
-
-                    // Input box
-                    HStack {
-                        TextField("Enter your thought...", text: $inputText)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .focused($isInputFocused)
-
-                        Button(action: sendThought) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .foregroundColor(.blue)
-                                .font(.title)
+        HStack(spacing: 0) {
+            // Main chat area
+            VStack {
+                // Messages
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(viewModel.allThoughts) { wrapper in
+                            MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.accountName)
                         }
                     }
                     .padding()
-                    .background(Color.white)
-                    .shadow(radius: 5)
                 }
+
+                // Input area
+                HStack {
+                    TextField("Type a message...", text: $inputText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disabled(isSending)
+
+                    Button(action: sendThought) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(isSending ? .gray : .blue)
+                            .font(.title)
+                    }
+                    .disabled(isSending)
+                }
+                .padding()
             }
-        }
-        .onAppear {
-            isInputFocused = false
         }
     }
 
@@ -174,17 +151,16 @@ actor ThoughtHandler {
 }
 
 class ThoughtStreamViewModel: ObservableObject {
-    @Published var topThoughts: [ThoughtWrapper] = []
-    @Published var bottomThoughts: [ThoughtWrapper] = []
-    let maxThoughtsPerStream: Int = 10
+    @Published var allThoughts: [ThoughtWrapper] = []
+    let maxThoughts: Int = 100
     public var thoughtHandler: ThoughtHandler?
+    @Published var accountName: String = "User"
     // nano
     @Published var webSocketManager: WebSocketManager
     var nanoTDFManager: NanoTDFManager
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
 
     init() {
-        _kasPublicKey = .constant(nil) // Temporary binding
         _webSocketManager = .init(initialValue: WebSocketManager())
         _kasPublicKey = .constant(nil)
         nanoTDFManager = NanoTDFManager()
@@ -197,7 +173,7 @@ class ThoughtStreamViewModel: ObservableObject {
         self.nanoTDFManager = nanoTDFManager
         thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
         webSocketManager.setCustomMessageCallback { [weak self] data in
-            // FIXME this is called frequently
+            // FIXME: this is called frequently
 //            print("setCustomMessageCallback")
             guard let self, let thoughtHandler else { return }
             Task {
@@ -241,22 +217,15 @@ class ThoughtStreamViewModel: ObservableObject {
 
     func receiveThought(_ newThought: Thought) {
         DispatchQueue.main.async {
-            self.addThought(newThought, toTop: true)
+            self.addThought(newThought)
         }
     }
 
-    func addThought(_ thought: Thought, toTop: Bool) {
+    private func addThought(_ thought: Thought) {
         let wrappedThought = ThoughtWrapper(thought: thought)
-        if toTop {
-            topThoughts.insert(wrappedThought, at: 0)
-            if topThoughts.count > maxThoughtsPerStream {
-                topThoughts.removeLast()
-            }
-        } else {
-            bottomThoughts.insert(wrappedThought, at: 0)
-            if bottomThoughts.count > maxThoughtsPerStream {
-                bottomThoughts.removeLast()
-            }
+        allThoughts.append(wrappedThought)
+        if allThoughts.count > maxThoughts {
+            allThoughts.removeFirst()
         }
     }
 }
@@ -265,5 +234,31 @@ struct ThoughtStreamView_Previews: PreviewProvider {
     static var previews: some View {
         let viewModel = ThoughtStreamViewModel()
         ThoughtStreamView(viewModel: viewModel)
+    }
+}
+
+struct MessageBubble: View {
+    let thought: Thought
+    let isCurrentUser: Bool
+
+    var body: some View {
+        HStack {
+            if isCurrentUser {
+                Spacer()
+            }
+            VStack(alignment: isCurrentUser ? .trailing : .leading) {
+                Text(thought.sender)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(thought.content.first?.content ?? "")
+                    .padding(10)
+                    .background(isCurrentUser ? Color.blue : Color(.gray))
+                    .foregroundColor(isCurrentUser ? .white : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            if !isCurrentUser {
+                Spacer()
+            }
+        }
     }
 }
