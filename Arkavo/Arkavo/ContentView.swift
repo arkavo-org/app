@@ -63,8 +63,7 @@ struct ContentView: View {
                     if showMap {
                         mapContent
                     } else {
-//                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                        WordCloudView()
+                        WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
                     }
 
                     VStack {

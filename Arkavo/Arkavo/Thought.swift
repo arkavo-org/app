@@ -1,16 +1,23 @@
 import Foundation
 
 struct Thought: Codable {
+    let sender: String
     let content: [MediaContent]
 
-    init(content: [MediaContent]) {
+    init(sender: String, content: [MediaContent]) {
+        self.sender = sender
         self.content = content
     }
 
     // Helper method for creating a simple text Thought
     static func createTextThought(_ text: String) -> Thought {
         let textContent = MediaContent(type: .text, content: text)
-        return Thought(content: [textContent])
+        return Thought(sender: "Anonymous", content: [textContent])
+    }
+
+    static func createTextThoughtWithSender(_ text: String, sender: String) -> Thought {
+        let textContent = MediaContent(type: .text, content: text)
+        return Thought(sender: sender, content: [textContent])
     }
 
     // PropertyList encoding/decoding
