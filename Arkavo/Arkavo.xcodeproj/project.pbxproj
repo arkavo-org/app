@@ -13,6 +13,7 @@
 		DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2046192C603C05006AB6E4 /* Thought.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
+		DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* WordCloudView.swift */; };
 		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
 		DA95A43A2C3DF611007409D5 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA95A4392C3DF60F007409D5 /* City.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
@@ -49,6 +50,7 @@
 		DA2046192C603C05006AB6E4 /* Thought.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Thought.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
+		DA73B3342C6436EF00393056 /* WordCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordCloudView.swift; sourceTree = "<group>"; };
 		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
 		DA95A4392C3DF60F007409D5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -113,6 +115,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA73B3342C6436EF00393056 /* WordCloudView.swift */,
 				DA0FEC402C586DF700C0A010 /* SecureStream.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
@@ -293,6 +296,7 @@
 			files = (
 				DA0FEC422C58766F00C0A010 /* SecureStream.swift in Sources */,
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
+				DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */,
 				DAC1F9E92C34DA7000499631 /* ContentView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,

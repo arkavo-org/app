@@ -63,7 +63,8 @@ struct ContentView: View {
                     if showMap {
                         mapContent
                     } else {
-                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+//                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+                        WordCloudView()
                     }
 
                     VStack {
@@ -175,7 +176,8 @@ struct ContentView: View {
                     if showMap {
                         mapContent
                     } else {
-                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+//                        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+                        WordCloudView()
                     }
                 }
             }
