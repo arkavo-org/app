@@ -243,7 +243,9 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack {
-            if isCurrentUser { Spacer() }
+            if isCurrentUser {
+                Spacer()
+            }
             VStack(alignment: isCurrentUser ? .trailing : .leading) {
                 Text(thought.sender)
                     .font(.caption)
@@ -254,7 +256,9 @@ struct MessageBubble: View {
                     .foregroundColor(isCurrentUser ? .white : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            if !isCurrentUser { Spacer() }
+            if !isCurrentUser {
+                Spacer()
+            }
         }
     }
 }
