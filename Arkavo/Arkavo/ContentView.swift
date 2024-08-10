@@ -30,11 +30,6 @@ struct ContentView: View {
     @State private var selectedAccount: String = "main"
     @State private var selectedAccountIndex = 0
     private let accountOptions = ["Main", "Alt", "Private"]
-    // SecureStream
-    @Query private var secureStreams: [SecureStreamModel]
-    @StateObject private var secureStreamModel = SecureStreamModel(
-        stream: SecureStream(name: "Public", streamDescription: "Earth", ownerID: UUID())
-    )
     // ThoughtStream
     @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // demo
@@ -518,7 +513,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: SecureStreamModel.self, inMemory: true)
 }
 
 class NanoTDFManager: ObservableObject {

@@ -9,6 +9,8 @@ final class Account {
     var signPublicKeyData: Data
     var derivePublicKeyData: Data
     var profiles: [Profile] = []
+    var streams: [SecureStream] = []
+    // TODO add authentication level
     
     init(signPublicKey: P256.KeyAgreement.PublicKey, derivePublicKey: P256.KeyAgreement.PublicKey) {
         self.id = UUID()

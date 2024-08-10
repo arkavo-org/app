@@ -2,13 +2,12 @@ import Foundation
 import SwiftData
 
 @Model
-final class Profile: Identifiable, Codable {
+final class Profile: Identifiable, Codable, @unchecked Sendable {
     var id: UUID
     var name: String
     var blurb: String?
     var dateCreated: Date
     private static let decoder = PropertyListDecoder()
-    // PropertyList encoding/decoding
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
@@ -46,7 +45,7 @@ final class Profile: Identifiable, Codable {
         try Profile.encoder.encode(self)
     }
 
-    static func deserialize(from data: Data) throws -> Thought {
-        try decoder.decode(Thought.self, from: data)
+    static func deserialize(from data: Data) throws -> Profile {
+        try decoder.decode(Profile.self, from: data)
     }
 }
