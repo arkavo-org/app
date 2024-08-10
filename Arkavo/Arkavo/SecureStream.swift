@@ -2,14 +2,13 @@ import AppIntents
 import Foundation
 import SwiftData
 
-@Model
-final class SecureStream: Identifiable, Codable {
-    var id: UUID
-    var name: String
-    var createdAt: Date
-    var tags: [String]
-    var ownerID: UUID
-    var profile: Profile?
+final class SecureStream: Identifiable, Codable, Sendable {
+    let id: UUID
+    let name: String
+    let createdAt: Date
+    let updatedAt: Date
+    let ownerID: UUID
+    let profile: Profile
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()
@@ -18,15 +17,16 @@ final class SecureStream: Identifiable, Codable {
     }()
 
     enum CodingKeys: String, CodingKey {
-        case id, name, createdAt, updatedAt, tags, ownerID, profile
+        case id, name, createdAt, updatedAt, ownerID, profile
     }
 
-    init(id: UUID = UUID(), name: String, ownerID: UUID) {
+    init(id: UUID = UUID(), name: String, ownerID: UUID, profile: Profile) {
         self.id = id
         self.name = name
         self.createdAt = Date()
-        self.tags = []
+        self.updatedAt = Date()
         self.ownerID = ownerID
+        self.profile = profile
     }
 
     required init(from decoder: Decoder) throws {
@@ -34,9 +34,9 @@ final class SecureStream: Identifiable, Codable {
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
-        tags = try container.decode([String].self, forKey: .tags)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         ownerID = try container.decode(UUID.self, forKey: .ownerID)
-        profile = try container.decodeIfPresent(Profile.self, forKey: .profile)
+        profile = try container.decode(Profile.self, forKey: .profile)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -44,9 +44,9 @@ final class SecureStream: Identifiable, Codable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(createdAt, forKey: .createdAt)
-        try container.encode(tags, forKey: .tags)
+        try container.encode(updatedAt, forKey: .updatedAt)
         try container.encode(ownerID, forKey: .ownerID)
-        try container.encodeIfPresent(profile, forKey: .profile)
+        try container.encode(profile, forKey: .profile)
     }
     
     func serialize() throws -> Data {
