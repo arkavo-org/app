@@ -4,12 +4,12 @@ import SwiftData
 
 @Model
 final class SecureStream: Identifiable, Codable {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var createdAt: Date
     var tags: [String]
     var ownerID: UUID
-    @Relationship var profile: Profile?
+    var profile: Profile?
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()
