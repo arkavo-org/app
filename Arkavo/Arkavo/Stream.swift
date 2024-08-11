@@ -2,7 +2,7 @@ import AppIntents
 import Foundation
 import SwiftData
 
-final class SecureStream: Identifiable, Codable, Sendable {
+final class Stream: Identifiable, Codable, Sendable {
     let id: UUID
     let name: String
     let createdAt: Date
@@ -23,8 +23,8 @@ final class SecureStream: Identifiable, Codable, Sendable {
     init(id: UUID = UUID(), name: String, ownerID: UUID, profile: Profile) {
         self.id = id
         self.name = name
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        createdAt = Date()
+        updatedAt = Date()
         self.ownerID = ownerID
         self.profile = profile
     }
@@ -48,17 +48,17 @@ final class SecureStream: Identifiable, Codable, Sendable {
         try container.encode(ownerID, forKey: .ownerID)
         try container.encode(profile, forKey: .profile)
     }
-    
+
     func serialize() throws -> Data {
-        try SecureStream.encoder.encode(self)
+        try Stream.encoder.encode(self)
     }
 
-    static func deserialize(from data: Data) throws -> SecureStream {
-        try decoder.decode(SecureStream.self, from: data)
+    static func deserialize(from data: Data) throws -> Stream {
+        try decoder.decode(Stream.self, from: data)
     }
 }
 
-extension SecureStream: AppEntity {
+extension Stream: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "SecureStream"
     static var defaultQuery = SecureStreamQuery()
 
@@ -72,15 +72,15 @@ extension SecureStream: AppEntity {
 }
 
 struct SecureStreamQuery: EntityQuery {
-    typealias Entity = SecureStream
+    typealias Entity = Stream
 
-    func entities(for identifiers: [SecureStream.ID]) async throws -> [SecureStream] {
+    func entities(for _: [Stream.ID]) async throws -> [Stream] {
         // Implement this method to fetch SecureStream instances
         // This is just a placeholder implementation
         []
     }
 
-    func suggestedEntities() async throws -> [SecureStream] {
+    func suggestedEntities() async throws -> [Stream] {
         // Implement this method to suggest SecureStream instances
         // This is just a placeholder implementation
         []

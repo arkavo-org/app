@@ -1,6 +1,6 @@
+import CryptoKit
 import Foundation
 import SwiftData
-import CryptoKit
 
 @Model
 final class Account {
@@ -9,13 +9,13 @@ final class Account {
     var signPublicKeyData: Data
     var derivePublicKeyData: Data
     var profiles: [Profile] = []
-    var streams: [SecureStream] = []
-    // TODO add authentication level
-    
+    var streams: [Stream] = []
+    // TODO: add authentication level
+
     init(signPublicKey: P256.KeyAgreement.PublicKey, derivePublicKey: P256.KeyAgreement.PublicKey) {
-        self.id = UUID()
-        self.dateCreated = Date()
-        self.signPublicKeyData = signPublicKey.rawRepresentation
-        self.derivePublicKeyData = derivePublicKey.rawRepresentation
+        id = UUID()
+        dateCreated = Date()
+        signPublicKeyData = signPublicKey.rawRepresentation
+        derivePublicKeyData = derivePublicKey.rawRepresentation
     }
 }

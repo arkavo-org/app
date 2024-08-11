@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
-		DA0FEC422C58766F00C0A010 /* SecureStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* SecureStream.swift */; };
+		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
 		DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE02C6807AD00722E3E /* Content.swift */; };
+		DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */; };
+		DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */; };
 		DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2046192C603C05006AB6E4 /* Thought.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
@@ -48,11 +50,13 @@
 
 /* Begin PBXFileReference section */
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
-		DA0FEC402C586DF700C0A010 /* SecureStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStream.swift; sourceTree = "<group>"; };
+		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		DA1A4DE02C6807AD00722E3E /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
+		DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountProfileView.swift; sourceTree = "<group>"; };
+		DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamProfileView.swift; sourceTree = "<group>"; };
 		DA2046192C603C05006AB6E4 /* Thought.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Thought.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
@@ -124,7 +128,9 @@
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
 				DA1A4DE02C6807AD00722E3E /* Content.swift */,
-				DA0FEC402C586DF700C0A010 /* SecureStream.swift */,
+				DA0FEC402C586DF700C0A010 /* Stream.swift */,
+				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
+				DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */,
 				DA73B3342C6436EF00393056 /* WordCloudView.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
@@ -303,8 +309,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA0FEC422C58766F00C0A010 /* SecureStream.swift in Sources */,
+				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
+				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
 				DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */,
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
 				DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */,
@@ -314,6 +321,7 @@
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
+				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
 				DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
 			);
