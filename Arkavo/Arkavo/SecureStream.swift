@@ -2,90 +2,88 @@ import AppIntents
 import Foundation
 import SwiftData
 
-struct SecureStream: AppEntity, Identifiable, Codable {
+final class SecureStream: Identifiable, Codable, Sendable {
+    let id: UUID
+    let name: String
+    let createdAt: Date
+    let updatedAt: Date
+    let ownerID: UUID
+    let profile: Profile
+    private static let decoder = PropertyListDecoder()
+    private static let encoder: PropertyListEncoder = {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        return encoder
+    }()
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, createdAt, updatedAt, ownerID, profile
+    }
+
+    init(id: UUID = UUID(), name: String, ownerID: UUID, profile: Profile) {
+        self.id = id
+        self.name = name
+        self.createdAt = Date()
+        self.updatedAt = Date()
+        self.ownerID = ownerID
+        self.profile = profile
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        ownerID = try container.decode(UUID.self, forKey: .ownerID)
+        profile = try container.decode(Profile.self, forKey: .profile)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(ownerID, forKey: .ownerID)
+        try container.encode(profile, forKey: .profile)
+    }
+    
+    func serialize() throws -> Data {
+        try SecureStream.encoder.encode(self)
+    }
+
+    static func deserialize(from data: Data) throws -> SecureStream {
+        try decoder.decode(SecureStream.self, from: data)
+    }
+}
+
+extension SecureStream: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "SecureStream"
     static var defaultQuery = SecureStreamQuery()
-
-    var id: UUID
-    var name: String
-    var streamDescription: String
-    var createdAt: Date
-    var updatedAt: Date
-    var tags: [String]
-    var ownerID: UUID
-    var contents: [Content]
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)")
     }
 
-    init(id: UUID = UUID(), name: String, streamDescription: String, ownerID: UUID, isPublic _: Bool = false) {
-        self.id = id
-        self.name = name
-        self.streamDescription = streamDescription
-        createdAt = Date()
-        updatedAt = Date()
-        tags = []
-        self.ownerID = ownerID
-        contents = []
-    }
-
     static var typeDisplayName: String {
         "SecureStream"
     }
+}
 
-    // TODO: revisit metadata
-    mutating func shareContent(type: ContentType, data: ContentData, metadata: [String: String], createdBy userID: UUID) -> Result<Content, ContentError> {
-        let newContent = Content(id: UUID(), type: type, data: data, metadata: metadata, createdAt: Date(), createdBy: userID)
-        contents.append(newContent)
-        updatedAt = Date()
+struct SecureStreamQuery: EntityQuery {
+    typealias Entity = SecureStream
 
-        return .success(newContent)
+    func entities(for identifiers: [SecureStream.ID]) async throws -> [SecureStream] {
+        // Implement this method to fetch SecureStream instances
+        // This is just a placeholder implementation
+        []
     }
-}
 
-enum ContentError: Error {
-    case notAMember
-    case contentNotFound
-    case notAuthorized
-}
-
-// Define various content types
-enum ContentType: String, Codable {
-    case text
-    case image
-    case video
-    case audio
-    case document
-    case link
-}
-
-struct Content: Identifiable, Codable {
-    let id: UUID
-    let type: ContentType
-    let data: ContentData
-    let metadata: [String: String]
-    let createdAt: Date
-    let createdBy: UUID
-}
-
-struct ContentData: Codable {
-    let title: String
-    let description: String?
-    let url: URL?
-    let textContent: String?
-    let fileSize: Int64?
-    let duration: TimeInterval?
-}
-
-@Model
-final class SecureStreamModel: ObservableObject {
-    @Attribute(.unique) var id: UUID
-    var stream: SecureStream
-
-    init(stream: SecureStream) {
-        id = stream.id
-        self.stream = stream
+    func suggestedEntities() async throws -> [SecureStream] {
+        // Implement this method to suggest SecureStream instances
+        // This is just a placeholder implementation
+        []
     }
 }
 
@@ -109,21 +107,5 @@ struct SecureStreamAppIntent: AppIntent {
 
     static var parameterSummary: some ParameterSummary {
         Summary("View the secure stream with ID \(\.$streamIDString)")
-    }
-}
-
-struct SecureStreamQuery: EntityQuery {
-    typealias Entity = SecureStream
-
-    func entities(for _: [SecureStream.ID]) async throws -> [SecureStream] {
-        // Implement this method to fetch SecureStream instances
-        // This is just a placeholder implementation
-        []
-    }
-
-    func suggestedEntities() async throws -> [SecureStream] {
-        // Implement this method to suggest SecureStream instances
-        // This is just a placeholder implementation
-        []
     }
 }
