@@ -7,7 +7,7 @@ import OpenTDFKit
 import SwiftData
 import SwiftUI
 
-struct ContentView: View {
+struct ArkavoView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
@@ -512,7 +512,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ArkavoView()
 }
 
 class NanoTDFManager: ObservableObject {
