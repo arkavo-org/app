@@ -59,48 +59,47 @@ final class Stream: Identifiable, Codable, Sendable {
 }
 
 extension Stream: AppEntity {
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "SecureStream"
-    static var defaultQuery = SecureStreamQuery()
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Stream"
+    static var defaultQuery = StreamQuery()
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)")
     }
 
     static var typeDisplayName: String {
-        "SecureStream"
+        "Stream"
     }
 }
 
-struct SecureStreamQuery: EntityQuery {
+struct StreamQuery: EntityQuery {
     typealias Entity = Stream
 
     func entities(for _: [Stream.ID]) async throws -> [Stream] {
-        // Implement this method to fetch SecureStream instances
         // This is just a placeholder implementation
         []
     }
 
     func suggestedEntities() async throws -> [Stream] {
-        // Implement this method to suggest SecureStream instances
         // This is just a placeholder implementation
         []
     }
 }
 
-struct SecureStreamAppIntent: AppIntent {
+struct StreamAppIntent: AppIntent {
     static var title: LocalizedStringResource = "View Secure Stream"
 
     @Parameter(title: "Stream ID")
     var streamIDString: String
 
-    init() {}
+    init() {
+        // AppIntent
+    }
 
     init(streamID: UUID) {
         streamIDString = streamID.uuidString
     }
 
     func perform() async throws -> some IntentResult {
-        // Here you would typically use the streamIDString to fetch or manipulate the corresponding SecureStream
         // For now, we'll just return a success result
         .result()
     }
