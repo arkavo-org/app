@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([])
+        let schema = Schema([Account.self, Profile.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

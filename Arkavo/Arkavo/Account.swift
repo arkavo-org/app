@@ -8,7 +8,7 @@ final class Account {
     var dateCreated: Date
     var signPublicKeyData: Data
     var derivePublicKeyData: Data
-    var profiles: [Profile] = []
+    var profile: Profile?
     var streams: [Stream] = []
     // TODO: add authentication level
 

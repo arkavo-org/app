@@ -1,3 +1,4 @@
+import Combine
 import CryptoKit
 import OpenTDFKit
 import SwiftUI
@@ -22,7 +23,7 @@ struct ThoughtStreamView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(viewModel.allThoughts) { wrapper in
-                            MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.accountName)
+                            MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.profile!.name)
                         }
                     }
                     .padding()
@@ -48,7 +49,7 @@ struct ThoughtStreamView: View {
 
     private func sendThought() {
         guard !inputText.isEmpty else { return }
-        let newThought = Thought.createTextThought(inputText)
+        let newThought = Thought.createTextThoughtWithSender(inputText, sender: viewModel.profile!.name)
         viewModel.sendThought(thought: newThought)
         inputText = ""
     }
@@ -154,11 +155,12 @@ class ThoughtStreamViewModel: ObservableObject {
     @Published var allThoughts: [ThoughtWrapper] = []
     let maxThoughts: Int = 100
     public var thoughtHandler: ThoughtHandler?
-    @Published var accountName: String = "User"
+    @Published var profile: Profile?
     // nano
     @Published var webSocketManager: WebSocketManager
     var nanoTDFManager: NanoTDFManager
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         _webSocketManager = .init(initialValue: WebSocketManager())
@@ -166,7 +168,11 @@ class ThoughtStreamViewModel: ObservableObject {
         nanoTDFManager = NanoTDFManager()
     }
 
-    func initialize(webSocketManager: WebSocketManager, nanoTDFManager: NanoTDFManager, kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>) {
+    func initialize(
+        webSocketManager: WebSocketManager,
+        nanoTDFManager: NanoTDFManager,
+        kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>
+    ) {
         self.webSocketManager = webSocketManager
         self.webSocketManager = webSocketManager
         _kasPublicKey = kasPublicKey
