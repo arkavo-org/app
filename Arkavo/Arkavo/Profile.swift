@@ -13,18 +13,18 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         encoder.outputFormat = .binary
         return encoder
     }()
-    
+
     init(id: UUID = UUID(), name: String, blurb: String? = nil) {
         self.id = id
         self.name = name
         self.blurb = blurb
-        self.dateCreated = Date()
+        dateCreated = Date()
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case id, name, blurb, dateCreated, ownerType, ownerId
     }
-    
+
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -32,7 +32,7 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         blurb = try container.decodeIfPresent(String.self, forKey: .blurb)
         dateCreated = try container.decode(Date.self, forKey: .dateCreated)
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -40,7 +40,7 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         try container.encodeIfPresent(blurb, forKey: .blurb)
         try container.encode(dateCreated, forKey: .dateCreated)
     }
-    
+
     func serialize() throws -> Data {
         try Profile.encoder.encode(self)
     }

@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([])
+        let schema = Schema([Account.self, Profile.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
@@ -17,7 +17,7 @@ struct ArkavoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ArkavoView()
             #if os(macOS)
                 .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
                        minHeight: 600, idealHeight: 800, maxHeight: .infinity)

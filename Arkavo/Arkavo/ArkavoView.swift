@@ -7,10 +7,8 @@ import OpenTDFKit
 import SwiftData
 import SwiftUI
 
-struct ContentView: View {
+struct ArkavoView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) private var scenePhase
-
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
@@ -27,7 +25,9 @@ struct ContentView: View {
     @State private var isReconnecting = false
     @State private var hasInitialConnection = false
     // account
-    @State private var selectedAccount: String = "main"
+    @StateObject private var accountManager = AccountManager()
+    @State private var showingProfileCreation = false
+    @State private var showingProfileDetails = false
     @State private var selectedAccountIndex = 0
     private let accountOptions = ["Main", "Alt", "Private"]
     // ThoughtStream
@@ -57,6 +57,22 @@ struct ContentView: View {
                 ZStack {
                     if showMap {
                         mapContent
+                            .sheet(isPresented: $showingProfileCreation) {
+                                AccountProfileCreateView { newProfile in
+                                    accountManager.account.profile = newProfile
+                                    thoughtStreamViewModel.profile = newProfile
+                                    do {
+                                        try modelContext.save()
+                                    } catch {
+                                        print("Failed to save profile: \(error)")
+                                    }
+                                }
+                            }
+                            .sheet(isPresented: $showingProfileDetails) {
+                                if let profile = accountManager.account.profile {
+                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                                }
+                            }
                     } else {
                         WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
                     }
@@ -77,13 +93,22 @@ struct ContentView: View {
                                         amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
                                         resetWebSocketManager()
                                     }
+                                    if accountManager.account.profile == nil {
+                                        Button("Create Profile") {
+                                            showingProfileCreation = true
+                                        }
+                                    } else {
+                                        Button("View Profile") {
+                                            showingProfileDetails = true
+                                        }
+                                    }
                                 }
                                 Section("Authentication") {
                                     Button("Sign Up") {
-                                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
                                     }
                                     Button("Sign In") {
-                                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
                                     }
                                 }
                                 Spacer()
@@ -145,11 +170,13 @@ struct ContentView: View {
                                             }
                                         }
                                     }) {
-                                        Text("Engage!")
-                                            .padding()
-                                            .background(Color.blue)
-                                            .foregroundColor(.white)
-                                            .cornerRadius(10)
+                                        if accountManager.account.profile != nil {
+                                            Text("Engage!")
+                                                .padding()
+                                                .background(Color.blue)
+                                                .foregroundColor(.white)
+                                                .cornerRadius(10)
+                                        }
                                     }
                                     .padding()
                                 }
@@ -192,12 +219,37 @@ struct ContentView: View {
                         amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
                         resetWebSocketManager()
                     }
+                    if accountManager.account.profile == nil {
+                        Button("Create Profile") {
+                            showingProfileCreation = true
+                        }
+                    } else {
+                        Button("View Profile") {
+                            showingProfileDetails = true
+                        }
+                    }
+                }
+                .sheet(isPresented: $showingProfileCreation) {
+                    AccountProfileCreateView { newProfile in
+                        accountManager.account.profile = newProfile
+                        thoughtStreamViewModel.profile = newProfile
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            print("Failed to save profile: \(error)")
+                        }
+                    }
+                }
+                .sheet(isPresented: $showingProfileDetails) {
+                    if let profile = accountManager.account.profile {
+                        AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                    }
                 }
                 Section("Authentication") {
                     Button("Sign Up") {
-                        amViewModel.authenticationManager.signUp(accountName: selectedAccount)
+                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
                     }
-                    Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: selectedAccount)
+                    Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: accountOptions[0])
                     }
                 }
                 Spacer()
@@ -242,18 +294,20 @@ struct ContentView: View {
                     cityInfoOverlay
                 }
             }
-            VStack {
-                Spacer()
-                HStack {
+            if thoughtStreamViewModel.profile != nil {
+                VStack {
                     Spacer()
-                    Button(action: engageAction) {
-                        Text("Engage!")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+                    HStack {
+                        Spacer()
+                        Button(action: engageAction) {
+                            Text("Engage!")
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
             }
         }
@@ -299,6 +353,7 @@ struct ContentView: View {
     }
 
     private func initialSetup() {
+        accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
@@ -512,7 +567,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ArkavoView()
 }
 
 class NanoTDFManager: ObservableObject {
@@ -559,7 +614,7 @@ class NanoTDFManager: ObservableObject {
     }
 
     private func stopProcessTimer() {
-        print("stopProcessTimer")
+//        print("stopProcessTimer")
         guard let startTime = processStartTime else { return }
         processDuration = Date().timeIntervalSince(startTime)
         print("processDuration \(processDuration)")
@@ -652,5 +707,14 @@ extension WebSocketConnectionState: CustomStringConvertible {
         case .connecting: "Connecting"
         case .connected: "Connected"
         }
+    }
+}
+
+class AccountManager: ObservableObject {
+    @Published var account: Account
+
+    init() {
+        account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
+                          derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
     }
 }
