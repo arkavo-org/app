@@ -40,53 +40,6 @@ struct DetailedStreamProfileView: View {
     }
 }
 
-struct CreateStreamProfileView: View {
-    @StateObject var viewModel = CreateStreamProfileViewModel()
-    @Environment(\.dismiss) private var dismiss
-    var onSave: (Profile, Int) -> Void
-
-    var body: some View {
-        Form {
-            Section(header: Text("Profile Information")) {
-                TextField("Name", text: $viewModel.name)
-                    .onChange(of: viewModel.name) { _, _ in
-                        viewModel.validateName()
-                    }
-                if let nameError = viewModel.nameError {
-                    Text(nameError).foregroundColor(.red)
-                }
-
-                TextField("Blurb", text: $viewModel.blurb)
-                    .onChange(of: viewModel.blurb) { _, _ in
-                        viewModel.validateBlurb()
-                    }
-                if let blurbError = viewModel.blurbError {
-                    Text(blurbError).foregroundColor(.red)
-                }
-            }
-
-            Section(header: Text("Stream Information")) {
-                Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
-                    .onChange(of: viewModel.participantCount) { _, _ in
-                        viewModel.validateParticipantCount()
-                    }
-                if let participantCountError = viewModel.participantCountError {
-                    Text(participantCountError).foregroundColor(.red)
-                }
-            }
-
-            Button("Create Stream Profile") {
-                if let (profile, participantCount) = viewModel.createStreamProfile() {
-                    onSave(profile, participantCount)
-                    dismiss()
-                }
-            }
-            .disabled(!viewModel.isValid())
-        }
-        .navigationTitle("Create Stream Profile")
-    }
-}
-
 class StreamProfileViewModel: ObservableObject {
     @Published var profile: Profile
     @Published var participantCount: Int
@@ -97,11 +50,61 @@ class StreamProfileViewModel: ObservableObject {
     }
 }
 
-class CreateProfileViewModel: ObservableObject {
+struct CreateStreamProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = CreateStreamProfileViewModel()
+    var onSave: (Profile, Int) -> Void
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Profile Information")) {
+                    TextField("Name", text: $viewModel.name)
+                    if !viewModel.nameError.isEmpty {
+                        Text(viewModel.nameError).foregroundColor(.red)
+                    }
+
+                    TextField("Blurb", text: $viewModel.blurb)
+                    if !viewModel.blurbError.isEmpty {
+                        Text(viewModel.blurbError).foregroundColor(.red)
+                    }
+                }
+
+                Section(header: Text("Stream Information")) {
+                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
+                    if !viewModel.participantCountError.isEmpty {
+                        Text(viewModel.participantCountError).foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Create Stream")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Create") {
+                    if let (profile, participantCount) = viewModel.createStreamProfile() {
+                        onSave(profile, participantCount)
+                        dismiss()
+                    }
+                }
+                .disabled(!viewModel.isValid)
+            )
+        }
+        .onChange(of: viewModel.name) { viewModel.validateName() }
+        .onChange(of: viewModel.blurb) { viewModel.validateBlurb() }
+        .onChange(of: viewModel.participantCount) { viewModel.validateParticipantCount() }
+    }
+}
+
+class CreateStreamProfileViewModel: ObservableObject {
     @Published var name: String = ""
     @Published var blurb: String = ""
-    @Published var nameError: String?
-    @Published var blurbError: String?
+    @Published var participantCount: Int = 2
+    @Published var nameError: String = ""
+    @Published var blurbError: String = ""
+    @Published var participantCountError: String = ""
+    @Published var isValid: Bool = false
 
     func validateName() {
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -109,35 +112,19 @@ class CreateProfileViewModel: ObservableObject {
         } else if name.count > 50 {
             nameError = "Name must be 50 characters or less"
         } else {
-            nameError = nil
+            nameError = ""
         }
+        updateValidity()
     }
 
     func validateBlurb() {
         if blurb.count > 200 {
             blurbError = "Blurb must be 200 characters or less"
         } else {
-            blurbError = nil
+            blurbError = ""
         }
+        updateValidity()
     }
-
-    func isValid() -> Bool {
-        validateName()
-        validateBlurb()
-        return nameError == nil && blurbError == nil
-    }
-
-    func createProfile() -> Profile? {
-        if isValid() {
-            return Profile(name: name, blurb: blurb.isEmpty ? nil : blurb)
-        }
-        return nil
-    }
-}
-
-class CreateStreamProfileViewModel: CreateProfileViewModel {
-    @Published var participantCount: Int = 2
-    @Published var participantCountError: String?
 
     func validateParticipantCount() {
         if participantCount < 2 {
@@ -145,17 +132,17 @@ class CreateStreamProfileViewModel: CreateProfileViewModel {
         } else if participantCount > 100 {
             participantCountError = "A Stream can have at most 100 participants"
         } else {
-            participantCountError = nil
+            participantCountError = ""
         }
+        updateValidity()
     }
 
-    override func isValid() -> Bool {
-        validateParticipantCount()
-        return super.isValid() && participantCountError == nil
+    private func updateValidity() {
+        isValid = nameError.isEmpty && blurbError.isEmpty && participantCountError.isEmpty && !name.isEmpty
     }
 
     func createStreamProfile() -> (Profile, Int)? {
-        if isValid() {
+        if isValid {
             let profile = Profile(name: name, blurb: blurb.isEmpty ? nil : blurb)
             return (profile, participantCount)
         }
