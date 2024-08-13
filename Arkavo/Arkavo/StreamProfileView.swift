@@ -78,18 +78,22 @@ struct CreateStreamProfileView: View {
                 }
             }
             .navigationTitle("Create Stream")
-            .navigationBarItems(
-                leading: Button("Cancel") {
-                    dismiss()
-                },
-                trailing: Button("Create") {
-                    if let (profile, participantCount) = viewModel.createStreamProfile() {
-                        onSave(profile, participantCount)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
                         dismiss()
                     }
                 }
-                .disabled(!viewModel.isValid)
-            )
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        if let (profile, participantCount) = viewModel.createStreamProfile() {
+                            onSave(profile, participantCount)
+                            dismiss()
+                        }
+                    }
+                    .disabled(!viewModel.isValid)
+                }
+            }
         }
         .onChange(of: viewModel.name) { viewModel.validateName() }
         .onChange(of: viewModel.blurb) { viewModel.validateBlurb() }
