@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreGraphics
 
 struct WordCloudItem: Identifiable {
     let id = UUID()
@@ -40,10 +39,10 @@ class WordCloudViewModel: ObservableObject {
 struct WordCloudView: View {
     @StateObject var viewModel: WordCloudViewModel
     @State private var items: [WordCloudItem] = []
-    @State private var scale: CGFloat = 0.1
     @State private var animationProgress: CGFloat = 0
     @State private var selectedWord: WordCloudItem?
     @State private var showingContentView = false
+    @State private var availableSize: CGSize = .zero
     let animationDuration: Double = 2.0
     let titleSize: CGFloat = 40
 
@@ -71,38 +70,40 @@ struct WordCloudView: View {
                             Text(item.text)
                                 .font(.system(size: item.size))
                                 .foregroundColor(item.color)
-                                .position(animatedPosition(for: item))
+                                .position(animatedPosition(for: item, in: geometry.size))
                                 .animation(.easeInOut(duration: animationDuration), value: animationProgress)
-                                .background(GeometryReader { geometry in
-                                    Color.clear.preference(key: SizePreferenceKey.self, value: geometry.size)
+                                .background(GeometryReader { itemGeometry in
+                                    Color.clear.preference(key: ItemPreferenceKey.self, value: ItemPreference(id: item.id, frame: itemGeometry.frame(in: .named("wordCloud"))))
                                 })
-                                .onPreferenceChange(SizePreferenceKey.self) { size in
-                                    if let index = items.firstIndex(where: { $0.id == item.id }) {
-                                        items[index].frame = CGRect(origin: items[index].position, size: size)
-                                    }
-                                }
                                 .onTapGesture {
                                     withAnimation(.easeInOut(duration: 0.5)) {
-                                        selectWord(item, in: geometry)
+                                        selectWord(item, in: geometry.size)
                                     }
                                 }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black)
+                    .coordinateSpace(name: "wordCloud")
+                    .onPreferenceChange(ItemPreferenceKey.self) { preference in
+                        if let preference = preference,
+                           let index = items.firstIndex(where: { $0.id == preference.id }) {
+                            items[index].frame = preference.frame
+                        }
+                    }
                 }
             }
-        }
-        .onAppear {
-            setupWordCloud()
-            withAnimation(.easeOut(duration: animationDuration)) {
-                animationProgress = 1.0
+            .onAppear {
+                availableSize = geometry.size
+                setupWordCloud(in: geometry.size)
+                withAnimation(.easeOut(duration: animationDuration)) {
+                    animationProgress = 1.0
+                }
             }
         }
     }
 
-    func setupWordCloud() {
-        let bounds = UIScreen.main.bounds
+    func setupWordCloud(in size: CGSize) {
         items = viewModel.words.enumerated().map { index, word in
             WordCloudItem(
                 text: word.0,
@@ -113,14 +114,14 @@ struct WordCloudView: View {
                     blue: .random(in: 0.4 ... 1)
                 ),
                 position: .zero,
-                initialPosition: getInitialPosition(for: viewModel.animationType, in: bounds)
+                initialPosition: getInitialPosition(for: viewModel.animationType, in: size)
             )
         }
 
-        layoutWords(in: bounds)
+        layoutWords(in: size)
     }
 
-    func layoutWords(in bounds: CGRect) {
+    func layoutWords(in size: CGSize) {
         var placedItems: [WordCloudItem] = []
 
         for i in 0 ..< items.count {
@@ -130,10 +131,10 @@ struct WordCloudView: View {
 
             while !placed && attempts < 100 {
                 let angle = CGFloat.random(in: 0...(2 * .pi))
-                let radius = CGFloat.random(in: 0...min(bounds.width, bounds.height) / 2 - item.size)
+                let radius = CGFloat.random(in: 0...min(size.width, size.height) / 2 - item.size)
                 let newPosition = CGPoint(
-                    x: bounds.width / 2 + cos(angle) * radius,
-                    y: bounds.height / 2 + sin(angle) * radius
+                    x: size.width / 2 + cos(angle) * radius,
+                    y: size.height / 2 + sin(angle) * radius
                 )
 
                 item.position = newPosition
@@ -151,18 +152,18 @@ struct WordCloudView: View {
                 items[i] = item
             } else {
                 // If we couldn't place the item after 100 attempts, we'll just place it at a random position
-                items[i].position = CGPoint(x: CGFloat.random(in: item.size...bounds.width-item.size),
-                                            y: CGFloat.random(in: item.size...bounds.height-item.size))
+                items[i].position = CGPoint(x: CGFloat.random(in: item.size...size.width-item.size),
+                                            y: CGFloat.random(in: item.size...size.height-item.size))
             }
         }
     }
 
-    func selectWord(_ item: WordCloudItem, in geometry: GeometryProxy) {
+    func selectWord(_ item: WordCloudItem, in size: CGSize) {
         selectedWord = item
 
         // Animate the selected word to the title area
         if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index].position = CGPoint(x: geometry.size.width / 2, y: 30)
+            items[index].position = CGPoint(x: size.width / 2, y: 30)
             items[index].size = titleSize
         }
 
@@ -172,25 +173,23 @@ struct WordCloudView: View {
         }
     }
 
-    func getInitialPosition(for animationType: WordCloudAnimationType, in bounds: CGRect) -> CGPoint {
+    func getInitialPosition(for animationType: WordCloudAnimationType, in size: CGSize) -> CGPoint {
         switch animationType {
-        case .circleRotation:
-            return CGPoint(x: bounds.width / 2, y: bounds.height / 2)
-        case .explosion:
-            return CGPoint(x: bounds.width / 2, y: bounds.height / 2)
+        case .circleRotation, .explosion:
+            return CGPoint(x: size.width / 2, y: size.height / 2)
         case .falling:
-            return CGPoint(x: CGFloat.random(in: 0...bounds.width), y: -50)
+            return CGPoint(x: CGFloat.random(in: 0...size.width), y: -50)
         }
     }
 
-    func animatedPosition(for item: WordCloudItem) -> CGPoint {
+    func animatedPosition(for item: WordCloudItem, in size: CGSize) -> CGPoint {
         switch viewModel.animationType {
         case .circleRotation:
             let angle = 2 * .pi * animationProgress
-            let radius = distance(from: CGPoint(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2), to: item.position)
+            let radius = distance(from: CGPoint(x: size.width / 2, y: size.height / 2), to: item.position)
             return CGPoint(
-                x: UIScreen.main.bounds.width / 2 + cos(angle) * radius * animationProgress,
-                y: UIScreen.main.bounds.height / 2 + sin(angle) * radius * animationProgress
+                x: size.width / 2 + cos(angle) * radius * animationProgress,
+                y: size.height / 2 + sin(angle) * radius * animationProgress
             )
         case .explosion:
             return CGPoint(
@@ -210,10 +209,16 @@ struct WordCloudView: View {
     }
 }
 
-struct SizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
+struct ItemPreference: Equatable {
+    let id: UUID
+    let frame: CGRect
+}
+
+struct ItemPreferenceKey: PreferenceKey {
+    static var defaultValue: ItemPreference?
+    
+    static func reduce(value: inout ItemPreference?, nextValue: () -> ItemPreference?) {
+        value = nextValue() ?? value
     }
 }
 
