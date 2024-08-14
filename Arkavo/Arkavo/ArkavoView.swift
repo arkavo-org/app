@@ -44,7 +44,8 @@ struct ArkavoView: View {
     @State private var annotations: [AnnotationItem] = []
     // view control
     @State private var selectedView: SelectedView = .map
-
+    @Query  var profiles: [Profile] = []
+    
     enum SelectedView {
         case map
         case wordCloud
@@ -282,7 +283,16 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
+        @Environment(\.modelContext)  var modelContext
+        
         accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+        
+        for profile in profiles {
+            print("profiles: \(profile.name)")
+        }
+        
+
+        
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
@@ -292,6 +302,12 @@ struct ArkavoView: View {
             nanoTDFManager: nanoTDFManager,
             kasPublicKey: $kasPublicKey
         )
+        if !profiles.isEmpty {
+            if accountManager.account.profile == nil {
+                accountManager.account.profile = profiles.first
+                thoughtStreamViewModel.profile = profiles.first
+            }
+        }
     }
 
     private func setupCallbacks() {
