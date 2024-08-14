@@ -74,7 +74,28 @@ struct ArkavoView: View {
                                 }
                             }
                     case .wordCloud:
-                        WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
+                        if !accountManager.account.streams.isEmpty {
+                            let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words
+                                )
+                            )
+                        } else {
+                            var words : [(String, CGFloat)] = [
+                               ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+                               ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+                               ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+                           ]
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words
+                                )
+                            )
+                        }
+
                     case .streams:
                         StreamManagementView(accountManager: accountManager)
                     }

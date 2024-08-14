@@ -10,16 +10,15 @@ struct WordCloudItem: Identifiable {
 }
 
 class WordCloudViewModel: ObservableObject {
-    @Published var words: [(String, CGFloat)] = [
-        ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-        ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
-        ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
-    ]
-
+    @Published var words: [(String, CGFloat)]
     @Published var thoughtStreamViewModel: ThoughtStreamViewModel
 
-    init(thoughtStreamViewModel: ThoughtStreamViewModel) {
+    init(
+        thoughtStreamViewModel: ThoughtStreamViewModel,
+        words: [(String, CGFloat)]
+    ) {
         self.thoughtStreamViewModel = thoughtStreamViewModel
+        self.words = words
     }
 
     func updateWords(_ newWords: [(String, CGFloat)]) {
@@ -135,6 +134,11 @@ struct WordCloudView: View {
 
 struct WordCloudView_Previews: PreviewProvider {
     static var previews: some View {
-        WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel()))
+        let words : [(String, CGFloat)] = [
+           ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+           ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+           ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+       ]
+        WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words))
     }
 }
