@@ -99,6 +99,7 @@ struct WordCloudView: View {
                 withAnimation(.easeOut(duration: animationDuration)) {
                     animationProgress = 1.0
                 }
+                startAnimation()
             }
         }
     }
@@ -183,19 +184,33 @@ struct WordCloudView: View {
     }
 
     func animatedPosition(for item: WordCloudItem, in size: CGSize) -> CGPoint {
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let radius: CGFloat = min(size.width, size.height) / 4  // Adjust the radius based on the view size
+        let angle = 2 * .pi * animationProgress * CGFloat(item.id.uuidString.hashValue % 360) / 360
+
         switch viewModel.animationType {
         case .circleRotation:
-            let angle = 2 * .pi * animationProgress
-            let radius = distance(from: CGPoint(x: size.width / 2, y: size.height / 2), to: item.position)
-            return CGPoint(
-                x: size.width / 2 + cos(angle) * radius * animationProgress,
-                y: size.height / 2 + sin(angle) * radius * animationProgress
-            )
+            if animationProgress < 0.5 {
+                // Rotation phase
+                return CGPoint(
+                    x: center.x + cos(angle) * radius * (1 - animationProgress * 2),
+                    y: center.y + sin(angle) * radius * (1 - animationProgress * 2)
+                )
+            } else {
+                // Settle phase
+                let finalPosition = calculateFinalPosition(for: item, in: size)
+                return CGPoint(
+                    x: finalPosition.x + (center.x - finalPosition.x) * (1 - (animationProgress - 0.5) * 2),
+                    y: finalPosition.y + (center.y - finalPosition.y) * (1 - (animationProgress - 0.5) * 2)
+                )
+            }
+
         case .explosion:
             return CGPoint(
                 x: item.initialPosition.x + (item.position.x - item.initialPosition.x) * animationProgress,
                 y: item.initialPosition.y + (item.position.y - item.initialPosition.y) * animationProgress
             )
+
         case .falling:
             return CGPoint(
                 x: item.position.x,
@@ -204,6 +219,24 @@ struct WordCloudView: View {
         }
     }
 
+    func startAnimation() {
+        withAnimation(Animation.linear(duration: animationDuration).repeatForever(autoreverses: false)) {
+            animationProgress = 1.0
+        }
+    }
+
+    func calculateFinalPosition(for item: WordCloudItem, in size: CGSize) -> CGPoint {
+        // Example simple layout logic to avoid overlap
+        let availableWidth = size.width - item.size
+        let availableHeight = size.height - item.size
+        
+        // Position in a grid or spiral pattern
+        let x = CGFloat.random(in: 0...availableWidth)
+        let y = CGFloat.random(in: 0...availableHeight)
+        
+        return CGPoint(x: x, y: y)
+    }
+    
     func distance(from point1: CGPoint, to point2: CGPoint) -> CGFloat {
         return sqrt(pow(point2.x - point1.x, 2) + pow(point2.y - point1.y, 2))
     }
