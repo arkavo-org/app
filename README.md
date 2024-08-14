@@ -5,17 +5,11 @@ _for the Apple ecosystem_
 
 ### Entity
 
-```mermaid
-graph TD
-  A[Account] --> B[Content]
-  B --> C[Metadata]
-  A --> D[Profile]
-  D --> E[Thought]
-  E --> F[Media]
-  E --> G[Text]
-  A --> H[SecureStream]
-  H --> I[ThoughtStreamView]
-```
+- Account
+- Profile
+- Stream
+- Content
+- Thought
 
 ## Development
 
