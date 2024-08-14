@@ -79,11 +79,12 @@ struct ArkavoView: View {
                             WordCloudView(
                                 viewModel: WordCloudViewModel(
                                     thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words
+                                    words: words,
+                                    animationType: .falling
                                 )
                             )
                         } else {
-                            var words : [(String, CGFloat)] = [
+                            let words : [(String, CGFloat)] = [
                                ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
                                ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
                                ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
@@ -91,7 +92,8 @@ struct ArkavoView: View {
                             WordCloudView(
                                 viewModel: WordCloudViewModel(
                                     thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words
+                                    words: words,
+                                    animationType: .explosion
                                 )
                             )
                         }
