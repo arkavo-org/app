@@ -43,8 +43,8 @@ struct ArkavoView: View {
     @State private var annotations: [AnnotationItem] = []
     // view control
     @State private var selectedView: SelectedView = .map
-    @Query  var profiles: [Profile] = []
-    
+    @Query var profiles: [Profile] = []
+
     enum SelectedView {
         case map
         case wordCloud
@@ -52,134 +52,134 @@ struct ArkavoView: View {
     }
 
     var body: some View {
+        ZStack {
             ZStack {
-                ZStack {
-                    switch selectedView {
-                    case .map:
-                        mapContent
-                            .sheet(isPresented: $showingProfileCreation) {
-                                AccountProfileCreateView { newProfile in
-                                    accountManager.account.profile = newProfile
-                                    thoughtStreamViewModel.profile = newProfile
-                                    do {
-                                        try modelContext.save()
-                                    } catch {
-                                        print("Failed to save profile: \(error)")
-                                    }
+                switch selectedView {
+                case .map:
+                    mapContent
+                        .sheet(isPresented: $showingProfileCreation) {
+                            AccountProfileCreateView { newProfile in
+                                accountManager.account.profile = newProfile
+                                thoughtStreamViewModel.profile = newProfile
+                                do {
+                                    try modelContext.save()
+                                } catch {
+                                    print("Failed to save profile: \(error)")
                                 }
                             }
-                            .sheet(isPresented: $showingProfileDetails) {
-                                if let profile = accountManager.account.profile {
-                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
-                                }
-                            }
-                    case .wordCloud:
-                        if !accountManager.account.streams.isEmpty {
-                            let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
-                            WordCloudView(
-                                viewModel: WordCloudViewModel(
-                                    thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words,
-                                    animationType: .falling
-                                )
-                            )
-                        } else {
-                            let words : [(String, CGFloat)] = [
-                               ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-                               ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
-                               ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
-                           ]
-                            WordCloudView(
-                                viewModel: WordCloudViewModel(
-                                    thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words,
-                                    animationType: .explosion
-                                )
-                            )
                         }
-
-                    case .streams:
-                        StreamManagementView(accountManager: accountManager)
-                    }
-                    VStack {
-                        GeometryReader { geometry in
-                            HStack {
-                                Spacer()
-                                    .frame(width: geometry.size.width * 0.8)
-                                Menu {
-                                    Section("Navigation") {
-                                        Button("Map") {
-                                            selectedView = .map
-                                            withAnimation(.easeInOut(duration: 2.5)) {
-                                                cameraPosition = .camera(MapCamera(
-                                                    centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
-                                                    distance: 2_000_000_000,
-                                                    heading: 0,
-                                                    pitch: 0
-                                                ))
-                                            }
-                                        }
-                                        Button("My Streams") {
-                                            selectedView = .streams
-                                        }
-                                        Button("Engage!") {
-                                            selectedView = .wordCloud
-                                        }
-                                    }
-                                    Section("Account") {
-                                        Picker(accountOptions[selectedAccountIndex], selection: $selectedAccountIndex) {
-                                            ForEach(0 ..< accountOptions.count, id: \.self) { index in
-                                                Text(accountOptions[index]).tag(index)
-                                            }
-                                        }
-                                        .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                                            print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                                            amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                                            resetWebSocketManager()
-                                        }
-                                        if accountManager.account.profile == nil {
-                                            Button("Create Profile") {
-                                                showingProfileCreation = true
-                                            }
-                                        } else {
-                                            Button("View Profile") {
-                                                showingProfileDetails = true
-                                            }
-                                        }
-                                    }
-                                    Section("Authentication") {
-                                        Button("Sign Up") {
-                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                                        }
-                                        Button("Sign In") {
-                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                                        }
-                                    }
-                                    Spacer()
-                                    Section("Demo") {
-                                        Button("Prepare", action: loadGeoJSON)
-                                        Button("Nano", action: createNanoCities)
-                                        Button("Send", action: sendCities)
-                                        Button("Add", action: loadRandomCities)
-                                    }
-                                } label: {
-                                    Image(systemName: "gear")
-                                        .padding()
-                                        .background(Color.black.opacity(0.5))
-                                        .clipShape(Circle())
-                                }
-                                .menuStyle(DefaultMenuStyle())
-                                .padding(.top, 40)
-                                Spacer()
-                                Spacer()
+                        .sheet(isPresented: $showingProfileDetails) {
+                            if let profile = accountManager.account.profile {
+                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
                             }
+                        }
+                case .wordCloud:
+                    if !accountManager.account.streams.isEmpty {
+                        let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
+                        WordCloudView(
+                            viewModel: WordCloudViewModel(
+                                thoughtStreamViewModel: thoughtStreamViewModel,
+                                words: words,
+                                animationType: .falling
+                            )
+                        )
+                    } else {
+                        let words: [(String, CGFloat)] = [
+                            ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+                            ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+                            ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+                        ]
+                        WordCloudView(
+                            viewModel: WordCloudViewModel(
+                                thoughtStreamViewModel: thoughtStreamViewModel,
+                                words: words,
+                                animationType: .explosion
+                            )
+                        )
+                    }
+
+                case .streams:
+                    StreamManagementView(accountManager: accountManager)
+                }
+                VStack {
+                    GeometryReader { geometry in
+                        HStack {
+                            Spacer()
+                                .frame(width: geometry.size.width * 0.8)
+                            Menu {
+                                Section("Navigation") {
+                                    Button("Map") {
+                                        selectedView = .map
+                                        withAnimation(.easeInOut(duration: 2.5)) {
+                                            cameraPosition = .camera(MapCamera(
+                                                centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
+                                                distance: 2_000_000_000,
+                                                heading: 0,
+                                                pitch: 0
+                                            ))
+                                        }
+                                    }
+                                    Button("My Streams") {
+                                        selectedView = .streams
+                                    }
+                                    Button("Engage!") {
+                                        selectedView = .wordCloud
+                                    }
+                                }
+                                Section("Account") {
+                                    Picker(accountOptions[selectedAccountIndex], selection: $selectedAccountIndex) {
+                                        ForEach(0 ..< accountOptions.count, id: \.self) { index in
+                                            Text(accountOptions[index]).tag(index)
+                                        }
+                                    }
+                                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                                        resetWebSocketManager()
+                                    }
+                                    if accountManager.account.profile == nil {
+                                        Button("Create Profile") {
+                                            showingProfileCreation = true
+                                        }
+                                    } else {
+                                        Button("View Profile") {
+                                            showingProfileDetails = true
+                                        }
+                                    }
+                                }
+                                Section("Authentication") {
+                                    Button("Sign Up") {
+                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                    }
+                                    Button("Sign In") {
+                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                    }
+                                }
+                                Spacer()
+                                Section("Demo") {
+                                    Button("Prepare", action: loadGeoJSON)
+                                    Button("Nano", action: createNanoCities)
+                                    Button("Send", action: sendCities)
+                                    Button("Add", action: loadRandomCities)
+                                }
+                            } label: {
+                                Image(systemName: "gear")
+                                    .padding()
+                                    .background(Color.black.opacity(0.5))
+                                    .clipShape(Circle())
+                            }
+                            .menuStyle(DefaultMenuStyle())
+                            .padding(.top, 40)
+                            Spacer()
+                            Spacer()
                         }
                     }
                 }
-                .ignoresSafeArea(edges: .all)
             }
-            .onAppear(perform: initialSetup)
+            .ignoresSafeArea(edges: .all)
         }
+        .onAppear(perform: initialSetup)
+    }
 
     private var mapContent: some View {
         ZStack {
@@ -262,16 +262,14 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        @Environment(\.modelContext)  var modelContext
-        
+        @Environment(\.modelContext) var modelContext
+
         accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-        
+
         for profile in profiles {
             print("profiles: \(profile.name)")
         }
-        
 
-        
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()

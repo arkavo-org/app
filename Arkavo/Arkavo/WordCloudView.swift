@@ -86,8 +86,9 @@ struct WordCloudView: View {
                     .background(Color.black)
                     .coordinateSpace(name: "wordCloud")
                     .onPreferenceChange(ItemPreferenceKey.self) { preference in
-                        if let preference = preference,
-                           let index = items.firstIndex(where: { $0.id == preference.id }) {
+                        if let preference,
+                           let index = items.firstIndex(where: { $0.id == preference.id })
+                        {
                             items[index].frame = preference.frame
                         }
                     }
@@ -105,7 +106,7 @@ struct WordCloudView: View {
     }
 
     func setupWordCloud(in size: CGSize) {
-        items = viewModel.words.enumerated().map { index, word in
+        items = viewModel.words.enumerated().map { _, word in
             WordCloudItem(
                 text: word.0,
                 size: word.1,
@@ -130,9 +131,9 @@ struct WordCloudView: View {
             var attempts = 0
             var placed = false
 
-            while !placed && attempts < 100 {
-                let angle = CGFloat.random(in: 0...(2 * .pi))
-                let radius = CGFloat.random(in: 0...min(size.width, size.height) / 2 - item.size)
+            while !placed, attempts < 100 {
+                let angle = CGFloat.random(in: 0 ... (2 * .pi))
+                let radius = CGFloat.random(in: 0 ... min(size.width, size.height) / 2 - item.size)
                 let newPosition = CGPoint(
                     x: size.width / 2 + cos(angle) * radius,
                     y: size.height / 2 + sin(angle) * radius
@@ -153,8 +154,8 @@ struct WordCloudView: View {
                 items[i] = item
             } else {
                 // If we couldn't place the item after 100 attempts, we'll just place it at a random position
-                items[i].position = CGPoint(x: CGFloat.random(in: item.size...size.width-item.size),
-                                            y: CGFloat.random(in: item.size...size.height-item.size))
+                items[i].position = CGPoint(x: CGFloat.random(in: item.size ... size.width - item.size),
+                                            y: CGFloat.random(in: item.size ... size.height - item.size))
             }
         }
     }
@@ -177,15 +178,15 @@ struct WordCloudView: View {
     func getInitialPosition(for animationType: WordCloudAnimationType, in size: CGSize) -> CGPoint {
         switch animationType {
         case .circleRotation, .explosion:
-            return CGPoint(x: size.width / 2, y: size.height / 2)
+            CGPoint(x: size.width / 2, y: size.height / 2)
         case .falling:
-            return CGPoint(x: CGFloat.random(in: 0...size.width), y: -50)
+            CGPoint(x: CGFloat.random(in: 0 ... size.width), y: -50)
         }
     }
 
     func animatedPosition(for item: WordCloudItem, in size: CGSize) -> CGPoint {
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let radius: CGFloat = min(size.width, size.height) / 4  // Adjust the radius based on the view size
+        let radius: CGFloat = min(size.width, size.height) / 4 // Adjust the radius based on the view size
         let angle = 2 * .pi * animationProgress * CGFloat(item.id.uuidString.hashValue % 360) / 360
 
         switch viewModel.animationType {
@@ -229,16 +230,16 @@ struct WordCloudView: View {
         // Example simple layout logic to avoid overlap
         let availableWidth = size.width - item.size
         let availableHeight = size.height - item.size
-        
+
         // Position in a grid or spiral pattern
-        let x = CGFloat.random(in: 0...availableWidth)
-        let y = CGFloat.random(in: 0...availableHeight)
-        
+        let x = CGFloat.random(in: 0 ... availableWidth)
+        let y = CGFloat.random(in: 0 ... availableHeight)
+
         return CGPoint(x: x, y: y)
     }
-    
+
     func distance(from point1: CGPoint, to point2: CGPoint) -> CGFloat {
-        return sqrt(pow(point2.x - point1.x, 2) + pow(point2.y - point1.y, 2))
+        sqrt(pow(point2.x - point1.x, 2) + pow(point2.y - point1.y, 2))
     }
 }
 
@@ -249,7 +250,7 @@ struct ItemPreference: Equatable {
 
 struct ItemPreferenceKey: PreferenceKey {
     static var defaultValue: ItemPreference?
-    
+
     static func reduce(value: inout ItemPreference?, nextValue: () -> ItemPreference?) {
         value = nextValue() ?? value
     }
@@ -257,11 +258,11 @@ struct ItemPreferenceKey: PreferenceKey {
 
 struct WordCloudView_Previews: PreviewProvider {
     static var previews: some View {
-        let words : [(String, CGFloat)] = [
-           ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-           ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
-           ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
-       ]
+        let words: [(String, CGFloat)] = [
+            ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+            ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+            ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+        ]
         Group {
             WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .circleRotation))
             WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .explosion))

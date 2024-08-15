@@ -7,7 +7,7 @@ struct ArkavoApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Account.self, Profile.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        //find out where SwiftData is storing the sqlite database
+        // find out where SwiftData is storing the sqlite database
         print(modelConfiguration.url)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])

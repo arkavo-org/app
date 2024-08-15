@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct AccountProfileCompactView: View {
     @ObservedObject var viewModel: AccountProfileViewModel
@@ -59,11 +59,10 @@ struct AccountProfileCreateView: View {
             }
 
             Button("Create Profile") {
-                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
-                    modelContext.insert(profile)
-                   onSave(profile)
-                    dismiss()
-                
+                let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
+                modelContext.insert(profile)
+                onSave(profile)
+                dismiss()
             }
             .disabled(!viewModel.isValid)
         }
