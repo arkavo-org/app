@@ -14,8 +14,7 @@ struct ArkavoView: View {
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     // map
-    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 35_000_000, heading: 0, pitch: 0))
-    @State private var showMap = true
+    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 2_000_000_000, heading: 0, pitch: 0))
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     // authentication
@@ -53,154 +52,134 @@ struct ArkavoView: View {
     }
 
     var body: some View {
-        ZStack {
             ZStack {
-                switch selectedView {
-                case .map:
-                    mapContent
-                        .sheet(isPresented: $showingProfileCreation) {
-                            AccountProfileCreateView { newProfile in
-                                accountManager.account.profile = newProfile
-                                thoughtStreamViewModel.profile = newProfile
-                                do {
-                                    try modelContext.save()
-                                } catch {
-                                    print("Failed to save profile: \(error)")
-                                }
-                            }
-                        }
-                        .sheet(isPresented: $showingProfileDetails) {
-                            if let profile = accountManager.account.profile {
-                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
-                            }
-                        }
-                case .wordCloud:
-                    WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
-                case .streams:
-                    StreamManagementView(accountManager: accountManager)
-                }
-                VStack {
-                    HStack {
-                        Spacer()
-                        Menu {
-                            Section("Navigation") {
-                                Button("Map") {
-                                    selectedView = .map
-                                }
-                                Button("My Streams") {
-                                    selectedView = .streams
-                                }
-                                Button("Engage!") {
-                                    selectedView = .wordCloud
-                                }
-                            }
-                            Section("Account") {
-                                Picker("", selection: $selectedAccountIndex) {
-                                    ForEach(0 ..< accountOptions.count, id: \.self) { index in
-                                        Text(accountOptions[index]).tag(index)
-                                    }
-                                }
-                                .pickerStyle(SegmentedPickerStyle())
-                                .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                                    print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                                    amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                                    resetWebSocketManager()
-                                }
-                                if accountManager.account.profile == nil {
-                                    Button("Create Profile") {
-                                        showingProfileCreation = true
-                                    }
-                                } else {
-                                    Button("View Profile") {
-                                        showingProfileDetails = true
+                ZStack {
+                    switch selectedView {
+                    case .map:
+                        mapContent
+                            .sheet(isPresented: $showingProfileCreation) {
+                                AccountProfileCreateView { newProfile in
+                                    accountManager.account.profile = newProfile
+                                    thoughtStreamViewModel.profile = newProfile
+                                    do {
+                                        try modelContext.save()
+                                    } catch {
+                                        print("Failed to save profile: \(error)")
                                     }
                                 }
                             }
-                            Section("Authentication") {
-                                Button("Sign Up") {
-                                    amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                                }
-                                Button("Sign In") {
-                                    amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                            .sheet(isPresented: $showingProfileDetails) {
+                                if let profile = accountManager.account.profile {
+                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
                                 }
                             }
-                            Spacer()
-                            Section("Demo") {
-                                if !showMap {
-                                    Button("Map", action: {
-                                        showMap = true
-                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
-                                    })
-                                }
-                                Button("Prepare", action: loadGeoJSON)
-                                Button("Nano", action: createNanoCities)
-                                Button("Send", action: sendCities)
-                                Button("Add", action: loadRandomCities)
-                            }
-                        } label: {
-                            Image(systemName: "gear")
-                                .padding()
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
+                    case .wordCloud:
+                        if !accountManager.account.streams.isEmpty {
+                            let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words,
+                                    animationType: .falling
+                                )
+                            )
+                        } else {
+                            let words : [(String, CGFloat)] = [
+                               ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+                               ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+                               ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+                           ]
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words,
+                                    animationType: .explosion
+                                )
+                            )
                         }
+
+                    case .streams:
+                        StreamManagementView(accountManager: accountManager)
                     }
-                    .padding()
-                    //                    ++++++++++++++ Connection debug
-                    //                    Spacer()
-                    //                    Section(header: Text("Status")) {
-                    //                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
-                    //                        if let error = webSocketManager.lastError {
-                    //                            Text("Error: \(error)")
-                    //                                .foregroundColor(.red)
-                    //                        }
-                    //                        if isReconnecting {
-                    //                            ProgressView()
-                    //                        } else {
-                    //                            Button("Reconnect") {
-                    //                                resetWebSocketManager()
-                    //                            }
-                    //                            .buttonStyle(.bordered)
-                    //                        }
-                    //                        if let kasPublicKey = kasPublicKey {
-                    //                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
-                    //                                .font(.caption)
-                    //                                .lineLimit(1)
-                    //                                .truncationMode(.tail)
-                    //                        }
-                    //                    }
-                    if showMap {
-                        VStack {
-                            Spacer()
+                    VStack {
+                        GeometryReader { geometry in
                             HStack {
                                 Spacer()
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 1.0)) {
-                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                                        withAnimation(.smooth(duration: 0.5)) {
-                                            showMap = false
+                                    .frame(width: geometry.size.width * 0.8)
+                                Menu {
+                                    Section("Navigation") {
+                                        Button("Map") {
+                                            selectedView = .map
+                                            withAnimation(.easeInOut(duration: 2.5)) {
+                                                cameraPosition = .camera(MapCamera(
+                                                    centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
+                                                    distance: 2_000_000_000,
+                                                    heading: 0,
+                                                    pitch: 0
+                                                ))
+                                            }
+                                        }
+                                        Button("My Streams") {
+                                            selectedView = .streams
+                                        }
+                                        Button("Engage!") {
+                                            selectedView = .wordCloud
                                         }
                                     }
-                                }) {
-                                    if accountManager.account.profile != nil {
-                                        Text("Engage!")
-                                            .padding()
-                                            .background(Color.blue)
-                                            .foregroundColor(.white)
-                                            .cornerRadius(10)
+                                    Section("Account") {
+                                        Picker(accountOptions[selectedAccountIndex], selection: $selectedAccountIndex) {
+                                            ForEach(0 ..< accountOptions.count, id: \.self) { index in
+                                                Text(accountOptions[index]).tag(index)
+                                            }
+                                        }
+                                        .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                                            print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                                            amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                                            resetWebSocketManager()
+                                        }
+                                        if accountManager.account.profile == nil {
+                                            Button("Create Profile") {
+                                                showingProfileCreation = true
+                                            }
+                                        } else {
+                                            Button("View Profile") {
+                                                showingProfileDetails = true
+                                            }
+                                        }
                                     }
+                                    Section("Authentication") {
+                                        Button("Sign Up") {
+                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                        }
+                                        Button("Sign In") {
+                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                        }
+                                    }
+                                    Spacer()
+                                    Section("Demo") {
+                                        Button("Prepare", action: loadGeoJSON)
+                                        Button("Nano", action: createNanoCities)
+                                        Button("Send", action: sendCities)
+                                        Button("Add", action: loadRandomCities)
+                                    }
+                                } label: {
+                                    Image(systemName: "gear")
+                                        .padding()
+                                        .background(Color.black.opacity(0.5))
+                                        .clipShape(Circle())
                                 }
-                                .padding()
+                                .menuStyle(DefaultMenuStyle())
+                                .padding(.top, 40)
+                                Spacer()
+                                Spacer()
                             }
                         }
                     }
                 }
+                .ignoresSafeArea(edges: .all)
             }
-            .ignoresSafeArea(edges: .all)
+            .onAppear(perform: initialSetup)
         }
-        .onAppear(perform: initialSetup)
-    }
 
     private var mapContent: some View {
         ZStack {
@@ -249,7 +228,7 @@ struct ArkavoView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             withAnimation(.smooth(duration: 0.5)) {
-                showMap = false
+                selectedView = .wordCloud
             }
         }
     }
