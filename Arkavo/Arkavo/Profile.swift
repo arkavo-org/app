@@ -7,6 +7,8 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
     var name: String
     var blurb: String?
     var dateCreated: Date
+    // add image, thumbnail
+
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()

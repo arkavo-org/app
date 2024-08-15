@@ -14,8 +14,7 @@ struct ArkavoView: View {
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     // map
-    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 35_000_000, heading: 0, pitch: 0))
-    @State private var showMap = true
+    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 2_000_000_000, heading: 0, pitch: 0))
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     // authentication
@@ -42,52 +41,97 @@ struct ArkavoView: View {
     @State private var inProcessCount = 0
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
+    // view control
+    @State private var selectedView: SelectedView = .map
+    @Query var profiles: [Profile] = []
 
-    var body: some View {
-        #if os(iOS)
-            iOSLayout
-        #else
-            macOSLayout
-        #endif
+    enum SelectedView {
+        case map
+        case wordCloud
+        case streams
     }
 
-    #if os(iOS)
-        private var iOSLayout: some View {
+    var body: some View {
+        ZStack {
             ZStack {
-                ZStack {
-                    if showMap {
-                        mapContent
-                            .sheet(isPresented: $showingProfileCreation) {
-                                AccountProfileCreateView { newProfile in
-                                    accountManager.account.profile = newProfile
-                                    thoughtStreamViewModel.profile = newProfile
-                                    do {
-                                        try modelContext.save()
-                                    } catch {
-                                        print("Failed to save profile: \(error)")
-                                    }
+                switch selectedView {
+                case .map:
+                    mapContent
+                        .sheet(isPresented: $showingProfileCreation) {
+                            AccountProfileCreateView { newProfile in
+                                accountManager.account.profile = newProfile
+                                thoughtStreamViewModel.profile = newProfile
+                                do {
+                                    try modelContext.save()
+                                } catch {
+                                    print("Failed to save profile: \(error)")
                                 }
                             }
-                            .sheet(isPresented: $showingProfileDetails) {
-                                if let profile = accountManager.account.profile {
-                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
-                                }
+                        }
+                        .sheet(isPresented: $showingProfileDetails) {
+                            if let profile = accountManager.account.profile {
+                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
                             }
+                        }
+                case .wordCloud:
+                    if !accountManager.account.streams.isEmpty {
+                        let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
+                        WordCloudView(
+                            viewModel: WordCloudViewModel(
+                                thoughtStreamViewModel: thoughtStreamViewModel,
+                                words: words,
+                                animationType: .falling
+                            )
+                        )
                     } else {
-                        WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
+                        let words: [(String, CGFloat)] = [
+                            ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+                            ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+                            ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+                        ]
+                        WordCloudView(
+                            viewModel: WordCloudViewModel(
+                                thoughtStreamViewModel: thoughtStreamViewModel,
+                                words: words,
+                                animationType: .explosion
+                            )
+                        )
                     }
 
-                    VStack {
+                case .streams:
+                    StreamManagementView(accountManager: accountManager)
+                }
+                VStack {
+                    GeometryReader { geometry in
                         HStack {
                             Spacer()
+                                .frame(width: geometry.size.width * 0.8)
                             Menu {
+                                Section("Navigation") {
+                                    Button("Map") {
+                                        selectedView = .map
+                                        withAnimation(.easeInOut(duration: 2.5)) {
+                                            cameraPosition = .camera(MapCamera(
+                                                centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
+                                                distance: 2_000_000_000,
+                                                heading: 0,
+                                                pitch: 0
+                                            ))
+                                        }
+                                    }
+                                    Button("My Streams") {
+                                        selectedView = .streams
+                                    }
+                                    Button("Engage!") {
+                                        selectedView = .wordCloud
+                                    }
+                                }
                                 Section("Account") {
-                                    Picker("", selection: $selectedAccountIndex) {
+                                    Picker(accountOptions[selectedAccountIndex], selection: $selectedAccountIndex) {
                                         ForEach(0 ..< accountOptions.count, id: \.self) { index in
                                             Text(accountOptions[index]).tag(index)
                                         }
                                     }
-                                    .pickerStyle(SegmentedPickerStyle())
                                     .onChange(of: selectedAccountIndex) { oldValue, newValue in
                                         print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
                                         amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
@@ -113,12 +157,6 @@ struct ArkavoView: View {
                                 }
                                 Spacer()
                                 Section("Demo") {
-                                    if !showMap {
-                                        Button("Map", action: {
-                                            showMap = true
-                                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
-                                        })
-                                    }
                                     Button("Prepare", action: loadGeoJSON)
                                     Button("Nano", action: createNanoCities)
                                     Button("Send", action: sendCities)
@@ -130,147 +168,18 @@ struct ArkavoView: View {
                                     .background(Color.black.opacity(0.5))
                                     .clipShape(Circle())
                             }
+                            .menuStyle(DefaultMenuStyle())
+                            .padding(.top, 40)
+                            Spacer()
+                            Spacer()
                         }
-                        .padding()
-                        //                    ++++++++++++++ Connection debug
-                        //                    Spacer()
-                        //                    Section(header: Text("Status")) {
-                        //                        Text("WebSocket Status: \(webSocketManager.connectionState.description)")
-                        //                        if let error = webSocketManager.lastError {
-                        //                            Text("Error: \(error)")
-                        //                                .foregroundColor(.red)
-                        //                        }
-                        //                        if isReconnecting {
-                        //                            ProgressView()
-                        //                        } else {
-                        //                            Button("Reconnect") {
-                        //                                resetWebSocketManager()
-                        //                            }
-                        //                            .buttonStyle(.bordered)
-                        //                        }
-                        //                        if let kasPublicKey = kasPublicKey {
-                        //                            Text("KAS Public Key: \(kasPublicKey.compressedRepresentation.base64EncodedString().prefix(20))...")
-                        //                                .font(.caption)
-                        //                                .lineLimit(1)
-                        //                                .truncationMode(.tail)
-                        //                        }
-                        //                    }
-                        if showMap {
-                            VStack {
-                                Spacer()
-                                HStack {
-                                    Spacer()
-                                    Button(action: {
-                                        withAnimation(.easeInOut(duration: 1.0)) {
-                                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                                            withAnimation(.smooth(duration: 0.5)) {
-                                                showMap = false
-                                            }
-                                        }
-                                    }) {
-                                        if accountManager.account.profile != nil {
-                                            Text("Engage!")
-                                                .padding()
-                                                .background(Color.blue)
-                                                .foregroundColor(.white)
-                                                .cornerRadius(10)
-                                        }
-                                    }
-                                    .padding()
-                                }
-                            }
-                        }
-                    }
-                }
-                .ignoresSafeArea(edges: .all)
-            }
-            .onAppear(perform: initialSetup)
-        }
-    #else
-        private var macOSLayout: some View {
-            NavigationSplitView(columnVisibility: $sidebarVisibility) {
-                sidebarContent
-            } detail: {
-                ZStack {
-                    if showMap {
-                        mapContent
-                    } else {
-                        let wordCloudViewModel = WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
-                        WordCloudView(viewModel: wordCloudViewModel)
                     }
                 }
             }
-            .onAppear(perform: initialSetup)
+            .ignoresSafeArea(edges: .all)
         }
-
-        private var sidebarContent: some View {
-            List {
-                Section("Account") {
-                    Picker("", selection: $selectedAccountIndex) {
-                        ForEach(0 ..< accountOptions.count, id: \.self) { index in
-                            Text(accountOptions[index]).tag(index)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                        resetWebSocketManager()
-                    }
-                    if accountManager.account.profile == nil {
-                        Button("Create Profile") {
-                            showingProfileCreation = true
-                        }
-                    } else {
-                        Button("View Profile") {
-                            showingProfileDetails = true
-                        }
-                    }
-                }
-                .sheet(isPresented: $showingProfileCreation) {
-                    AccountProfileCreateView { newProfile in
-                        accountManager.account.profile = newProfile
-                        thoughtStreamViewModel.profile = newProfile
-                        do {
-                            try modelContext.save()
-                        } catch {
-                            print("Failed to save profile: \(error)")
-                        }
-                    }
-                }
-                .sheet(isPresented: $showingProfileDetails) {
-                    if let profile = accountManager.account.profile {
-                        AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
-                    }
-                }
-                Section("Authentication") {
-                    Button("Sign Up") {
-                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                    }
-                    Button("Sign In") { amViewModel.authenticationManager.signIn(accountName: accountOptions[0])
-                    }
-                }
-                Spacer()
-                Spacer()
-                Section("Demo") {
-                    if !showMap {
-                        Button("Map", action: {
-                            showMap = true
-                            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
-                        })
-                    }
-                    Button("Prepare", action: loadGeoJSON)
-                    Button("Nano", action: createNanoCities)
-                    Button("Send", action: sendCities)
-                    Button("Add", action: loadRandomCities)
-                }
-            }
-            .listStyle(SidebarListStyle())
-            .frame(minWidth: 200)
-        }
-    #endif
+        .onAppear(perform: initialSetup)
+    }
 
     private var mapContent: some View {
         ZStack {
@@ -319,7 +228,7 @@ struct ArkavoView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             withAnimation(.smooth(duration: 0.5)) {
-                showMap = false
+                selectedView = .wordCloud
             }
         }
     }
@@ -353,7 +262,14 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
+        @Environment(\.modelContext) var modelContext
+
         accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+
+        for profile in profiles {
+            print("profiles: \(profile.name)")
+        }
+
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
@@ -363,6 +279,12 @@ struct ArkavoView: View {
             nanoTDFManager: nanoTDFManager,
             kasPublicKey: $kasPublicKey
         )
+        if !profiles.isEmpty {
+            if accountManager.account.profile == nil {
+                accountManager.account.profile = profiles.first
+                thoughtStreamViewModel.profile = profiles.first
+            }
+        }
     }
 
     private func setupCallbacks() {
