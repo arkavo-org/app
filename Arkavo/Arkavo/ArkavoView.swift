@@ -8,13 +8,14 @@ import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
+    @Environment(\.locale) var locale
     @Environment(\.modelContext) private var modelContext
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
     // map
-    @State private var cameraPosition: MapCameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 2_000_000_000, heading: 0, pitch: 0))
+    @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     // authentication
@@ -113,7 +114,7 @@ struct ArkavoView: View {
                                         withAnimation(.easeInOut(duration: 2.5)) {
                                             cameraPosition = .camera(MapCamera(
                                                 centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
-                                                distance: 2_000_000_000,
+                                                distance: 40_000_000,
                                                 heading: 0,
                                                 pitch: 0
                                             ))
@@ -195,7 +196,9 @@ struct ArkavoView: View {
                 }
             }
             .mapStyle(.imagery(elevation: .realistic))
-            .gesture(mapDragGesture)
+            .task {
+                await showGlobeCenteredOnUserCountry()
+            }
 
             VStack {
                 Spacer()
@@ -208,7 +211,11 @@ struct ArkavoView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Button(action: engageAction) {
+                        Button(action: {
+                            Task {
+                                await engageAction()
+                            }
+                        }) {
                             Text("Engage!")
                                 .padding()
                                 .background(Color.blue)
@@ -222,10 +229,43 @@ struct ArkavoView: View {
         }
     }
 
-    private func engageAction() {
-        withAnimation(.easeInOut(duration: 1.0)) {
-            cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
+    private func showGlobeCenteredOnUserCountry() async {
+        let centerCoordinate = await getCountryCenterCoordinate()
+        cameraPosition = .camera(MapCamera(
+            centerCoordinate: centerCoordinate,
+            distance: 40_000_000,
+            heading: 0,
+            pitch: 0
+        ))
+    }
+
+    private func getCountryCenterCoordinate() async -> CLLocationCoordinate2D {
+        let countryCode = locale.region?.identifier ?? "US"
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.geocodeAddressString(countryCode)
+            return (placemarks.first?.location!.coordinate)!
+        } catch {
+            print("Geocoding failed: \(error.localizedDescription)")
+            return CLLocationCoordinate2D(latitude: 0, longitude: 0)
         }
+    }
+
+    private func engageAction() async {
+        let centerCoordinate = await getCountryCenterCoordinate()
+        var currentCenter = centerCoordinate
+        if cameraPosition.camera != nil {
+            currentCenter = cameraPosition.camera!.centerCoordinate
+        }
+        withAnimation(.easeInOut(duration: 0.5)) {
+            cameraPosition = .camera(MapCamera(
+                centerCoordinate: currentCenter,
+                distance: 400_000,
+                heading: 0,
+                pitch: 0
+            ))
+        }
+        // Switch to word cloud view
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             withAnimation(.smooth(duration: 0.5)) {
                 selectedView = .wordCloud
@@ -241,7 +281,7 @@ struct ArkavoView: View {
                     cameraPosition = MapCameraPosition.camera(
                         MapCamera(
                             centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                            distance: 2_000_000_000,
+                            distance: 40_000_000,
                             heading: delta.width,
                             pitch: delta.height
                         )
@@ -262,14 +302,7 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        @Environment(\.modelContext) var modelContext
-
         accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-
-        for profile in profiles {
-            print("profiles: \(profile.name)")
-        }
-
         amViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
