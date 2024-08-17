@@ -4,5 +4,7 @@
 <dict>
     <key>NSFaceIDUsageDescription</key>
     <string>We use Face ID for secure authentication.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>We need access to the camera for real-time video streaming and processing.</string>
 </dict>
 </plist>

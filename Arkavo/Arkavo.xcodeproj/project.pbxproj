@@ -30,6 +30,9 @@
 		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
+		DAF458A22C702C8E004B44FE /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A12C702C8E004B44FE /* CameraPreview.swift */; };
+		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +79,9 @@
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
+		DAF458A12C702C8E004B44FE /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
+		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -139,7 +145,10 @@
 				DA9D34492C6AE68000D39ED4 /* StreamManagementView.swift */,
 				DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */,
 				DA73B3342C6436EF00393056 /* WordCloudView.swift */,
+				DAF458A32C70320F004B44FE /* VideoStreamView.swift */,
+				DAF458A12C702C8E004B44FE /* CameraPreview.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
+				DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA95A4392C3DF60F007409D5 /* City.swift */,
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
@@ -314,6 +323,8 @@
 			files = (
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
+				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
+				DAF458A22C702C8E004B44FE /* CameraPreview.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
 				DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */,
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
@@ -322,6 +333,7 @@
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamManagementView.swift in Sources */,
+				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
@@ -714,7 +726,7 @@
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = exactVersion;
-				version = 2.0.0;
+				version = 2.0.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

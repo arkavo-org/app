@@ -43,13 +43,14 @@ struct ArkavoView: View {
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
     // view control
-    @State private var selectedView: SelectedView = .map
+    @State private var selectedView: SelectedView = .video
     @Query var profiles: [Profile] = []
 
     enum SelectedView {
         case map
         case wordCloud
         case streams
+        case video
     }
 
     var body: some View {
@@ -98,7 +99,8 @@ struct ArkavoView: View {
                             )
                         )
                     }
-
+                case .video:
+                    VideoStreamView(viewModel: VideoStreamViewModel())
                 case .streams:
                     StreamManagementView(accountManager: accountManager)
                 }
@@ -122,6 +124,9 @@ struct ArkavoView: View {
                                     }
                                     Button("My Streams") {
                                         selectedView = .streams
+                                    }
+                                    Button("Video") {
+                                        selectedView = .video
                                     }
                                     Button("Engage!") {
                                         selectedView = .wordCloud
@@ -653,16 +658,6 @@ struct AnnotationItem: Identifiable {
     let name: String
     let count: Int
     let isCluster: Bool
-}
-
-extension WebSocketConnectionState: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .disconnected: "Disconnected"
-        case .connecting: "Connecting"
-        case .connected: "Connected"
-        }
-    }
 }
 
 class AccountManager: ObservableObject {
