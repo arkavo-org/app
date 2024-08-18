@@ -3,101 +3,106 @@ import Combine
 import SwiftUI
 
 struct VideoStreamView: View {
-    @ObservedObject var viewModel: VideoStreamViewModel
-    @State private var isStreaming = false
-    @State private var isCameraActive = false
+    @StateObject private var videoCaptureManager = VideoCaptureManager()
+    @State private var commentText = ""
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             // Video preview area
-            if isCameraActive {
-                CameraPreview(videoCaptureManager: viewModel.videoCaptureManager)
-                    .edgesIgnoringSafeArea(.all)
-                    .frame(height: 300)
-            } else {
-                Text("Camera is inactive")
-                    .frame(height: 300)
+            ZStack {
+                if videoCaptureManager.isCameraActive {
+                    CameraPreview(videoCaptureManager: videoCaptureManager)
+                        .edgesIgnoringSafeArea(.all)
+                } else {
+                    Text("Camera is inactive")
+                }
             }
+            .frame(height: 300)
 
             // Control buttons
             HStack {
                 Button(action: {
                     toggleCamera()
                 }) {
-                    Text(isCameraActive ? "stopcamera" : "startcamera")
+                    Text(videoCaptureManager.isCameraActive ? "Stop Camera" : "Start Camera")
                         .padding()
                 }
                 Button(action: {
                     toggleStreaming()
                 }) {
-                    Text(isStreaming ? "Stop Streaming" : "Streaming...")
+                    Text(videoCaptureManager.isStreaming ? "Stop Streaming" : "Start Streaming")
                         .padding()
                 }
-                .disabled(!isCameraActive)
+                .disabled(!videoCaptureManager.isCameraActive)
             }
             .padding()
 
             // Input area for video metadata or comments
             HStack {
-                TextField("Type a comment", text: $viewModel.commentText)
+                TextField("Type a comment", text: $commentText)
                     .focused($isInputFocused)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.leading)
 
                 Button(action: {
-                    viewModel.sendComment()
+                    sendComment()
                 }) {
                     Text("Send")
                 }
                 .padding(.trailing)
-                .disabled(viewModel.commentText.isEmpty)
+                .disabled(commentText.isEmpty)
             }
             .padding()
         }
     }
 
     private func toggleCamera() {
-        if isCameraActive {
-            viewModel.stopCamera()
+        if videoCaptureManager.isCameraActive {
+            videoCaptureManager.stopCapture()
         } else {
-            viewModel.startCamera()
+            videoCaptureManager.startCapture()
         }
-        isCameraActive.toggle()
     }
 
     private func toggleStreaming() {
-        if isStreaming {
-            viewModel.stopStreaming()
+        if videoCaptureManager.isStreaming {
+            videoCaptureManager.stopStreaming()
         } else {
-            viewModel.startStreaming()
+            videoCaptureManager.startStreaming()
         }
-        isStreaming.toggle()
+    }
+
+    private func sendComment() {
+        // Logic to send the comment
+        print("Sending comment: \(commentText)")
+        commentText = ""
     }
 }
 
-class VideoStreamViewModel: ObservableObject {
-    @Published var videoCaptureManager = VideoCaptureManager()
-    @Published var commentText = ""
+struct CameraPreview: UIViewRepresentable {
+    @ObservedObject var videoCaptureManager: VideoCaptureManager
 
-    func startCamera() {
-        videoCaptureManager.checkCameraPermissions()
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.layer.addSublayer(videoCaptureManager.previewLayer ?? AVCaptureVideoPreviewLayer())
+        return view
     }
 
-    func stopCamera() {
-        videoCaptureManager.stopCapture()
+    func updateUIView(_ uiView: UIView, context: Context) {
+        updatePreviewLayer(uiView)
     }
 
-    func startStreaming() {
-        // Add logic to start video streaming
-    }
-
-    func stopStreaming() {
-        // Add logic to stop video streaming
-    }
-
-    func sendComment() {
-        // Logic to send the comment
-        commentText = ""
+    private func updatePreviewLayer(_ uiView: UIView) {
+        if let layer = videoCaptureManager.previewLayer {
+            layer.frame = uiView.bounds
+            if layer.superlayer == nil {
+                uiView.layer.addSublayer(layer)
+            }
+        } else {
+            // Remove the preview layer if it exists but videoCaptureManager.previewLayer is nil
+            uiView.layer.sublayers?.removeAll(where: { $0 is AVCaptureVideoPreviewLayer })
+        }
     }
 }

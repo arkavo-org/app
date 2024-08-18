@@ -100,7 +100,7 @@ struct ArkavoView: View {
                         )
                     }
                 case .video:
-                    VideoStreamView(viewModel: VideoStreamViewModel())
+                    VideoStreamView()
                 case .streams:
                     StreamManagementView(accountManager: accountManager)
                 }
