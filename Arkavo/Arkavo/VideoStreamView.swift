@@ -1,8 +1,10 @@
 import AVFoundation
 import Combine
 import SwiftUI
+import CryptoKit
 
 struct VideoStreamView: View {
+    @ObservedObject var viewModel: VideoStreamViewModel
     @StateObject private var videoCaptureManager = VideoCaptureManager()
     @State private var commentText = ""
     @FocusState private var isInputFocused: Bool
@@ -42,7 +44,7 @@ struct VideoStreamView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(height: 300)
+            .frame(height: UIScreen.main.bounds.height * 0.4)
 
             // Control buttons
             HStack {
@@ -106,6 +108,9 @@ struct VideoStreamView: View {
                 showingErrorAlert = true
             }
         }
+        .onAppear {
+            videoCaptureManager.setKasPublicKeyBinding(viewModel.$kasPublicKey)
+        }
     }
 
     private func toggleCamera() {
@@ -120,13 +125,39 @@ struct VideoStreamView: View {
         if videoCaptureManager.isStreaming {
             videoCaptureManager.stopStreaming()
         } else {
-            videoCaptureManager.startStreaming()
+            // FIXME pass in WebSocketManager
+            videoCaptureManager.startStreaming(webSocketManager: WebSocketManager())
         }
     }
 
     private func sendComment() {
         print("Sending comment: \(commentText)")
         commentText = ""
+    }
+}
+
+class VideoStreamViewModel: ObservableObject {
+    // nano
+    @Published var webSocketManager: WebSocketManager
+    var nanoTDFManager: NanoTDFManager
+    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        _webSocketManager = .init(initialValue: WebSocketManager())
+        _kasPublicKey = .constant(nil)
+        nanoTDFManager = NanoTDFManager()
+    }
+    
+    func initialize(
+        webSocketManager: WebSocketManager,
+        nanoTDFManager: NanoTDFManager,
+        kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>
+    ) {
+        self.webSocketManager = webSocketManager
+        self.webSocketManager = webSocketManager
+        _kasPublicKey = kasPublicKey
+        self.nanoTDFManager = nanoTDFManager
     }
 }
 
@@ -141,7 +172,9 @@ struct CameraPreview: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        updatePreviewLayer(uiView)
+        DispatchQueue.main.async {
+            self.updatePreviewLayer(uiView)
+        }
     }
 
     private func updatePreviewLayer(_ uiView: UIView) {

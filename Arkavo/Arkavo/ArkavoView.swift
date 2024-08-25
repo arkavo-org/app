@@ -32,6 +32,8 @@ struct ArkavoView: View {
     private let accountOptions = ["Main", "Alt", "Private"]
     // ThoughtStream
     @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
+    // video
+    @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     // demo
     @State private var showCityInfoOverlay = false
     @State private var cities: [City] = []
@@ -43,7 +45,7 @@ struct ArkavoView: View {
     @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
     // view control
-    @State private var selectedView: SelectedView = .video
+    @State private var selectedView: SelectedView = .map
     @Query var profiles: [Profile] = []
 
     enum SelectedView {
@@ -100,7 +102,7 @@ struct ArkavoView: View {
                         )
                     }
                 case .video:
-                    VideoStreamView()
+                    VideoStreamView(viewModel: videoStreamViewModel)
                 case .streams:
                     StreamManagementView(accountManager: accountManager)
                 }
@@ -313,6 +315,12 @@ struct ArkavoView: View {
         setupWebSocketManager()
         // Initialize ThoughtStreamViewModel
         thoughtStreamViewModel.initialize(
+            webSocketManager: webSocketManager,
+            nanoTDFManager: nanoTDFManager,
+            kasPublicKey: $kasPublicKey
+        )
+        // Initialize VideoSteamViewModel
+        videoStreamViewModel.initialize(
             webSocketManager: webSocketManager,
             nanoTDFManager: nanoTDFManager,
             kasPublicKey: $kasPublicKey

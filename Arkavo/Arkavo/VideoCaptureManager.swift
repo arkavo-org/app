@@ -1,7 +1,9 @@
 import AVFoundation
 import SwiftUI
 import VideoToolbox
-import CommonCrypto
+import CryptoKit
+import OpenTDFKit
+import Combine
 
 class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private var captureSession: AVCaptureSession?
@@ -9,6 +11,9 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var streamingService: StreamingService?
     private var videoCompressor: VideoCompressor?
     private var videoEncryptor: VideoEncryptor?
+    private var encryptionSession: EncryptionSession?
+    private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    private var kasPublicKeySubscription: AnyCancellable?
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
     @Published var isCameraActive = false
     @Published var isStreaming = false
@@ -19,7 +24,25 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         super.init()
         checkCameraPermissions()
     }
-
+    
+    func setKasPublicKeyBinding(_ binding: Binding<P256.KeyAgreement.PublicKey?>) {
+        kasPublicKeySubscription = binding.wrappedValue.publisher
+            .sink { [weak self] newValue in
+                self?.updateKasPublicKey(newValue)
+            }
+        // Initial update
+        updateKasPublicKey(binding.wrappedValue)
+    }
+    
+    private func updateKasPublicKey(_ newValue: P256.KeyAgreement.PublicKey?) {
+        kasPublicKey = newValue
+        if let newValue = newValue {
+            videoEncryptor = VideoEncryptor(kasPublicKey: newValue)
+        } else {
+            videoEncryptor = nil
+        }
+    }
+    
     func checkCameraPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -70,16 +93,20 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 previewLayer.frame = UIScreen.main.bounds
                 self?.previewLayer = previewLayer
             }
-
             // Set up video compressor
             let formatDescription = videoDevice.activeFormat.formatDescription
             let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
             self?.videoCompressor = VideoCompressor()
             self?.videoCompressor?.setupCompression(width: Int(dimensions.width), height: Int(dimensions.height))
-
+            // FIXME add back video compression
             // Set up video encryptor
-            self?.videoEncryptor = VideoEncryptor()
-            self?.videoEncryptor?.setupEncryption()
+            DispatchQueue.main.async {
+                if let kasPublicKey = self?.kasPublicKey {
+                    self?.videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
+                } else {
+                    print("Error: KAS public key not available")
+                }
+            }
         }
     }
 
@@ -111,8 +138,15 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         }
     }
 
-    func startStreaming() {
-        streamingService = StreamingService()
+    func setupEncryption() {
+        encryptionSession = EncryptionSession()
+        if let kasPublicKey = kasPublicKey {
+            encryptionSession?.setupEncryption(kasPublicKey: kasPublicKey)
+        }
+    }
+    
+    func startStreaming(webSocketManager: WebSocketManager) {
+        streamingService = StreamingService(webSocketManager: webSocketManager)
         isStreaming = true
     }
 
@@ -122,25 +156,45 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard isStreaming, let streamingService = streamingService else { return }
+        guard isStreaming, let streamingService = streamingService, let videoEncryptor = videoEncryptor else {
+            print("Streaming is not active or required services are not available")
+            return
+        }
         
-        videoCompressor?.compressFrame(sampleBuffer) { [weak self] compressedBuffer in
-            if let compressedBuffer = compressedBuffer {
-                self?.videoEncryptor?.encryptFrame(compressedBuffer) { encryptedBuffer in
-                    if let encryptedBuffer = encryptedBuffer {
-                        streamingService.sendVideoFrame(encryptedBuffer)
-                    }
-                }
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            print("Failed to get pixel buffer from sample buffer")
+            return
+        }
+        
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        
+        videoEncryptor.encryptFrame(pixelBuffer, timestamp: timestamp) { encryptedData in
+            if let encryptedData = encryptedData {
+                print("Frame encrypted successfully. Sending frame of size: \(encryptedData.count) bytes")
+                streamingService.sendVideoFrame(encryptedData)
+            } else {
+                print("Failed to encrypt frame")
             }
         }
     }
 }
 
-// Placeholder for the actual streaming service implementation
 class StreamingService {
-    func sendVideoFrame(_ sampleBuffer: CMSampleBuffer) {
-        // Implement the actual streaming logic here
-        print("Sending video frame to streaming service")
+    private let webSocketManager: WebSocketManager
+    
+    init(webSocketManager: WebSocketManager) {
+        self.webSocketManager = webSocketManager
+    }
+    
+    func sendVideoFrame(_ encryptedBuffer: Data) {
+        let natsMessage = NATSMessage(payload: encryptedBuffer)
+        let messageData = natsMessage.toData()
+        
+        webSocketManager.sendCustomMessage(messageData) { error in
+            if let error = error {
+                print("Error sending video frame: \(error)")
+            }
+        }
     }
 }
 
@@ -196,116 +250,86 @@ class VideoCompressor {
 }
 
 class VideoEncryptor {
-    private var encryptionSession: EncryptionSession?
+    private var encryptionSession: EncryptionSession
     
-    func setupEncryption() {
-        encryptionSession = EncryptionSession()
-        encryptionSession?.generateKey()
+    init(kasPublicKey: P256.KeyAgreement.PublicKey) {
+        self.encryptionSession = EncryptionSession()
+        self.encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
     }
     
-    func encryptFrame(_ sampleBuffer: CMSampleBuffer, completion: @escaping (CMSampleBuffer?) -> Void) {
-        guard let encryptionSession = encryptionSession,
-              let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
+    func encryptFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime, completion: @escaping (Data?) -> Void) {
+        print("Encrypting frame")
+        
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            print("Failed to get base address")
             completion(nil)
             return
         }
         
-        var length: Int = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        let status = CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: &length, totalLengthOut: nil, dataPointerOut: &dataPointer)
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let bufferSize = bytesPerRow * height
         
-        guard status == kCMBlockBufferNoErr, let inputBuffer = dataPointer else {
-            completion(nil)
-            return
-        }
+        print("Frame dimensions: \(width)x\(height), Bytes per row: \(bytesPerRow), Total size: \(bufferSize)")
         
-        let outputBuffer = UnsafeMutablePointer<Int8>.allocate(capacity: length)
-        encryptionSession.encrypt(input: inputBuffer, inputLength: length, output: outputBuffer)
+        let buffer = Data(bytes: baseAddress, count: bufferSize)
         
-        var encryptedBlockBuffer: CMBlockBuffer?
-        CMBlockBufferCreateWithMemoryBlock(
-            allocator: kCFAllocatorDefault,
-            memoryBlock: outputBuffer,
-            blockLength: length,
-            blockAllocator: kCFAllocatorDefault,
-            customBlockSource: nil,
-            offsetToData: 0,
-            dataLength: length,
-            flags: 0,
-            blockBufferOut: &encryptedBlockBuffer
-        )
-        
-        if let encryptedBlockBuffer = encryptedBlockBuffer {
-            var encryptedSampleBuffer: CMSampleBuffer?
-            CMSampleBufferCreateCopy(allocator: kCFAllocatorDefault, sampleBuffer: sampleBuffer, sampleBufferOut: &encryptedSampleBuffer)
-            CMSampleBufferSetDataBuffer(encryptedSampleBuffer!, newValue: encryptedBlockBuffer)
-            completion(encryptedSampleBuffer)
-        } else {
+        do {
+            var encryptedData = try encryptionSession.encrypt(input: buffer)
+            
+            // Prepend timestamp to encrypted data
+            var timestampBytes = timestamp.value.bigEndian
+            encryptedData.insert(contentsOf: Data(bytes: &timestampBytes, count: MemoryLayout<Int64>.size), at: 0)
+            
+            // Prepend width and height to encrypted data
+            var widthBytes = Int32(width).bigEndian
+            var heightBytes = Int32(height).bigEndian
+            encryptedData.insert(contentsOf: Data(bytes: &heightBytes, count: MemoryLayout<Int32>.size), at: 0)
+            encryptedData.insert(contentsOf: Data(bytes: &widthBytes, count: MemoryLayout<Int32>.size), at: 0)
+            
+            print("Frame encrypted successfully. Encrypted size: \(encryptedData.count)")
+            completion(encryptedData)
+        } catch {
+            print("Error encrypting video frame: \(error)")
             completion(nil)
         }
     }
 }
 
 class EncryptionSession {
-    private var key: Data?
-    private let algorithm: CCAlgorithm = CCAlgorithm(kCCAlgorithmAES)
-    private let options: CCOptions = CCOptions(kCCOptionPKCS7Padding)
-    private let keySize = kCCKeySizeAES256
-    private let blockSize = kCCBlockSizeAES128
+    private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    private var iv: UInt64 = 0
     
-    func generateKey() {
-        key = Data(count: keySize)
-        key?.withUnsafeMutableBytes { keyBytes in
-            if let keyBaseAddress = keyBytes.baseAddress {
-                let result = SecRandomCopyBytes(kSecRandomDefault, keySize, keyBaseAddress)
-                if result != errSecSuccess {
-                    print("Error generating random bytes for encryption key")
-                }
-            }
-        }
+    func setupEncryption(kasPublicKey: P256.KeyAgreement.PublicKey) {
+        self.kasPublicKey = kasPublicKey
     }
     
-    func encrypt(input: UnsafePointer<Int8>, inputLength: Int, output: UnsafeMutablePointer<Int8>) {
-        print("Encrypting length \(inputLength)")
-        guard let key = key else {
-            print("Encryption key not set")
-            return
+    func encrypt(input: Data) throws -> Data {
+        print("Encrypting...")
+        guard let kasPublicKey = kasPublicKey else {
+            throw EncryptionError.missingKasPublicKey
         }
         
-        let ivSize = kCCBlockSizeAES128
-        var iv = Data(count: ivSize)
-        iv.withUnsafeMutableBytes { ivBytes in
-            if let ivBaseAddress = ivBytes.baseAddress {
-                let result = SecRandomCopyBytes(kSecRandomDefault, ivSize, ivBaseAddress)
-                if result != errSecSuccess {
-                    print("Error generating random bytes for IV")
-                }
-            }
-        }
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
         
-        var numBytesEncrypted: Int = 0
+        // Smart contract
+        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
+        var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
         
-        key.withUnsafeBytes { keyBytes in
-            iv.withUnsafeBytes { ivBytes in
-                let keyBaseAddress = keyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self)
-                let ivBaseAddress = ivBytes.baseAddress?.assumingMemoryBound(to: UInt8.self)
-                
-                CCCrypt(CCOperation(kCCEncrypt),
-                        algorithm,
-                        options,
-                        keyBaseAddress,
-                        keySize,
-                        ivBaseAddress,
-                        input,
-                        inputLength,
-                        output,
-                        inputLength + blockSize,
-                        &numBytesEncrypted)
-            }
-        }
-        
-        // Prepend IV to encrypted data
-        memcpy(output + ivSize, output, numBytesEncrypted)
-        memcpy(output, [UInt8](iv), ivSize)
+        // Increment IV for each frame
+        iv += 1
+        let ivData = withUnsafeBytes(of: iv.bigEndian) { Data($0) }
+        // FIXME pass int , iv: ivData
+        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: input)
+        return nanoTDF.toData()
     }
+}
+
+enum EncryptionError: Error {
+    case missingKasPublicKey
 }
