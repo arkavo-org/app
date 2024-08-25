@@ -1,15 +1,17 @@
 import AVFoundation
-import SwiftUI
-import VideoToolbox
+import Combine
 import CryptoKit
 import OpenTDFKit
-import Combine
+import SwiftUI
+import VideoToolbox
 
 class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var streamingService: StreamingService?
     private var videoCompressor: VideoCompressor?
+    private var videoWidth: Int32 = 0
+    private var videoHeight: Int32 = 0
     private var videoEncryptor: VideoEncryptor?
     private var encryptionSession: EncryptionSession?
     private var kasPublicKey: P256.KeyAgreement.PublicKey?
@@ -17,6 +19,7 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
     @Published var isCameraActive = false
     @Published var isStreaming = false
+    @Published var isConnected = false
     @Published var hasCameraAccess = false
     @Published var error: Error?
 
@@ -24,7 +27,7 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         super.init()
         checkCameraPermissions()
     }
-    
+
     func setKasPublicKeyBinding(_ binding: Binding<P256.KeyAgreement.PublicKey?>) {
         kasPublicKeySubscription = binding.wrappedValue.publisher
             .sink { [weak self] newValue in
@@ -33,16 +36,16 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         // Initial update
         updateKasPublicKey(binding.wrappedValue)
     }
-    
+
     private func updateKasPublicKey(_ newValue: P256.KeyAgreement.PublicKey?) {
         kasPublicKey = newValue
-        if let newValue = newValue {
+        if let newValue {
             videoEncryptor = VideoEncryptor(kasPublicKey: newValue)
         } else {
             videoEncryptor = nil
         }
     }
-    
+
     func checkCameraPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -71,19 +74,20 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
             guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
                   let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-                  session.canAddInput(videoInput) else {
+                  session.canAddInput(videoInput)
+            else {
                 print("Failed to set up video capture device")
                 return
             }
 
             session.addInput(videoInput)
-            
+
             let videoOutput = AVCaptureVideoDataOutput()
             videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "videoQueue"))
             if session.canAddOutput(videoOutput) {
                 session.addOutput(videoOutput)
             }
-            
+
             self?.videoOutput = videoOutput
             self?.captureSession = session
 
@@ -96,9 +100,11 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             // Set up video compressor
             let formatDescription = videoDevice.activeFormat.formatDescription
             let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
+            self?.videoWidth = dimensions.width
+            self?.videoHeight = dimensions.height
             self?.videoCompressor = VideoCompressor()
             self?.videoCompressor?.setupCompression(width: Int(dimensions.width), height: Int(dimensions.height))
-            // FIXME add back video compression
+            // FIXME: add back video compression
             // Set up video encryptor
             DispatchQueue.main.async {
                 if let kasPublicKey = self?.kasPublicKey {
@@ -119,7 +125,7 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         if captureSession == nil {
             setupCaptureSession()
         }
-        
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession?.startRunning()
             DispatchQueue.main.async {
@@ -140,12 +146,13 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     func setupEncryption() {
         encryptionSession = EncryptionSession()
-        if let kasPublicKey = kasPublicKey {
+        if let kasPublicKey {
             encryptionSession?.setupEncryption(kasPublicKey: kasPublicKey)
         }
     }
-    
+
     func startStreaming(webSocketManager: WebSocketManager) {
+//        print("connectionState: \(webSocketManager.connectionState)")
         streamingService = StreamingService(webSocketManager: webSocketManager)
         isStreaming = true
     }
@@ -155,25 +162,29 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
         isStreaming = false
     }
 
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard isStreaming, let streamingService = streamingService, let videoEncryptor = videoEncryptor else {
-            print("Streaming is not active or required services are not available")
+    func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
+        guard isStreaming, let streamingService, let videoEncryptor, let videoCompressor else {
+//            print("Streaming is not active or required services are not available")
             return
         }
-        
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             print("Failed to get pixel buffer from sample buffer")
             return
         }
-        
-        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        
-        videoEncryptor.encryptFrame(pixelBuffer, timestamp: timestamp) { encryptedData in
-            if let encryptedData = encryptedData {
-                print("Frame encrypted successfully. Sending frame of size: \(encryptedData.count) bytes")
-                streamingService.sendVideoFrame(encryptedData)
+        let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let duration = CMSampleBufferGetDuration(sampleBuffer)
+        videoCompressor.compressFrame(pixelBuffer, presentationTimeStamp: presentationTimeStamp, duration: duration) { compressedData in
+            if let compressedData {
+                videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: self.videoWidth, height: self.videoHeight) { encryptedData in
+                    if let encryptedData {
+//                        print("Frame compressed and encrypted successfully. Sending frame of size: \(encryptedData.count) bytes")
+                        streamingService.sendVideoFrame(encryptedData)
+                    } else {
+                        print("Failed to encrypt frame")
+                    }
+                }
             } else {
-                print("Failed to encrypt frame")
+                print("Failed to compress video frame")
             }
         }
     }
@@ -181,17 +192,17 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
 class StreamingService {
     private let webSocketManager: WebSocketManager
-    
+
     init(webSocketManager: WebSocketManager) {
         self.webSocketManager = webSocketManager
     }
-    
+
     func sendVideoFrame(_ encryptedBuffer: Data) {
         let natsMessage = NATSMessage(payload: encryptedBuffer)
         let messageData = natsMessage.toData()
-        
+
         webSocketManager.sendCustomMessage(messageData) { error in
-            if let error = error {
+            if let error {
                 print("Error sending video frame: \(error)")
             }
         }
@@ -200,7 +211,8 @@ class StreamingService {
 
 class VideoCompressor {
     private var compressionSession: VTCompressionSession?
-    
+    private let compressionQueue = DispatchQueue(label: "com.videocompressor.compression")
+
     func setupCompression(width: Int, height: Int) {
         VTCompressionSessionCreate(
             allocator: nil,
@@ -214,84 +226,101 @@ class VideoCompressor {
             refcon: nil,
             compressionSessionOut: &compressionSession
         )
-        guard let compressionSession = compressionSession else {
+        guard let compressionSession else {
             print("Failed to create compression session")
             return
         }
-        VTSessionSetProperty(compressionSession, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-        VTSessionSetProperty(compressionSession, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_Baseline_AutoLevel)
-
+        // Configure compression settings for real-time video
+        let properties: [(CFString, Any)] = [
+            (kVTCompressionPropertyKey_RealTime, kCFBooleanTrue!),
+            (kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Baseline_AutoLevel),
+            (kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse!),
+            (kVTCompressionPropertyKey_MaxKeyFrameInterval, 60),
+            (kVTCompressionPropertyKey_ExpectedFrameRate, 30),
+            (kVTCompressionPropertyKey_AverageBitRate, 1_000_000), // 1 Mbps
+            (kVTCompressionPropertyKey_DataRateLimits, [1_000_000, 1] as CFArray),
+        ]
+        for (key, value) in properties {
+            VTSessionSetProperty(compressionSession, key: key, value: value as CFTypeRef)
+        }
+        // Start the compression session
+        VTCompressionSessionPrepareToEncodeFrames(compressionSession)
     }
-    
-    func compressFrame(_ sampleBuffer: CMSampleBuffer, completion: @escaping (CMSampleBuffer?) -> Void) {
-        guard let compressionSession = compressionSession,
-              let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+
+    func compressFrame(_ pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime, completion: @escaping (Data?) -> Void) {
+        guard let compressionSession else {
+            print("Compression session is nil")
             completion(nil)
             return
         }
-        
-        let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        
-        VTCompressionSessionEncodeFrame(
-            compressionSession,
-            imageBuffer: imageBuffer,
-            presentationTimeStamp: presentationTimeStamp,
-            duration: CMTime.invalid,
-            frameProperties: nil,
-            infoFlagsOut: nil
-        ) { status, infoFlags, compressedBuffer in
-            guard status == noErr, let compressedBuffer = compressedBuffer else {
-                completion(nil)
-                return
-            }
-            completion(compressedBuffer)
+
+        var flags: VTEncodeInfoFlags = []
+
+        compressionQueue.async {
+            VTCompressionSessionEncodeFrame(
+                compressionSession,
+                imageBuffer: pixelBuffer,
+                presentationTimeStamp: presentationTimeStamp,
+                duration: duration,
+                frameProperties: nil,
+                infoFlagsOut: &flags,
+                outputHandler: { status, _, sampleBuffer in
+                    if status == noErr, let sampleBuffer {
+                        if let dataBuffer = sampleBuffer.dataBuffer {
+                            var totalLength = 0
+                            var dataPointer: UnsafeMutablePointer<Int8>?
+                            let result = CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &totalLength, dataPointerOut: &dataPointer)
+                            if result == kCMBlockBufferNoErr, let dataPointer {
+                                let data = Data(bytes: dataPointer, count: totalLength)
+//                                print("Frame compressed successfully, size: \(data.count) bytes")
+                                DispatchQueue.main.async {
+                                    completion(data)
+                                }
+                            } else {
+                                print("Error getting compressed data: \(result)")
+                                DispatchQueue.main.async {
+                                    completion(nil)
+                                }
+                            }
+                        } else {
+                            print("No data buffer in sample buffer")
+                            DispatchQueue.main.async {
+                                completion(nil)
+                            }
+                        }
+                    } else {
+                        print("Error compressing frame: \(status)")
+                        DispatchQueue.main.async {
+                            completion(nil)
+                        }
+                    }
+                }
+            )
         }
     }
 }
 
 class VideoEncryptor {
     private var encryptionSession: EncryptionSession
-    
+
     init(kasPublicKey: P256.KeyAgreement.PublicKey) {
-        self.encryptionSession = EncryptionSession()
-        self.encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
+        encryptionSession = EncryptionSession()
+        encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
     }
-    
-    func encryptFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime, completion: @escaping (Data?) -> Void) {
-        print("Encrypting frame")
-        
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-        
-        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-            print("Failed to get base address")
-            completion(nil)
-            return
-        }
-        
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        let bufferSize = bytesPerRow * height
-        
-        print("Frame dimensions: \(width)x\(height), Bytes per row: \(bytesPerRow), Total size: \(bufferSize)")
-        
-        let buffer = Data(bytes: baseAddress, count: bufferSize)
-        
+
+    func encryptFrame(_ compressedData: Data, timestamp: CMTime, width: Int32, height: Int32, completion: @escaping (Data?) -> Void) {
+//        print("Encrypting frame")
         do {
-            var encryptedData = try encryptionSession.encrypt(input: buffer)
-            
+            var encryptedData = try encryptionSession.encrypt(input: compressedData)
             // Prepend timestamp to encrypted data
             var timestampBytes = timestamp.value.bigEndian
             encryptedData.insert(contentsOf: Data(bytes: &timestampBytes, count: MemoryLayout<Int64>.size), at: 0)
-            
             // Prepend width and height to encrypted data
-            var widthBytes = Int32(width).bigEndian
-            var heightBytes = Int32(height).bigEndian
+            var widthBytes = width.bigEndian
+            var heightBytes = height.bigEndian
             encryptedData.insert(contentsOf: Data(bytes: &heightBytes, count: MemoryLayout<Int32>.size), at: 0)
             encryptedData.insert(contentsOf: Data(bytes: &widthBytes, count: MemoryLayout<Int32>.size), at: 0)
-            
-            print("Frame encrypted successfully. Encrypted size: \(encryptedData.count)")
+//            print("Frame encrypted successfully. Encrypted size: \(encryptedData.count)")
             completion(encryptedData)
         } catch {
             print("Error encrypting video frame: \(error)")
@@ -303,28 +332,28 @@ class VideoEncryptor {
 class EncryptionSession {
     private var kasPublicKey: P256.KeyAgreement.PublicKey?
     private var iv: UInt64 = 0
-    
+
     func setupEncryption(kasPublicKey: P256.KeyAgreement.PublicKey) {
         self.kasPublicKey = kasPublicKey
     }
-    
+
     func encrypt(input: Data) throws -> Data {
-        print("Encrypting...")
-        guard let kasPublicKey = kasPublicKey else {
+//        print("Encrypting...")
+        guard let kasPublicKey else {
             throw EncryptionError.missingKasPublicKey
         }
-        
+
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
-        
+
         // Smart contract
         let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
         var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-        
+
         // Increment IV for each frame
         iv += 1
         let ivData = withUnsafeBytes(of: iv.bigEndian) { Data($0) }
-        // FIXME pass int , iv: ivData
+        // FIXME: pass int , iv: ivData
         let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: input)
         return nanoTDF.toData()
     }

@@ -72,15 +72,15 @@ struct CreateStreamProfileView: View {
                     if !viewModel.nameError.isEmpty {
                         Text(viewModel.nameError).foregroundColor(.red)
                     }
-                    
+
                     TextField("Blurb", text: $viewModel.blurb)
                     if !viewModel.blurbError.isEmpty {
                         Text(viewModel.blurbError).foregroundColor(.red)
                     }
                 }
-                
+
                 Section(header: Text("Stream Information")) {
-                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2...100)
+                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
                     if !viewModel.participantCountError.isEmpty {
                         Text(viewModel.participantCountError).foregroundColor(.red)
                     }
@@ -104,13 +104,13 @@ struct CreateStreamProfileView: View {
                 }
             }
         }
-        .onChange(of: viewModel.name) { oldValue, newValue in
+        .onChange(of: viewModel.name) { _, _ in
             viewModel.validateName()
         }
-        .onChange(of: viewModel.blurb) { oldValue, newValue in
+        .onChange(of: viewModel.blurb) { _, _ in
             viewModel.validateBlurb()
         }
-        .onChange(of: viewModel.participantCount) { oldValue, newValue in
+        .onChange(of: viewModel.participantCount) { _, _ in
             viewModel.validateParticipantCount()
         }
     }

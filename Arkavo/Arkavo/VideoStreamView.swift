@@ -1,7 +1,7 @@
 import AVFoundation
 import Combine
-import SwiftUI
 import CryptoKit
+import SwiftUI
 
 struct VideoStreamView: View {
     @ObservedObject var viewModel: VideoStreamViewModel
@@ -22,7 +22,7 @@ struct VideoStreamView: View {
                     Text("Camera is inactive")
                         .foregroundColor(.secondary)
                 }
-                
+
                 // Streaming indicator
                 if videoCaptureManager.isStreaming {
                     VStack {
@@ -60,7 +60,7 @@ struct VideoStreamView: View {
                     .foregroundColor(.white)
                     .cornerRadius(8)
                 }
-                
+
                 Button(action: {
                     toggleStreaming()
                 }) {
@@ -103,7 +103,7 @@ struct VideoStreamView: View {
             Alert(title: Text("Error"), message: Text(errorMessage), dismissButton: .default(Text("OK")))
         }
         .onReceive(videoCaptureManager.$error) { error in
-            if let error = error {
+            if let error {
                 errorMessage = error.localizedDescription
                 showingErrorAlert = true
             }
@@ -125,8 +125,7 @@ struct VideoStreamView: View {
         if videoCaptureManager.isStreaming {
             videoCaptureManager.stopStreaming()
         } else {
-            // FIXME pass in WebSocketManager
-            videoCaptureManager.startStreaming(webSocketManager: WebSocketManager())
+            videoCaptureManager.startStreaming(webSocketManager: viewModel.webSocketManager)
         }
     }
 
@@ -142,13 +141,13 @@ class VideoStreamViewModel: ObservableObject {
     var nanoTDFManager: NanoTDFManager
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
     private var cancellables = Set<AnyCancellable>()
-    
+
     init() {
         _webSocketManager = .init(initialValue: WebSocketManager())
         _kasPublicKey = .constant(nil)
         nanoTDFManager = NanoTDFManager()
     }
-    
+
     func initialize(
         webSocketManager: WebSocketManager,
         nanoTDFManager: NanoTDFManager,
@@ -164,16 +163,16 @@ class VideoStreamViewModel: ObservableObject {
 struct CameraPreview: UIViewRepresentable {
     @ObservedObject var videoCaptureManager: VideoCaptureManager
 
-    func makeUIView(context: Context) -> UIView {
+    func makeUIView(context _: Context) -> UIView {
         let view = UIView()
         view.backgroundColor = .black
         view.layer.addSublayer(videoCaptureManager.previewLayer ?? AVCaptureVideoPreviewLayer())
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
+    func updateUIView(_ uiView: UIView, context _: Context) {
         DispatchQueue.main.async {
-            self.updatePreviewLayer(uiView)
+            updatePreviewLayer(uiView)
         }
     }
 
