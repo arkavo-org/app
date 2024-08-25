@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - CompactStreamProfileView
+
 struct CompactStreamProfileView: View {
     @ObservedObject var viewModel: StreamProfileViewModel
 
@@ -15,40 +17,46 @@ struct CompactStreamProfileView: View {
     }
 }
 
+// MARK: - DetailedStreamProfileView
+
 struct DetailedStreamProfileView: View {
     @ObservedObject var viewModel: StreamProfileViewModel
 
     var body: some View {
-        Form {
+        List {
             Section(header: Text("Profile Information")) {
-                Text("Name: \(viewModel.profile.name)")
+                LabeledContent("Name", value: viewModel.profile.name)
                 if let blurb = viewModel.profile.blurb {
-                    Text("Blurb: \(blurb)")
+                    LabeledContent("Blurb", value: blurb)
                 }
             }
 
             Section(header: Text("Stream Information")) {
-                Text("Participants: \(viewModel.participantCount)")
+                LabeledContent("Participants", value: "\(viewModel.participantCount)")
             }
 
             Section(header: Text("Profile Details")) {
-                Text("ID: \(viewModel.profile.id.uuidString)")
-                Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
+                LabeledContent("ID", value: viewModel.profile.id.uuidString)
+                LabeledContent("Created", value: viewModel.profile.dateCreated.formatted(.dateTime))
             }
         }
         .navigationTitle("Stream Profile")
     }
 }
 
+// MARK: - StreamProfileViewModel
+
 class StreamProfileViewModel: ObservableObject {
     @Published var profile: Profile
     @Published var participantCount: Int
 
     init(profile: Profile, participantCount: Int) {
-        self.participantCount = participantCount
         self.profile = profile
+        self.participantCount = participantCount
     }
 }
+
+// MARK: - CreateStreamProfileView
 
 struct CreateStreamProfileView: View {
     @Environment(\.dismiss) private var dismiss
@@ -60,18 +68,19 @@ struct CreateStreamProfileView: View {
             Form {
                 Section(header: Text("Profile Information")) {
                     TextField("Name", text: $viewModel.name)
+                        .autocapitalization(.words)
                     if !viewModel.nameError.isEmpty {
                         Text(viewModel.nameError).foregroundColor(.red)
                     }
-
+                    
                     TextField("Blurb", text: $viewModel.blurb)
                     if !viewModel.blurbError.isEmpty {
                         Text(viewModel.blurbError).foregroundColor(.red)
                     }
                 }
-
+                
                 Section(header: Text("Stream Information")) {
-                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
+                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2...100)
                     if !viewModel.participantCountError.isEmpty {
                         Text(viewModel.participantCountError).foregroundColor(.red)
                     }
@@ -95,26 +104,40 @@ struct CreateStreamProfileView: View {
                 }
             }
         }
-        .onChange(of: viewModel.name) { viewModel.validateName() }
-        .onChange(of: viewModel.blurb) { viewModel.validateBlurb() }
-        .onChange(of: viewModel.participantCount) { viewModel.validateParticipantCount() }
+        .onChange(of: viewModel.name) { oldValue, newValue in
+            viewModel.validateName()
+        }
+        .onChange(of: viewModel.blurb) { oldValue, newValue in
+            viewModel.validateBlurb()
+        }
+        .onChange(of: viewModel.participantCount) { oldValue, newValue in
+            viewModel.validateParticipantCount()
+        }
     }
 }
 
+// MARK: - CreateStreamProfileViewModel
+
 class CreateStreamProfileViewModel: ObservableObject {
-    @Published var name: String = ""
-    @Published var blurb: String = ""
-    @Published var participantCount: Int = 2
-    @Published var nameError: String = ""
-    @Published var blurbError: String = ""
-    @Published var participantCountError: String = ""
-    @Published var isValid: Bool = false
+    @Published var name = ""
+    @Published var blurb = ""
+    @Published var participantCount = 2
+    @Published var nameError = ""
+    @Published var blurbError = ""
+    @Published var participantCountError = ""
+    @Published var isValid = false
+
+    private let maxNameLength = 50
+    private let maxBlurbLength = 200
+    private let minParticipants = 2
+    private let maxParticipants = 100
 
     func validateName() {
-        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty {
             nameError = "Name cannot be empty"
-        } else if name.count > 50 {
-            nameError = "Name must be 50 characters or less"
+        } else if trimmedName.count > maxNameLength {
+            nameError = "Name must be \(maxNameLength) characters or less"
         } else {
             nameError = ""
         }
@@ -122,19 +145,19 @@ class CreateStreamProfileViewModel: ObservableObject {
     }
 
     func validateBlurb() {
-        if blurb.count > 200 {
-            blurbError = "Blurb must be 200 characters or less"
+        if blurb.count > maxBlurbLength {
+            blurbError = "Blurb must be \(maxBlurbLength) characters or less"
         } else {
-            blurbError = ""
+            blurb = ""
         }
         updateValidity()
     }
 
     func validateParticipantCount() {
-        if participantCount < 2 {
-            participantCountError = "A Stream must have at least 2 participants"
-        } else if participantCount > 100 {
-            participantCountError = "A Stream can have at most 100 participants"
+        if participantCount < minParticipants {
+            participantCountError = "A Stream must have at least \(minParticipants) participants"
+        } else if participantCount > maxParticipants {
+            participantCountError = "A Stream can have at most \(maxParticipants) participants"
         } else {
             participantCountError = ""
         }
@@ -146,10 +169,9 @@ class CreateStreamProfileViewModel: ObservableObject {
     }
 
     func createStreamProfile() -> (Profile, Int)? {
-        if isValid {
-            let profile = Profile(name: name, blurb: blurb.isEmpty ? nil : blurb)
-            return (profile, participantCount)
-        }
-        return nil
+        guard isValid else { return nil }
+        let profile = Profile(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                              blurb: blurb.isEmpty ? nil : blurb)
+        return (profile, participantCount)
     }
 }
