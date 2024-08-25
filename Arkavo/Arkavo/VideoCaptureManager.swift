@@ -9,11 +9,11 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var streamingService: StreamingService?
     private var videoCompressor: VideoCompressor?
     private var videoEncryptor: VideoEncryptor?
-    
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
     @Published var isCameraActive = false
     @Published var isStreaming = false
     @Published var hasCameraAccess = false
+    @Published var error: Error?
 
     override init() {
         super.init()
