@@ -311,17 +311,17 @@ class VideoEncryptor {
     func encryptFrame(_ compressedData: Data, timestamp: CMTime, width: Int32, height: Int32, completion: @escaping (Data?) -> Void) {
 //        print("Encrypting frame")
         do {
-            var encryptedData = try encryptionSession.encrypt(input: compressedData)
+            var nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
             // Prepend timestamp to encrypted data
-            var timestampBytes = timestamp.value.bigEndian
-            encryptedData.insert(contentsOf: Data(bytes: &timestampBytes, count: MemoryLayout<Int64>.size), at: 0)
+//            var timestampBytes = timestamp.value.bigEndian
+//            encryptedData.insert(contentsOf: Data(bytes: &timestampBytes, count: MemoryLayout<Int64>.size), at: 0)
             // Prepend width and height to encrypted data
-            var widthBytes = width.bigEndian
-            var heightBytes = height.bigEndian
-            encryptedData.insert(contentsOf: Data(bytes: &heightBytes, count: MemoryLayout<Int32>.size), at: 0)
-            encryptedData.insert(contentsOf: Data(bytes: &widthBytes, count: MemoryLayout<Int32>.size), at: 0)
+//            var widthBytes = width.bigEndian
+//            var heightBytes = height.bigEndian
+//            encryptedData.insert(contentsOf: Data(bytes: &heightBytes, count: MemoryLayout<Int32>.size), at: 0)
+//            encryptedData.insert(contentsOf: Data(bytes: &widthBytes, count: MemoryLayout<Int32>.size), at: 0)
 //            print("Frame encrypted successfully. Encrypted size: \(encryptedData.count)")
-            completion(encryptedData)
+            completion(nanoTDFBytes)
         } catch {
             print("Error encrypting video frame: \(error)")
             completion(nil)
