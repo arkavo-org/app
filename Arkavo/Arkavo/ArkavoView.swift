@@ -412,7 +412,10 @@ struct ArkavoView: View {
                         }
                     }
                 } else {
-                    print("Unable to deserialize payload as Thought or City")
+                    // If it's neither a Thought nor a City, assume it's a video frame
+                    DispatchQueue.main.async {
+                        videoStreamViewModel.receiveVideoFrame(payload)
+                    }
                 }
             } catch {
                 print("Unexpected error during nanoTDF decryption: \(error)")

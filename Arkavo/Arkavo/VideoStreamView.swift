@@ -13,38 +13,44 @@ struct VideoStreamView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Video preview area
-            ZStack {
-                if videoCaptureManager.isCameraActive {
-                    CameraPreview(videoCaptureManager: videoCaptureManager)
-                        .edgesIgnoringSafeArea(.all)
-                } else {
-                    Text("Camera is inactive")
-                        .foregroundColor(.secondary)
+            HStack {
+                // Video preview area (outgoing)
+                ZStack {
+                    if videoCaptureManager.isCameraActive {
+                        CameraPreview(videoCaptureManager: videoCaptureManager)
+                            .frame(height: UIScreen.main.bounds.height * 0.3)
+                    } else {
+                        Text("Camera is inactive")
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Streaming indicator
+                    if videoCaptureManager.isStreaming {
+                        VStack {
+                            HStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 10, height: 10)
+                                Text("Live")
+                                    .foregroundColor(.white)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.red.opacity(0.8))
+                                    .cornerRadius(4)
+                            }
+                            .padding(8)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
 
-                // Streaming indicator
-                if videoCaptureManager.isStreaming {
-                    VStack {
-                        HStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 10, height: 10)
-                            Text("Live")
-                                .foregroundColor(.white)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.red.opacity(0.8))
-                                .cornerRadius(4)
-                        }
-                        .padding(8)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                // Incoming video display
+                IncomingVideoView(viewModel: viewModel)
+                    .frame(height: UIScreen.main.bounds.height * 0.3)
             }
-            .frame(height: UIScreen.main.bounds.height * 0.4)
+            .frame(height: UIScreen.main.bounds.height * 0.3)
 
             // Control buttons
             HStack {
@@ -135,6 +141,22 @@ struct VideoStreamView: View {
     }
 }
 
+struct IncomingVideoView: UIViewRepresentable {
+    @ObservedObject var viewModel: VideoStreamViewModel
+
+    func makeUIView(context _: Context) -> UIImageView {
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFit
+        return imageView
+    }
+
+    func updateUIView(_ uiView: UIImageView, context _: Context) {
+        if let image = viewModel.currentFrame {
+            uiView.image = image
+        }
+    }
+}
+
 class VideoStreamViewModel: ObservableObject {
     // nano
     @Published var webSocketManager: WebSocketManager
@@ -142,10 +164,15 @@ class VideoStreamViewModel: ObservableObject {
     @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
     private var cancellables = Set<AnyCancellable>()
 
+    // Video frame handling
+    @Published var currentFrame: UIImage?
+    private var videoDecoder: VideoDecoder?
+
     init() {
         _webSocketManager = .init(initialValue: WebSocketManager())
         _kasPublicKey = .constant(nil)
         nanoTDFManager = NanoTDFManager()
+        videoDecoder = VideoDecoder()
     }
 
     func initialize(
@@ -154,9 +181,16 @@ class VideoStreamViewModel: ObservableObject {
         kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>
     ) {
         self.webSocketManager = webSocketManager
-        self.webSocketManager = webSocketManager
         _kasPublicKey = kasPublicKey
         self.nanoTDFManager = nanoTDFManager
+    }
+
+    func receiveVideoFrame(_ frameData: Data) {
+        videoDecoder?.decodeFrame(frameData) { [weak self] image in
+            DispatchQueue.main.async {
+                self?.currentFrame = image
+            }
+        }
     }
 }
 
