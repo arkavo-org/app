@@ -197,7 +197,6 @@ enum VideoCodecConfig {
     static let bitRate: Int32 = 1_000_000 // 1 Mbps
     static let keyframeInterval: Int32 = 60
     static let pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-
     static var compressionProperties: [String: Any] {
         [
             kVTCompressionPropertyKey_RealTime as String: kCFBooleanTrue!,
@@ -241,6 +240,8 @@ class StreamingService {
 class VideoCompressor {
     private var compressionSession: VTCompressionSession?
     private let compressionQueue = DispatchQueue(label: "com.videocompressor.compression")
+    private var sps: Data?
+    private var pps: Data?
 
     func setupCompression() {
         VTCompressionSessionCreate(
@@ -273,9 +274,7 @@ class VideoCompressor {
             completion(nil)
             return
         }
-
         var flags: VTEncodeInfoFlags = []
-
         compressionQueue.async {
             VTCompressionSessionEncodeFrame(
                 compressionSession,
@@ -284,30 +283,10 @@ class VideoCompressor {
                 duration: duration,
                 frameProperties: nil,
                 infoFlagsOut: &flags,
-                outputHandler: { status, _, sampleBuffer in
+                outputHandler: { [weak self] status, infoFlags, sampleBuffer in
+                    guard let self else { return }
                     if status == noErr, let sampleBuffer {
-                        if let dataBuffer = sampleBuffer.dataBuffer {
-                            var totalLength = 0
-                            var dataPointer: UnsafeMutablePointer<Int8>?
-                            let result = CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &totalLength, dataPointerOut: &dataPointer)
-                            if result == kCMBlockBufferNoErr, let dataPointer {
-                                let data = Data(bytes: dataPointer, count: totalLength)
-//                                print("Frame compressed successfully, size: \(data.count) bytes")
-                                DispatchQueue.main.async {
-                                    completion(data)
-                                }
-                            } else {
-                                print("Error getting compressed data: \(result)")
-                                DispatchQueue.main.async {
-                                    completion(nil)
-                                }
-                            }
-                        } else {
-                            print("No data buffer in sample buffer")
-                            DispatchQueue.main.async {
-                                completion(nil)
-                            }
-                        }
+                        handleCompressedFrame(sampleBuffer: sampleBuffer, infoFlags: infoFlags, completion: completion)
                     } else {
                         print("Error compressing frame: \(status)")
                         DispatchQueue.main.async {
@@ -316,6 +295,84 @@ class VideoCompressor {
                     }
                 }
             )
+        }
+    }
+
+    private func handleCompressedFrame(sampleBuffer: CMSampleBuffer, infoFlags _: VTEncodeInfoFlags, completion: @escaping (Data?) -> Void) {
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true) as? [[CFString: Any]],
+              let dataBuffer = sampleBuffer.dataBuffer
+        else {
+            print("Failed to get sample attachments or data buffer")
+            DispatchQueue.main.async {
+                completion(nil)
+            }
+            return
+        }
+
+        let isKeyFrame = !(attachments[0][kCMSampleAttachmentKey_DependsOnOthers] as? Bool ?? true)
+        if isKeyFrame {
+            print("Key frame")
+            // For key frames, we need to include SPS and PPS
+            if let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                var parameterSetCount = 0
+                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDescription,
+                                                                   parameterSetIndex: 0,
+                                                                   parameterSetPointerOut: nil,
+                                                                   parameterSetSizeOut: nil,
+                                                                   parameterSetCountOut: &parameterSetCount,
+                                                                   nalUnitHeaderLengthOut: nil)
+
+                if parameterSetCount > 0 {
+                    var parameterSetPointers: [UnsafePointer<UInt8>?] = Array(repeating: nil, count: 2)
+                    var parameterSetSizes: [Int] = Array(repeating: 0, count: 2)
+
+                    for i in 0 ..< min(2, parameterSetCount) {
+                        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDescription,
+                                                                           parameterSetIndex: i,
+                                                                           parameterSetPointerOut: &parameterSetPointers[i],
+                                                                           parameterSetSizeOut: &parameterSetSizes[i],
+                                                                           parameterSetCountOut: nil,
+                                                                           nalUnitHeaderLengthOut: nil)
+                    }
+
+                    if parameterSetCount > 0, let spsPointer = parameterSetPointers[0] {
+                        sps = Data(bytes: spsPointer, count: parameterSetSizes[0])
+                    }
+                    if parameterSetCount > 1, let ppsPointer = parameterSetPointers[1] {
+                        pps = Data(bytes: ppsPointer, count: parameterSetSizes[1])
+                    }
+                    print("SPS: \(String(describing: sps)) PPS: \(String(describing: pps))")
+                }
+            }
+        }
+
+        var totalLength = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        let result = CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &totalLength, dataPointerOut: &dataPointer)
+
+        if result == kCMBlockBufferNoErr, let dataPointer {
+            var finalData = Data()
+
+            // Add SPS and PPS for key frames
+            if isKeyFrame, let sps, let pps {
+                finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
+                finalData.append(sps)
+                finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
+                finalData.append(pps)
+            }
+
+            // Add the frame data
+            finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
+            finalData.append(Data(bytes: dataPointer, count: totalLength))
+
+            DispatchQueue.main.async {
+                completion(finalData)
+            }
+        } else {
+            print("Error getting compressed data: \(result)")
+            DispatchQueue.main.async {
+                completion(nil)
+            }
         }
     }
 }
