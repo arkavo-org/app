@@ -18,7 +18,7 @@ struct VideoStreamView: View {
                 ZStack {
                     if videoCaptureManager.isCameraActive {
                         CameraPreview(videoCaptureManager: videoCaptureManager)
-                            .frame(height: UIScreen.main.bounds.height * 0.3)
+                            .frame(height: UIScreen.main.bounds.height * 0.2)
                     } else {
                         Text("Camera is inactive")
                             .foregroundColor(.secondary)
@@ -45,12 +45,11 @@ struct VideoStreamView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-
                 // Incoming video display
                 IncomingVideoView(viewModel: viewModel)
-                    .frame(height: UIScreen.main.bounds.height * 0.3)
+                    .frame(height: UIScreen.main.bounds.height * 0.2)
             }
-            .frame(height: UIScreen.main.bounds.height * 0.3)
+            .frame(height: UIScreen.main.bounds.height * 0.2)
 
             // Control buttons
             HStack {

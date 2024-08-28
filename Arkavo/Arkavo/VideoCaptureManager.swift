@@ -9,9 +9,9 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var streamingService: StreamingService?
-    private var videoCompressor: VideoCompressor?
-    private var videoWidth: Int32 = 0
-    private var videoHeight: Int32 = 0
+    public var videoDecoder: VideoDecoder?
+    private var videoWidth = 320
+    private var videoHeight = 240
     private var videoEncryptor: VideoEncryptor?
     private var encryptionSession: EncryptionSession?
     private var kasPublicKey: P256.KeyAgreement.PublicKey?
@@ -22,10 +22,12 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     @Published var isConnected = false
     @Published var hasCameraAccess = false
     @Published var error: Error?
+    @Published var unCompressionFrame: UIImage?
 
     override init() {
         super.init()
         checkCameraPermissions()
+        videoDecoder = VideoDecoder()
     }
 
     func setKasPublicKeyBinding(_ binding: Binding<P256.KeyAgreement.PublicKey?>) {
@@ -69,8 +71,10 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
 
     private func setupCaptureSession() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
             let session = AVCaptureSession()
-            session.sessionPreset = .high
+            session.sessionPreset = .vga640x480 // Use a lower preset
 
             guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
                   let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
@@ -88,27 +92,20 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                 session.addOutput(videoOutput)
             }
 
-            self?.videoOutput = videoOutput
-            self?.captureSession = session
+            self.videoOutput = videoOutput
+            self.captureSession = session
 
             DispatchQueue.main.async {
                 let previewLayer = AVCaptureVideoPreviewLayer(session: session)
                 previewLayer.videoGravity = .resizeAspectFill
                 previewLayer.frame = UIScreen.main.bounds
-                self?.previewLayer = previewLayer
+                self.previewLayer = previewLayer
             }
-            // Set up video compressor
-            let formatDescription = videoDevice.activeFormat.formatDescription
-            let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
-            self?.videoWidth = dimensions.width
-            self?.videoHeight = dimensions.height
-            self?.videoCompressor = VideoCompressor()
-            self?.videoCompressor?.setupCompression()
-            // FIXME: add back video compression
+
             // Set up video encryptor
             DispatchQueue.main.async {
-                if let kasPublicKey = self?.kasPublicKey {
-                    self?.videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
+                if let kasPublicKey = self.kasPublicKey {
+                    self.videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
                 } else {
                     print("Error: KAS public key not available")
                 }
@@ -152,7 +149,6 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func startStreaming(webSocketManager: WebSocketManager) {
-//        print("connectionState: \(webSocketManager.connectionState)")
         streamingService = StreamingService(webSocketManager: webSocketManager)
         isStreaming = true
     }
@@ -163,60 +159,48 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
-        guard isStreaming, let streamingService, let videoEncryptor, let videoCompressor else {
-//            print("Streaming is not active or required services are not available")
+        guard isStreaming, let streamingService, let videoEncryptor else {
             return
         }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             print("Failed to get pixel buffer from sample buffer")
             return
         }
-        let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let duration = CMSampleBufferGetDuration(sampleBuffer)
-        videoCompressor.compressFrame(pixelBuffer, presentationTimeStamp: presentationTimeStamp, duration: duration) { compressedData in
-            if let compressedData {
-                videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: self.videoWidth, height: self.videoHeight) { encryptedData in
-                    if let encryptedData {
-//                        print("Frame compressed and encrypted successfully. Sending frame of size: \(encryptedData.count) bytes")
-                        streamingService.sendVideoFrame(encryptedData)
-                    } else {
-                        print("Failed to encrypt frame")
-                    }
+
+        // Downscale the image
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let scale = CGFloat(videoWidth) / CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+        let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        
+        let context = CIContext()
+        var downscaledPixelBuffer: CVPixelBuffer?
+        CVPixelBufferCreate(kCFAllocatorDefault, Int(videoWidth), Int(videoHeight), kCVPixelFormatType_32BGRA, nil, &downscaledPixelBuffer)
+        
+        if let downscaledPixelBuffer = downscaledPixelBuffer {
+            context.render(scaledImage, to: downscaledPixelBuffer)
+            
+            // Convert downscaled pixel buffer to Data
+            CVPixelBufferLockBaseAddress(downscaledPixelBuffer, .readOnly)
+            let baseAddress = CVPixelBufferGetBaseAddress(downscaledPixelBuffer)
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(downscaledPixelBuffer)
+            let height = CVPixelBufferGetHeight(downscaledPixelBuffer)
+            let data = Data(bytes: baseAddress!, count: bytesPerRow * height)
+            CVPixelBufferUnlockBaseAddress(downscaledPixelBuffer, .readOnly)
+
+            let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            
+            videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: videoWidth, height: videoHeight) { encryptedData in
+                if let encryptedData {
+                    print("Sending frame data of length: \(encryptedData.count) bytes")
+                    streamingService.sendVideoFrame(encryptedData)
+                } else {
+                    print("Failed to encrypt frame")
                 }
-            } else {
-                print("Failed to compress video frame")
             }
         }
     }
 }
 
-enum VideoCodecConfig {
-    static let width: Int32 = 1280
-    static let height: Int32 = 720
-    static let fps: Int32 = 30
-    static let bitRate: Int32 = 1_000_000 // 1 Mbps
-    static let keyframeInterval: Int32 = 60
-    static let pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-    static var compressionProperties: [String: Any] {
-        [
-            kVTCompressionPropertyKey_RealTime as String: kCFBooleanTrue!,
-            kVTCompressionPropertyKey_ProfileLevel as String: kVTProfileLevel_H264_Baseline_AutoLevel,
-            kVTCompressionPropertyKey_AverageBitRate as String: bitRate,
-            kVTCompressionPropertyKey_ExpectedFrameRate as String: fps,
-            kVTCompressionPropertyKey_MaxKeyFrameInterval as String: keyframeInterval,
-            kVTCompressionPropertyKey_AllowFrameReordering as String: kCFBooleanFalse!,
-            kVTCompressionPropertyKey_DataRateLimits as String: [bitRate / 8, 1] as CFArray,
-        ]
-    }
-
-    static var decompressionImageBufferAttributes: [String: Any] {
-        [
-            kCVPixelBufferPixelFormatTypeKey as String: pixelFormat,
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height,
-        ]
-    }
-}
 
 class StreamingService {
     private let webSocketManager: WebSocketManager
@@ -226,152 +210,14 @@ class StreamingService {
     }
 
     func sendVideoFrame(_ encryptedBuffer: Data) {
+        print("Sending frame data of length: \(encryptedBuffer.count) bytes")
+        print("Sending first 32 bytes of frame data: \(encryptedBuffer.prefix(32).hexEncodedString())")
         let natsMessage = NATSMessage(payload: encryptedBuffer)
         let messageData = natsMessage.toData()
 
         webSocketManager.sendCustomMessage(messageData) { error in
             if let error {
                 print("Error sending video frame: \(error)")
-            }
-        }
-    }
-}
-
-class VideoCompressor {
-    private var compressionSession: VTCompressionSession?
-    private let compressionQueue = DispatchQueue(label: "com.videocompressor.compression")
-    private var sps: Data?
-    private var pps: Data?
-
-    func setupCompression() {
-        VTCompressionSessionCreate(
-            allocator: nil,
-            width: VideoCodecConfig.width,
-            height: VideoCodecConfig.height,
-            codecType: kCMVideoCodecType_H264,
-            encoderSpecification: nil,
-            imageBufferAttributes: nil,
-            compressedDataAllocator: nil,
-            outputCallback: nil,
-            refcon: nil,
-            compressionSessionOut: &compressionSession
-        )
-        guard let compressionSession else {
-            print("Failed to create compression session")
-            return
-        }
-        // Configure compression settings
-        for (key, value) in VideoCodecConfig.compressionProperties {
-            VTSessionSetProperty(compressionSession, key: key as CFString, value: value as CFTypeRef)
-        }
-        // Start the compression session
-        VTCompressionSessionPrepareToEncodeFrames(compressionSession)
-    }
-
-    func compressFrame(_ pixelBuffer: CVPixelBuffer, presentationTimeStamp: CMTime, duration: CMTime, completion: @escaping (Data?) -> Void) {
-        guard let compressionSession else {
-            print("Compression session is nil")
-            completion(nil)
-            return
-        }
-        var flags: VTEncodeInfoFlags = []
-        compressionQueue.async {
-            VTCompressionSessionEncodeFrame(
-                compressionSession,
-                imageBuffer: pixelBuffer,
-                presentationTimeStamp: presentationTimeStamp,
-                duration: duration,
-                frameProperties: nil,
-                infoFlagsOut: &flags,
-                outputHandler: { [weak self] status, infoFlags, sampleBuffer in
-                    guard let self else { return }
-                    if status == noErr, let sampleBuffer {
-                        handleCompressedFrame(sampleBuffer: sampleBuffer, infoFlags: infoFlags, completion: completion)
-                    } else {
-                        print("Error compressing frame: \(status)")
-                        DispatchQueue.main.async {
-                            completion(nil)
-                        }
-                    }
-                }
-            )
-        }
-    }
-
-    private func handleCompressedFrame(sampleBuffer: CMSampleBuffer, infoFlags _: VTEncodeInfoFlags, completion: @escaping (Data?) -> Void) {
-        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true) as? [[CFString: Any]],
-              let dataBuffer = sampleBuffer.dataBuffer
-        else {
-            print("Failed to get sample attachments or data buffer")
-            DispatchQueue.main.async {
-                completion(nil)
-            }
-            return
-        }
-
-        let isKeyFrame = !(attachments[0][kCMSampleAttachmentKey_DependsOnOthers] as? Bool ?? true)
-        if isKeyFrame {
-            print("Key frame")
-            // For key frames, we need to include SPS and PPS
-            if let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
-                var parameterSetCount = 0
-                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDescription,
-                                                                   parameterSetIndex: 0,
-                                                                   parameterSetPointerOut: nil,
-                                                                   parameterSetSizeOut: nil,
-                                                                   parameterSetCountOut: &parameterSetCount,
-                                                                   nalUnitHeaderLengthOut: nil)
-
-                if parameterSetCount > 0 {
-                    var parameterSetPointers: [UnsafePointer<UInt8>?] = Array(repeating: nil, count: 2)
-                    var parameterSetSizes: [Int] = Array(repeating: 0, count: 2)
-
-                    for i in 0 ..< min(2, parameterSetCount) {
-                        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDescription,
-                                                                           parameterSetIndex: i,
-                                                                           parameterSetPointerOut: &parameterSetPointers[i],
-                                                                           parameterSetSizeOut: &parameterSetSizes[i],
-                                                                           parameterSetCountOut: nil,
-                                                                           nalUnitHeaderLengthOut: nil)
-                    }
-
-                    if parameterSetCount > 0, let spsPointer = parameterSetPointers[0] {
-                        sps = Data(bytes: spsPointer, count: parameterSetSizes[0])
-                    }
-                    if parameterSetCount > 1, let ppsPointer = parameterSetPointers[1] {
-                        pps = Data(bytes: ppsPointer, count: parameterSetSizes[1])
-                    }
-                    print("SPS: \(String(describing: sps)) PPS: \(String(describing: pps))")
-                }
-            }
-        }
-
-        var totalLength = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        let result = CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &totalLength, dataPointerOut: &dataPointer)
-
-        if result == kCMBlockBufferNoErr, let dataPointer {
-            var finalData = Data()
-
-            // Add SPS and PPS for key frames
-            if isKeyFrame, let sps, let pps {
-                finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
-                finalData.append(sps)
-                finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
-                finalData.append(pps)
-            }
-
-            // Add the frame data
-            finalData.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
-            finalData.append(Data(bytes: dataPointer, count: totalLength))
-
-            DispatchQueue.main.async {
-                completion(finalData)
-            }
-        } else {
-            print("Error getting compressed data: \(result)")
-            DispatchQueue.main.async {
-                completion(nil)
             }
         }
     }
@@ -385,10 +231,8 @@ class VideoEncryptor {
         encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
     }
 
-    func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int32, height _: Int32, completion: @escaping (Data?) -> Void) {
+    func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) {
 //        print("Encrypting frame")
-        print("Sending frame data of length: \(compressedData.count) bytes")
-        print("Sending first 32 bytes of frame data: \(compressedData.prefix(32).hexEncodedString())")
         do {
             let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
             // Prepend timestamp to encrypted data
@@ -421,7 +265,6 @@ class EncryptionSession {
         guard let kasPublicKey else {
             throw EncryptionError.missingKasPublicKey
         }
-
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 
@@ -443,177 +286,50 @@ enum EncryptionError: Error {
 }
 
 class VideoDecoder {
-    private var decompressionSession: VTDecompressionSession?
-    private let decompressionQueue = DispatchQueue(label: "com.videodecoder.decompression")
-    private var formatDescription: CMVideoFormatDescription?
-    private var extractedSPS: Data?
-    private var extractedPPS: Data?
+    private var videoWidth = 320
+    private var videoHeight = 240
+    func decodeFrame(_ frameData: Data, completion: @escaping (UIImage?) -> Void) {
+        let bytesPerRow = videoWidth * 4 // Assuming 32-bit RGBA format
 
-    init() {
-        setupFormatDescription()
-    }
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
 
-    private func setupFormatDescription() {
-        let parameters = [
-            kCVPixelBufferWidthKey: VideoCodecConfig.width,
-            kCVPixelBufferHeightKey: VideoCodecConfig.height,
-            kCVPixelBufferPixelFormatTypeKey: VideoCodecConfig.pixelFormat,
-        ] as [String: Any]
+        guard let context = CGContext(data: nil,
+                                      width: videoWidth,
+                                      height: videoHeight,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow,
+                                      space: colorSpace,
+                                      bitmapInfo: bitmapInfo.rawValue) else {
+            print("Failed to create CGContext")
+            completion(nil)
+            return
+        }
 
-        let status = CMVideoFormatDescriptionCreate(
-            allocator: kCFAllocatorDefault,
-            codecType: kCMVideoCodecType_H264,
-            width: VideoCodecConfig.width,
-            height: VideoCodecConfig.height,
-            extensions: parameters as CFDictionary,
-            formatDescriptionOut: &formatDescription
-        )
+        frameData.withUnsafeBytes { bufferPointer in
+            guard let baseAddress = bufferPointer.baseAddress else {
+                completion(nil)
+                return
+            }
+            context.data?.copyMemory(from: baseAddress, byteCount: frameData.count)
+        }
 
-        if status != noErr {
-            print("Failed to create format description. Status: \(status)")
+        if let cgImage = context.makeImage() {
+            let image = UIImage(cgImage: cgImage)
+            completion(image)
         } else {
-            print("Format description created successfully")
+            print("Failed to create CGImage")
+            completion(nil)
         }
     }
-
-    func setupDecompressionSession() {
-        guard let formatDescription else {
-            print("Format description is not available")
-            return
-        }
-
-        var callbacks = VTDecompressionOutputCallbackRecord(
-            decompressionOutputCallback: { (decompressionOutputRefCon: UnsafeMutableRawPointer?, _: UnsafeMutableRawPointer?, status: OSStatus, _: VTDecodeInfoFlags, imageBuffer: CVImageBuffer?, _: CMTime, _: CMTime) in
-                let decoder = Unmanaged<VideoDecoder>.fromOpaque(decompressionOutputRefCon!).takeUnretainedValue()
-                decoder.handleDecompressedFrame(status: status, imageBuffer: imageBuffer, completion: nil)
-            },
-            decompressionOutputRefCon: Unmanaged.passUnretained(self).toOpaque()
-        )
-
-        let decoderSpecification: [String: Any] = [:]
-        let imageBufferAttributes = VideoCodecConfig.decompressionImageBufferAttributes
-
-        var session: VTDecompressionSession?
-        let status = VTDecompressionSessionCreate(
-            allocator: kCFAllocatorDefault,
-            formatDescription: formatDescription,
-            decoderSpecification: decoderSpecification as CFDictionary,
-            imageBufferAttributes: imageBufferAttributes as CFDictionary,
-            outputCallback: &callbacks,
-            decompressionSessionOut: &session
-        )
-
-        if status != noErr {
-            print("Failed to create decompression session. Status: \(status)")
-        }
-
-        decompressionSession = session
-    }
-
-    func decodeFrame(_ frameData: Data, completion _: @escaping (UIImage?) -> Void) {
-        print("Received frame data of length: \(frameData.count) bytes")
-        print("First 32 bytes of frame data: \(frameData.prefix(32).hexEncodedString())")
-        // If we haven't set up the decompression session yet, try to extract parameter sets and set it up
-        if decompressionSession == nil {
-            setupDecompressionSession()
-        }
-        decompressionQueue.async { [weak self] in
-            guard let self, let decompressionSession else {
-                print("Decompression session is nil")
-                return
-            }
-
-            var blockBuffer: CMBlockBuffer?
-            var sampleBuffer: CMSampleBuffer?
-
-            let result = CMBlockBufferCreateWithMemoryBlock(
-                allocator: kCFAllocatorDefault,
-                memoryBlock: nil,
-                blockLength: frameData.count,
-                blockAllocator: nil,
-                customBlockSource: nil,
-                offsetToData: 0,
-                dataLength: frameData.count,
-                flags: 0,
-                blockBufferOut: &blockBuffer
-            )
-
-            guard result == kCMBlockBufferNoErr, let blockBuffer else {
-                print("Failed to create block buffer")
-                return
-            }
-
-            frameData.withUnsafeBytes { (bufferPointer: UnsafeRawBufferPointer) in
-                guard let baseAddress = bufferPointer.baseAddress else { return }
-                CMBlockBufferReplaceDataBytes(with: baseAddress, blockBuffer: blockBuffer, offsetIntoDestination: 0, dataLength: frameData.count)
-            }
-
-            var timingInfo = CMSampleTimingInfo(duration: CMTime.invalid, presentationTimeStamp: CMTime.invalid, decodeTimeStamp: CMTime.invalid)
-            var sampleSize = frameData.count
-
-            guard let formatDescription else {
-                print("Format description is nil")
-                return
-            }
-
-            let sampleBufferStatus = CMSampleBufferCreateReady(
-                allocator: kCFAllocatorDefault,
-                dataBuffer: blockBuffer,
-                formatDescription: formatDescription,
-                sampleCount: 1,
-                sampleTimingEntryCount: 1,
-                sampleTimingArray: &timingInfo,
-                sampleSizeEntryCount: 1,
-                sampleSizeArray: &sampleSize,
-                sampleBufferOut: &sampleBuffer
-            )
-
-            guard sampleBufferStatus == noErr, let sampleBuffer else {
-                print("Failed to create sample buffer")
-                return
-            }
-
-            var flagOut = VTDecodeInfoFlags()
-            let decodeStatus = VTDecompressionSessionDecodeFrame(
-                decompressionSession,
-                sampleBuffer: sampleBuffer,
-                flags: [._1xRealTimePlayback],
-                frameRefcon: nil,
-                infoFlagsOut: &flagOut
-            )
-
-            if decodeStatus != noErr {
-                print("Failed to decode frame: \(decodeStatus)")
-            }
-        }
-    }
-
-    private func handleDecompressedFrame(status: OSStatus, imageBuffer: CVImageBuffer?, completion: ((UIImage?) -> Void)?) {
-        guard status == noErr, let imageBuffer else {
-            print("Decompression failed with status: \(status)")
-            completion?(nil)
-            return
-        }
-
-        let ciImage = CIImage(cvImageBuffer: imageBuffer)
-        let context = CIContext(options: nil)
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
-            print("Failed to create CGImage from CIImage")
-            completion?(nil)
-            return
-        }
-
-        let image = UIImage(cgImage: cgImage)
-        completion?(image)
-    }
-}
-
-extension Notification.Name {
-    static let decodedFrameReady = Notification.Name("decodedFrameReady")
 }
 
 extension Data {
     func hexEncodedString() -> String {
         map { String(format: "%02hhx", $0) }.joined()
     }
+}
+
+extension Notification.Name {
+    static let decodedFrameReady = Notification.Name("decodedFrameReady")
 }
