@@ -33,7 +33,9 @@ struct ArkavoView: View {
     // ThoughtStream
     @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // video
-    @StateObject private var videoStreamViewModel = VideoStreamViewModel()
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        @StateObject private var videoStreamViewModel = VideoStreamViewModel()
+    #endif
     // demo
     @State private var showCityInfoOverlay = false
     @State private var cities: [City] = []
@@ -102,7 +104,9 @@ struct ArkavoView: View {
                         )
                     }
                 case .video:
-                    VideoStreamView(viewModel: videoStreamViewModel)
+                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                        VideoStreamView(viewModel: videoStreamViewModel)
+                    #endif
                 case .streams:
                     StreamManagementView(accountManager: accountManager)
                 }
@@ -127,9 +131,11 @@ struct ArkavoView: View {
                                     Button("My Streams") {
                                         selectedView = .streams
                                     }
-                                    Button("Video") {
-                                        selectedView = .video
-                                    }
+                                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                                        Button("Video") {
+                                            selectedView = .video
+                                        }
+                                    #endif
                                     Button("Engage!") {
                                         selectedView = .wordCloud
                                     }
@@ -320,11 +326,13 @@ struct ArkavoView: View {
             kasPublicKey: $kasPublicKey
         )
         // Initialize VideoSteamViewModel
-        videoStreamViewModel.initialize(
-            webSocketManager: webSocketManager,
-            nanoTDFManager: nanoTDFManager,
-            kasPublicKey: $kasPublicKey
-        )
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+            videoStreamViewModel.initialize(
+                webSocketManager: webSocketManager,
+                nanoTDFManager: nanoTDFManager,
+                kasPublicKey: $kasPublicKey
+            )
+        #endif
         if !profiles.isEmpty {
             if accountManager.account.profile == nil {
                 accountManager.account.profile = profiles.first
@@ -412,10 +420,12 @@ struct ArkavoView: View {
                         }
                     }
                 } else {
-                    // If it's neither a Thought nor a City, assume it's a video frame
-                    DispatchQueue.main.async {
-                        videoStreamViewModel.receiveVideoFrame(payload)
-                    }
+                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                        // If it's neither a Thought nor a City, assume it's a video frame
+                        DispatchQueue.main.async {
+                            videoStreamViewModel.receiveVideoFrame(payload)
+                        }
+                    #endif
                 }
             } catch {
                 print("Unexpected error during nanoTDF decryption: \(error)")
