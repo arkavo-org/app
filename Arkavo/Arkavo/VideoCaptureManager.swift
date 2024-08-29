@@ -191,7 +191,6 @@ class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             
             videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: videoWidth, height: videoHeight) { encryptedData in
                 if let encryptedData {
-                    print("Sending frame data of length: \(encryptedData.count) bytes")
                     streamingService.sendVideoFrame(encryptedData)
                 } else {
                     print("Failed to encrypt frame")
@@ -211,7 +210,7 @@ class StreamingService {
 
     func sendVideoFrame(_ encryptedBuffer: Data) {
         print("Sending frame data of length: \(encryptedBuffer.count) bytes")
-        print("Sending first 32 bytes of frame data: \(encryptedBuffer.prefix(32).hexEncodedString())")
+//        print("Sending first 32 bytes of frame data: \(encryptedBuffer.prefix(32).hexEncodedString())")
         let natsMessage = NATSMessage(payload: encryptedBuffer)
         let messageData = natsMessage.toData()
 
@@ -235,15 +234,6 @@ class VideoEncryptor {
 //        print("Encrypting frame")
         do {
             let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
-            // Prepend timestamp to encrypted data
-//            var timestampBytes = timestamp.value.bigEndian
-//            encryptedData.insert(contentsOf: Data(bytes: &timestampBytes, count: MemoryLayout<Int64>.size), at: 0)
-            // Prepend width and height to encrypted data
-//            var widthBytes = width.bigEndian
-//            var heightBytes = height.bigEndian
-//            encryptedData.insert(contentsOf: Data(bytes: &heightBytes, count: MemoryLayout<Int32>.size), at: 0)
-//            encryptedData.insert(contentsOf: Data(bytes: &widthBytes, count: MemoryLayout<Int32>.size), at: 0)
-//            print("Frame encrypted successfully. Encrypted size: \(encryptedData.count)")
             completion(nanoTDFBytes)
         } catch {
             print("Error encrypting video frame: \(error)")
@@ -274,8 +264,7 @@ class EncryptionSession {
 
         // Increment IV for each frame
         iv += 1
-        let ivData = withUnsafeBytes(of: iv.bigEndian) { Data($0) }
-        // FIXME: pass int , iv: ivData
+        // FIXME: pass int , iv: iv
         let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: input)
         return nanoTDF.toData()
     }
