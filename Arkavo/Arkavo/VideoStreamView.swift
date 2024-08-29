@@ -216,26 +216,6 @@
                         .foregroundColor(.secondary)
                         .font(.caption)
                 }
-
-                if videoCaptureManager.isStreaming {
-                    VStack {
-                        HStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 6, height: 6)
-                            Text("Live")
-                                .foregroundColor(.white)
-                                .font(.system(size: 8))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.8))
-                                .cornerRadius(2)
-                        }
-                        .padding(4)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
         }
     }
