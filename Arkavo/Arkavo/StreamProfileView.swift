@@ -1,5 +1,8 @@
 import SwiftUI
 
+
+// MARK: - CompactStreamProfileView
+
 struct CompactStreamProfileView: View {
     @ObservedObject var viewModel: StreamProfileViewModel
 
@@ -14,6 +17,8 @@ struct CompactStreamProfileView: View {
         .padding(.vertical, 8)
     }
 }
+
+// MARK: - DetailedStreamProfileView
 
 struct DetailedStreamProfileView: View {
     @ObservedObject var viewModel: StreamProfileViewModel
@@ -40,6 +45,8 @@ struct DetailedStreamProfileView: View {
     }
 }
 
+// MARK: - StreamProfileViewModel
+
 class StreamProfileViewModel: ObservableObject {
     @Published var profile: Profile
     @Published var participantCount: Int
@@ -49,6 +56,8 @@ class StreamProfileViewModel: ObservableObject {
         self.profile = profile
     }
 }
+
+// MARK: - CreateStreamProfileView
 
 struct CreateStreamProfileView: View {
     @Environment(\.dismiss) private var dismiss
@@ -60,21 +69,34 @@ struct CreateStreamProfileView: View {
             Form {
                 Section(header: Text("Profile Information")) {
                     TextField("Name", text: $viewModel.name)
+                        .padding(.leading, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
                     if !viewModel.nameError.isEmpty {
                         Text(viewModel.nameError).foregroundColor(.red)
                     }
 
                     TextField("Blurb", text: $viewModel.blurb)
+                        .padding(.leading, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
                     if !viewModel.blurbError.isEmpty {
                         Text(viewModel.blurbError).foregroundColor(.red)
                     }
                 }
+                .padding()
 
                 Section(header: Text("Stream Information")) {
-                    Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
-                    if !viewModel.participantCountError.isEmpty {
-                        Text(viewModel.participantCountError).foregroundColor(.red)
+                    HStack {
+                        Stepper("Participants: \(viewModel.participantCount)", value: $viewModel.participantCount, in: 2 ... 100)
+                            .padding(.leading, 20)
+                            .frame(maxWidth: .infinity, alignment: .leading) 
+                        
+                        if !viewModel.participantCountError.isEmpty {
+                            Text(viewModel.participantCountError).foregroundColor(.red)
+                        }
                     }
+
                 }
             }
             .navigationTitle("Create Stream")
@@ -100,6 +122,9 @@ struct CreateStreamProfileView: View {
         .onChange(of: viewModel.participantCount) { viewModel.validateParticipantCount() }
     }
 }
+
+
+// MARK: - CreateStreamProfileViewModel
 
 class CreateStreamProfileViewModel: ObservableObject {
     @Published var name: String = ""

@@ -8,18 +8,39 @@ struct StreamManagementView: View {
     @State private var streams: [Stream] = []
 
     var body: some View {
-        List {
-            Section(header: Text("My Streams")) {
-                ForEach(streams) { stream in
-                    CompactStreamProfileView(viewModel: StreamProfileViewModel(profile: stream.profile, participantCount: 2))
-                }
-            }
+        VStack {
+              HStack {
+                  Spacer()
+                  
+                  Text("My Streams")
+                    .font(.title)
+                    .padding(.leading, 50)
+                  
+                  Spacer()
 
-            Button("Create New Stream") {
-                showingCreateStream = true
-            }
-        }
-        .navigationTitle("My Streams")
+                Button(action: {
+                    showingCreateStream = true
+                }, label: {
+                    Image(systemName: "plus")
+                        .font(.title)
+                })
+                .padding(.trailing, 20)
+                  
+
+            } //: HStack
+            
+            List {
+ 
+                    ForEach(streams) { stream in
+                        CompactStreamProfileView(viewModel: StreamProfileViewModel(profile: stream.profile, participantCount: 2))
+                    }
+
+            } //: LIST
+            
+            Spacer()
+            
+        } //: VStack
+        .padding(.top, 100)
         .sheet(isPresented: $showingCreateStream) {
             CreateStreamProfileView { profile, _ in
                 let newStream = Stream(name: profile.name, ownerID: accountManager.account.id, profile: profile)

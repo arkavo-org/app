@@ -1,10 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct AccountProfileCompactView: View {
     @ObservedObject var viewModel: AccountProfileViewModel
 
     var body: some View {
         HStack {
+            
             Text(viewModel.profile.name)
                 .font(.headline)
             Spacer()
@@ -18,8 +20,28 @@ struct AccountProfileCompactView: View {
 
 struct AccountProfileDetailedView: View {
     @ObservedObject var viewModel: AccountProfileViewModel
+    @Environment(\.dismiss) private var dismiss
+    
 
     var body: some View {
+        Spacer()
+        
+        HStack {
+            Spacer()
+            
+            Text("View Profile")
+                .font(.title3)
+                
+            Spacer()
+            
+            Button(action: {
+                dismiss()
+            }, label: {
+                Image(systemName: "xmark.circle")
+                  .font(.system(size: 20, weight: .light))
+            })
+
+        }
         Form {
             Section(header: Text("Profile Information")) {
                 Text("Name: \(viewModel.profile.name)")
@@ -40,12 +62,33 @@ struct AccountProfileDetailedView: View {
 struct AccountProfileCreateView: View {
     @StateObject var viewModel = AccountProfileCreateViewModel()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) var modelContext
     var onSave: (Profile) -> Void
 
     var body: some View {
+        Spacer()
+        
+        HStack {
+            Spacer()
+            
+            Text("Create Profile")
+                .font(.title3)
+                
+            Spacer()
+            
+            Button(action: {
+                dismiss()
+            }, label: {
+                Image(systemName: "xmark.circle")
+                  .font(.system(size: 20, weight: .light))
+            })
+
+        }
+        
         Form {
             Section(header: Text("Profile Information")) {
                 TextField("Name", text: $viewModel.name)
+                    .padding()
                 if let nameError = viewModel.nameError {
                     Text(nameError).foregroundColor(.red)
                 }
@@ -57,10 +100,11 @@ struct AccountProfileCreateView: View {
             }
 
             Button("Create Profile") {
-                if let profile = viewModel.createProfile() {
-                    onSave(profile)
+                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
+                    modelContext.insert(profile)
+                   onSave(profile)
                     dismiss()
-                }
+                
             }
             .disabled(!viewModel.isValid)
         }
