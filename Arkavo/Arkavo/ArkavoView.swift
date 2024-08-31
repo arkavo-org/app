@@ -8,6 +8,8 @@ import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
+    // MARK: - PROPERTIES
+    
     @Environment(\.modelContext) private var modelContext
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
@@ -51,8 +53,15 @@ struct ArkavoView: View {
         case wordCloud
         case streams
     }
+    
+    
+    // MARK: - BODY
 
     var body: some View {
+        
+
+#if os(macOS)
+        // MARK: - MacOS
         ZStack {
             ZStack {
                 switch selectedView {
@@ -80,6 +89,8 @@ struct ArkavoView: View {
                     StreamManagementView(accountManager: accountManager)
                 }
                 VStack {
+                    Spacer()
+
                     HStack {
                         Spacer()
                         Menu {
@@ -200,6 +211,140 @@ struct ArkavoView: View {
             .ignoresSafeArea(edges: .all)
         }
         .onAppear(perform: initialSetup)
+#else
+        // MARK: - iOS
+        
+        NavigationStack {
+            ZStack {
+                switch selectedView {
+                case .map:
+                    mapContent
+                        .sheet(isPresented: $showingProfileCreation) {
+                            AccountProfileCreateView { newProfile in
+                                accountManager.account.profile = newProfile
+                                thoughtStreamViewModel.profile = newProfile
+                                do {
+                                    try modelContext.save()
+                                } catch {
+                                    print("Failed to save profile: \(error)")
+                                }
+                            }
+                        }
+                        .sheet(isPresented: $showingProfileDetails) {
+                            if let profile = accountManager.account.profile {
+                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                            }
+                        }
+                case .wordCloud:
+                    WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
+                case .streams:
+                    StreamManagementView(accountManager: accountManager)
+                }
+                VStack {
+                    if showMap {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 1.0)) {
+                                        cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 30, longitude: 0), distance: 400_000, heading: 0, pitch: 0))
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                        withAnimation(.smooth(duration: 0.5)) {
+                                            showMap = false
+                                        }
+                                    }
+                                }) {
+                                    if accountManager.account.profile != nil {
+                                        Text("Engage!")
+                                            .padding()
+                                            .background(Color.blue)
+                                            .foregroundColor(.white)
+                                            .cornerRadius(10)
+                                    }
+                                }
+                                .padding()
+                            }
+                        }
+                    }
+                } //: VSTACK
+               
+                .navigationBarTitle("", displayMode: .inline)
+                .toolbar {
+                   ToolbarItem(placement: .navigationBarTrailing) {
+                       Menu {
+                           Section("Navigation") {
+                               Button("Map") {
+                                   selectedView = .map
+                               }
+                               Button("My Streams") {
+                                   selectedView = .streams
+                               }
+                               Button("Engage!") {
+                                   selectedView = .wordCloud
+                               }
+                           }
+                           Section("Account") {
+                               Picker("", selection: $selectedAccountIndex) {
+                                   ForEach(0 ..< accountOptions.count, id: \.self) { index in
+                                       Text(accountOptions[index]).tag(index)
+                                   }
+                               }
+                               .pickerStyle(SegmentedPickerStyle())
+                               .onChange(of: selectedAccountIndex) { oldValue, newValue in
+                                   print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
+                                   amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
+                                   resetWebSocketManager()
+                               }
+                               if accountManager.account.profile == nil {
+                                   Button("Create Profile") {
+                                       showingProfileCreation = true
+                                   }
+                               } else {
+                                   Button("View Profile") {
+                                       showingProfileDetails = true
+                                   }
+                               }
+                           }
+                           Section("Authentication") {
+                               Button("Sign Up") {
+                                   amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                               }
+                               Button("Sign In") {
+                                   amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                               }
+                           }
+
+                           Section("Demo") {
+                               if !showMap {
+                                   Button("Map", action: {
+                                       showMap = true
+                                       cameraPosition = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0), distance: 40_000_000, heading: 0, pitch: 0))
+                                   })
+                               }
+                               Button("Prepare", action: loadGeoJSON)
+                               Button("Nano", action: createNanoCities)
+                               Button("Send", action: sendCities)
+                               Button("Add", action: loadRandomCities)
+                           }
+                       } label: {
+                           Label("Menu", systemImage: "line.3.horizontal")
+                               .font(.largeTitle)
+                               .foregroundStyle(Color.white)
+                       }
+                   }
+               }
+
+            } //: ZSTACK
+
+            .ignoresSafeArea(edges: .all)
+            .toolbarBackground(.hidden, for: .navigationBar)
+
+        } //: NAVIGATION STACK
+        .onAppear(perform: initialSetup)
+        
+#endif
     }
 
     private var mapContent: some View {
@@ -645,7 +790,7 @@ struct AnnotationItem: Identifiable {
     let isCluster: Bool
 }
 
-extension WebSocketConnectionState: CustomStringConvertible {
+extension WebSocketConnectionState: @retroactive CustomStringConvertible {
     public var description: String {
         switch self {
         case .disconnected: "Disconnected"
