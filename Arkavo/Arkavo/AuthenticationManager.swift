@@ -27,6 +27,8 @@ class AuthenticationManagerViewModel: ObservableObject {
 }
 
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    let signingKeyAppTag: String = "net.arkavo.Arkavo.signingKey"
+    let accessGroup = "net.arkavo.Arkavo"
     @Published var currentAccount: String?
     private let baseURL: URL
     private let relyingPartyIdentifier: String
@@ -314,6 +316,23 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Client data JSON: \(clientDataJSONString)")
             print("Extracted challenge: \(challenge)")
         }
+        // signing key
+        // Create and store the EC signing key
+        guard let signingKey = createAndStoreECSigningKey() else {
+            print("Failed to create signing key")
+            return
+        }
+        // Extract the public key from the signing key
+        guard let publicKey = SecKeyCopyPublicKey(signingKey) else {
+            print("Failed to get public key from signing key")
+            return
+        }
+        // Convert public key to raw data
+        var error: Unmanaged<CFError>?
+        guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            print("Error getting public key data: \(error!.takeRetainedValue() as Error)")
+            return
+        }
         let parameters: [String: Any] = [
             "id": credential.credentialID.base64URLEncodedString(),
             "rawId": credential.credentialID.base64URLEncodedString(),
@@ -322,7 +341,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 "attestationObject": credential.rawAttestationObject!.base64URLEncodedString(),
             ],
             "type": "public-key",
-            "extensions": [:], // Add any extensions if needed
+            "extensions": [
+                "signingPublicKey": publicKeyData.base64URLEncodedString(),
+            ],
         ]
 
         do {
@@ -358,6 +379,13 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 do {
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         print("Parsed JSON response: \(jsonResult)")
+                        // TODO: get signed account from extensions.largeBlob
+                        let extensions = jsonResult["extensions"] as? [String: Any]
+                        let largeBlob = extensions?["largeBlob"] as? String
+                        // Store account information in keychain
+                        let accountName = jsonResult["rawId"] as? String
+                        self.storeAccountInKeychain(accountName: accountName!, account: largeBlob!)
+
                         // Handle successful registration here
                         DispatchQueue.main.async {
                             self.currentAccount = jsonResult["username"] as? String
@@ -366,7 +394,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     }
                 } catch {
                     // currently empty
-                    // print("Failed to parse JSON data. Error: \(error)")
+                    print("Failed to parse Registration response JSON data. Error: \(error)")
                 }
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")
@@ -427,6 +455,22 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     func updateAccount(_ newAccount: String) {
         currentAccount = newAccount
     }
+
+    private func storeAccountInKeychain(accountName: String, account _: String) {
+        let account = accountName.data(using: .utf8)!
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrAccount as String: accountName,
+            kSecValueData as String: account,
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecSuccess {
+            print("Account information stored in keychain")
+        } else {
+            print("Failed to store account information in keychain")
+        }
+    }
 }
 
 struct AuthenticationOptionsResponse: Decodable {
@@ -467,5 +511,104 @@ extension String {
             base64.append(String(repeating: "=", count: 4 - base64.count % 4))
         }
         return base64
+    }
+}
+
+import Security
+
+extension AuthenticationManager {
+    func createAndStoreECSigningKey() -> SecKey? {
+        let accessControl = SecAccessControlCreateWithFlags(nil,
+                                                            kSecAttrAccessibleWhenUnlocked,
+                                                            [],
+                                                            nil)
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrApplicationTag as String: signingKeyAppTag,
+                kSecAttrLabel as String: "Arkavo Signing Key",
+                kSecAttrCanSign as String: true,
+                kSecAttrAccessControl as String: accessControl!,
+            ],
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+            print("Error generating private key: \(error!.takeRetainedValue() as Error)")
+            return nil
+        }
+
+        print("EC signing key created successfully")
+        return privateKey
+    }
+
+    func getStoredSigningKey() -> SecKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: signingKeyAppTag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecReturnRef as String: true,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        if status == errSecSuccess {
+            return (item as! SecKey)
+        } else {
+            print("Failed to retrieve signing key from keychain. Status: \(status)")
+            return nil
+        }
+    }
+
+    func signData(_ data: Data, with key: SecKey) -> Data? {
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(key,
+                                                    .ecdsaSignatureMessageX962SHA256,
+                                                    data as CFData,
+                                                    &error) as Data?
+        else {
+            print("Error creating signature: \(error!.takeRetainedValue() as Error)")
+            return nil
+        }
+        return signature
+    }
+
+    func inspectKeychain() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess {
+            if let items = result as? [[String: Any]] {
+                for (index, item) in items.enumerated() {
+                    print("Key \(index + 1):")
+                    if let tag = item[kSecAttrApplicationTag as String] as? Data,
+                       let tagString = String(data: tag, encoding: .utf8)
+                    {
+                        print("  Application Tag: \(tagString)")
+                    }
+                    if let label = item[kSecAttrLabel as String] as? String {
+                        print("  Label: \(label)")
+                    }
+                    print("  All Attributes: \(item)")
+                    print("--------------------")
+                }
+            }
+        } else {
+            print("Error querying keychain: \(status)")
+        }
     }
 }

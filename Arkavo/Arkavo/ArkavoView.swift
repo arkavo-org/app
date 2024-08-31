@@ -162,11 +162,15 @@ struct ArkavoView: View {
                                     }
                                 }
                                 Section("Authentication") {
-                                    Button("Sign Up") {
-                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                                    }
-                                    Button("Sign In") {
-                                        amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                    // FIXME: check Account not signing key or maybe both
+                                    if amViewModel.authenticationManager.getStoredSigningKey() == nil {
+                                        Button("Sign Up") {
+                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                        }
+                                    } else {
+                                        Button("Sign In") {
+                                            amViewModel.authenticationManager.signIn(accountName: accountOptions[0])
+                                        }
                                     }
                                 }
                                 Spacer()
