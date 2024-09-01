@@ -19,7 +19,8 @@ struct ArkavoView: View {
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     // authentication
-    @ObservedObject var amViewModel = AuthenticationManagerViewModel(baseURL: URL(string: "https://webauthn.arkavo.net")!)
+    @ObservedObject var amViewModel = AuthenticationManagerViewModel()
+    @State private var passkeyExists: Bool?
     // connection
     @State private var cancellables = Set<AnyCancellable>()
     @State private var isReconnecting = false
@@ -162,7 +163,6 @@ struct ArkavoView: View {
                                     }
                                 }
                                 Section("Authentication") {
-                                    // FIXME: check Account not signing key or maybe both
                                     if amViewModel.authenticationManager.getStoredSigningKey() == nil {
                                         Button("Sign Up") {
                                             amViewModel.authenticationManager.signUp(accountName: accountOptions[0])

@@ -21,21 +21,18 @@ import Foundation
 class AuthenticationManagerViewModel: ObservableObject {
     @Published var authenticationManager: AuthenticationManager
 
-    init(baseURL: URL) {
-        authenticationManager = AuthenticationManager(baseURL: baseURL)
+    init() {
+        authenticationManager = AuthenticationManager()
     }
 }
 
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    let signingKeyAppTag: String = "net.arkavo.Arkavo.signingKey"
-    let accessGroup = "net.arkavo.Arkavo"
+    private let signingKeyAppTag: String = "net.arkavo.Arkavo"
+    private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
     @Published var currentAccount: String?
-    private let baseURL: URL
-    private let relyingPartyIdentifier: String
+    private let baseURL = URL(string: "https://webauthn.arkavo.net")!
 
-    init(baseURL: URL) {
-        self.baseURL = baseURL
-        relyingPartyIdentifier = baseURL.host ?? "webauthn.arkavo.net"
+    override init() {
         super.init()
     }
 
@@ -162,7 +159,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Account name cannot be empty")
             return
         }
-        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "webauthn.arkavo.net")
+        inspectKeychain()
+        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
 
         authenticationOptions(accountName: accountName) { result in
             switch result {
@@ -525,7 +523,6 @@ extension AuthenticationManager {
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
-            kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true,
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
@@ -552,7 +549,6 @@ extension AuthenticationManager {
             kSecAttrApplicationTag as String: signingKeyAppTag,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecReturnRef as String: true,
-            kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true,
         ]
 
@@ -583,7 +579,7 @@ extension AuthenticationManager {
     func inspectKeychain() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrApplicationTag as String: signingKeyAppTag,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true,
         ]
