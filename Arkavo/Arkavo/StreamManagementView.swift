@@ -1,9 +1,10 @@
+import CryptoKit
 import SwiftData
 import SwiftUI
 
 struct StreamManagementView: View {
     @Environment(\.modelContext) private var modelContext
-    @ObservedObject var accountManager: AccountManager
+    @ObservedObject var accountManager: AccountViewModel
     @State private var showingCreateStream = false
     @State private var streams: [Stream] = []
 
@@ -44,8 +45,10 @@ struct StreamManagementView_Previews: PreviewProvider {
             .modelContainer(for: [Account.self, Profile.self], inMemory: true)
     }
 
-    static func mockAccountManager() -> AccountManager {
-        let accountManager = AccountManager()
+    static func mockAccountManager() -> AccountViewModel {
+        let account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
+                              derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+        let accountManager = AccountViewModel(account: account)
 
         // Create mock streams
         let profile1 = Profile(name: "Stream 1", blurb: "This is the first stream")

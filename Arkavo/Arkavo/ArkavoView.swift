@@ -18,15 +18,13 @@ struct ArkavoView: View {
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var mapUpdateTrigger = UUID()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
-    // authentication
-    @ObservedObject var amViewModel = AuthenticationManagerViewModel()
-    @State private var passkeyExists: Bool?
     // connection
     @State private var cancellables = Set<AnyCancellable>()
     @State private var isReconnecting = false
     @State private var hasInitialConnection = false
+    // authentication
+    @StateObject private var authnViewModel: AuthenticationViewModel
     // account
-    @StateObject private var accountManager = AccountManager()
     @State private var showingProfileCreation = false
     @State private var showingProfileDetails = false
     @State private var selectedAccountIndex = 0
@@ -51,6 +49,14 @@ struct ArkavoView: View {
     @State private var selectedView: SelectedView = .map
     @Query var profiles: [Profile] = []
 
+    init(container: ModelContainer) {
+        let context = ModelContext(container)
+        // FIXME: load from database
+        let account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
+                              derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+        _authnViewModel = StateObject(wrappedValue: AuthenticationViewModel(modelContext: context, account: account))
+    }
+
     enum SelectedView {
         case map
         case wordCloud
@@ -66,7 +72,7 @@ struct ArkavoView: View {
                     mapContent
                         .sheet(isPresented: $showingProfileCreation) {
                             AccountProfileCreateView { newProfile in
-                                accountManager.account.profile = newProfile
+                                authnViewModel.account.profile = newProfile
                                 thoughtStreamViewModel.profile = newProfile
                                 do {
                                     try modelContext.save()
@@ -76,13 +82,13 @@ struct ArkavoView: View {
                             }
                         }
                         .sheet(isPresented: $showingProfileDetails) {
-                            if let profile = accountManager.account.profile {
+                            if let profile = authnViewModel.account.profile {
                                 AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
                             }
                         }
                 case .wordCloud:
-                    if !accountManager.account.streams.isEmpty {
-                        let words: [(String, CGFloat)] = accountManager.account.streams.map { ($0.name, 40) }
+                    if !authnViewModel.account.streams.isEmpty {
+                        let words: [(String, CGFloat)] = authnViewModel.account.streams.map { ($0.name, 40) }
                         WordCloudView(
                             viewModel: WordCloudViewModel(
                                 thoughtStreamViewModel: thoughtStreamViewModel,
@@ -109,6 +115,7 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
+                    let accountManager = AccountViewModel(account: authnViewModel.account)
                     StreamManagementView(accountManager: accountManager)
                 }
                 VStack {
@@ -142,37 +149,31 @@ struct ArkavoView: View {
                                     }
                                 }
                                 Section("Account") {
-                                    Picker(accountOptions[selectedAccountIndex], selection: $selectedAccountIndex) {
-                                        ForEach(0 ..< accountOptions.count, id: \.self) { index in
-                                            Text(accountOptions[index]).tag(index)
+                                    if let attestationEnvelope = authnViewModel.account.attestationEnvelope {
+                                        VStack(alignment: .leading) {
+                                            Text("ID: \(attestationEnvelope.payload.userUniqueId)")
                                         }
-                                    }
-                                    .onChange(of: selectedAccountIndex) { oldValue, newValue in
-                                        print("Account changed from \(accountOptions[oldValue]) to \(accountOptions[newValue])")
-                                        amViewModel.authenticationManager.updateAccount(accountOptions[newValue])
-                                        resetWebSocketManager()
-                                    }
-                                    if accountManager.account.profile == nil {
-                                        Button("Create Profile") {
-                                            showingProfileCreation = true
-                                        }
-                                    } else {
-                                        Button("View Profile") {
-                                            showingProfileDetails = true
-                                        }
-                                    }
-                                }
-                                Section("Authentication") {
-                                    if amViewModel.authenticationManager.getStoredSigningKey() == nil {
-                                        Button("Sign Up") {
-                                            amViewModel.authenticationManager.signUp(accountName: accountOptions[0])
-                                        }
-                                    } else {
                                         Button("Sign In") {
-                                            amViewModel.authenticationManager.signIn(accountName: accountOptions[0])
+                                            authnViewModel.authenticationManager.signIn(accountName: accountOptions[0])
+                                        }
+                                        if let profile = authnViewModel.account.profile {
+                                            VStack(alignment: .leading) {
+                                                Button("View Profile") {
+                                                    showingProfileDetails = true
+                                                }
+                                            }
+                                        } else {
+                                            Button("Create Profile") {
+                                                showingProfileCreation = true
+                                            }
+                                        }
+                                    } else {
+                                        Button("Sign Up") {
+                                            authnViewModel.authenticationManager.signUp(accountName: accountOptions[0])
                                         }
                                     }
                                 }
+                                Section("Authentication") {}
                                 Spacer()
                                 Section("Demo") {
                                     Button("Prepare", action: loadGeoJSON)
@@ -319,8 +320,8 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        accountManager.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-        amViewModel.authenticationManager.updateAccount(accountOptions[0])
+        authnViewModel.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+        authnViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
         // Initialize ThoughtStreamViewModel
@@ -338,8 +339,8 @@ struct ArkavoView: View {
             )
         #endif
         if !profiles.isEmpty {
-            if accountManager.account.profile == nil {
-                accountManager.account.profile = profiles.first
+            if authnViewModel.account.profile == nil {
+                authnViewModel.account.profile = profiles.first
                 thoughtStreamViewModel.profile = profiles.first
             }
         }
@@ -374,7 +375,7 @@ struct ArkavoView: View {
                 }
             }
             .store(in: &cancellables)
-        let token = amViewModel.authenticationManager.createJWT()
+        let token = authnViewModel.authenticationManager.createJWT()
         if token != nil {
             webSocketManager.setupWebSocket(token: token!)
         } else {
@@ -551,10 +552,6 @@ struct ArkavoView: View {
     }
 }
 
-#Preview {
-    ArkavoView()
-}
-
 class NanoTDFManager: ObservableObject {
     private var nanoTDFs: [Data: NanoTDF] = [:]
     @Published private(set) var count: Int = 0
@@ -685,11 +682,21 @@ struct AnnotationItem: Identifiable {
     let isCluster: Bool
 }
 
-class AccountManager: ObservableObject {
+@available(*, deprecated, message: "AccountViewModel is deprecated. Please use AuthenticationManagerViewModel instead.")
+class AccountViewModel: ObservableObject {
     @Published var account: Account
 
-    init() {
-        account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
-                          derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
+    init(account: Account) {
+        self.account = account
+    }
+}
+
+class AuthenticationViewModel: ObservableObject {
+    @Published var authenticationManager: AuthenticationManager
+    @Published var account: Account
+
+    init(modelContext: ModelContext, account: Account) {
+        self.account = account
+        authenticationManager = AuthenticationManager(modelContext: modelContext, account: account)
     }
 }

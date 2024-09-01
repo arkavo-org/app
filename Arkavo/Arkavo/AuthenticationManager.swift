@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import SwiftData
 
 #if canImport(UIKit)
     import UIKit
@@ -18,21 +19,18 @@ import Foundation
     typealias MyWindow = NSWindow
 #endif
 
-class AuthenticationManagerViewModel: ObservableObject {
-    @Published var authenticationManager: AuthenticationManager
-
-    init() {
-        authenticationManager = AuthenticationManager()
-    }
-}
-
+// TODO: rename to AuthenticationService
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let signingKeyAppTag: String = "net.arkavo.Arkavo"
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
+    private let modelContext: ModelContext
+    private let account: Account
     @Published var currentAccount: String?
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
 
-    override init() {
+    init(modelContext: ModelContext, account: Account) {
+        self.modelContext = modelContext
+        self.account = account
         super.init()
     }
 
@@ -378,29 +376,33 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 do {
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         print("Parsed JSON response: \(jsonResult)")
-                        // TODO: get signed account from extensions.largeBlob
-                        let extensions = jsonResult["extensions"] as? [String: Any]
-                        let largeBlob = extensions?["largeBlob"] as? String
-                        // Store account information in keychain
-                        let accountName = jsonResult["rawId"] as? String
-                        self.storeAccountInKeychain(accountName: accountName!, account: largeBlob!)
+                        if let payloadData = jsonResult["payload"] as? [String: Any],
+                           let signatureString = jsonResult["signature"] as? String
+                        {
+                            let attestationEntity = AttestationEntity(
+                                credentialId: payloadData["credential_id"] as? String ?? "",
+                                userUniqueId: payloadData["user_unique_id"] as? String ?? ""
+                            )
+                            let attestationEnvelope = AttestationEnvelope(payload: attestationEntity, signature: signatureString)
 
-                        // Handle successful registration here
-                        DispatchQueue.main.async {
-                            self.currentAccount = jsonResult["username"] as? String
-                            // Notify the user of successful registration
+                            DispatchQueue.main.async {
+                                self.account.attestationEnvelope = attestationEnvelope
+                                try? self.modelContext.save()
+                                // TODO: Notify the user of successful registration or did it in ArkavoView
+                            }
+                        } else {
+                            print("Failed to parse attestation envelope from server response")
                         }
                     }
                 } catch {
-                    // currently empty
+                    // TODO: Notify the user
                     print("Failed to parse Registration response JSON data. Error: \(error)")
                 }
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")
-                // Handle registration failure
-                DispatchQueue.main.async {
-                    // Notify the user of registration failure
-                }
+                // TODO: Notify the user of registration failure
+//                DispatchQueue.main.async {
+//                }
             }
         }.resume()
     }
