@@ -37,7 +37,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
 
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
-        print("presentationAnchor called")
+//        print("presentationAnchor called")
 
         #if os(iOS)
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -113,7 +113,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("Either challenge or userID is nil.")
                 return
             }
-            print("signUp challengeData \(challengeData)")
+//            print("signUp challengeData \(challengeData)")
             let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(
                 challenge: challengeData,
                 name: accountName,
@@ -123,7 +123,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             controller.delegate = self
             controller.presentationContextProvider = self
             DispatchQueue.main.async {
-                controller.performRequests()
+                controller.performRequests(options: .preferImmediatelyAvailableCredentials)
             }
         }
     }
@@ -159,7 +159,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Account name cannot be empty")
             return
         }
-        inspectKeychain()
+//         debug only
+//        inspectKeychain()
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
 
         authenticationOptions(accountName: accountName) { result in
@@ -172,13 +173,13 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 controller.delegate = self
                 controller.presentationContextProvider = self
                 DispatchQueue.main.async {
-                    controller.performRequests()
+                    controller.performRequests(options: .preferImmediatelyAvailableCredentials)
                 }
             case let .failure(error):
                 print("Failed to get authentication options: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    // Notify the user of the error
-                }
+//                DispatchQueue.main.async {
+//                    // Notify the user of the error
+//                }
             }
         }
     }
@@ -220,7 +221,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
 
     private func sendAuthenticationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) {
-        print("sendAuthenticationDataToServer")
+//        print("sendAuthenticationDataToServer")
         let url = baseURL.appendingPathComponent("authenticate")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -576,6 +577,7 @@ extension AuthenticationManager {
         return signature
     }
 
+    // Debug only
     func inspectKeychain() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
