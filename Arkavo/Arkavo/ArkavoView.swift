@@ -100,12 +100,12 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                        let profile1 = Profile(name: "Profile 1", blurb: "This is the first stream")
-                        let stream1 = Stream(name: "Feedback", ownerUUID: UUID(), profile: profile1)
-                        let profile2 = Profile(name: "Profile 2", blurb: "This is the second stream")
-                        let stream2 = Stream(name: "Technology", ownerUUID: UUID(), profile: profile2)
-                        let profile3 = Profile(name: "Profile 3", blurb: "This is the third stream")
-                        let stream3 = Stream(name: "Beauty", ownerUUID: UUID(), profile: profile3)
+                    let profile1 = Profile(name: "Profile 1", blurb: "This is the first stream")
+                    let stream1 = Stream(name: "Feedback", ownerUUID: UUID(), profile: profile1)
+                    let profile2 = Profile(name: "Profile 2", blurb: "This is the second stream")
+                    let stream2 = Stream(name: "Technology", ownerUUID: UUID(), profile: profile2)
+                    let profile3 = Profile(name: "Profile 3", blurb: "This is the third stream")
+                    let stream3 = Stream(name: "Beauty", ownerUUID: UUID(), profile: profile3)
                     StreamManagementView(streams: [stream1, stream2, stream3])
                 }
                 VStack {

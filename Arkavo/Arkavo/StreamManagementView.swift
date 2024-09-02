@@ -11,7 +11,7 @@ struct StreamManagementView: View {
     init(streams: [Stream]) {
         self.streams = streams
     }
-    
+
     var body: some View {
         List {
             Section(header: Text("My Streams")) {
@@ -35,20 +35,20 @@ struct StreamManagementView: View {
 
     private func createNewStream(with streamProfile: Profile) {
         if let account = accounts.first,
-            let accountProfile = account.profile {
+           let accountProfile = account.profile
+        {
             let newStream = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
 //            do {
 //                try modelContext.save()
 //            } catch {
 //                print("Failed to save new stream: \(error)")
 //            }
-        }
-        else {
+        } else {
             print("No profile found")
         }
     }
 
-    private func deleteStreams(at offsets: IndexSet) {
+    private func deleteStreams(at _: IndexSet) {
 //        for index in offsets {
 //            let stream = streams[index]
 //            modelContext.delete(stream)
@@ -69,6 +69,7 @@ struct StreamManagementView_Previews: PreviewProvider {
         }
         .modelContainer(for: [Account.self, Profile.self], inMemory: true)
     }
+
     static func mockStreams() -> [Stream] {
         let profile1 = Profile(name: "Stream 1", blurb: "This is the first stream")
         let stream1 = Stream(name: "Stream 1", ownerUUID: UUID(), profile: profile1)

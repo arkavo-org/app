@@ -1,5 +1,5 @@
-import Foundation
 import AppIntents
+import Foundation
 
 final class Stream {
     let id: UUID
@@ -10,10 +10,10 @@ final class Stream {
     var profile: Profile
 
     init(name: String, ownerUUID: UUID, profile: Profile) {
-        self.id = UUID()
+        id = UUID()
         self.name = name
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        createdAt = Date()
+        updatedAt = Date()
         self.ownerUUID = ownerUUID
         self.profile = profile
     }

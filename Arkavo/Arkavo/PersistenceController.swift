@@ -1,5 +1,5 @@
-import SwiftData
 import Foundation
+import SwiftData
 
 @globalActor actor PersistenceActor {
     static let shared = PersistenceActor()
@@ -8,14 +8,14 @@ import Foundation
 @PersistenceActor
 class PersistenceController {
     static let shared = PersistenceController()
-    
+
     let container: ModelContainer
-    
+
     private init() {
         do {
             let schema = Schema([
                 Account.self,
-                Profile.self
+                Profile.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -25,13 +25,13 @@ class PersistenceController {
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
     }
-    
+
     // MARK: - Account Operations
-    
+
     func getOrCreateAccount() async throws -> Account {
         let context = await container.mainContext
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == 0 })
-        
+
         if let existingAccount = try context.fetch(descriptor).first {
             print("PersistenceController: Fetched existing account")
             return existingAccount
@@ -45,7 +45,7 @@ class PersistenceController {
     }
 
     // MARK: - Utility Methods
-    
+
     func saveChanges() async throws {
         let context = await container.mainContext
         if context.hasChanges {
@@ -55,9 +55,9 @@ class PersistenceController {
             print("PersistenceController: No changes to save")
         }
     }
-    
+
     // MARK: - Profile Operations
-    
+
     func createProfile(name: String, blurb: String?) -> Profile {
         let profile = Profile(name: name, blurb: blurb)
         Task { @MainActor in
@@ -65,9 +65,9 @@ class PersistenceController {
         }
         return profile
     }
-    
+
     func fetchProfile(withID id: UUID) async throws -> Profile? {
-        return try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
                 do {
                     let result = try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
