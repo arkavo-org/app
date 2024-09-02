@@ -15,10 +15,16 @@ struct ThoughtStreamView: View {
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
 
+    
+    // MARK: - BODY
+    
     var body: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
             // Main chat area
             VStack {
+                
+                Spacer()
+                
                 // Messages
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -43,49 +49,23 @@ struct ThoughtStreamView: View {
                     .disabled(isSending)
                 }
                 .padding()
+                
+                Spacer()
             }
+            .padding(.top, 30)
+            .padding(.bottom, 30)
         }
     }
-
     private func sendThought() {
         guard !inputText.isEmpty else { return }
+        
+        //profile must be set
+        guard ((viewModel.profile?.name.isEmpty) == nil) == false else { return }
+        
+        
         let newThought = Thought.createTextThoughtWithSender(inputText, sender: viewModel.profile!.name)
         viewModel.sendThought(thought: newThought)
         inputText = ""
-    }
-}
-
-struct ThoughtView: View {
-    let thought: Thought
-    let index: Int
-    let totalCount: Int
-    let screenHeight: CGFloat
-    let isTopThought: Bool
-    let color: Color
-
-    @State private var offset: CGFloat = 0
-
-    var body: some View {
-        Text(thought.content.first?.content ?? "")
-            .padding(8)
-            .background(color.opacity(0.7))
-            .foregroundColor(.white)
-            .clipShape(Capsule())
-            .scaleEffect(1 - offset * 0.5)
-            .offset(y: calculateYOffset())
-            .onAppear {
-                withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-                    offset = 1
-                }
-            }
-    }
-
-    private func calculateYOffset() -> CGFloat {
-        let visibleHeight = screenHeight - 100
-        let startY = isTopThought ? -visibleHeight / 2 : visibleHeight / 2
-        let endY: CGFloat = 0
-        let progress = CGFloat(index) / CGFloat(totalCount - 1)
-        return startY + (endY - startY) * progress * offset
     }
 }
 
