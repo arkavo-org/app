@@ -4,23 +4,15 @@ import SwiftUI
 @main
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Account.self, Profile.self, Stream.self])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        print(modelConfiguration.url)
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    let persistenceController = PersistenceController.shared
 
     var body: some Scene {
         WindowGroup {
             ArkavoView()
+                .modelContainer(persistenceController.container)
                 .onAppear {
                     Task {
-                        createAccountIfNeeded()
+                        await ensureAccountExists()
                     }
                 }
             #if os(macOS)
@@ -28,10 +20,17 @@ struct ArkavoApp: App {
                        minHeight: 600, idealHeight: 800, maxHeight: .infinity)
             #endif
         }
-        .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
+                Task {
+                    await saveChanges()
+                }
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
+            }
+            if newPhase == .active {
+                Task {
+                    await ensureAccountExists()
+                }
             }
         }
         #if os(macOS)
@@ -40,23 +39,25 @@ struct ArkavoApp: App {
         #endif
     }
 
-    @MainActor
-    private func createAccountIfNeeded() {
+    private func ensureAccountExists() async {
         do {
-            let context = sharedModelContainer.mainContext
-            let fetchDescriptor = FetchDescriptor<Account>(predicate: nil, sortBy: [])
-            let existingAccounts = try context.fetch(fetchDescriptor)
-
-            if existingAccounts.isEmpty {
-                let newAccount = Account()
-                context.insert(newAccount)
-                try context.save()
-                print("New Account created with ID: \(newAccount.id)")
-            } else {
-                print("Existing Account found with ID: \(existingAccounts[0].id)")
-            }
+            let account = try await Task { @PersistenceActor in
+                try await persistenceController.getOrCreateAccount()
+            }.value
+            print("ArkavoApp: Account ensured with ID: \(account.id)")
         } catch {
-            print("Error checking/creating Account: \(error)")
+            print("ArkavoApp: Error ensuring Account exists: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveChanges() async {
+        do {
+            try await Task { @PersistenceActor in
+                try await persistenceController.saveChanges()
+            }.value
+            print("ArkavoApp: Changes saved successfully")
+        } catch {
+            print("ArkavoApp: Error saving changes: \(error.localizedDescription)")
         }
     }
 }

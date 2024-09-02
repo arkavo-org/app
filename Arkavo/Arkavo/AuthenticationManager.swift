@@ -373,17 +373,16 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         print("Parsed JSON response: \(jsonResult)")
                         print("Unparsed JSON response: \(data.base64EncodedString())")
-                        // FIXME: perhaps a callback
-//                        if let account = accounts.first {
-//                            account.attestationEnvelope = data
-//                        }
-//                        DispatchQueue.main.async {
-//                            do {
-//                                try self.modelContext.save()
-//                            } catch {
-//                                print("Failed to save changes: \(error)")
-//                            }
-//                        }
+                        // update Account
+                        Task.detached { @PersistenceActor in
+                            do {
+                                let account = try await PersistenceController.shared.getOrCreateAccount()
+                                account.attestationEnvelope = data
+                                try await PersistenceController.shared.saveChanges()
+                            } catch {
+                                print("Error: \(error)")
+                            }
+                        }
                     }
                 } catch {
                     // TODO: Notify the user

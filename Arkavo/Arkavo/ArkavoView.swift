@@ -157,19 +157,16 @@ struct ArkavoView: View {
                                             }
                                         }
                                         if let attestationEnvelope = account.attestationEnvelope {
-                                            VStack(alignment: .leading) {
-                                                Text("ID: \(attestationEnvelope.base64EncodedString())")
-                                            }
-                                            Button("Sign In") {
-                                                authenticationManager.signIn(accountName: account.id.uuidString)
+                                            if let profile = account.profile {
+                                                Button("Sign In") {
+                                                    authenticationManager.signIn(accountName: profile.name)
+                                                }
                                             }
                                         } else {
-                                            Button("Sign Up") {
-                                                authenticationManager.signUp(accountName: account.id.uuidString)
-                                            }
-                                            // FIXME: remove
-                                            Button("Sign In") {
-                                                authenticationManager.signIn(accountName: account.id.uuidString)
+                                            if let profile = account.profile {
+                                                Button("Sign Up") {
+                                                    authenticationManager.signUp(accountName: profile.name)
+                                                }
                                             }
                                         }
                                     }
@@ -581,6 +578,10 @@ class NanoTDFManager: ObservableObject {
     }
 
     func removeNanoTDF(withIdentifier identifier: Data) {
+        guard identifier.count > 32 else {
+            print("Identifier must be greater than 32 bytes long")
+            return
+        }
         if nanoTDFs.removeValue(forKey: identifier) != nil {
             count -= 1
             updateInProcessCount(inProcessCount - 1)

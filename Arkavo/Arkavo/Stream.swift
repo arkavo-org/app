@@ -1,27 +1,25 @@
 import Foundation
 import SwiftData
+import AppIntents
 
 @Model
 final class Stream {
-    @Attribute(.unique) var id: UUID
+    @Attribute(.unique) let id: UUID
     var name: String
-    var createdAt: Date
+    let createdAt: Date
     var updatedAt: Date
-    var ownerID: UUID
+    var ownerUUID: UUID
     @Relationship var profile: Profile
 
-    init(name: String, ownerID: UUID, profile: Profile) {
+    init(name: String, ownerUUID: UUID, profile: Profile) {
         self.id = UUID()
         self.name = name
         self.createdAt = Date()
         self.updatedAt = Date()
-        self.ownerID = ownerID
+        self.ownerUUID = ownerUUID
         self.profile = profile
     }
 }
-
-// AppIntents-related code can be moved to a separate file
-import AppIntents
 
 extension Stream: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Stream"

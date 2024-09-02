@@ -29,15 +29,19 @@ struct StreamManagementView: View {
         }
     }
 
-    private func createNewStream(with profile: Profile) {
-        if let account = accounts.first {
-            let newStream = Stream(name: profile.name, ownerID: account.id, profile: profile)
+    private func createNewStream(with streamProfile: Profile) {
+        if let account = accounts.first,
+            let accountProfile = account.profile {
+            let newStream = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
             modelContext.insert(newStream)
             do {
                 try modelContext.save()
             } catch {
                 print("Failed to save new stream: \(error)")
             }
+        }
+        else {
+            print("No profile found")
         }
     }
 
