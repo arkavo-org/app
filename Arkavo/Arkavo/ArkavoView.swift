@@ -83,37 +83,30 @@ struct ArkavoView: View {
                             }
                         }
                 case .wordCloud:
-                    if let account = accounts.first {
-                        if !account.streams.isEmpty {
-                            let words: [(String, CGFloat)] = account.streams.map { ($0.name, 40) }
-                            WordCloudView(
-                                viewModel: WordCloudViewModel(
-                                    thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words,
-                                    animationType: .falling
-                                )
-                            )
-                        } else {
-                            let words: [(String, CGFloat)] = [
-                                ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-                                ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
-                                ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
-                            ]
-                            WordCloudView(
-                                viewModel: WordCloudViewModel(
-                                    thoughtStreamViewModel: thoughtStreamViewModel,
-                                    words: words,
-                                    animationType: .explosion
-                                )
-                            )
-                        }
-                    }
+                    let words: [(String, CGFloat)] = [
+                        ("Feedback", 60), ("Technology", 50), ("Fitness", 45), ("Activism", 55),
+                        ("Sports", 40), ("Career", 35), ("Education", 30), ("Beauty", 25),
+                        ("Fashion", 20), ("Gaming", 15), ("Entertainment", 30), ("Climate Change", 25),
+                    ]
+                    WordCloudView(
+                        viewModel: WordCloudViewModel(
+                            thoughtStreamViewModel: thoughtStreamViewModel,
+                            words: words,
+                            animationType: .explosion
+                        )
+                    )
                 case .video:
                     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                    StreamManagementView()
+                        let profile1 = Profile(name: "Profile 1", blurb: "This is the first stream")
+                        let stream1 = Stream(name: "Feedback", ownerUUID: UUID(), profile: profile1)
+                        let profile2 = Profile(name: "Profile 2", blurb: "This is the second stream")
+                        let stream2 = Stream(name: "Technology", ownerUUID: UUID(), profile: profile2)
+                        let profile3 = Profile(name: "Profile 3", blurb: "This is the third stream")
+                        let stream3 = Stream(name: "Beauty", ownerUUID: UUID(), profile: profile3)
+                    StreamManagementView(streams: [stream1, stream2, stream3])
                 }
                 VStack {
                     GeometryReader { geometry in

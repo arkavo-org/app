@@ -1,15 +1,13 @@
 import Foundation
-import SwiftData
 import AppIntents
 
-@Model
 final class Stream {
-    @Attribute(.unique) let id: UUID
+    let id: UUID
     var name: String
     let createdAt: Date
     var updatedAt: Date
     var ownerUUID: UUID
-    @Relationship var profile: Profile
+    var profile: Profile
 
     init(name: String, ownerUUID: UUID, profile: Profile) {
         self.id = UUID()
