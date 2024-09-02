@@ -2,7 +2,6 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 import SwiftData
-import SwiftUICore
 
 #if canImport(UIKit)
     import UIKit
