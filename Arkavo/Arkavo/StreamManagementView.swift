@@ -4,9 +4,9 @@ import SwiftUI
 
 struct StreamManagementView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var streams: [Stream]
     @ObservedObject var accountManager: AccountViewModel
     @State private var showingCreateStream = false
-    @State private var streams: [Stream] = []
 
     var body: some View {
         List {
@@ -14,6 +14,7 @@ struct StreamManagementView: View {
                 ForEach(streams) { stream in
                     CompactStreamProfileView(viewModel: StreamProfileViewModel(profile: stream.profile, participantCount: 2))
                 }
+                .onDelete(perform: deleteStreams)
             }
 
             Button("Create New Stream") {
@@ -23,26 +24,40 @@ struct StreamManagementView: View {
         .navigationTitle("My Streams")
         .sheet(isPresented: $showingCreateStream) {
             CreateStreamProfileView { profile, _ in
-                let newStream = Stream(name: profile.name, ownerID: accountManager.account.id, profile: profile)
-                streams.append(newStream)
-                accountManager.account.streams.append(newStream)
-                do {
-                    try modelContext.save()
-                } catch {
-                    print("Failed to save new stream: \(error)")
-                }
+                createNewStream(with: profile)
             }
         }
-        .onAppear {
-            streams = accountManager.account.streams
+    }
+
+    private func createNewStream(with profile: Profile) {
+        let newStream = Stream(name: profile.name, ownerID: accountManager.account.id, profile: profile)
+        modelContext.insert(newStream)
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save new stream: \(error)")
+        }
+    }
+
+    private func deleteStreams(at offsets: IndexSet) {
+        for index in offsets {
+            let stream = streams[index]
+            modelContext.delete(stream)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to delete stream(s): \(error)")
         }
     }
 }
 
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        StreamManagementView(accountManager: mockAccountManager())
-            .modelContainer(for: [Account.self, Profile.self], inMemory: true)
+        NavigationView {
+            StreamManagementView(accountManager: mockAccountManager())
+        }
+        .modelContainer(for: [Account.self, Stream.self, Profile.self], inMemory: true)
     }
 
     static func mockAccountManager() -> AccountViewModel {

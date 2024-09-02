@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Account.self, Profile.self])
+        let schema = Schema([Account.self, AttestationEnvelope.self, AttestationEntity.self, Profile.self, Stream.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         // find out where SwiftData is storing the sqlite database
         print(modelConfiguration.url)
