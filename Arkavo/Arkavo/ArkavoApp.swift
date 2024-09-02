@@ -7,7 +7,6 @@ struct ArkavoApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Account.self, Profile.self, Stream.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        // find out where SwiftData is storing the sqlite database
         print(modelConfiguration.url)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -20,7 +19,9 @@ struct ArkavoApp: App {
         WindowGroup {
             ArkavoView()
                 .onAppear {
-                    createAccountIfNeeded()
+                    Task {
+                        createAccountIfNeeded()
+                    }
                 }
             #if os(macOS)
                 .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
@@ -30,7 +31,6 @@ struct ArkavoApp: App {
         .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
-                // Close any open WebSockets
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
             }
         }
@@ -40,6 +40,7 @@ struct ArkavoApp: App {
         #endif
     }
 
+    @MainActor
     private func createAccountIfNeeded() {
         do {
             let context = sharedModelContainer.mainContext
