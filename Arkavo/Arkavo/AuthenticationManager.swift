@@ -24,6 +24,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     private let signingKeyAppTag: String = "net.arkavo.Arkavo"
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
+    private var attestationEnvelope: Data?
 
     override init() {}
 
@@ -145,11 +146,18 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }.resume()
     }
 
-    func signIn(accountName: String) {
+    func signIn(accountName: String) async {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
             return
         }
+        do {
+            attestationEnvelope = try await PersistenceController.shared.getOrCreateAccount().attestationEnvelope!
+        } catch {
+            print("Failed to get attestation envelope: \(error.localizedDescription)")
+            return
+        }
+        
 //         debug only
 //        inspectKeychain()
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
@@ -217,26 +225,23 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let parameters: [String: Any] = [
-            "id": credential.credentialID.base64URLEncodedString(),
-            "rawId": credential.credentialID.base64URLEncodedString(),
-            "response": [
-                "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
-                "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
-                "signature": credential.signature.base64URLEncodedString(),
-                "userHandle": credential.userID.base64URLEncodedString(),
-            ],
-            "type": "public-key",
-            "extensions": [
-                "clientDataJSON": "{}",
-            ],
-            // FIXME: use attestationEnvelope
-        ]
-
         do {
+            let parameters: [String: Any] = [
+                "id": credential.credentialID.base64URLEncodedString(),
+                "rawId": credential.credentialID.base64URLEncodedString(),
+                "response": [
+                    "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+                    "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
+                    "signature": credential.signature.base64URLEncodedString(),
+                    "userHandle": credential.userID.base64URLEncodedString(),
+                ],
+                "type": "public-key",
+                "extensions": [
+                    "serverDataJSON": attestationEnvelope?.base64URLEncodedString(),
+                ],
+            ]
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-            // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+             print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
         } catch {
             print("Error creating authentication JSON data: \(error)")
             return
