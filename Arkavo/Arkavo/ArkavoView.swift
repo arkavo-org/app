@@ -22,13 +22,9 @@ struct ArkavoView: View {
     @State private var cancellables = Set<AnyCancellable>()
     @State private var isReconnecting = false
     @State private var hasInitialConnection = false
-    // authentication
-    @StateObject private var authnViewModel: AuthenticationViewModel
     // account
     @State private var showingProfileCreation = false
     @State private var showingProfileDetails = false
-    @State private var selectedAccountIndex = 0
-    private let accountOptions = ["Main", "Alt", "Private"]
     // ThoughtStream
     @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // video
@@ -47,15 +43,11 @@ struct ArkavoView: View {
     @State private var annotations: [AnnotationItem] = []
     // view control
     @State private var selectedView: SelectedView = .map
-    @Query var profiles: [Profile] = []
+    private var authenticationManager = AuthenticationManager()
+    @Query private var accounts: [Account]
+    @Query private var profiles: [Profile]
 
-    init(container: ModelContainer) {
-        let context = ModelContext(container)
-        // FIXME: load from database
-        let account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
-                              derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-        _authnViewModel = StateObject(wrappedValue: AuthenticationViewModel(modelContext: context, account: account))
-    }
+    init() {}
 
     enum SelectedView {
         case map
@@ -71,52 +63,57 @@ struct ArkavoView: View {
                 case .map:
                     mapContent
                         .sheet(isPresented: $showingProfileCreation) {
-                            AccountProfileCreateView { newProfile in
-                                authnViewModel.account.profile = newProfile
-                                thoughtStreamViewModel.profile = newProfile
-                                do {
-                                    try modelContext.save()
-                                } catch {
-                                    print("Failed to save profile: \(error)")
+                            if let account = accounts.first {
+                                AccountProfileCreateView { newProfile in
+                                    account.profile = newProfile
+                                    thoughtStreamViewModel.profile = newProfile
+                                    do {
+                                        try modelContext.save()
+                                    } catch {
+                                        print("Failed to save profile: \(error)")
+                                    }
                                 }
                             }
                         }
                         .sheet(isPresented: $showingProfileDetails) {
-                            if let profile = authnViewModel.account.profile {
-                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                            if let account = accounts.first {
+                                if let profile = account.profile {
+                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                                }
                             }
                         }
                 case .wordCloud:
-                    if !authnViewModel.account.streams.isEmpty {
-                        let words: [(String, CGFloat)] = authnViewModel.account.streams.map { ($0.name, 40) }
-                        WordCloudView(
-                            viewModel: WordCloudViewModel(
-                                thoughtStreamViewModel: thoughtStreamViewModel,
-                                words: words,
-                                animationType: .falling
+                    if let account = accounts.first {
+                        if !account.streams.isEmpty {
+                            let words: [(String, CGFloat)] = account.streams.map { ($0.name, 40) }
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words,
+                                    animationType: .falling
+                                )
                             )
-                        )
-                    } else {
-                        let words: [(String, CGFloat)] = [
-                            ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-                            ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
-                            ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
-                        ]
-                        WordCloudView(
-                            viewModel: WordCloudViewModel(
-                                thoughtStreamViewModel: thoughtStreamViewModel,
-                                words: words,
-                                animationType: .explosion
+                        } else {
+                            let words: [(String, CGFloat)] = [
+                                ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+                                ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+                                ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
+                            ]
+                            WordCloudView(
+                                viewModel: WordCloudViewModel(
+                                    thoughtStreamViewModel: thoughtStreamViewModel,
+                                    words: words,
+                                    animationType: .explosion
+                                )
                             )
-                        )
+                        }
                     }
                 case .video:
                     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                    let accountManager = AccountViewModel(account: authnViewModel.account)
-                    StreamManagementView(accountManager: accountManager)
+                    StreamManagementView()
                 }
                 VStack {
                     GeometryReader { geometry in
@@ -149,37 +146,37 @@ struct ArkavoView: View {
                                     }
                                 }
                                 Section("Account") {
-                                    if let attestationEnvelope = authnViewModel.account.attestationEnvelope {
-                                        VStack(alignment: .leading) {
-                                            Text("ID: \(attestationEnvelope.payload.userUniqueId)")
-                                        }
-                                        Button("Sign In") {
-                                            authnViewModel.authenticationManager.signIn(accountName: accountOptions[0])
-                                        }
-                                        if let profile = authnViewModel.account.profile {
+                                    if let account = accounts.first {
+                                        if let profile = account.profile {
                                             VStack(alignment: .leading) {
-                                                Button("View Profile") {
-                                                    showingProfileDetails = true
-                                                }
+                                                Text("Profile: \(profile.name)")
                                             }
                                         } else {
                                             Button("Create Profile") {
                                                 showingProfileCreation = true
                                             }
                                         }
-                                    } else {
-                                        Button("Sign Up") {
-                                            authnViewModel.authenticationManager.signUp(accountName: accountOptions[0])
+                                        if let attestationEnvelope = account.attestationEnvelope {
+                                            VStack(alignment: .leading) {
+                                                Text("ID: \(attestationEnvelope.base64EncodedString())")
+                                            }
+                                            Button("Sign In") {
+                                                authenticationManager.signIn(accountName: account.id.uuidString)
+                                            }
+                                        } else {
+                                            Button("Sign Up") {
+                                                authenticationManager.signUp(accountName: account.id.uuidString)
+                                            }
+                                            // FIXME: remove
+                                            Button("Sign In") {
+                                                authenticationManager.signIn(accountName: account.id.uuidString)
+                                            }
                                         }
                                     }
                                 }
-                                Section("Authentication") {}
-                                Spacer()
                                 Section("Demo") {
-                                    Button("Prepare", action: loadGeoJSON)
-                                    Button("Nano", action: createNanoCities)
-                                    Button("Send", action: sendCities)
-                                    Button("Add", action: loadRandomCities)
+                                    Button("Cities", action: loadGeoJSON)
+                                    Button("Clusters", action: loadRandomCities)
                                 }
                             } label: {
                                 Image(systemName: "gear")
@@ -320,8 +317,6 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        authnViewModel.account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey, derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-        authnViewModel.authenticationManager.updateAccount(accountOptions[0])
         setupCallbacks()
         setupWebSocketManager()
         // Initialize ThoughtStreamViewModel
@@ -338,16 +333,24 @@ struct ArkavoView: View {
                 kasPublicKey: $kasPublicKey
             )
         #endif
-        if !profiles.isEmpty {
-            if authnViewModel.account.profile == nil {
-                authnViewModel.account.profile = profiles.first
-                thoughtStreamViewModel.profile = profiles.first
+        if let account = accounts.first {
+            if !profiles.isEmpty {
+                if account.profile == nil {
+                    account.profile = profiles.first
+                    thoughtStreamViewModel.profile = profiles.first
+                }
             }
         }
     }
 
     private func setupCallbacks() {
         webSocketManager.setKASPublicKeyCallback { publicKey in
+            if kasPublicKey != nil {
+                // go ahead and show something on the map
+                loadGeoJSON()
+                showCityInfoOverlay = false
+                return
+            }
             DispatchQueue.main.async {
                 print("Received KAS Public Key")
                 kasPublicKey = publicKey
@@ -366,16 +369,15 @@ struct ArkavoView: View {
                 if state == .connected, !hasInitialConnection {
                     DispatchQueue.main.async {
                         print("Initial connection established. Sending public key and KAS key message.")
-                        webSocketManager.sendPublicKey()
-                        webSocketManager.sendKASKeyMessage()
-                        hasInitialConnection = true
+                        hasInitialConnection = webSocketManager.sendPublicKey() && webSocketManager.sendKASKeyMessage()
                     }
                 } else if state == .disconnected {
                     hasInitialConnection = false
                 }
             }
             .store(in: &cancellables)
-        let token = authnViewModel.authenticationManager.createJWT()
+        // FIXME: replace using account
+        let token = authenticationManager.createJWT(profileName: "Main")
         if token != nil {
             webSocketManager.setupWebSocket(token: token!)
         } else {
@@ -449,22 +451,25 @@ struct ArkavoView: View {
     private func loadGeoJSON() {
         showCityInfoOverlay = true
         cities = generateTwoThousandActualCities()
+        createNanoCities()
     }
 
     private func loadRandomCities() {
+        showCityInfoOverlay = true
         nanoTime = 0
         nanoCities = []
         print("Generating new random cities...")
-        let newCities = generateRandomCities(count: 200)
+        let newCities = generateRandomCities(count: 1000)
         cities.append(contentsOf: newCities)
         print("New cities added: \(newCities.count)")
         print("Total cities: \(cities.count)")
+        createNanoCities()
     }
 
     private func createNanoCities() {
         print("Nanoing Cities...")
         guard kasPublicKey != nil else {
-            print("KAS public key")
+            print("Missing KAS public key")
             return
         }
         let startTime = Date()
@@ -498,12 +503,16 @@ struct ArkavoView: View {
         dispatchGroup.notify(queue: .main) {
             let endTime = Date()
             nanoTime = endTime.timeIntervalSince(startTime)
+            sendCities()
         }
     }
 
     private func sendCities() {
         print("Sending...")
-        for nanoCity in nanoCities {
+        // Limit the number of cities to 3000
+        let maxCitiesToSend = 3000
+        let citiesToSend = nanoCities.prefix(maxCitiesToSend)
+        for nanoCity in citiesToSend {
             // Create and send the NATSMessage
             let natsMessage = NATSMessage(payload: nanoCity.toData())
             let messageData = natsMessage.toData()
@@ -680,23 +689,4 @@ struct AnnotationItem: Identifiable {
     let name: String
     let count: Int
     let isCluster: Bool
-}
-
-@available(*, deprecated, message: "AccountViewModel is deprecated. Please use AuthenticationManagerViewModel instead.")
-class AccountViewModel: ObservableObject {
-    @Published var account: Account
-
-    init(account: Account) {
-        self.account = account
-    }
-}
-
-class AuthenticationViewModel: ObservableObject {
-    @Published var authenticationManager: AuthenticationManager
-    @Published var account: Account
-
-    init(modelContext: ModelContext, account: Account) {
-        self.account = account
-        authenticationManager = AuthenticationManager(modelContext: modelContext, account: account)
-    }
 }

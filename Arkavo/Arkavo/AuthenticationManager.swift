@@ -2,6 +2,7 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 import SwiftData
+import SwiftUICore
 
 #if canImport(UIKit)
     import UIKit
@@ -23,16 +24,9 @@ import SwiftData
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let signingKeyAppTag: String = "net.arkavo.Arkavo"
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
-    private let modelContext: ModelContext
-    private let account: Account
-    @Published var currentAccount: String?
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
 
-    init(modelContext: ModelContext, account: Account) {
-        self.modelContext = modelContext
-        self.account = account
-        super.init()
-    }
+    override init() {}
 
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
 //        print("presentationAnchor called")
@@ -235,6 +229,10 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 "userHandle": credential.userID.base64URLEncodedString(),
             ],
             "type": "public-key",
+            "extensions": [
+                "clientDataJSON": "{}",
+            ],
+            // FIXME: use attestationEnvelope
         ]
 
         do {
@@ -272,11 +270,10 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     print("No data in response body, but authentication was successful")
                 }
 
-                DispatchQueue.main.async {
-                    // Update UI or app state to reflect successful authentication
-                    self.currentAccount = credential.userID.base64EncodedString()
-                    // Notify the user of successful authentication
-                }
+//                DispatchQueue.main.async {
+//                    // FIXME Update UI or app state to reflect successful authentication
+//                    // Notify the user of successful authentication
+//                }
             } else {
                 print("Authentication failed with status code: \(httpResponse.statusCode)")
                 if let data, let responseString = String(data: data, encoding: .utf8) {
@@ -376,23 +373,18 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 do {
                     if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         print("Parsed JSON response: \(jsonResult)")
-                        if let payloadData = jsonResult["payload"] as? [String: Any],
-                           let signatureString = jsonResult["signature"] as? String
-                        {
-                            let attestationEntity = AttestationEntity(
-                                credentialId: payloadData["credential_id"] as? String ?? "",
-                                userUniqueId: payloadData["user_unique_id"] as? String ?? ""
-                            )
-                            let attestationEnvelope = AttestationEnvelope(payload: attestationEntity, signature: signatureString)
-
-                            DispatchQueue.main.async {
-                                self.account.attestationEnvelope = attestationEnvelope
-                                try? self.modelContext.save()
-                                // TODO: Notify the user of successful registration or did it in ArkavoView
-                            }
-                        } else {
-                            print("Failed to parse attestation envelope from server response")
-                        }
+                        print("Unparsed JSON response: \(data.base64EncodedString())")
+                        // FIXME: perhaps a callback
+//                        if let account = accounts.first {
+//                            account.attestationEnvelope = data
+//                        }
+//                        DispatchQueue.main.async {
+//                            do {
+//                                try self.modelContext.save()
+//                            } catch {
+//                                print("Failed to save changes: \(error)")
+//                            }
+//                        }
                     }
                 } catch {
                     // TODO: Notify the user
@@ -407,18 +399,13 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }.resume()
     }
 
-    func createJWT() -> String? {
-        guard let account = currentAccount else {
-            print("No account available to create JWT")
-            return nil
-        }
-
+    func createJWT(profileName: String) -> String? {
         // Create JWT header
         let header = ["alg": "HS256", "typ": "JWT"]
 
         // Create JWT payload
         let payload: [String: Any] = [
-            "sub": account,
+            "sub": profileName,
             "exp": Int(Date().addingTimeInterval(3600).timeIntervalSince1970),
             "iat": Int(Date().timeIntervalSince1970),
             "iss": "Arkavo App",
@@ -451,10 +438,6 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 
         // Combine all parts
         return "\(headerString).\(payloadString).\(signatureString)"
-    }
-
-    func updateAccount(_ newAccount: String) {
-        currentAccount = newAccount
     }
 
     private func storeAccountInKeychain(accountName: String, account _: String) {

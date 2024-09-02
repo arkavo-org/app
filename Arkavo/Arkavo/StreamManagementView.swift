@@ -4,8 +4,8 @@ import SwiftUI
 
 struct StreamManagementView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var accounts: [Account]
     @Query private var streams: [Stream]
-    @ObservedObject var accountManager: AccountViewModel
     @State private var showingCreateStream = false
 
     var body: some View {
@@ -30,12 +30,14 @@ struct StreamManagementView: View {
     }
 
     private func createNewStream(with profile: Profile) {
-        let newStream = Stream(name: profile.name, ownerID: accountManager.account.id, profile: profile)
-        modelContext.insert(newStream)
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save new stream: \(error)")
+        if let account = accounts.first {
+            let newStream = Stream(name: profile.name, ownerID: account.id, profile: profile)
+            modelContext.insert(newStream)
+            do {
+                try modelContext.save()
+            } catch {
+                print("Failed to save new stream: \(error)")
+            }
         }
     }
 
@@ -55,29 +57,8 @@ struct StreamManagementView: View {
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
-            StreamManagementView(accountManager: mockAccountManager())
+            StreamManagementView()
         }
         .modelContainer(for: [Account.self, Stream.self, Profile.self], inMemory: true)
-    }
-
-    static func mockAccountManager() -> AccountViewModel {
-        let account = Account(signPublicKey: P256.KeyAgreement.PrivateKey().publicKey,
-                              derivePublicKey: P256.KeyAgreement.PrivateKey().publicKey)
-        let accountManager = AccountViewModel(account: account)
-
-        // Create mock streams
-        let profile1 = Profile(name: "Stream 1", blurb: "This is the first stream")
-        let stream1 = Stream(name: "Stream 1", ownerID: accountManager.account.id, profile: profile1)
-
-        let profile2 = Profile(name: "Stream 2", blurb: "This is the second stream")
-        let stream2 = Stream(name: "Stream 2", ownerID: accountManager.account.id, profile: profile2)
-
-        let profile3 = Profile(name: "Stream 3", blurb: "This is the third stream")
-        let stream3 = Stream(name: "Stream 3", ownerID: accountManager.account.id, profile: profile3)
-
-        // Add mock streams to the account
-        accountManager.account.streams = [stream1, stream2, stream3]
-
-        return accountManager
     }
 }

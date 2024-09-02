@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Account.self, AttestationEnvelope.self, AttestationEntity.self, Profile.self, Stream.self])
+        let schema = Schema([Account.self, Profile.self, Stream.self])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         // find out where SwiftData is storing the sqlite database
         print(modelConfiguration.url)
@@ -18,7 +18,10 @@ struct ArkavoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ArkavoView(container: sharedModelContainer)
+            ArkavoView()
+                .onAppear {
+                    createAccountIfNeeded()
+                }
             #if os(macOS)
                 .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
                        minHeight: 600, idealHeight: 800, maxHeight: .infinity)
@@ -35,6 +38,25 @@ struct ArkavoApp: App {
         .windowStyle(HiddenTitleBarWindowStyle())
         .defaultSize(width: 1200, height: 800)
         #endif
+    }
+
+    private func createAccountIfNeeded() {
+        do {
+            let context = sharedModelContainer.mainContext
+            let fetchDescriptor = FetchDescriptor<Account>(predicate: nil, sortBy: [])
+            let existingAccounts = try context.fetch(fetchDescriptor)
+
+            if existingAccounts.isEmpty {
+                let newAccount = Account()
+                context.insert(newAccount)
+                try context.save()
+                print("New Account created with ID: \(newAccount.id)")
+            } else {
+                print("Existing Account found with ID: \(existingAccounts[0].id)")
+            }
+        } catch {
+            print("Error checking/creating Account: \(error)")
+        }
     }
 }
 
