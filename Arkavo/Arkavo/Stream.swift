@@ -11,10 +11,10 @@ final class Stream {
     @Relationship var profile: Profile
 
     init(name: String, ownerID: UUID, profile: Profile) {
-        id = UUID()
+        self.id = UUID()
         self.name = name
-        createdAt = Date()
-        updatedAt = Date()
+        self.createdAt = Date()
+        self.updatedAt = Date()
         self.ownerID = ownerID
         self.profile = profile
     }
