@@ -58,6 +58,7 @@ struct WordCloudView: View {
                             .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .opacity))
                     }
                 }
+                .padding(.top, 150)
                 .frame(height: 30)
                 .zIndex(1)
 
