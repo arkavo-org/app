@@ -15,16 +15,14 @@ struct ThoughtStreamView: View {
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
 
-    
     // MARK: - BODY
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Main chat area
             VStack {
-                
                 Spacer()
-                
+
                 // Messages
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -49,20 +47,20 @@ struct ThoughtStreamView: View {
                     .disabled(isSending)
                 }
                 .padding()
-                
+
                 Spacer()
             }
             .padding(.top, 30)
             .padding(.bottom, 30)
         }
     }
+
     private func sendThought() {
         guard !inputText.isEmpty else { return }
-        
-        //profile must be set
+
+        // profile must be set
         guard ((viewModel.profile?.name.isEmpty) == nil) == false else { return }
-        
-        
+
         let newThought = Thought.createTextThoughtWithSender(inputText, sender: viewModel.profile!.name)
         viewModel.sendThought(thought: newThought)
         inputText = ""

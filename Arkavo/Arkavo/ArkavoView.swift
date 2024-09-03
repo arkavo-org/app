@@ -149,11 +149,11 @@ struct ArkavoView: View {
                                                 showingProfileCreation = true
                                             }
                                         }
-                                        if account.attestationEnvelope != nil {
+                                        if let authenticationToken = account.authenticationToken {
                                             if let profile = account.profile {
                                                 Button("Sign In") {
                                                     Task {
-                                                        await authenticationManager.signIn(accountName: profile.name)
+                                                        await authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
                                                     }
                                                 }
                                             }

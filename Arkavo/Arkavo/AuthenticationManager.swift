@@ -24,7 +24,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     private let signingKeyAppTag: String = "net.arkavo.Arkavo"
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
-    private var attestationEnvelope: Data?
+    private var authenticationToken: Data?
 
     override init() {}
 
@@ -146,23 +146,16 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }.resume()
     }
 
-    func signIn(accountName: String) async {
+    func signIn(accountName: String, authenticationToken: String) async {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
             return
         }
-        do {
-            attestationEnvelope = try await PersistenceController.shared.getOrCreateAccount().attestationEnvelope!
-        } catch {
-            print("Failed to get attestation envelope: \(error.localizedDescription)")
-            return
-        }
-        
 //         debug only
 //        inspectKeychain()
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
 
-        authenticationOptions(accountName: accountName) { result in
+        authenticationOptions(accountName: accountName, authenticationToken: authenticationToken) { result in
             switch result {
             case let .success(challengeData):
                 print("signIn challengeData \(challengeData.base64EncodedString())")
@@ -176,6 +169,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 }
             case let .failure(error):
                 print("Failed to get authentication options: \(error.localizedDescription)")
+                // FIXME: major issue - user is lost from the backend
 //                DispatchQueue.main.async {
 //                    // Notify the user of the error
 //                }
@@ -183,10 +177,12 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }
     }
 
-    func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
+    func authenticationOptions(accountName: String, authenticationToken: String, completion: @escaping (Result<Data, Error>) -> Void) {
         let url = baseURL.appendingPathComponent("authenticate/\(accountName)")
-        let request = URLRequest(url: url)
-
+        var request = URLRequest(url: url)
+        // Add X-Auth-Token header
+        request.addValue(authenticationToken, forHTTPHeaderField: "X-Auth-Token")
+        print("Request: \(request)")
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
@@ -236,12 +232,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     "userHandle": credential.userID.base64URLEncodedString(),
                 ],
                 "type": "public-key",
-                "extensions": [
-                    "serverDataJSON": attestationEnvelope?.base64URLEncodedString(),
-                ],
             ]
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-             print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+            print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
         } catch {
             print("Error creating authentication JSON data: \(error)")
             return
@@ -373,25 +366,16 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             }
 
             if (200 ... 299).contains(httpResponse.statusCode) {
-                // Try to parse the response as JSON
-                do {
-                    if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                        print("Parsed JSON response: \(jsonResult)")
-                        print("Unparsed JSON response: \(data.base64EncodedString())")
-                        // update Account
-                        Task.detached { @PersistenceActor in
-                            do {
-                                let account = try await PersistenceController.shared.getOrCreateAccount()
-                                account.attestationEnvelope = data
-                                try await PersistenceController.shared.saveChanges()
-                            } catch {
-                                print("Error: \(error)")
-                            }
-                        }
+                let authenticationToken = httpResponse.allHeaderFields["X-Auth-Token"] as? String
+                // update Account
+                Task.detached { @PersistenceActor in
+                    do {
+                        let account = try await PersistenceController.shared.getOrCreateAccount()
+                        account.authenticationToken = authenticationToken
+                        try await PersistenceController.shared.saveChanges()
+                    } catch {
+                        print("Error: \(error)")
                     }
-                } catch {
-                    // TODO: Notify the user
-                    print("Failed to parse Registration response JSON data. Error: \(error)")
                 }
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")

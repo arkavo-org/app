@@ -33,7 +33,7 @@ class PersistenceController {
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == 0 })
 
         if let existingAccount = try context.fetch(descriptor).first {
-            print("PersistenceController: Fetched existing account")
+//            print("PersistenceController: Fetched existing account")
             return existingAccount
         } else {
             print("PersistenceController: Creating new account")

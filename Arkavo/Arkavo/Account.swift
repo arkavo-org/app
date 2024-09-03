@@ -6,7 +6,7 @@ final class Account {
     @Attribute(.unique) let id: Int
     var dateCreated: Date
     var profile: Profile?
-    var attestationEnvelope: Data?
+    var authenticationToken: String?
     // TODO: add Identity fields and authentication levels
 
     init() {
