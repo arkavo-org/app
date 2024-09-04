@@ -335,6 +335,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             "extensions": [
                 "signingPublicKey": publicKeyData.base64URLEncodedString(),
             ],
+            // FIXME move client session signingPublicKey to /authenticate
         ]
 
         do {
@@ -356,23 +357,23 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 return
             }
 
-            guard let data else {
-                print("No data received from server")
-                return
-            }
-
             if let httpResponse = response as? HTTPURLResponse {
                 print("HTTP Status Code: \(httpResponse.statusCode)")
             }
 
             if (200 ... 299).contains(httpResponse.statusCode) {
-                let authenticationToken = httpResponse.allHeaderFields["X-Auth-Token"] as? String
+                let authenticationToken = httpResponse.allHeaderFields["x-auth-token"] as? String
+                if authenticationToken == nil {
+                    print("No authentication token received")
+                    return
+                }
                 // update Account
                 Task.detached { @PersistenceActor in
                     do {
                         let account = try await PersistenceController.shared.getOrCreateAccount()
                         account.authenticationToken = authenticationToken
                         try await PersistenceController.shared.saveChanges()
+                        print("Saved authentication token")
                     } catch {
                         print("Error: \(error)")
                     }
