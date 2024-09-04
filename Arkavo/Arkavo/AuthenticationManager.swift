@@ -182,7 +182,17 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         var request = URLRequest(url: url)
         // Add X-Auth-Token header
         request.addValue(authenticationToken, forHTTPHeaderField: "X-Auth-Token")
-        print("Request: \(request)")
+//        print("Request URL: \(request.url?.absoluteString ?? "")")
+//        print("Request Method: \(request.httpMethod ?? "")")
+//        print("Request Headers:")
+//        if let headers = request.allHTTPHeaderFields {
+//            for (key, value) in headers {
+//                print("  \(key): \(value)")
+//            }
+//        }
+//        if let body = request.httpBody {
+//            print("Request Body: \(String(data: body, encoding: .utf8) ?? "")")
+//        }
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
@@ -199,6 +209,39 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                             completion(.failure(NSError(domain: "ChallengeError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unable to decode challenge string"])))
                         }
                     case let .failure(error):
+//                        print("Failure occurred. Printing detailed response information:")
+//
+//                        if let httpResponse = response as? HTTPURLResponse {
+//                            print("HTTP Status Code: \(httpResponse.statusCode)")
+//                            print("Response Headers:")
+//                            for (key, value) in httpResponse.allHeaderFields {
+//                                print("  \(key): \(value)")
+//                            }
+//                        }
+//
+//                        if let responseData = data {
+//                            if let responseString = String(data: responseData, encoding: .utf8) {
+//                                print("Response Body:")
+//                                print(responseString)
+//                            } else {
+//                                print("Response Body: Unable to decode as UTF-8 string")
+//                                print("Raw Data: \(responseData)")
+//                            }
+//                        } else {
+//                            print("Response Body: No data received")
+//                        }
+//
+//                        print("Error: \(error.localizedDescription)")
+//                        if let errorResponse = error as NSError? {
+//                            print("Error Domain: \(errorResponse.domain)")
+//                            print("Error Code: \(errorResponse.code)")
+//                            if let errorInfo = errorResponse.userInfo as? [String: Any] {
+//                                print("Error User Info:")
+//                                for (key, value) in errorInfo {
+//                                    print("  \(key): \(value)")
+//                                }
+//                            }
+//                        }
                         completion(.failure(error))
                     }
                 }
@@ -335,7 +378,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             "extensions": [
                 "signingPublicKey": publicKeyData.base64URLEncodedString(),
             ],
-            // FIXME move client session signingPublicKey to /authenticate
+            // FIXME: move client session signingPublicKey to /authenticate
         ]
 
         do {
@@ -346,7 +389,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             return
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        URLSession.shared.dataTask(with: request) { _, response, error in
             if let error {
                 print("Error sending registration data: \(error.localizedDescription)")
                 return

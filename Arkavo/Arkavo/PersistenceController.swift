@@ -19,9 +19,9 @@ class PersistenceController {
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("PersistenceController: ModelContainer created successfully")
+//            print("PersistenceController: ModelContainer created successfully")
         } catch {
-            print("PersistenceController: Failed to create ModelContainer: \(error.localizedDescription)")
+//            print("PersistenceController: Failed to create ModelContainer: \(error.localizedDescription)")
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
     }
@@ -36,7 +36,7 @@ class PersistenceController {
 //            print("PersistenceController: Fetched existing account")
             return existingAccount
         } else {
-            print("PersistenceController: Creating new account")
+//            print("PersistenceController: Creating new account")
             let newAccount = Account()
             context.insert(newAccount)
             try context.save()
