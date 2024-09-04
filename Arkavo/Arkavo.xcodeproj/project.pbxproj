@@ -19,6 +19,7 @@
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
 		DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* WordCloudView.swift */; };
+		DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA78EF882C85FE4F00B89422 /* PersistenceController.swift */; };
 		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
 		DA95A43A2C3DF611007409D5 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA95A4392C3DF60F007409D5 /* City.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamManagementView.swift */; };
@@ -64,6 +65,7 @@
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* WordCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordCloudView.swift; sourceTree = "<group>"; };
+		DA78EF882C85FE4F00B89422 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
 		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
 		DA95A4392C3DF60F007409D5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamManagementView.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 				DA1A4DE02C6807AD00722E3E /* Content.swift */,
 				DA0FEC402C586DF700C0A010 /* Stream.swift */,
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
+				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
@@ -330,6 +333,7 @@
 				DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamManagementView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
+				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
@@ -510,6 +514,7 @@
 				INFOPLIST_FILE = Arkavo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Arkavo;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -557,6 +562,7 @@
 				INFOPLIST_FILE = Arkavo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Arkavo;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

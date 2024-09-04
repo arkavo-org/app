@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import SwiftData
 
 #if canImport(UIKit)
     import UIKit
@@ -18,27 +19,17 @@ import Foundation
     typealias MyWindow = NSWindow
 #endif
 
-class AuthenticationManagerViewModel: ObservableObject {
-    @Published var authenticationManager: AuthenticationManager
-
-    init(baseURL: URL) {
-        authenticationManager = AuthenticationManager(baseURL: baseURL)
-    }
-}
-
+// TODO: rename to AuthenticationService
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    @Published var currentAccount: String?
-    private let baseURL: URL
-    private let relyingPartyIdentifier: String
+    private let signingKeyAppTag: String = "net.arkavo.Arkavo"
+    private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
+    private let baseURL = URL(string: "https://webauthn.arkavo.net")!
+    private var authenticationToken: Data?
 
-    init(baseURL: URL) {
-        self.baseURL = baseURL
-        relyingPartyIdentifier = baseURL.host ?? "webauthn.arkavo.net"
-        super.init()
-    }
+    override init() {}
 
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
-        print("presentationAnchor called")
+//        print("presentationAnchor called")
 
         #if os(iOS)
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -114,7 +105,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("Either challenge or userID is nil.")
                 return
             }
-            print("signUp challengeData \(challengeData)")
+//            print("signUp challengeData \(challengeData)")
             let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(
                 challenge: challengeData,
                 name: accountName,
@@ -124,7 +115,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             controller.delegate = self
             controller.presentationContextProvider = self
             DispatchQueue.main.async {
-                controller.performRequests()
+                controller.performRequests(options: .preferImmediatelyAvailableCredentials)
             }
         }
     }
@@ -155,14 +146,16 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }.resume()
     }
 
-    func signIn(accountName: String) {
+    func signIn(accountName: String, authenticationToken: String) async {
         guard !accountName.isEmpty else {
             print("Account name cannot be empty")
             return
         }
-        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "webauthn.arkavo.net")
+//         debug only
+//        inspectKeychain()
+        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
 
-        authenticationOptions(accountName: accountName) { result in
+        authenticationOptions(accountName: accountName, authenticationToken: authenticationToken) { result in
             switch result {
             case let .success(challengeData):
                 print("signIn challengeData \(challengeData.base64EncodedString())")
@@ -172,21 +165,34 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 controller.delegate = self
                 controller.presentationContextProvider = self
                 DispatchQueue.main.async {
-                    controller.performRequests()
+                    controller.performRequests(options: .preferImmediatelyAvailableCredentials)
                 }
             case let .failure(error):
                 print("Failed to get authentication options: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    // Notify the user of the error
-                }
+                // FIXME: major issue - user is lost from the backend
+//                DispatchQueue.main.async {
+//                    // Notify the user of the error
+//                }
             }
         }
     }
 
-    func authenticationOptions(accountName: String, completion: @escaping (Result<Data, Error>) -> Void) {
+    func authenticationOptions(accountName: String, authenticationToken: String, completion: @escaping (Result<Data, Error>) -> Void) {
         let url = baseURL.appendingPathComponent("authenticate/\(accountName)")
-        let request = URLRequest(url: url)
-
+        var request = URLRequest(url: url)
+        // Add X-Auth-Token header
+        request.addValue(authenticationToken, forHTTPHeaderField: "X-Auth-Token")
+//        print("Request URL: \(request.url?.absoluteString ?? "")")
+//        print("Request Method: \(request.httpMethod ?? "")")
+//        print("Request Headers:")
+//        if let headers = request.allHTTPHeaderFields {
+//            for (key, value) in headers {
+//                print("  \(key): \(value)")
+//            }
+//        }
+//        if let body = request.httpBody {
+//            print("Request Body: \(String(data: body, encoding: .utf8) ?? "")")
+//        }
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
@@ -203,6 +209,39 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                             completion(.failure(NSError(domain: "ChallengeError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unable to decode challenge string"])))
                         }
                     case let .failure(error):
+//                        print("Failure occurred. Printing detailed response information:")
+//
+//                        if let httpResponse = response as? HTTPURLResponse {
+//                            print("HTTP Status Code: \(httpResponse.statusCode)")
+//                            print("Response Headers:")
+//                            for (key, value) in httpResponse.allHeaderFields {
+//                                print("  \(key): \(value)")
+//                            }
+//                        }
+//
+//                        if let responseData = data {
+//                            if let responseString = String(data: responseData, encoding: .utf8) {
+//                                print("Response Body:")
+//                                print(responseString)
+//                            } else {
+//                                print("Response Body: Unable to decode as UTF-8 string")
+//                                print("Raw Data: \(responseData)")
+//                            }
+//                        } else {
+//                            print("Response Body: No data received")
+//                        }
+//
+//                        print("Error: \(error.localizedDescription)")
+//                        if let errorResponse = error as NSError? {
+//                            print("Error Domain: \(errorResponse.domain)")
+//                            print("Error Code: \(errorResponse.code)")
+//                            if let errorInfo = errorResponse.userInfo as? [String: Any] {
+//                                print("Error User Info:")
+//                                for (key, value) in errorInfo {
+//                                    print("  \(key): \(value)")
+//                                }
+//                            }
+//                        }
                         completion(.failure(error))
                     }
                 }
@@ -220,27 +259,25 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     }
 
     private func sendAuthenticationDataToServer(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) {
-        print("sendAuthenticationDataToServer")
+//        print("sendAuthenticationDataToServer")
         let url = baseURL.appendingPathComponent("authenticate")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let parameters: [String: Any] = [
-            "id": credential.credentialID.base64URLEncodedString(),
-            "rawId": credential.credentialID.base64URLEncodedString(),
-            "response": [
-                "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
-                "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
-                "signature": credential.signature.base64URLEncodedString(),
-                "userHandle": credential.userID.base64URLEncodedString(),
-            ],
-            "type": "public-key",
-        ]
-
         do {
+            let parameters: [String: Any] = [
+                "id": credential.credentialID.base64URLEncodedString(),
+                "rawId": credential.credentialID.base64URLEncodedString(),
+                "response": [
+                    "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+                    "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
+                    "signature": credential.signature.base64URLEncodedString(),
+                    "userHandle": credential.userID.base64URLEncodedString(),
+                ],
+                "type": "public-key",
+            ]
             request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-            // print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
+            print("Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print request body")")
         } catch {
             print("Error creating authentication JSON data: \(error)")
             return
@@ -273,11 +310,10 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     print("No data in response body, but authentication was successful")
                 }
 
-                DispatchQueue.main.async {
-                    // Update UI or app state to reflect successful authentication
-                    self.currentAccount = credential.userID.base64EncodedString()
-                    // Notify the user of successful authentication
-                }
+//                DispatchQueue.main.async {
+//                    // FIXME Update UI or app state to reflect successful authentication
+//                    // Notify the user of successful authentication
+//                }
             } else {
                 print("Authentication failed with status code: \(httpResponse.statusCode)")
                 if let data, let responseString = String(data: data, encoding: .utf8) {
@@ -314,6 +350,23 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             print("Client data JSON: \(clientDataJSONString)")
             print("Extracted challenge: \(challenge)")
         }
+        // signing key
+        // Create and store the EC signing key
+        guard let signingKey = createAndStoreECSigningKey() else {
+            print("Failed to create signing key")
+            return
+        }
+        // Extract the public key from the signing key
+        guard let publicKey = SecKeyCopyPublicKey(signingKey) else {
+            print("Failed to get public key from signing key")
+            return
+        }
+        // Convert public key to raw data
+        var error: Unmanaged<CFError>?
+        guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            print("Error getting public key data: \(error!.takeRetainedValue() as Error)")
+            return
+        }
         let parameters: [String: Any] = [
             "id": credential.credentialID.base64URLEncodedString(),
             "rawId": credential.credentialID.base64URLEncodedString(),
@@ -322,7 +375,10 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 "attestationObject": credential.rawAttestationObject!.base64URLEncodedString(),
             ],
             "type": "public-key",
-            "extensions": [:], // Add any extensions if needed
+            "extensions": [
+                "signingPublicKey": publicKeyData.base64URLEncodedString(),
+            ],
+            // FIXME: move client session signingPublicKey to /authenticate
         ]
 
         do {
@@ -333,7 +389,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             return
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        URLSession.shared.dataTask(with: request) { _, response, error in
             if let error {
                 print("Error sending registration data: \(error.localizedDescription)")
                 return
@@ -344,52 +400,43 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 return
             }
 
-            guard let data else {
-                print("No data received from server")
-                return
-            }
-
             if let httpResponse = response as? HTTPURLResponse {
                 print("HTTP Status Code: \(httpResponse.statusCode)")
             }
 
             if (200 ... 299).contains(httpResponse.statusCode) {
-                // Try to parse the response as JSON
-                do {
-                    if let jsonResult = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                        print("Parsed JSON response: \(jsonResult)")
-                        // Handle successful registration here
-                        DispatchQueue.main.async {
-                            self.currentAccount = jsonResult["username"] as? String
-                            // Notify the user of successful registration
-                        }
+                let authenticationToken = httpResponse.allHeaderFields["x-auth-token"] as? String
+                if authenticationToken == nil {
+                    print("No authentication token received")
+                    return
+                }
+                // update Account
+                Task.detached { @PersistenceActor in
+                    do {
+                        let account = try await PersistenceController.shared.getOrCreateAccount()
+                        account.authenticationToken = authenticationToken
+                        try await PersistenceController.shared.saveChanges()
+                        print("Saved authentication token")
+                    } catch {
+                        print("Error: \(error)")
                     }
-                } catch {
-                    // currently empty
-                    // print("Failed to parse JSON data. Error: \(error)")
                 }
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")
-                // Handle registration failure
-                DispatchQueue.main.async {
-                    // Notify the user of registration failure
-                }
+                // TODO: Notify the user of registration failure
+//                DispatchQueue.main.async {
+//                }
             }
         }.resume()
     }
 
-    func createJWT() -> String? {
-        guard let account = currentAccount else {
-            print("No account available to create JWT")
-            return nil
-        }
-
+    func createJWT(profileName: String) -> String? {
         // Create JWT header
         let header = ["alg": "HS256", "typ": "JWT"]
 
         // Create JWT payload
         let payload: [String: Any] = [
-            "sub": account,
+            "sub": profileName,
             "exp": Int(Date().addingTimeInterval(3600).timeIntervalSince1970),
             "iat": Int(Date().timeIntervalSince1970),
             "iss": "Arkavo App",
@@ -424,8 +471,20 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         return "\(headerString).\(payloadString).\(signatureString)"
     }
 
-    func updateAccount(_ newAccount: String) {
-        currentAccount = newAccount
+    private func storeAccountInKeychain(accountName: String, account _: String) {
+        let account = accountName.data(using: .utf8)!
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrAccount as String: accountName,
+            kSecValueData as String: account,
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecSuccess {
+            print("Account information stored in keychain")
+        } else {
+            print("Failed to store account information in keychain")
+        }
     }
 }
 
@@ -467,5 +526,103 @@ extension String {
             base64.append(String(repeating: "=", count: 4 - base64.count % 4))
         }
         return base64
+    }
+}
+
+import Security
+
+extension AuthenticationManager {
+    func createAndStoreECSigningKey() -> SecKey? {
+        let accessControl = SecAccessControlCreateWithFlags(nil,
+                                                            kSecAttrAccessibleWhenUnlocked,
+                                                            [],
+                                                            nil)
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrApplicationTag as String: signingKeyAppTag,
+                kSecAttrLabel as String: "Arkavo Signing Key",
+                kSecAttrCanSign as String: true,
+                kSecAttrAccessControl as String: accessControl!,
+            ],
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+            print("Error generating private key: \(error!.takeRetainedValue() as Error)")
+            return nil
+        }
+
+        print("EC signing key created successfully")
+        return privateKey
+    }
+
+    func getStoredSigningKey() -> SecKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: signingKeyAppTag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecReturnRef as String: true,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        if status == errSecSuccess {
+            return (item as! SecKey)
+        } else {
+            print("Failed to retrieve signing key from keychain. Status: \(status)")
+            return nil
+        }
+    }
+
+    func signData(_ data: Data, with key: SecKey) -> Data? {
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(key,
+                                                    .ecdsaSignatureMessageX962SHA256,
+                                                    data as CFData,
+                                                    &error) as Data?
+        else {
+            print("Error creating signature: \(error!.takeRetainedValue() as Error)")
+            return nil
+        }
+        return signature
+    }
+
+    // Debug only
+    func inspectKeychain() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: signingKeyAppTag,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess {
+            if let items = result as? [[String: Any]] {
+                for (index, item) in items.enumerated() {
+                    print("Key \(index + 1):")
+                    if let tag = item[kSecAttrApplicationTag as String] as? Data,
+                       let tagString = String(data: tag, encoding: .utf8)
+                    {
+                        print("  Application Tag: \(tagString)")
+                    }
+                    if let label = item[kSecAttrLabel as String] as? String {
+                        print("  Label: \(label)")
+                    }
+                    print("  All Attributes: \(item)")
+                    print("--------------------")
+                }
+            }
+        } else {
+            print("Error querying keychain: \(status)")
+        }
     }
 }

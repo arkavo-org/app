@@ -84,20 +84,22 @@ class WebSocketManager: ObservableObject {
         webSocket?.setRewrapCallback(callback)
     }
 
-    func sendPublicKey() {
+    func sendPublicKey() -> Bool {
         guard connectionState == .connected else {
             lastError = "Cannot send public key: WebSocket not connected"
-            return
+            return false
         }
         webSocket?.sendPublicKey()
+        return true
     }
 
-    func sendKASKeyMessage() {
+    func sendKASKeyMessage() -> Bool {
         guard connectionState == .connected else {
             lastError = "Cannot send KAS key message: WebSocket not connected"
-            return
+            return false
         }
         webSocket?.sendKASKeyMessage()
+        return true
     }
 
     func sendRewrapMessage(header: Header) {

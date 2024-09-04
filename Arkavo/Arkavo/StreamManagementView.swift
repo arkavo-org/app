@@ -1,11 +1,16 @@
+import CryptoKit
 import SwiftData
 import SwiftUI
 
 struct StreamManagementView: View {
     @Environment(\.modelContext) private var modelContext
-    @ObservedObject var accountManager: AccountManager
+    @Query private var accounts: [Account]
+    private var streams: [Stream]
     @State private var showingCreateStream = false
-    @State private var streams: [Stream] = []
+
+    init(streams: [Stream]) {
+        self.streams = streams
+    }
 
     var body: some View {
         List {
@@ -13,6 +18,7 @@ struct StreamManagementView: View {
                 ForEach(streams) { stream in
                     CompactStreamProfileView(viewModel: StreamProfileViewModel(profile: stream.profile, participantCount: 2))
                 }
+                .onDelete(perform: deleteStreams)
             }
 
             Button("Create New Stream") {
@@ -22,44 +28,55 @@ struct StreamManagementView: View {
         .navigationTitle("My Streams")
         .sheet(isPresented: $showingCreateStream) {
             CreateStreamProfileView { profile, _ in
-                let newStream = Stream(name: profile.name, ownerID: accountManager.account.id, profile: profile)
-                streams.append(newStream)
-                accountManager.account.streams.append(newStream)
-                do {
-                    try modelContext.save()
-                } catch {
-                    print("Failed to save new stream: \(error)")
-                }
+                createNewStream(with: profile)
             }
         }
-        .onAppear {
-            streams = accountManager.account.streams
+    }
+
+    private func createNewStream(with streamProfile: Profile) {
+        if let account = accounts.first,
+           let accountProfile = account.profile
+        {
+            let newStream = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
+//            do {
+//                try modelContext.save()
+//            } catch {
+//                print("Failed to save new stream: \(error)")
+//            }
+        } else {
+            print("No profile found")
         }
+    }
+
+    private func deleteStreams(at _: IndexSet) {
+//        for index in offsets {
+//            let stream = streams[index]
+//            modelContext.delete(stream)
+//        }
+//        do {
+//            try modelContext.save()
+//        } catch {
+//            print("Failed to delete stream(s): \(error)")
+//        }
+        print("Failed to delete stream")
     }
 }
 
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        StreamManagementView(accountManager: mockAccountManager())
-            .modelContainer(for: [Account.self, Profile.self], inMemory: true)
+        NavigationView {
+            StreamManagementView(streams: mockStreams())
+        }
+        .modelContainer(for: [Account.self, Profile.self], inMemory: true)
     }
 
-    static func mockAccountManager() -> AccountManager {
-        let accountManager = AccountManager()
-
-        // Create mock streams
+    static func mockStreams() -> [Stream] {
         let profile1 = Profile(name: "Stream 1", blurb: "This is the first stream")
-        let stream1 = Stream(name: "Stream 1", ownerID: accountManager.account.id, profile: profile1)
-
+        let stream1 = Stream(name: "Stream 1", ownerUUID: UUID(), profile: profile1)
         let profile2 = Profile(name: "Stream 2", blurb: "This is the second stream")
-        let stream2 = Stream(name: "Stream 2", ownerID: accountManager.account.id, profile: profile2)
-
+        let stream2 = Stream(name: "Stream 2", ownerUUID: UUID(), profile: profile2)
         let profile3 = Profile(name: "Stream 3", blurb: "This is the third stream")
-        let stream3 = Stream(name: "Stream 3", ownerID: accountManager.account.id, profile: profile3)
-
-        // Add mock streams to the account
-        accountManager.account.streams = [stream1, stream2, stream3]
-
-        return accountManager
+        let stream3 = Stream(name: "Stream 3", ownerUUID: UUID(), profile: profile3)
+        return [stream1, stream2, stream3]
     }
 }

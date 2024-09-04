@@ -1,21 +1,16 @@
-import CryptoKit
 import Foundation
 import SwiftData
 
 @Model
 final class Account {
-    var id: UUID
+    @Attribute(.unique) let id: Int
     var dateCreated: Date
-    var signPublicKeyData: Data
-    var derivePublicKeyData: Data
     var profile: Profile?
-    var streams: [Stream] = []
-    // TODO: add authentication level
+    var authenticationToken: String?
+    // TODO: add Identity fields and authentication levels
 
-    init(signPublicKey: P256.KeyAgreement.PublicKey, derivePublicKey: P256.KeyAgreement.PublicKey) {
-        id = UUID()
+    init() {
+        id = 0 // There should only ever be one account with id 0
         dateCreated = Date()
-        signPublicKeyData = signPublicKey.rawRepresentation
-        derivePublicKeyData = derivePublicKey.rawRepresentation
     }
 }
