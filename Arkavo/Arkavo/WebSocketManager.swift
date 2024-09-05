@@ -74,7 +74,7 @@ class WebSocketManager: ObservableObject {
         webSocket?.connect()
         startReconnectTimer()
     }
-    
+
     func disconnect() {
         stopReconnectTimer()
         webSocket?.disconnect()
@@ -105,7 +105,7 @@ class WebSocketManager: ObservableObject {
 
     private func attemptReconnect() {
         guard connectionState == .disconnected else { return }
-        
+
         if reconnectAttempts < maxReconnectAttempts {
             reconnectAttempts += 1
             print("Attempting to reconnect... (Attempt \(reconnectAttempts))")
@@ -115,7 +115,7 @@ class WebSocketManager: ObservableObject {
             stopReconnectTimer()
         }
     }
-    
+
     func setKASPublicKeyCallback(_ callback: @escaping (P256.KeyAgreement.PublicKey) -> Void) {
         kasPublicKeyCallback = callback
         webSocket?.setKASPublicKeyCallback(callback)

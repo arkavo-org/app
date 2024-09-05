@@ -20,27 +20,26 @@ struct AccountProfileCompactView: View {
 struct AccountProfileDetailedView: View {
     @ObservedObject var viewModel: AccountProfileViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         Spacer()
-        
+
         HStack {
             Spacer()
-            
+
             Text("View Profile")
                 .font(.title3)
-                
+
             Spacer()
-            
+
             Button(action: {
                 dismiss()
             }, label: {
                 Image(systemName: "xmark.circle")
-                  .font(.system(size: 20, weight: .light))
+                    .font(.system(size: 20, weight: .light))
             })
-
         } //: HSTACK
-        
+
         Form {
             Section(header: Text("Profile Information")) {
                 Text("Name: \(viewModel.profile.name)")
@@ -63,28 +62,28 @@ struct AccountProfileCreateView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) var modelContext
     var onSave: (Profile) -> Void
+    @Binding var selectedView: ArkavoView.SelectedView
 
     var body: some View {
         Spacer()
-        
+
         HStack {
             Spacer()
-            
+
             Text("Create Profile")
                 .font(.title3)
-                
+
             Spacer()
-            
+
             Button(action: {
                 dismiss()
             }, label: {
                 Image(systemName: "xmark.circle")
-                  .font(.system(size: 20, weight: .light))
+                    .font(.system(size: 20, weight: .light))
             })
             .padding(.trailing, 10)
-
         }
-        
+
         Form {
             Section(header: Text("Profile Information")) {
                 TextField("Name", text: $viewModel.name)
@@ -98,13 +97,11 @@ struct AccountProfileCreateView: View {
                     Text(blurbError).foregroundColor(.red)
                 }
             }
-
-            Button("Create Profile") {
-                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
-                    modelContext.insert(profile)
-                   onSave(profile)
-                    dismiss()
-                
+            Button("Register") {
+                let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
+                modelContext.insert(profile)
+                onSave(profile)
+                dismiss()
             }
             .disabled(!viewModel.isValid)
         }

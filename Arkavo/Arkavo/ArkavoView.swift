@@ -44,12 +44,14 @@ struct ArkavoView: View {
     // view control
     @State private var selectedView: SelectedView = .map
     private var authenticationManager = AuthenticationManager()
+    @State private var tokenCheckTimer: Timer?
     @Query private var accounts: [Account]
     @Query private var profiles: [Profile]
 
     init() {}
 
     enum SelectedView {
+        case initial
         case map
         case wordCloud
         case streams
@@ -60,21 +62,29 @@ struct ArkavoView: View {
         ZStack {
             ZStack {
                 switch selectedView {
-                case .map:
-                    mapContent
+                case .initial:
+                    initialWelcomeView
                         .sheet(isPresented: $showingProfileCreation) {
                             if let account = accounts.first {
-                                AccountProfileCreateView { newProfile in
-                                    account.profile = newProfile
-                                    thoughtStreamViewModel.profile = newProfile
-                                    do {
-                                        try modelContext.save()
-                                    } catch {
-                                        print("Failed to save profile: \(error)")
-                                    }
-                                }
+                                AccountProfileCreateView(
+                                    onSave: { newProfile in
+                                        account.profile = newProfile
+                                        thoughtStreamViewModel.profile = newProfile
+                                        do {
+                                            try modelContext.save()
+                                            authenticationManager.signUp(accountName: newProfile.name)
+                                            startTokenCheck()
+                                            selectedView = .map
+                                        } catch {
+                                            print("Failed to save profile: \(error)")
+                                        }
+                                    },
+                                    selectedView: $selectedView
+                                )
                             }
                         }
+                case .map:
+                    mapContent
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first {
                                 if let profile = account.profile {
@@ -100,86 +110,88 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                    let profile1 = Profile(name: "Profile 1", blurb: "This is the first stream")
+                    let profile1 = Profile(name: "Feedback", blurb: "This is the first stream")
                     let stream1 = Stream(name: "Feedback", ownerUUID: UUID(), profile: profile1)
-                    let profile2 = Profile(name: "Profile 2", blurb: "This is the second stream")
+                    let profile2 = Profile(name: "Technology", blurb: "This is the second stream")
                     let stream2 = Stream(name: "Technology", ownerUUID: UUID(), profile: profile2)
-                    let profile3 = Profile(name: "Profile 3", blurb: "This is the third stream")
+                    let profile3 = Profile(name: "Beauty", blurb: "This is the third stream")
                     let stream3 = Stream(name: "Beauty", ownerUUID: UUID(), profile: profile3)
                     StreamManagementView(streams: [stream1, stream2, stream3])
                 }
-                VStack {
-                    GeometryReader { geometry in
-                        HStack {
-                            Spacer()
-                                .frame(width: geometry.size.width * 0.8)
-                            Menu {
-                                Section("Navigation") {
-                                    Button("Map") {
-                                        selectedView = .map
-                                        withAnimation(.easeInOut(duration: 2.5)) {
-                                            cameraPosition = .camera(MapCamera(
-                                                centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
-                                                distance: 40_000_000,
-                                                heading: 0,
-                                                pitch: 0
-                                            ))
-                                        }
-                                    }
-                                    Button("My Streams") {
-                                        selectedView = .streams
-                                    }
-                                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                                        Button("Video") {
-                                            selectedView = .video
-                                        }
-                                    #endif
-                                    Button("Engage!") {
-                                        selectedView = .wordCloud
-                                    }
-                                }
-                                Section("Account") {
-                                    if let account = accounts.first {
-                                        if let profile = account.profile {
-                                            VStack(alignment: .leading) {
-                                                Text("Profile: \(profile.name)")
-                                            }
-                                        } else {
-                                            Button("Create Profile") {
-                                                showingProfileCreation = true
+                if selectedView != .initial {
+                    VStack {
+                        GeometryReader { geometry in
+                            HStack {
+                                Spacer()
+                                    .frame(width: geometry.size.width * 0.8)
+                                Menu {
+                                    Section("Navigation") {
+                                        Button("Map") {
+                                            selectedView = .map
+                                            withAnimation(.easeInOut(duration: 2.5)) {
+                                                cameraPosition = .camera(MapCamera(
+                                                    centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
+                                                    distance: 40_000_000,
+                                                    heading: 0,
+                                                    pitch: 0
+                                                ))
                                             }
                                         }
-                                        if let authenticationToken = account.authenticationToken {
+                                        Button("My Streams") {
+                                            selectedView = .streams
+                                        }
+                                        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                                            Button("Video") {
+                                                selectedView = .video
+                                            }
+                                        #endif
+                                        Button("Engage!") {
+                                            selectedView = .wordCloud
+                                        }
+                                    }
+                                    Section("Account") {
+                                        if let account = accounts.first {
                                             if let profile = account.profile {
-                                                Button("Sign In") {
-                                                    Task {
-                                                        await authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
+                                                VStack(alignment: .leading) {
+                                                    Text("Profile: \(profile.name)")
+                                                }
+                                            } else {
+                                                Button("Create Profile") {
+                                                    showingProfileCreation = true
+                                                }
+                                            }
+                                            if let authenticationToken = account.authenticationToken {
+                                                if let profile = account.profile {
+                                                    Button("Sign In") {
+                                                        Task {
+                                                            await authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                if let profile = account.profile {
+                                                    Button("Sign Up") {
+                                                        authenticationManager.signUp(accountName: profile.name)
                                                     }
                                                 }
                                             }
-                                        } else {
-                                            if let profile = account.profile {
-                                                Button("Sign Up") {
-                                                    authenticationManager.signUp(accountName: profile.name)
-                                                }
-                                            }
                                         }
                                     }
+                                    Section("Demo") {
+                                        Button("Cities", action: loadGeoJSON)
+                                        Button("Clusters", action: loadRandomCities)
+                                    }
+                                } label: {
+                                    Image(systemName: "gear")
+                                        .padding()
+                                        .background(Color.black.opacity(0.5))
+                                        .clipShape(Circle())
                                 }
-                                Section("Demo") {
-                                    Button("Cities", action: loadGeoJSON)
-                                    Button("Clusters", action: loadRandomCities)
-                                }
-                            } label: {
-                                Image(systemName: "gear")
-                                    .padding()
-                                    .background(Color.black.opacity(0.5))
-                                    .clipShape(Circle())
+                                .menuStyle(DefaultMenuStyle())
+                                .padding(.top, 40)
+                                Spacer()
+                                Spacer()
                             }
-                            .menuStyle(DefaultMenuStyle())
-                            .padding(.top, 40)
-                            Spacer()
-                            Spacer()
                         }
                     }
                 }
@@ -187,6 +199,43 @@ struct ArkavoView: View {
             .ignoresSafeArea(edges: .all)
         }
         .onAppear(perform: initialSetup)
+    }
+
+    private var initialWelcomeView: some View {
+        VStack(spacing: 20) {
+            Text("Welcome to Arkavo!")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            Text("Your content is always under your control - everywhere")
+                .multilineTextAlignment(.center)
+                .padding()
+            Text("Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle.")
+                .multilineTextAlignment(.center)
+                .padding()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("What makes us different?")
+                    .font(.headline)
+                BulletPoint(text: "Leader in Privacy")
+                BulletPoint(text: "Leader in Content Security")
+                BulletPoint(text: "Military-grade data security powered by OpenTDF.")
+                BulletPoint(text: "Start group chats now, with more exciting features coming soon!")
+            }
+            .padding()
+            Text("Ready to join?")
+                .font(.headline)
+            Button(action: {
+                showingProfileCreation = true
+            }) {
+                Text("Create Profile")
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(minWidth: 200)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(10)
+            }
+        }
+        .padding()
     }
 
     private var mapContent: some View {
@@ -326,12 +375,15 @@ struct ArkavoView: View {
             )
         #endif
         if let account = accounts.first {
-            if !profiles.isEmpty {
-                if account.profile == nil {
-                    account.profile = profiles.first
-                    thoughtStreamViewModel.profile = profiles.first
-                }
+            if account.profile == nil {
+                selectedView = .initial
+            } else {
+                selectedView = .map
+                thoughtStreamViewModel.profile = account.profile
             }
+        } else {
+            selectedView = .initial
+            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
 
@@ -368,14 +420,17 @@ struct ArkavoView: View {
                 }
             }
             .store(in: &cancellables)
-        // FIXME: replace using account
-        let token = authenticationManager.createJWT(profileName: "Main")
-        if token != nil {
-            webSocketManager.setupWebSocket(token: token!)
+        if let account = accounts.first, let profile = account.profile {
+            let token = authenticationManager.createJWT(profileName: profile.name)
+            if let token {
+                webSocketManager.setupWebSocket(token: token)
+                webSocketManager.connect()
+            } else {
+                print("createJWT token nil")
+            }
         } else {
-            print("createJWT token nil")
+            print("No profile no webSocket no token")
         }
-        webSocketManager.connect()
     }
 
     private func resetWebSocketManager() {
@@ -551,6 +606,25 @@ struct ArkavoView: View {
         let count = Double(cities.count)
         return CLLocationCoordinate2D(latitude: totalLat / count, longitude: totalLon / count)
     }
+
+    private func startTokenCheck() {
+        tokenCheckTimer?.invalidate() // Invalidate any existing timer
+        tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            checkForAuthenticationToken()
+        }
+    }
+
+    private func checkForAuthenticationToken() {
+        Task {
+            await MainActor.run {
+                if let account = accounts.first, account.authenticationToken != nil {
+                    tokenCheckTimer?.invalidate()
+                    tokenCheckTimer = nil
+                    setupWebSocketManager()
+                }
+            }
+        }
+    }
 }
 
 class NanoTDFManager: ObservableObject {
@@ -685,4 +759,19 @@ struct AnnotationItem: Identifiable {
     let name: String
     let count: Int
     let isCluster: Bool
+}
+
+struct BulletPoint: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .font(.body)
+                .padding(.top, 4)
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 }
