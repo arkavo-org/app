@@ -10,7 +10,7 @@ struct BoundingBox: Identifiable {
     let id = UUID()
     var rect: CGRect
     let word: String
-    let size: CGFloat
+    var size: CGFloat
     var position: CGPoint
     var opacity: Double = 0
     var rotation: Angle = .zero
@@ -22,35 +22,75 @@ struct WordCloudView: View {
     @State private var availableSize: CGSize = .zero
     @State private var spacing: CGFloat = 20
     @State private var animationProgress: Double = 0
+    @State private var items: [BoundingBox] = []
+    @State private var selectedWord: BoundingBox?
+    @State private var showingContentView = false
     let animationDuration: Double = 2.0
+    let titleSize: CGFloat = 40
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                ForEach(boundingBoxes) { box in
-                    Text(box.word)
-                        .font(.system(size: box.size))
-                        .foregroundColor(Color(
-                            red: .random(in: 0.4...1),
-                            green: .random(in: 0.4...1),
-                            blue: .random(in: 0.4...1)
-                        ))
-                        .position(animatedPosition(for: box))
-                        .opacity(box.opacity)
-                        .rotationEffect(box.rotation)
+            // Title area
+            ZStack(alignment: .center) {
+                if let selectedWord {
+                    Text(selectedWord.word)
+                        .font(.system(size: titleSize))
+                        .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .opacity))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
-            .onAppear {
-                availableSize = geometry.size
-                calculateSpacing(for: geometry.size)
-                layoutWords(in: geometry.size)
-                startAnimation()
+            .padding(.top, 150)
+            .frame(height: 30)
+            .zIndex(1)
+
+            if showingContentView {
+                ThoughtStreamView(viewModel: viewModel.thoughtStreamViewModel)
+            } else {
+                ZStack {
+                    ForEach(boundingBoxes) { box in
+                        Text(box.word)
+                            .font(.system(size: box.size))
+                            .foregroundColor(Color(
+                                red: .random(in: 0.4...1),
+                                green: .random(in: 0.4...1),
+                                blue: .random(in: 0.4...1)
+                            ))
+                            .position(animatedPosition(for: box))
+                            .opacity(box.opacity)
+                            .rotationEffect(box.rotation)
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.5)) {
+                                    selectWord(box, in: geometry.size)
+                                }
+                            }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .onAppear {
+                    availableSize = geometry.size
+                    calculateSpacing(for: geometry.size)
+                    layoutWords(in: geometry.size)
+                    startAnimation()
+                }
             }
         }
     }
 
+    func selectWord(_ item: BoundingBox, in size: CGSize) {
+        selectedWord = item
+
+        // Animate the selected word to the title area
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index].position = CGPoint(x: size.width / 2, y: 30)
+            items[index].size = titleSize
+        }
+
+        // Show the content view after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            showingContentView = true
+        }
+    }
+    
     func startAnimation() {
         withAnimation(.easeInOut(duration: animationDuration)) {
             animationProgress = 1.0
@@ -148,8 +188,8 @@ struct WordCloudView: View {
              let x = size.width / 2 + cos(angle) * radius
              let y = size.height / 2 + sin(angle) * radius
              // Ensure the x and y coordinates are within the visible area of the screen
-             let adjustedX = max(box.rect.width / 2, min(x, size.width - box.rect.width / 2))
-             let adjustedY = max(box.rect.height / 2, min(y, size.height - box.rect.height / 2))
+             _ = max(box.rect.width / 2, min(x, size.width - box.rect.width / 2))
+             _ = max(box.rect.height / 2, min(y, size.height - box.rect.height / 2))
              
              let proposedRect = CGRect(x: x, y: y, width: box.rect.width, height: box.rect.height)
              
@@ -191,6 +231,16 @@ enum WordCloudAnimationType {
     case falling
     case rising
     case swirling
+}
+
+struct WordCloudItem: Identifiable {
+    let id = UUID()
+    let text: String
+    var size: CGFloat
+    let color: Color
+    var position: CGPoint
+    var initialPosition: CGPoint
+    var frame: CGRect = .zero
 }
 
 class WordCloudViewModel: ObservableObject {
