@@ -33,6 +33,9 @@ class WebSocketManager: ObservableObject {
     private var kasPublicKeyCallback: ((P256.KeyAgreement.PublicKey) -> Void)?
     private var rewrapCallback: ((Data, SymmetricKey?) -> Void)?
     private var customMessageCallback: ((Data) -> Void)?
+    private var reconnectTimer: Timer?
+    private let maxReconnectAttempts = 5
+    private var reconnectAttempts = 0
 
     func setupWebSocket(token: String) {
         let url = URL(string: "wss://kas.arkavo.net")!
@@ -55,8 +58,12 @@ class WebSocketManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.connectionState = state
-                if state == .disconnected {
+                if state == .connected {
+                    self?.stopReconnectTimer()
+                    self?.reconnectAttempts = 0
+                } else if state == .disconnected {
                     self?.lastError = "WebSocket disconnected"
+                    self?.startReconnectTimer()
                 }
             }
             .store(in: &cancellables)
@@ -65,6 +72,15 @@ class WebSocketManager: ObservableObject {
     func connect() {
         lastError = nil
         webSocket?.connect()
+        startReconnectTimer()
+    }
+    
+    func disconnect() {
+        stopReconnectTimer()
+        webSocket?.disconnect()
+        cancellables.removeAll()
+        webSocket = nil
+        connectionState = .disconnected
     }
 
     func close() {
@@ -74,6 +90,32 @@ class WebSocketManager: ObservableObject {
         connectionState = .disconnected
     }
 
+    private func startReconnectTimer() {
+        stopReconnectTimer()
+        reconnectTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.attemptReconnect()
+        }
+    }
+
+    private func stopReconnectTimer() {
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
+        reconnectAttempts = 0
+    }
+
+    private func attemptReconnect() {
+        guard connectionState == .disconnected else { return }
+        
+        if reconnectAttempts < maxReconnectAttempts {
+            reconnectAttempts += 1
+            print("Attempting to reconnect... (Attempt \(reconnectAttempts))")
+            connect()
+        } else {
+            print("Max reconnection attempts reached. Please try again later.")
+            stopReconnectTimer()
+        }
+    }
+    
     func setKASPublicKeyCallback(_ callback: @escaping (P256.KeyAgreement.PublicKey) -> Void) {
         kasPublicKeyCallback = callback
         webSocket?.setKASPublicKeyCallback(callback)
