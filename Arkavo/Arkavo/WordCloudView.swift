@@ -20,9 +20,8 @@ struct WordCloudView: View {
     @StateObject var viewModel: WordCloudViewModel
     @State private var boundingBoxes: [BoundingBox] = []
     @State private var availableSize: CGSize = .zero
-    @State private var spacing: CGFloat = 10
+    @State private var spacing: CGFloat = 20
     @State private var animationProgress: Double = 0
-    
     let animationDuration: Double = 2.0
 
     var body: some View {
@@ -102,7 +101,7 @@ struct WordCloudView: View {
         let totalArea = size.width * size.height
         let wordCount = CGFloat(viewModel.words.count)
         let averageAreaPerWord = totalArea / wordCount
-        spacing = sqrt(averageAreaPerWord) * 0.15  // Increased factor for more spacing
+        spacing = sqrt(averageAreaPerWord) * 0.2  // Increased factor for more spacing
     }
 
     func layoutWords(in size: CGSize) {
@@ -139,33 +138,30 @@ struct WordCloudView: View {
     }
 
     func findNonOverlappingPosition(for box: BoundingBox, in size: CGSize) -> CGPoint? {
-        let maxAttempts = 5000
-        let minDistance: CGFloat = 0  // Minimum distance from other words
-        
-        for attempt in 0..<maxAttempts {
-            let angle = CGFloat(attempt) * CGFloat.pi * (3 - sqrt(5))
-            let normalizedRadius = CGFloat(attempt) / CGFloat(maxAttempts)
-            let radius = normalizedRadius * min(size.width, size.height) * 0.48  // Use 48% of the smaller dimension
-            
-            let x = size.width * 0.5 + cos(angle) * radius
-            let y = size.height * 0.5 + sin(angle) * radius
-            
-            let proposedRect = CGRect(x: x - box.rect.width * 0.5,
-                                      y: y - box.rect.height * 0.5,
-                                      width: box.rect.width,
-                                      height: box.rect.height)
-            
-            if proposedRect.minX >= 0 && proposedRect.minY >= 0 &&
-               proposedRect.maxX <= size.width && proposedRect.maxY <= size.height &&
-               !boundingBoxes.contains(where: {
-                   $0.rect.insetBy(dx: -minDistance, dy: -minDistance).intersects(proposedRect)
-               }) {
-                return CGPoint(x: x - box.rect.width * 0.5, y: y - box.rect.height * 0.5)
-            }
-        }
-        
-        return nil
-    }
+         let stepSize: CGFloat = spacing
+         let maxAttempts = 3000
+         
+         for attempt in 0..<maxAttempts {
+             let angle = CGFloat(attempt) * CGFloat.pi * (3 - sqrt(5))
+             let radius = sqrt(CGFloat(attempt)) * stepSize
+             
+             let x = size.width / 2 + cos(angle) * radius
+             let y = size.height / 2 + sin(angle) * radius
+             // Ensure the x and y coordinates are within the visible area of the screen
+             let adjustedX = max(box.rect.width / 2, min(x, size.width - box.rect.width / 2))
+             let adjustedY = max(box.rect.height / 2, min(y, size.height - box.rect.height / 2))
+             
+             let proposedRect = CGRect(x: x, y: y, width: box.rect.width, height: box.rect.height)
+             
+             if proposedRect.minX >= 20 && proposedRect.minY >= 0 &&
+                proposedRect.maxX <= size.width && proposedRect.maxY <= size.height &&
+                !boundingBoxes.contains(where: { $0.rect.intersects(proposedRect) }) {
+                 return CGPoint(x: x, y: y)
+             }
+         }
+         
+         return nil
+     }
 }
 
 struct BoundingBoxView: View {
@@ -220,15 +216,25 @@ class WordCloudViewModel: ObservableObject {
 struct WordCloudView_Previews: PreviewProvider {
     static var previews: some View {
         let words: [(String, CGFloat)] = [
-            ("SwiftUI", 60), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
-            ("Apple", 40), ("Developer", 35), ("Code", 30), ("App", 25),
+            ("SwiftUI", 22), ("iOS", 50), ("Xcode", 45), ("Swift", 55),
+            ("Apple", 40), ("Developer", 35), ("Code", 30),
             ("UI", 20), ("UX", 15), ("Design", 30), ("Mobile", 25),
         ]
+        let moreWords: [(String, CGFloat)] = [
+            ("Feedback", 60), ("Technology", 50), ("Fitness", 45), ("Activism", 55),
+            ("Sports", 40), ("Career", 35), ("Education", 30), ("Beauty", 25),
+            ("Fashion", 20), ("Gaming", 15), ("Entertainment", 30), ("Climate Change", 25),
+        ]
+        let moreWordsDifferentSize: [(String, CGFloat)] = [
+            ("Feedback", 33), ("Technology", 11), ("Fitness", 22), ("Activism", 44),
+            ("Sports", 32), ("Career", 21), ("Education", 11), ("Beauty", 35),
+            ("Fashion", 38), ("Gaming", 12), ("Entertainment", 36), ("Climate Change", 16),
+        ]
         Group {
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .rotating))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .explosion))
+            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWordsDifferentSize, animationType: .rotating))
+            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .explosion))
             WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .falling))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .rising))
+            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .rising))
             WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .swirling))
         }
     }
