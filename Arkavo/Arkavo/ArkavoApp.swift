@@ -10,10 +10,8 @@ struct ArkavoApp: App {
         WindowGroup {
             ArkavoView()
                 .modelContainer(persistenceController.container)
-                .onAppear {
-                    Task {
-                        await ensureAccountExists()
-                    }
+                .task {
+                    await ensureAccountExists()
                 }
             #if os(macOS)
                 .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
@@ -21,16 +19,20 @@ struct ArkavoApp: App {
             #endif
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background {
+            switch newPhase {
+            case .active:
+                Task {
+                    await ensureAccountExists()
+                }
+            case .background:
                 Task {
                     await saveChanges()
                 }
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
-            }
-            if newPhase == .active {
-                Task {
-                    await ensureAccountExists()
-                }
+            case .inactive:
+                break
+            @unknown default:
+                break
             }
         }
         #if os(macOS)
@@ -41,9 +43,7 @@ struct ArkavoApp: App {
 
     private func ensureAccountExists() async {
         do {
-            let account = try await Task { @PersistenceActor in
-                try await persistenceController.getOrCreateAccount()
-            }.value
+            let account = try await persistenceController.getOrCreateAccount()
             print("ArkavoApp: Account ensured with ID: \(account.id)")
         } catch {
             print("ArkavoApp: Error ensuring Account exists: \(error.localizedDescription)")
@@ -52,9 +52,7 @@ struct ArkavoApp: App {
 
     private func saveChanges() async {
         do {
-            try await Task { @PersistenceActor in
-                try await persistenceController.saveChanges()
-            }.value
+            try await persistenceController.saveChanges()
             print("ArkavoApp: Changes saved successfully")
         } catch {
             print("ArkavoApp: Error saving changes: \(error.localizedDescription)")
