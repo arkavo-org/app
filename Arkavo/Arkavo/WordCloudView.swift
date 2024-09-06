@@ -39,6 +39,7 @@ struct WordCloudView: View {
                 }
             }
             .padding(.top, 150)
+            .padding(.leading, 20)
             .frame(height: 30)
             .zIndex(1)
 
@@ -187,14 +188,10 @@ struct WordCloudView: View {
              
              let x = size.width / 2 + cos(angle) * radius
              let y = size.height / 2 + sin(angle) * radius
-             // Ensure the x and y coordinates are within the visible area of the screen
-             _ = max(box.rect.width / 2, min(x, size.width - box.rect.width / 2))
-             _ = max(box.rect.height / 2, min(y, size.height - box.rect.height / 2))
+            let proposedRect = CGRect(x: x, y: y, width: box.rect.width, height: box.rect.height)
              
-             let proposedRect = CGRect(x: x, y: y, width: box.rect.width, height: box.rect.height)
-             
-             if proposedRect.minX >= 20 && proposedRect.minY >= 0 &&
-                proposedRect.maxX <= size.width && proposedRect.maxY <= size.height &&
+             if proposedRect.minX >= 80 && proposedRect.minY >= 0 &&
+                proposedRect.maxX <= size.width + 80 && proposedRect.maxY <= size.height &&
                 !boundingBoxes.contains(where: { $0.rect.intersects(proposedRect) }) {
                  return CGPoint(x: x, y: y)
              }
