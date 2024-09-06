@@ -51,9 +51,9 @@ struct WordCloudView: View {
                         Text(box.word)
                             .font(.system(size: box.size))
                             .foregroundColor(Color(
-                                red: .random(in: 0.4...1),
-                                green: .random(in: 0.4...1),
-                                blue: .random(in: 0.4...1)
+                                red: .random(in: 0.4 ... 1),
+                                green: .random(in: 0.4 ... 1),
+                                blue: .random(in: 0.4 ... 1)
                             ))
                             .position(animatedPosition(for: box))
                             .opacity(box.opacity)
@@ -91,14 +91,14 @@ struct WordCloudView: View {
             showingContentView = true
         }
     }
-    
+
     func startAnimation() {
         withAnimation(.easeInOut(duration: animationDuration)) {
             animationProgress = 1.0
-            
-            for i in 0..<boundingBoxes.count {
+
+            for i in 0 ..< boundingBoxes.count {
                 boundingBoxes[i].opacity = 1.0
-                
+
                 switch viewModel.animationType {
                 case .rotating:
                     boundingBoxes[i].rotation = .degrees(360)
@@ -113,7 +113,7 @@ struct WordCloudView: View {
     func animatedPosition(for box: BoundingBox) -> CGPoint {
         let startPosition: CGPoint
         let endPosition = box.position
-        
+
         switch viewModel.animationType {
         case .rotating:
             return endPosition
@@ -131,7 +131,7 @@ struct WordCloudView: View {
                 y: endPosition.y + sin(angle) * radius
             )
         }
-        
+
         return CGPoint(
             x: startPosition.x + (endPosition.x - startPosition.x) * animationProgress,
             y: startPosition.y + (endPosition.y - startPosition.y) * animationProgress
@@ -142,7 +142,7 @@ struct WordCloudView: View {
         let totalArea = size.width * size.height
         let wordCount = CGFloat(viewModel.words.count)
         let averageAreaPerWord = totalArea / wordCount
-        spacing = sqrt(averageAreaPerWord) * 0.2  // Increased factor for more spacing
+        spacing = sqrt(averageAreaPerWord) * 0.2 // Increased factor for more spacing
     }
 
     func layoutWords(in size: CGSize) {
@@ -155,9 +155,9 @@ struct WordCloudView: View {
                 rect: CGRect(origin: .zero, size: CGSize(width: textSize.width + spacing, height: textSize.height + spacing)),
                 word: word.0,
                 size: wordSize,
-                position: .zero  // We'll set this later if we find a position
+                position: .zero // We'll set this later if we find a position
             )
-            
+
             if let position = findNonOverlappingPosition(for: box, in: size) {
                 var newBox = box
                 newBox.position = position
@@ -179,26 +179,27 @@ struct WordCloudView: View {
     }
 
     func findNonOverlappingPosition(for box: BoundingBox, in size: CGSize) -> CGPoint? {
-         let stepSize: CGFloat = spacing
-         let maxAttempts = 3000
-         
-         for attempt in 0..<maxAttempts {
-             let angle = CGFloat(attempt) * CGFloat.pi * (3 - sqrt(5))
-             let radius = sqrt(CGFloat(attempt)) * stepSize
-             
-             let x = size.width / 2 + cos(angle) * radius
-             let y = size.height / 2 + sin(angle) * radius
+        let stepSize: CGFloat = spacing
+        let maxAttempts = 3000
+
+        for attempt in 0 ..< maxAttempts {
+            let angle = CGFloat(attempt) * CGFloat.pi * (3 - sqrt(5))
+            let radius = sqrt(CGFloat(attempt)) * stepSize
+
+            let x = size.width / 2 + cos(angle) * radius
+            let y = size.height / 2 + sin(angle) * radius
             let proposedRect = CGRect(x: x, y: y, width: box.rect.width, height: box.rect.height)
-             
-             if proposedRect.minX >= 80 && proposedRect.minY >= 0 &&
-                proposedRect.maxX <= size.width + 80 && proposedRect.maxY <= size.height &&
-                !boundingBoxes.contains(where: { $0.rect.intersects(proposedRect) }) {
-                 return CGPoint(x: x, y: y)
-             }
-         }
-         
-         return nil
-     }
+
+            if proposedRect.minX >= 80, proposedRect.minY >= 0,
+               proposedRect.maxX <= size.width + 80, proposedRect.maxY <= size.height,
+               !boundingBoxes.contains(where: { $0.rect.intersects(proposedRect) })
+            {
+                return CGPoint(x: x, y: y)
+            }
+        }
+
+        return nil
+    }
 }
 
 struct BoundingBoxView: View {

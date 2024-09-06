@@ -14,8 +14,7 @@ struct ThoughtStreamView: View {
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
-
-    // MARK: - BODY
+    @State private var cancellables = Set<AnyCancellable>()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,13 +23,23 @@ struct ThoughtStreamView: View {
                 Spacer()
 
                 // Messages
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(viewModel.allThoughts) { wrapper in
-                            MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.profile!.name)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(viewModel.allThoughts) { wrapper in
+                                MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.profile!.name)
+                                    .id(wrapper.id)
+                            }
+                        }
+                        .padding()
+                    }
+                    .onReceive(viewModel.$allThoughts.debounce(for: .milliseconds(100), scheduler: RunLoop.main)) { _ in
+                        if let lastThought = viewModel.allThoughts.last {
+                            withAnimation {
+                                proxy.scrollTo(lastThought.id, anchor: .bottom)
+                            }
                         }
                     }
-                    .padding()
                 }
 
                 // Input area
@@ -38,13 +47,10 @@ struct ThoughtStreamView: View {
                     TextField("Type a message...", text: $inputText)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .disabled(isSending)
-
-                    Button(action: sendThought) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .foregroundColor(isSending ? .gray : .blue)
-                            .font(.title)
-                    }
-                    .disabled(isSending)
+                        .focused($isInputFocused)
+                        .onSubmit {
+                            sendThought()
+                        }
                 }
                 .padding()
 
