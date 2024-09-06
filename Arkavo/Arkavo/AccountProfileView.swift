@@ -1,22 +1,6 @@
 import SwiftData
 import SwiftUI
 
-struct AccountProfileCompactView: View {
-    @ObservedObject var viewModel: AccountProfileViewModel
-
-    var body: some View {
-        HStack {
-            Text(viewModel.profile.name)
-                .font(.headline)
-            Spacer()
-            Text(viewModel.profile.blurb ?? "")
-                .font(.subheadline)
-                .lineLimit(1)
-        }
-        .padding(.vertical, 8)
-    }
-}
-
 struct AccountProfileDetailedView: View {
     @ObservedObject var viewModel: AccountProfileViewModel
     @Environment(\.dismiss) private var dismiss
@@ -57,12 +41,45 @@ struct AccountProfileDetailedView: View {
     }
 }
 
+class Interest   {
+    var name: String
+    var isSelected: Bool
+    
+    init(name: String, isSelected: Bool) {
+        self.name = name
+        self.isSelected = isSelected
+    }
+}
+
+
 struct AccountProfileCreateView: View {
     @StateObject var viewModel = AccountProfileCreateViewModel()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) var modelContext
     var onSave: (Profile) -> Void
     @Binding var selectedView: ArkavoView.SelectedView
+    
+    @State private var interests: [Interest] = [
+        Interest(name: "Sports", isSelected: false),
+        Interest(name: "Music", isSelected: false),
+        Interest(name: "Food", isSelected: false),
+        Interest(name: "Politics", isSelected: false),
+        Interest(name: "Gaming", isSelected: false)
+    ]
+    
+    @State private var areSelected: [Bool] = [false,false,false,false,false]
+
+    var currentInterest: String {
+        var curInterest: [String] = []
+        
+        interests.forEach { interest in
+            if interest.isSelected {
+                curInterest.append(interest.name)
+            }
+        }
+
+        return curInterest.joined(separator: ",")
+    }
 
     var body: some View {
         Spacer()
@@ -97,11 +114,39 @@ struct AccountProfileCreateView: View {
                     Text(blurbError).foregroundColor(.red)
                 }
             }
-            Button("Register") {
-                let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb)
+            Section(header: Text("Interests")) {
+                List  {
+                    ForEach(interests.indices, id: \.self) { i in
+                        HStack {
+                            Text(interests[i].name)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                areSelected[i].toggle()
+                                interests[i].isSelected = areSelected[i]
+                                
+                            }, label: {
+                                Image(systemName: areSelected[i] ? "circle.fill" : "circle")
+                                  .font(.system(size: 20, weight: .light))
+                            })
+                        }
+                    }
+                }
+            }
+            Button(action: {
+                let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
                 modelContext.insert(profile)
                 onSave(profile)
                 dismiss()
+            }) {
+                Text("Register")
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(minWidth: 200)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(10)
             }
             .disabled(!viewModel.isValid)
         }

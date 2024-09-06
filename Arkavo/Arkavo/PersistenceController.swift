@@ -18,6 +18,9 @@ class PersistenceController {
                 Profile.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            // find out where SwiftData is storing the sqlite database
+            print(modelConfiguration.url)
+            
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
 //            print("PersistenceController: ModelContainer created successfully")
         } catch {
