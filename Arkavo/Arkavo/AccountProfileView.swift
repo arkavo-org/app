@@ -105,9 +105,9 @@ struct AccountProfileCreateView: View {
             Section(header: Text("Profile Information")) {
                 TextField("Name", text: $viewModel.name)
 
-                if let nameError = viewModel.nameError {
-                    Text(nameError).foregroundColor(.red)
-                }
+//                if let nameError = viewModel.nameError {
+//                    Text(nameError).foregroundColor(.red)
+//                }
 
                 TextField("Blurb", text: $viewModel.blurb)
                 if let blurbError = viewModel.blurbError {
