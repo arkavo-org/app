@@ -18,55 +18,46 @@ struct ThoughtStreamView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main chat area
             VStack {
                 Spacer()
-
-                // Messages
-                ScrollViewReader { proxy in
+                    .frame(height: 90)
+                ScrollViewReader { _ in
                     ScrollView {
+                        // Input area
+                        HStack {
+                            TextField("Type a message...", text: $inputText)
+                                .padding(10)
+                                .background(Color.blue.opacity(0.3))
+                                .foregroundColor(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .disabled(isSending)
+                                .focused($isInputFocused)
+                                .onSubmit {
+                                    sendThought()
+                                }
+                        }
+                        .padding()
                         LazyVStack(spacing: 8) {
-                            ForEach(viewModel.allThoughts) { wrapper in
+                            ForEach(Array(viewModel.allThoughts.reversed().enumerated()), id: \.element.id) { index, wrapper in
+                                let totalThoughts = viewModel.allThoughts.count
+                                let opacity = Double(totalThoughts - index) / Double(totalThoughts)
                                 MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.profile!.name)
+                                    .opacity(opacity)
                                     .id(wrapper.id)
                             }
                         }
-                        .padding()
-                    }
-                    .onReceive(viewModel.$allThoughts.debounce(for: .milliseconds(100), scheduler: RunLoop.main)) { _ in
-                        if let lastThought = viewModel.allThoughts.last {
-                            withAnimation {
-                                proxy.scrollTo(lastThought.id, anchor: .bottom)
-                            }
-                        }
                     }
                 }
-
-                // Input area
-                HStack {
-                    TextField("Type a message...", text: $inputText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .disabled(isSending)
-                        .focused($isInputFocused)
-                        .onSubmit {
-                            sendThought()
-                        }
-                }
-                .padding()
-
-                Spacer()
             }
-            .padding(.top, 30)
-            .padding(.bottom, 30)
+        }
+        .onTapGesture {
+            isInputFocused = true
         }
     }
 
     private func sendThought() {
         guard !inputText.isEmpty else { return }
-
-        // profile must be set
         guard ((viewModel.profile?.name.isEmpty) == nil) == false else { return }
-
         let newThought = Thought.createTextThoughtWithSender(inputText, sender: viewModel.profile!.name)
         viewModel.sendThought(thought: newThought)
         inputText = ""
