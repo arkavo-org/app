@@ -66,16 +66,14 @@ struct ArkavoView: View {
                 case .initial:
                     initialWelcomeView
                         .sheet(isPresented: $showingProfileCreation) {
-                            if let account = accounts.first {
-                                AccountProfileCreateView(
-                                    onSave: { newProfile in
-                                        Task {
-                                            await saveProfile(newProfile: newProfile, for: account)
-                                        }
-                                    },
-                                    selectedView: $selectedView
-                                )
-                            }
+                            AccountProfileCreateView(
+                                onSave: { profile in
+                                    Task {
+                                        await saveProfile(profile: profile)
+                                    }
+                                },
+                                selectedView: $selectedView
+                            )
                         }
                 case .map:
                     mapContent
@@ -104,13 +102,7 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                    let profile1 = Profile(name: "Feedback", blurb: "This is the first stream")
-                    let stream1 = Stream(name: "Feedback", ownerUUID: UUID(), profile: profile1)
-                    let profile2 = Profile(name: "Technology", blurb: "This is the second stream")
-                    let stream2 = Stream(name: "Technology", ownerUUID: UUID(), profile: profile2)
-                    let profile3 = Profile(name: "Beauty", blurb: "This is the third stream")
-                    let stream3 = Stream(name: "Beauty", ownerUUID: UUID(), profile: profile3)
-                    StreamManagementView(streams: [stream1, stream2, stream3])
+                    StreamManagementView()
                 }
                 if selectedView != .initial {
                     VStack {
@@ -482,20 +474,18 @@ struct ArkavoView: View {
         }
     }
 
-    private func saveProfile(newProfile: Profile, for account: Account) async {
+    private func saveProfile(profile: Profile) async {
         guard let persistenceController else {
             print("PersistenceController not initialized")
             return
         }
-
-        let createdProfile = persistenceController.createProfile(name: newProfile.name, blurb: newProfile.blurb)
-        account.profile = createdProfile
-        thoughtStreamViewModel.profile = createdProfile
-
         do {
+            let account = try persistenceController.getOrCreateAccount()
+            account.profile = profile
+            thoughtStreamViewModel.profile = profile
             try persistenceController.saveChanges()
 
-            authenticationManager.signUp(accountName: createdProfile.name)
+            authenticationManager.signUp(accountName: profile.name)
             startTokenCheck()
             await MainActor.run {
                 selectedView = .map

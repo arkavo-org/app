@@ -4,17 +4,12 @@ import SwiftUI
 
 struct StreamManagementView: View {
     @Query private var accounts: [Account]
-    private var streams: [Stream]
     @State private var showingCreateStream = false
-
-    init(streams: [Stream]) {
-        self.streams = streams
-    }
 
     var body: some View {
         List {
             Section(header: Text("My Streams")) {
-                ForEach(streams) { stream in
+                ForEach(accounts.first!.streams) { stream in
                     CompactStreamProfileView(viewModel: StreamProfileViewModel(profile: stream.profile, participantCount: 2))
                 }
                 .onDelete(perform: deleteStreams)
@@ -33,17 +28,13 @@ struct StreamManagementView: View {
     }
 
     private func createNewStream(with streamProfile: Profile) {
-        if let account = accounts.first,
-           let accountProfile = account.profile
-        {
-            _ = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
-//            do {
-//                try modelContext.save()
-//            } catch {
-//                print("Failed to save new stream: \(error)")
-//            }
-        } else {
-            print("No profile found")
+        do {
+            let account = try PersistenceController.shared.getOrCreateAccount()
+            let stream = Stream(account: account, profile: streamProfile)
+            try account.addStream(stream)
+            try PersistenceController.shared.saveChanges()
+        } catch {
+            print("Stream creation failed: \(error.localizedDescription)")
         }
     }
 
@@ -63,19 +54,50 @@ struct StreamManagementView: View {
 
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            StreamManagementView(streams: mockStreams())
+        Group {
+            NavigationView {
+                StreamManagementView()
+            }
+            .previewDisplayName("Main View")
+
+            CreateStreamProfileView { _, _ in
+                // This is just for preview, so we'll leave the closure empty
+            }
+            .previewDisplayName("Create Stream Sheet")
         }
-        .modelContainer(for: [Account.self, Profile.self], inMemory: true)
+        .modelContainer(previewContainer)
     }
 
-    static func mockStreams() -> [Stream] {
-        let profile1 = Profile(name: "Stream 1", blurb: "This is the first stream")
-        let stream1 = Stream(name: "Stream 1", ownerUUID: UUID(), profile: profile1)
-        let profile2 = Profile(name: "Stream 2", blurb: "This is the second stream")
-        let stream2 = Stream(name: "Stream 2", ownerUUID: UUID(), profile: profile2)
-        let profile3 = Profile(name: "Stream 3", blurb: "This is the third stream")
-        let stream3 = Stream(name: "Stream 3", ownerUUID: UUID(), profile: profile3)
-        return [stream1, stream2, stream3]
+    static var previewContainer: ModelContainer {
+        let schema = Schema([Account.self, Profile.self, Stream.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+
+        do {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let context = container.mainContext
+
+            // Create and save sample data
+            let account = Account()
+            context.insert(account)
+            try context.save()
+
+            let profiles = [
+                Profile(name: "Stream 1", blurb: "This is the first stream"),
+                Profile(name: "Stream 2", blurb: "This is the second stream"),
+                Profile(name: "Stream 3", blurb: "This is the third stream"),
+            ]
+
+            for profile in profiles {
+                let stream = Stream(account: account, profile: profile)
+                account.streams.append(stream)
+                try context.save()
+            }
+
+            try context.save()
+
+            return container
+        } catch {
+            fatalError("Failed to create preview container: \(error.localizedDescription)")
+        }
     }
 }
