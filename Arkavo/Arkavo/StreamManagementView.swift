@@ -3,7 +3,6 @@ import SwiftData
 import SwiftUI
 
 struct StreamManagementView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     private var streams: [Stream]
     @State private var showingCreateStream = false
@@ -37,7 +36,7 @@ struct StreamManagementView: View {
         if let account = accounts.first,
            let accountProfile = account.profile
         {
-            let newStream = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
+            _ = Stream(name: streamProfile.name, ownerUUID: accountProfile.id, profile: streamProfile)
 //            do {
 //                try modelContext.save()
 //            } catch {

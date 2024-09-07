@@ -55,7 +55,6 @@ class Interest   {
 struct AccountProfileCreateView: View {
     @StateObject var viewModel = AccountProfileCreateViewModel()
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) var modelContext
     var onSave: (Profile) -> Void
     @Binding var selectedView: ArkavoView.SelectedView
     
@@ -136,7 +135,6 @@ struct AccountProfileCreateView: View {
             }
             Button(action: {
                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
-                modelContext.insert(profile)
                 onSave(profile)
                 dismiss()
             }) {

@@ -9,11 +9,12 @@ import SwiftUI
 
 struct ArkavoView: View {
     @Environment(\.locale) var locale
-    @Environment(\.modelContext) private var modelContext
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
     let nanoTDFManager = NanoTDFManager()
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    // Data model
+    @State private var persistenceController: PersistenceController?
     // map
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var mapUpdateTrigger = UUID()
@@ -68,15 +69,8 @@ struct ArkavoView: View {
                             if let account = accounts.first {
                                 AccountProfileCreateView(
                                     onSave: { newProfile in
-                                        account.profile = newProfile
-                                        thoughtStreamViewModel.profile = newProfile
-                                        do {
-                                            try modelContext.save()
-                                            authenticationManager.signUp(accountName: newProfile.name)
-                                            startTokenCheck()
-                                            selectedView = .map
-                                        } catch {
-                                            print("Failed to save profile: \(error)")
+                                        Task {
+                                            await saveProfile(newProfile: newProfile, for: account)
                                         }
                                     },
                                     selectedView: $selectedView
@@ -358,32 +352,35 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        setupCallbacks()
-        setupWebSocketManager()
-        // Initialize ThoughtStreamViewModel
-        thoughtStreamViewModel.initialize(
-            webSocketManager: webSocketManager,
-            nanoTDFManager: nanoTDFManager,
-            kasPublicKey: $kasPublicKey
-        )
-        // Initialize VideoSteamViewModel
-        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        Task {
+            setupCallbacks()
+            setupWebSocketManager()
+            persistenceController = PersistenceController.shared
+            // Initialize ThoughtStreamViewModel
+            thoughtStreamViewModel.initialize(
+                webSocketManager: webSocketManager,
+                nanoTDFManager: nanoTDFManager,
+                kasPublicKey: $kasPublicKey
+            )
+            // Initialize VideoSteamViewModel
+#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
             videoStreamViewModel.initialize(
                 webSocketManager: webSocketManager,
                 nanoTDFManager: nanoTDFManager,
                 kasPublicKey: $kasPublicKey
             )
-        #endif
-        if let account = accounts.first {
-            if account.profile == nil {
-                selectedView = .initial
+#endif
+            if let account = accounts.first {
+                if account.profile == nil {
+                    selectedView = .initial
+                } else {
+                    selectedView = .map
+                    thoughtStreamViewModel.profile = account.profile
+                }
             } else {
-                selectedView = .map
-                thoughtStreamViewModel.profile = account.profile
+                selectedView = .initial
+                // TODO: check if account needs to be created in edge case when deleted app and reinstalled
             }
-        } else {
-            selectedView = .initial
-            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
 
@@ -487,6 +484,29 @@ struct ArkavoView: View {
         }
     }
 
+    private func saveProfile(newProfile: Profile, for account: Account) async {
+        guard let persistenceController = persistenceController else {
+            print("PersistenceController not initialized")
+            return
+        }
+
+        let createdProfile = persistenceController.createProfile(name: newProfile.name, blurb: newProfile.blurb)
+        account.profile = createdProfile
+        thoughtStreamViewModel.profile = createdProfile
+
+        do {
+            try persistenceController.saveChanges()
+            
+            authenticationManager.signUp(accountName: createdProfile.name)
+            startTokenCheck()
+            await MainActor.run {
+                selectedView = .map
+            }
+        } catch {
+            print("Failed to save profile: \(error)")
+        }
+    }
+    
     private func addCityAnnotation(_ city: City) {
         annotationManager.addAnnotation(city)
     }
