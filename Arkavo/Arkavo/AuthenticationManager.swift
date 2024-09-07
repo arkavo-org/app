@@ -21,7 +21,7 @@ import SwiftData
 
 // TODO: rename to AuthenticationService
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    private let signingKeyAppTag: String = "net.arkavo.Arkavo"
+    private let signingKeyAppTag: String = "com.arkavo.Arkavo"
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
     private var authenticationToken: Data?
