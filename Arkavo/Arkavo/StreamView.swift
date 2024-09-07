@@ -2,7 +2,7 @@ import CryptoKit
 import SwiftData
 import SwiftUI
 
-struct StreamManagementView: View {
+struct StreamView: View {
     @Query private var accounts: [Account]
     @State private var showingCreateStream = false
 
@@ -56,7 +56,7 @@ struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             NavigationView {
-                StreamManagementView()
+                StreamView()
             }
             .previewDisplayName("Main View")
 

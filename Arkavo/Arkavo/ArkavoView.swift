@@ -102,7 +102,7 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streams:
-                    StreamManagementView()
+                    StreamView()
                 }
                 if selectedView != .initial {
                     VStack {
