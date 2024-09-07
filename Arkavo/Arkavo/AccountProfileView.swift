@@ -41,38 +41,36 @@ struct AccountProfileDetailedView: View {
     }
 }
 
-class Interest   {
+class Interest {
     var name: String
     var isSelected: Bool
-    
+
     init(name: String, isSelected: Bool) {
         self.name = name
         self.isSelected = isSelected
     }
 }
 
-
 struct AccountProfileCreateView: View {
     @StateObject var viewModel = AccountProfileCreateViewModel()
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) var modelContext
     var onSave: (Profile) -> Void
     @Binding var selectedView: ArkavoView.SelectedView
-    
+
     @State private var interests: [Interest] = [
         Interest(name: "Sports", isSelected: false),
         Interest(name: "Music", isSelected: false),
         Interest(name: "Food", isSelected: false),
         Interest(name: "Politics", isSelected: false),
-        Interest(name: "Gaming", isSelected: false)
+        Interest(name: "Gaming", isSelected: false),
     ]
-    
-    @State private var areSelected: [Bool] = [false,false,false,false,false]
+
+    @State private var areSelected: [Bool] = [false, false, false, false, false]
 
     var currentInterest: String {
         var curInterest: [String] = []
-        
-        interests.forEach { interest in
+
+        for interest in interests {
             if interest.isSelected {
                 curInterest.append(interest.name)
             }
@@ -115,20 +113,20 @@ struct AccountProfileCreateView: View {
                 }
             }
             Section(header: Text("Interests")) {
-                List  {
+                List {
                     ForEach(interests.indices, id: \.self) { i in
                         HStack {
                             Text(interests[i].name)
-                            
+
                             Spacer()
-                            
+
                             Button(action: {
                                 areSelected[i].toggle()
                                 interests[i].isSelected = areSelected[i]
-                                
+
                             }, label: {
                                 Image(systemName: areSelected[i] ? "circle.fill" : "circle")
-                                  .font(.system(size: 20, weight: .light))
+                                    .font(.system(size: 20, weight: .light))
                             })
                         }
                     }
@@ -136,7 +134,6 @@ struct AccountProfileCreateView: View {
             }
             Button(action: {
                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
-                modelContext.insert(profile)
                 onSave(profile)
                 dismiss()
             }) {

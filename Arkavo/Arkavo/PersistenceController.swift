@@ -1,11 +1,7 @@
 import Foundation
 import SwiftData
 
-@globalActor actor PersistenceActor {
-    static let shared = PersistenceActor()
-}
-
-@PersistenceActor
+@MainActor
 class PersistenceController {
     static let shared = PersistenceController()
 
@@ -18,28 +14,23 @@ class PersistenceController {
                 Profile.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            // find out where SwiftData is storing the sqlite database
             print(modelConfiguration.url)
-            
+
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-//            print("PersistenceController: ModelContainer created successfully")
         } catch {
-//            print("PersistenceController: Failed to create ModelContainer: \(error.localizedDescription)")
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Account Operations
 
-    func getOrCreateAccount() async throws -> Account {
-        let context = await container.mainContext
+    func getOrCreateAccount() throws -> Account {
+        let context = container.mainContext
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == 0 })
 
         if let existingAccount = try context.fetch(descriptor).first {
-//            print("PersistenceController: Fetched existing account")
             return existingAccount
         } else {
-//            print("PersistenceController: Creating new account")
             let newAccount = Account()
             context.insert(newAccount)
             try context.save()
@@ -49,8 +40,8 @@ class PersistenceController {
 
     // MARK: - Utility Methods
 
-    func saveChanges() async throws {
-        let context = await container.mainContext
+    func saveChanges() throws {
+        let context = container.mainContext
         if context.hasChanges {
             try context.save()
             print("PersistenceController: Changes saved successfully")
@@ -63,22 +54,11 @@ class PersistenceController {
 
     func createProfile(name: String, blurb: String?) -> Profile {
         let profile = Profile(name: name, blurb: blurb)
-        Task { @MainActor in
-            container.mainContext.insert(profile)
-        }
+        container.mainContext.insert(profile)
         return profile
     }
 
-    func fetchProfile(withID id: UUID) async throws -> Profile? {
-        try await withCheckedThrowingContinuation { continuation in
-            Task { @MainActor in
-                do {
-                    let result = try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+    func fetchProfile(withID id: UUID) throws -> Profile? {
+        try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
     }
 }

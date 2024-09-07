@@ -105,7 +105,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 print("Either challenge or userID is nil.")
                 return
             }
-//            print("signUp challengeData \(challengeData)")
+            print("signUp challengeData \(challengeData)")
             let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(
                 challenge: challengeData,
                 name: accountName,
@@ -411,11 +411,11 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                     return
                 }
                 // update Account
-                Task.detached { @PersistenceActor in
+                Task { @MainActor in
                     do {
-                        let account = try await PersistenceController.shared.getOrCreateAccount()
+                        let account = try PersistenceController.shared.getOrCreateAccount()
                         account.authenticationToken = authenticationToken
-                        try await PersistenceController.shared.saveChanges()
+                        try PersistenceController.shared.saveChanges()
                         print("Saved authentication token")
                     } catch {
                         print("Error: \(error)")
@@ -424,8 +424,8 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             } else {
                 print("Registration failed with status code: \(httpResponse.statusCode)")
                 // TODO: Notify the user of registration failure
-//                DispatchQueue.main.async {
-//                }
+                // This can now be done directly if this code is already on the main thread
+                // If not, you might need to wrap it in a Task { @MainActor in ... }
             }
         }.resume()
     }
