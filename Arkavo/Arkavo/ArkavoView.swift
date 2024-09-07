@@ -352,35 +352,33 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        Task {
-            setupCallbacks()
-            setupWebSocketManager()
-            persistenceController = PersistenceController.shared
-            // Initialize ThoughtStreamViewModel
-            thoughtStreamViewModel.initialize(
-                webSocketManager: webSocketManager,
-                nanoTDFManager: nanoTDFManager,
-                kasPublicKey: $kasPublicKey
-            )
-            // Initialize VideoSteamViewModel
-#if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        setupCallbacks()
+        setupWebSocketManager()
+        persistenceController = PersistenceController.shared
+        // Initialize ThoughtStreamViewModel
+        thoughtStreamViewModel.initialize(
+            webSocketManager: webSocketManager,
+            nanoTDFManager: nanoTDFManager,
+            kasPublicKey: $kasPublicKey
+        )
+        // Initialize VideoSteamViewModel
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
             videoStreamViewModel.initialize(
                 webSocketManager: webSocketManager,
                 nanoTDFManager: nanoTDFManager,
                 kasPublicKey: $kasPublicKey
             )
-#endif
-            if let account = accounts.first {
-                if account.profile == nil {
-                    selectedView = .initial
-                } else {
-                    selectedView = .map
-                    thoughtStreamViewModel.profile = account.profile
-                }
-            } else {
+        #endif
+        if let account = accounts.first {
+            if account.profile == nil {
                 selectedView = .initial
-                // TODO: check if account needs to be created in edge case when deleted app and reinstalled
+            } else {
+                selectedView = .map
+                thoughtStreamViewModel.profile = account.profile
             }
+        } else {
+            selectedView = .initial
+            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
 
@@ -485,7 +483,7 @@ struct ArkavoView: View {
     }
 
     private func saveProfile(newProfile: Profile, for account: Account) async {
-        guard let persistenceController = persistenceController else {
+        guard let persistenceController else {
             print("PersistenceController not initialized")
             return
         }
@@ -496,7 +494,7 @@ struct ArkavoView: View {
 
         do {
             try persistenceController.saveChanges()
-            
+
             authenticationManager.signUp(accountName: createdProfile.name)
             startTokenCheck()
             await MainActor.run {
@@ -506,7 +504,7 @@ struct ArkavoView: View {
             print("Failed to save profile: \(error)")
         }
     }
-    
+
     private func addCityAnnotation(_ city: City) {
         annotationManager.addAnnotation(city)
     }

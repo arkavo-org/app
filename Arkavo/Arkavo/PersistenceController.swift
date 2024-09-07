@@ -15,7 +15,7 @@ class PersistenceController {
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             print(modelConfiguration.url)
-            
+
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
