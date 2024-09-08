@@ -52,12 +52,6 @@ class PersistenceController {
 
     // MARK: - Profile Operations
 
-    func createProfile(name: String, blurb: String?) -> Profile {
-        let profile = Profile(name: name, blurb: blurb)
-        container.mainContext.insert(profile)
-        return profile
-    }
-
     func fetchProfile(withID id: UUID) throws -> Profile? {
         try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
     }

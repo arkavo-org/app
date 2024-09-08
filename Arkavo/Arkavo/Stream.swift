@@ -1,22 +1,35 @@
 import AppIntents
 import Foundation
+import SwiftData
 
-final class Stream {
-    let id: UUID
-    var name: String
-    let createdAt: Date
-    var updatedAt: Date
-    var ownerUUID: UUID
+@Model
+final class Stream: @unchecked Sendable {
+    @Attribute(.unique) private(set) var id: UUID
+    var account: Account
     var profile: Profile
+    var admissionPolicy: AdmissionPolicy
+    var interactionPolicy: InteractionPolicy
 
-    init(name: String, ownerUUID: UUID, profile: Profile) {
-        id = UUID()
-        self.name = name
-        createdAt = Date()
-        updatedAt = Date()
-        self.ownerUUID = ownerUUID
+    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) {
+        self.id = id
+        self.account = account
         self.profile = profile
+        self.admissionPolicy = admissionPolicy
+        self.interactionPolicy = interactionPolicy
     }
+}
+
+enum AdmissionPolicy: String, Codable, CaseIterable {
+    case open = "Open"
+    case openInvitation = "Invitation"
+    case openApplication = "Application"
+    case closed = "Closed"
+}
+
+enum InteractionPolicy: String, Codable, CaseIterable {
+    case open = "Open"
+    case moderated = "Moderated"
+    case closed = "Closed"
 }
 
 extension Stream: AppEntity {
@@ -24,7 +37,7 @@ extension Stream: AppEntity {
     static var defaultQuery = StreamQuery()
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)")
+        DisplayRepresentation(title: "\(profile.name)")
     }
 
     static var typeDisplayName: String {
