@@ -20,7 +20,7 @@
                 HStack {
                     Button(action: toggleCamera) {
                         Label(
-                            videoCaptureViewController.isCameraActive ? "Stop Camera" : "Start Camera",
+                            videoCaptureViewController.isCameraActive ? "Stop" : "Start",
                             systemImage: videoCaptureViewController.isCameraActive ? "video.slash.fill" : "video.fill"
                         )
                         .padding()
@@ -30,13 +30,21 @@
                     }
                     Button(action: toggleStreaming) {
                         Label(
-                            videoCaptureViewController.isStreaming ? "Stop Streaming" : "Start Streaming",
+                            videoCaptureViewController.isStreaming ? "Stop" : "Share",
                             systemImage: videoCaptureViewController.isStreaming ? "stop.circle.fill" : "play.circle.fill"
                         )
                         .padding()
                         .background(videoCaptureViewController.isCameraActive ? Color.green : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(8)
+                    }
+                    .disabled(!videoCaptureViewController.isCameraActive)
+                    Button(action: switchCamera) {
+                        Image(systemName: "camera.rotate.fill")
+                            .padding()
+                            .background(Color.orange)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
                     }
                     .disabled(!videoCaptureViewController.isCameraActive)
                 }
@@ -60,6 +68,10 @@
             } else {
                 videoCaptureViewController.startStreaming(viewModel: viewModel)
             }
+        }
+
+        private func switchCamera() {
+            videoCaptureViewController.switchCamera()
         }
 
         private func sendComment() {

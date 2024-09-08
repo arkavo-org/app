@@ -8,11 +8,15 @@
         @Published var isCameraActive: Bool = true
         @Published var isStreaming: Bool = false
         @Published var hasCameraAccess = false
+        @Published var isFrontCameraActive: Bool = false
         var captureSession: AVCaptureSession!
         var previewLayer: AVCaptureVideoPreviewLayer!
         var streamingService: StreamingService?
         var videoEncryptor: VideoEncryptor?
         var videoDecoder: VideoDecoder?
+        private var frontCamera: AVCaptureDevice?
+        private var backCamera: AVCaptureDevice?
+        private var currentCameraInput: AVCaptureDeviceInput?
 
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -20,45 +24,46 @@
         }
 
         func setupCaptureSession() {
-            // 1. Create the session
             captureSession = AVCaptureSession()
             captureSession.sessionPreset = .high
-            // 2. Select the camera as input
-            guard let camera = AVCaptureDevice.default(for: .video) else {
-                print("No video camera available")
+
+            // Setup back camera by default
+            guard let backCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let input = try? AVCaptureDeviceInput(device: backCamera)
+            else {
+                print("Unable to access back camera")
                 return
             }
-            do {
-                let input = try AVCaptureDeviceInput(device: camera)
-                if captureSession.canAddInput(input) {
-                    captureSession.addInput(input)
-                }
-            } catch {
-                print("Error setting up camera input: \(error)")
-                return
+
+            self.backCamera = backCamera
+            frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+
+            if captureSession.canAddInput(input) {
+                captureSession.addInput(input)
+                currentCameraInput = input
             }
-            // 3. Set up output
+
             let videoOutput = AVCaptureVideoDataOutput()
             videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "videoQueue"))
+
             if captureSession.canAddOutput(videoOutput) {
                 captureSession.addOutput(videoOutput)
             }
-            // 4. Add preview layer
+
+            setupPreviewLayer()
+        }
+
+        func setupPreviewLayer() {
             previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
             previewLayer.videoGravity = .resizeAspectFill
             previewLayer.frame = view.bounds
             view.layer.addSublayer(previewLayer)
-            // 5. Start capturing
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.captureSession.startRunning()
-            }
         }
 
         func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
             guard isStreaming, let streamingService, let videoEncryptor else {
                 return
             }
-            print("Processing video frame")
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                 print("Failed to get pixel buffer from sample buffer")
                 return
@@ -66,7 +71,6 @@
             // Define the target size
             let targetWidth = 80
             let targetHeight = 80
-
             // Downscale the image
             let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
             let scaleX = CGFloat(targetWidth) / CGFloat(CVPixelBufferGetWidth(pixelBuffer))
@@ -129,15 +133,7 @@
         }
 
         func startCapture() {
-            guard hasCameraAccess else {
-                checkCameraPermissions()
-                return
-            }
-
-            if captureSession == nil {
-                setupCaptureSession()
-            }
-
+            guard !isCameraActive else { return }
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.captureSession?.startRunning()
                 DispatchQueue.main.async {
@@ -153,6 +149,29 @@
                     self?.isCameraActive = false
                     self?.isStreaming = false
                 }
+            }
+        }
+
+        func switchCamera() {
+            guard let currentCameraInput, isCameraActive else { return }
+
+            let newCamera = isFrontCameraActive ? backCamera : frontCamera
+            guard let newInput = try? AVCaptureDeviceInput(device: newCamera!) else { return }
+
+            captureSession.beginConfiguration()
+            captureSession.removeInput(currentCameraInput)
+
+            if captureSession.canAddInput(newInput) {
+                captureSession.addInput(newInput)
+                self.currentCameraInput = newInput
+            } else {
+                captureSession.addInput(currentCameraInput)
+            }
+
+            captureSession.commitConfiguration()
+
+            DispatchQueue.main.async {
+                self.isFrontCameraActive.toggle()
             }
         }
 
