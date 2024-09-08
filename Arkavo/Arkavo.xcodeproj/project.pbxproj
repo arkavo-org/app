@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
-		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
+		DA0FEC442C5B230700C0A010 /* ThoughtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtView.swift */; };
+		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
+		DA11D51E2C8DF250005D1946 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D51D2C8DF250005D1946 /* WelcomeView.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
 		DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE02C6807AD00722E3E /* Content.swift */; };
@@ -18,7 +20,7 @@
 		DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2046192C603C05006AB6E4 /* Thought.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
-		DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* WordCloudView.swift */; };
+		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
 		DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA78EF882C85FE4F00B89422 /* PersistenceController.swift */; };
 		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
 		DA95A43A2C3DF611007409D5 /* City.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA95A4392C3DF60F007409D5 /* City.swift */; };
@@ -55,7 +57,9 @@
 /* Begin PBXFileReference section */
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
-		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
+		DA0FEC432C5B230700C0A010 /* ThoughtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtView.swift; sourceTree = "<group>"; };
+		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
+		DA11D51D2C8DF250005D1946 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		DA1A4DE02C6807AD00722E3E /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
@@ -64,7 +68,7 @@
 		DA2046192C603C05006AB6E4 /* Thought.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Thought.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
-		DA73B3342C6436EF00393056 /* WordCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordCloudView.swift; sourceTree = "<group>"; };
+		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
 		DA78EF882C85FE4F00B89422 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
 		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
 		DA95A4392C3DF60F007409D5 /* City.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = City.swift; sourceTree = "<group>"; };
@@ -143,15 +147,17 @@
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
 				DA9D34492C6AE68000D39ED4 /* StreamView.swift */,
+				DA73B3342C6436EF00393056 /* StreamCloudView.swift */,
 				DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */,
-				DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */,
-				DA73B3342C6436EF00393056 /* WordCloudView.swift */,
+				DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */,
+				DA0FEC432C5B230700C0A010 /* ThoughtView.swift */,
 				DAF458A32C70320F004B44FE /* VideoStreamView.swift */,
 				DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA95A4392C3DF60F007409D5 /* City.swift */,
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
+				DA11D51D2C8DF250005D1946 /* WelcomeView.swift */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
@@ -327,19 +333,21 @@
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
 				DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */,
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
-				DA73B3352C6436EF00393056 /* WordCloudView.swift in Sources */,
+				DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */,
 				DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
+				DA11D51E2C8DF250005D1946 /* WelcomeView.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA95A43A2C3DF611007409D5 /* City.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
+				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,
 				DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */,
-				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
+				DA0FEC442C5B230700C0A010 /* ThoughtView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

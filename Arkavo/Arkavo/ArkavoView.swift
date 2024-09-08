@@ -8,17 +8,17 @@ import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
+    private let nanoTDFManager = NanoTDFManager()
+    private let authenticationManager = AuthenticationManager()
     @Environment(\.locale) var locale
     // OpenTDFKit
     @StateObject private var webSocketManager = WebSocketManager()
-    let nanoTDFManager = NanoTDFManager()
+    @State private var inProcessCount = 0
     @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
-    // Data model
+    // data
     @State private var persistenceController: PersistenceController?
     // map
-    @State private var cameraPosition: MapCameraPosition = .automatic
-    @State private var mapUpdateTrigger = UUID()
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
+    @State private var streamMapView: StreamMapView?
     // connection
     @State private var cancellables = Set<AnyCancellable>()
     @State private var isReconnecting = false
@@ -26,25 +26,14 @@ struct ArkavoView: View {
     // account
     @State private var showingProfileCreation = false
     @State private var showingProfileDetails = false
-    // ThoughtStream
+    // thought
     @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // video
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     #endif
-    // demo
-    @State private var showCityInfoOverlay = false
-    @State private var cities: [City] = []
-    @State private var cityCount = 0
-    @State private var nanoCities: [NanoTDF] = []
-    @State private var nanoTime: TimeInterval = 0
-    @StateObject private var annotationManager = AnnotationManager()
-    @State private var inProcessCount = 0
-    @State private var continentClusters: [String: [City]] = [:]
-    @State private var annotations: [AnnotationItem] = []
     // view control
-    @State private var selectedView: SelectedView = .map
-    private var authenticationManager = AuthenticationManager()
+    @State private var selectedView: SelectedView = .streamMap
     @State private var tokenCheckTimer: Timer?
     @Query private var accounts: [Account]
     @Query private var profiles: [Profile]
@@ -52,10 +41,10 @@ struct ArkavoView: View {
     init() {}
 
     enum SelectedView {
-        case initial
-        case map
-        case wordCloud
-        case streams
+        case welcome
+        case streamMap
+        case streamWordCloud
+        case streamList
         case video
     }
 
@@ -63,34 +52,42 @@ struct ArkavoView: View {
         ZStack {
             ZStack {
                 switch selectedView {
-                case .initial:
-                    initialWelcomeView
-                        .sheet(isPresented: $showingProfileCreation) {
-                            AccountProfileCreateView(
-                                onSave: { profile in
-                                    Task {
-                                        await saveProfile(profile: profile)
-                                    }
-                                },
-                                selectedView: $selectedView
-                            )
-                        }
-                case .map:
-                    mapContent
-                        .sheet(isPresented: $showingProfileDetails) {
-                            if let account = accounts.first {
-                                if let profile = account.profile {
-                                    AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                case .welcome:
+                    WelcomeView(onCreateProfile: {
+                        showingProfileCreation = true
+                    })
+                    .sheet(isPresented: $showingProfileCreation) {
+                        AccountProfileCreateView(
+                            onSave: { profile in
+                                Task {
+                                    await saveProfile(profile: profile)
                                 }
+                            },
+                            selectedView: $selectedView
+                        )
+                    }
+                case .streamMap:
+                    StreamMapView(webSocketManager: webSocketManager,
+                                  nanoTDFManager: nanoTDFManager,
+                                  kasPublicKey: $kasPublicKey)
+                        .onAppear {
+                            // Store reference to StreamMapView when it appears
+                            streamMapView = StreamMapView(webSocketManager: webSocketManager,
+                                                          nanoTDFManager: nanoTDFManager,
+                                                          kasPublicKey: $kasPublicKey)
+                        }
+                        .sheet(isPresented: $showingProfileDetails) {
+                            if let account = accounts.first, let profile = account.profile {
+                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
                             }
                         }
-                case .wordCloud:
+                case .streamWordCloud:
                     let words: [(String, CGFloat)] = [
                         ("Feedback", 60), ("Technology", 50), ("Fitness", 45), ("Activism", 55),
                         ("Sports", 40), ("Career", 35), ("Education", 30), ("Beauty", 25),
                         ("Fashion", 20), ("Gaming", 15), ("Entertainment", 30), ("Climate Change", 25),
                     ]
-                    WordCloudView(
+                    StreamCloudView(
                         viewModel: WordCloudViewModel(
                             thoughtStreamViewModel: thoughtStreamViewModel,
                             words: words,
@@ -101,10 +98,10 @@ struct ArkavoView: View {
                     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
-                case .streams:
+                case .streamList:
                     StreamView()
                 }
-                if selectedView != .initial {
+                if selectedView != .welcome {
                     VStack {
                         GeometryReader { geometry in
                             HStack {
@@ -113,18 +110,10 @@ struct ArkavoView: View {
                                 Menu {
                                     Section("Navigation") {
                                         Button("Map") {
-                                            selectedView = .map
-                                            withAnimation(.easeInOut(duration: 2.5)) {
-                                                cameraPosition = .camera(MapCamera(
-                                                    centerCoordinate: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129), // Center of USA
-                                                    distance: 40_000_000,
-                                                    heading: 0,
-                                                    pitch: 0
-                                                ))
-                                            }
+                                            selectedView = .streamMap
                                         }
                                         Button("My Streams") {
-                                            selectedView = .streams
+                                            selectedView = .streamList
                                         }
                                         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
                                             Button("Video") {
@@ -132,7 +121,7 @@ struct ArkavoView: View {
                                             }
                                         #endif
                                         Button("Engage!") {
-                                            selectedView = .wordCloud
+                                            selectedView = .streamWordCloud
                                         }
                                     }
                                     Section("Account") {
@@ -164,8 +153,12 @@ struct ArkavoView: View {
                                         }
                                     }
                                     Section("Demo") {
-                                        Button("Cities", action: loadGeoJSON)
-                                        Button("Clusters", action: loadRandomCities)
+                                        Button("Cities") {
+                                            streamMapView?.loadGeoJSON()
+                                        }
+                                        Button("Clusters") {
+                                            streamMapView?.loadRandomCities()
+                                        }
                                     }
                                 } label: {
                                     Image(systemName: "gear")
@@ -185,162 +178,6 @@ struct ArkavoView: View {
             .ignoresSafeArea(edges: .all)
         }
         .onAppear(perform: initialSetup)
-    }
-
-    private var initialWelcomeView: some View {
-        VStack(spacing: 20) {
-            Text("Welcome to Arkavo!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-            Text("Your content is always under your control - everywhere")
-                .multilineTextAlignment(.center)
-                .padding()
-            Text("Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle.")
-                .multilineTextAlignment(.center)
-                .padding()
-            VStack(alignment: .leading, spacing: 10) {
-                Text("What makes us different?")
-                    .font(.headline)
-                BulletPoint(text: "Leader in Privacy")
-                BulletPoint(text: "Leader in Content Security")
-                BulletPoint(text: "Military-grade data security powered by OpenTDF.")
-                BulletPoint(text: "Start group chats now, with more exciting features coming soon!")
-            }
-            .padding()
-            Text("Ready to join?")
-                .font(.headline)
-            Button(action: {
-                showingProfileCreation = true
-            }) {
-                Text("Create Profile")
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .frame(minWidth: 200)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(10)
-            }
-        }
-        .padding()
-    }
-
-    private var mapContent: some View {
-        ZStack {
-            Map(position: $cameraPosition, interactionModes: .all) {
-                ForEach(annotations) { item in
-                    if item.isCluster {
-                        Annotation(item.name, coordinate: item.coordinate) {
-                            ClusterAnnotationView(count: item.count, continent: item.name)
-                        }
-                    } else {
-                        Marker(item.name, coordinate: item.coordinate)
-                    }
-                }
-            }
-            .mapStyle(.imagery(elevation: .realistic))
-            .task {
-                await showGlobeCenteredOnUserCountry()
-            }
-
-            VStack {
-                Spacer()
-                if showCityInfoOverlay {
-                    cityInfoOverlay
-                }
-            }
-            if thoughtStreamViewModel.profile != nil {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            Task {
-                                await engageAction()
-                            }
-                        }) {
-                            Text("Engage!")
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                        }
-                        .padding()
-                    }
-                }
-            }
-        }
-    }
-
-    private func showGlobeCenteredOnUserCountry() async {
-        let centerCoordinate = await getCountryCenterCoordinate()
-        cameraPosition = .camera(MapCamera(
-            centerCoordinate: centerCoordinate,
-            distance: 40_000_000,
-            heading: 0,
-            pitch: 0
-        ))
-    }
-
-    private func getCountryCenterCoordinate() async -> CLLocationCoordinate2D {
-        let countryCode = locale.region?.identifier ?? "US"
-        let geocoder = CLGeocoder()
-        do {
-            let placemarks = try await geocoder.geocodeAddressString(countryCode)
-            return (placemarks.first?.location!.coordinate)!
-        } catch {
-            print("Geocoding failed: \(error.localizedDescription)")
-            return CLLocationCoordinate2D(latitude: 0, longitude: 0)
-        }
-    }
-
-    private func engageAction() async {
-        let centerCoordinate = await getCountryCenterCoordinate()
-        var currentCenter = centerCoordinate
-        if cameraPosition.camera != nil {
-            currentCenter = cameraPosition.camera!.centerCoordinate
-        }
-        withAnimation(.easeInOut(duration: 0.5)) {
-            cameraPosition = .camera(MapCamera(
-                centerCoordinate: currentCenter,
-                distance: 400_000,
-                heading: 0,
-                pitch: 0
-            ))
-        }
-        // Switch to word cloud view
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            withAnimation(.smooth(duration: 0.5)) {
-                selectedView = .wordCloud
-            }
-        }
-    }
-
-    private var mapDragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                let delta = value.translation
-                withAnimation {
-                    cameraPosition = MapCameraPosition.camera(
-                        MapCamera(
-                            centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-                            distance: 40_000_000,
-                            heading: delta.width,
-                            pitch: delta.height
-                        )
-                    )
-                }
-            }
-    }
-
-    private var cityInfoOverlay: some View {
-        PerformanceInfoOverlay(
-            nanoTime: nanoTime,
-            nanoCitiesCount: nanoCities.count,
-            citiesCount: cities.count,
-            decryptTime: nanoTDFManager.processDuration,
-            decryptCount: nanoTDFManager.inProcessCount
-        )
-        .padding()
     }
 
     private func initialSetup() {
@@ -363,13 +200,13 @@ struct ArkavoView: View {
         #endif
         if let account = accounts.first {
             if account.profile == nil {
-                selectedView = .initial
+                selectedView = .welcome
             } else {
-                selectedView = .map
+                selectedView = .streamMap
                 thoughtStreamViewModel.profile = account.profile
             }
         } else {
-            selectedView = .initial
+            selectedView = .welcome
             // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
@@ -377,9 +214,8 @@ struct ArkavoView: View {
     private func setupCallbacks() {
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if kasPublicKey != nil {
-                // go ahead and show something on the map
-                loadGeoJSON()
-                showCityInfoOverlay = false
+                // FIXME: remove when streams are broadcast
+                streamMapView?.loadGeoJSON()
                 return
             }
             DispatchQueue.main.async {
@@ -452,12 +288,9 @@ struct ArkavoView: View {
                 } else if let city = try? City.deserialize(from: payload) {
                     // If it's not a Thought, try to deserialize as a City
                     DispatchQueue.main.async {
-                        addCityToCluster(city)
-                        updateAnnotations()
-
+                        streamMapView?.addCityToCluster(city)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            removeCityFromCluster(city)
-                            updateAnnotations()
+                            streamMapView?.removeCityFromCluster(city)
                         }
                     }
                 } else {
@@ -488,131 +321,11 @@ struct ArkavoView: View {
             authenticationManager.signUp(accountName: profile.name)
             startTokenCheck()
             await MainActor.run {
-                selectedView = .map
+                selectedView = .streamMap
             }
         } catch {
             print("Failed to save profile: \(error)")
         }
-    }
-
-    private func addCityAnnotation(_ city: City) {
-        annotationManager.addAnnotation(city)
-    }
-
-    private func removeCityAnnotation(_ city: City) {
-        annotationManager.removeAnnotation(city)
-    }
-
-    private func loadGeoJSON() {
-        showCityInfoOverlay = true
-        cities = generateTwoThousandActualCities()
-        createNanoCities()
-    }
-
-    private func loadRandomCities() {
-        showCityInfoOverlay = true
-        nanoTime = 0
-        nanoCities = []
-        print("Generating new random cities...")
-        let newCities = generateRandomCities(count: 1000)
-        cities.append(contentsOf: newCities)
-        print("New cities added: \(newCities.count)")
-        print("Total cities: \(cities.count)")
-        createNanoCities()
-    }
-
-    private func createNanoCities() {
-        print("Nanoing Cities...")
-        guard kasPublicKey != nil else {
-            print("Missing KAS public key")
-            return
-        }
-        let startTime = Date()
-        let dispatchGroup = DispatchGroup()
-        let queue = DispatchQueue(label: "com.arkavo.nanoTDFCreation", attributes: .concurrent)
-
-        for city in cities {
-            dispatchGroup.enter()
-            queue.async {
-                do {
-                    let serializedCity = try city.serialize()
-                    let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")
-                    let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
-//                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")
-                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: city.continent)
-                    var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-                    let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
-
-                    DispatchQueue.main.async {
-                        nanoCities.append(nanoTDF)
-                        dispatchGroup.leave()
-                    }
-                } catch {
-                    print("Error creating nanoTDF for \(city.name): \(error)")
-                    dispatchGroup.leave()
-                }
-            }
-        }
-
-        dispatchGroup.notify(queue: .main) {
-            let endTime = Date()
-            nanoTime = endTime.timeIntervalSince(startTime)
-            sendCities()
-        }
-    }
-
-    private func sendCities() {
-        print("Sending...")
-        // Limit the number of cities to 3000
-        let maxCitiesToSend = 3000
-        let citiesToSend = nanoCities.prefix(maxCitiesToSend)
-        for nanoCity in citiesToSend {
-            // Create and send the NATSMessage
-            let natsMessage = NATSMessage(payload: nanoCity.toData())
-            let messageData = natsMessage.toData()
-//            print("City NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
-
-            webSocketManager.sendCustomMessage(messageData) { error in
-                if let error {
-                    print("Error sending thought: \(error)")
-                }
-            }
-        }
-    }
-
-    private func addCityToCluster(_ city: City) {
-        if continentClusters[city.continent] == nil {
-            continentClusters[city.continent] = []
-        }
-        continentClusters[city.continent]?.append(city)
-        cityCount += 1
-    }
-
-    private func removeCityFromCluster(_ city: City) {
-        continentClusters[city.continent]?.removeAll { $0.id == city.id }
-        cityCount -= 1
-    }
-
-    private func updateAnnotations() {
-        annotations = continentClusters.flatMap { continent, cities -> [AnnotationItem] in
-            if cities.count > 50 {
-                let centerCoordinate = calculateCenterCoordinate(for: cities)
-                return [AnnotationItem(coordinate: centerCoordinate, name: continent, count: cities.count, isCluster: true)]
-            } else {
-                return cities.map { city in
-                    AnnotationItem(coordinate: city.clCoordinate, name: city.name, count: 1, isCluster: false)
-                }
-            }
-        }
-        mapUpdateTrigger = UUID()
-    }
-
-    private func calculateCenterCoordinate(for cities: [City]) -> CLLocationCoordinate2D {
-        let totalLat = cities.reduce(0.0) { $0 + $1.coordinate.latitude }
-        let totalLon = cities.reduce(0.0) { $0 + $1.coordinate.longitude }
-        let count = Double(cities.count)
-        return CLLocationCoordinate2D(latitude: totalLat / count, longitude: totalLon / count)
     }
 
     private func startTokenCheck() {
@@ -694,92 +407,5 @@ class NanoTDFManager: ObservableObject {
 
     func isEmpty() -> Bool {
         nanoTDFs.isEmpty
-    }
-}
-
-class AnnotationManager: ObservableObject {
-    @Published var annotations: [CityAnnotation] = []
-
-    func addAnnotation(_ city: City) {
-        DispatchQueue.main.async {
-            if !self.annotations.contains(where: { $0.id == city.id }) {
-                self.annotations.append(CityAnnotation(city: city))
-            }
-        }
-    }
-
-    func removeAnnotation(_ city: City) {
-        DispatchQueue.main.async {
-            self.annotations.removeAll { $0.id == city.id }
-        }
-    }
-}
-
-struct ClusterAnnotationView: View {
-    let count: Int
-    let continent: String
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.blue.opacity(0.7))
-                .frame(width: 50, height: 50)
-            VStack {
-                Text("\(count)")
-                    .font(.system(size: 14, weight: .bold))
-                Text(continent)
-                    .font(.system(size: 10))
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
-
-struct CityAnnotationView: View {
-    let city: City
-
-    var body: some View {
-        VStack {
-            Image(systemName: "mappin.circle.fill")
-                .foregroundColor(.red)
-                .font(.title)
-            Text(city.name)
-                .font(.caption)
-                .fixedSize()
-        }
-    }
-}
-
-struct IdentifiableMapAnnotation: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
-    let content: AnyView
-
-    init(coordinate: CLLocationCoordinate2D, @ViewBuilder content: () -> some View) {
-        self.coordinate = coordinate
-        self.content = AnyView(content())
-    }
-}
-
-struct AnnotationItem: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
-    let name: String
-    let count: Int
-    let isCluster: Bool
-}
-
-struct BulletPoint: View {
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("•")
-                .font(.body)
-                .padding(.top, 4)
-            Text(text)
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }

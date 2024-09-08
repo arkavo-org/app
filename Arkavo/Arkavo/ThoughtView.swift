@@ -9,7 +9,7 @@ struct ThoughtWrapper: Identifiable {
     let thought: Thought
 }
 
-struct ThoughtStreamView: View {
+struct ThoughtView: View {
     @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
@@ -214,7 +214,7 @@ class ThoughtStreamViewModel: ObservableObject {
 struct ThoughtStreamView_Previews: PreviewProvider {
     static var previews: some View {
         let viewModel = ThoughtStreamViewModel()
-        ThoughtStreamView(viewModel: viewModel)
+        ThoughtView(viewModel: viewModel)
     }
 }
 
