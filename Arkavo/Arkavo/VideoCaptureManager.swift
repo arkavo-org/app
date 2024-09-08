@@ -1,239 +1,68 @@
 #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
     import AVFoundation
-    import Combine
     import CryptoKit
     import OpenTDFKit
-    import SwiftUI
-    import VideoToolbox
+    import UIKit
 
-    class VideoCaptureManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-        private var captureSession: AVCaptureSession?
-        private var videoOutput: AVCaptureVideoDataOutput?
-        private var streamingService: StreamingService?
-        public var videoDecoder: VideoDecoder?
-        private var videoWidth = 80
-        private var videoHeight = 80
-        private var videoEncryptor: VideoEncryptor?
-        private var encryptionSession: EncryptionSession?
-        private var kasPublicKey: P256.KeyAgreement.PublicKey?
-        private var kasPublicKeySubscription: AnyCancellable?
-        private var currentOrientation: UIInterfaceOrientation = .portrait
-        private var orientationObserver: NSObjectProtocol?
-        @Published var previewLayer: AVCaptureVideoPreviewLayer?
-        @Published var isCameraActive = false
-        @Published var isStreaming = false
-        @Published var isConnected = false
+    class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
+        @Published var isCameraActive: Bool = true
+        @Published var isStreaming: Bool = false
         @Published var hasCameraAccess = false
-        @Published var error: Error?
-        @Published var unCompressionFrame: UIImage?
+        var captureSession: AVCaptureSession!
+        var previewLayer: AVCaptureVideoPreviewLayer!
+        var streamingService: StreamingService?
+        var videoEncryptor: VideoEncryptor?
+        var videoDecoder: VideoDecoder?
 
-        private var cancellables = Set<AnyCancellable>()
-        private let videoEncryptorQueue = DispatchQueue(label: "com.yourapp.videoEncryptorQueue")
-
-        override init() {
-            super.init()
-            checkCameraPermissions()
-            videoDecoder = VideoDecoder()
-            setupOrientationObserver()
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            setupCaptureSession()
         }
 
-        deinit {
-            if let observer = orientationObserver {
-                NotificationCenter.default.removeObserver(observer)
-            }
-        }
-
-        private func setupOrientationObserver() {
-            orientationObserver = NotificationCenter.default.addObserver(
-                forName: UIApplication.didChangeStatusBarOrientationNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.updateForOrientation()
-            }
-        }
-
-        private func updateForOrientation() {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-            let newOrientation = windowScene.interfaceOrientation
-            guard newOrientation != currentOrientation else { return }
-
-            switch newOrientation {
-            case .portrait, .portraitUpsideDown, .landscapeLeft, .landscapeRight:
-                currentOrientation = newOrientation
-                updateVideoOrientation()
-            default:
-                break
-            }
-        }
-
-        private func updateVideoOrientation() {
-            guard let connection = videoOutput?.connection(with: .video) else { return }
-
-            let videoOrientation: AVCaptureVideoOrientation = switch currentOrientation {
-            case .portrait:
-                .portrait
-            case .portraitUpsideDown:
-                .portraitUpsideDown
-            case .landscapeLeft:
-                .landscapeRight
-            case .landscapeRight:
-                .landscapeLeft
-            default:
-                .portrait
-            }
-
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = videoOrientation
-            }
-
-            DispatchQueue.main.async {
-                self.previewLayer?.connection?.videoOrientation = videoOrientation
-            }
-        }
-
-        func setKasPublicKeyBinding(_ binding: Binding<P256.KeyAgreement.PublicKey?>) {
-            kasPublicKeySubscription = binding.wrappedValue.publisher
-                .sink { [weak self] newValue in
-                    self?.updateKasPublicKey(newValue)
-                }
-            // Initial update
-            updateKasPublicKey(binding.wrappedValue)
-        }
-
-        private func updateKasPublicKey(_ newValue: P256.KeyAgreement.PublicKey?) {
-            videoEncryptorQueue.async { [weak self] in
-                self?.kasPublicKey = newValue
-                if let newValue {
-                    self?.videoEncryptor = VideoEncryptor(kasPublicKey: newValue)
-                } else {
-                    self?.videoEncryptor = nil
-                }
-            }
-        }
-
-        func checkCameraPermissions() {
-            switch AVCaptureDevice.authorizationStatus(for: .video) {
-            case .authorized:
-                hasCameraAccess = true
-                setupCaptureSession()
-            case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                    DispatchQueue.main.async {
-                        self?.hasCameraAccess = granted
-                        if granted {
-                            self?.setupCaptureSession()
-                        }
-                    }
-                }
-            case .denied, .restricted:
-                hasCameraAccess = false
-            @unknown default:
-                hasCameraAccess = false
-            }
-        }
-
-        private func setupCaptureSession() {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self else { return }
-
-                let session = AVCaptureSession()
-                session.sessionPreset = .low
-
-                guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
-                      let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-                      session.canAddInput(videoInput)
-                else {
-                    print("Failed to set up video capture device")
-                    return
-                }
-
-                session.addInput(videoInput)
-
-                let videoOutput = AVCaptureVideoDataOutput()
-                videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "videoQueue"))
-                if session.canAddOutput(videoOutput) {
-                    session.addOutput(videoOutput)
-                }
-
-                self.videoOutput = videoOutput
-                captureSession = session
-
-                DispatchQueue.main.async {
-                    let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-                    previewLayer.videoGravity = .resizeAspectFill
-                    previewLayer.frame = UIScreen.main.bounds
-                    self.previewLayer = previewLayer
-                    self.updateVideoOrientation()
-                }
-
-                // Set up video encryptor
-                DispatchQueue.main.async {
-                    if let kasPublicKey = self.kasPublicKey {
-                        self.videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
-                    } else {
-                        print("Error: KAS public key not available")
-                    }
-                }
-            }
-        }
-
-        func startCapture() {
-            guard hasCameraAccess else {
-                checkCameraPermissions()
+        func setupCaptureSession() {
+            // 1. Create the session
+            captureSession = AVCaptureSession()
+            captureSession.sessionPreset = .high
+            // 2. Select the camera as input
+            guard let camera = AVCaptureDevice.default(for: .video) else {
+                print("No video camera available")
                 return
             }
-
-            if captureSession == nil {
-                setupCaptureSession()
-            }
-
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.captureSession?.startRunning()
-                DispatchQueue.main.async {
-                    self?.isCameraActive = true
-                    self?.updateVideoOrientation()
+            do {
+                let input = try AVCaptureDeviceInput(device: camera)
+                if captureSession.canAddInput(input) {
+                    captureSession.addInput(input)
                 }
+            } catch {
+                print("Error setting up camera input: \(error)")
+                return
             }
-        }
-
-        func stopCapture() {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.captureSession?.stopRunning()
-                DispatchQueue.main.async {
-                    self?.isCameraActive = false
-                    self?.isStreaming = false
-                }
+            // 3. Set up output
+            let videoOutput = AVCaptureVideoDataOutput()
+            videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "videoQueue"))
+            if captureSession.canAddOutput(videoOutput) {
+                captureSession.addOutput(videoOutput)
             }
-        }
-
-        func setupEncryption() {
-            encryptionSession = EncryptionSession()
-            if let kasPublicKey {
-                encryptionSession?.setupEncryption(kasPublicKey: kasPublicKey)
+            // 4. Add preview layer
+            previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+            previewLayer.videoGravity = .resizeAspectFill
+            previewLayer.frame = view.bounds
+            view.layer.addSublayer(previewLayer)
+            // 5. Start capturing
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.captureSession.startRunning()
             }
-        }
-
-        func startStreaming(webSocketManager: WebSocketManager) {
-            streamingService = StreamingService(webSocketManager: webSocketManager)
-            isStreaming = true
-        }
-
-        func stopStreaming() {
-            streamingService = nil
-            isStreaming = false
         }
 
         func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
             guard isStreaming, let streamingService, let videoEncryptor else {
                 return
             }
+            print("Processing video frame")
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                 print("Failed to get pixel buffer from sample buffer")
                 return
             }
-            updateVideoOrientation()
-
             // Define the target size
             let targetWidth = 80
             let targetHeight = 80
@@ -249,7 +78,7 @@
 
             let attributes: [String: Any] = [
                 kCVPixelBufferCGImageCompatibilityKey as String: true,
-                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
             ]
             CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &downscaledPixelBuffer)
 
@@ -276,6 +105,77 @@
                     print("Failed to lock base address of pixel buffer")
                 }
             }
+        }
+
+        func checkCameraPermissions() {
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                hasCameraAccess = true
+                setupCaptureSession()
+            case .notDetermined:
+                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                    DispatchQueue.main.async {
+                        self?.hasCameraAccess = granted
+                        if granted {
+                            self?.setupCaptureSession()
+                        }
+                    }
+                }
+            case .denied, .restricted:
+                hasCameraAccess = false
+            @unknown default:
+                hasCameraAccess = false
+            }
+        }
+
+        func startCapture() {
+            guard hasCameraAccess else {
+                checkCameraPermissions()
+                return
+            }
+
+            if captureSession == nil {
+                setupCaptureSession()
+            }
+
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.captureSession?.startRunning()
+                DispatchQueue.main.async {
+                    self?.isCameraActive = true
+                }
+            }
+        }
+
+        func stopCapture() {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.captureSession?.stopRunning()
+                DispatchQueue.main.async {
+                    self?.isCameraActive = false
+                    self?.isStreaming = false
+                }
+            }
+        }
+
+        func startStreaming(viewModel: VideoStreamViewModel) {
+            let webSocketManager = viewModel.webSocketManager
+            streamingService = StreamingService(webSocketManager: webSocketManager)
+            if let kasPublicKey = viewModel.kasPublicKey {
+                videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
+            } else {
+                print("Error: Unable to get KAS public key for video encryption")
+            }
+            isStreaming = true
+        }
+
+        func stopStreaming() {
+            streamingService = nil
+            videoEncryptor = nil
+            isStreaming = false
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            previewLayer.frame = view.bounds
         }
     }
 
@@ -394,15 +294,5 @@
                 completion(nil)
             }
         }
-    }
-
-    extension Data {
-        func hexEncodedString() -> String {
-            map { String(format: "%02hhx", $0) }.joined()
-        }
-    }
-
-    extension Notification.Name {
-        static let decodedFrameReady = Notification.Name("decodedFrameReady")
     }
 #endif
