@@ -30,7 +30,7 @@ struct StreamView: View {
                             }
                         }
                     ) {
-                        ForEach(accounts.first!.streams) { stream in
+                        ForEach(accounts.first?.streams ?? []) { stream in
                             CompactStreamProfileView(viewModel: StreamViewModel(stream: stream))
                                 .onTapGesture {
                                     selectedStream = stream

@@ -6,17 +6,7 @@ import SwiftUI
     import AppKit
 #endif
 
-struct BoundingBox: Identifiable {
-    let id = UUID()
-    var rect: CGRect
-    let word: String
-    var size: CGFloat
-    var position: CGPoint
-    var opacity: Double = 0
-    var rotation: Angle = .zero
-}
-
-struct WordCloudView: View {
+struct StreamCloudView: View {
     @StateObject var viewModel: WordCloudViewModel
     @State private var boundingBoxes: [BoundingBox] = []
     @State private var availableSize: CGSize = .zero
@@ -44,7 +34,7 @@ struct WordCloudView: View {
             .zIndex(1)
 
             if showingContentView {
-                ThoughtStreamView(viewModel: viewModel.thoughtStreamViewModel)
+                ThoughtView(viewModel: viewModel.thoughtStreamViewModel)
             } else {
                 ZStack {
                     ForEach(boundingBoxes) { box in
@@ -279,11 +269,11 @@ struct WordCloudView_Previews: PreviewProvider {
             ("Fashion", 38), ("Gaming", 12), ("Entertainment", 36), ("Climate Change", 16),
         ]
         Group {
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWordsDifferentSize, animationType: .rotating))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .explosion))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .falling))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .rising))
-            WordCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .swirling))
+            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWordsDifferentSize, animationType: .rotating))
+            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .explosion))
+            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .falling))
+            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .rising))
+            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .swirling))
         }
     }
 }
@@ -292,4 +282,14 @@ extension CGRect {
     var area: CGFloat {
         width * height
     }
+}
+
+struct BoundingBox: Identifiable {
+    let id = UUID()
+    var rect: CGRect
+    let word: String
+    var size: CGFloat
+    var position: CGPoint
+    var opacity: Double = 0
+    var rotation: Angle = .zero
 }
