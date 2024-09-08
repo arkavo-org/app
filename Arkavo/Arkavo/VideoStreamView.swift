@@ -11,11 +11,17 @@
         @State private var showingErrorAlert = false
         @State private var errorMessage = ""
         @State private var videoCaptureViewController = VideoCaptureViewController()
+        @State private var isShowingLocalVideo = true
 
         var body: some View {
             ZStack {
-                VideoPreviewArea(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: viewModel)
-                    .edgesIgnoringSafeArea(.all)
+                if isShowingLocalVideo {
+                    VideoPreviewArea(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: viewModel)
+                        .edgesIgnoringSafeArea(.all)
+                } else {
+                    VideoIncomingArea(viewModel: viewModel)
+                        .edgesIgnoringSafeArea(.all)
+                }
                 Spacer()
                 HStack {
                     Button(action: toggleCamera) {
@@ -47,6 +53,13 @@
                             .cornerRadius(8)
                     }
                     .disabled(!videoCaptureViewController.isCameraActive)
+                    Button(action: toggleVideoSource) {
+                        Image(systemName: isShowingLocalVideo ? "arrow.down.left.video.fill" : "video.fill")
+                            .padding()
+                            .background(Color.purple)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
                 }
             }
             .alert(isPresented: $showingErrorAlert) {
@@ -72,6 +85,10 @@
 
         private func switchCamera() {
             videoCaptureViewController.switchCamera()
+        }
+        
+        private func toggleVideoSource() {
+            isShowingLocalVideo.toggle()
         }
 
         private func sendComment() {
@@ -105,7 +122,8 @@
         private var cancellables = Set<AnyCancellable>()
 
         @Published var currentFrame: UIImage?
-        private var videoDecoder: VideoDecoder?
+        private var videoDecoder: VideoDecoder
+        private let frameProcessingQueue = DispatchQueue(label: "com.arkavo.frameProcessing", qos: .userInteractive)
 
         init() {
             _webSocketManager = .init(initialValue: WebSocketManager())
@@ -125,50 +143,67 @@
         }
 
         func receiveVideoFrame(_ frameData: Data) {
-            videoDecoder?.decodeFrame(frameData) { [weak self] image in
+            videoDecoder.decodeFrame(frameData) { [weak self] image in
                 DispatchQueue.main.async {
                     self?.currentFrame = image
                 }
             }
         }
     }
+
+    struct VideoIncomingArea: View {
+        @ObservedObject var viewModel: VideoStreamViewModel
+
+        var body: some View {
+            GeometryReader { geometry in
+                if let image = viewModel.currentFrame {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    Color.black
+                }
+            }
+        }
+    }
+
+    // MARK: - Preview
+
+    struct VideoStreamView_Previews: PreviewProvider {
+        static var previews: some View {
+            VideoStreamView(viewModel: MockVideoStreamViewModel())
+        }
+    }
+
+    // MARK: - Mock ViewModel for Preview
+
+    class MockVideoStreamViewModel: VideoStreamViewModel {
+        override init() {
+            super.init()
+            // Initialize with mock data if needed
+        }
+    }
+
+    // MARK: - Mock VideoPreviewArea for Preview
+
+    struct MockVideoPreviewArea: View {
+        var body: some View {
+            Color.gray // Placeholder for video preview
+        }
+    }
+
+    // Actual VideoPreviewArea implementation
+    struct VideoPreviewAreaImpl: UIViewControllerRepresentable {
+        @Binding var videoCaptureViewController: VideoCaptureViewController
+        var incomingVideoViewModel: VideoStreamViewModel
+
+        func makeUIViewController(context _: Context) -> VideoCaptureViewController {
+            videoCaptureViewController
+        }
+
+        func updateUIViewController(_: VideoCaptureViewController, context _: Context) {
+            // Update the view controller if needed
+        }
+    }
 #endif
-
-// MARK: - Preview
-
-struct VideoStreamView_Previews: PreviewProvider {
-    static var previews: some View {
-        VideoStreamView(viewModel: MockVideoStreamViewModel())
-    }
-}
-
-// MARK: - Mock ViewModel for Preview
-
-class MockVideoStreamViewModel: VideoStreamViewModel {
-    override init() {
-        super.init()
-        // Initialize with mock data if needed
-    }
-}
-
-// MARK: - Mock VideoPreviewArea for Preview
-
-struct MockVideoPreviewArea: View {
-    var body: some View {
-        Color.gray // Placeholder for video preview
-    }
-}
-
-// Actual VideoPreviewArea implementation
-struct VideoPreviewAreaImpl: UIViewControllerRepresentable {
-    @Binding var videoCaptureViewController: VideoCaptureViewController
-    var incomingVideoViewModel: VideoStreamViewModel
-
-    func makeUIViewController(context _: Context) -> VideoCaptureViewController {
-        videoCaptureViewController
-    }
-
-    func updateUIViewController(_: VideoCaptureViewController, context _: Context) {
-        // Update the view controller if needed
-    }
-}
