@@ -7,12 +7,29 @@ final class Stream: @unchecked Sendable {
     @Attribute(.unique) private(set) var id: UUID
     var account: Account
     var profile: Profile
+    var admissionPolicy: AdmissionPolicy
+    var interactionPolicy: InteractionPolicy
 
-    init(id: UUID = UUID(), account: Account, profile: Profile) {
+    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) {
         self.id = id
         self.account = account
         self.profile = profile
+        self.admissionPolicy = admissionPolicy
+        self.interactionPolicy = interactionPolicy
     }
+}
+
+enum AdmissionPolicy: String, Codable, CaseIterable {
+    case open = "Open"
+    case openInvitation = "Invitation"
+    case openApplication = "Application"
+    case closed = "Closed"
+}
+
+enum InteractionPolicy: String, Codable, CaseIterable {
+    case open = "Open"
+    case moderated = "Moderated"
+    case closed = "Closed"
 }
 
 extension Stream: AppEntity {
