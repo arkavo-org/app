@@ -17,7 +17,7 @@
         private var encryptionSession: EncryptionSession?
         private var kasPublicKey: P256.KeyAgreement.PublicKey?
         private var kasPublicKeySubscription: AnyCancellable?
-        private var currentOrientation: UIDeviceOrientation = .portrait
+        private var currentOrientation: UIInterfaceOrientation = .portrait
         private var orientationObserver: NSObjectProtocol?
         @Published var previewLayer: AVCaptureVideoPreviewLayer?
         @Published var isCameraActive = false
@@ -26,6 +26,9 @@
         @Published var hasCameraAccess = false
         @Published var error: Error?
         @Published var unCompressionFrame: UIImage?
+
+        private var cancellables = Set<AnyCancellable>()
+        private let videoEncryptorQueue = DispatchQueue(label: "com.yourapp.videoEncryptorQueue")
 
         override init() {
             super.init()
@@ -42,7 +45,7 @@
 
         private func setupOrientationObserver() {
             orientationObserver = NotificationCenter.default.addObserver(
-                forName: UIDevice.orientationDidChangeNotification,
+                forName: UIApplication.didChangeStatusBarOrientationNotification,
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
@@ -51,14 +54,17 @@
         }
 
         private func updateForOrientation() {
-            let newOrientation = UIDevice.current.orientation
-            guard newOrientation != currentOrientation,
-                  newOrientation.isValidInterfaceOrientation
-            else {
-                return
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+            let newOrientation = windowScene.interfaceOrientation
+            guard newOrientation != currentOrientation else { return }
+
+            switch newOrientation {
+            case .portrait, .portraitUpsideDown, .landscapeLeft, .landscapeRight:
+                currentOrientation = newOrientation
+                updateVideoOrientation()
+            default:
+                break
             }
-            currentOrientation = newOrientation
-            updateVideoOrientation()
         }
 
         private func updateVideoOrientation() {
@@ -96,11 +102,13 @@
         }
 
         private func updateKasPublicKey(_ newValue: P256.KeyAgreement.PublicKey?) {
-            kasPublicKey = newValue
-            if let newValue {
-                videoEncryptor = VideoEncryptor(kasPublicKey: newValue)
-            } else {
-                videoEncryptor = nil
+            videoEncryptorQueue.async { [weak self] in
+                self?.kasPublicKey = newValue
+                if let newValue {
+                    self?.videoEncryptor = VideoEncryptor(kasPublicKey: newValue)
+                } else {
+                    self?.videoEncryptor = nil
+                }
             }
         }
 
@@ -238,26 +246,34 @@
 
             let context = CIContext()
             var downscaledPixelBuffer: CVPixelBuffer?
-            CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, kCVPixelFormatType_32BGRA, nil, &downscaledPixelBuffer)
+
+            let attributes: [String: Any] = [
+                kCVPixelBufferCGImageCompatibilityKey as String: true,
+                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+            ]
+            CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &downscaledPixelBuffer)
 
             if let downscaledPixelBuffer {
-                context.render(scaledImage, to: downscaledPixelBuffer)
+                if CVPixelBufferLockBaseAddress(downscaledPixelBuffer, .readOnly) == kCVReturnSuccess {
+                    context.render(scaledImage, to: downscaledPixelBuffer)
 
-                // Convert downscaled pixel buffer to Data
-                CVPixelBufferLockBaseAddress(downscaledPixelBuffer, .readOnly)
-                let baseAddress = CVPixelBufferGetBaseAddress(downscaledPixelBuffer)
-                let bytesPerRow = CVPixelBufferGetBytesPerRow(downscaledPixelBuffer)
-                let data = Data(bytes: baseAddress!, count: bytesPerRow * targetHeight)
-                CVPixelBufferUnlockBaseAddress(downscaledPixelBuffer, .readOnly)
+                    // Convert downscaled pixel buffer to Data
+                    let baseAddress = CVPixelBufferGetBaseAddress(downscaledPixelBuffer)
+                    let bytesPerRow = CVPixelBufferGetBytesPerRow(downscaledPixelBuffer)
+                    let data = Data(bytes: baseAddress!, count: bytesPerRow * targetHeight)
+                    CVPixelBufferUnlockBaseAddress(downscaledPixelBuffer, .readOnly)
 
-                let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-                videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: targetWidth, height: targetHeight) { encryptedData in
-                    if let encryptedData {
-                        streamingService.sendVideoFrame(encryptedData)
-                    } else {
-                        print("Failed to encrypt frame")
+                    videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: targetWidth, height: targetHeight) { encryptedData in
+                        if let encryptedData {
+                            streamingService.sendVideoFrame(encryptedData)
+                        } else {
+                            print("Failed to encrypt frame")
+                        }
                     }
+                } else {
+                    print("Failed to lock base address of pixel buffer")
                 }
             }
         }
@@ -271,8 +287,6 @@
         }
 
         func sendVideoFrame(_ encryptedBuffer: Data) {
-//        print("Sending frame data of length: \(encryptedBuffer.count) bytes")
-//        print("Sending first 32 bytes of frame data: \(encryptedBuffer.prefix(32).hexEncodedString())")
             let natsMessage = NATSMessage(payload: encryptedBuffer)
             let messageData = natsMessage.toData()
 
@@ -293,7 +307,6 @@
         }
 
         func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) {
-//        print("Encrypting frame")
             do {
                 let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
                 completion(nanoTDFBytes)
@@ -313,7 +326,6 @@
         }
 
         func encrypt(input: Data) throws -> Data {
-//        print("Encrypting...")
             guard let kasPublicKey else {
                 throw EncryptionError.missingKasPublicKey
             }
@@ -382,27 +394,6 @@
                 completion(nil)
             }
         }
-    }
-
-    private func applyColorCorrection(to image: UIImage) -> UIImage? {
-        guard let cgImage = image.cgImage else { return nil }
-
-        let ciImage = CIImage(cgImage: cgImage)
-        let context = CIContext(options: nil)
-
-        // Apply color adjustments
-        let colorControls = CIFilter(name: "CIColorControls")
-        colorControls?.setValue(ciImage, forKey: kCIInputImageKey)
-        colorControls?.setValue(1.1, forKey: kCIInputSaturationKey) // Slightly increase saturation
-        colorControls?.setValue(1.05, forKey: kCIInputContrastKey) // Slightly increase contrast
-
-        guard let outputImage = colorControls?.outputImage,
-              let cgOutputImage = context.createCGImage(outputImage, from: outputImage.extent)
-        else {
-            return nil
-        }
-
-        return UIImage(cgImage: cgOutputImage)
     }
 
     extension Data {
