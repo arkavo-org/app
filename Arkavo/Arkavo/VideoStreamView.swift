@@ -86,7 +86,7 @@
         private func switchCamera() {
             videoCaptureViewController.switchCamera()
         }
-        
+
         private func toggleVideoSource() {
             isShowingLocalVideo.toggle()
         }

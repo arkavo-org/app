@@ -127,8 +127,8 @@ struct ArkavoView: View {
                                     Section("Account") {
                                         if let account = accounts.first {
                                             if let profile = account.profile {
-                                                VStack(alignment: .leading) {
-                                                    Text("Profile: \(profile.name)")
+                                                Button("Profile: \(profile.name)") {
+                                                    showingProfileDetails = true
                                                 }
                                             } else {
                                                 Button("Create Profile") {

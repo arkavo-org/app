@@ -19,7 +19,7 @@ struct DetailedStreamProfileView: View {
     @State var isShareSheetPresented: Bool = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Form {
                     Section(header: Text("Profile")) {
@@ -37,7 +37,7 @@ struct DetailedStreamProfileView: View {
             .navigationTitle("Stream")
             .toolbar {
                 if viewModel.stream.admissionPolicy != .closed {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .primaryAction) {
                         Button(action: {
                             isShareSheetPresented = true
                         }) {
@@ -47,23 +47,53 @@ struct DetailedStreamProfileView: View {
                 }
             }
             .sheet(isPresented: $isShareSheetPresented) {
-                ShareSheet(activityItems: [URL(string: "https://arkavo.net/s/\(viewModel.stream.profile.id)")!])
+                ShareSheet(activityItems: [URL(string: "https://arkavo.net/s/\(viewModel.stream.profile.id)")!],
+                           isPresented: $isShareSheetPresented)
             }
         }
     }
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-    let applicationActivities: [UIActivity]? = nil
+#if os(iOS)
+    struct ShareSheet: UIViewControllerRepresentable {
+        let activityItems: [Any]
+        @Binding var isPresented: Bool
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
-        return controller
+        func makeUIViewController(context _: Context) -> UIActivityViewController {
+            let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+            return controller
+        }
+
+        func updateUIViewController(_: UIActivityViewController, context _: Context) {}
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
+#elseif os(macOS)
+    struct ShareSheet: View {
+        let activityItems: [Any]
+        @Binding var isPresented: Bool
+
+        var body: some View {
+            VStack {
+                ForEach(activityItems.indices, id: \.self) { index in
+                    let item = activityItems[index]
+                    if let url = item as? URL {
+                        ShareLink(item: url) {
+                            Label("Share URL", systemImage: "link")
+                        }
+                    } else if let string = item as? String {
+                        ShareLink(item: string) {
+                            Label("Share Text", systemImage: "text.quote")
+                        }
+                    }
+                }
+                Button("Done") {
+                    isPresented = false
+                }
+            }
+            .padding()
+        }
+    }
+#endif
 
 class StreamViewModel: ObservableObject {
     @Published var stream: Stream
@@ -193,7 +223,7 @@ struct StreamProfileView_Previews: PreviewProvider {
                 .previewDisplayName("Compact Stream Profile")
 
             DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
-            .previewDisplayName("Detailed Stream Profile")
+                .previewDisplayName("Detailed Stream Profile")
 
             CreateStreamProfileView { _, _, _ in
                 // This closure is just for preview, so we'll leave it empty
