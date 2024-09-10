@@ -12,7 +12,7 @@ struct StreamView: View {
             Spacer(minLength: 40)
             VStack {
                 HStack {
-                    Text("My Stream")
+                    Text("My Streams")
                         .font(.title)
                     Spacer()
                 }

@@ -16,22 +16,53 @@ struct CompactStreamProfileView: View {
 
 struct DetailedStreamProfileView: View {
     @ObservedObject var viewModel: StreamViewModel
+    @State var isShareSheetPresented: Bool = false
 
     var body: some View {
-        Form {
-            Section(header: Text("Profile Information")) {
-                Text("\(viewModel.stream.profile.name)")
-                if let blurb = viewModel.stream.profile.blurb {
-                    Text("\(blurb)")
+        NavigationView {
+            VStack {
+                Form {
+                    Section(header: Text("Profile")) {
+                        Text("\(viewModel.stream.profile.name)")
+                        if let blurb = viewModel.stream.profile.blurb {
+                            Text("\(blurb)")
+                        }
+                    }
+                    Section(header: Text("Policies")) {
+                        Text("Admission: \(viewModel.stream.admissionPolicy)")
+                        Text("Interaction: \(viewModel.stream.interactionPolicy)")
+                    }
                 }
             }
-            Section(header: Text("Policies")) {
-                Text("Admission: \(viewModel.stream.admissionPolicy)")
-                Text("Interaction: \(viewModel.stream.interactionPolicy)")
+            .navigationTitle("Stream")
+            .toolbar {
+                if viewModel.stream.admissionPolicy != .closed {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            isShareSheetPresented = true
+                        }) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $isShareSheetPresented) {
+                ShareSheet(activityItems: [URL(string: "https://arkavo.net/s/\(viewModel.stream.profile.id)")!])
             }
         }
-        .navigationTitle("Stream Profile")
     }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 class StreamViewModel: ObservableObject {
@@ -161,9 +192,7 @@ struct StreamProfileView_Previews: PreviewProvider {
                 .previewLayout(.sizeThatFits)
                 .previewDisplayName("Compact Stream Profile")
 
-            NavigationView {
-                DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
-            }
+            DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
             .previewDisplayName("Detailed Stream Profile")
 
             CreateStreamProfileView { _, _, _ in
