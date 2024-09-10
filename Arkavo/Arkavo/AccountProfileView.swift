@@ -6,24 +6,35 @@ struct AccountProfileDetailedView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Spacer()
-
-        HStack {
-            Spacer()
-
-            Text("View Profile")
-                .font(.title3)
-
-            Spacer()
-
-            Button(action: {
-                dismiss()
-            }, label: {
-                Image(systemName: "xmark.circle")
-                    .font(.system(size: 20, weight: .light))
-            })
-        } //: HSTACK
-
+        #if os(iOS)
+        NavigationView {
+            contentView
+                .navigationTitle("Account Profile")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        dismissButton
+                    }
+                }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        #else
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text("Account Profile")
+                    .font(.title)
+                Spacer()
+                dismissButton
+            }
+            .padding(.bottom)
+            
+            contentView
+        }
+        .padding()
+        .frame(minWidth: 300, minHeight: 400)
+        #endif
+    }
+    
+    private var contentView: some View {
         Form {
             Section(header: Text("Profile Information")) {
                 Text("Name: \(viewModel.profile.name)")
@@ -36,8 +47,16 @@ struct AccountProfileDetailedView: View {
                 Text("ID: \(viewModel.profile.id.uuidString)")
                 Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
             }
-        } //: FORM
-        .navigationTitle("Account Profile")
+        }
+    }
+    
+    private var dismissButton: some View {
+        Button(action: {
+            dismiss()
+        }) {
+            Image(systemName: "xmark.circle")
+                .font(.system(size: 20, weight: .light))
+        }
     }
 }
 
@@ -80,74 +99,73 @@ struct AccountProfileCreateView: View {
     }
 
     var body: some View {
-        Spacer()
-
-        HStack {
+        VStack {
             Spacer()
-
-            Text("Create Profile")
-                .font(.title3)
-
-            Spacer()
-
-            Button(action: {
-                dismiss()
-            }, label: {
-                Image(systemName: "xmark.circle")
-                    .font(.system(size: 20, weight: .light))
-            })
-            .padding(.trailing, 10)
-        }
-
-        Form {
-            Section(header: Text("Profile Information")) {
-                TextField("Name", text: $viewModel.name)
-
-//                if let nameError = viewModel.nameError {
-//                    Text(nameError).foregroundColor(.red)
-//                }
-
-                TextField("Blurb", text: $viewModel.blurb)
-                if let blurbError = viewModel.blurbError {
-                    Text(blurbError).foregroundColor(.red)
-                }
+            
+            HStack {
+                Text("Create Profile")
+                    .font(.title3)
+                    .padding(.leading, 20)
+                Spacer()
+                Button(action: {
+                    dismiss()
+                }, label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 20, weight: .light))
+                })
+                .padding(.trailing, 10)
             }
-            Section(header: Text("Interests")) {
-                List {
-                    ForEach(interests.indices, id: \.self) { i in
-                        HStack {
-                            Text(interests[i].name)
-
-                            Spacer()
-
-                            Button(action: {
-                                areSelected[i].toggle()
-                                interests[i].isSelected = areSelected[i]
-
-                            }, label: {
-                                Image(systemName: areSelected[i] ? "circle.fill" : "circle")
-                                    .font(.system(size: 20, weight: .light))
-                            })
+            
+            Form {
+                Section(header: Text("Profile Information")) {
+                    TextField("Name", text: $viewModel.name)
+                    
+                    //                if let nameError = viewModel.nameError {
+                    //                    Text(nameError).foregroundColor(.red)
+                    //                }
+                    
+                    TextField("Blurb", text: $viewModel.blurb)
+                    if let blurbError = viewModel.blurbError {
+                        Text(blurbError).foregroundColor(.red)
+                    }
+                }
+                Section(header: Text("Interests")) {
+                    List {
+                        ForEach(interests.indices, id: \.self) { i in
+                            HStack {
+                                Text(interests[i].name)
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    areSelected[i].toggle()
+                                    interests[i].isSelected = areSelected[i]
+                                    
+                                }, label: {
+                                    Image(systemName: areSelected[i] ? "circle.fill" : "circle")
+                                        .font(.system(size: 20, weight: .light))
+                                })
+                            }
                         }
                     }
                 }
+                Button(action: {
+                    let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
+                    onSave(profile)
+                    dismiss()
+                }) {
+                    Text("Register")
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .frame(minWidth: 200)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                }
+                .disabled(!viewModel.isValid)
             }
-            Button(action: {
-                let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
-                onSave(profile)
-                dismiss()
-            }) {
-                Text("Register")
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .frame(minWidth: 200)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(10)
-            }
-            .disabled(!viewModel.isValid)
+            .navigationTitle("Create Account Profile")
         }
-        .navigationTitle("Create Account Profile")
     }
 }
 
@@ -196,4 +214,22 @@ extension DateFormatter {
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+struct AccountProfileDetailedView_Previews: PreviewProvider {
+    static var previews: some View {
+        let sampleProfile = Profile(name: "John Doe", blurb: "A sample user", interests: "Sports,Music")
+        let viewModel = AccountProfileViewModel(profile: sampleProfile)
+        
+        Group {
+            AccountProfileCreateView(onSave: { _ in }, selectedView: .constant(.streamList))
+                .previewDisplayName("Create")
+                .previewDevice("iPhone 13")
+            
+            AccountProfileDetailedView(viewModel: viewModel)
+                .previewDisplayName("Detailed")
+                .previewDevice("iPhone 13")
+           
+        }
+    }
 }
