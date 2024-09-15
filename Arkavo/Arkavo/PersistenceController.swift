@@ -12,6 +12,8 @@ class PersistenceController {
             let schema = Schema([
                 Account.self,
                 Profile.self,
+                Stream.self,
+                Thought.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             print(modelConfiguration.url)
@@ -54,5 +56,11 @@ class PersistenceController {
 
     func fetchProfile(withID id: UUID) throws -> Profile? {
         try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    // MARK: - Stream Operations
+
+    func fetchStream(withID id: UUID) throws -> Stream? {
+        try container.mainContext.fetch(FetchDescriptor<Stream>(predicate: #Predicate { $0.id == id })).first
     }
 }

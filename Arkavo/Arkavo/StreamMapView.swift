@@ -6,15 +6,12 @@ import SwiftUI
 struct StreamMapView: View {
     @ObservedObject var webSocketManager: WebSocketManager
     @ObservedObject var nanoTDFManager: NanoTDFManager
-    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
+    var kasPublicKey: P256.KeyAgreement.PublicKey?
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var mapUpdateTrigger = UUID()
-    @State private var cities: [City] = []
     @State private var nanoCities: [NanoTDF] = []
     @State private var nanoTime: TimeInterval = 0
-    @StateObject private var annotationManager = AnnotationManager()
     @State private var inProcessCount = 0
-    @State private var continentClusters: [String: [City]] = [:]
     @State private var annotations: [AnnotationItem] = []
     @State private var cityCount = 0
     @Environment(\.locale) var locale
@@ -73,103 +70,6 @@ struct StreamMapView: View {
         }
     }
 
-    func loadGeoJSON() {
-        cities = generateTwoThousandActualCities()
-        createNanoCities()
-    }
-
-    private func createNanoCities() {
-        print("Nanoing Cities...")
-        guard kasPublicKey != nil else {
-            print("Missing KAS public key")
-            return
-        }
-        let startTime = Date()
-        let dispatchGroup = DispatchGroup()
-        let queue = DispatchQueue(label: "com.arkavo.nanoTDFCreation", attributes: .concurrent)
-
-        for city in cities {
-            dispatchGroup.enter()
-            queue.async {
-                do {
-                    let serializedCity = try city.serialize()
-                    let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")
-                    let kasMetadata = KasMetadata(resourceLocator: kasRL!, publicKey: kasPublicKey!, curve: .secp256r1)
-                    let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: city.continent)
-                    var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-                    let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedCity)
-
-                    DispatchQueue.main.async {
-                        nanoCities.append(nanoTDF)
-                        dispatchGroup.leave()
-                    }
-                } catch {
-                    print("Error creating nanoTDF for \(city.name): \(error)")
-                    dispatchGroup.leave()
-                }
-            }
-        }
-
-        dispatchGroup.notify(queue: .main) {
-            let endTime = Date()
-            nanoTime = endTime.timeIntervalSince(startTime)
-            sendCities()
-        }
-    }
-
-    private func sendCities() {
-        print("Sending...")
-        let maxCitiesToSend = 3000
-        let citiesToSend = nanoCities.prefix(maxCitiesToSend)
-        for nanoCity in citiesToSend {
-            let natsMessage = NATSMessage(payload: nanoCity.toData())
-            let messageData = natsMessage.toData()
-
-            webSocketManager.sendCustomMessage(messageData) { error in
-                if let error {
-                    print("Error sending thought: \(error)")
-                }
-            }
-        }
-    }
-
-    func addCityToCluster(_ city: City) {
-        if continentClusters[city.continent] == nil {
-            continentClusters[city.continent] = []
-        }
-        continentClusters[city.continent]?.append(city)
-        cityCount += 1
-        updateAnnotations()
-    }
-
-    func removeCityFromCluster(_ city: City) {
-        continentClusters[city.continent]?.removeAll { $0.id == city.id }
-        cityCount -= 1
-        updateAnnotations()
-    }
-
-    private func updateAnnotations() {
-        annotations = continentClusters.flatMap { continent, cities -> [AnnotationItem] in
-            if cities.count > 50 {
-                let centerCoordinate = calculateCenterCoordinate(for: cities)
-                return [AnnotationItem(coordinate: centerCoordinate, name: continent, count: cities.count, isCluster: true)]
-            } else {
-                return cities.map { city in
-                    AnnotationItem(coordinate: city.clCoordinate, name: city.name, count: 1, isCluster: false)
-                }
-            }
-        }
-        mapUpdateTrigger = UUID()
-    }
-
-    private func calculateCenterCoordinate(for cities: [City]) -> CLLocationCoordinate2D {
-        let totalLat = cities.reduce(0.0) { $0 + $1.coordinate.latitude }
-        let totalLon = cities.reduce(0.0) { $0 + $1.coordinate.longitude }
-        let count = Double(cities.count)
-        return CLLocationCoordinate2D(latitude: totalLat / count, longitude: totalLon / count)
-    }
-
     private func engageAction() async {
         let centerCoordinate = await getCountryCenterCoordinate()
         var currentCenter = centerCoordinate
@@ -203,46 +103,6 @@ struct StreamMapView: View {
                 }
             }
     }
-
-    private var diagnosticOverlay: some View {
-        PerformanceInfoOverlay(
-            nanoTime: nanoTime,
-            nanoCitiesCount: nanoCities.count,
-            citiesCount: cities.count,
-            decryptTime: nanoTDFManager.processDuration,
-            decryptCount: nanoTDFManager.inProcessCount
-        )
-        .padding()
-    }
-
-    func loadRandomCities() {
-        nanoTime = 0
-        nanoCities = []
-        print("Generating new random cities...")
-        let newCities = generateRandomCities(count: 1000)
-        cities.append(contentsOf: newCities)
-        print("New cities added: \(newCities.count)")
-        print("Total cities: \(cities.count)")
-        createNanoCities()
-    }
-}
-
-class AnnotationManager: ObservableObject {
-    @Published var annotations: [CityAnnotation] = []
-
-    func addAnnotation(_ city: City) {
-        DispatchQueue.main.async {
-            if !self.annotations.contains(where: { $0.id == city.id }) {
-                self.annotations.append(CityAnnotation(city: city))
-            }
-        }
-    }
-
-    func removeAnnotation(_ city: City) {
-        DispatchQueue.main.async {
-            self.annotations.removeAll { $0.id == city.id }
-        }
-    }
 }
 
 struct ClusterAnnotationView: View {
@@ -261,21 +121,6 @@ struct ClusterAnnotationView: View {
                     .font(.system(size: 10))
             }
             .foregroundColor(.white)
-        }
-    }
-}
-
-struct CityAnnotationView: View {
-    let city: City
-
-    var body: some View {
-        VStack {
-            Image(systemName: "mappin.circle.fill")
-                .foregroundColor(.red)
-                .font(.title)
-            Text(city.name)
-                .font(.caption)
-                .fixedSize()
         }
     }
 }

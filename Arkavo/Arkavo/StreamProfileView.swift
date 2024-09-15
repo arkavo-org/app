@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct CompactStreamProfileView: View {
-    @ObservedObject var viewModel: StreamViewModel
+    @ObservedObject var viewModel: StreamProfileViewModel
 
     var body: some View {
         HStack {
@@ -15,7 +15,7 @@ struct CompactStreamProfileView: View {
 }
 
 struct DetailedStreamProfileView: View {
-    @ObservedObject var viewModel: StreamViewModel
+    @ObservedObject var viewModel: StreamProfileViewModel
     @State var isShareSheetPresented: Bool = false
 
     var body: some View {
@@ -95,7 +95,7 @@ struct DetailedStreamProfileView: View {
     }
 #endif
 
-class StreamViewModel: ObservableObject {
+class StreamProfileViewModel: ObservableObject {
     @Published var stream: Stream
 
     init(stream: Stream) {
@@ -218,11 +218,11 @@ extension StreamProfileView_Previews {
 struct StreamProfileView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            CompactStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
+            CompactStreamProfileView(viewModel: StreamProfileViewModel(stream: previewStream))
                 .previewLayout(.sizeThatFits)
                 .previewDisplayName("Compact Stream Profile")
 
-            DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
+            DetailedStreamProfileView(viewModel: StreamProfileViewModel(stream: previewStream))
                 .previewDisplayName("Detailed Stream Profile")
 
             CreateStreamProfileView { _, _, _ in

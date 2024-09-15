@@ -32,37 +32,32 @@ struct StreamCloudView: View {
             .padding(.leading, 20)
             .frame(height: 30)
             .zIndex(1)
-
-            if showingContentView {
-                ThoughtView(viewModel: viewModel.thoughtStreamViewModel)
-            } else {
-                ZStack {
-                    ForEach(boundingBoxes) { box in
-                        Text(box.word)
-                            .font(.system(size: box.size))
-                            .foregroundColor(Color(
-                                red: .random(in: 0.4 ... 1),
-                                green: .random(in: 0.4 ... 1),
-                                blue: .random(in: 0.4 ... 1)
-                            ))
-                            .position(animatedPosition(for: box))
-                            .opacity(box.opacity)
-                            .rotationEffect(box.rotation)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.5)) {
-                                    selectWord(box, in: geometry.size)
-                                }
+            ZStack {
+                ForEach(boundingBoxes) { box in
+                    Text(box.word)
+                        .font(.system(size: box.size))
+                        .foregroundColor(Color(
+                            red: .random(in: 0.4 ... 1),
+                            green: .random(in: 0.4 ... 1),
+                            blue: .random(in: 0.4 ... 1)
+                        ))
+                        .position(animatedPosition(for: box))
+                        .opacity(box.opacity)
+                        .rotationEffect(box.rotation)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                selectWord(box, in: geometry.size)
                             }
-                    }
+                        }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
-                .onAppear {
-                    availableSize = geometry.size
-                    calculateSpacing(for: geometry.size)
-                    layoutWords(in: geometry.size)
-                    startAnimation()
-                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+            .onAppear {
+                availableSize = geometry.size
+                calculateSpacing(for: geometry.size)
+                layoutWords(in: geometry.size)
+                startAnimation()
             }
         }
     }
@@ -233,15 +228,12 @@ struct WordCloudItem: Identifiable {
 
 class WordCloudViewModel: ObservableObject {
     @Published var words: [(String, CGFloat)]
-    @Published var thoughtStreamViewModel: ThoughtStreamViewModel
     let animationType: WordCloudAnimationType
 
     init(
-        thoughtStreamViewModel: ThoughtStreamViewModel,
         words: [(String, CGFloat)],
         animationType: WordCloudAnimationType
     ) {
-        self.thoughtStreamViewModel = thoughtStreamViewModel
         self.words = words
         self.animationType = animationType
     }
@@ -269,11 +261,11 @@ struct WordCloudView_Previews: PreviewProvider {
             ("Fashion", 38), ("Gaming", 12), ("Entertainment", 36), ("Climate Change", 16),
         ]
         Group {
-            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWordsDifferentSize, animationType: .rotating))
-            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .explosion))
-            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .falling))
-            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: moreWords, animationType: .rising))
-            StreamCloudView(viewModel: WordCloudViewModel(thoughtStreamViewModel: ThoughtStreamViewModel(), words: words, animationType: .swirling))
+            StreamCloudView(viewModel: WordCloudViewModel(words: moreWordsDifferentSize, animationType: .rotating))
+            StreamCloudView(viewModel: WordCloudViewModel(words: moreWords, animationType: .explosion))
+            StreamCloudView(viewModel: WordCloudViewModel(words: words, animationType: .falling))
+            StreamCloudView(viewModel: WordCloudViewModel(words: moreWords, animationType: .rising))
+            StreamCloudView(viewModel: WordCloudViewModel(words: words, animationType: .swirling))
         }
     }
 }

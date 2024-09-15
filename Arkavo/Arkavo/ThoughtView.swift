@@ -1,12 +1,39 @@
-import Combine
-import CryptoKit
 import OpenTDFKit
 import SwiftUI
 
-// Wrapper struct for Thought
-struct ThoughtWrapper: Identifiable {
+final class ThoughtViewModel: ObservableObject, Identifiable {
     let id = UUID()
-    let thought: Thought
+    @Published var creator: Profile
+    @Published var stream: Profile
+    // TODO: change to Data
+    @Published var content: String
+    @Published var mediaType: MediaType
+
+    init(mediaType: MediaType, content: String, creator: Profile, stream: Profile) {
+        self.mediaType = mediaType
+        self.content = content
+        self.creator = creator
+        self.stream = stream
+    }
+}
+
+func createThoughtViewModelText(creator: Profile, stream: Profile, text: String) -> ThoughtViewModel {
+    ThoughtViewModel(mediaType: .text, content: text, creator: creator, stream: stream)
+}
+
+struct ThoughtListView: View {
+    @StateObject var viewModel: ThoughtViewModel
+
+    var body: some View {
+        VStack {
+            Text(viewModel.content)
+                .font(.body)
+            Text(viewModel.creator.name)
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .padding()
+    }
 }
 
 struct ThoughtView: View {
@@ -14,7 +41,6 @@ struct ThoughtView: View {
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
-    @State private var cancellables = Set<AnyCancellable>()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,27 +49,35 @@ struct ThoughtView: View {
                     .frame(height: 90)
                 ScrollViewReader { _ in
                     ScrollView {
-                        // Input area
-                        HStack {
-                            TextField("Type a message...", text: $inputText)
-                                .padding(10)
-                                .background(Color.blue.opacity(0.3))
-                                .foregroundColor(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .disabled(isSending)
-                                .focused($isInputFocused)
-                                .onSubmit {
-                                    sendThought()
-                                }
+                        if viewModel.creatorProfile != nil {
+                            HStack {
+                                TextField("Type a message...", text: $inputText)
+                                    .padding(10)
+                                    .background(Color.blue.opacity(0.3))
+                                    .foregroundColor(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .disabled(isSending)
+                                    .focused($isInputFocused)
+                                    .onSubmit {
+                                        sendThought()
+                                    }
+                            }
+                            .padding()
+                        } else {
+                            VStack {
+                                Spacer()
+                                    .frame(height: 100)
+                                Text("No stream profile")
+                                    .font(.headline)
+                            }
                         }
-                        .padding()
                         LazyVStack(spacing: 8) {
-                            ForEach(Array(viewModel.allThoughts.reversed().enumerated()), id: \.element.id) { index, wrapper in
-                                let totalThoughts = viewModel.allThoughts.count
-                                let opacity = Double(totalThoughts - index) / Double(totalThoughts)
-                                MessageBubble(thought: wrapper.thought, isCurrentUser: wrapper.thought.sender == viewModel.profile!.name)
+                            ForEach(Array(viewModel.thoughts.enumerated()), id: \.element.id) { index, thoughtViewModel in
+                                let totalThoughts = 20
+                                let opacity = Double(totalThoughts - min(index, totalThoughts - 1)) / Double(totalThoughts)
+                                MessageBubble(viewModel: thoughtViewModel, isCurrentUser: thoughtViewModel.creator.name == viewModel.creatorProfile!.name)
                                     .opacity(opacity)
-                                    .id(wrapper.id)
+                                    .id(thoughtViewModel.id)
                             }
                         }
                     }
@@ -57,170 +91,47 @@ struct ThoughtView: View {
 
     private func sendThought() {
         guard !inputText.isEmpty else { return }
-        guard ((viewModel.profile?.name.isEmpty) == nil) == false else { return }
-        let newThought = Thought.createTextThoughtWithSender(inputText, sender: viewModel.profile!.name)
-        viewModel.sendThought(thought: newThought)
+        let thoughtViewModel = createThoughtViewModelText(creator: viewModel.creatorProfile!, stream: viewModel.stream!.profile, text: inputText)
+        viewModel.sendThought(thoughtViewModel)
         inputText = ""
     }
 }
 
-actor ThoughtHandler {
-    private let nanoTDFManager: NanoTDFManager
-    private let webSocketManager: WebSocketManager
-    init(nanoTDFManager: NanoTDFManager, webSocketManager: WebSocketManager) {
-        self.nanoTDFManager = nanoTDFManager
-        self.webSocketManager = webSocketManager
-    }
-
-    func handleIncomingThought(data: Data) async {
-        // Assuming the incoming data is a NATSMessage
-//        print("NATS message received: \(data.base64EncodedString())")
-//        print("NATS payload size: \(data.count)")
-        do {
-            // FIXME: copy of data after first byte
-            let subData = data.subdata(in: 1 ..< data.count)
-            // Create a NanoTDF from the payload
-            let parser = BinaryParser(data: subData)
-            let header = try parser.parseHeader()
-            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
-            let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
-            // Use the nanoTDFManager to handle the incoming NanoTDF
-            let id = nanoTDF.header.ephemeralPublicKey
-//            print("ephemeralPublicKey: \(id.base64EncodedString())")
-            nanoTDFManager.addNanoTDF(nanoTDF, withIdentifier: id)
-            webSocketManager.sendRewrapMessage(header: nanoTDF.header)
-        } catch let error as ParsingError {
-            handleParsingError(error)
-        } catch {
-            print("Unexpected error: \(error.localizedDescription)")
-        }
-    }
-
-    private func handleParsingError(_ error: ParsingError) {
-        switch error {
-        case .invalidFormat:
-            print("Invalid NanoTDF format")
-        case .invalidEphemeralKey:
-            print("Invalid NanoTDF ephemeral key")
-        case .invalidPayload:
-            print("Invalid NanoTDF payload")
-        case .invalidMagicNumber:
-            print("Invalid NanoTDF magic number")
-        case .invalidVersion:
-            print("Invalid NanoTDF version")
-        case .invalidKAS:
-            print("Invalid NanoTDF kas")
-        case .invalidECCMode:
-            print("Invalid NanoTDF ecc mode")
-        case .invalidPayloadSigMode:
-            print("Invalid NanoTDF payload signature mode")
-        case .invalidPolicy:
-            print("Invalid NanoTDF policy")
-        case .invalidPublicKeyLength:
-            print("Invalid NanoTDF public key length")
-        case .invalidSignatureLength:
-            print("Invalid NanoTDF signature length")
-        case .invalidSigning:
-            print("Invalid NanoTDF signing")
-        }
-    }
-}
-
 class ThoughtStreamViewModel: ObservableObject {
-    @Published var allThoughts: [ThoughtWrapper] = []
-    let maxThoughts: Int = 100
-    public var thoughtHandler: ThoughtHandler?
-    @Published var profile: Profile?
-    // nano
-    @Published var webSocketManager: WebSocketManager
-    var nanoTDFManager: NanoTDFManager
-    @Binding var kasPublicKey: P256.KeyAgreement.PublicKey?
-    private var cancellables = Set<AnyCancellable>()
+    @Published var service: ThoughtService
+    @Published var stream: Stream?
+    @Published var creatorProfile: Profile?
+    @Published var thoughts: [ThoughtViewModel] = []
 
-    init() {
-        _webSocketManager = .init(initialValue: WebSocketManager())
-        _kasPublicKey = .constant(nil)
-        nanoTDFManager = NanoTDFManager()
+    init(service: ThoughtService) {
+        self.service = service
     }
 
-    func initialize(
-        webSocketManager: WebSocketManager,
-        nanoTDFManager: NanoTDFManager,
-        kasPublicKey: Binding<P256.KeyAgreement.PublicKey?>
-    ) {
-        self.webSocketManager = webSocketManager
-        self.webSocketManager = webSocketManager
-        _kasPublicKey = kasPublicKey
-        self.nanoTDFManager = nanoTDFManager
-        thoughtHandler = ThoughtHandler(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
-        webSocketManager.setCustomMessageCallback { [weak self] data in
-            // FIXME: this is called frequently
-//            print("setCustomMessageCallback")
-            guard let self, let thoughtHandler else { return }
-            Task {
-                await thoughtHandler.handleIncomingThought(data: data)
-            }
-        }
-    }
-
-    func sendThought(thought: Thought) {
-        guard let kasPublicKey else {
-            print("KAS public key not available")
-            return
-        }
-        do {
-            // Serialize the new Thought
-            let serializedThought = try thought.serialize()
-
-            // Create a NanoTDF
-            let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-            let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
-            // smart contract
-            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
-            var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-            let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: serializedThought)
-
-            // Create and send the NATSMessage
-            let natsMessage = NATSMessage(payload: nanoTDF.toData())
-            let messageData = natsMessage.toData()
-//            print("NATS message payload sent: \(natsMessage.payload.base64EncodedString())")
-
-            webSocketManager.sendCustomMessage(messageData) { error in
-                if let error {
-                    print("Error sending thought: \(error)")
-                }
-            }
-        } catch {
-            print("Error creating or serializing NanoTDF: \(error)")
-        }
-    }
-
-    func receiveThought(_ newThought: Thought) {
+    func receiveThought(_: Thought) {
+        // TODO: covert Thought to ThoughtViewModel
         DispatchQueue.main.async {
-            self.addThought(newThought)
+//            self.addThought(newThought)
         }
     }
 
-    private func addThought(_ thought: Thought) {
-        let wrappedThought = ThoughtWrapper(thought: thought)
-        allThoughts.append(wrappedThought)
-        if allThoughts.count > maxThoughts {
-            allThoughts.removeFirst()
+    func sendThought(_ viewModel: ThoughtViewModel) {
+        do {
+            let nano = try service.createNano(viewModel, stream: stream!)
+            try service.sendThought(nano)
+        } catch {
+            print("error sending thought: \(error.localizedDescription)")
         }
-    }
-}
-
-struct ThoughtStreamView_Previews: PreviewProvider {
-    static var previews: some View {
-        let viewModel = ThoughtStreamViewModel()
-        ThoughtView(viewModel: viewModel)
     }
 }
 
 struct MessageBubble: View {
-    let thought: Thought
+    let viewModel: ThoughtViewModel
     let isCurrentUser: Bool
+
+    init(viewModel: ThoughtViewModel, isCurrentUser: Bool) {
+        self.viewModel = viewModel
+        self.isCurrentUser = isCurrentUser
+    }
 
     var body: some View {
         HStack {
@@ -228,10 +139,10 @@ struct MessageBubble: View {
                 Spacer()
             }
             VStack(alignment: isCurrentUser ? .trailing : .leading) {
-                Text(thought.sender)
+                Text(viewModel.creator.name)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text(thought.content.first?.content ?? "")
+                Text(viewModel.content)
                     .padding(10)
                     .background(isCurrentUser ? Color.blue : Color(.gray))
                     .foregroundColor(isCurrentUser ? .white : .primary)
@@ -243,3 +154,15 @@ struct MessageBubble: View {
         }
     }
 }
+
+// struct ThoughtStreamView_Previews: PreviewProvider {
+//    static var previews: some View {
+//        let account = Account()
+//        let profile = Profile(name: "TestProfile")
+//        let admissionPolicy = AdmissionPolicy(rawValue: "test")
+//        let interactionPolicy = InteractionPolicy(rawValue: "test")
+//        let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+//        let viewModel = ThoughtStreamViewModel(service: ThoughtService(nanoTDFManager: NanoTDFManager(), webSocketManager: WebSocketManager()))
+//        ThoughtView(viewModel: viewModel)
+//    }
+// }

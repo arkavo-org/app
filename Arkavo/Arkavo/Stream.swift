@@ -9,13 +9,19 @@ final class Stream: @unchecked Sendable {
     var profile: Profile
     var admissionPolicy: AdmissionPolicy
     var interactionPolicy: InteractionPolicy
+    var thoughts: [Thought]
 
-    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) {
+    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, thoughts: [Thought] = []) {
         self.id = id
         self.account = account
         self.profile = profile
         self.admissionPolicy = admissionPolicy
         self.interactionPolicy = interactionPolicy
+        self.thoughts = thoughts
+    }
+
+    func addThought(_ thought: Thought) {
+        thoughts.append(thought)
     }
 }
 
