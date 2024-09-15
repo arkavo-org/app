@@ -4,6 +4,7 @@ import Foundation
 import OpenTDFKit
 
 class ArkavoService {
+    public static var kasPublicKey: P256.KeyAgreement.PublicKey?
     let webSocketManager: WebSocketManager
     private var cancellables = Set<AnyCancellable>()
     private var isReconnecting = false
@@ -11,7 +12,6 @@ class ArkavoService {
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
     let thoughtService: ThoughtService
-    var kasPublicKey: P256.KeyAgreement.PublicKey?
     var token: String?
 
     init(_ webSocketManager: WebSocketManager) {
@@ -21,12 +21,12 @@ class ArkavoService {
 
     func setupCallbacks() {
         webSocketManager.setKASPublicKeyCallback { publicKey in
-            if self.kasPublicKey != nil {
+            if ArkavoService.kasPublicKey != nil {
                 return
             }
             DispatchQueue.main.async {
                 print("Received KAS Public Key")
-                self.kasPublicKey = publicKey
+                ArkavoService.kasPublicKey = publicKey
             }
         }
         webSocketManager.setRewrapCallback { id, symmetricKey in
@@ -66,36 +66,14 @@ class ArkavoService {
                 case .thought:
                     try self.thoughtService.handle(payload, policy: policy, nano: nano.toData())
                 case .videoFrame:
-                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                        DispatchQueue.main.async {
-                            videoStreamViewModel.receiveVideoFrame(payload)
-                        }
-                    #endif
-                }
-                // TODO: register service for each payload type
-
-                // Try to deserialize as a Thought first
-//                if let thought = try? ThoughtService.deserialize(from: payload) {
-//                    DispatchQueue.main.async {
-//                        // Update the ThoughtStreamView
-//                        thoughtStreamViewModel.receiveThought(thought)
-//                    }
-//                } else if let city = try? City.deserialize(from: payload) {
-//                    // If it's not a Thought, try to deserialize as a City
-//                    DispatchQueue.main.async {
-//                        streamMapView?.addCityToCluster(city)
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-//                            streamMapView?.removeCityFromCluster(city)
+                    // TODO: create VideoStreamService
+//                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+//                        DispatchQueue.main.async {
+//                            videoStreamViewModel.receiveVideoFrame(payload)
 //                        }
-//                    }
-//                } else {
-                #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                    // If it's neither a Thought nor a City, assume it's a video frame
-                    DispatchQueue.main.async {
-                        videoStreamViewModel.receiveVideoFrame(payload)
-                    }
-                #endif
-//                }
+//                    #endif
+                    break
+                }
             } catch {
                 print("Unexpected error during nanoTDF decryption: \(error)")
             }

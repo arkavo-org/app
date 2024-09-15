@@ -43,8 +43,6 @@ class ThoughtService {
     private let webSocketManager: WebSocketManager
     private let nanoTDFManager: NanoTDFManager
     var thoughtStreamViewModel: ThoughtStreamViewModel?
-    // FIXME: get from provider or singleton
-    var kasPublicKey: P256.KeyAgreement.PublicKey?
 
     init(nanoTDFManager: NanoTDFManager, webSocketManager: WebSocketManager) {
         self.nanoTDFManager = nanoTDFManager
@@ -105,7 +103,7 @@ class ThoughtService {
     }
 
     func createNano(_ viewModel: ThoughtViewModel, stream _: Stream) throws -> Data {
-        guard let kasPublicKey else {
+        guard let kasPublicKey = ArkavoService.kasPublicKey else {
             print("KAS public key not available")
             return Data()
         }

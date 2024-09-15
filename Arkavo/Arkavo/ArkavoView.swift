@@ -57,12 +57,12 @@ struct ArkavoView: View {
                 case .streamMap:
                     StreamMapView(webSocketManager: service.webSocketManager,
                                   nanoTDFManager: service.nanoTDFManager,
-                                  kasPublicKey: service.kasPublicKey)
+                                  kasPublicKey: ArkavoService.kasPublicKey)
                         .onAppear {
                             // Store reference to StreamMapView when it appears
                             streamMapView = StreamMapView(webSocketManager: service.webSocketManager,
                                                           nanoTDFManager: service.nanoTDFManager,
-                                                          kasPublicKey: service.kasPublicKey)
+                                                          kasPublicKey: ArkavoService.kasPublicKey)
                         }
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first, let profile = account.profile {
@@ -177,9 +177,8 @@ struct ArkavoView: View {
         // Initialize VideoSteamViewModel
         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
             videoStreamViewModel.initialize(
-                webSocketManager: webSocketManager,
-                nanoTDFManager: nanoTDFManager,
-                kasPublicKey: $kasPublicKey
+                webSocketManager: service.webSocketManager,
+                nanoTDFManager: service.nanoTDFManager
             )
         #endif
         if let account = accounts.first {
