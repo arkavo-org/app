@@ -116,8 +116,6 @@
     }
 
     class VideoStreamViewModel: ObservableObject {
-        @Published var webSocketManager: WebSocketManager
-        var nanoTDFManager: NanoTDFManager
         private var cancellables = Set<AnyCancellable>()
 
         @Published var currentFrame: UIImage?
@@ -125,17 +123,7 @@
         private let frameProcessingQueue = DispatchQueue(label: "com.arkavo.frameProcessing", qos: .userInteractive)
 
         init() {
-            _webSocketManager = .init(initialValue: WebSocketManager())
-            nanoTDFManager = NanoTDFManager()
             videoDecoder = VideoDecoder()
-        }
-
-        func initialize(
-            webSocketManager: WebSocketManager,
-            nanoTDFManager: NanoTDFManager
-        ) {
-            self.webSocketManager = webSocketManager
-            self.nanoTDFManager = nanoTDFManager
         }
 
         func receiveVideoFrame(_ frameData: Data) {

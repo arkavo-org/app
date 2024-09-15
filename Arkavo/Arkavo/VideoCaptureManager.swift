@@ -175,9 +175,8 @@
             }
         }
 
-        func startStreaming(viewModel: VideoStreamViewModel) {
-            let webSocketManager = viewModel.webSocketManager
-            streamingService = StreamingService(webSocketManager: webSocketManager)
+        func startStreaming(viewModel _: VideoStreamViewModel) {
+            streamingService = StreamingService(webSocketManager: WebSocketManager.shared)
             if let kasPublicKey = ArkavoService.kasPublicKey {
                 videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
             } else {

@@ -8,8 +8,9 @@ import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
-    var service = ArkavoService(WebSocketManager())
     @Environment(\.locale) var locale
+    // service
+    @State private var service = ArkavoService()
     // data
     @State private var persistenceController: PersistenceController?
     // map
@@ -86,8 +87,16 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streamList:
-                    let thoughtStreamViewModel = ThoughtStreamViewModel(service: service.thoughtService)
-                    StreamView(viewModel: StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel))
+                    if let thoughtService = service.thoughtService {
+                        let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService)
+                        let streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
+                        StreamView(viewModel: streamViewModel)
+                            .onAppear {
+                                thoughtService.streamViewModel = streamViewModel
+                            }
+                    } else {
+                        Text("Thought service is unavailable")
+                    }
                 }
                 if selectedView != .welcome {
                     VStack {
@@ -162,8 +171,13 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        service.setupCallbacks()
         persistenceController = PersistenceController.shared
+        service.setupCallbacks()
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+            service.videoStreamViewModel = videoStreamViewModel
+        #endif
+
+        // TODO: replace with session token
         if let account = accounts.first, let profile = account.profile {
             let token = service.authenticationManager.createJWT(profileName: profile.name)
             if let token {
@@ -174,13 +188,6 @@ struct ArkavoView: View {
         } else {
             print("No profile no webSocket no token")
         }
-        // Initialize VideoSteamViewModel
-        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-            videoStreamViewModel.initialize(
-                webSocketManager: service.webSocketManager,
-                nanoTDFManager: service.nanoTDFManager
-            )
-        #endif
         if let account = accounts.first {
             if account.profile == nil {
                 selectedView = .welcome
@@ -284,7 +291,7 @@ class NanoTDFManager: ObservableObject {
 //        print("stopProcessTimer")
         guard let startTime = processStartTime else { return }
         processDuration = Date().timeIntervalSince(startTime)
-        print("processDuration \(processDuration)")
+        print("rewrapDuration \(processDuration)")
         processTimer?.invalidate()
         processTimer = nil
         processStartTime = nil

@@ -11,15 +11,16 @@ class ArkavoService {
     private var hasInitialConnection = false
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
-    let thoughtService: ThoughtService
+    var thoughtService: ThoughtService?
+    var videoStreamViewModel: VideoStreamViewModel?
     var token: String?
 
-    init(_ webSocketManager: WebSocketManager) {
-        self.webSocketManager = webSocketManager
-        thoughtService = ThoughtService(nanoTDFManager: nanoTDFManager, webSocketManager: webSocketManager)
+    init() {
+        webSocketManager = WebSocketManager.shared
     }
 
     func setupCallbacks() {
+        thoughtService = ThoughtService(self)
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if ArkavoService.kasPublicKey != nil {
                 return
@@ -32,6 +33,44 @@ class ArkavoService {
         webSocketManager.setRewrapCallback { id, symmetricKey in
             self.handleRewrapCallback(id: id, symmetricKey: symmetricKey)
         }
+        webSocketManager.setCustomMessageCallback { [weak self] data in
+            guard let self else { return }
+//            print("Received Custom Message: \(data.base64EncodedString())")
+            Task {
+                await self.handleIncomingNATSMessage(data: data)
+            }
+        }
+    }
+
+    private func handleIncomingNATSMessage(data: Data) async {
+//        print("NATS payload size: \(data.count)")
+        guard data.count > 4 else {
+            print("Invalid NATS message: \(data.base64EncodedString())")
+            return
+        }
+        do {
+            // FIXME: copy of data after first byte
+            let subData = data.subdata(in: 1 ..< data.count)
+            // Create a NanoTDF from the payload
+            let parser = BinaryParser(data: subData)
+            let header = try parser.parseHeader()
+            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+            let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
+            sendRewrapNanoTDF(nano: nanoTDF)
+        } catch let error as ParsingError {
+            handleParsingError(error)
+        } catch {
+            print("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+
+    /// Sends a rewrap message with the provided header.
+    func sendRewrapNanoTDF(nano: NanoTDF) {
+        // Use the nanoTDFManager to handle the incoming NanoTDF
+        let id = nano.header.ephemeralPublicKey
+//            print("ephemeralPublicKey: \(id.base64EncodedString())")
+        nanoTDFManager.addNanoTDF(nano, withIdentifier: id)
+        webSocketManager.sendRewrapMessage(header: nano.header)
     }
 
     func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
@@ -48,13 +87,20 @@ class ArkavoService {
             print("DENY")
             return
         }
+//        print("received rewrap")
         // dispatch
         DispatchQueue.global(qos: .default).async {
+            // determine payload type based on policy metadata
+            let policy = ArkavoPolicy(nano.header.policy)
+            var payload: Data
             do {
-                // determine payload type based on policy metadata
-                let policy = ArkavoPolicy(nano.header.policy)
                 // decrypt payload
-                let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+                payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+            } catch {
+                print("Unexpected error during nanoTDF decryption: \(error)")
+                return
+            }
+            do {
                 // TODO: route to appropriate service
                 switch policy.type {
                 case .accountProfile:
@@ -64,7 +110,8 @@ class ArkavoService {
                     // TODO:
                     break
                 case .thought:
-                    try self.thoughtService.handle(payload, policy: policy, nano: nano.toData())
+                    guard let thoughtService = self.thoughtService else { return }
+                    try thoughtService.handle(payload, policy: policy, nano: nano)
                 case .videoFrame:
                     // TODO: create VideoStreamService
 //                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -75,7 +122,13 @@ class ArkavoService {
                     break
                 }
             } catch {
-                print("Unexpected error during nanoTDF decryption: \(error)")
+//                print("Unexpected error during nanoTDF decryption: \(error)")
+                // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
+                #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                    DispatchQueue.main.async { [self] in
+                        videoStreamViewModel!.receiveVideoFrame(payload)
+                    }
+                #endif
             }
         }
     }
@@ -106,6 +159,35 @@ class ArkavoService {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // Increased delay to 1 second
             self.setupWebSocketManager(token: self.token!)
             self.isReconnecting = false
+        }
+    }
+
+    private func handleParsingError(_ error: ParsingError) {
+        switch error {
+        case .invalidFormat:
+            print("Invalid NanoTDF format")
+        case .invalidEphemeralKey:
+            print("Invalid NanoTDF ephemeral key")
+        case .invalidPayload:
+            print("Invalid NanoTDF payload")
+        case .invalidMagicNumber:
+            print("Invalid NanoTDF magic number")
+        case .invalidVersion:
+            print("Invalid NanoTDF version")
+        case .invalidKAS:
+            print("Invalid NanoTDF kas")
+        case .invalidECCMode:
+            print("Invalid NanoTDF ecc mode")
+        case .invalidPayloadSigMode:
+            print("Invalid NanoTDF payload signature mode")
+        case .invalidPolicy:
+            print("Invalid NanoTDF policy")
+        case .invalidPublicKeyLength:
+            print("Invalid NanoTDF public key length")
+        case .invalidSignatureLength:
+            print("Invalid NanoTDF signature length")
+        case .invalidSigning:
+            print("Invalid NanoTDF signing")
         }
     }
 }

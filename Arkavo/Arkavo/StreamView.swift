@@ -20,7 +20,7 @@ struct StreamView: View {
     var body: some View {
         if showingThoughtView, let selectedStream {
             let account = accounts.first { $0.id == selectedStream.account.id }
-            ThoughtView(viewModel: viewModel.thoughtStreamViewModel)
+            ThoughtStreamView(viewModel: viewModel.thoughtStreamViewModel)
                 .onAppear {
                     viewModel.thoughtStreamViewModel.stream = selectedStream
                     viewModel.thoughtStreamViewModel.creatorProfile = account?.profile
@@ -124,15 +124,7 @@ struct StreamView: View {
 
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
-        let account = Account()
-        let profile = Profile(name: "TestProfile")
-        let admissionPolicy = AdmissionPolicy(rawValue: "test")
-        let interactionPolicy = InteractionPolicy(rawValue: "test")
-        let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-//        let viewModel = ThoughtStreamViewModel(service: ThoughtService(nanoTDFManager: NanoTDFManager(), webSocketManager: WebSocketManager(), kasPublicKeyProvider: nil)
         Group {
-//            StreamView(viewModel: StreamViewModel(thoughtStreamViewModel: viewModel))
-
             CreateStreamProfileView { _, _, _ in
                 // This is just for preview, so we'll leave the closure empty
             }

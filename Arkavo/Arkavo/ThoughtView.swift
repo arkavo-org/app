@@ -1,24 +1,46 @@
 import OpenTDFKit
 import SwiftUI
 
-final class ThoughtViewModel: ObservableObject, Identifiable {
+final class ThoughtViewModel: ObservableObject, Identifiable, Equatable {
     let id = UUID()
     @Published var creator: Profile
-    @Published var stream: Profile
+    @Published var streamPublicIdString: String
     // TODO: change to Data
     @Published var content: String
     @Published var mediaType: MediaType
 
-    init(mediaType: MediaType, content: String, creator: Profile, stream: Profile) {
+    init(mediaType: MediaType, content: String, creator: Profile, streamPublicIdString: String) {
         self.mediaType = mediaType
         self.content = content
         self.creator = creator
-        self.stream = stream
+        self.streamPublicIdString = streamPublicIdString
     }
-}
 
-func createThoughtViewModelText(creator: Profile, stream: Profile, text: String) -> ThoughtViewModel {
-    ThoughtViewModel(mediaType: .text, content: text, creator: creator, stream: stream)
+    static func == (lhs: ThoughtViewModel, rhs: ThoughtViewModel) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    static func createText(creatorProfile: Profile, streamPublicIdString: String, text: String) -> ThoughtViewModel {
+        ThoughtViewModel(mediaType: .text, content: text, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+    }
+
+    static func createImage(creatorProfile: Profile, streamPublicIdString: String, imageData: Data) -> ThoughtViewModel {
+        // Handle image data appropriately
+        let imageContent = "Image data: \(imageData.count) bytes"
+        return ThoughtViewModel(mediaType: .image, content: imageContent, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+    }
+
+    static func createAudio(creatorProfile: Profile, streamPublicIdString: String, audioData: Data) -> ThoughtViewModel {
+        // Handle audio data appropriately
+        let audioContent = "Audio data: \(audioData.count) bytes"
+        return ThoughtViewModel(mediaType: .audio, content: audioContent, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+    }
+
+    static func createVideo(creatorProfile: Profile, streamPublicIdString: String, videoData: Data) -> ThoughtViewModel {
+        // Handle video data appropriately
+        let videoContent = "Video data: \(videoData.count) bytes"
+        return ThoughtViewModel(mediaType: .video, content: videoContent, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+    }
 }
 
 struct ThoughtListView: View {
@@ -36,7 +58,7 @@ struct ThoughtListView: View {
     }
 }
 
-struct ThoughtView: View {
+struct ThoughtStreamView: View {
     @ObservedObject var viewModel: ThoughtStreamViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
@@ -91,8 +113,9 @@ struct ThoughtView: View {
 
     private func sendThought() {
         guard !inputText.isEmpty else { return }
-        let thoughtViewModel = createThoughtViewModelText(creator: viewModel.creatorProfile!, stream: viewModel.stream!.profile, text: inputText)
-        viewModel.sendThought(thoughtViewModel)
+        let streamPublicIdString = viewModel.stream?.publicId.map { String(format: "%02hhx", $0) }.joined() ?? ""
+        let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: viewModel.creatorProfile!, streamPublicIdString: streamPublicIdString, text: inputText)
+        viewModel.send(thoughtViewModel)
         inputText = ""
     }
 }
@@ -107,19 +130,40 @@ class ThoughtStreamViewModel: ObservableObject {
         self.service = service
     }
 
-    func receiveThought(_: Thought) {
-        // TODO: covert Thought to ThoughtViewModel
+    func receive(_ serviceModel: ThoughtServiceModel) {
+        let creatorProfile = Profile(name: serviceModel.creatorId.uuidString)
+        let streamPublicIdString = stream?.publicId.map { String(format: "%02hhx", $0) }.joined() ?? ""
+        let viewModel: ThoughtViewModel
+        switch serviceModel.mediaType {
+        case .text:
+            let text = String(decoding: serviceModel.content, as: UTF8.self)
+            viewModel = ThoughtViewModel.createText(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, text: text)
+        case .image:
+            viewModel = ThoughtViewModel.createImage(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, imageData: serviceModel.content)
+        case .audio:
+            viewModel = ThoughtViewModel.createAudio(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, audioData: serviceModel.content)
+        case .video:
+            viewModel = ThoughtViewModel.createVideo(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, videoData: serviceModel.content)
+        }
         DispatchQueue.main.async {
-//            self.addThought(newThought)
+            self.thoughts.append(viewModel)
         }
     }
 
-    func sendThought(_ viewModel: ThoughtViewModel) {
+    func send(_ viewModel: ThoughtViewModel) {
         do {
             let nano = try service.createNano(viewModel, stream: stream!)
             try service.sendThought(nano)
         } catch {
             print("error sending thought: \(error.localizedDescription)")
+        }
+    }
+
+    func receive(_ viewModel: ThoughtViewModel) {
+        if !thoughts.contains(where: { $0 == viewModel }) {
+            DispatchQueue.main.async { [self] in
+                thoughts.append(viewModel)
+            }
         }
     }
 }

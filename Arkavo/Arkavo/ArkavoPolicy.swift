@@ -12,7 +12,7 @@ class ArkavoPolicy {
     let type: PolicyType
 
     init(_: Policy) {
-        // TODO: handle other types
+        // FIXME: update OpenTDFKit to expose Policy
         type = .thought
     }
 }
