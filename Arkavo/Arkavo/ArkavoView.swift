@@ -199,9 +199,9 @@ struct ArkavoView: View {
             return
         }
         do {
-            let account = try persistenceController.getOrCreateAccount()
+            let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            try persistenceController.saveChanges()
+            try await persistenceController.saveChanges()
 
             service.authenticationManager.signUp(accountName: profile.name)
             startTokenCheck()

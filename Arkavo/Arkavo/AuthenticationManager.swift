@@ -413,9 +413,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 // update Account
                 Task { @MainActor in
                     do {
-                        let account = try PersistenceController.shared.getOrCreateAccount()
+                        let account = try await PersistenceController.shared.getOrCreateAccount()
                         account.authenticationToken = authenticationToken
-                        try PersistenceController.shared.saveChanges()
+                        try await PersistenceController.shared.saveChanges()
                         print("Saved authentication token")
                     } catch {
                         print("Error: \(error)")

@@ -65,7 +65,11 @@ struct StreamView: View {
                                     }
                                 }
                             }
-                            .onDelete(perform: deleteStreams)
+                            .onDelete { indexSet in
+                                Task {
+                                    await deleteStreams(at: indexSet)
+                                }
+                            }
                         }
                     }
                 }
@@ -75,7 +79,9 @@ struct StreamView: View {
             }
             .sheet(isPresented: $showingCreateStream) {
                 CreateStreamProfileView { profile, admissionPolicy, interactionPolicy in
-                    saveNewStream(with: profile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+                    Task {
+                        await saveNewStream(with: profile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+                    }
                 }
             }
             .sheet(item: $selectedStream) { stream in
@@ -84,7 +90,7 @@ struct StreamView: View {
         }
     }
 
-    private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) {
+    private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async {
         guard let account = accounts.first else {
             print("No account found")
             return
@@ -92,13 +98,13 @@ struct StreamView: View {
         do {
             let stream = Stream(account: account, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
             try account.addStream(stream)
-            try PersistenceController.shared.saveChanges()
+            try await PersistenceController.shared.saveChanges()
         } catch {
             print("Stream creation failed: \(error.localizedDescription)")
         }
     }
 
-    private func deleteStreams(at offsets: IndexSet) {
+    private func deleteStreams(at offsets: IndexSet) async {
         guard let account = accounts.first else {
             print("No account found")
             return
@@ -107,7 +113,7 @@ struct StreamView: View {
             if offset < account.streams.count {
                 account.streams.remove(at: offset)
                 do {
-                    try PersistenceController.shared.saveChanges()
+                    try await PersistenceController.shared.saveChanges()
                 } catch {
                     print("Failed to delete stream(s): \(error)")
                 }

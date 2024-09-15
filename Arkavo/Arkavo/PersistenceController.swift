@@ -26,7 +26,7 @@ class PersistenceController {
 
     // MARK: - Account Operations
 
-    func getOrCreateAccount() throws -> Account {
+    func getOrCreateAccount() async throws -> Account {
         let context = container.mainContext
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == 0 })
 
@@ -42,7 +42,7 @@ class PersistenceController {
 
     // MARK: - Utility Methods
 
-    func saveChanges() throws {
+    func saveChanges() async throws {
         let context = container.mainContext
         if context.hasChanges {
             try context.save()

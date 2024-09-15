@@ -41,18 +41,20 @@ struct ArkavoApp: App {
         #endif
     }
 
-    private func ensureAccountExists() {
+    @MainActor
+    private func ensureAccountExists() async {
         do {
-            let account = try persistenceController.getOrCreateAccount()
+            let account = try await persistenceController.getOrCreateAccount()
             print("ArkavoApp: Account ensured with ID: \(account.id)")
         } catch {
             print("ArkavoApp: Error ensuring Account exists: \(error.localizedDescription)")
         }
     }
 
-    private func saveChanges() {
+    @MainActor
+    private func saveChanges() async {
         do {
-            try persistenceController.saveChanges()
+            try await persistenceController.saveChanges()
             print("ArkavoApp: Changes saved successfully")
         } catch {
             print("ArkavoApp: Error saving changes: \(error.localizedDescription)")
