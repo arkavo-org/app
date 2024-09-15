@@ -19,7 +19,6 @@
 		DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */; };
 		DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2046192C603C05006AB6E4 /* Thought.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
-		DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D622C3F682200CCF7EC /* CityTests.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
 		DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598BE2C95EE540021A8FC /* ThoughtService.swift */; };
 		DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598C02C96108C0021A8FC /* ArkavoService.swift */; };
@@ -69,7 +68,6 @@
 		DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamProfileView.swift; sourceTree = "<group>"; };
 		DA2046192C603C05006AB6E4 /* Thought.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Thought.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
-		DA284D622C3F682200CCF7EC /* CityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityTests.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
 		DA7598BE2C95EE540021A8FC /* ThoughtService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtService.swift; sourceTree = "<group>"; };
 		DA7598C02C96108C0021A8FC /* ArkavoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoService.swift; sourceTree = "<group>"; };
@@ -182,7 +180,6 @@
 		DAC1F9F92C34DA7100499631 /* ArkavoTests */ = {
 			isa = PBXGroup;
 			children = (
-				DA284D622C3F682200CCF7EC /* CityTests.swift */,
 				DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */,
 			);
 			path = ArkavoTests;
@@ -363,7 +360,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA284D632C3F682800CCF7EC /* CityTests.swift in Sources */,
 				DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
