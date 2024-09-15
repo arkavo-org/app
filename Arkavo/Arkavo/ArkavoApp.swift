@@ -41,7 +41,7 @@ struct ArkavoApp: App {
         #endif
     }
 
-    private func ensureAccountExists() async {
+    private func ensureAccountExists() {
         do {
             let account = try persistenceController.getOrCreateAccount()
             print("ArkavoApp: Account ensured with ID: \(account.id)")
@@ -50,7 +50,7 @@ struct ArkavoApp: App {
         }
     }
 
-    private func saveChanges() async {
+    private func saveChanges() {
         do {
             try persistenceController.saveChanges()
             print("ArkavoApp: Changes saved successfully")
