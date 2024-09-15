@@ -12,7 +12,9 @@ class ArkavoService {
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
     var thoughtService: ThoughtService?
-    var videoStreamViewModel: VideoStreamViewModel?
+    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+        var videoStreamViewModel: VideoStreamViewModel?
+    #endif
     var token: String?
 
     init() {
