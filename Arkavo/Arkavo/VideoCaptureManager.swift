@@ -175,10 +175,9 @@
             }
         }
 
-        func startStreaming(viewModel: VideoStreamViewModel) {
-            let webSocketManager = viewModel.webSocketManager
-            streamingService = StreamingService(webSocketManager: webSocketManager)
-            if let kasPublicKey = viewModel.kasPublicKey {
+        func startStreaming(viewModel _: VideoStreamViewModel) {
+            streamingService = StreamingService(webSocketManager: WebSocketManager.shared)
+            if let kasPublicKey = ArkavoService.kasPublicKey {
                 videoEncryptor = VideoEncryptor(kasPublicKey: kasPublicKey)
             } else {
                 print("Error: Unable to get KAS public key for video encryption")

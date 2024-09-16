@@ -8,35 +8,24 @@ import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
-    private let nanoTDFManager = NanoTDFManager()
-    private let authenticationManager = AuthenticationManager()
     @Environment(\.locale) var locale
-    // OpenTDFKit
-    @StateObject private var webSocketManager = WebSocketManager()
-    @State private var inProcessCount = 0
-    @State private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    // service
+    @State private var service = ArkavoService()
     // data
     @State private var persistenceController: PersistenceController?
     // map
     @State private var streamMapView: StreamMapView?
-    // connection
-    @State private var cancellables = Set<AnyCancellable>()
-    @State private var isReconnecting = false
-    @State private var hasInitialConnection = false
     // account
     @State private var showingProfileCreation = false
     @State private var showingProfileDetails = false
-    // thought
-    @StateObject private var thoughtStreamViewModel = ThoughtStreamViewModel()
     // video
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     #endif
     // view control
-    @State private var selectedView: SelectedView = .streamMap
+    @State private var selectedView: SelectedView = .streamList
     @State private var tokenCheckTimer: Timer?
     @Query private var accounts: [Account]
-    @Query private var profiles: [Profile]
 
     init() {}
 
@@ -67,14 +56,14 @@ struct ArkavoView: View {
                         )
                     }
                 case .streamMap:
-                    StreamMapView(webSocketManager: webSocketManager,
-                                  nanoTDFManager: nanoTDFManager,
-                                  kasPublicKey: $kasPublicKey)
+                    StreamMapView(webSocketManager: service.webSocketManager,
+                                  nanoTDFManager: service.nanoTDFManager,
+                                  kasPublicKey: ArkavoService.kasPublicKey)
                         .onAppear {
                             // Store reference to StreamMapView when it appears
-                            streamMapView = StreamMapView(webSocketManager: webSocketManager,
-                                                          nanoTDFManager: nanoTDFManager,
-                                                          kasPublicKey: $kasPublicKey)
+                            streamMapView = StreamMapView(webSocketManager: service.webSocketManager,
+                                                          nanoTDFManager: service.nanoTDFManager,
+                                                          kasPublicKey: ArkavoService.kasPublicKey)
                         }
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first, let profile = account.profile {
@@ -89,7 +78,6 @@ struct ArkavoView: View {
                     ]
                     StreamCloudView(
                         viewModel: WordCloudViewModel(
-                            thoughtStreamViewModel: thoughtStreamViewModel,
                             words: words,
                             animationType: .explosion
                         )
@@ -99,7 +87,16 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streamList:
-                    StreamView()
+                    if let thoughtService = service.thoughtService {
+                        let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService)
+                        let streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
+                        StreamView(viewModel: streamViewModel)
+                            .onAppear {
+                                thoughtService.streamViewModel = streamViewModel
+                            }
+                    } else {
+                        Text("Thought service is unavailable")
+                    }
                 }
                 if selectedView != .welcome {
                     VStack {
@@ -108,11 +105,11 @@ struct ArkavoView: View {
                                 Spacer()
                                     .frame(width: geometry.size.width * 0.8)
                                 Menu {
-                                    Section("Navigation") {
+                                    Section("Stream") {
                                         Button("Map") {
                                             selectedView = .streamMap
                                         }
-                                        Button("My Streams") {
+                                        Button("List") {
                                             selectedView = .streamList
                                         }
                                         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -120,7 +117,7 @@ struct ArkavoView: View {
                                                 selectedView = .video
                                             }
                                         #endif
-                                        Button("Engage!") {
+                                        Button("Message") {
                                             selectedView = .streamWordCloud
                                         }
                                     }
@@ -137,27 +134,20 @@ struct ArkavoView: View {
                                             }
                                             if let authenticationToken = account.authenticationToken {
                                                 if let profile = account.profile {
+                                                    // TODO: check if session token, then change to logout
                                                     Button("Sign In") {
                                                         Task {
-                                                            await authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
+                                                            await service.authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
                                                         }
                                                     }
                                                 }
                                             } else {
                                                 if let profile = account.profile {
                                                     Button("Sign Up") {
-                                                        authenticationManager.signUp(accountName: profile.name)
+                                                        service.authenticationManager.signUp(accountName: profile.name)
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-                                    Section("Demo") {
-                                        Button("Cities") {
-                                            streamMapView?.loadGeoJSON()
-                                        }
-                                        Button("Clusters") {
-                                            streamMapView?.loadRandomCities()
                                         }
                                     }
                                 } label: {
@@ -181,129 +171,32 @@ struct ArkavoView: View {
     }
 
     private func initialSetup() {
-        setupCallbacks()
-        setupWebSocketManager()
         persistenceController = PersistenceController.shared
-        // Initialize ThoughtStreamViewModel
-        thoughtStreamViewModel.initialize(
-            webSocketManager: webSocketManager,
-            nanoTDFManager: nanoTDFManager,
-            kasPublicKey: $kasPublicKey
-        )
-        // Initialize VideoSteamViewModel
+        service.setupCallbacks()
         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-            videoStreamViewModel.initialize(
-                webSocketManager: webSocketManager,
-                nanoTDFManager: nanoTDFManager,
-                kasPublicKey: $kasPublicKey
-            )
+            service.videoStreamViewModel = videoStreamViewModel
         #endif
-        if let account = accounts.first {
-            if account.profile == nil {
-                selectedView = .welcome
-            } else {
-                selectedView = .streamMap
-                thoughtStreamViewModel.profile = account.profile
-            }
-        } else {
-            selectedView = .welcome
-            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
-        }
-    }
 
-    private func setupCallbacks() {
-        webSocketManager.setKASPublicKeyCallback { publicKey in
-            if kasPublicKey != nil {
-                // FIXME: remove when streams are broadcast
-                streamMapView?.loadGeoJSON()
-                return
-            }
-            DispatchQueue.main.async {
-                print("Received KAS Public Key")
-                kasPublicKey = publicKey
-            }
-        }
-
-        webSocketManager.setRewrapCallback { id, symmetricKey in
-            handleRewrapCallback(id: id, symmetricKey: symmetricKey)
-        }
-    }
-
-    private func setupWebSocketManager() {
-        // Subscribe to connection state changes
-        webSocketManager.$connectionState
-            .sink { state in
-                if state == .connected, !hasInitialConnection {
-                    DispatchQueue.main.async {
-                        print("Initial connection established. Sending public key and KAS key message.")
-                        hasInitialConnection = webSocketManager.sendPublicKey() && webSocketManager.sendKASKeyMessage()
-                    }
-                } else if state == .disconnected {
-                    hasInitialConnection = false
-                }
-            }
-            .store(in: &cancellables)
+        // TODO: replace with session token
         if let account = accounts.first, let profile = account.profile {
-            let token = authenticationManager.createJWT(profileName: profile.name)
+            let token = service.authenticationManager.createJWT(profileName: profile.name)
             if let token {
-                webSocketManager.setupWebSocket(token: token)
-                webSocketManager.connect()
+                service.setupWebSocketManager(token: token)
             } else {
                 print("createJWT token nil")
             }
         } else {
             print("No profile no webSocket no token")
         }
-    }
-
-    private func resetWebSocketManager() {
-        isReconnecting = true
-        hasInitialConnection = false
-        webSocketManager.close()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // Increased delay to 1 second
-            setupWebSocketManager()
-            isReconnecting = false
-        }
-    }
-
-    private func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
-        guard let id, let symmetricKey else {
-            print("DENY")
-            return
-        }
-
-        guard let nanoTDF = nanoTDFManager.getNanoTDF(withIdentifier: id) else { return }
-        nanoTDFManager.removeNanoTDF(withIdentifier: id)
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let payload = try nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
-
-                // Try to deserialize as a Thought first
-                if let thought = try? Thought.deserialize(from: payload) {
-                    DispatchQueue.main.async {
-                        // Update the ThoughtStreamView
-                        thoughtStreamViewModel.receiveThought(thought)
-                    }
-                } else if let city = try? City.deserialize(from: payload) {
-                    // If it's not a Thought, try to deserialize as a City
-                    DispatchQueue.main.async {
-                        streamMapView?.addCityToCluster(city)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            streamMapView?.removeCityFromCluster(city)
-                        }
-                    }
-                } else {
-                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                        // If it's neither a Thought nor a City, assume it's a video frame
-                        DispatchQueue.main.async {
-                            videoStreamViewModel.receiveVideoFrame(payload)
-                        }
-                    #endif
-                }
-            } catch {
-                print("Unexpected error during nanoTDF decryption: \(error)")
+        if let account = accounts.first {
+            if account.profile == nil {
+                selectedView = .welcome
+            } else {
+                selectedView = .streamMap
             }
+        } else {
+            selectedView = .welcome
+            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
 
@@ -313,12 +206,11 @@ struct ArkavoView: View {
             return
         }
         do {
-            let account = try persistenceController.getOrCreateAccount()
+            let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            thoughtStreamViewModel.profile = profile
-            try persistenceController.saveChanges()
+            try await persistenceController.saveChanges()
 
-            authenticationManager.signUp(accountName: profile.name)
+            service.authenticationManager.signUp(accountName: profile.name)
             startTokenCheck()
             await MainActor.run {
                 selectedView = .streamMap
@@ -341,7 +233,7 @@ struct ArkavoView: View {
                 if let account = accounts.first, account.authenticationToken != nil {
                     tokenCheckTimer?.invalidate()
                     tokenCheckTimer = nil
-                    setupWebSocketManager()
+                    service.setupWebSocketManager(token: account.authenticationToken!)
                 }
             }
         }
@@ -358,9 +250,11 @@ class NanoTDFManager: ObservableObject {
     private var processStartTime: Date?
 
     func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
-        nanoTDFs[identifier] = nanoTDF
-        count += 1
-        updateInProcessCount(inProcessCount + 1)
+        DispatchQueue.main.async {
+            self.nanoTDFs[identifier] = nanoTDF
+            self.count += 1
+            self.updateInProcessCount(self.inProcessCount + 1)
+        }
     }
 
     func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
@@ -372,37 +266,50 @@ class NanoTDFManager: ObservableObject {
             print("Identifier must be greater than 32 bytes long")
             return
         }
-        if nanoTDFs.removeValue(forKey: identifier) != nil {
-            count -= 1
-            updateInProcessCount(inProcessCount - 1)
+        DispatchQueue.main.async {
+            if self.nanoTDFs.removeValue(forKey: identifier) != nil {
+                self.count -= 1
+                self.updateInProcessCount(self.inProcessCount - 1)
+            }
         }
     }
 
     private func updateInProcessCount(_ newCount: Int) {
-        if newCount > 0, inProcessCount == 0 {
-            startProcessTimer()
-        } else if newCount == 0, inProcessCount > 0 {
-            stopProcessTimer()
+        DispatchQueue.main.async {
+            if newCount > 0, self.inProcessCount == 0 {
+                self.startProcessTimer()
+            } else if newCount == 0, self.inProcessCount > 0 {
+                self.stopProcessTimer()
+            }
+            self.inProcessCount = newCount
+//            print("inProcessCount \(self.inProcessCount)")
         }
-        inProcessCount = newCount
     }
 
     private func startProcessTimer() {
-        processStartTime = Date()
-        processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self, let startTime = processStartTime else { return }
-            print("processDuration \(Date().timeIntervalSince(startTime))")
+        DispatchQueue.main.async {
+            self.processStartTime = Date()
+            self.processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self, let startTime = processStartTime else { return }
+                DispatchQueue.main.async {
+                    self.processDuration = Date().timeIntervalSince(startTime)
+                    print("rewrapDuration \(String(format: "%.4f", self.processDuration))")
+                    if self.processDuration > 2.0 {
+                        self.stopProcessTimer()
+                    }
+                }
+            }
         }
     }
 
     private func stopProcessTimer() {
-//        print("stopProcessTimer")
-        guard let startTime = processStartTime else { return }
-        processDuration = Date().timeIntervalSince(startTime)
-        print("processDuration \(processDuration)")
-        processTimer?.invalidate()
-        processTimer = nil
-        processStartTime = nil
+        DispatchQueue.main.async {
+            guard let startTime = self.processStartTime else { return }
+            self.processDuration = Date().timeIntervalSince(startTime)
+            self.processTimer?.invalidate()
+            self.processTimer = nil
+            self.processStartTime = nil
+        }
     }
 
     func isEmpty() -> Bool {

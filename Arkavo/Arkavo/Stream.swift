@@ -1,21 +1,33 @@
 import AppIntents
+import CryptoKit
 import Foundation
 import SwiftData
 
 @Model
 final class Stream: @unchecked Sendable {
     @Attribute(.unique) private(set) var id: UUID
+    // Using SHA256 hash as a public identifier, stored as 32 bytes
+    @Attribute(.unique) var publicId: Data
     var account: Account
     var profile: Profile
     var admissionPolicy: AdmissionPolicy
     var interactionPolicy: InteractionPolicy
+    var thoughts: [Thought] = []
 
-    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) {
+    init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, thoughts: [Thought] = []) {
         self.id = id
         self.account = account
         self.profile = profile
         self.admissionPolicy = admissionPolicy
         self.interactionPolicy = interactionPolicy
+        self.thoughts = thoughts
+        publicId = Stream.generatePublicIdentifier(from: id)
+    }
+
+    private static func generatePublicIdentifier(from uuid: UUID) -> Data {
+        withUnsafeBytes(of: uuid) { buffer in
+            Data(SHA256.hash(data: buffer))
+        }
     }
 }
 
