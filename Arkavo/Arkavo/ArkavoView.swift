@@ -109,7 +109,7 @@ struct ArkavoView: View {
                                         Button("Map") {
                                             selectedView = .streamMap
                                         }
-                                        Button("My") {
+                                        Button("List") {
                                             selectedView = .streamList
                                         }
                                         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -117,7 +117,7 @@ struct ArkavoView: View {
                                                 selectedView = .video
                                             }
                                         #endif
-                                        Button("Engage") {
+                                        Button("Message") {
                                             selectedView = .streamWordCloud
                                         }
                                     }
@@ -250,9 +250,11 @@ class NanoTDFManager: ObservableObject {
     private var processStartTime: Date?
 
     func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
-        nanoTDFs[identifier] = nanoTDF
-        count += 1
-        updateInProcessCount(inProcessCount + 1)
+        DispatchQueue.main.async {
+            self.nanoTDFs[identifier] = nanoTDF
+            self.count += 1
+            self.updateInProcessCount(self.inProcessCount + 1)
+        }
     }
 
     func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
@@ -264,37 +266,50 @@ class NanoTDFManager: ObservableObject {
             print("Identifier must be greater than 32 bytes long")
             return
         }
-        if nanoTDFs.removeValue(forKey: identifier) != nil {
-            count -= 1
-            updateInProcessCount(inProcessCount - 1)
+        DispatchQueue.main.async {
+            if self.nanoTDFs.removeValue(forKey: identifier) != nil {
+                self.count -= 1
+                self.updateInProcessCount(self.inProcessCount - 1)
+            }
         }
     }
 
     private func updateInProcessCount(_ newCount: Int) {
-        if newCount > 0, inProcessCount == 0 {
-            startProcessTimer()
-        } else if newCount == 0, inProcessCount > 0 {
-            stopProcessTimer()
+        DispatchQueue.main.async {
+            if newCount > 0, self.inProcessCount == 0 {
+                self.startProcessTimer()
+            } else if newCount == 0, self.inProcessCount > 0 {
+                self.stopProcessTimer()
+            }
+            self.inProcessCount = newCount
+//            print("inProcessCount \(self.inProcessCount)")
         }
-        inProcessCount = newCount
     }
 
     private func startProcessTimer() {
-        processStartTime = Date()
-        processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self, let startTime = processStartTime else { return }
-            print("processDuration \(Date().timeIntervalSince(startTime))")
+        DispatchQueue.main.async {
+            self.processStartTime = Date()
+            self.processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self, let startTime = processStartTime else { return }
+                DispatchQueue.main.async {
+                    self.processDuration = Date().timeIntervalSince(startTime)
+                    print("rewrapDuration \(String(format: "%.4f", self.processDuration))")
+                    if self.processDuration > 2.0 {
+                        self.stopProcessTimer()
+                    }
+                }
+            }
         }
     }
 
     private func stopProcessTimer() {
-//        print("stopProcessTimer")
-        guard let startTime = processStartTime else { return }
-        processDuration = Date().timeIntervalSince(startTime)
-        print("rewrapDuration \(processDuration)")
-        processTimer?.invalidate()
-        processTimer = nil
-        processStartTime = nil
+        DispatchQueue.main.async {
+            guard let startTime = self.processStartTime else { return }
+            self.processDuration = Date().timeIntervalSince(startTime)
+            self.processTimer?.invalidate()
+            self.processTimer = nil
+            self.processStartTime = nil
+        }
     }
 
     func isEmpty() -> Bool {

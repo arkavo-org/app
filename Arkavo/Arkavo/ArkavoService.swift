@@ -102,35 +102,38 @@ class ArkavoService {
                 print("Unexpected error during nanoTDF decryption: \(error)")
                 return
             }
-            do {
-                // TODO: route to appropriate service
-                switch policy.type {
-                case .accountProfile:
-                    // TODO:
-                    break
-                case .streamProfile:
-                    // TODO:
-                    break
-                case .thought:
-                    guard let thoughtService = self.thoughtService else { return }
-                    try thoughtService.handle(payload, policy: policy, nano: nano)
-                case .videoFrame:
-                    // TODO: create VideoStreamService
+            // TODO: route to appropriate service
+            switch policy.type {
+            case .accountProfile:
+                // TODO:
+                break
+            case .streamProfile:
+                // TODO:
+                break
+            case .thought:
+                guard let thoughtService = self.thoughtService else { return }
+                Task {
+                    do {
+                        try await thoughtService.handle(payload, policy: policy, nano: nano)
+                    } catch {
+                        //                print("Unexpected error during nanoTDF decryption: \(error)")
+                        // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
+                        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                            DispatchQueue.main.async { [self] in
+                                videoStreamViewModel!.receiveVideoFrame(payload)
+                            }
+                        #endif
+                    }
+                }
+
+            case .videoFrame:
+                // TODO: create VideoStreamService
 //                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
 //                        DispatchQueue.main.async {
 //                            videoStreamViewModel.receiveVideoFrame(payload)
 //                        }
 //                    #endif
-                    break
-                }
-            } catch {
-//                print("Unexpected error during nanoTDF decryption: \(error)")
-                // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
-                #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                    DispatchQueue.main.async { [self] in
-                        videoStreamViewModel!.receiveVideoFrame(payload)
-                    }
-                #endif
+                break
             }
         }
     }

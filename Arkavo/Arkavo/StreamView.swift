@@ -4,6 +4,7 @@ import SwiftUI
 
 final class StreamViewModel: ObservableObject, Identifiable {
     var thoughtStreamViewModel: ThoughtStreamViewModel
+    var accountProfile: Profile?
 
     init(thoughtStreamViewModel: ThoughtStreamViewModel) {
         self.thoughtStreamViewModel = thoughtStreamViewModel
@@ -22,15 +23,17 @@ struct StreamView: View {
             let account = accounts.first { $0.id == selectedStream.account.id }
             ThoughtStreamView(viewModel: viewModel.thoughtStreamViewModel)
                 .onAppear {
+                    viewModel.accountProfile = account?.profile
                     viewModel.thoughtStreamViewModel.stream = selectedStream
                     viewModel.thoughtStreamViewModel.creatorProfile = account?.profile
+                    viewModel.thoughtStreamViewModel.loadAndDecrypt(for: selectedStream)
                 }
         } else {
             VStack {
                 Spacer(minLength: 40)
                 VStack {
                     HStack {
-                        Text("My Streams")
+                        Text("Streams")
                             .font(.title)
                         Spacer()
                     }

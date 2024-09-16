@@ -92,14 +92,27 @@ class ThoughtService {
     /// Reconstructs a Thought object from unencrypted Data.
     /// - Parameter thought: The Thought object containing encrypted data.
     /// - Returns: A reconstructed Thought object, or nil if decryption fails.
-    func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) throws {
+    @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) async throws {
         guard let thoughtStreamViewModel = streamViewModel?.thoughtStreamViewModel else {
             throw ThoughtServiceError.missingThoughtStreamViewModel
         }
+        // FIXME: dedupe
         let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
-        thoughtStreamViewModel.receive(thoughtServiceModel)
+        // don't process if creator
+        if streamViewModel?.accountProfile?.id == thoughtServiceModel.creatorId {
+//            print("Ignoring thought from self")
+            return
+        }
+        // persist
         let thought = Thought(nano: nano.toData())
+        thought.publicId = thoughtServiceModel.publicId
         thought.nano = nano.toData()
+        thought.stream = streamViewModel?.thoughtStreamViewModel.stream
+        PersistenceController.shared.container.mainContext.insert(thought)
+        streamViewModel?.thoughtStreamViewModel.stream?.thoughts.append(thought)
+        try await PersistenceController.shared.saveChanges()
+        // show
+        thoughtStreamViewModel.receive(thoughtServiceModel)
     }
 
     enum ThoughtServiceError: Error {

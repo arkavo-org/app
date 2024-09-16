@@ -7,6 +7,7 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
     @Attribute(.unique) var id: UUID
     // Using SHA256 hash as a public identifier, stored as 32 bytes
     @Attribute(.unique) var publicId: Data
+    var stream: Stream?
     var metadata: ThoughtMetadata
     var nano: Data
 
@@ -45,6 +46,37 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }
+    }
+
+    /// decode from hex back to 32 bytes Data
+    public static func decodePublicIdentifier(from string: String) throws -> Data {
+        if string.count != 64 {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Hex string should be 64 characters long."
+                )
+            )
+        }
+        var data = Data()
+        var hexString = string
+        while hexString.count > 0 {
+            let subIndex = hexString.index(hexString.startIndex, offsetBy: 2)
+            let byteString = String(hexString[..<subIndex])
+            hexString = String(hexString[subIndex...])
+
+            if let num = UInt8(byteString, radix: 16) {
+                data.append(num)
+            } else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: [],
+                        debugDescription: "Invalid hex byte: \(byteString)"
+                    )
+                )
+            }
+        }
+        return data
     }
 }
 

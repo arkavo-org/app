@@ -12,7 +12,7 @@ final class Stream: @unchecked Sendable {
     var profile: Profile
     var admissionPolicy: AdmissionPolicy
     var interactionPolicy: InteractionPolicy
-    var thoughts: [Thought]
+    var thoughts: [Thought] = []
 
     init(id: UUID = UUID(), account: Account, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, thoughts: [Thought] = []) {
         self.id = id
@@ -28,10 +28,6 @@ final class Stream: @unchecked Sendable {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }
-    }
-
-    func addThought(_ thought: Thought) {
-        thoughts.append(thought)
     }
 }
 
