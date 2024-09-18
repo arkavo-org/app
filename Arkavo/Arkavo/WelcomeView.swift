@@ -5,22 +5,22 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Welcome to Arkavo!")
+            Text(LocalizedStringKey("Welcome to Arkavo!"))
                 .font(.largeTitle)
                 .fontWeight(.bold)
-            Text("Your content is always under your control - everywhere")
+            Text(LocalizedStringKey("Your content is always under your control - everywhere"))
                 .multilineTextAlignment(.center)
                 .padding()
-            Text("Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle.")
+            Text(LocalizedStringKey("Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle."))
                 .multilineTextAlignment(.center)
                 .padding()
             VStack(alignment: .leading, spacing: 10) {
-                Text("What makes us different?")
+                Text(LocalizedStringKey("What makes us different?"))
                     .font(.headline)
-                BulletPoint(text: "Leader in Privacy")
-                BulletPoint(text: "Leader in Content Security")
-                BulletPoint(text: "Military-grade data security powered by OpenTDF.")
-                BulletPoint(text: "Start group chats now, with more exciting features coming soon!")
+                BulletPoint(key: "Leader in Privacy")
+                BulletPoint(key: "Leader in Content Security")
+                BulletPoint(key: "Military-grade data security powered by OpenTDF.")
+                BulletPoint(key: "Start group chats now, with more exciting features coming soon!")
             }
             .padding()
             Text("Ready to join?")
@@ -40,14 +40,14 @@ struct WelcomeView: View {
 }
 
 struct BulletPoint: View {
-    let text: String
+    let key: LocalizedStringKey
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
                 .font(.body)
                 .padding(.top, 4)
-            Text(text)
+            Text(key)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
         }
