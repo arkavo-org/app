@@ -8,22 +8,22 @@ struct WelcomeView: View {
             Text(LocalizedStringKey("Welcome to Arkavo!"))
                 .font(.largeTitle)
                 .fontWeight(.bold)
-            Text(LocalizedStringKey("Your content is always under your control - everywhere"))
+            Text(LocalizedStringKey("Take control of your content — anytime, anywhere."))
                 .multilineTextAlignment(.center)
                 .padding()
-            Text(LocalizedStringKey("Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle."))
+            Text(LocalizedStringKey("Create your profile in seconds using Apple Passkey — no passwords, no hassle."))
                 .multilineTextAlignment(.center)
                 .padding()
             VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizedStringKey("What makes us different?"))
+                Text(differenceText)
                     .font(.headline)
-                BulletPoint(key: "Leader in Privacy")
-                BulletPoint(key: "Leader in Content Security")
-                BulletPoint(key: "Military-grade data security powered by OpenTDF.")
-                BulletPoint(key: "Start group chats now, with more exciting features coming soon!")
+                BulletPoint(text: "Unmatched Privacy: Your data is yours, and we keep it that way.")
+                BulletPoint(text: "Top-Notch Security: Military-Grade Encryption ensures your content is always safe.")
+                BulletPoint(text: "More to Come: Group chats and more exciting features are just the beginning")
+                BulletPoint(text: "Your data stays yours: Arkavo will never collect, store, or share any of your personal data at any time. Not even your email address!")
             }
             .padding()
-            Text("Ready to join?")
+            Text("Ready to Secure Your Socials?")
                 .font(.headline)
             Button(action: onCreateProfile) {
                 Text("Create Profile")
@@ -37,20 +37,37 @@ struct WelcomeView: View {
         }
         .padding()
     }
+    
+    private var differenceText: AttributedString {
+        var text = AttributedString("What makes Arkavo different? Your privacy is actually our priority.")
+        // this probably breaks l10n
+        if let range = text.range(of: "actually") {
+            text[range].font = .headline.italic()
+        }
+        return text
+    }
+    
 }
 
 struct BulletPoint: View {
-    let key: LocalizedStringKey
+    let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             Text("•")
                 .font(.body)
-                .padding(.top, 4)
-            Text(key)
+            Text(attributedString)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+    
+    private var attributedString: AttributedString {
+        var attributedString = AttributedString(text)
+        if let colonRange = attributedString.range(of: ":") {
+            attributedString[..<colonRange.lowerBound].font = .body.bold()
+        }
+        return attributedString
     }
 }
 

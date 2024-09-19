@@ -107,6 +107,9 @@
         }
       }
     },
+    "Create your profile in seconds using Apple Passkey — no passwords, no hassle." : {
+
+    },
     "Created: %@" : {
       "localizations" : {
         "es-US" : {
@@ -242,6 +245,7 @@
       }
     },
     "Military-grade data security powered by OpenTDF." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -362,6 +366,7 @@
       }
     },
     "Ready to join?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -370,6 +375,9 @@
           }
         }
       }
+    },
+    "Ready to Secure Your Socials?" : {
+
     },
     "Register" : {
       "localizations" : {
@@ -452,6 +460,7 @@
       }
     },
     "Start group chats now, with more exciting features coming soon!" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -500,6 +509,9 @@
           }
         }
       }
+    },
+    "Take control of your content — anytime, anywhere." : {
+
     },
     "Thought service is unavailable" : {
       "localizations" : {
@@ -569,6 +581,7 @@
       }
     },
     "What makes us different?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -579,6 +592,7 @@
       }
     },
     "Your content is always under your control - everywhere" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -589,6 +603,7 @@
       }
     },
     "Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
