@@ -221,6 +221,9 @@
         }
       }
     },
+    "Loading stream..." : {
+
+    },
     "Map" : {
       "localizations" : {
         "es-US" : {
@@ -350,6 +353,9 @@
           }
         }
       }
+    },
+    "Profile View for %@" : {
+
     },
     "Profile: %@" : {
       "localizations" : {
@@ -490,6 +496,9 @@
           }
         }
       }
+    },
+    "Stream not found" : {
+
     },
     "Streams" : {
       "localizations" : {
