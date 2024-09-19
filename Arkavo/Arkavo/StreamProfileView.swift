@@ -54,7 +54,7 @@ struct DetailedStreamProfileView: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
     struct ShareSheet: UIViewControllerRepresentable {
         let activityItems: [Any]
         @Binding var isPresented: Bool
