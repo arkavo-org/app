@@ -5,7 +5,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:webauthn.arkavo.net</string>
-		<string>applinks:arkavo.net</string>
+		<string>applinks:app.arkavo.com</string>
 		<string>applinks:webauthn.arkavo.net</string>
 		<string>webcredentials:arkavo.net</string>
 	</array>
