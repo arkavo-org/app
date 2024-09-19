@@ -47,7 +47,7 @@ struct DetailedStreamProfileView: View {
                 }
             }
             .sheet(isPresented: $isShareSheetPresented) {
-                ShareSheet(activityItems: [URL(string: "https://arkavo.net/s/\(viewModel.stream.profile.id)")!],
+                ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream.publicId)")!],
                            isPresented: $isShareSheetPresented)
             }
         }

@@ -7,12 +7,21 @@ struct ThoughtStreamView: View {
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
+    @State private var isShareSheetPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
+            #if os(iOS)
+                HStack {
+                    shareButton
+                        .padding(.top, 20)
+                        .padding(.leading, 20)
+                    Spacer()
+                }
+            #endif
             VStack {
                 Spacer()
-                    .frame(height: 90)
+                    .frame(height: 40)
                 ScrollViewReader { _ in
                     ScrollView {
                         if viewModel.creatorProfile != nil {
@@ -55,6 +64,34 @@ struct ThoughtStreamView: View {
         .onTapGesture {
             isInputFocused = true
         }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                shareButton
+            }
+        }
+        #endif
+        .sheet(isPresented: $isShareSheetPresented) {
+            ShareSheet(activityItems: [shareURL].compactMap { $0 },
+                       isPresented: $isShareSheetPresented)
+        }
+    }
+
+    private var shareButton: some View {
+        Button(action: {
+            isShareSheetPresented = true
+        }) {
+            Image(systemName: "square.and.arrow.up")
+        }
+    }
+
+    private var shareURL: URL? {
+        guard let publicId = viewModel.stream?.publicId.map({ String(format: "%02hhx", $0) }).joined(),
+              !publicId.isEmpty
+        else {
+            return nil
+        }
+        return URL(string: "https://app.arkavo.com/stream/\(publicId)")
     }
 
     private func sendThought() async {
@@ -216,14 +253,56 @@ struct MessageBubble: View {
     }
 }
 
-// struct ThoughtStreamView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        let account = Account()
-//        let profile = Profile(name: "TestProfile")
-//        let admissionPolicy = AdmissionPolicy(rawValue: "test")
-//        let interactionPolicy = InteractionPolicy(rawValue: "test")
-//        let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-//        let viewModel = ThoughtStreamViewModel(service: ThoughtService(nanoTDFManager: NanoTDFManager(), webSocketManager: WebSocketManager()))
-//        ThoughtView(viewModel: viewModel)
-//    }
-// }
+struct ThoughtStreamView_Previews: PreviewProvider {
+    static var previews: some View {
+        ThoughtStreamView(viewModel: previewViewModel)
+            .modelContainer(previewContainer)
+    }
+
+    static var previewViewModel: ThoughtStreamViewModel {
+        let service = ThoughtService(ArkavoService())
+        let viewModel = ThoughtStreamViewModel(service: service)
+
+        // Set up mock data
+        viewModel.creatorProfile = Profile(name: "Preview User")
+        viewModel.stream = previewStream
+
+        // Add some sample thoughts
+        viewModel.thoughts = [
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIdString: "abc123", text: "Hello, this is a test message!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIdString: "abc123", text: "Hi Alice, great to see you here!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIdString: "abc123", text: "Welcome everyone to this stream!"),
+        ]
+
+        return viewModel
+    }
+
+    static var previewStream: Stream {
+        let account = Account()
+        let profile = Profile(name: "Preview Stream")
+        return Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+    }
+
+    static var previewContainer: ModelContainer {
+        let schema = Schema([Account.self, Profile.self, Stream.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+
+        do {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let context = container.mainContext
+
+            // Create and save sample data
+            let account = Account()
+            try context.save()
+
+            let profile = Profile(name: "Preview Stream")
+            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+            account.streams.append(stream)
+            try context.save()
+
+            return container
+        } catch {
+            fatalError("Failed to create preview container: \(error.localizedDescription)")
+        }
+    }
+}
