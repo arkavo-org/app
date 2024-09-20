@@ -13,8 +13,10 @@ struct ArkavoApp: App {
         WindowGroup {
             NavigationStack(path: $navigationPath) {
                 ArkavoView()
+                #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationBarHidden(true)
+                #endif
                     .modelContainer(persistenceController.container)
                     .task {
                         await ensureAccountExists()
