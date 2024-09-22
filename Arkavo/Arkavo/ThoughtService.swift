@@ -4,17 +4,17 @@ import OpenTDFKit
 
 // for transmission, serializes to payload
 struct ThoughtServiceModel: Codable {
-    var publicId: Data
-    var creatorId: UUID
+    var publicID: Data
+    var creatorID: UUID
     var mediaType: MediaType
     var content: Data
 
-    init(creatorId: UUID, mediaType: MediaType, content: Data) {
-        self.creatorId = creatorId
+    init(creatorID: UUID, mediaType: MediaType, content: Data) {
+        self.creatorID = creatorID
         self.mediaType = mediaType
         self.content = content
-        let hashData = creatorId.uuidString.data(using: .utf8)! + mediaType.rawValue.data(using: .utf8)! + content
-        publicId = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
+        let hashData = creatorID.uuidString.data(using: .utf8)! + mediaType.rawValue.data(using: .utf8)! + content
+        publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
 }
 
@@ -26,8 +26,9 @@ extension ThoughtServiceModel {
         return encoder
     }()
 
-    var publicIdString: String {
-        publicId.map { String(format: "%02x", $0) }.joined()
+    // FIXME: baseXX not hex
+    var publicIDString: String {
+        publicID.base58EncodedString
     }
 
     func serialize() throws -> Data {
@@ -71,7 +72,7 @@ class ThoughtService {
 
     func createPayload(viewModel: ThoughtViewModel) throws -> Data {
         let contentData = viewModel.content.data(using: .utf8) ?? Data()
-        let thoughtServiceModel = ThoughtServiceModel(creatorId: viewModel.creator.id, mediaType: viewModel.mediaType, content: contentData)
+        let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: contentData)
         let payload = try thoughtServiceModel.serialize()
         return payload
     }
@@ -99,13 +100,13 @@ class ThoughtService {
         // FIXME: dedupe
         let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
         // don't process if creator
-        if streamViewModel?.accountProfile?.id == thoughtServiceModel.creatorId {
+        if streamViewModel?.accountProfile?.id == thoughtServiceModel.creatorID {
 //            print("Ignoring thought from self")
             return
         }
         // persist
         let thought = Thought(nano: nano.toData())
-        thought.publicId = thoughtServiceModel.publicId
+        thought.publicID = thoughtServiceModel.publicID
         thought.nano = nano.toData()
         thought.stream = streamViewModel?.thoughtStreamViewModel.stream
         PersistenceController.shared.container.mainContext.insert(thought)

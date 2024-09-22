@@ -15,6 +15,9 @@
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
 		DA11D51E2C8DF250005D1946 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D51D2C8DF250005D1946 /* WelcomeView.swift */; };
+		DA179ADA2CA0BBDC0083EB99 /* UserAction.swift in Resources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
+		DA179ADC2CA0C2950083EB99 /* UserActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */; };
+		DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
 		DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE02C6807AD00722E3E /* Content.swift */; };
@@ -65,6 +68,8 @@
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
 		DA11D51D2C8DF250005D1946 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		DA179AD92CA0BBDC0083EB99 /* UserAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserAction.swift; sourceTree = "<group>"; };
+		DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserActionTests.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		DA1A4DE02C6807AD00722E3E /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
@@ -151,6 +156,7 @@
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
+				DA179AD92CA0BBDC0083EB99 /* UserAction.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
@@ -185,6 +191,7 @@
 		DAC1F9F92C34DA7100499631 /* ArkavoTests */ = {
 			isa = PBXGroup;
 			children = (
+				DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */,
 				DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */,
 			);
 			path = ArkavoTests;
@@ -311,6 +318,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */,
+				DA179ADA2CA0BBDC0083EB99 /* UserAction.swift in Resources */,
 				DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */,
 				CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */,
 			);
@@ -339,6 +347,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
@@ -369,6 +378,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA179ADC2CA0C2950083EB99 /* UserActionTests.swift in Sources */,
 				DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -621,6 +631,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -644,6 +655,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -666,6 +678,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -688,6 +701,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
