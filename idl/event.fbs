@@ -1,0 +1,37 @@
+namespace Arkavo;
+
+// Enum to represent action types
+enum ActionType: byte {
+    join = 0,
+    apply,
+    approve,
+    leave,
+    sendMessage
+}
+// Enum to represent the current status of the action
+enum ActionStatus: byte {
+    preparing = 0,
+    fulfilling,
+    fulfilled,
+    failed
+}
+// Enum to represent entity types
+enum EntityType: byte {
+    stream_profile = 0,
+    account_profile
+}
+
+table Event {
+  action_type:ActionType;
+}
+// Table for User Action
+table UserEvent {
+    source_type: EntityType;        // Source entity type
+    target_type: EntityType;        // Target entity type
+    source_id: [ubyte];       // Source public ID (array of bytes to represent Data)
+    target_id: [ubyte];       // Target public ID (array of bytes to represent Data)
+    timestamp: ulong;              // Timestamp (using unix timestamp in seconds)
+    status: ActionStatus;          // Action status
+}
+
+root_type Event;

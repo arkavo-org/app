@@ -15,9 +15,8 @@
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
 		DA11D51E2C8DF250005D1946 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D51D2C8DF250005D1946 /* WelcomeView.swift */; };
-		DA179ADA2CA0BBDC0083EB99 /* UserAction.swift in Resources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
-		DA179ADC2CA0C2950083EB99 /* UserActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */; };
 		DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
+		DA179AE62CA0DE8B0083EB99 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AE52CA0DE8B0083EB99 /* Extension.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
 		DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE02C6807AD00722E3E /* Content.swift */; };
@@ -40,6 +39,8 @@
 		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
+		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 /* End PBXBuildFile section */
@@ -69,7 +70,7 @@
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
 		DA11D51D2C8DF250005D1946 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		DA179AD92CA0BBDC0083EB99 /* UserAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserAction.swift; sourceTree = "<group>"; };
-		DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserActionTests.swift; sourceTree = "<group>"; };
+		DA179AE52CA0DE8B0083EB99 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		DA1A4DE02C6807AD00722E3E /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
@@ -95,6 +96,7 @@
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -105,6 +107,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
+				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,6 +135,7 @@
 				DAC1F9E52C34DA7000499631 /* Arkavo */,
 				DAC1F9F92C34DA7100499631 /* ArkavoTests */,
 				DAC1FA032C34DA7100499631 /* ArkavoUITests */,
+				DAEE13882CA1021500DCB5EC /* Frameworks */,
 				DAC1F9E42C34DA7000499631 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -157,6 +161,7 @@
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DA179AD92CA0BBDC0083EB99 /* UserAction.swift */,
+				DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
@@ -173,6 +178,7 @@
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
 				DA11D51D2C8DF250005D1946 /* WelcomeView.swift */,
+				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
@@ -191,7 +197,6 @@
 		DAC1F9F92C34DA7100499631 /* ArkavoTests */ = {
 			isa = PBXGroup;
 			children = (
-				DA179ADB2CA0C2950083EB99 /* UserActionTests.swift */,
 				DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */,
 			);
 			path = ArkavoTests;
@@ -204,6 +209,13 @@
 				DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */,
 			);
 			path = ArkavoUITests;
+			sourceTree = "<group>";
+		};
+		DAEE13882CA1021500DCB5EC /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -224,6 +236,7 @@
 			name = Arkavo;
 			packageProductDependencies = (
 				DABFC28F2C34F54E00232D79 /* OpenTDFKit */,
+				DAEE13892CA1021500DCB5EC /* FlatBuffers */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -300,6 +313,7 @@
 			mainGroup = DAC1F9DA2C34DA7000499631;
 			packageReferences = (
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
+				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -318,7 +332,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */,
-				DA179ADA2CA0BBDC0083EB99 /* UserAction.swift in Resources */,
 				DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */,
 				CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */,
 			);
@@ -357,11 +370,13 @@
 				DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */,
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
 				DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */,
+				DA179AE62CA0DE8B0083EB99 /* Extension.swift in Sources */,
 				DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA1A4DE12C6807AD00722E3E /* Content.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
+				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA11D51E2C8DF250005D1946 /* WelcomeView.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
@@ -378,7 +393,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA179ADC2CA0C2950083EB99 /* UserActionTests.swift in Sources */,
 				DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -768,6 +782,14 @@
 				version = 2.0.1;
 			};
 		};
+		DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/flatbuffers.git";
+			requirement = {
+				kind = exactVersion;
+				version = 24.3.25;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -775,6 +797,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */;
 			productName = OpenTDFKit;
+		};
+		DAEE13892CA1021500DCB5EC /* FlatBuffers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */;
+			productName = FlatBuffers;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
