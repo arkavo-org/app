@@ -21,10 +21,10 @@ final class Stream: @unchecked Sendable {
         self.admissionPolicy = admissionPolicy
         self.interactionPolicy = interactionPolicy
         self.thoughts = thoughts
-        publicID = Stream.generatePublicIdentifier(from: id)
+        publicID = Stream.generatePublicID(from: id)
     }
 
-    private static func generatePublicIdentifier(from uuid: UUID) -> Data {
+    private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }

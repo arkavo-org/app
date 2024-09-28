@@ -26,7 +26,6 @@ extension ThoughtServiceModel {
         return encoder
     }()
 
-    // FIXME: baseXX not hex
     var publicIDString: String {
         publicID.base58EncodedString
     }

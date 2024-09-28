@@ -13,7 +13,7 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
 
     init(id: UUID = UUID(), nano: Data) {
         self.id = id
-        publicID = Thought.generatePublicIDentifier(from: id)
+        publicID = Thought.generatePublicID(from: id)
         metadata = Thought.extractMetadata(from: nano)
         self.nano = nano
     }
@@ -42,7 +42,7 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
         ThoughtMetadata(creator: UUID(), mediaType: .text)
     }
 
-    private static func generatePublicIDentifier(from uuid: UUID) -> Data {
+    private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }
