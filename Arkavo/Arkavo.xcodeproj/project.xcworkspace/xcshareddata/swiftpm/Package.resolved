@@ -1,6 +1,15 @@
 {
-  "originHash" : "7efd00919183b3a280d965b8e31b44e054a856c705952e51a84326aac877cc29",
+  "originHash" : "522ba979183f372e788c23d85a264372351dc685379387e4e58ab6510d4023d7",
   "pins" : [
+    {
+      "identity" : "flatbuffers",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/google/flatbuffers.git",
+      "state" : {
+        "revision" : "595bf0007ab1929570c7671f091313c8fc20644e",
+        "version" : "24.3.25"
+      }
+    },
     {
       "identity" : "opentdfkit",
       "kind" : "remoteSourceControl",

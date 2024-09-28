@@ -168,16 +168,15 @@ struct ThoughtStreamView: View {
     }
 
     private var shareURL: URL? {
-        guard let publicId = viewModel.stream?.publicId.map({ String(format: "%02hhx", $0) }).joined(),
-              !publicId.isEmpty
+        guard let publicID = viewModel.stream?.publicID.base58EncodedString
         else {
             return nil
         }
-        return URL(string: "https://app.arkavo.com/stream/\(publicId)")
+        return URL(string: "https://app.arkavo.com/stream/\(publicID)")
     }
 
     private func sendImageThought(_ imageData: Data) async {
-        guard let streamPublicIdString = viewModel.stream?.publicId.map({ String(format: "%02hhx", $0) }).joined(),
+        guard let streamPublicIDString = viewModel.stream?.publicID.map({ String(format: "%02hhx", $0) }).joined(),
               let creatorProfile = viewModel.creatorProfile
         else {
             return
@@ -185,7 +184,7 @@ struct ThoughtStreamView: View {
 
         let thoughtViewModel = ThoughtViewModel.createImage(
             creatorProfile: creatorProfile,
-            streamPublicIdString: streamPublicIdString,
+            streamPublicIDString: streamPublicIDString,
             imageData: imageData
         )
 
@@ -194,8 +193,8 @@ struct ThoughtStreamView: View {
 
     private func sendThought() async {
         guard !inputText.isEmpty else { return }
-        let streamPublicIdString = viewModel.stream?.publicId.map { String(format: "%02hhx", $0) }.joined() ?? ""
-        let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: viewModel.creatorProfile!, streamPublicIdString: streamPublicIdString, text: inputText)
+        let streamPublicIDString = viewModel.stream?.publicID.base58EncodedString ?? ""
+        let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: viewModel.creatorProfile!, streamPublicIDString: streamPublicIDString, text: inputText)
         await viewModel.send(thoughtViewModel)
         inputText = ""
     }
@@ -278,19 +277,19 @@ class ThoughtStreamViewModel: ObservableObject {
     }
 
     func receive(_ serviceModel: ThoughtServiceModel) {
-        let creatorProfile = Profile(name: serviceModel.creatorId.uuidString)
-        let streamPublicIdString = stream?.publicId.map { String(format: "%02hhx", $0) }.joined() ?? ""
+        let creatorProfile = Profile(name: serviceModel.creatorID.uuidString)
+        let streamPublicIDString = stream?.publicID.base58EncodedString ?? ""
         let viewModel: ThoughtViewModel
         switch serviceModel.mediaType {
         case .text:
             let text = String(decoding: serviceModel.content, as: UTF8.self)
-            viewModel = ThoughtViewModel.createText(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, text: text)
+            viewModel = ThoughtViewModel.createText(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, text: text)
         case .image:
-            viewModel = ThoughtViewModel.createImage(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, imageData: serviceModel.content)
+            viewModel = ThoughtViewModel.createImage(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, imageData: serviceModel.content)
         case .audio:
-            viewModel = ThoughtViewModel.createAudio(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, audioData: serviceModel.content)
+            viewModel = ThoughtViewModel.createAudio(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, audioData: serviceModel.content)
         case .video:
-            viewModel = ThoughtViewModel.createVideo(creatorProfile: creatorProfile, streamPublicIdString: streamPublicIdString, videoData: serviceModel.content)
+            viewModel = ThoughtViewModel.createVideo(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, videoData: serviceModel.content)
         }
         DispatchQueue.main.async {
             self.thoughts.append(viewModel)
@@ -305,7 +304,7 @@ class ThoughtStreamViewModel: ObservableObject {
                 // persist
                 let thought = Thought(nano: nano)
                 thought.stream = stream
-                thought.publicId = try Thought.decodePublicIdentifier(from: viewModel.streamPublicIdString)
+                thought.publicID = try Thought.decodePublicID(from: viewModel.streamPublicIDString)
                 PersistenceController.shared.container.mainContext.insert(thought)
                 stream?.thoughts.append(thought)
                 try await PersistenceController.shared.saveChanges()
@@ -331,41 +330,41 @@ class ThoughtStreamViewModel: ObservableObject {
 final class ThoughtViewModel: ObservableObject, Identifiable, Equatable {
     let id = UUID()
     @Published var creator: Profile
-    @Published var streamPublicIdString: String
+    @Published var streamPublicIDString: String
     @Published var content: Data
     @Published var mediaType: MediaType
 
-    init(mediaType: MediaType, content: Data, creator: Profile, streamPublicIdString: String) {
+    init(mediaType: MediaType, content: Data, creator: Profile, streamPublicIDString: String) {
         self.mediaType = mediaType
         self.content = content
         self.creator = creator
-        self.streamPublicIdString = streamPublicIdString
+        self.streamPublicIDString = streamPublicIDString
     }
 
     static func == (lhs: ThoughtViewModel, rhs: ThoughtViewModel) -> Bool {
         lhs.id == rhs.id
     }
 
-    static func createText(creatorProfile: Profile, streamPublicIdString: String, text: String) -> ThoughtViewModel {
-        ThoughtViewModel(mediaType: .text, content: text.isEmpty ? Data() : text.data(using: .utf8) ?? Data(), creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+    static func createText(creatorProfile: Profile, streamPublicIDString: String, text: String) -> ThoughtViewModel {
+        ThoughtViewModel(mediaType: .text, content: text.isEmpty ? Data() : text.data(using: .utf8) ?? Data(), creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
-    static func createImage(creatorProfile: Profile, streamPublicIdString: String, imageData: Data) -> ThoughtViewModel {
+    static func createImage(creatorProfile: Profile, streamPublicIDString: String, imageData: Data) -> ThoughtViewModel {
         let imageContent = "Image data: \(imageData.count) bytes"
         print(imageContent)
-        return ThoughtViewModel(mediaType: .image, content: imageData, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .image, content: imageData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
-    static func createAudio(creatorProfile: Profile, streamPublicIdString: String, audioData: Data) -> ThoughtViewModel {
+    static func createAudio(creatorProfile: Profile, streamPublicIDString: String, audioData: Data) -> ThoughtViewModel {
         let audioContent = "Audio data: \(audioData.count) bytes"
         print(audioContent)
-        return ThoughtViewModel(mediaType: .audio, content: audioData, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .audio, content: audioData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
-    static func createVideo(creatorProfile: Profile, streamPublicIdString: String, videoData: Data) -> ThoughtViewModel {
+    static func createVideo(creatorProfile: Profile, streamPublicIDString: String, videoData: Data) -> ThoughtViewModel {
         let videoContent = "Video data: \(videoData.count) bytes"
         print(videoContent)
-        return ThoughtViewModel(mediaType: .video, content: videoData, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .video, content: videoData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 }
 
@@ -418,7 +417,7 @@ struct MessageBubble: View {
                             .foregroundColor(.red)
                     }
                 }
-                Text(viewModel.streamPublicIdString)
+                Text(viewModel.streamPublicIDString)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -445,9 +444,9 @@ struct ThoughtStreamView_Previews: PreviewProvider {
 
         // Add some sample thoughts
         viewModel.thoughts = [
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIdString: "abc123", text: "Hello, this is a test message!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIdString: "abc123", text: "Hi Alice, great to see you here!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIdString: "abc123", text: "Welcome everyone to this stream!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIDString: "abc123", text: "Hello, this is a test message!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
         ]
 
         return viewModel

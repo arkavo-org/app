@@ -509,28 +509,6 @@ struct User: Decodable {
     let id: String
 }
 
-extension Data {
-    func base64URLEncodedString() -> String {
-        base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-}
-
-extension String {
-    func base64URLToBase64() -> String {
-        var base64 = replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        if base64.count % 4 != 0 {
-            base64.append(String(repeating: "=", count: 4 - base64.count % 4))
-        }
-        return base64
-    }
-}
-
-import Security
-
 extension AuthenticationManager {
     func createAndStoreECSigningKey() -> SecKey? {
         let accessControl = SecAccessControlCreateWithFlags(nil,

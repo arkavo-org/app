@@ -194,15 +194,6 @@ class AccountProfileCreateViewModel: ObservableObject {
     }
 }
 
-extension DateFormatter {
-    static let shortDateTime: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter
-    }()
-}
-
 struct AccountProfileDetailedView_Previews: PreviewProvider {
     static var previews: some View {
         let sampleProfile = Profile(name: "John Doe", blurb: "A sample user", interests: "Sports,Music")

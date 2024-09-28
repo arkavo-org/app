@@ -6,14 +6,14 @@ import SwiftData
 final class Thought: Identifiable, Codable, @unchecked Sendable {
     @Attribute(.unique) var id: UUID
     // Using SHA256 hash as a public identifier, stored as 32 bytes
-    @Attribute(.unique) var publicId: Data
+    @Attribute(.unique) var publicID: Data
     var stream: Stream?
     var metadata: ThoughtMetadata
     var nano: Data
 
     init(id: UUID = UUID(), nano: Data) {
         self.id = id
-        publicId = Thought.generatePublicIdentifier(from: id)
+        publicID = Thought.generatePublicID(from: id)
         metadata = Thought.extractMetadata(from: nano)
         self.nano = nano
     }
@@ -21,19 +21,19 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        publicId = try container.decode(Data.self, forKey: .publicId)
+        publicID = try container.decode(Data.self, forKey: .publicID)
         metadata = try container.decode(ThoughtMetadata.self, forKey: .metadata)
         nano = try container.decode(Data.self, forKey: .nano)
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, publicId, metadata, nano
+        case id, publicID, metadata, nano
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encode(publicId, forKey: .publicId)
+        try container.encode(publicID, forKey: .publicID)
         try container.encode(metadata, forKey: .metadata)
     }
 
@@ -42,14 +42,14 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
         ThoughtMetadata(creator: UUID(), mediaType: .text)
     }
 
-    private static func generatePublicIdentifier(from uuid: UUID) -> Data {
+    private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }
     }
 
     /// decode from hex back to 32 bytes Data
-    public static func decodePublicIdentifier(from string: String) throws -> Data {
+    public static func decodePublicID(from string: String) throws -> Data {
         if string.count != 64 {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(
@@ -88,8 +88,8 @@ extension Thought {
         return encoder
     }()
 
-    var publicIdString: String {
-        publicId.map { String(format: "%02x", $0) }.joined()
+    var publicIDString: String {
+        publicID.base58EncodedString
     }
 
     func serialize() throws -> Data {

@@ -1,3 +1,4 @@
+import FlatBuffers
 import Foundation
 import SwiftData
 
@@ -8,6 +9,27 @@ class PersistenceController {
     let container: ModelContainer
 
     private init() {
+        // Create a FlatBuffer builder
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        // Create string offsets
+        let sourcePublicID: [UInt8] = [1, 2, 3, 4, 5] // Example byte array for sourcePublicID
+        let targetPublicID: [UInt8] = [6, 7, 8, 9, 10] // Example byte array for targetPublicID
+        let sourcePublicIDOffset = builder.createVector(sourcePublicID)
+        let targetPublicIDOffset = builder.createVector(targetPublicID)
+        // Create the Event object in the FlatBuffer
+        let action = Arkavo_UserEvent.createUserEvent(
+            &builder,
+            sourceType: .accountProfile,
+            targetType: .streamProfile,
+            sourceIdVectorOffset: sourcePublicIDOffset,
+            targetIdVectorOffset: targetPublicIDOffset,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing
+        )
+        builder.finish(offset: action)
+        let data = builder.data
+        let serializedEvent = data.base64EncodedString()
+        print("streamJoinUsepublicrEvent: \(serializedEvent)")
         do {
             let schema = Schema([
                 Account.self,
@@ -64,8 +86,8 @@ class PersistenceController {
         try container.mainContext.fetch(FetchDescriptor<Stream>(predicate: #Predicate { $0.id == id })).first
     }
 
-    func fetchStream(withPublicId publicId: Data) async throws -> [Stream]? {
-        let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicId == publicId })
+    func fetchStream(withPublicID publicID: Data) async throws -> [Stream]? {
+        let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicID == publicID })
         return try container.mainContext.fetch(fetchDescriptor)
     }
 }

@@ -1,6 +1,15 @@
 # Arkavo app
 _for the Apple ecosystem_
 
+## Prerequisites
+
+Flatbuffers
+https://github.com/google/flatbuffers
+
+```shell
+brew install flatbuffers
+```
+
 ## Design
 
 ### Entity
@@ -12,6 +21,14 @@ _for the Apple ecosystem_
 - Thought
 
 ## Development
+
+### Initialize
+
+```shell
+flatc --binary --swift -o Arkavo/Arkavo idl/event.fbs
+cd Arkavo/Arkavo
+mv event_generated.swift EventServiceModel.swift
+```
 
 ### Dependencies 
 
