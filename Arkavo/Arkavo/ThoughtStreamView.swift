@@ -176,7 +176,7 @@ struct ThoughtStreamView: View {
     }
 
     private func sendImageThought(_ imageData: Data) async {
-        guard let streamPublicIdString = viewModel.stream?.publicId.map({ String(format: "%02hhx", $0) }).joined(),
+        guard let streamPublicIDString = viewModel.stream?.publicID.map({ String(format: "%02hhx", $0) }).joined(),
               let creatorProfile = viewModel.creatorProfile
         else {
             return
@@ -184,7 +184,7 @@ struct ThoughtStreamView: View {
 
         let thoughtViewModel = ThoughtViewModel.createImage(
             creatorProfile: creatorProfile,
-            streamPublicIdString: streamPublicIdString,
+            streamPublicIDString: streamPublicIDString,
             imageData: imageData
         )
 
@@ -346,25 +346,25 @@ final class ThoughtViewModel: ObservableObject, Identifiable, Equatable {
     }
 
     static func createText(creatorProfile: Profile, streamPublicIDString: String, text: String) -> ThoughtViewModel {
-        ThoughtViewModel(mediaType: .text, content: text.isEmpty ? Data() : text.data(using: .utf8) ?? Data(), creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+        ThoughtViewModel(mediaType: .text, content: text.isEmpty ? Data() : text.data(using: .utf8) ?? Data(), creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
     static func createImage(creatorProfile: Profile, streamPublicIDString: String, imageData: Data) -> ThoughtViewModel {
         let imageContent = "Image data: \(imageData.count) bytes"
         print(imageContent)
-        return ThoughtViewModel(mediaType: .image, content: imageData, creator: creatorProfile, streamPublicIDString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .image, content: imageData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
     static func createAudio(creatorProfile: Profile, streamPublicIDString: String, audioData: Data) -> ThoughtViewModel {
         let audioContent = "Audio data: \(audioData.count) bytes"
         print(audioContent)
-        return ThoughtViewModel(mediaType: .audio, content: audioData, creator: creatorProfile, streamPublicIdString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .audio, content: audioData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 
     static func createVideo(creatorProfile: Profile, streamPublicIDString: String, videoData: Data) -> ThoughtViewModel {
         let videoContent = "Video data: \(videoData.count) bytes"
         print(videoContent)
-        return ThoughtViewModel(mediaType: .video, content: videoData, creator: creatorProfile, streamPublicIDString: streamPublicIdString)
+        return ThoughtViewModel(mediaType: .video, content: videoData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
     }
 }
 
