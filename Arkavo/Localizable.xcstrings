@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -225,6 +228,9 @@
       }
     },
     "Loading stream..." : {
+
+    },
+    "Location Picker Placeholder" : {
 
     },
     "Map" : {
@@ -476,6 +482,9 @@
         }
       }
     },
+    "Sticker Picker Placeholder" : {
+
+    },
     "Stop" : {
       "localizations" : {
         "es-US" : {
@@ -541,6 +550,12 @@
           }
         }
       }
+    },
+    "Unable to decode text" : {
+
+    },
+    "Unable to load image" : {
+
     },
     "Video" : {
       "localizations" : {
