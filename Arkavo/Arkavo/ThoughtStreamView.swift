@@ -32,7 +32,7 @@ struct ThoughtStreamView: View {
                     ScrollView {
                         if viewModel.creatorProfile != nil {
                             HStack {
-                                TextField("Type a message...", text: $inputText)
+                                TextField("", text: $inputText)
                                     .padding(10)
                                     .background(Color.blue.opacity(0.3))
                                     .foregroundColor(.white)
@@ -65,15 +65,16 @@ struct ThoughtStreamView: View {
                         }
                     }
                     if viewModel.creatorProfile != nil {
-                        HStack(alignment: .bottom) {
-                            Button(action: { isShowingCamera = true }) {
-                                Image(systemName: "camera")
-                                    .foregroundColor(.blue)
-                            }
-                            Button(action: { isShowingImagePicker = true }) {
-                                Image(systemName: "photo")
-                                    .foregroundColor(.blue)
-                            }
+                        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+                            HStack(alignment: .bottom) {
+                                Button(action: { isShowingCamera = true }) {
+                                    Image(systemName: "camera")
+                                        .foregroundColor(.blue)
+                                }
+                                Button(action: { isShowingImagePicker = true }) {
+                                    Image(systemName: "photo")
+                                        .foregroundColor(.blue)
+                                }
 //                             Button(action: { isShowingStickerPicker = true }) {
 //                                 Image(systemName: "face.smiling")
 //                                     .foregroundColor(.blue)
@@ -82,25 +83,26 @@ struct ThoughtStreamView: View {
 //                                 Image(systemName: "location")
 //                                     .foregroundColor(.blue)
 //                             }
-                            TextField("iMessage", text: $inputText)
-                                .padding(10)
-                                .background(Color(.systemGray6))
-                                .clipShape(RoundedRectangle(cornerRadius: 20))
-                                .focused($isInputFocused)
+                                TextField("Type a message...", text: $inputText)
+                                    .padding(10)
+                                    .background(Color(.systemGray6))
+                                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                                    .focused($isInputFocused)
 
-                            Button(action: {
-                                Task {
-                                    await sendThought()
+                                Button(action: {
+                                    Task {
+                                        await sendThought()
+                                    }
+                                }) {
+//                                Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
+//                                    .foregroundColor(.blue)
+//                                    .font(.system(size: 24))
                                 }
-                            }) {
-                                Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 24))
+                                .disabled(isSending)
                             }
-                            .disabled(isSending)
-                        }
-                        .padding()
-                        .background(Color(.systemBackground))
+                            .padding()
+                            .background(Color(.systemBackground))
+                        #endif
                     }
                 }
             }
@@ -116,26 +118,30 @@ struct ThoughtStreamView: View {
         }
         #endif
         .sheet(isPresented: $isShowingImagePicker) {
-            ImagePicker(sourceType: .photoLibrary) { image in
-                guard let imageData = image.heifData() else {
-                    print("Failed to convert image to HEIF data")
-                    return
+            #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+                ImagePicker(sourceType: .photoLibrary) { image in
+                    guard let imageData = image.heifData() else {
+                        print("Failed to convert image to HEIF data")
+                        return
+                    }
+                    Task {
+                        await sendImageThought(imageData)
+                    }
                 }
-                Task {
-                    await sendImageThought(imageData)
-                }
-            }
+            #endif
         }
         .sheet(isPresented: $isShowingCamera) {
-            ImagePicker(sourceType: .camera) { image in
-                guard let imageData = image.heifData() else {
-                    print("Failed to convert image to HEIF data")
-                    return
+            #if os(iOS) || os(visionOS)
+                ImagePicker(sourceType: .camera) { image in
+                    guard let imageData = image.heifData() else {
+                        print("Failed to convert image to HEIF data")
+                        return
+                    }
+                    Task {
+                        await sendImageThought(imageData)
+                    }
                 }
-                Task {
-                    await sendImageThought(imageData)
-                }
-            }
+            #endif
         }
         .sheet(isPresented: $isShowingLocationPicker) {
             LocationPicker { _ in
@@ -195,38 +201,40 @@ struct ThoughtStreamView: View {
     }
 }
 
-struct ImagePicker: UIViewControllerRepresentable {
-    let sourceType: UIImagePickerController.SourceType
-    let onImagePicked: (UIImage) -> Void
+#if os(iOS) || os(visionOS)
+    struct ImagePicker: UIViewControllerRepresentable {
+        let sourceType: UIImagePickerController.SourceType
+        let onImagePicked: (UIImage) -> Void
 
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = sourceType
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_: UIImagePickerController, context _: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
-
-        init(_ parent: ImagePicker) {
-            self.parent = parent
+        func makeUIViewController(context: Context) -> UIImagePickerController {
+            let picker = UIImagePickerController()
+            picker.sourceType = sourceType
+            picker.delegate = context.coordinator
+            return picker
         }
 
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.onImagePicked(image)
+        func updateUIViewController(_: UIImagePickerController, context _: Context) {}
+
+        func makeCoordinator() -> Coordinator {
+            Coordinator(self)
+        }
+
+        class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+            let parent: ImagePicker
+
+            init(_ parent: ImagePicker) {
+                self.parent = parent
             }
-            picker.dismiss(animated: true)
+
+            func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+                if let image = info[.originalImage] as? UIImage {
+                    parent.onImagePicked(image)
+                }
+                picker.dismiss(animated: true)
+            }
         }
     }
-}
+#endif
 
 struct LocationPicker: View {
     let onLocationPicked: (CLLocation) -> Void
@@ -393,16 +401,18 @@ struct MessageBubble: View {
                                 .foregroundColor(.red)
                         }
                     case .image:
-                        if let uiImage = UIImage(data: viewModel.content) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: 200, maxHeight: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        } else {
-                            Text("Unable to load image")
-                                .foregroundColor(.red)
-                        }
+                        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+                            if let uiImage = UIImage(data: viewModel.content) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 200, maxHeight: 200)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            } else {
+                                Text("Unable to load image")
+                                    .foregroundColor(.red)
+                            }
+                        #endif
                     case .audio, .video:
                         Text("Unsupported media type: \(viewModel.mediaType)")
                             .foregroundColor(.red)
@@ -474,39 +484,41 @@ struct ThoughtStreamView_Previews: PreviewProvider {
 }
 
 // Extension to convert UIImage to HEIF data
-extension UIImage {
-    func heifData(maxSizeBytes: Int = 1_048_576, initialQuality: CGFloat = 0.9) -> Data? {
-        var compressionQuality = initialQuality
-        var imageData: Data?
+#if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+    extension UIImage {
+        func heifData(maxSizeBytes: Int = 1_048_576, initialQuality: CGFloat = 0.9) -> Data? {
+            var compressionQuality = initialQuality
+            var imageData: Data?
 
-        while compressionQuality > 0.1 {
-            let data = NSMutableData()
-            guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, AVFileType.heic as CFString, 1, nil) else {
-                return nil
-            }
-
-            let options: [CFString: Any] = [
-                kCGImageDestinationLossyCompressionQuality: compressionQuality,
-                kCGImageDestinationOptimizeColorForSharing: true,
-            ]
-
-            guard let cgImage else {
-                return nil
-            }
-
-            CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
-
-            if CGImageDestinationFinalize(destination) {
-                imageData = data as Data
-                if let imageData, imageData.count <= maxSizeBytes {
-                    return imageData
+            while compressionQuality > 0.1 {
+                let data = NSMutableData()
+                guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, AVFileType.heic as CFString, 1, nil) else {
+                    return nil
                 }
+
+                let options: [CFString: Any] = [
+                    kCGImageDestinationLossyCompressionQuality: compressionQuality,
+                    kCGImageDestinationOptimizeColorForSharing: true,
+                ]
+
+                guard let cgImage else {
+                    return nil
+                }
+
+                CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
+
+                if CGImageDestinationFinalize(destination) {
+                    imageData = data as Data
+                    if let imageData, imageData.count <= maxSizeBytes {
+                        return imageData
+                    }
+                }
+
+                compressionQuality -= 0.1
             }
 
-            compressionQuality -= 0.1
+            // If we couldn't get it under the limit, return nil or consider other options
+            return nil
         }
-
-        // If we couldn't get it under the limit, return nil or consider other options
-        return nil
     }
-}
+#endif
