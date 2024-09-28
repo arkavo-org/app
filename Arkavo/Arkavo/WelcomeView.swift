@@ -9,13 +9,13 @@ struct WelcomeView: View {
                 Text(LocalizedStringKey("Welcome to Arkavo!"))
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                
+
                 Text(LocalizedStringKey("Take control of your content — anytime, anywhere."))
                     .multilineTextAlignment(.center)
-                   
+
                 Text(LocalizedStringKey("Create your profile in seconds using Apple Passkey — no passwords, no hassle."))
                     .multilineTextAlignment(.center)
-                 
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text(differenceText)
                         .font(.headline)
@@ -25,10 +25,10 @@ struct WelcomeView: View {
                     BulletPoint(text: "Your data stays yours: Arkavo will never collect, store, or share any of your personal data at any time. Not even your email address!")
                 }
                 .padding()
-                
+
                 Text("Ready to Secure Your Socials?")
                     .font(.headline)
-                
+
                 Button(action: onCreateProfile) {
                     Text("Create Profile")
                         .fontWeight(.semibold)
@@ -43,10 +43,8 @@ struct WelcomeView: View {
             .padding(.leading, 10)
             .padding(.trailing, 10)
         }
-
-
     }
-    
+
     private var differenceText: AttributedString {
         var text = AttributedString("What makes Arkavo different? Your privacy is actually our priority.")
         // this probably breaks l10n
@@ -55,7 +53,6 @@ struct WelcomeView: View {
         }
         return text
     }
-    
 }
 
 struct BulletPoint: View {
@@ -70,7 +67,7 @@ struct BulletPoint: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
-    
+
     private var attributedString: AttributedString {
         var attributedString = AttributedString(text)
         if let colonRange = attributedString.range(of: ":") {
