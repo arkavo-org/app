@@ -89,53 +89,53 @@ class ArkavoService {
             print("DENY")
             return
         }
-//        print("received rewrap")
-        // dispatch
-        DispatchQueue.global(qos: .default).async {
-            // determine payload type based on policy metadata
-            let policy = ArkavoPolicy(nano.header.policy)
-            var payload: Data
+        // Create a Task to handle the asynchronous work
+        Task {
             do {
-                // decrypt payload
-                payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+                // Decrypt payload within the Task
+                let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+
+                // Determine payload type based on policy metadata
+                let policy = ArkavoPolicy(nano.header.policy)
+
+                // Handle different policy types
+                switch policy.type {
+                case .accountProfile:
+                    // TODO: Handle account profile
+                    break
+                case .streamProfile:
+                    // TODO: Handle stream profile
+                    break
+                case .thought:
+                    await handleThought(payload: payload, policy: policy, nano: nano)
+                case .videoFrame:
+                    await handleVideoFrame(payload: payload)
+                }
             } catch {
                 print("Unexpected error during nanoTDF decryption: \(error)")
-                return
-            }
-            // TODO: route to appropriate service
-            switch policy.type {
-            case .accountProfile:
-                // TODO:
-                break
-            case .streamProfile:
-                // TODO:
-                break
-            case .thought:
-                guard let thoughtService = self.thoughtService else { return }
-                Task {
-                    do {
-                        try await thoughtService.handle(payload, policy: policy, nano: nano)
-                    } catch {
-                        //                print("Unexpected error during nanoTDF decryption: \(error)")
-                        // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
-                        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                            DispatchQueue.main.async { [self] in
-                                videoStreamViewModel!.receiveVideoFrame(payload)
-                            }
-                        #endif
-                    }
-                }
-
-            case .videoFrame:
-                // TODO: create VideoStreamService
-//                    #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-//                        DispatchQueue.main.async {
-//                            videoStreamViewModel.receiveVideoFrame(payload)
-//                        }
-//                    #endif
-                break
             }
         }
+    }
+
+    private func handleThought(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
+        guard let thoughtService else { return }
+        do {
+            try await thoughtService.handle(payload, policy: policy, nano: nano)
+        } catch {
+//            print("Error handling thought: \(error)")
+            // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
+            #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+                await handleVideoFrame(payload: payload)
+            #endif
+        }
+    }
+
+    private func handleVideoFrame(payload: Data) async {
+        #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
+            await MainActor.run {
+                videoStreamViewModel?.receiveVideoFrame(payload)
+            }
+        #endif
     }
 
     func setupWebSocketManager(token: String) {
