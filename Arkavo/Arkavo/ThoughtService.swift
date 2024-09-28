@@ -71,8 +71,7 @@ class ThoughtService {
     }
 
     func createPayload(viewModel: ThoughtViewModel) throws -> Data {
-        let contentData = viewModel.content.data(using: .utf8) ?? Data()
-        let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: contentData)
+        let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: viewModel.content)
         let payload = try thoughtServiceModel.serialize()
         return payload
     }
