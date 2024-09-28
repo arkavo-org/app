@@ -23,11 +23,11 @@ struct ArkavoApp: App {
                     }
                     .navigationDestination(for: DeepLinkDestination.self) { destination in
                         switch destination {
-                        case let .stream(publicId):
-                            StreamLoadingView(publicId: publicId)
-                        case let .profile(publicId):
+                        case let .stream(publicID):
+                            StreamLoadingView(publicID: publicID)
+                        case let .profile(publicID):
                             // TODO: account profile
-                            Text("Profile View for \(publicId)")
+                            Text("Profile View for \(publicID)")
                         }
                     }
             }
@@ -103,13 +103,13 @@ struct ArkavoApp: App {
         }
 
         let type = pathComponents[0]
-        let publicId = pathComponents[1]
+        let publicID = pathComponents[1]
 
         switch type {
         case "stream":
-            navigationPath.append(DeepLinkDestination.stream(publicId: publicId))
+            navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
         case "profile":
-            navigationPath.append(DeepLinkDestination.profile(publicId: publicId))
+            navigationPath.append(DeepLinkDestination.profile(publicID: publicID))
         default:
             print("Unknown URL type")
         }
@@ -117,7 +117,7 @@ struct ArkavoApp: App {
 }
 
 struct StreamLoadingView: View {
-    let publicId: String
+    let publicID: String
     @State private var stream: Stream?
     @State private var accountProfile: Profile?
     @State private var isLoading = true
@@ -141,16 +141,16 @@ struct StreamLoadingView: View {
             }
         }
         .task {
-            await loadStream(withPublicId: publicId)
+            await loadStream(withPublicID: publicID)
         }
     }
 
     @MainActor
-    private func loadStream(withPublicId publicId: String) async {
+    private func loadStream(withPublicID publicID: String) async {
         isLoading = true
-        // Decode the hex-encoded publicId to Data
-        guard let publicIdData = Data(hexString: publicId) else {
-            print("Invalid publicId format")
+        // Decode the hex-encoded publicID to Data
+        guard let publicIDData = Data(hexString: publicID) else {
+            print("Invalid publicID format")
             stream = nil
             isLoading = false
             return
@@ -159,14 +159,14 @@ struct StreamLoadingView: View {
         do {
             let account = try await PersistenceController.shared.getOrCreateAccount()
             accountProfile = account.profile
-            let streams = try await PersistenceController.shared.fetchStream(withPublicId: publicIdData)
+            let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicIDData)
 
             if let stream = streams?.first {
-                print("Stream found with publicId: \(publicId)")
+                print("Stream found with publicID: \(publicID)")
                 self.stream = stream
                 isLoading = false
             } else {
-                print("No stream found with publicId: \(publicId)")
+                print("No stream found with publicID: \(publicID)")
                 // Here you would typically implement logic to fetch the stream from a network source
                 // For now, we'll just return nil
                 isLoading = false
@@ -191,8 +191,8 @@ struct StreamLoadingView: View {
 #endif
 
 enum DeepLinkDestination: Hashable {
-    case stream(publicId: String)
-    case profile(publicId: String)
+    case stream(publicID: String)
+    case profile(publicID: String)
 }
 
 extension Notification.Name {

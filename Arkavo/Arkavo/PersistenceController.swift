@@ -29,7 +29,7 @@ class PersistenceController {
         builder.finish(offset: action)
         let data = builder.data
         let serializedEvent = data.base64EncodedString()
-        print("streamJoinUserEvent: \(serializedEvent)")
+        print("streamJoinUsepublicrEvent: \(serializedEvent)")
         do {
             let schema = Schema([
                 Account.self,
@@ -86,7 +86,7 @@ class PersistenceController {
         try container.mainContext.fetch(FetchDescriptor<Stream>(predicate: #Predicate { $0.id == id })).first
     }
 
-    func fetchStream(withPublicId publicID: Data) async throws -> [Stream]? {
+    func fetchStream(withPublicID publicID: Data) async throws -> [Stream]? {
         let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicID == publicID })
         return try container.mainContext.fetch(fetchDescriptor)
     }
