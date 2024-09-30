@@ -1,3 +1,4 @@
+import FlatBuffers
 import SwiftData
 import SwiftUI
 
@@ -103,8 +104,12 @@ struct ArkavoApp: App {
         }
 
         let type = pathComponents[0]
-        let publicID = pathComponents[1]
-
+        let publicIDString = pathComponents[1]
+        // convert publicIDString using base58 decode to publicID
+        guard let publicID = publicIDString.base58Decoded else {
+            print("Invalid publicID format")
+            return
+        }
         switch type {
         case "stream":
             navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
@@ -117,7 +122,7 @@ struct ArkavoApp: App {
 }
 
 struct StreamLoadingView: View {
-    let publicID: String
+    let publicID: Data
     @State private var stream: Stream?
     @State private var accountProfile: Profile?
     @State private var isLoading = true
@@ -146,20 +151,12 @@ struct StreamLoadingView: View {
     }
 
     @MainActor
-    private func loadStream(withPublicID publicID: String) async {
+    private func loadStream(withPublicID publicID: Data) async {
         isLoading = true
-        // Decode the hex-encoded publicID to Data
-        guard let publicIDData = Data(hexString: publicID) else {
-            print("Invalid publicID format")
-            stream = nil
-            isLoading = false
-            return
-        }
-
         do {
             let account = try await PersistenceController.shared.getOrCreateAccount()
             accountProfile = account.profile
-            let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicIDData)
+            let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicID)
 
             if let stream = streams?.first {
                 print("Stream found with publicID: \(publicID)")
@@ -167,8 +164,34 @@ struct StreamLoadingView: View {
                 isLoading = false
             } else {
                 print("No stream found with publicID: \(publicID)")
-                // Here you would typically implement logic to fetch the stream from a network source
-                // For now, we'll just return nil
+                // get stream
+                var builder = FlatBufferBuilder(initialSize: 1024)
+                // Create string offsets
+                let targetIdVector = builder.createVector(bytes: publicID)
+                let sourcePublicID: [UInt8] = [1, 2, 3, 4, 5] // Example byte array for sourcePublicID
+                let sourcePublicIDOffset = builder.createVector(sourcePublicID)
+                // Create the Event object in the FlatBuffer
+                let action = Arkavo_UserEvent.createUserEvent(
+                    &builder,
+                    sourceType: .accountProfile,
+                    targetType: .streamProfile,
+                    sourceIdVectorOffset: sourcePublicIDOffset,
+                    targetIdVectorOffset: targetIdVector
+                )
+                // Create the Event object
+                let eventOffset = Arkavo_Event.createEvent(
+                    &builder,
+                    action: .invite,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    status: .preparing,
+                    dataType: .userevent,
+                    dataOffset: action
+                )
+                builder.finish(offset: eventOffset)
+                let data = builder.data
+                let serializedEvent = data.base64EncodedString()
+                print("streamInvite: \(serializedEvent)")
+                // TODO: send NATSEvent
                 isLoading = false
             }
         } catch {
@@ -191,8 +214,8 @@ struct StreamLoadingView: View {
 #endif
 
 enum DeepLinkDestination: Hashable {
-    case stream(publicID: String)
-    case profile(publicID: String)
+    case stream(publicID: Data)
+    case profile(publicID: Data)
 }
 
 extension Notification.Name {

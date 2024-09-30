@@ -138,4 +138,8 @@ extension String {
         }
         return base64
     }
+
+    var base58Decoded: Data? {
+        Data(base58Encoded: self)
+    }
 }

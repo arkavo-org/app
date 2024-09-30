@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreLocation
+import FlatBuffers
 import OpenTDFKit
 import SwiftData
 import SwiftUI
@@ -131,7 +132,7 @@ struct ThoughtStreamView: View {
             #endif
         }
         .sheet(isPresented: $isShowingCamera) {
-            #if os(iOS) || os(visionOS)
+            #if os(iOS)
                 ImagePicker(sourceType: .camera) { image in
                     guard let imageData = image.heifData() else {
                         print("Failed to convert image to HEIF data")
@@ -168,11 +169,43 @@ struct ThoughtStreamView: View {
     }
 
     private var shareURL: URL? {
-        guard let publicID = viewModel.stream?.publicID.base58EncodedString
+        guard let publicID = viewModel.stream?.publicID.base58EncodedString,
+              let stream = viewModel.stream
         else {
             return nil
         }
-        return URL(string: "https://app.arkavo.com/stream/\(publicID)")
+        // cache stream for later retrieval
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        let targetIdVector = builder.createVector(bytes: stream.publicID)
+        do {
+            // FIXME: use nanotdf on StreamServiceModel
+            let targetPayloadVector = try builder.createVector(bytes: stream.profile.serialize())
+            // Create CacheEvent
+            let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
+                &builder,
+                targetIdVectorOffset: targetIdVector,
+                targetPayloadVectorOffset: targetPayloadVector,
+                ttl: 3600, // 1 hour TTL, TODOadjust as needed
+                oneTimeAccess: false
+            )
+            // Create the Event object
+            let eventOffset = Arkavo_Event.createEvent(
+                &builder,
+                action: .cache,
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                status: .preparing,
+                dataType: .cacheevent,
+                dataOffset: cacheEventOffset
+            )
+            builder.finish(offset: eventOffset)
+            let data = builder.data
+            let serializedEvent = data.base64EncodedString()
+            print("streamJoinUserEvent: \(serializedEvent)")
+            return URL(string: "https://app.arkavo.com/stream/\(publicID)")
+        } catch {
+            print("streamJoinUserEvent: \(error)")
+            return nil
+        }
     }
 
     private func sendImageThought(_ imageData: Data) async {
@@ -302,9 +335,8 @@ class ThoughtStreamViewModel: ObservableObject {
             do {
                 let nano = try service.createNano(viewModel, stream: stream!)
                 // persist
-                let thought = Thought(nano: nano)
+                let thought = Thought(id: UUID(), nano: nano)
                 thought.stream = stream
-                thought.publicID = try Thought.decodePublicID(from: viewModel.streamPublicIDString)
                 PersistenceController.shared.container.mainContext.insert(thought)
                 stream?.thoughts.append(thought)
                 try await PersistenceController.shared.saveChanges()
