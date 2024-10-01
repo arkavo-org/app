@@ -39,6 +39,7 @@
 		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
 		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
@@ -96,6 +97,7 @@
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 				DA73B3342C6436EF00393056 /* StreamCloudView.swift */,
 				DA1A4DE42C6929CF00722E3E /* StreamProfileView.swift */,
 				DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */,
+				DACCD61C2CAB91A300A9060C /* StreamService.swift */,
 				DA7598BE2C95EE540021A8FC /* ThoughtService.swift */,
 				DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */,
 				DAF458A32C70320F004B44FE /* VideoStreamView.swift */,
@@ -361,6 +364,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */,
+				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,

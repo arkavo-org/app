@@ -126,6 +126,7 @@ struct StreamLoadingView: View {
     @State private var stream: Stream?
     @State private var accountProfile: Profile?
     @State private var isLoading = true
+    @State private var error: Error?
 
     var body: some View {
         Group {
@@ -141,65 +142,31 @@ struct StreamLoadingView: View {
                         thoughtStreamViewModel.creatorProfile = accountProfile
                         thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
                     }
+            } else if let error {
+                Text("Error loading stream: \(error.localizedDescription)")
             } else {
                 Text("Stream not found")
             }
         }
         .task {
-            await loadStream(withPublicID: publicID)
+            await loadStream()
         }
     }
 
-    @MainActor
-    private func loadStream(withPublicID publicID: Data) async {
+    private func loadStream() async {
         isLoading = true
-        do {
-            let account = try await PersistenceController.shared.getOrCreateAccount()
-            accountProfile = account.profile
-            let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicID)
+        defer { isLoading = false }
 
-            if let stream = streams?.first {
-                print("Stream found with publicID: \(publicID)")
-                self.stream = stream
-                isLoading = false
-            } else {
-                print("No stream found with publicID: \(publicID)")
-                // get stream
-                var builder = FlatBufferBuilder(initialSize: 1024)
-                // Create string offsets
-                let targetIdVector = builder.createVector(bytes: publicID)
-                let sourcePublicID: [UInt8] = [1, 2, 3, 4, 5] // Example byte array for sourcePublicID
-                let sourcePublicIDOffset = builder.createVector(sourcePublicID)
-                // Create the Event object in the FlatBuffer
-                let action = Arkavo_UserEvent.createUserEvent(
-                    &builder,
-                    sourceType: .accountProfile,
-                    targetType: .streamProfile,
-                    sourceIdVectorOffset: sourcePublicIDOffset,
-                    targetIdVectorOffset: targetIdVector
-                )
-                // Create the Event object
-                let eventOffset = Arkavo_Event.createEvent(
-                    &builder,
-                    action: .invite,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    status: .preparing,
-                    dataType: .userevent,
-                    dataOffset: action
-                )
-                builder.finish(offset: eventOffset)
-                let data = builder.data
-                let serializedEvent = data.base64EncodedString()
-                print("streamInvite: \(serializedEvent)")
-                // TODO: send NATSEvent
-                isLoading = false
+        do {
+            let streamService = StreamService(ArkavoService())
+            stream = try await streamService.fetchStream(withPublicID: publicID)
+            if stream == nil {
+                print("Stream not found for publicID: \(publicID.base58EncodedString)")
             }
         } catch {
-            print("Error fetching stream: \(error.localizedDescription)")
-            isLoading = false
-            return
+            self.error = error
+            print("Error loading stream: \(error.localizedDescription)")
         }
-        isLoading = false
     }
 }
 
