@@ -1,5 +1,6 @@
 import Combine
 import CryptoKit
+import FlatBuffers
 import Foundation
 import OpenTDFKit
 
@@ -41,31 +42,86 @@ class ArkavoService {
             guard let self else { return }
 //            print("Received Custom Message: \(data.base64EncodedString())")
             Task {
-                await self.handleIncomingNATSMessage(data: data)
+                await self.handleIncomingNATS(data: data)
             }
         }
     }
 
-    private func handleIncomingNATSMessage(data: Data) async {
-//        print("NATS payload size: \(data.count)")
+    private func handleIncomingNATS(data: Data) async {
         guard data.count > 4 else {
             print("Invalid NATS message: \(data.base64EncodedString())")
             return
         }
-        do {
-            // FIXME: copy of data after first byte
-            let subData = data.subdata(in: 1 ..< data.count)
-            // Create a NanoTDF from the payload
-            let parser = BinaryParser(data: subData)
-            let header = try parser.parseHeader()
-            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
-            let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
-            sendRewrapNanoTDF(nano: nanoTDF)
-        } catch let error as ParsingError {
-            handleParsingError(error)
-        } catch {
-            print("Unexpected error: \(error.localizedDescription)")
+        let messageType = data.prefix(1)
+        let payload = data.suffix(from: 1)
+        switch messageType[0] {
+        case 0x05:
+            do {
+                // FIXME: copy of data after first byte
+                let subData = data.subdata(in: 1 ..< data.count)
+                // Create a NanoTDF from the payload
+                let parser = BinaryParser(data: subData)
+                let header = try parser.parseHeader()
+                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+                let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
+                sendRewrapNanoTDF(nano: nanoTDF)
+            } catch let error as ParsingError {
+                handleParsingError(error)
+            } catch {
+                print("Unexpected error: \(error.localizedDescription)")
+            }
+        case 0x06:
+            handleNATSEvent(payload: payload)
+        default:
+            print("Unknown message type: \(messageType.base64EncodedString())")
         }
+    }
+
+    private func handleNATSEvent(payload: Data) {
+        var bb = ByteBuffer(data: payload)
+        do {
+            var verifier = try Verifier(buffer: &bb)
+            try Arkavo_Event.verify(&verifier, at: 0, of: Arkavo_Event.self)
+            print("The bytes represent a valid Arkavo_Event")
+        } catch {
+            print("Verification failed: \(error)")
+            return
+        }
+
+        let event = Arkavo_Event(bb, o: 0)
+
+        print("Received NATS event:")
+        print("  Action: \(event.action)")
+
+        switch event.dataType {
+        case .userevent:
+            if let userEvent = event.data(type: Arkavo_UserEvent.self) {
+                handleUserEvent(userEvent)
+            }
+        case .cacheevent:
+            if let cacheEvent = event.data(type: Arkavo_CacheEvent.self) {
+                handleCacheEvent(cacheEvent)
+            }
+        case .none_:
+            print("  No event data")
+        }
+    }
+
+    private func handleUserEvent(_ userEvent: Arkavo_UserEvent) {
+        print("User Event:")
+        print("  Source Type: \(userEvent.sourceType)")
+        print("  Target Type: \(userEvent.targetType)")
+        print("  Source ID: \(Data(userEvent.sourceId).base64EncodedString())")
+        print("  Target ID: \(Data(userEvent.targetId).base64EncodedString())")
+        // Add any additional processing for user events here
+    }
+
+    private func handleCacheEvent(_ cacheEvent: Arkavo_CacheEvent) {
+        print("Cache Event:")
+        print("  Target ID: \(Data(cacheEvent.targetId).base64EncodedString())")
+        print("  TTL: \(cacheEvent.ttl)")
+        print("  One-Time Access: \(cacheEvent.oneTimeAccess)")
+        // Add any additional processing for cache events here
     }
 
     /// Sends a rewrap message with the provided header.

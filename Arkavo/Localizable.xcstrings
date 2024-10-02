@@ -308,6 +308,7 @@
       }
     },
     "No stream profile" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -316,6 +317,9 @@
           }
         }
       }
+    },
+    "No stream profile for %@." : {
+
     },
     "OK" : {
       "localizations" : {

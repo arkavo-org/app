@@ -51,7 +51,7 @@ struct ThoughtStreamView: View {
                             VStack {
                                 Spacer()
                                     .frame(height: 100)
-                                Text("No stream profile")
+                                Text("No stream profile for \(viewModel.stream?.profile.name ?? "unknown").")
                                     .font(.headline)
                             }
                         }
