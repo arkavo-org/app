@@ -12,6 +12,7 @@ class ArkavoService {
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
     var thoughtService: ThoughtService?
+    var streamService: StreamService?
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         var videoStreamViewModel: VideoStreamViewModel?
     #endif
@@ -23,6 +24,7 @@ class ArkavoService {
 
     func setupCallbacks() {
         thoughtService = ThoughtService(self)
+        streamService = StreamService(self)
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if ArkavoService.kasPublicKey != nil {
                 return

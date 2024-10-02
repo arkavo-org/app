@@ -161,18 +161,16 @@ struct ThoughtStreamView: View {
     }
 
     private var shareButton: some View {
-        Button(action: {
-            isShareSheetPresented = true
-        }) {
+        Button(action: prepareShare) {
             Image(systemName: "square.and.arrow.up")
         }
     }
 
-    private var shareURL: URL? {
-        guard let publicID = viewModel.stream?.publicID.base58EncodedString,
-              let stream = viewModel.stream
+    private func prepareShare() {
+        guard let stream = viewModel.stream
         else {
-            return nil
+            print("streamCacheEvent: No stream to cache")
+            return
         }
         // cache stream for later retrieval
         var builder = FlatBufferBuilder(initialSize: 1024)
@@ -199,13 +197,20 @@ struct ThoughtStreamView: View {
             )
             builder.finish(offset: eventOffset)
             let data = builder.data
-            let serializedEvent = data.base64EncodedString()
-            print("streamJoinUserEvent: \(serializedEvent)")
-            return URL(string: "https://app.arkavo.com/stream/\(publicID)")
+            print("streamCacheEvent: \(data.base64EncodedString())")
+            try viewModel.streamService.sendEvent(data)
+            isShareSheetPresented = true
         } catch {
-            print("streamJoinUserEvent: \(error)")
+            print("streamCacheEvent: \(error)")
+        }
+    }
+
+    private var shareURL: URL? {
+        guard let publicID = viewModel.stream?.publicID.base58EncodedString
+        else {
             return nil
         }
+        return URL(string: "https://app.arkavo.com/stream/\(publicID)")
     }
 
     private func sendImageThought(_ imageData: Data) async {
@@ -290,11 +295,13 @@ struct StickerPicker: View {
 class ThoughtStreamViewModel: ObservableObject {
     @Published var service: ThoughtService
     @Published var stream: Stream?
+    @Published var streamService: StreamService
     @Published var creatorProfile: Profile?
     @Published var thoughts: [ThoughtViewModel] = []
 
-    init(service: ThoughtService) {
-        self.service = service
+    init(thoughtService: ThoughtService, streamService: StreamService) {
+        service = thoughtService
+        self.streamService = streamService
     }
 
     func loadAndDecrypt(for _: Stream) {
@@ -467,8 +474,10 @@ struct ThoughtStreamView_Previews: PreviewProvider {
     }
 
     static var previewViewModel: ThoughtStreamViewModel {
-        let service = ThoughtService(ArkavoService())
-        let viewModel = ThoughtStreamViewModel(service: service)
+        let arkavo = ArkavoService()
+        let service = ThoughtService(arkavo)
+        let streamService = StreamService(arkavo)
+        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService)
 
         // Set up mock data
         viewModel.creatorProfile = Profile(name: "Preview User")

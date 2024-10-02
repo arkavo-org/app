@@ -123,48 +123,78 @@ struct ArkavoApp: App {
 
 struct StreamLoadingView: View {
     let publicID: Data
-    @State private var stream: Stream?
-    @State private var accountProfile: Profile?
-    @State private var isLoading = true
-    @State private var error: Error?
+    @StateObject private var viewModel: StreamLoadingViewModel
+
+    init(publicID: Data) {
+        self.publicID = publicID
+        _viewModel = StateObject(wrappedValue: StreamLoadingViewModel(publicID: publicID))
+    }
 
     var body: some View {
         Group {
-            if isLoading {
+            switch viewModel.state {
+            case .loading:
                 ProgressView("Loading stream...")
-            } else if let stream {
-                let thoughtService = ThoughtService(ArkavoService())
-                let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService)
-                ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                    .onAppear {
-                        thoughtStreamViewModel.stream = stream
-                        // FIXME: creatorProfile != accountProfile
-                        thoughtStreamViewModel.creatorProfile = accountProfile
-                        thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
-                    }
-            } else if let error {
+            case let .loaded(stream, accountProfile):
+                loadedView(stream: stream, accountProfile: accountProfile)
+            case let .error(error):
                 Text("Error loading stream: \(error.localizedDescription)")
-            } else {
+            case .notFound:
                 Text("Stream not found")
             }
         }
         .task {
-            await loadStream()
+            await viewModel.loadStream()
         }
     }
 
-    private func loadStream() async {
-        isLoading = true
-        defer { isLoading = false }
+    @ViewBuilder
+    private func loadedView(stream: Stream, accountProfile: Profile?) -> some View {
+        let arkavoService = ArkavoService()
+        let thoughtService = ThoughtService(arkavoService)
+        let streamService = StreamService(arkavoService)
+        let thoughtStreamViewModel = ThoughtStreamViewModel(thoughtService: thoughtService, streamService: streamService)
+
+        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+            .onAppear {
+                thoughtStreamViewModel.stream = stream
+                // FIXME: creatorProfile != accountProfile
+                thoughtStreamViewModel.creatorProfile = accountProfile
+                thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
+            }
+    }
+}
+
+class StreamLoadingViewModel: ObservableObject {
+    enum LoadingState {
+        case loading
+        case loaded(Stream, Profile?)
+        case error(Error)
+        case notFound
+    }
+
+    @Published private(set) var state: LoadingState = .loading
+    private let publicID: Data
+    private let streamService: StreamService
+
+    init(publicID: Data, streamService: StreamService = StreamService(ArkavoService())) {
+        self.publicID = publicID
+        self.streamService = streamService
+    }
+
+    @MainActor
+    func loadStream() async {
+        state = .loading
 
         do {
-            let streamService = StreamService(ArkavoService())
-            stream = try await streamService.fetchStream(withPublicID: publicID)
-            if stream == nil {
+            if let stream = try await streamService.fetchStream(withPublicID: publicID) {
+                state = .loaded(stream, nil) // Note: accountProfile is set to nil here
+            } else {
+                state = .notFound
                 print("Stream not found for publicID: \(publicID.base58EncodedString)")
             }
         } catch {
-            self.error = error
+            state = .error(error)
             print("Error loading stream: \(error.localizedDescription)")
         }
     }
