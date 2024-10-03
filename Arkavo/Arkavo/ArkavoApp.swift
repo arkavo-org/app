@@ -1,4 +1,3 @@
-import FlatBuffers
 import SwiftData
 import SwiftUI
 
@@ -88,6 +87,7 @@ struct ArkavoApp: App {
         }
     }
 
+    // applinks
     private func handleIncomingURL(_ url: URL) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
               components.host == "app.arkavo.com"

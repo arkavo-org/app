@@ -2,28 +2,31 @@ namespace Arkavo;
 
 // Enum to represent action that was performed
 enum Action: byte {
-    join = 0,
-    apply,
-    approve,
-    leave,
-    cache,
-    store,
-    share,
-    invite
+    unused = 0,
+    join = 1,
+    apply = 2,
+    approve = 3,
+    leave = 4,
+    cache = 5,
+    store = 6,
+    share = 7,
+    invite = 8
 }
 
 // Enum to represent the current status of the action
 enum ActionStatus: byte {
-    preparing = 0,
-    fulfilling,
-    fulfilled,
-    failed
+    unused = 0,
+    preparing = 1,
+    fulfilling = 2,
+    fulfilled = 3,
+    failed = 4
 }
 
 // Enum to represent entity types
 enum EntityType: byte {
-    stream_profile = 0,
-    account_profile
+    unused = 0,
+    stream_profile = 1,
+    account_profile = 2
 }
 
 // Table for User Event
@@ -48,7 +51,7 @@ union EventData { UserEvent, CacheEvent }
 // Root Event table
 table Event {
     action: Action;
-    timestamp: ulong;
+    timestamp: ulong;       // time since 1970
     status: ActionStatus;
     data: EventData;
 }

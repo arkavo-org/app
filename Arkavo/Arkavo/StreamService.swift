@@ -97,39 +97,43 @@ class StreamService {
 
     @MainActor
     public func fetchStream(withPublicID publicID: Data) async throws -> Stream? {
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        let accountProfile = account.profile
         let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicID)
-        let stream = streams?.first
-        if stream == nil {
-            print("No stream found with publicID: \(publicID)")
-            // get stream
-            var builder = FlatBufferBuilder(initialSize: 1024)
-            // Create string offsets
-            let targetIdVector = builder.createVector(bytes: publicID)
-            let sourcePublicID: [UInt8] = [1, 2, 3, 4, 5] // Example byte array for sourcePublicID
-            let sourcePublicIDOffset = builder.createVector(sourcePublicID)
-            // Create the Event object in the FlatBuffer
-            let action = Arkavo_UserEvent.createUserEvent(
-                &builder,
-                sourceType: .accountProfile,
-                targetType: .streamProfile,
-                sourceIdVectorOffset: sourcePublicIDOffset,
-                targetIdVectorOffset: targetIdVector
-            )
-            // Create the Event object
-            let eventOffset = Arkavo_Event.createEvent(
-                &builder,
-                action: .invite,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                status: .preparing,
-                dataType: .userevent,
-                dataOffset: action
-            )
-            builder.finish(offset: eventOffset)
-            let serializedEvent = builder.data
-            print("streamInvite: \(builder.data.base64EncodedString())")
-            try sendEvent(serializedEvent)
+        guard let accountProfilePublicID = accountProfile?.publicID
+        else {
+            throw StreamServiceError.missingAccountOrProfile
         }
-        return stream
+        let stream = streams?.first
+        if let stream {
+            print("Found stream: \(stream)")
+            return stream
+        }
+        print("No stream found with publicID: \(publicID)")
+        // Create FlatBuffer
+        var builder = FlatBufferBuilder(initialSize: 384)
+        // Create the UserEvent object
+        let userEventOffset = Arkavo_UserEvent.createUserEvent(
+            &builder,
+            sourceType: .accountProfile,
+            targetType: .streamProfile,
+            sourceIdVectorOffset: builder.createVector(bytes: accountProfilePublicID),
+            targetIdVectorOffset: builder.createVector(bytes: publicID)
+        )
+        // Create the Event object
+        let eventOffset = Arkavo_Event.createEvent(
+            &builder,
+            action: .invite,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing,
+            dataType: .userevent,
+            dataOffset: userEventOffset
+        )
+        builder.finish(offset: eventOffset)
+        let data = builder.data
+        print("inviteEvent: \(data.base64EncodedString())")
+        try sendEvent(data)
+        return nil
     }
 
     @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {

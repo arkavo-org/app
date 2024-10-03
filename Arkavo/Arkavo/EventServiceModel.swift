@@ -8,17 +8,18 @@ public enum Arkavo_Action: Int8, Enum, Verifiable {
   public typealias T = Int8
   public static var byteSize: Int { return MemoryLayout<Int8>.size }
   public var value: Int8 { return self.rawValue }
-  case join = 0
-  case apply = 1
-  case approve = 2
-  case leave = 3
-  case cache = 4
-  case store = 5
-  case share = 6
-  case invite = 7
+  case unused = 0
+  case join = 1
+  case apply = 2
+  case approve = 3
+  case leave = 4
+  case cache = 5
+  case store = 6
+  case share = 7
+  case invite = 8
 
   public static var max: Arkavo_Action { return .invite }
-  public static var min: Arkavo_Action { return .join }
+  public static var min: Arkavo_Action { return .unused }
 }
 
 
@@ -26,13 +27,14 @@ public enum Arkavo_ActionStatus: Int8, Enum, Verifiable {
   public typealias T = Int8
   public static var byteSize: Int { return MemoryLayout<Int8>.size }
   public var value: Int8 { return self.rawValue }
-  case preparing = 0
-  case fulfilling = 1
-  case fulfilled = 2
-  case failed = 3
+  case unused = 0
+  case preparing = 1
+  case fulfilling = 2
+  case fulfilled = 3
+  case failed = 4
 
   public static var max: Arkavo_ActionStatus { return .failed }
-  public static var min: Arkavo_ActionStatus { return .preparing }
+  public static var min: Arkavo_ActionStatus { return .unused }
 }
 
 
@@ -40,11 +42,12 @@ public enum Arkavo_EntityType: Int8, Enum, Verifiable {
   public typealias T = Int8
   public static var byteSize: Int { return MemoryLayout<Int8>.size }
   public var value: Int8 { return self.rawValue }
-  case streamProfile = 0
-  case accountProfile = 1
+  case unused = 0
+  case streamProfile = 1
+  case accountProfile = 2
 
   public static var max: Arkavo_EntityType { return .accountProfile }
-  public static var min: Arkavo_EntityType { return .streamProfile }
+  public static var min: Arkavo_EntityType { return .unused }
 }
 
 
@@ -84,8 +87,8 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var sourceType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.sourceType.v); return o == 0 ? .streamProfile : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .streamProfile }
-  public var targetType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.targetType.v); return o == 0 ? .streamProfile : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .streamProfile }
+  public var sourceType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.sourceType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public var targetType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.targetType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
   public var hasSourceId: Bool { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? false : true }
   public var sourceIdCount: Int32 { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func sourceId(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
@@ -102,8 +105,8 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
   public static func endUserEvent(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createUserEvent(
     _ fbb: inout FlatBufferBuilder,
-    sourceType: Arkavo_EntityType = .streamProfile,
-    targetType: Arkavo_EntityType = .streamProfile,
+    sourceType: Arkavo_EntityType = .unused,
+    targetType: Arkavo_EntityType = .unused,
     sourceIdVectorOffset sourceId: Offset = Offset(),
     targetIdVectorOffset targetId: Offset = Offset()
   ) -> Offset {
@@ -204,9 +207,9 @@ public struct Arkavo_Event: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var action: Arkavo_Action { let o = _accessor.offset(VTOFFSET.action.v); return o == 0 ? .join : Arkavo_Action(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .join }
+  public var action: Arkavo_Action { let o = _accessor.offset(VTOFFSET.action.v); return o == 0 ? .unused : Arkavo_Action(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
   public var timestamp: UInt64 { let o = _accessor.offset(VTOFFSET.timestamp.v); return o == 0 ? 0 : _accessor.readBuffer(of: UInt64.self, at: o) }
-  public var status: Arkavo_ActionStatus { let o = _accessor.offset(VTOFFSET.status.v); return o == 0 ? .preparing : Arkavo_ActionStatus(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .preparing }
+  public var status: Arkavo_ActionStatus { let o = _accessor.offset(VTOFFSET.status.v); return o == 0 ? .unused : Arkavo_ActionStatus(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
   public var dataType: Arkavo_EventData { let o = _accessor.offset(VTOFFSET.dataType.v); return o == 0 ? .none_ : Arkavo_EventData(rawValue: _accessor.readBuffer(of: UInt8.self, at: o)) ?? .none_ }
   public func data<T: FlatbuffersInitializable>(type: T.Type) -> T? { let o = _accessor.offset(VTOFFSET.data.v); return o == 0 ? nil : _accessor.union(o) }
   public static func startEvent(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 5) }
@@ -218,9 +221,9 @@ public struct Arkavo_Event: FlatBufferObject, Verifiable {
   public static func endEvent(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createEvent(
     _ fbb: inout FlatBufferBuilder,
-    action: Arkavo_Action = .join,
+    action: Arkavo_Action = .unused,
     timestamp: UInt64 = 0,
-    status: Arkavo_ActionStatus = .preparing,
+    status: Arkavo_ActionStatus = .unused,
     dataType: Arkavo_EventData = .none_,
     dataOffset data: Offset = Offset()
   ) -> Offset {

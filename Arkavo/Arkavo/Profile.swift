@@ -1,9 +1,12 @@
+import CryptoKit
 import Foundation
 import SwiftData
 
 @Model
 final class Profile: Identifiable, Codable, @unchecked Sendable {
     var id: UUID
+    // Using SHA256 hash as a public identifier, stored as 32 bytes
+    @Attribute(.unique) var publicID: Data
     var name: String
     var blurb: String?
     var dateCreated: Date
@@ -23,15 +26,23 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         self.blurb = blurb
         self.dateCreated = dateCreated
         self.interests = interests
+        publicID = Profile.generatePublicID(from: id)
+    }
+
+    private static func generatePublicID(from uuid: UUID) -> Data {
+        withUnsafeBytes(of: uuid) { buffer in
+            Data(SHA256.hash(data: buffer))
+        }
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, blurb, dateCreated, interests, ownerType, ownerId
+        case id, publicID, name, blurb, dateCreated, interests, ownerType, ownerId
     }
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        publicID = try container.decode(Data.self, forKey: .publicID)
         name = try container.decode(String.self, forKey: .name)
         blurb = try container.decodeIfPresent(String.self, forKey: .blurb)
         dateCreated = try container.decode(Date.self, forKey: .dateCreated)
@@ -41,6 +52,7 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
+        try container.encode(publicID, forKey: .publicID)
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(blurb, forKey: .blurb)
         try container.encode(dateCreated, forKey: .dateCreated)
