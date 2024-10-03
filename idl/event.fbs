@@ -1,37 +1,59 @@
 namespace Arkavo;
 
-// Enum to represent action types
-enum ActionType: byte {
-    join = 0,
-    apply,
-    approve,
-    leave,
-    sendMessage
-}
-// Enum to represent the current status of the action
-enum ActionStatus: byte {
-    preparing = 0,
-    fulfilling,
-    fulfilled,
-    failed
-}
-// Enum to represent entity types
-enum EntityType: byte {
-    stream_profile = 0,
-    account_profile
+// Enum to represent action that was performed
+enum Action: byte {
+    unused = 0,
+    join = 1,
+    apply = 2,
+    approve = 3,
+    leave = 4,
+    cache = 5,
+    store = 6,
+    share = 7,
+    invite = 8
 }
 
-table Event {
-  action_type:ActionType;
+// Enum to represent the current status of the action
+enum ActionStatus: byte {
+    unused = 0,
+    preparing = 1,
+    fulfilling = 2,
+    fulfilled = 3,
+    failed = 4
 }
-// Table for User Action
+
+// Enum to represent entity types
+enum EntityType: byte {
+    unused = 0,
+    stream_profile = 1,
+    account_profile = 2
+}
+
+// Table for User Event
 table UserEvent {
-    source_type: EntityType;        // Source entity type
-    target_type: EntityType;        // Target entity type
-    source_id: [ubyte];       // Source public ID (array of bytes to represent Data)
-    target_id: [ubyte];       // Target public ID (array of bytes to represent Data)
-    timestamp: ulong;              // Timestamp (using unix timestamp in seconds)
-    status: ActionStatus;          // Action status
+    source_type: EntityType;
+    target_type: EntityType;
+    source_id: [ubyte];       // public ID (array of bytes to represent Data)
+    target_id: [ubyte];       // public ID (array of bytes to represent Data)
+}
+
+// Table for Cache Event
+table CacheEvent {
+    target_id: [ubyte];       // public ID (array of bytes to represent Data)
+    target_payload: [ubyte];  // Binary payload
+    ttl: uint;                // Time-To-Live in seconds
+    one_time_access: bool;    // One-Time Access flag
+}
+
+// Union to represent different event types
+union EventData { UserEvent, CacheEvent }
+
+// Root Event table
+table Event {
+    action: Action;
+    timestamp: ulong;       // time since 1970
+    status: ActionStatus;
+    data: EventData;
 }
 
 root_type Event;

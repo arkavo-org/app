@@ -113,7 +113,9 @@ final class WebSocketManager: ObservableObject {
 
     /// Initiates the WebSocket connection.
     func connect() {
-        lastError = nil
+        DispatchQueue.main.async {
+            self.lastError = nil
+        }
         webSocket?.connect()
         startReconnectTimer()
     }

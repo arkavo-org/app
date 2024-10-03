@@ -87,6 +87,7 @@ struct ArkavoApp: App {
         }
     }
 
+    // applinks
     private func handleIncomingURL(_ url: URL) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
               components.host == "app.arkavo.com"
@@ -103,8 +104,12 @@ struct ArkavoApp: App {
         }
 
         let type = pathComponents[0]
-        let publicID = pathComponents[1]
-
+        let publicIDString = pathComponents[1]
+        // convert publicIDString using base58 decode to publicID
+        guard let publicID = publicIDString.base58Decoded else {
+            print("Invalid publicID format")
+            return
+        }
         switch type {
         case "stream":
             navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
@@ -117,66 +122,81 @@ struct ArkavoApp: App {
 }
 
 struct StreamLoadingView: View {
-    let publicID: String
-    @State private var stream: Stream?
-    @State private var accountProfile: Profile?
-    @State private var isLoading = true
+    let publicID: Data
+    @StateObject private var viewModel: StreamLoadingViewModel
+
+    init(publicID: Data) {
+        self.publicID = publicID
+        _viewModel = StateObject(wrappedValue: StreamLoadingViewModel(publicID: publicID))
+    }
 
     var body: some View {
         Group {
-            if isLoading {
+            switch viewModel.state {
+            case .loading:
                 ProgressView("Loading stream...")
-            } else if let stream {
-                let thoughtService = ThoughtService(ArkavoService())
-                let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService)
-                ThoughtStreamView(viewModel: thoughtStreamViewModel)
-                    .onAppear {
-                        thoughtStreamViewModel.stream = stream
-                        // FIXME: creatorProfile != accountProfile
-                        thoughtStreamViewModel.creatorProfile = accountProfile
-                        thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
-                    }
-            } else {
+            case let .loaded(stream, accountProfile):
+                loadedView(stream: stream, accountProfile: accountProfile)
+            case let .error(error):
+                Text("Error loading stream: \(error.localizedDescription)")
+            case .notFound:
                 Text("Stream not found")
             }
         }
         .task {
-            await loadStream(withPublicID: publicID)
+            await viewModel.loadStream()
         }
     }
 
+    @ViewBuilder
+    private func loadedView(stream: Stream, accountProfile: Profile?) -> some View {
+        let arkavoService = ArkavoService()
+        let thoughtService = ThoughtService(arkavoService)
+        let streamService = StreamService(arkavoService)
+        let thoughtStreamViewModel = ThoughtStreamViewModel(thoughtService: thoughtService, streamService: streamService)
+
+        ThoughtStreamView(viewModel: thoughtStreamViewModel)
+            .onAppear {
+                thoughtStreamViewModel.stream = stream
+                // FIXME: creatorProfile != accountProfile
+                thoughtStreamViewModel.creatorProfile = accountProfile
+                thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
+            }
+    }
+}
+
+class StreamLoadingViewModel: ObservableObject {
+    enum LoadingState {
+        case loading
+        case loaded(Stream, Profile?)
+        case error(Error)
+        case notFound
+    }
+
+    @Published private(set) var state: LoadingState = .loading
+    private let publicID: Data
+    private let streamService: StreamService
+
+    init(publicID: Data, streamService: StreamService = StreamService(ArkavoService())) {
+        self.publicID = publicID
+        self.streamService = streamService
+    }
+
     @MainActor
-    private func loadStream(withPublicID publicID: String) async {
-        isLoading = true
-        // Decode the hex-encoded publicID to Data
-        guard let publicIDData = Data(hexString: publicID) else {
-            print("Invalid publicID format")
-            stream = nil
-            isLoading = false
-            return
-        }
+    func loadStream() async {
+        state = .loading
 
         do {
-            let account = try await PersistenceController.shared.getOrCreateAccount()
-            accountProfile = account.profile
-            let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicIDData)
-
-            if let stream = streams?.first {
-                print("Stream found with publicID: \(publicID)")
-                self.stream = stream
-                isLoading = false
+            if let stream = try await streamService.fetchStream(withPublicID: publicID) {
+                state = .loaded(stream, nil) // Note: accountProfile is set to nil here
             } else {
-                print("No stream found with publicID: \(publicID)")
-                // Here you would typically implement logic to fetch the stream from a network source
-                // For now, we'll just return nil
-                isLoading = false
+                state = .notFound
+                print("Stream not found for publicID: \(publicID.base58EncodedString)")
             }
         } catch {
-            print("Error fetching stream: \(error.localizedDescription)")
-            isLoading = false
-            return
+            state = .error(error)
+            print("Error loading stream: \(error.localizedDescription)")
         }
-        isLoading = false
     }
 }
 
@@ -191,8 +211,8 @@ struct StreamLoadingView: View {
 #endif
 
 enum DeepLinkDestination: Hashable {
-    case stream(publicID: String)
-    case profile(publicID: String)
+    case stream(publicID: Data)
+    case profile(publicID: Data)
 }
 
 extension Notification.Name {

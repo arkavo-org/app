@@ -47,37 +47,6 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
             Data(SHA256.hash(data: buffer))
         }
     }
-
-    /// decode from hex back to 32 bytes Data
-    public static func decodePublicID(from string: String) throws -> Data {
-        if string.count != 64 {
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: [],
-                    debugDescription: "Hex string should be 64 characters long."
-                )
-            )
-        }
-        var data = Data()
-        var hexString = string
-        while hexString.count > 0 {
-            let subIndex = hexString.index(hexString.startIndex, offsetBy: 2)
-            let byteString = String(hexString[..<subIndex])
-            hexString = String(hexString[subIndex...])
-
-            if let num = UInt8(byteString, radix: 16) {
-                data.append(num)
-            } else {
-                throw DecodingError.dataCorrupted(
-                    DecodingError.Context(
-                        codingPath: [],
-                        debugDescription: "Invalid hex byte: \(byteString)"
-                    )
-                )
-            }
-        }
-        return data
-    }
 }
 
 extension Thought {

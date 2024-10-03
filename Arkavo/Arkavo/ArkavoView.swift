@@ -87,8 +87,10 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streamList:
-                    if let thoughtService = service.thoughtService {
-                        let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService)
+                    if let thoughtService = service.thoughtService,
+                       let streamService = service.streamService
+                    {
+                        let thoughtStreamViewModel = ThoughtStreamViewModel(thoughtService: thoughtService, streamService: streamService)
                         let streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
                         StreamView(viewModel: streamViewModel)
                             .onAppear {

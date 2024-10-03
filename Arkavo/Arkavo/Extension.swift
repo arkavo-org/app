@@ -38,12 +38,11 @@ extension Data {
 
 enum Base58 {
     private static let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-    private static let baseCount = UInt8(alphabet.count)
+    private static let base = alphabet.count
 
     static func encode(_ bytes: [UInt8]) -> String {
         var bytes = bytes
         var zerosCount = 0
-        var length = 0
 
         for b in bytes {
             if b != 0 { break }
@@ -52,71 +51,50 @@ enum Base58 {
 
         bytes.removeFirst(zerosCount)
 
-        let size = bytes.count * 138 / 100 + 1
-
-        var base58: [UInt8] = Array(repeating: 0, count: size)
+        var result = [UInt8]()
         for b in bytes {
             var carry = Int(b)
-            var i = 0
-
-            for j in 0 ... base58.count - 1 where carry != 0 || i < length {
-                carry += 256 * Int(base58[base58.count - 1 - j])
-                base58[base58.count - 1 - j] = UInt8(carry % 58)
-                carry /= 58
-                i += 1
+            for j in 0 ..< result.count {
+                carry += Int(result[j]) << 8
+                result[j] = UInt8(carry % base)
+                carry /= base
             }
-
-            assert(carry == 0)
-
-            length = i
+            while carry > 0 {
+                result.append(UInt8(carry % base))
+                carry /= base
+            }
         }
 
-        var string = ""
-        for _ in 0 ..< zerosCount {
-            string += "1"
-        }
-
-        for b in base58[base58.count - length ..< base58.count].reversed() {
-            string += String(alphabet[alphabet.index(alphabet.startIndex, offsetBy: Int(b))])
-        }
-
-        return string
+        let prefix = String(repeating: alphabet.first!, count: zerosCount)
+        let encoded = result.reversed().map { alphabet[alphabet.index(alphabet.startIndex, offsetBy: Int($0))] }
+        return prefix + String(encoded)
     }
 
-    static func decode(_ base58: String) -> [UInt8]? {
+    static func decode(_ string: String) -> [UInt8]? {
         var result = [UInt8]()
-        var leadingZeros = 0
-        var value: UInt = 0
-        var base: UInt = 1
+        for char in string {
+            guard let charIndex = alphabet.firstIndex(of: char) else { return nil }
+            let index = alphabet.distance(from: alphabet.startIndex, to: charIndex)
 
-        for char in base58.reversed() {
-            guard let digit = alphabet.firstIndex(of: char) else { return nil }
-            let index = alphabet.distance(from: alphabet.startIndex, to: digit)
-            value += UInt(index) * base
-            base *= UInt(baseCount)
+            var carry = index
+            for j in 0 ..< result.count {
+                carry += Int(result[j]) * base
+                result[j] = UInt8(carry & 0xFF)
+                carry >>= 8
+            }
 
-            if value > UInt(UInt8.max) {
-                var mod = value
-                while mod > 0 {
-                    result.insert(UInt8(mod & 0xFF), at: 0)
-                    mod >>= 8
-                }
-                value = 0
-                base = 1
+            while carry > 0 {
+                result.append(UInt8(carry & 0xFF))
+                carry >>= 8
             }
         }
 
-        if value > 0 {
-            result.insert(UInt8(value), at: 0)
+        for char in string {
+            if char != alphabet.first! { break }
+            result.append(0)
         }
 
-        for char in base58 {
-            guard char == "1" else { break }
-            leadingZeros += 1
-        }
-
-        result.insert(contentsOf: repeatElement(0, count: leadingZeros), at: 0)
-        return result
+        return result.reversed()
     }
 }
 
@@ -126,6 +104,10 @@ extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+
+    func hexEncodedString() -> String {
+        map { String(format: "%02hhx", $0) }.joined()
     }
 }
 
@@ -137,5 +119,9 @@ extension String {
             base64.append(String(repeating: "=", count: 4 - base64.count % 4))
         }
         return base64
+    }
+
+    var base58Decoded: Data? {
+        Data(base58Encoded: self)
     }
 }
