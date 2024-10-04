@@ -1,4 +1,3 @@
-import CryptoKit
 import MapKit
 import OpenTDFKit
 import SwiftUI
@@ -6,14 +5,14 @@ import SwiftUI
 struct StreamMapView: View {
     @ObservedObject var webSocketManager: WebSocketManager
     @ObservedObject var nanoTDFManager: NanoTDFManager
-    var kasPublicKey: P256.KeyAgreement.PublicKey?
+    @StateObject private var locationManager = MapLocationManager()
     @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var isTrackingUser = false
     @State private var mapUpdateTrigger = UUID()
-    @State private var nanoCities: [NanoTDF] = []
-    @State private var nanoTime: TimeInterval = 0
-    @State private var inProcessCount = 0
+//    @State private var nanoCities: [NanoTDF] = []
+//    @State private var nanoTime: TimeInterval = 0
+//    @State private var inProcessCount = 0
     @State private var annotations: [AnnotationItem] = []
-    @State private var cityCount = 0
     @Environment(\.locale) var locale
 
     var body: some View {
@@ -33,6 +32,30 @@ struct StreamMapView: View {
             .task {
                 await showGlobeCenteredOnUserCountry()
             }
+            if locationManager.statusString == "authorizedWhenInUse" || locationManager.statusString == "authorizedAlways" {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            isTrackingUser.toggle()
+                            if isTrackingUser {
+                                centerOnUserLocation()
+                            } else {
+                                Task {
+                                    await showGlobeCenteredOnUserCountry()
+                                }
+                            }
+                        }) {
+                            Image(systemName: isTrackingUser ? "location.fill" : "location")
+                                .padding()
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
+                        .padding()
+                    }
+                }
+            }
             // TODO: move to diagnostic view
 //            VStack {
 //                Spacer()
@@ -45,6 +68,22 @@ struct StreamMapView: View {
 //                    )
 //                    .padding()
 //            }
+        }
+    }
+
+    private func centerOnUserLocation() {
+        if let userLocation = locationManager.lastLocation?.coordinate {
+            withAnimation {
+                cameraPosition = .camera(MapCamera(
+                    centerCoordinate: userLocation,
+                    distance: 1000, // Adjust this value to change the zoom level
+                    heading: 0,
+                    pitch: 0
+                ))
+            }
+        } else {
+            // Fallback if user location is not available
+            cameraPosition = .userLocation(fallback: cameraPosition)
         }
     }
 
@@ -102,6 +141,43 @@ struct StreamMapView: View {
                     )
                 }
             }
+    }
+}
+
+class MapLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let locationManager = CLLocationManager()
+    @Published var locationStatus: CLAuthorizationStatus?
+    @Published var lastLocation: CLLocation?
+
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+    }
+
+    var statusString: String {
+        guard let status = locationStatus else {
+            return "unknown"
+        }
+        switch status {
+        case .notDetermined: return "notDetermined"
+        case .authorizedWhenInUse: return "authorizedWhenInUse"
+        case .authorizedAlways: return "authorizedAlways"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        @unknown default: return "unknown"
+        }
+    }
+
+    func locationManager(_: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        locationStatus = status
+    }
+
+    func locationManager(_: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        lastLocation = location
     }
 }
 

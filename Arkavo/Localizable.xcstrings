@@ -216,6 +216,16 @@
         }
       }
     },
+    "Last known location: %lf, %lf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last known location: %1$lf, %2$lf"
+          }
+        }
+      }
+    },
     "Leader in Content Security" : {
       "extractionState" : "manual",
       "localizations" : {

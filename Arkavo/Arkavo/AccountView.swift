@@ -33,6 +33,7 @@ enum DataModeLevel: String, CaseIterable {
 }
 
 struct AccountView: View {
+    @StateObject private var locationManager = LocationManager()
     @State private var isLocationEnabled = false
     @State private var isFaceEnabled = false
     @State private var isVoiceEnabled = false
@@ -67,6 +68,9 @@ struct AccountView: View {
                         }
                     }
                     .padding(.leading, 10)
+                    if let location = locationManager.lastLocation {
+                        Text("Last known location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                    }
                 }
                 Toggle("Face", isOn: $isFaceEnabled)
                     .onChange(of: isFaceEnabled) { _, newValue in
@@ -106,20 +110,49 @@ struct AccountView: View {
         } message: {
             Text("Please grant location permission in Settings to use this feature.")
         }
+        .onChange(of: locationManager.locationStatus) { _, newValue in
+            if newValue == .denied || newValue == .restricted {
+                isLocationEnabled = false
+                showingLocationPermissionAlert = true
+            }
+        }
     }
 
     private func requestLocationPermission() {
-        let locationManager = CLLocationManager()
-        switch locationManager.authorizationStatus {
-        case .notDetermined:
-            locationManager.requestWhenInUseAuthorization()
-        case .restricted, .denied:
-            showingLocationPermissionAlert = true
-        case .authorizedAlways, .authorizedWhenInUse:
-            break
-        @unknown default:
-            break
+        locationManager.requestLocation()
+    }
+}
+
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let locationManager = CLLocationManager()
+    @Published var lastLocation: CLLocation?
+    @Published var locationStatus: CLAuthorizationStatus?
+    @Published var lastLocationError: Error?
+
+    override init() {
+        super.init()
+        locationManager.delegate = self
+    }
+
+    func requestLocation() {
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestLocation()
+    }
+
+    func locationManager(_: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        lastLocation = locations.last
+        if let location = lastLocation {
+            print("Location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         }
+    }
+
+    func locationManager(_: CLLocationManager, didFailWithError error: Error) {
+        print("Location Error: \(error.localizedDescription)")
+        lastLocationError = error
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        locationStatus = manager.authorizationStatus
     }
 }
 
