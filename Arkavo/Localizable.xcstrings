@@ -64,6 +64,9 @@
         }
       }
     },
+    "Assurance" : {
+
+    },
     "Blurb" : {
 
     },
@@ -79,6 +82,12 @@
           }
         }
       }
+    },
+    "Classification" : {
+
+    },
+    "Classification settings go here" : {
+
     },
     "Create Account Profile" : {
       "localizations" : {
@@ -123,6 +132,9 @@
         }
       }
     },
+    "Data mode" : {
+
+    },
     "Description" : {
       "localizations" : {
         "es-US" : {
@@ -143,6 +155,9 @@
         }
       }
     },
+    "Encryption" : {
+
+    },
     "Error" : {
       "localizations" : {
         "es-US" : {
@@ -156,6 +171,18 @@
     "Error loading stream: %@" : {
 
     },
+    "Face" : {
+
+    },
+    "Features" : {
+
+    },
+    "Go to Account" : {
+
+    },
+    "Granularity" : {
+
+    },
     "ID: %@" : {
       "localizations" : {
         "es-US" : {
@@ -165,6 +192,9 @@
           }
         }
       }
+    },
+    "Identity" : {
+
     },
     "Interaction" : {
       "localizations" : {
@@ -182,6 +212,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Intereses"
+          }
+        }
+      }
+    },
+    "Last known location: %lf, %lf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last known location: %1$lf, %2$lf"
           }
         }
       }
@@ -231,6 +271,12 @@
       }
     },
     "Loading stream..." : {
+
+    },
+    "Location" : {
+
+    },
+    "Location Permission" : {
 
     },
     "Location Picker Placeholder" : {
@@ -331,6 +377,9 @@
         }
       }
     },
+    "Please grant location permission in Settings to use this feature." : {
+
+    },
     "Policies" : {
       "localizations" : {
         "es-US" : {
@@ -340,6 +389,9 @@
           }
         }
       }
+    },
+    "Privacy" : {
+
     },
     "Profile" : {
       "localizations" : {
@@ -417,6 +469,9 @@
           }
         }
       }
+    },
+    "Settings" : {
+
     },
     "Share" : {
       "localizations" : {
@@ -593,6 +648,9 @@
           }
         }
       }
+    },
+    "Voice" : {
+
     },
     "Welcome to Arkavo!" : {
       "extractionState" : "manual",

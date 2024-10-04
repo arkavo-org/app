@@ -57,13 +57,11 @@ struct ArkavoView: View {
                     }
                 case .streamMap:
                     StreamMapView(webSocketManager: service.webSocketManager,
-                                  nanoTDFManager: service.nanoTDFManager,
-                                  kasPublicKey: ArkavoService.kasPublicKey)
+                                  nanoTDFManager: service.nanoTDFManager)
                         .onAppear {
                             // Store reference to StreamMapView when it appears
                             streamMapView = StreamMapView(webSocketManager: service.webSocketManager,
-                                                          nanoTDFManager: service.nanoTDFManager,
-                                                          kasPublicKey: ArkavoService.kasPublicKey)
+                                                          nanoTDFManager: service.nanoTDFManager)
                         }
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first, let profile = account.profile {

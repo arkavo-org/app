@@ -4,5 +4,7 @@
 <dict>
 	<key>UIBackgroundModes</key>
 	<array/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+    <string>Optional for securely sharing your location.  Required to consume geo-location content.</string>
 </dict>
 </plist>

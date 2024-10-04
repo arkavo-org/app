@@ -18,6 +18,9 @@ struct AccountProfileDetailedView: View {
                     Text("ID: \(viewModel.profile.id.uuidString)")
                     Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
                 }
+                NavigationLink(destination: AccountView()) {
+                    Text("Go to Account")
+                }
             }
             .navigationTitle("Account Profile")
             .toolbar {
