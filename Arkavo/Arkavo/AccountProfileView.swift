@@ -20,7 +20,10 @@ struct AccountProfileDetailedView: View {
 //                    Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
 //                }
                 NavigationLink(destination: AccountView()) {
-                    Text("Go to Account")
+                    Text("My Account")
+                }
+                NavigationLink(destination: InteractiveTopicGraphView()) {
+                    Text("Refine Interests")
                 }
             }
             .navigationTitle("Account Profile")
