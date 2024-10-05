@@ -1,3 +1,4 @@
+import Combine
 import SwiftData
 import SwiftUI
 
@@ -14,10 +15,10 @@ struct AccountProfileDetailedView: View {
                         Text("Blurb: \(blurb)")
                     }
                 }
-                Section(header: Text("Profile Details")) {
-                    Text("ID: \(viewModel.profile.id.uuidString)")
-                    Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
-                }
+//                Section(header: Text("Profile Details")) {
+//                    Text("ID: \(viewModel.profile.id.uuidString)")
+//                    Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
+//                }
                 NavigationLink(destination: AccountView()) {
                     Text("Go to Account")
                 }
@@ -161,9 +162,16 @@ struct AccountProfileCreateView: View {
 
 class AccountProfileViewModel: ObservableObject {
     @Published var profile: Profile
+    @Published var profileImage = Image(systemName: "person.fill")
+    @Published var activityServiceModel: ActivityServiceModel?
 
-    init(profile: Profile) {
+    init(profile: Profile, activityService: ActivityServiceModel) {
         self.profile = profile
+        activityServiceModel = activityService
+    }
+
+    var topicTags: [String] {
+        profile.interests.components(separatedBy: ",")
     }
 }
 
@@ -200,7 +208,7 @@ class AccountProfileCreateViewModel: ObservableObject {
 struct AccountProfileDetailedView_Previews: PreviewProvider {
     static var previews: some View {
         let sampleProfile = Profile(name: "John Doe", blurb: "A sample user", interests: "Sports,Music")
-        let viewModel = AccountProfileViewModel(profile: sampleProfile)
+        let viewModel = AccountProfileViewModel(profile: sampleProfile, activityService: ActivityServiceModel())
 
         Group {
             AccountProfileCreateView(onSave: { _ in }, selectedView: .constant(.streamList))

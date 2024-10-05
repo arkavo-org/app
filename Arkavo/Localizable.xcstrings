@@ -54,6 +54,9 @@
         }
       }
     },
+    "Activity Level: %@" : {
+
+    },
     "Admission" : {
       "localizations" : {
         "es-US" : {
@@ -123,6 +126,7 @@
 
     },
     "Created: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -171,6 +175,9 @@
     "Error loading stream: %@" : {
 
     },
+    "Expert Level: %@" : {
+
+    },
     "Face" : {
 
     },
@@ -184,6 +191,7 @@
 
     },
     "ID: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -282,6 +290,9 @@
     "Location Picker Placeholder" : {
 
     },
+    "Location: %@" : {
+
+    },
     "Map" : {
       "localizations" : {
         "es-US" : {
@@ -291,6 +302,12 @@
           }
         }
       }
+    },
+    "Member since: %@" : {
+
+    },
+    "Members:" : {
+
     },
     "Message" : {
       "localizations" : {
@@ -364,9 +381,6 @@
         }
       }
     },
-    "No stream profile for %@." : {
-
-    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -376,6 +390,9 @@
           }
         }
       }
+    },
+    "Owner:" : {
+
     },
     "Please grant location permission in Settings to use this feature." : {
 
@@ -404,6 +421,7 @@
       }
     },
     "Profile Details" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -602,6 +620,12 @@
           }
         }
       }
+    },
+    "Topic Tags:" : {
+
+    },
+    "Trust Level: %@" : {
+
     },
     "Type a message..." : {
       "localizations" : {

@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import SwiftData
+import SwiftUICore
 
 @Model
 final class Profile: Identifiable, Codable, @unchecked Sendable {
@@ -9,9 +10,10 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
     @Attribute(.unique) var publicID: Data
     var name: String
     var blurb: String?
-    var dateCreated: Date
     var interests: String
-    // add image, thumbnail
+    var location: String
+    var hasHighEncryption: Bool
+    var hasHighIdentityAssurance: Bool
 
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
@@ -20,12 +22,14 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         return encoder
     }()
 
-    init(id: UUID = UUID(), name: String, blurb: String? = nil, dateCreated: Date = Date(), interests: String = "") {
+    init(id: UUID = UUID(), name: String, blurb: String? = nil, interests: String = "", location: String = "", hasHighEncryption: Bool = false, hasHighIdentityAssurance: Bool = false) {
         self.id = id
         self.name = name
         self.blurb = blurb
-        self.dateCreated = dateCreated
         self.interests = interests
+        self.location = location
+        self.hasHighEncryption = hasHighEncryption
+        self.hasHighIdentityAssurance = hasHighIdentityAssurance
         publicID = Profile.generatePublicID(from: id)
     }
 
@@ -36,7 +40,7 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, publicID, name, blurb, dateCreated, interests, ownerType, ownerId
+        case id, publicID, name, blurb, interests, location, hasHighEncryption, hasHighIdentityAssurance, activityService
     }
 
     required init(from decoder: Decoder) throws {
@@ -45,8 +49,10 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         publicID = try container.decode(Data.self, forKey: .publicID)
         name = try container.decode(String.self, forKey: .name)
         blurb = try container.decodeIfPresent(String.self, forKey: .blurb)
-        dateCreated = try container.decode(Date.self, forKey: .dateCreated)
         interests = try container.decode(String.self, forKey: .interests)
+        location = try container.decode(String.self, forKey: .location)
+        hasHighEncryption = try container.decode(Bool.self, forKey: .hasHighEncryption)
+        hasHighIdentityAssurance = try container.decode(Bool.self, forKey: .hasHighIdentityAssurance)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -55,8 +61,10 @@ final class Profile: Identifiable, Codable, @unchecked Sendable {
         try container.encode(publicID, forKey: .publicID)
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(blurb, forKey: .blurb)
-        try container.encode(dateCreated, forKey: .dateCreated)
-        try container.encodeIfPresent(interests, forKey: .interests)
+        try container.encode(interests, forKey: .interests)
+        try container.encode(location, forKey: .location)
+        try container.encode(hasHighEncryption, forKey: .hasHighEncryption)
+        try container.encode(hasHighIdentityAssurance, forKey: .hasHighIdentityAssurance)
     }
 
     func serialize() throws -> Data {
