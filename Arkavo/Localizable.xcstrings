@@ -24,9 +24,6 @@
         }
       }
     },
-    "%lld members" : {
-
-    },
     "•" : {
       "localizations" : {
         "es-US" : {
@@ -56,6 +53,9 @@
           }
         }
       }
+    },
+    "Activity Level: %@" : {
+
     },
     "Admission" : {
       "localizations" : {
@@ -126,6 +126,7 @@
 
     },
     "Created: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -134,9 +135,6 @@
           }
         }
       }
-    },
-    "Current Activity Level:" : {
-
     },
     "Data mode" : {
 
@@ -177,6 +175,9 @@
     "Error loading stream: %@" : {
 
     },
+    "Expert Level: %@" : {
+
+    },
     "Face" : {
 
     },
@@ -190,6 +191,7 @@
 
     },
     "ID: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -288,6 +290,9 @@
     "Location Picker Placeholder" : {
 
     },
+    "Location: %@" : {
+
+    },
     "Map" : {
       "localizations" : {
         "es-US" : {
@@ -297,6 +302,9 @@
           }
         }
       }
+    },
+    "Member since: %@" : {
+
     },
     "Members:" : {
 
@@ -416,6 +424,7 @@
       }
     },
     "Profile Details" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -616,6 +625,9 @@
       }
     },
     "Topic Tags:" : {
+
+    },
+    "Trust Level: %@" : {
 
     },
     "Type a message..." : {

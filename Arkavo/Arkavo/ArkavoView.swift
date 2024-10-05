@@ -65,7 +65,7 @@ struct ArkavoView: View {
                         }
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first, let profile = account.profile {
-                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile))
+                                AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile, activityService: ActivityServiceModel()))
                             }
                         }
                 case .streamWordCloud:
