@@ -184,9 +184,6 @@
     "Features" : {
 
     },
-    "Go to Account" : {
-
-    },
     "Granularity" : {
 
     },
@@ -340,6 +337,9 @@
         }
       }
     },
+    "My Account" : {
+
+    },
     "Name" : {
       "localizations" : {
         "es-US" : {
@@ -466,6 +466,9 @@
       }
     },
     "Ready to Secure Your Socials?" : {
+
+    },
+    "Refine Interests" : {
 
     },
     "Register" : {

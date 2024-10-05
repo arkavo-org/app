@@ -1,0 +1,169 @@
+module Topics
+
+import "Sport.pkl" as Sports
+
+/// Represents information about a topic
+class TopicInfo {
+  subtopics: Listing
+  connectedTo: Listing
+  relatedTo: Listing
+  crossReferences: Listing
+}
+
+/// Represents information about leisure activities
+class LeisureInfo {
+  subtopics: Listing
+  relatedTo: Listing
+  sports: Listing
+}
+
+/// The main topics hierarchy
+Self = new {
+  subtopics = new {
+    "Family"
+    "Relationships"
+    "Health"
+    "Hobbies"
+  }
+  connectedTo = new {
+    "Psychology"
+    "Career"
+    "Education"
+  }
+}
+
+Career = new {
+  subtopics = new {
+    "Growth"
+    "Dynamics"
+    "Trends"
+  }
+  relatedTo = new {
+    "Business"
+    "Education"
+    "Technology"
+  }
+}
+
+Society = new {
+  subtopics = new {
+    "Politics"
+    "Issues"
+    "Traditions"
+    "Media"
+    "Entertainment"
+  }
+  connectedTo = new {
+    "Events"
+    "Philosophy"
+    "Arts"
+  }
+}
+
+Education = new {
+  subtopics = new {
+    "Academics"
+    "Skills"
+    "Growth"
+  }
+  relatedTo = new {
+    "Science"
+    "Technology"
+    "Career"
+  }
+}
+
+Technology = new {
+  subtopics = new {
+    "Innovations"
+    "AI"
+    "Environment"
+    "Space"
+    "Medicine"
+  }
+  crossReferences = new {
+    "Events"
+    "Education"
+    "Ethics"
+  }
+}
+
+Economics = new {
+  subtopics = new {
+    "Finance"
+    "Economy"
+    "Business"
+  }
+  connectedTo = new {
+    "Events"
+    "Career"
+  }
+}
+
+Leisure = new {
+  subtopics = new {
+    Sports
+    "Travel"
+    "Entertainment"
+    "Food"
+  }
+  relatedTo = new {
+    "Health"
+    "Culture"
+    "Self"
+  }
+  sports = Sport.Sports
+}
+
+Philosophy = new {
+  subtopics = new {
+    "Morality"
+    "Existence"
+    "Beliefs"
+    "Values"
+  }
+  connectedTo = new {
+    "Religion"
+    "Science"
+    "Psychology"
+  }
+}
+
+Events = new {
+  subtopics = new {
+    "News"
+    "Conflicts"
+    "Discoveries"
+  }
+  relatedTo = new {
+    "Politics"
+    "Science"
+    "Society"
+  }
+}
+
+Psychology = new {
+  subtopics = new {
+    "Emotions"
+    "Cognition"
+    "Mental-health"
+  }
+  connectedTo = new {
+    "Self"
+    "Relationships"
+    "Health"
+  }
+}
+
+Future = new {
+  subtopics = new {
+    "Goals"
+    "Trends"
+    "Progress"
+  }
+  relatedTo = new {
+    "Technology"
+    "Society"
+    "Self"
+  }
+}
