@@ -24,6 +24,9 @@
         }
       }
     },
+    "%lld members" : {
+
+    },
     "•" : {
       "localizations" : {
         "es-US" : {
@@ -131,6 +134,9 @@
           }
         }
       }
+    },
+    "Current Activity Level:" : {
+
     },
     "Data mode" : {
 
@@ -292,6 +298,9 @@
         }
       }
     },
+    "Members:" : {
+
+    },
     "Message" : {
       "localizations" : {
         "es-US" : {
@@ -376,6 +385,9 @@
           }
         }
       }
+    },
+    "Owner:" : {
+
     },
     "Please grant location permission in Settings to use this feature." : {
 
@@ -602,6 +614,9 @@
           }
         }
       }
+    },
+    "Topic Tags:" : {
+
     },
     "Type a message..." : {
       "localizations" : {
