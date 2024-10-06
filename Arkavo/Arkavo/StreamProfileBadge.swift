@@ -134,6 +134,26 @@ struct StreamProfileBadge_Previews: PreviewProvider {
             )
             .previewLayout(.sizeThatFits)
             .padding()
+
+            // New expanded preview
+            StreamProfileBadge(
+                streamName: "Tech Enthusiasts",
+                image: Image(systemName: "laptopcomputer"),
+                isHighlighted: true,
+                description: "A community for tech lovers to discuss the latest trends and innovations.",
+                topicTags: ["Technology", "Innovation", "Gadgets"],
+                membersProfile: [
+                    AccountProfileViewModel(profile: Profile(name: "John"), activityService: ActivityServiceModel()),
+                    AccountProfileViewModel(profile: Profile(name: "Sarah"), activityService: ActivityServiceModel()),
+                    AccountProfileViewModel(profile: Profile(name: "Mike"), activityService: ActivityServiceModel()),
+                    AccountProfileViewModel(profile: Profile(name: "Emma"), activityService: ActivityServiceModel()),
+                ],
+                ownerProfile: AccountProfileViewModel(profile: Profile(name: "TechGuru"), activityService: ActivityServiceModel()),
+                activityLevel: .high
+            )
+            .previewLayout(.sizeThatFits)
+            .padding()
+            .previewDisplayName("Expanded Tech Enthusiasts Stream")
         }
     }
 }
