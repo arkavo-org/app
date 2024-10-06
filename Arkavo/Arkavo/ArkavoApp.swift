@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 @main
@@ -6,13 +5,14 @@ struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
     let persistenceController = PersistenceController.shared
+    let service = ArkavoService()
     #if os(macOS)
         @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
     var body: some Scene {
         WindowGroup {
             NavigationStack(path: $navigationPath) {
-                ArkavoView()
+                ArkavoView(service: service)
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationBarHidden(true)
@@ -24,7 +24,11 @@ struct ArkavoApp: App {
                     .navigationDestination(for: DeepLinkDestination.self) { destination in
                         switch destination {
                         case let .stream(publicID):
-                            StreamLoadingView(publicID: publicID)
+                            if service.streamService == nil {
+                                Text("No Stream Service for \(publicID)")
+                            } else {
+                                StreamLoadingView(service: service.streamService!, publicID: publicID)
+                            }
                         case let .profile(publicID):
                             // TODO: account profile
                             Text("Profile View for \(publicID)")
@@ -117,85 +121,6 @@ struct ArkavoApp: App {
             navigationPath.append(DeepLinkDestination.profile(publicID: publicID))
         default:
             print("Unknown URL type")
-        }
-    }
-}
-
-struct StreamLoadingView: View {
-    let publicID: Data
-    @StateObject private var viewModel: StreamLoadingViewModel
-
-    init(publicID: Data) {
-        self.publicID = publicID
-        _viewModel = StateObject(wrappedValue: StreamLoadingViewModel(publicID: publicID))
-    }
-
-    var body: some View {
-        Group {
-            switch viewModel.state {
-            case .loading:
-                ProgressView("Loading stream...")
-            case let .loaded(stream, accountProfile):
-                loadedView(stream: stream, accountProfile: accountProfile)
-            case let .error(error):
-                Text("Error loading stream: \(error.localizedDescription)")
-            case .notFound:
-                Text("Stream not found")
-            }
-        }
-        .task {
-            await viewModel.loadStream()
-        }
-    }
-
-    @ViewBuilder
-    private func loadedView(stream: Stream, accountProfile: Profile?) -> some View {
-        let arkavoService = ArkavoService()
-        let thoughtService = ThoughtService(arkavoService)
-        let streamService = StreamService(arkavoService)
-        let thoughtStreamViewModel = ThoughtStreamViewModel(thoughtService: thoughtService, streamService: streamService)
-
-        ThoughtStreamView(viewModel: thoughtStreamViewModel)
-            .onAppear {
-                thoughtStreamViewModel.stream = stream
-                // FIXME: creatorProfile != accountProfile
-                thoughtStreamViewModel.creatorProfile = accountProfile
-                thoughtService.streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
-            }
-    }
-}
-
-class StreamLoadingViewModel: ObservableObject {
-    enum LoadingState {
-        case loading
-        case loaded(Stream, Profile?)
-        case error(Error)
-        case notFound
-    }
-
-    @Published private(set) var state: LoadingState = .loading
-    private let publicID: Data
-    private let streamService: StreamService
-
-    init(publicID: Data, streamService: StreamService = StreamService(ArkavoService())) {
-        self.publicID = publicID
-        self.streamService = streamService
-    }
-
-    @MainActor
-    func loadStream() async {
-        state = .loading
-
-        do {
-            if let stream = try await streamService.fetchStream(withPublicID: publicID) {
-                state = .loaded(stream, nil) // Note: accountProfile is set to nil here
-            } else {
-                state = .notFound
-                print("Stream not found for publicID: \(publicID.base58EncodedString)")
-            }
-        } catch {
-            state = .error(error)
-            print("Error loading stream: \(error.localizedDescription)")
         }
     }
 }

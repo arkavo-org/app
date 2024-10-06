@@ -4,7 +4,7 @@ import Foundation
 import OpenTDFKit
 import SwiftData
 
-struct StreamServiceModel: Codable {
+struct StreamServiceModel {
     var publicID: Data
     var streamProfile: Profile
     var admissionPolicy: AdmissionPolicy
@@ -19,23 +19,8 @@ struct StreamServiceModel: Codable {
 }
 
 extension StreamServiceModel {
-    private static let decoder = PropertyListDecoder()
-    private static let encoder: PropertyListEncoder = {
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        return encoder
-    }()
-
     var publicIDString: String {
         publicID.base58EncodedString
-    }
-
-    func serialize() throws -> Data {
-        try StreamServiceModel.encoder.encode(self)
-    }
-
-    static func deserialize(from data: Data) throws -> StreamServiceModel {
-        try decoder.decode(StreamServiceModel.self, from: data)
     }
 }
 
@@ -65,12 +50,14 @@ class StreamService {
     }
 
     @MainActor func createPayload(viewModel: StreamViewModel) throws -> Data {
-        guard let stream = viewModel.thoughtStreamViewModel.stream else {
+        guard let stream = viewModel.stream else {
             throw StreamServiceError.missingAccountOrProfile
         }
         let streamServiceModel = StreamServiceModel(stream: stream)
-        let payload = try streamServiceModel.serialize()
-        return payload
+        // FIXME: add flatbuffers
+//        let payload = try streamServiceModel.serialize()
+//        return payload
+        return Data()
     }
 
     func sendStream(_ nano: Data) throws {
@@ -136,8 +123,8 @@ class StreamService {
         return nil
     }
 
-    @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
-        _ = try StreamServiceModel.deserialize(from: decryptedData)
+    @MainActor func handle(_: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
+//        _ = try StreamServiceModel.deserialize(from: decryptedData)
         // TODO: implement
 //        // Check if the stream already exists
 //        if let existingStream = try await fetchExistingStream(publicID: streamServiceModel.publicID) {

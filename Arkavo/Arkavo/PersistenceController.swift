@@ -58,6 +58,13 @@ class PersistenceController {
         try container.mainContext.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first
     }
 
+    func saveProfile(_ profile: Profile) throws {
+        let context = container.mainContext
+        context.insert(profile)
+        try context.save()
+        print("PersistenceController: Profile saved successfully")
+    }
+
     // MARK: - Stream Operations
 
     func fetchStream(withID id: UUID) async throws -> Stream? {
@@ -67,5 +74,30 @@ class PersistenceController {
     func fetchStream(withPublicID publicID: Data) async throws -> [Stream]? {
         let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicID == publicID })
         return try container.mainContext.fetch(fetchDescriptor)
+    }
+
+    func saveStream(_ stream: Stream) throws {
+        let context = container.mainContext
+        context.insert(stream)
+        try context.save()
+        print("PersistenceController: Stream saved successfully")
+    }
+
+    func deleteStreams(at offsets: IndexSet, from account: Account) async throws {
+        for offset in offsets {
+            if offset < account.streams.count {
+                account.streams.remove(at: offset)
+            }
+        }
+        try await saveChanges()
+    }
+
+    // MARK: - Thought Operations
+
+    func saveThought(_ thought: Thought) throws {
+        let context = container.mainContext
+        context.insert(thought)
+        try context.save()
+        print("PersistenceController: Thought saved successfully")
     }
 }

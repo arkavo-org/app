@@ -26,25 +26,25 @@ struct ThoughtStreamView: View {
                 streamProfileHeader
                     .padding(.top, 20)
 
-                ScrollViewReader { _ in
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            ForEach(Array(viewModel.thoughts.reversed().enumerated()), id: \.element.id) { index, thoughtViewModel in
-                                let totalThoughts = 8
-                                let opacity = Double(totalThoughts - min(index, totalThoughts - 1)) / Double(totalThoughts)
-                                MessageBubble(viewModel: thoughtViewModel, isCurrentUser: thoughtViewModel.creator.name == viewModel.creatorProfile?.name)
-                                    .opacity(opacity)
-                                    .id(thoughtViewModel.id)
-                            }
-                        }
-                    }
-
-                    if viewModel.creatorProfile != nil {
-                        messageInputArea
-                    }
-                }
+//                ScrollViewReader { _ in
+//                    ScrollView {
+//                        LazyVStack(spacing: 8) {
+//                            ForEach(Array(viewModel.thoughts.reversed().enumerated()), id: \.element.id) { index, thoughtViewModel in
+//                                let totalThoughts = 8
+//                                let opacity = Double(totalThoughts - min(index, totalThoughts - 1)) / Double(totalThoughts)
+//                                MessageBubble(viewModel: thoughtViewModel, isCurrentUser: thoughtViewModel.creator.name == viewModel.accountProfile?.name)
+//                                    .opacity(opacity)
+//                                    .id(thoughtViewModel.id)
+//                            }
+//                        }
+//                    }
+//
+//                    if viewModel.accountProfile != nil {
+//                        messageInputArea
+//                    }
+//                }
             }
-            .edgesIgnoringSafeArea(.top) // Extend the VStack to the top edge
+            .edgesIgnoringSafeArea(.top)
         }
         .onTapGesture {
             isInputFocused = true
@@ -79,21 +79,21 @@ struct ThoughtStreamView: View {
 
     private var streamProfileHeader: some View {
         HStack {
-            StreamProfileBadge(
-                streamName: viewModel.stream?.profile.name ?? "Unknown Stream",
-                image: Image(systemName: "person.3.fill"),
-                isHighlighted: false,
-                description: "Stream description",
-                topicTags: ["Tag1", "Tag2"],
-                membersProfile: [], // You might want to populate this from your viewModel
-                ownerProfile: AccountProfileViewModel(profile: viewModel.stream?.profile ?? Profile(name: "Unknown"), activityService: ActivityServiceModel()),
-                activityLevel: .medium
-            )
-            .onTapGesture {
-                withAnimation {
-                    isStreamProfileExpanded.toggle()
-                }
-            }
+//            StreamProfileBadge(
+//                streamName: viewModel.stream?.profile.name ?? "Unknown Stream",
+//                image: Image(systemName: "person.3.fill"),
+//                isHighlighted: false,
+//                description: "Stream description",
+//                topicTags: ["Tag1", "Tag2"],
+//                membersProfile: [], // You might want to populate this from your viewModel
+//                ownerProfile: AccountProfileViewModel(profile: viewModel.stream?.profile ?? Profile(name: "Unknown"), activityService: ActivityServiceModel()),
+//                activityLevel: .medium
+//            )
+//            .onTapGesture {
+//                withAnimation {
+//                    isStreamProfileExpanded.toggle()
+//                }
+//            }
             Spacer()
             shareButton
         }
@@ -120,7 +120,7 @@ struct ThoughtStreamView: View {
 
             Button(action: {
                 Task {
-                    await sendThought()
+                    try await sendThought()
                 }
             }) {
                 Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
@@ -144,7 +144,7 @@ struct ThoughtStreamView: View {
                     return
                 }
                 Task {
-                    await sendImageThought(imageData)
+                    try await sendImageThought(imageData)
                 }
             }
         #else
@@ -161,7 +161,7 @@ struct ThoughtStreamView: View {
                     return
                 }
                 Task {
-                    await sendImageThought(imageData)
+                    try await sendImageThought(imageData)
                 }
             }
         #else
@@ -180,7 +180,7 @@ struct ThoughtStreamView: View {
         let targetIdVector = builder.createVector(bytes: stream.publicID)
         do {
             // FIXME: use nanotdf on StreamServiceModel
-            let targetPayloadVector = try builder.createVector(bytes: stream.profile.serialize())
+            let targetPayloadVector = builder.createVector(bytes: stream.publicID)
             // Create CacheEvent
             let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
                 &builder,
@@ -216,15 +216,11 @@ struct ThoughtStreamView: View {
         return URL(string: "https://app.arkavo.com/stream/\(publicID)")
     }
 
-    private func sendImageThought(_ imageData: Data) async {
-        guard let streamPublicIDString = viewModel.stream?.publicID.map({ String(format: "%02hhx", $0) }).joined(),
-              let creatorProfile = viewModel.creatorProfile
-        else {
-            return
-        }
-
+    private func sendImageThought(_ imageData: Data) async throws {
+        let streamPublicIDString = viewModel.stream!.publicID.base58EncodedString
+        let account = try await PersistenceController.shared.getOrCreateAccount()
         let thoughtViewModel = ThoughtViewModel.createImage(
-            creatorProfile: creatorProfile,
+            creatorProfile: account.profile!,
             streamPublicIDString: streamPublicIDString,
             imageData: imageData
         )
@@ -232,10 +228,11 @@ struct ThoughtStreamView: View {
         await viewModel.send(thoughtViewModel)
     }
 
-    private func sendThought() async {
+    private func sendThought() async throws {
         guard !inputText.isEmpty else { return }
-        let streamPublicIDString = viewModel.stream?.publicID.base58EncodedString ?? ""
-        let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: viewModel.creatorProfile!, streamPublicIDString: streamPublicIDString, text: inputText)
+        let streamPublicIDString = viewModel.stream!.publicID.base58EncodedString
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: account.profile!, streamPublicIDString: streamPublicIDString, text: inputText)
         await viewModel.send(thoughtViewModel)
         inputText = ""
     }
@@ -295,20 +292,19 @@ struct StickerPicker: View {
 }
 
 @MainActor
-class ThoughtStreamViewModel: ObservableObject {
+class ThoughtStreamViewModel: StreamViewModel {
     @Published var service: ThoughtService
-    @Published var stream: Stream?
     @Published var streamService: StreamService
-    @Published var creatorProfile: Profile?
     @Published var thoughts: [ThoughtViewModel] = []
 
-    init(thoughtService: ThoughtService, streamService: StreamService) {
+    init(thoughtService: ThoughtService, streamService: StreamService, stream: Stream) {
         service = thoughtService
         self.streamService = streamService
+        super.init(stream: stream)
     }
 
-    func loadAndDecrypt(for _: Stream) {
-        guard let stream else { return }
+    func loadAndDecrypt(for stream: Stream) {
+        self.stream = stream
         for thought in stream.thoughts {
             do {
                 try service.sendThought(thought.nano)
@@ -316,7 +312,6 @@ class ThoughtStreamViewModel: ObservableObject {
                 print("sendThought error: \(error)")
             }
         }
-//        print("stream.thoughts load count: \(stream.thoughts.count)")
     }
 
     func receive(_ serviceModel: ThoughtServiceModel) {
@@ -337,18 +332,19 @@ class ThoughtStreamViewModel: ObservableObject {
         DispatchQueue.main.async {
             self.thoughts.append(viewModel)
         }
-//        print("thoughts receive count: \(thoughts.count)")
     }
 
     func send(_ viewModel: ThoughtViewModel) async {
+        guard let stream else { return }
+
         Task {
             do {
-                let nano = try service.createNano(viewModel, stream: stream!)
+                let nano = try service.createNano(viewModel, stream: stream)
                 // persist
                 let thought = Thought(id: UUID(), nano: nano)
                 thought.stream = stream
                 PersistenceController.shared.container.mainContext.insert(thought)
-                stream?.thoughts.append(thought)
+                stream.thoughts.append(thought)
                 try await PersistenceController.shared.saveChanges()
                 // show
                 receive(viewModel)
@@ -369,107 +365,6 @@ class ThoughtStreamViewModel: ObservableObject {
     }
 }
 
-final class ThoughtViewModel: ObservableObject, Identifiable, Equatable {
-    let id = UUID()
-    @Published var creator: Profile
-    @Published var streamPublicIDString: String
-    @Published var content: Data
-    @Published var mediaType: MediaType
-
-    init(mediaType: MediaType, content: Data, creator: Profile, streamPublicIDString: String) {
-        self.mediaType = mediaType
-        self.content = content
-        self.creator = creator
-        self.streamPublicIDString = streamPublicIDString
-    }
-
-    static func == (lhs: ThoughtViewModel, rhs: ThoughtViewModel) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    static func createText(creatorProfile: Profile, streamPublicIDString: String, text: String) -> ThoughtViewModel {
-        ThoughtViewModel(mediaType: .text, content: text.isEmpty ? Data() : text.data(using: .utf8) ?? Data(), creator: creatorProfile, streamPublicIDString: streamPublicIDString)
-    }
-
-    static func createImage(creatorProfile: Profile, streamPublicIDString: String, imageData: Data) -> ThoughtViewModel {
-        let imageContent = "Image data: \(imageData.count) bytes"
-        print(imageContent)
-        return ThoughtViewModel(mediaType: .image, content: imageData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
-    }
-
-    static func createAudio(creatorProfile: Profile, streamPublicIDString: String, audioData: Data) -> ThoughtViewModel {
-        let audioContent = "Audio data: \(audioData.count) bytes"
-        print(audioContent)
-        return ThoughtViewModel(mediaType: .audio, content: audioData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
-    }
-
-    static func createVideo(creatorProfile: Profile, streamPublicIDString: String, videoData: Data) -> ThoughtViewModel {
-        let videoContent = "Video data: \(videoData.count) bytes"
-        print(videoContent)
-        return ThoughtViewModel(mediaType: .video, content: videoData, creator: creatorProfile, streamPublicIDString: streamPublicIDString)
-    }
-}
-
-struct MessageBubble: View {
-    let viewModel: ThoughtViewModel
-    let isCurrentUser: Bool
-
-    init(viewModel: ThoughtViewModel, isCurrentUser: Bool) {
-        self.viewModel = viewModel
-        self.isCurrentUser = isCurrentUser
-    }
-
-    var body: some View {
-        HStack {
-            if isCurrentUser {
-                Spacer()
-            }
-            VStack(alignment: isCurrentUser ? .trailing : .leading) {
-                Text(viewModel.creator.name)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Group {
-                    switch viewModel.mediaType {
-                    case .text:
-                        if let text = String(data: viewModel.content, encoding: .utf8) {
-                            Text(text)
-                                .padding(10)
-                                .background(isCurrentUser ? Color.blue : Color(.gray))
-                                .foregroundColor(isCurrentUser ? .white : .primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        } else {
-                            Text("Unable to decode text")
-                                .foregroundColor(.red)
-                        }
-                    case .image:
-                        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
-                            if let uiImage = UIImage(data: viewModel.content) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: 200, maxHeight: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            } else {
-                                Text("Unable to load image")
-                                    .foregroundColor(.red)
-                            }
-                        #endif
-                    case .audio, .video:
-                        Text("Unsupported media type: \(viewModel.mediaType)")
-                            .foregroundColor(.red)
-                    }
-                }
-                Text(viewModel.streamPublicIDString)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            if !isCurrentUser {
-                Spacer()
-            }
-        }
-    }
-}
-
 struct ThoughtStreamView_Previews: PreviewProvider {
     static var previews: some View {
         ThoughtStreamView(viewModel: previewViewModel)
@@ -480,12 +375,7 @@ struct ThoughtStreamView_Previews: PreviewProvider {
         let arkavo = ArkavoService()
         let service = ThoughtService(arkavo)
         let streamService = StreamService(arkavo)
-        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService)
-
-        // Set up mock data
-        viewModel.creatorProfile = Profile(name: "Preview User")
-        viewModel.stream = previewStream
-
+        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService, stream: previewStream)
         // Add some sample thoughts
         viewModel.thoughts = [
             ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIDString: "abc123", text: "Hello, this is a test message!"),

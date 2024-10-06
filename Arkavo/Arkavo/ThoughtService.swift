@@ -42,6 +42,7 @@ extension ThoughtServiceModel {
 class ThoughtService {
     private let service: ArkavoService
     public var streamViewModel: StreamViewModel?
+    public var thoughtStreamViewModel: ThoughtStreamViewModel?
 
     init(_ service: ArkavoService) {
         self.service = service
@@ -92,23 +93,18 @@ class ThoughtService {
     /// - Parameter thought: The Thought object containing encrypted data.
     /// - Returns: A reconstructed Thought object, or nil if decryption fails.
     @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) async throws {
-        guard let thoughtStreamViewModel = streamViewModel?.thoughtStreamViewModel else {
+        guard let thoughtStreamViewModel else {
             throw ThoughtServiceError.missingThoughtStreamViewModel
         }
         // FIXME: dedupe
         let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
-        // don't process if creator
-        if streamViewModel?.accountProfile?.id == thoughtServiceModel.creatorID {
-//            print("Ignoring thought from self")
-            return
-        }
         // persist
         let thought = Thought(nano: nano.toData())
         thought.publicID = thoughtServiceModel.publicID
         thought.nano = nano.toData()
-        thought.stream = streamViewModel?.thoughtStreamViewModel.stream
+        thought.stream = thoughtStreamViewModel.stream
         PersistenceController.shared.container.mainContext.insert(thought)
-        streamViewModel?.thoughtStreamViewModel.stream?.thoughts.append(thought)
+        thoughtStreamViewModel.stream?.thoughts.append(thought)
         try await PersistenceController.shared.saveChanges()
         // show
         thoughtStreamViewModel.receive(thoughtServiceModel)

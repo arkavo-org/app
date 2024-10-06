@@ -281,6 +281,9 @@
     "Loading stream..." : {
 
     },
+    "Loading..." : {
+
+    },
     "Location" : {
 
     },
@@ -380,6 +383,9 @@
           }
         }
       }
+    },
+    "No Stream Service for %@" : {
+
     },
     "OK" : {
       "localizations" : {
@@ -584,6 +590,9 @@
           }
         }
       }
+    },
+    "Stream found TODO show badge" : {
+
     },
     "Stream ID" : {
       "localizations" : {
