@@ -71,22 +71,33 @@ struct ThoughtStreamView: View {
         }
     }
 
-    private var streamProfileHeader: some View {
-        StreamProfileBadge(
-            streamName: viewModel.stream?.profile.name ?? "Unknown Stream",
-            image: Image(systemName: "person.3.fill"),
-            isHighlighted: false,
-            description: "Stream description",
-            topicTags: ["Tag1", "Tag2"],
-            membersProfile: [], // You might want to populate this from your viewModel
-            ownerProfile: AccountProfileViewModel(profile: viewModel.stream?.profile ?? Profile(name: "Unknown"), activityService: ActivityServiceModel()),
-            activityLevel: .medium
-        )
-        .onTapGesture {
-            withAnimation {
-                isStreamProfileExpanded.toggle()
-            }
+    private var shareButton: some View {
+        Button(action: prepareShare) {
+            Image(systemName: "square.and.arrow.up")
         }
+    }
+
+    private var streamProfileHeader: some View {
+        HStack {
+            StreamProfileBadge(
+                streamName: viewModel.stream?.profile.name ?? "Unknown Stream",
+                image: Image(systemName: "person.3.fill"),
+                isHighlighted: false,
+                description: "Stream description",
+                topicTags: ["Tag1", "Tag2"],
+                membersProfile: [], // You might want to populate this from your viewModel
+                ownerProfile: AccountProfileViewModel(profile: viewModel.stream?.profile ?? Profile(name: "Unknown"), activityService: ActivityServiceModel()),
+                activityLevel: .medium
+            )
+            .onTapGesture {
+                withAnimation {
+                    isStreamProfileExpanded.toggle()
+                }
+            }
+            Spacer()
+            shareButton
+        }
+        .padding(.horizontal)
     }
 
     private var messageInputArea: some View {
@@ -156,6 +167,45 @@ struct ThoughtStreamView: View {
         #else
             EmptyView()
         #endif
+    }
+
+    private func prepareShare() {
+        guard let stream = viewModel.stream
+        else {
+            print("streamCacheEvent: No stream to cache")
+            return
+        }
+        // cache stream for later retrieval
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        let targetIdVector = builder.createVector(bytes: stream.publicID)
+        do {
+            // FIXME: use nanotdf on StreamServiceModel
+            let targetPayloadVector = try builder.createVector(bytes: stream.profile.serialize())
+            // Create CacheEvent
+            let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
+                &builder,
+                targetIdVectorOffset: targetIdVector,
+                targetPayloadVectorOffset: targetPayloadVector,
+                ttl: 3600, // 1 hour TTL, TODOadjust as needed
+                oneTimeAccess: false
+            )
+            // Create the Event object
+            let eventOffset = Arkavo_Event.createEvent(
+                &builder,
+                action: .cache,
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                status: .preparing,
+                dataType: .cacheevent,
+                dataOffset: cacheEventOffset
+            )
+            builder.finish(offset: eventOffset)
+            let data = builder.data
+            print("streamCacheEvent: \(data.base64EncodedString())")
+            try viewModel.streamService.sendEvent(data)
+            isShareSheetPresented = true
+        } catch {
+            print("streamCacheEvent: \(error)")
+        }
     }
 
     private var shareURL: URL? {
