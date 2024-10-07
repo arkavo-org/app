@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct StreamLoadingView: View {
+    @Environment(\.dismiss) private var dismiss
     @State var service: StreamService
+    @State var streamBadgeViewModel: StreamBadgeViewModel?
     @State var state: LoadingState = .loading
     @State var stream: Stream?
+    @State private var showThoughtStream = false
     var publicID: Data
 
     var body: some View {
@@ -12,8 +15,25 @@ struct StreamLoadingView: View {
             case .loading:
                 ProgressView("Loading stream...")
             case .loaded:
-                Text("Stream found TODO show badge")
-//                StreamProfileBadge(stream: stream!)
+                if let viewModel = streamBadgeViewModel {
+                    StreamProfileBadge(viewModel: viewModel)
+                    Button("Join stream") {
+                        showThoughtStream = true
+                    }
+                    .fullScreenCover(isPresented: $showThoughtStream) {
+                        if let stream,
+                           let thoughtService = service.service.thoughtService,
+                           let streamBadgeViewModel
+                        {
+                            let thoughtStreamViewModel = ThoughtStreamViewModel(stream: stream)
+                            ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
+                        } else {
+                            Text("Service misconfigured")
+                        }
+                    }
+                } else {
+                    Text("Stream corrupted")
+                }
             case let .error(error):
                 Text("Error loading stream: \(error.localizedDescription)")
             case .notFound:
@@ -31,6 +51,7 @@ struct StreamLoadingView: View {
         do {
             if let stream = try await service.fetchStream(withPublicID: publicID) {
                 self.stream = stream
+                streamBadgeViewModel = createStreamBadgeViewModel(from: stream)
                 state = .loaded
             } else {
                 state = .notFound
@@ -40,6 +61,20 @@ struct StreamLoadingView: View {
             state = .error(error)
             print("Error loading stream: \(error.localizedDescription)")
         }
+    }
+
+    private func createStreamBadgeViewModel(from stream: Stream) -> StreamBadgeViewModel {
+        // Here you would populate the ViewModel with actual data from the stream
+        // For now, we'll use placeholder data
+        StreamBadgeViewModel(
+            stream: stream,
+            isHighlighted: false,
+            isExpanded: true,
+            topicTags: ["Placeholder"],
+            membersProfile: [],
+            ownerProfile: AccountProfileViewModel(profile: stream.profile, activityService: ActivityServiceModel()),
+            activityLevel: .medium
+        )
     }
 }
 

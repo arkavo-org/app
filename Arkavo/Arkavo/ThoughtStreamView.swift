@@ -6,7 +6,11 @@ import SwiftData
 import SwiftUI
 
 struct ThoughtStreamView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var service: ThoughtService
+    @State var streamService: StreamService
     @StateObject var viewModel: ThoughtStreamViewModel
+    @State var streamBadgeViewModel: StreamBadgeViewModel
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
@@ -22,9 +26,18 @@ struct ThoughtStreamView: View {
             VStack(spacing: 0) {
                 Color.clear
                     .frame(height: geometry.safeAreaInsets.top)
-
-                streamProfileHeader
-                    .padding(.top, 20)
+                HStack {
+                    StreamProfileBadge(viewModel: streamBadgeViewModel)
+                        .onTapGesture {
+                            withAnimation {
+                                isStreamProfileExpanded.toggle()
+                            }
+                        }
+                    Spacer()
+                    shareButton
+                }
+                .padding(.horizontal)
+                .padding(.top, 20)
 
 //                ScrollViewReader { _ in
 //                    ScrollView {
@@ -45,6 +58,17 @@ struct ThoughtStreamView: View {
 //                }
             }
             .edgesIgnoringSafeArea(.top)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Back") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            streamBadgeViewModel.isExpanded = false
         }
         .onTapGesture {
             isInputFocused = true
@@ -75,29 +99,6 @@ struct ThoughtStreamView: View {
         Button(action: prepareShare) {
             Image(systemName: "square.and.arrow.up")
         }
-    }
-
-    private var streamProfileHeader: some View {
-        HStack {
-//            StreamProfileBadge(
-//                streamName: viewModel.stream?.profile.name ?? "Unknown Stream",
-//                image: Image(systemName: "person.3.fill"),
-//                isHighlighted: false,
-//                description: "Stream description",
-//                topicTags: ["Tag1", "Tag2"],
-//                membersProfile: [], // You might want to populate this from your viewModel
-//                ownerProfile: AccountProfileViewModel(profile: viewModel.stream?.profile ?? Profile(name: "Unknown"), activityService: ActivityServiceModel()),
-//                activityLevel: .medium
-//            )
-//            .onTapGesture {
-//                withAnimation {
-//                    isStreamProfileExpanded.toggle()
-//                }
-//            }
-            Spacer()
-            shareButton
-        }
-        .padding(.horizontal)
     }
 
     private var messageInputArea: some View {
@@ -201,7 +202,7 @@ struct ThoughtStreamView: View {
             builder.finish(offset: eventOffset)
             let data = builder.data
             print("streamCacheEvent: \(data.base64EncodedString())")
-            try viewModel.streamService.sendEvent(data)
+            try streamService.sendEvent(data)
             isShareSheetPresented = true
         } catch {
             print("streamCacheEvent: \(error)")
@@ -217,23 +218,27 @@ struct ThoughtStreamView: View {
     }
 
     private func sendImageThought(_ imageData: Data) async throws {
-        let streamPublicIDString = viewModel.stream!.publicID.base58EncodedString
+        guard let stream = viewModel.stream else { return }
+        let streamPublicIDString = stream.publicID.base58EncodedString
         let account = try await PersistenceController.shared.getOrCreateAccount()
         let thoughtViewModel = ThoughtViewModel.createImage(
             creatorProfile: account.profile!,
             streamPublicIDString: streamPublicIDString,
             imageData: imageData
         )
-
-        await viewModel.send(thoughtViewModel)
+        await service.send(viewModel: thoughtViewModel, stream: stream)
+        viewModel.thoughts.append(thoughtViewModel)
     }
 
     private func sendThought() async throws {
         guard !inputText.isEmpty else { return }
-        let streamPublicIDString = viewModel.stream!.publicID.base58EncodedString
+        guard let stream = viewModel.stream else { return }
+        let streamPublicIDString = stream.publicID.base58EncodedString
         let account = try await PersistenceController.shared.getOrCreateAccount()
         let thoughtViewModel = ThoughtViewModel.createText(creatorProfile: account.profile!, streamPublicIDString: streamPublicIDString, text: inputText)
-        await viewModel.send(thoughtViewModel)
+        await service.send(viewModel: thoughtViewModel, stream: stream)
+        // show
+        viewModel.thoughts.append(thoughtViewModel)
         inputText = ""
     }
 }
@@ -293,26 +298,7 @@ struct StickerPicker: View {
 
 @MainActor
 class ThoughtStreamViewModel: StreamViewModel {
-    @Published var service: ThoughtService
-    @Published var streamService: StreamService
     @Published var thoughts: [ThoughtViewModel] = []
-
-    init(thoughtService: ThoughtService, streamService: StreamService, stream: Stream) {
-        service = thoughtService
-        self.streamService = streamService
-        super.init(stream: stream)
-    }
-
-    func loadAndDecrypt(for stream: Stream) {
-        self.stream = stream
-        for thought in stream.thoughts {
-            do {
-                try service.sendThought(thought.nano)
-            } catch {
-                print("sendThought error: \(error)")
-            }
-        }
-    }
 
     func receive(_ serviceModel: ThoughtServiceModel) {
         let creatorProfile = Profile(name: serviceModel.creatorID.uuidString)
@@ -333,88 +319,58 @@ class ThoughtStreamViewModel: StreamViewModel {
             self.thoughts.append(viewModel)
         }
     }
-
-    func send(_ viewModel: ThoughtViewModel) async {
-        guard let stream else { return }
-
-        Task {
-            do {
-                let nano = try service.createNano(viewModel, stream: stream)
-                // persist
-                let thought = Thought(id: UUID(), nano: nano)
-                thought.stream = stream
-                PersistenceController.shared.container.mainContext.insert(thought)
-                stream.thoughts.append(thought)
-                try await PersistenceController.shared.saveChanges()
-                // show
-                receive(viewModel)
-                // send
-                try service.sendThought(nano)
-            } catch {
-                print("error sending thought: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func receive(_ viewModel: ThoughtViewModel) {
-        if !thoughts.contains(where: { $0 == viewModel }) {
-            DispatchQueue.main.async { [self] in
-                thoughts.append(viewModel)
-            }
-        }
-    }
 }
 
-struct ThoughtStreamView_Previews: PreviewProvider {
-    static var previews: some View {
-        ThoughtStreamView(viewModel: previewViewModel)
-            .modelContainer(previewContainer)
-    }
-
-    static var previewViewModel: ThoughtStreamViewModel {
-        let arkavo = ArkavoService()
-        let service = ThoughtService(arkavo)
-        let streamService = StreamService(arkavo)
-        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService, stream: previewStream)
-        // Add some sample thoughts
-        viewModel.thoughts = [
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIDString: "abc123", text: "Hello, this is a test message!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
-        ]
-
-        return viewModel
-    }
-
-    static var previewStream: Stream {
-        let account = Account()
-        let profile = Profile(name: "Preview Stream")
-        return Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-    }
-
-    static var previewContainer: ModelContainer {
-        let schema = Schema([Account.self, Profile.self, Stream.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-
-        do {
-            let container = try ModelContainer(for: schema, configurations: [configuration])
-            let context = container.mainContext
-
-            // Create and save sample data
-            let account = Account()
-            try context.save()
-
-            let profile = Profile(name: "Preview Stream")
-            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-            account.streams.append(stream)
-            try context.save()
-
-            return container
-        } catch {
-            fatalError("Failed to create preview container: \(error.localizedDescription)")
-        }
-    }
-}
+// struct ThoughtStreamView_Previews: PreviewProvider {
+//    static var previews: some View {
+//        ThoughtStreamView(viewModel: previewViewModel)
+//            .modelContainer(previewContainer)
+//    }
+//
+//    static var previewViewModel: ThoughtStreamViewModel {
+//        let arkavo = ArkavoService()
+//        let service = ThoughtService(arkavo)
+//        let streamService = StreamService(arkavo)
+//        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService, stream: previewStream)
+//        // Add some sample thoughts
+//        viewModel.thoughts = [
+//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIDString: "abc123", text: "Hello, this is a test message!"),
+//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
+//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
+//        ]
+//
+//        return viewModel
+//    }
+//
+//    static var previewStream: Stream {
+//        let account = Account()
+//        let profile = Profile(name: "Preview Stream")
+//        return Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+//    }
+//
+//    static var previewContainer: ModelContainer {
+//        let schema = Schema([Account.self, Profile.self, Stream.self])
+//        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+//
+//        do {
+//            let container = try ModelContainer(for: schema, configurations: [configuration])
+//            let context = container.mainContext
+//
+//            // Create and save sample data
+//            let account = Account()
+//            try context.save()
+//
+//            let profile = Profile(name: "Preview Stream")
+//            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+//            account.streams.append(stream)
+//            try context.save()
+//
+//            return container
+//        } catch {
+//            fatalError("Failed to create preview container: \(error.localizedDescription)")
+//        }
+//    }
+// }
 
 // Extension to convert UIImage to HEIF data
 #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)

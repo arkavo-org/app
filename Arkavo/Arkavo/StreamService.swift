@@ -25,7 +25,7 @@ extension StreamServiceModel {
 }
 
 class StreamService {
-    private let service: ArkavoService
+    let service: ArkavoService
     public var streamViewModel: StreamViewModel?
 
     init(_ service: ArkavoService) {

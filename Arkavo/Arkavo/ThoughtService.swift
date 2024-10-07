@@ -76,6 +76,32 @@ class ThoughtService {
         return payload
     }
 
+    func send(viewModel: ThoughtViewModel, stream: Stream) async {
+        do {
+            let nano = try createNano(viewModel, stream: stream)
+            // persist
+            let thought = Thought(id: UUID(), nano: nano)
+            thought.stream = stream
+            try await PersistenceController.shared.saveThought(thought)
+            stream.thoughts.append(thought)
+            try await PersistenceController.shared.saveChanges()
+            // send
+            try sendThought(nano)
+        } catch {
+            print("error sending thought: \(error.localizedDescription)")
+        }
+    }
+
+    func loadAndDecrypt(for stream: Stream) {
+        for thought in stream.thoughts {
+            do {
+                try sendThought(thought.nano)
+            } catch {
+                print("sendThought error: \(error)")
+            }
+        }
+    }
+
     func sendThought(_ nano: Data) throws {
         // Create and send the NATSMessage
         let natsMessage = NATSMessage(payload: nano)
