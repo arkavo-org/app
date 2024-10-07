@@ -5,8 +5,10 @@ struct StreamView: View {
     @State var service: StreamService
     @State var showingCreateStream = false
     @State var showingThoughtView = false
-    @State var stream: Stream?
-    @State var streams: [Stream]?
+    @State var showingDetailedStreamProfileView = false
+    @State var selectedStream: Stream?
+    @Query var streams: [Stream]
+    @State var accountProfile: Profile?
 
     var body: some View {
         VStack {
@@ -31,20 +33,21 @@ struct StreamView: View {
                             }
                         }
                     ) {
-                        if streams == nil {
+                        if streams.isEmpty {
                             VStack {
                                 Text("Loading...")
                             }
                         } else {
-                            ForEach(streams!) { stream in
+                            ForEach(streams) { stream in
                                 HStack {
                                     CompactStreamProfileView(viewModel: StreamViewModel(stream: stream))
                                         .onTapGesture {
-                                            self.stream = stream
+                                            selectedStream = stream
+                                            showingDetailedStreamProfileView = true
                                         }
                                     Spacer()
                                     Button(action: {
-                                        self.stream = stream
+                                        selectedStream = stream
                                         showingThoughtView = true
                                     }) {
                                         Image(systemName: "arrow.right.circle")
@@ -72,20 +75,39 @@ struct StreamView: View {
                 }
             }
         }
-        .sheet(item: $stream) { stream in
-            DetailedStreamProfileView(viewModel: StreamViewModel(stream: stream))
+        .sheet(isPresented: $showingThoughtView) {
+            if let thoughtService = service.service.thoughtService,
+               let accountProfile,
+               let selectedStream
+            {
+                let accountProfileViewModel = AccountProfileViewModel(profile: accountProfile)
+                let streamBadgeViewModel = StreamBadgeViewModel(stream: selectedStream, ownerProfile: accountProfileViewModel)
+                let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService, stream: selectedStream)
+                ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
+            } else {
+                Text("Stream not set")
+            }
         }
-        .task {
-            await loadStreams()
+        .sheet(isPresented: $showingDetailedStreamProfileView) {
+            if let selectedStream {
+                DetailedStreamProfileView(viewModel: StreamViewModel(stream: selectedStream))
+            }
         }
-    }
-
-    private func loadStreams() async {
-        do {
-            let account = try await PersistenceController.shared.getOrCreateAccount()
-            streams = account.streams
-        } catch {
-            print("Failed to load streams: \(error)")
+        .onChange(of: showingThoughtView) { _, newValue in
+            if newValue == false {
+                selectedStream = nil
+            }
+        }
+        .onChange(of: showingDetailedStreamProfileView) { _, newValue in
+            if newValue == false {
+                selectedStream = nil
+            }
+        }
+        .onAppear {
+            Task {
+                let account = try await PersistenceController.shared.getOrCreateAccount()
+                accountProfile = account.profile
+            }
         }
     }
 

@@ -94,10 +94,22 @@ class PersistenceController {
 
     // MARK: - Thought Operations
 
-    func saveThought(_ thought: Thought) throws {
+    func fetchThought(withPublicID publicID: Data) async throws -> [Thought]? {
+        let fetchDescriptor = FetchDescriptor<Thought>(predicate: #Predicate { $0.publicID == publicID })
+        return try container.mainContext.fetch(fetchDescriptor)
+    }
+
+    func saveThought(_ thought: Thought) throws -> Bool {
         let context = container.mainContext
-        context.insert(thought)
-        try context.save()
-        print("PersistenceController: Thought saved successfully")
+        do {
+            // Insert the new thought if none exist with the same publicID
+            context.insert(thought)
+            try context.save()
+            print("PersistenceController: Thought saved successfully \(thought.publicID.base58EncodedString)")
+            return true
+        } catch {
+            print("Failed to fetch or save Thought: \(error.localizedDescription)")
+            return false
+        }
     }
 }

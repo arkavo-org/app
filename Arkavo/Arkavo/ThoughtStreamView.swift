@@ -11,6 +11,7 @@ struct ThoughtStreamView: View {
     @State var streamService: StreamService
     @StateObject var viewModel: ThoughtStreamViewModel
     @State var streamBadgeViewModel: StreamBadgeViewModel
+    @State var accountProfile: Profile?
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
     @State private var isSending = false
@@ -24,74 +25,60 @@ struct ThoughtStreamView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                Color.clear
-                    .frame(height: geometry.safeAreaInsets.top)
-                HStack {
-                    StreamProfileBadge(viewModel: streamBadgeViewModel)
-                        .onTapGesture {
-                            withAnimation {
-                                isStreamProfileExpanded.toggle()
-                            }
-                        }
-                    Spacer()
-                    shareButton
-                }
-                .padding(.horizontal)
-                .padding(.top, 20)
-
-//                ScrollViewReader { _ in
-//                    ScrollView {
-//                        LazyVStack(spacing: 8) {
-//                            ForEach(Array(viewModel.thoughts.reversed().enumerated()), id: \.element.id) { index, thoughtViewModel in
-//                                let totalThoughts = 8
-//                                let opacity = Double(totalThoughts - min(index, totalThoughts - 1)) / Double(totalThoughts)
-//                                MessageBubble(viewModel: thoughtViewModel, isCurrentUser: thoughtViewModel.creator.name == viewModel.accountProfile?.name)
-//                                    .opacity(opacity)
-//                                    .id(thoughtViewModel.id)
-//                            }
-//                        }
-//                    }
-//
-//                    if viewModel.accountProfile != nil {
-//                        messageInputArea
-//                    }
-//                }
+                topSection(geometry: geometry)
+                thoughtsList
+                messageInputArea
             }
             .edgesIgnoringSafeArea(.top)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") {
-                        dismiss()
+                    Button("Back") { dismiss() }
+                }
+            }
+            .onAppear(perform: onAppear)
+            .onDisappear(perform: onDisappear)
+            .onTapGesture { isInputFocused = true }
+            .sheet(isPresented: $isShowingImagePicker) { imagePicker }
+            .sheet(isPresented: $isShowingCamera) { cameraPicker }
+            .sheet(isPresented: $isShowingLocationPicker) { locationPicker }
+            .sheet(isPresented: $isShowingStickerPicker) { stickerPicker }
+            .sheet(isPresented: $isShareSheetPresented) { shareSheet }
+        }
+    }
+
+    private var thoughtsList: some View {
+        ScrollViewReader { _ in
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.thoughts) { thoughtViewModel in
+                        MessageBubble(
+                            viewModel: thoughtViewModel,
+                            isCurrentUser: thoughtViewModel.creator.publicID == accountProfile?.publicID
+                        )
+                        .id(thoughtViewModel.id)
                     }
                 }
             }
         }
-        .onAppear {
-            streamBadgeViewModel.isExpanded = false
-        }
-        .onTapGesture {
-            isInputFocused = true
-        }
-        .sheet(isPresented: $isShowingImagePicker) {
-            imagePicker
-        }
-        .sheet(isPresented: $isShowingCamera) {
-            cameraPicker
-        }
-        .sheet(isPresented: $isShowingLocationPicker) {
-            LocationPicker { _ in
-                // Handle selected location
+    }
+
+    private func topSection(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: geometry.safeAreaInsets.top)
+            HStack {
+                StreamProfileBadge(viewModel: streamBadgeViewModel)
+                    .onTapGesture {
+                        withAnimation {
+                            isStreamProfileExpanded.toggle()
+                        }
+                    }
+                Spacer()
+                shareButton
             }
-        }
-        .sheet(isPresented: $isShowingStickerPicker) {
-            StickerPicker { _ in
-                // Handle selected sticker
-            }
-        }
-        .sheet(isPresented: $isShareSheetPresented) {
-            ShareSheet(activityItems: [shareURL].compactMap { $0 },
-                       isPresented: $isShareSheetPresented)
+            .padding(.horizontal)
+            .padding(.top, 20)
         }
     }
 
@@ -113,61 +100,80 @@ struct ThoughtStreamView: View {
             }
             TextField("Type a message...", text: $inputText)
                 .padding(10)
-            #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
                 .background(Color(.systemGray6))
-            #endif
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .focused($isInputFocused)
-
-            Button(action: {
-                Task {
-                    try await sendThought()
-                }
-            }) {
-                Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
-                    .foregroundColor(.blue)
-                    .font(.system(size: 24))
-            }
-            .disabled(isSending)
+            sendButton
         }
         .padding()
-        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
-            .background(Color(.systemBackground))
-        #endif
+        .background(Color(.systemBackground))
     }
 
-    @ViewBuilder
+    private var sendButton: some View {
+        Button(action: {
+            Task {
+                try await sendThought()
+            }
+        }) {
+            Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
+                .foregroundColor(.blue)
+                .font(.system(size: 24))
+        }
+        .disabled(isSending)
+    }
+
     private var imagePicker: some View {
-        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
-            ImagePicker(sourceType: .photoLibrary) { image in
-                guard let imageData = image.heifData() else {
-                    print("Failed to convert image to HEIF data")
-                    return
-                }
-                Task {
-                    try await sendImageThought(imageData)
-                }
+        ImagePicker(sourceType: .photoLibrary) { image in
+            guard let imageData = image.heifData() else {
+                print("Failed to convert image to HEIF data")
+                return
             }
-        #else
-            EmptyView()
-        #endif
+            Task {
+                try await sendImageThought(imageData)
+            }
+        }
     }
 
-    @ViewBuilder
     private var cameraPicker: some View {
-        #if os(iOS)
-            ImagePicker(sourceType: .camera) { image in
-                guard let imageData = image.heifData() else {
-                    print("Failed to convert image to HEIF data")
-                    return
-                }
-                Task {
-                    try await sendImageThought(imageData)
-                }
+        ImagePicker(sourceType: .camera) { image in
+            guard let imageData = image.heifData() else {
+                print("Failed to convert image to HEIF data")
+                return
             }
-        #else
-            EmptyView()
-        #endif
+            Task {
+                try await sendImageThought(imageData)
+            }
+        }
+    }
+
+    private var locationPicker: some View {
+        LocationPicker { _ in
+            // Handle selected location
+        }
+    }
+
+    private var stickerPicker: some View {
+        StickerPicker { _ in
+            // Handle selected sticker
+        }
+    }
+
+    private var shareSheet: some View {
+        ShareSheet(activityItems: [shareURL].compactMap { $0 },
+                   isPresented: $isShareSheetPresented)
+    }
+
+    private func onAppear() {
+        streamBadgeViewModel.isExpanded = false
+        viewModel.service.thoughtStreamViewModel = viewModel
+        Task {
+            let account = try await PersistenceController.shared.getOrCreateAccount()
+            accountProfile = account.profile
+        }
+    }
+
+    private func onDisappear() {
+        viewModel.service.thoughtStreamViewModel = nil
     }
 
     private func prepareShare() {
@@ -298,26 +304,58 @@ struct StickerPicker: View {
 
 @MainActor
 class ThoughtStreamViewModel: StreamViewModel {
+    var service: ThoughtService
     @Published var thoughts: [ThoughtViewModel] = []
 
-    func receive(_ serviceModel: ThoughtServiceModel) {
-        let creatorProfile = Profile(name: serviceModel.creatorID.uuidString)
-        let streamPublicIDString = stream?.publicID.base58EncodedString ?? ""
+    init(service: ThoughtService, stream: Stream) {
+        self.service = service
+        super.init(stream: stream)
+    }
+
+    @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) async throws {
+        guard let stream else { throw ThoughtServiceError.missingThoughtStreamViewModel }
+        let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
+        // dedupe PersistenceController.shared
+        let found = try await PersistenceController.shared.fetchThought(withPublicID: thoughtServiceModel.publicID)
+        if found != nil {
+            print("Thought already exists")
+            return
+        }
+        if stream.publicID != thoughtServiceModel.publicID {
+            print("Wrong stream")
+            return
+        }
+        // persist
+        let thought = Thought(nano: nano.toData())
+        thought.publicID = thoughtServiceModel.publicID
+        thought.nano = nano.toData()
+        thought.stream = stream
+        let isNew = try PersistenceController.shared.saveThought(thought)
+        if !isNew { return }
+        stream.thoughts.append(thought)
+        try await PersistenceController.shared.saveChanges()
+        // show
+        let creatorProfile = Profile(name: thoughtServiceModel.creatorID.uuidString)
+        let streamPublicIDString = stream.publicID.base58EncodedString
         let viewModel: ThoughtViewModel
-        switch serviceModel.mediaType {
+        switch thoughtServiceModel.mediaType {
         case .text:
-            let text = String(decoding: serviceModel.content, as: UTF8.self)
+            let text = String(decoding: thoughtServiceModel.content, as: UTF8.self)
             viewModel = ThoughtViewModel.createText(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, text: text)
         case .image:
-            viewModel = ThoughtViewModel.createImage(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, imageData: serviceModel.content)
+            viewModel = ThoughtViewModel.createImage(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, imageData: thoughtServiceModel.content)
         case .audio:
-            viewModel = ThoughtViewModel.createAudio(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, audioData: serviceModel.content)
+            viewModel = ThoughtViewModel.createAudio(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, audioData: thoughtServiceModel.content)
         case .video:
-            viewModel = ThoughtViewModel.createVideo(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, videoData: serviceModel.content)
+            viewModel = ThoughtViewModel.createVideo(creatorProfile: creatorProfile, streamPublicIDString: streamPublicIDString, videoData: thoughtServiceModel.content)
         }
         DispatchQueue.main.async {
             self.thoughts.append(viewModel)
         }
+    }
+
+    enum ThoughtServiceError: Error {
+        case missingThoughtStreamViewModel
     }
 }
 

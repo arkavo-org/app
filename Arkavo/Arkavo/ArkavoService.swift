@@ -139,7 +139,7 @@ class ArkavoService {
             return
         }
         guard let nano = nanoTDFManager.getNanoTDF(withIdentifier: id) else {
-            print("missing nanoTDF")
+            print("missing nanoTDF \(id.base64EncodedString())")
             return
         }
         nanoTDFManager.removeNanoTDF(withIdentifier: id)
@@ -180,7 +180,7 @@ class ArkavoService {
         do {
             try await thoughtService.handle(payload, policy: policy, nano: nano)
         } catch {
-//            print("Error handling thought: \(error)")
+            print("Error handling thought: \(error)")
             // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
             #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
                 await handleVideoFrame(payload: payload)

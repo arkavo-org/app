@@ -25,7 +25,7 @@ struct StreamLoadingView: View {
                            let thoughtService = service.service.thoughtService,
                            let streamBadgeViewModel
                         {
-                            let thoughtStreamViewModel = ThoughtStreamViewModel(stream: stream)
+                            let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService, stream: stream)
                             ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
                         } else {
                             Text("Service misconfigured")

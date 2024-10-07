@@ -42,7 +42,7 @@ extension ThoughtServiceModel {
 class ThoughtService {
     private let service: ArkavoService
     public var streamViewModel: StreamViewModel?
-    public var thoughtStreamViewModel: ThoughtStreamViewModel?
+    weak var thoughtStreamViewModel: ThoughtStreamViewModel?
 
     init(_ service: ArkavoService) {
         self.service = service
@@ -71,6 +71,7 @@ class ThoughtService {
     }
 
     func createPayload(viewModel: ThoughtViewModel) throws -> Data {
+        // TODO: replace with Flatbuffers
         let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: viewModel.content)
         let payload = try thoughtServiceModel.serialize()
         return payload
@@ -80,11 +81,11 @@ class ThoughtService {
         do {
             let nano = try createNano(viewModel, stream: stream)
             // persist
-            let thought = Thought(id: UUID(), nano: nano)
-            thought.stream = stream
-            try await PersistenceController.shared.saveThought(thought)
-            stream.thoughts.append(thought)
-            try await PersistenceController.shared.saveChanges()
+            // FIXME: always fails on unique constraint
+//            let thought = Thought(id: UUID(), nano: nano)
+//            thought.stream = stream
+//            stream.thoughts.append(thought)
+//            try await PersistenceController.shared.saveChanges()
             // send
             try sendThought(nano)
         } catch {
@@ -115,25 +116,11 @@ class ThoughtService {
         }
     }
 
-    /// Reconstructs a Thought object from unencrypted Data.
-    /// - Parameter thought: The Thought object containing encrypted data.
-    /// - Returns: A reconstructed Thought object, or nil if decryption fails.
-    @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) async throws {
+    @MainActor func handle(_ decryptedData: Data, policy: ArkavoPolicy, nano: NanoTDF) async throws {
         guard let thoughtStreamViewModel else {
             throw ThoughtServiceError.missingThoughtStreamViewModel
         }
-        // FIXME: dedupe
-        let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
-        // persist
-        let thought = Thought(nano: nano.toData())
-        thought.publicID = thoughtServiceModel.publicID
-        thought.nano = nano.toData()
-        thought.stream = thoughtStreamViewModel.stream
-        PersistenceController.shared.container.mainContext.insert(thought)
-        thoughtStreamViewModel.stream?.thoughts.append(thought)
-        try await PersistenceController.shared.saveChanges()
-        // show
-        thoughtStreamViewModel.receive(thoughtServiceModel)
+        try await thoughtStreamViewModel.handle(decryptedData, policy: policy, nano: nano)
     }
 
     enum ThoughtServiceError: Error {
