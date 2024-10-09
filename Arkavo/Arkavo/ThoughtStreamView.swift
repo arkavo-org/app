@@ -183,32 +183,8 @@ struct ThoughtStreamView: View {
             return
         }
         // cache stream for later retrieval
-        var builder = FlatBufferBuilder(initialSize: 1024)
-        let targetIdVector = builder.createVector(bytes: stream.publicID)
         do {
-            // FIXME: use nanotdf on StreamServiceModel
-            let targetPayloadVector = builder.createVector(bytes: stream.publicID)
-            // Create CacheEvent
-            let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
-                &builder,
-                targetIdVectorOffset: targetIdVector,
-                targetPayloadVectorOffset: targetPayloadVector,
-                ttl: 3600, // 1 hour TTL, TODOadjust as needed
-                oneTimeAccess: false
-            )
-            // Create the Event object
-            let eventOffset = Arkavo_Event.createEvent(
-                &builder,
-                action: .cache,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                status: .preparing,
-                dataType: .cacheevent,
-                dataOffset: cacheEventOffset
-            )
-            builder.finish(offset: eventOffset)
-            let data = builder.data
-            print("streamCacheEvent: \(data.base64EncodedString())")
-            try streamService.sendEvent(data)
+            try streamService.sendStreamEvent(stream)
             isShareSheetPresented = true
         } catch {
             print("streamCacheEvent: \(error)")

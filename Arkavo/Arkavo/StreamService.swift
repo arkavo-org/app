@@ -32,58 +32,91 @@ class StreamService {
         self.service = service
     }
 
-    @MainActor func createStream(_ viewModel: StreamViewModel) throws -> Data {
+    func sendStreamEvent(_ stream: Stream) throws {
         guard let kasPublicKey = ArkavoService.kasPublicKey else {
-            print("KAS public key not available")
-            return Data()
+            throw StreamServiceError.missingKASkey
         }
-
-        let payload = try createPayload(viewModel: viewModel)
-
-        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
-        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
-        var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-
-        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: payload)
-        return nanoTDF.toData()
-    }
-
-    @MainActor func createPayload(viewModel: StreamViewModel) throws -> Data {
-        guard let stream = viewModel.stream else {
+        guard let streamAccountProfile = stream.account.profile else {
             throw StreamServiceError.missingAccountOrProfile
         }
-        let streamServiceModel = StreamServiceModel(stream: stream)
-        // FIXME: add flatbuffers
-//        let payload = try streamServiceModel.serialize()
-//        return payload
-        return Data()
-    }
-
-    func sendStream(_ nano: Data) throws {
-        let natsMessage = NATSMessage(payload: nano)
-        let messageData = natsMessage.toData()
-
-        WebSocketManager.shared.sendCustomMessage(messageData) { error in
-            if let error {
-                print("Error sending stream: \(error)")
-            }
-        }
-    }
-
-    func sendEvent(_ payload: Data) throws {
-        let natsMessage = NATSEvent(payload: payload)
-        let messageData = natsMessage.toData()
-        print("Sending event: \(messageData)")
-        WebSocketManager.shared.sendCustomMessage(messageData) { error in
-            if let error {
-                print("Error sending stream: \(error)")
-            }
-        }
+        // Create Stream
+        // Create Stream using FlatBuffers
+        var fbb = FlatBufferBuilder(initialSize: 1024)
+        // Create PublicId
+        let publicIdVector = fbb.createVector(bytes: stream.publicID)
+        let publicId = Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: publicIdVector)
+        // Create Entity
+        let entity = Arkavo_Entity.createEntity(&fbb, publicIdOffset: publicId)
+        // Create Profile
+        let name = fbb.create(string: stream.profile.name)
+        let blurb = fbb.create(string: stream.profile.blurb ?? "")
+        let interests = fbb.create(string: stream.profile.interests)
+        let location = fbb.create(string: stream.profile.location)
+        let profile = Arkavo_Profile.createProfile(
+            &fbb,
+            nameOffset: name,
+            blurbOffset: blurb,
+            interestsOffset: interests,
+            locationOffset: location,
+            locationLevel: .unused, // Set appropriate value
+            identityAssuranceLevel: .unused, // Set appropriate value
+            encryptionLevel: .unused // Set appropriate value
+        )
+        // Create creator's PublicId
+        let creatorPublicIdVector = fbb.createVector(bytes: streamAccountProfile.publicID)
+        let creatorPublicId = Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: creatorPublicIdVector)
+        // Create membersPublicId vector
+//        let membersPublicIds = stream.thoughts.compactMap { $0.account.publicID }
+//        let membersPublicIdVectors = membersPublicIds.map { fbb.createVector($0) }
+//        let membersPublicIdOffsets = membersPublicIdVectors.map { Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: $0) }
+//        let membersPublicIdVector = fbb.createVector(ofOffsets: membersPublicIdOffsets)
+        // Create Stream
+        let streamObj = Arkavo_Stream.createStream(
+            &fbb,
+            entityOffset: entity,
+            profileOffset: profile,
+            creatorPublicIdOffset: creatorPublicId,
+            membersPublicIdVectorOffset: Offset(), // Empty offset for no members,
+            streamLevel: .sl1 // Set appropriate StreamLevel
+        )
+        fbb.finish(offset: streamObj)
+        let payload = fbb.data
+        print("Arkavo_Stream payload: \(payload.base64URLEncodedString())")
+        // Create Nano
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.streamProfile.rawValue)!
+        var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
+        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: payload)
+        let targetPayload = nanoTDF.toData()
+        // Create CacheEvent
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        let targetIdVector = builder.createVector(bytes: stream.publicID)
+        let targetPayloadVector = builder.createVector(bytes: targetPayload)
+        let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
+            &builder,
+            targetIdVectorOffset: targetIdVector,
+            targetPayloadVectorOffset: targetPayloadVector,
+            ttl: 3600, // 1 hour TTL, TODO adjust as needed
+            oneTimeAccess: false
+        )
+        // Create Event
+        let eventOffset = Arkavo_Event.createEvent(
+            &builder,
+            action: .cache,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing,
+            dataType: .cacheevent,
+            dataOffset: cacheEventOffset
+        )
+        builder.finish(offset: eventOffset)
+        let data = builder.data
+        print("cache event: \(data.base64EncodedString())")
+        try service.sendEvent(data)
     }
 
     @MainActor
-    public func fetchStream(withPublicID publicID: Data) async throws -> Stream? {
+    public func requestStream(withPublicID publicID: Data) async throws -> Stream? {
         let account = try await PersistenceController.shared.getOrCreateAccount()
         let accountProfile = account.profile
         let streams = try await PersistenceController.shared.fetchStream(withPublicID: publicID)
@@ -118,25 +151,68 @@ class StreamService {
         )
         builder.finish(offset: eventOffset)
         let data = builder.data
-        print("inviteEvent: \(data.base64EncodedString())")
-        try sendEvent(data)
+        print("invite event: \(data.base64EncodedString())")
+        try service.sendEvent(data)
         return nil
     }
 
-    @MainActor func handle(_: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
-//        _ = try StreamServiceModel.deserialize(from: decryptedData)
-        // TODO: implement
-//        // Check if the stream already exists
-//        if let existingStream = try await fetchExistingStream(publicID: streamServiceModel.publicID) {
-//            // Update existing stream
-        ////            try await updateExistingStream(existingStream, with: streamServiceModel, policy: policy, nano: nano)
-//        } else {
-//            // Create new stream
-        ////            try await createNewStream(from: streamServiceModel, policy: policy, nano: nano)
-//        }
+    @MainActor
+    func handle(_ data: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
+        print("handle stream data \(data.base64EncodedString())")
+
+        // 2. Parse the decrypted data using FlatBuffers
+        let byteBuffer = ByteBuffer(data: data)
+        let arkStream = Arkavo_Stream(byteBuffer, o: 0)
+
+        // 3. Extract information from the Arkavo_Stream object
+        guard let entity = arkStream.entity,
+              let profile = arkStream.profile
+        else {
+            throw StreamServiceError.missingRequiredFields
+        }
+
+        let name = profile.name ?? ""
+        let blurb = profile.blurb
+        let interests = profile.interests ?? ""
+        let location = profile.location ?? ""
+
+        // 4. Create or fetch the Account
+//        let creatorPublicIDData = Data(creatorPublicId.id)
+        // FIXME: load creatorPublicIDData
+        let account = Account()
+
+        // 5. Create the Profile
+        let streamProfile = Profile(name: name, blurb: blurb, interests: interests, location: location)
+
+        // 6. Create the Stream object
+        let stream = Stream(
+            id: UUID(), // Generate a new UUID for local storage
+            account: account,
+            profile: streamProfile,
+            admissionPolicy: .open, // Set appropriate admission policy
+            interactionPolicy: .open, // Set appropriate interaction policy
+            thoughts: [] // Start with empty thoughts
+        )
+
+        // Set the publicID separately to ensure it matches the one from the incoming data
+        if entity.publicId != nil {
+            stream.publicID = Data(entity.publicId!.id)
+        }
+
+        do {
+            // 7. Store the Stream in the database
+            try PersistenceController.shared.saveStream(stream)
+            print("Stream saved successfully")
+        } catch {
+            print("Failed to save stream: \(error)")
+            throw error
+        }
     }
 
     enum StreamServiceError: Error {
         case missingAccountOrProfile
+        case missingKASkey
+        case flatBufferCreationFailed
+        case missingRequiredFields
     }
 }

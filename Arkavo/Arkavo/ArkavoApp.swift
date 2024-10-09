@@ -74,8 +74,8 @@ struct ArkavoApp: App {
     @MainActor
     private func ensureAccountExists() async {
         do {
-            let account = try await persistenceController.getOrCreateAccount()
-            print("ArkavoApp: Account ensured with ID: \(account.id)")
+            _ = try await persistenceController.getOrCreateAccount()
+//            print("ArkavoApp: Account ensured with ID: \(account.id)")
         } catch {
             print("ArkavoApp: Error ensuring Account exists: \(error.localizedDescription)")
         }

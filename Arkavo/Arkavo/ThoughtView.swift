@@ -90,9 +90,6 @@ struct MessageBubble: View {
                             .foregroundColor(.red)
                     }
                 }
-                Text(viewModel.streamPublicIDString)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             if !isCurrentUser {
                 Spacer()

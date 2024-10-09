@@ -49,7 +49,7 @@ struct StreamLoadingView: View {
     func loadStream() async {
         state = .loading
         do {
-            if let stream = try await service.fetchStream(withPublicID: publicID) {
+            if let stream = try await service.requestStream(withPublicID: publicID) {
                 self.stream = stream
                 streamBadgeViewModel = createStreamBadgeViewModel(from: stream)
                 state = .loaded
@@ -117,7 +117,7 @@ class MockStreamService: StreamService {
     }
 
     @MainActor
-    override func fetchStream(withPublicID _: Data) async throws -> Stream? {
+    override func requestStream(withPublicID _: Data) async throws -> Stream? {
         switch mockState {
         case .loading:
             // Simulate loading delay
