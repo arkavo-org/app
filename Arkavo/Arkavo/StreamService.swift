@@ -39,49 +39,33 @@ class StreamService {
         guard let streamAccountProfile = stream.account.profile else {
             throw StreamServiceError.missingAccountOrProfile
         }
-        // Create Stream
         // Create Stream using FlatBuffers
         var fbb = FlatBufferBuilder(initialSize: 1024)
         // Create PublicId
         let publicIdVector = fbb.createVector(bytes: stream.publicID)
         let publicId = Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: publicIdVector)
-        // Create Entity
-        let entity = Arkavo_Entity.createEntity(&fbb, publicIdOffset: publicId)
         // Create Profile
-        let name = fbb.create(string: stream.profile.name)
-        let blurb = fbb.create(string: stream.profile.blurb ?? "")
-        let interests = fbb.create(string: stream.profile.interests)
-        let location = fbb.create(string: stream.profile.location)
-        let profile = Arkavo_Profile.createProfile(
-            &fbb,
-            nameOffset: name,
-            blurbOffset: blurb,
-            interestsOffset: interests,
-            locationOffset: location,
-            locationLevel: .unused, // Set appropriate value
-            identityAssuranceLevel: .unused, // Set appropriate value
-            encryptionLevel: .unused // Set appropriate value
-        )
+        let profileOffset = createProfile(&fbb, from: stream.profile)
+        // Create Activity (using default values as it's not in the Stream model)
+        let activityOffset = createDefaultActivity(&fbb)
         // Create creator's PublicId
-        let creatorPublicIdVector = fbb.createVector(bytes: streamAccountProfile.publicID)
+        let creatorPublicIdVector = fbb.createVector(bytes: stream.account.profile!.publicID)
         let creatorPublicId = Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: creatorPublicIdVector)
-        // Create membersPublicId vector
-//        let membersPublicIds = stream.thoughts.compactMap { $0.account.publicID }
-//        let membersPublicIdVectors = membersPublicIds.map { fbb.createVector($0) }
-//        let membersPublicIdOffsets = membersPublicIdVectors.map { Arkavo_PublicId.createPublicId(&fbb, idVectorOffset: $0) }
-//        let membersPublicIdVector = fbb.createVector(ofOffsets: membersPublicIdOffsets)
+        // Create members' PublicIds (assuming Stream has a members property)
+        let membersPublicIdOffsets: [Offset] = [] // Implement this if Stream has members
+        let membersPublicIdVector = fbb.createVector(ofOffsets: membersPublicIdOffsets)
         // Create Stream
-        let streamObj = Arkavo_Stream.createStream(
+        let streamOffset = Arkavo_Stream.createStream(
             &fbb,
-            entityOffset: entity,
-            profileOffset: profile,
+            publicIdOffset: publicId,
+            profileOffset: profileOffset,
+            activityOffset: activityOffset,
             creatorPublicIdOffset: creatorPublicId,
-            membersPublicIdVectorOffset: Offset(), // Empty offset for no members,
-            streamLevel: .sl1 // Set appropriate StreamLevel
+            membersPublicIdVectorOffset: membersPublicIdVector,
+            streamLevel: .sl1 // You might want to map AdmissionPolicy to StreamLevel
         )
-        fbb.finish(offset: streamObj)
+        fbb.finish(offset: streamOffset)
         let payload = fbb.data
-        print("Arkavo_Stream payload: \(payload.base64URLEncodedString())")
         // Create Nano
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
@@ -97,7 +81,7 @@ class StreamService {
             &builder,
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: targetPayloadVector,
-            ttl: 3600, // 1 hour TTL, TODO adjust as needed
+            ttl: 3600, // 1 hour TTL
             oneTimeAccess: false
         )
         // Create Event
@@ -159,54 +143,70 @@ class StreamService {
     @MainActor
     func handle(_ data: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
         print("handle stream data \(data.base64EncodedString())")
-
-        // 2. Parse the decrypted data using FlatBuffers
+        // Parse the decrypted data using FlatBuffers
         let byteBuffer = ByteBuffer(data: data)
         let arkStream = Arkavo_Stream(byteBuffer, o: 0)
-
-        // 3. Extract information from the Arkavo_Stream object
-        guard let entity = arkStream.entity,
-              let profile = arkStream.profile
-        else {
-            throw StreamServiceError.missingRequiredFields
-        }
-
-        let name = profile.name ?? ""
-        let blurb = profile.blurb
-        let interests = profile.interests ?? ""
-        let location = profile.location ?? ""
-
-        // 4. Create or fetch the Account
-//        let creatorPublicIDData = Data(creatorPublicId.id)
-        // FIXME: load creatorPublicIDData
-        let account = Account()
-
-        // 5. Create the Profile
-        let streamProfile = Profile(name: name, blurb: blurb, interests: interests, location: location)
-
-        // 6. Create the Stream object
+        // Extract information from the Arkavo_Stream object
+        let publicID = Data(arkStream.publicId?.id ?? [])
+        let profile = extractProfile(from: arkStream.profile)
+        let creatorPublicID = Data(arkStream.creatorPublicId?.id ?? [])
+        // Create the Stream object
         let stream = Stream(
-            id: UUID(), // Generate a new UUID for local storage
-            account: account,
-            profile: streamProfile,
-            admissionPolicy: .open, // Set appropriate admission policy
-            interactionPolicy: .open, // Set appropriate interaction policy
-            thoughts: [] // Start with empty thoughts
+            id: UUID(),
+            account: Account(),
+            profile: profile,
+            admissionPolicy: .open, // You might want to map StreamLevel to AdmissionPolicy
+            interactionPolicy: .open // Default value, adjust as needed
         )
-
-        // Set the publicID separately to ensure it matches the one from the incoming data
-        if entity.publicId != nil {
-            stream.publicID = Data(entity.publicId!.id)
-        }
-
         do {
-            // 7. Store the Stream in the database
+            // Store the Stream in the database
             try PersistenceController.shared.saveStream(stream)
             print("Stream saved successfully")
         } catch {
             print("Failed to save stream: \(error)")
             throw error
         }
+    }
+
+    // Helper functions
+    private func createProfile(_ fbb: inout FlatBufferBuilder, from profile: Profile) -> Offset {
+        let nameOffset = fbb.create(string: profile.name)
+        let blurbOffset = fbb.create(string: profile.blurb ?? "")
+        let interestsOffset = fbb.create(string: profile.interests)
+        let locationOffset = fbb.create(string: profile.location)
+
+        return Arkavo_Profile.createProfile(
+            &fbb,
+            nameOffset: nameOffset,
+            blurbOffset: blurbOffset,
+            interestsOffset: interestsOffset,
+            locationOffset: locationOffset,
+            locationLevel: .approximate, // You might want to map this
+            identityAssuranceLevel: profile.hasHighIdentityAssurance ? .ial2 : .ial1,
+            encryptionLevel: profile.hasHighEncryption ? .el2 : .el1
+        )
+    }
+
+    private func createDefaultActivity(_ fbb: inout FlatBufferBuilder) -> Offset {
+        Arkavo_Activity.createActivity(
+            &fbb,
+            dateCreated: Int64(Date().timeIntervalSince1970),
+            expertLevel: .novice,
+            activityLevel: .low,
+            trustLevel: .low
+        )
+    }
+
+    private func extractProfile(from arkProfile: Arkavo_Profile?) -> Profile {
+        Profile(
+            id: UUID(),
+            name: arkProfile?.name ?? "",
+            blurb: arkProfile?.blurb,
+            interests: arkProfile?.interests ?? "",
+            location: arkProfile?.location ?? "",
+            hasHighEncryption: arkProfile?.encryptionLevel == .el2,
+            hasHighIdentityAssurance: arkProfile?.identityAssuranceLevel == .ial2 || arkProfile?.identityAssuranceLevel == .ial3
+        )
     }
 
     enum StreamServiceError: Error {

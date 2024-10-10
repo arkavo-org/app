@@ -122,7 +122,26 @@ public enum Arkavo_TrustLevel: Int8, Enum, Verifiable {
 }
 
 
-public struct Arkavo_Entity: FlatBufferObject, Verifiable {
+public enum Arkavo_Entity: UInt8, UnionEnum {
+  public typealias T = UInt8
+
+  public init?(value: T) {
+    self.init(rawValue: value)
+  }
+
+  public static var byteSize: Int { return MemoryLayout<UInt8>.size }
+  public var value: UInt8 { return self.rawValue }
+  case none_ = 0
+  case account = 1
+  case stream = 2
+  case thought = 3
+
+  public static var max: Arkavo_Entity { return .thought }
+  public static var min: Arkavo_Entity { return .none_ }
+}
+
+
+public struct Arkavo_PublicId: FlatBufferObject, Verifiable {
 
   static func validateVersion() { FlatBuffersVersion_24_3_25() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
@@ -132,27 +151,30 @@ public struct Arkavo_Entity: FlatBufferObject, Verifiable {
   public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
 
   private enum VTOFFSET: VOffset {
-    case publicId = 4
+    case id = 4
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
 
-  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public static func startEntity(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 1) }
-  public static func add(publicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: publicId, at: VTOFFSET.publicId.p) }
-  public static func endEntity(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
-  public static func createEntity(
+  public var hasId: Bool { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? false : true }
+  public var idCount: Int32 { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func id(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
+  public var id: [UInt8] { return _accessor.getVector(at: VTOFFSET.id.v) ?? [] }
+  public static func startPublicId(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 1) }
+  public static func addVectorOf(id: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: id, at: VTOFFSET.id.p) }
+  public static func endPublicId(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
+  public static func createPublicId(
     _ fbb: inout FlatBufferBuilder,
-    publicIdOffset publicId: Offset = Offset()
+    idVectorOffset id: Offset = Offset()
   ) -> Offset {
-    let __start = Arkavo_Entity.startEntity(&fbb)
-    Arkavo_Entity.add(publicId: publicId, &fbb)
-    return Arkavo_Entity.endEntity(&fbb, start: __start)
+    let __start = Arkavo_PublicId.startPublicId(&fbb)
+    Arkavo_PublicId.addVectorOf(id: id, &fbb)
+    return Arkavo_PublicId.endPublicId(&fbb, start: __start)
   }
 
   public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
     var _v = try verifier.visitTable(at: position)
-    try _v.visit(field: VTOFFSET.publicId.p, fieldName: "publicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
+    try _v.visit(field: VTOFFSET.id.p, fieldName: "id", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     _v.finish()
   }
 }
@@ -167,29 +189,29 @@ public struct Arkavo_Account: FlatBufferObject, Verifiable {
   public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
 
   private enum VTOFFSET: VOffset {
-    case entity = 4
+    case publicId = 4
     case profile = 6
     case activity = 8
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
 
-  public var entity: Arkavo_Entity? { let o = _accessor.offset(VTOFFSET.entity.v); return o == 0 ? nil : Arkavo_Entity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public static func startAccount(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 3) }
-  public static func add(entity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: entity, at: VTOFFSET.entity.p) }
+  public static func add(publicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: publicId, at: VTOFFSET.publicId.p) }
   public static func add(profile: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: profile, at: VTOFFSET.profile.p) }
   public static func add(activity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: activity, at: VTOFFSET.activity.p) }
   public static func endAccount(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createAccount(
     _ fbb: inout FlatBufferBuilder,
-    entityOffset entity: Offset = Offset(),
+    publicIdOffset publicId: Offset = Offset(),
     profileOffset profile: Offset = Offset(),
     activityOffset activity: Offset = Offset()
   ) -> Offset {
     let __start = Arkavo_Account.startAccount(&fbb)
-    Arkavo_Account.add(entity: entity, &fbb)
+    Arkavo_Account.add(publicId: publicId, &fbb)
     Arkavo_Account.add(profile: profile, &fbb)
     Arkavo_Account.add(activity: activity, &fbb)
     return Arkavo_Account.endAccount(&fbb, start: __start)
@@ -197,7 +219,7 @@ public struct Arkavo_Account: FlatBufferObject, Verifiable {
 
   public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
     var _v = try verifier.visitTable(at: position)
-    try _v.visit(field: VTOFFSET.entity.p, fieldName: "entity", required: false, type: ForwardOffset<Arkavo_Entity>.self)
+    try _v.visit(field: VTOFFSET.publicId.p, fieldName: "publicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.profile.p, fieldName: "profile", required: false, type: ForwardOffset<Arkavo_Profile>.self)
     try _v.visit(field: VTOFFSET.activity.p, fieldName: "activity", required: false, type: ForwardOffset<Arkavo_Activity>.self)
     _v.finish()
@@ -214,40 +236,45 @@ public struct Arkavo_Stream: FlatBufferObject, Verifiable {
   public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
 
   private enum VTOFFSET: VOffset {
-    case entity = 4
+    case publicId = 4
     case profile = 6
-    case creatorPublicId = 8
-    case membersPublicId = 10
-    case streamLevel = 12
+    case activity = 8
+    case creatorPublicId = 10
+    case membersPublicId = 12
+    case streamLevel = 14
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
 
-  public var entity: Arkavo_Entity? { let o = _accessor.offset(VTOFFSET.entity.v); return o == 0 ? nil : Arkavo_Entity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var hasMembersPublicId: Bool { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? false : true }
   public var membersPublicIdCount: Int32 { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func membersPublicId(at index: Int32) -> Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(_accessor.vector(at: o) + index * 4)) }
   public var streamLevel: Arkavo_StreamLevel { let o = _accessor.offset(VTOFFSET.streamLevel.v); return o == 0 ? .unused : Arkavo_StreamLevel(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
-  public static func startStream(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 5) }
-  public static func add(entity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: entity, at: VTOFFSET.entity.p) }
+  public static func startStream(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 6) }
+  public static func add(publicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: publicId, at: VTOFFSET.publicId.p) }
   public static func add(profile: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: profile, at: VTOFFSET.profile.p) }
+  public static func add(activity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: activity, at: VTOFFSET.activity.p) }
   public static func add(creatorPublicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: creatorPublicId, at: VTOFFSET.creatorPublicId.p) }
   public static func addVectorOf(membersPublicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: membersPublicId, at: VTOFFSET.membersPublicId.p) }
   public static func add(streamLevel: Arkavo_StreamLevel, _ fbb: inout FlatBufferBuilder) { fbb.add(element: streamLevel.rawValue, def: 0, at: VTOFFSET.streamLevel.p) }
   public static func endStream(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createStream(
     _ fbb: inout FlatBufferBuilder,
-    entityOffset entity: Offset = Offset(),
+    publicIdOffset publicId: Offset = Offset(),
     profileOffset profile: Offset = Offset(),
+    activityOffset activity: Offset = Offset(),
     creatorPublicIdOffset creatorPublicId: Offset = Offset(),
     membersPublicIdVectorOffset membersPublicId: Offset = Offset(),
     streamLevel: Arkavo_StreamLevel = .unused
   ) -> Offset {
     let __start = Arkavo_Stream.startStream(&fbb)
-    Arkavo_Stream.add(entity: entity, &fbb)
+    Arkavo_Stream.add(publicId: publicId, &fbb)
     Arkavo_Stream.add(profile: profile, &fbb)
+    Arkavo_Stream.add(activity: activity, &fbb)
     Arkavo_Stream.add(creatorPublicId: creatorPublicId, &fbb)
     Arkavo_Stream.addVectorOf(membersPublicId: membersPublicId, &fbb)
     Arkavo_Stream.add(streamLevel: streamLevel, &fbb)
@@ -256,8 +283,9 @@ public struct Arkavo_Stream: FlatBufferObject, Verifiable {
 
   public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
     var _v = try verifier.visitTable(at: position)
-    try _v.visit(field: VTOFFSET.entity.p, fieldName: "entity", required: false, type: ForwardOffset<Arkavo_Entity>.self)
+    try _v.visit(field: VTOFFSET.publicId.p, fieldName: "publicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.profile.p, fieldName: "profile", required: false, type: ForwardOffset<Arkavo_Profile>.self)
+    try _v.visit(field: VTOFFSET.activity.p, fieldName: "activity", required: false, type: ForwardOffset<Arkavo_Activity>.self)
     try _v.visit(field: VTOFFSET.creatorPublicId.p, fieldName: "creatorPublicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.membersPublicId.p, fieldName: "membersPublicId", required: false, type: ForwardOffset<Vector<ForwardOffset<Arkavo_PublicId>, Arkavo_PublicId>>.self)
     try _v.visit(field: VTOFFSET.streamLevel.p, fieldName: "streamLevel", required: false, type: Arkavo_StreamLevel.self)
@@ -275,7 +303,7 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
   public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
 
   private enum VTOFFSET: VOffset {
-    case entity = 4
+    case publicId = 4
     case creatorPublicId = 6
     case streamPublicId = 8
     case content = 10
@@ -284,7 +312,7 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var entity: Arkavo_Entity? { let o = _accessor.offset(VTOFFSET.entity.v); return o == 0 ? nil : Arkavo_Entity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var streamPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.streamPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
   public var hasContent: Bool { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? false : true }
@@ -293,7 +321,7 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
   public var content: [UInt8] { return _accessor.getVector(at: VTOFFSET.content.v) ?? [] }
   public var mediaType: Arkavo_MediaType { let o = _accessor.offset(VTOFFSET.mediaType.v); return o == 0 ? .unused : Arkavo_MediaType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
   public static func startThought(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 5) }
-  public static func add(entity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: entity, at: VTOFFSET.entity.p) }
+  public static func add(publicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: publicId, at: VTOFFSET.publicId.p) }
   public static func add(creatorPublicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: creatorPublicId, at: VTOFFSET.creatorPublicId.p) }
   public static func add(streamPublicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: streamPublicId, at: VTOFFSET.streamPublicId.p) }
   public static func addVectorOf(content: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: content, at: VTOFFSET.content.p) }
@@ -301,14 +329,14 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
   public static func endThought(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createThought(
     _ fbb: inout FlatBufferBuilder,
-    entityOffset entity: Offset = Offset(),
+    publicIdOffset publicId: Offset = Offset(),
     creatorPublicIdOffset creatorPublicId: Offset = Offset(),
     streamPublicIdOffset streamPublicId: Offset = Offset(),
     contentVectorOffset content: Offset = Offset(),
     mediaType: Arkavo_MediaType = .unused
   ) -> Offset {
     let __start = Arkavo_Thought.startThought(&fbb)
-    Arkavo_Thought.add(entity: entity, &fbb)
+    Arkavo_Thought.add(publicId: publicId, &fbb)
     Arkavo_Thought.add(creatorPublicId: creatorPublicId, &fbb)
     Arkavo_Thought.add(streamPublicId: streamPublicId, &fbb)
     Arkavo_Thought.addVectorOf(content: content, &fbb)
@@ -318,7 +346,7 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
 
   public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
     var _v = try verifier.visitTable(at: position)
-    try _v.visit(field: VTOFFSET.entity.p, fieldName: "entity", required: false, type: ForwardOffset<Arkavo_Entity>.self)
+    try _v.visit(field: VTOFFSET.publicId.p, fieldName: "publicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.creatorPublicId.p, fieldName: "creatorPublicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.streamPublicId.p, fieldName: "streamPublicId", required: false, type: ForwardOffset<Arkavo_PublicId>.self)
     try _v.visit(field: VTOFFSET.content.p, fieldName: "content", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
@@ -455,7 +483,7 @@ public struct Arkavo_Activity: FlatBufferObject, Verifiable {
   }
 }
 
-public struct Arkavo_PublicId: FlatBufferObject, Verifiable {
+public struct Arkavo_EntityRoot: FlatBufferObject, Verifiable {
 
   static func validateVersion() { FlatBuffersVersion_24_3_25() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
@@ -465,30 +493,43 @@ public struct Arkavo_PublicId: FlatBufferObject, Verifiable {
   public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
 
   private enum VTOFFSET: VOffset {
-    case id = 4
+    case entityType = 4
+    case entity = 6
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
 
-  public var hasId: Bool { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? false : true }
-  public var idCount: Int32 { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? 0 : _accessor.vector(count: o) }
-  public func id(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.id.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
-  public var id: [UInt8] { return _accessor.getVector(at: VTOFFSET.id.v) ?? [] }
-  public static func startPublicId(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 1) }
-  public static func addVectorOf(id: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: id, at: VTOFFSET.id.p) }
-  public static func endPublicId(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
-  public static func createPublicId(
+  public var entityType: Arkavo_Entity { let o = _accessor.offset(VTOFFSET.entityType.v); return o == 0 ? .none_ : Arkavo_Entity(rawValue: _accessor.readBuffer(of: UInt8.self, at: o)) ?? .none_ }
+  public func entity<T: FlatbuffersInitializable>(type: T.Type) -> T? { let o = _accessor.offset(VTOFFSET.entity.v); return o == 0 ? nil : _accessor.union(o) }
+  public static func startEntityRoot(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 2) }
+  public static func add(entityType: Arkavo_Entity, _ fbb: inout FlatBufferBuilder) { fbb.add(element: entityType.rawValue, def: 0, at: VTOFFSET.entityType.p) }
+  public static func add(entity: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: entity, at: VTOFFSET.entity.p) }
+  public static func endEntityRoot(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
+  public static func createEntityRoot(
     _ fbb: inout FlatBufferBuilder,
-    idVectorOffset id: Offset = Offset()
+    entityType: Arkavo_Entity = .none_,
+    entityOffset entity: Offset = Offset()
   ) -> Offset {
-    let __start = Arkavo_PublicId.startPublicId(&fbb)
-    Arkavo_PublicId.addVectorOf(id: id, &fbb)
-    return Arkavo_PublicId.endPublicId(&fbb, start: __start)
+    let __start = Arkavo_EntityRoot.startEntityRoot(&fbb)
+    Arkavo_EntityRoot.add(entityType: entityType, &fbb)
+    Arkavo_EntityRoot.add(entity: entity, &fbb)
+    return Arkavo_EntityRoot.endEntityRoot(&fbb, start: __start)
   }
 
   public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
     var _v = try verifier.visitTable(at: position)
-    try _v.visit(field: VTOFFSET.id.p, fieldName: "id", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
+    try _v.visit(unionKey: VTOFFSET.entityType.p, unionField: VTOFFSET.entity.p, unionKeyName: "entityType", fieldName: "entity", required: false, completion: { (verifier, key: Arkavo_Entity, pos) in
+      switch key {
+      case .none_:
+        break // NOTE - SWIFT doesnt support none
+      case .account:
+        try ForwardOffset<Arkavo_Account>.verify(&verifier, at: pos, of: Arkavo_Account.self)
+      case .stream:
+        try ForwardOffset<Arkavo_Stream>.verify(&verifier, at: pos, of: Arkavo_Stream.self)
+      case .thought:
+        try ForwardOffset<Arkavo_Thought>.verify(&verifier, at: pos, of: Arkavo_Thought.self)
+      }
+    })
     _v.finish()
   }
 }

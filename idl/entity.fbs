@@ -62,26 +62,27 @@ enum TrustLevel : byte {
   verified = 5
 }
 
-table Entity {
-  public_id:PublicId;
+table PublicId {
+  id:[ubyte];
 }
 
 table Account {
-  entity:Entity;
+  public_id:PublicId;
   profile:Profile;
   activity:Activity;
 }
 
 table Stream {
-  entity:Entity;
+  public_id:PublicId;
   profile:Profile;
+  activity:Activity;
   creator_public_id:PublicId;
   members_public_id:[PublicId];
   stream_level:StreamLevel;
 }
 
 table Thought {
-  entity:Entity;
+  public_id:PublicId;
   creator_public_id:PublicId;
   stream_public_id:PublicId;
   content:[ubyte];
@@ -105,9 +106,10 @@ table Activity {
   trust_level:TrustLevel;
 }
 
-table PublicId {
-  id:[ubyte];
+union Entity { Account, Stream, Thought }
+
+table EntityRoot {
+  entity:Entity;
 }
 
-
-root_type Entity;
+root_type EntityRoot;
