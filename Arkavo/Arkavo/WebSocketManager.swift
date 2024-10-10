@@ -186,7 +186,7 @@ final class WebSocketManager: ObservableObject {
     }
 
     /// Sends a custom message over the WebSocket.
-    func sendCustomMessage(_ message: Data, completion: @escaping (Error?) -> Void) {
+    func sendCustomMessage(_ message: Data, completion: @escaping @Sendable (Error?) -> Void) {
         guard connectionState == .connected else {
             lastError = "Cannot send custom message: WebSocket not connected."
             completion(NSError(domain: "WebSocketManager", code: 0, userInfo: [NSLocalizedDescriptionKey: "WebSocket not connected"]))

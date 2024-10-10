@@ -1,0 +1,115 @@
+namespace Arkavo;
+
+enum ActivityLevel : byte {
+  unused = 0,
+  low = 1,
+  medium = 2,
+  high = 3
+}
+
+enum MediaType : byte {
+  unused = 0,
+  text = 1,
+  image = 2,
+  video = 3,
+  audio = 4
+}
+
+enum LocationLevel : byte {
+  unused = 0,
+  wide = 1,
+  approximate = 2,
+  precise = 3
+}
+
+enum IdentityAssuranceLevel : byte {
+  unused = 0,
+  ial0 = 1,
+  ial1 = 2,
+  ial2 = 3,
+  ial25 = 4,
+  ial3 = 5
+}
+
+enum EncryptionLevel : byte {
+  unused = 0,
+  el0 = 1,
+  el1 = 2,
+  el2 = 3
+}
+
+enum StreamLevel : byte {
+  unused = 0,
+  sl0 = 1,
+  sl1 = 2,
+  sl2 = 3
+}
+
+enum ExpertLevel : byte {
+  unused = 0,
+  novice = 1,
+  intermediate = 2,
+  expert = 3,
+  master = 4
+}
+
+enum TrustLevel : byte {
+  unused = 0,
+  untrusted = 1,
+  low = 2,
+  medium = 3,
+  high = 4,
+  verified = 5
+}
+
+table PublicId {
+  id:[ubyte];
+}
+
+table Account {
+  public_id:PublicId;
+  profile:Profile;
+  activity:Activity;
+}
+
+table Stream {
+  public_id:PublicId;
+  profile:Profile;
+  activity:Activity;
+  creator_public_id:PublicId;
+  members_public_id:[PublicId];
+  stream_level:StreamLevel;
+}
+
+table Thought {
+  public_id:PublicId;
+  creator_public_id:PublicId;
+  stream_public_id:PublicId;
+  content:[ubyte];
+  media_type:MediaType;
+}
+
+table Profile {
+  name:string;
+  blurb:string;
+  interests:string;
+  location:string;
+  location_level:LocationLevel;
+  identity_assurance_level:IdentityAssuranceLevel;
+  encryption_level:EncryptionLevel;
+}
+
+table Activity {
+  date_created:int64;
+  expert_level:ExpertLevel;
+  activity_level:ActivityLevel;
+  trust_level:TrustLevel;
+}
+
+union Entity { Account, Stream, Thought }
+
+table EntityRoot {
+  entity:Entity;
+}
+
+root_type EntityRoot;

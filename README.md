@@ -24,10 +24,20 @@ brew install flatbuffers
 
 ### Initialize
 
+Events
+
 ```shell
 flatc --binary --swift -o Arkavo/Arkavo idl/event.fbs
 cd Arkavo/Arkavo
 mv event_generated.swift EventServiceModel.swift
+```
+
+Entities
+
+```shell
+flatc --binary --swift -o Arkavo/Arkavo idl/entity.fbs
+cd Arkavo/Arkavo
+mv entity_generated.swift EntityServiceModel.swift
 ```
 
 ### Dependencies 

@@ -47,15 +47,36 @@ class ArkavoService {
         }
     }
 
+    func sendMessage(_ nano: Data) throws {
+        let natsMessage = NATSMessage(payload: nano)
+        let messageData = natsMessage.toData()
+        print("Sending NATS message: \(messageData)")
+        WebSocketManager.shared.sendCustomMessage(messageData) { error in
+            if let error {
+                print("Error sending stream: \(error)")
+            }
+        }
+    }
+
+    func sendEvent(_ payload: Data) throws {
+        let natsMessage = NATSEvent(payload: payload)
+        let messageData = natsMessage.toData()
+        print("Sending NATS event: \(messageData)")
+        WebSocketManager.shared.sendCustomMessage(messageData) { error in
+            if let error {
+                print("Error sending stream: \(error)")
+            }
+        }
+    }
+
     private func handleIncomingNATS(data: Data) async {
         guard data.count > 4 else {
             print("Invalid NATS message: \(data.base64EncodedString())")
             return
         }
         let messageType = data.prefix(1)
-        let payload = data.suffix(from: 1)
         switch messageType[0] {
-        case 0x05:
+        case 0x05, 0x06:
             do {
                 // FIXME: copy of data after first byte
                 let subData = data.subdata(in: 1 ..< data.count)
@@ -70,14 +91,15 @@ class ArkavoService {
             } catch {
                 print("Unexpected error: \(error.localizedDescription)")
             }
-        case 0x06:
-            handleNATSEvent(payload: payload)
         default:
             print("Unknown message type: \(messageType.base64EncodedString())")
         }
     }
 
+    // FIXME: add to handle rewrap - handleNATSEvent(payload: payload)
+
     private func handleNATSEvent(payload: Data) {
+        print("Received NATS event: \(payload.base64EncodedString())")
         var bb = ByteBuffer(data: payload)
         do {
             var verifier = try Verifier(buffer: &bb)
@@ -90,7 +112,6 @@ class ArkavoService {
 
         let event = Arkavo_Event(bb, o: 0)
 
-        print("Received NATS event:")
         print("  Action: \(event.action)")
 
         switch event.dataType {
@@ -139,7 +160,7 @@ class ArkavoService {
             return
         }
         guard let nano = nanoTDFManager.getNanoTDF(withIdentifier: id) else {
-            print("missing nanoTDF")
+            print("missing nanoTDF \(id.base64EncodedString())")
             return
         }
         nanoTDFManager.removeNanoTDF(withIdentifier: id)
@@ -162,8 +183,7 @@ class ArkavoService {
                     // TODO: Handle account profile
                     break
                 case .streamProfile:
-                    // TODO: Handle stream profile
-                    break
+                    await handleStreamProfile(payload: payload, policy: policy, nano: nano)
                 case .thought:
                     await handleThought(payload: payload, policy: policy, nano: nano)
                 case .videoFrame:
@@ -175,16 +195,25 @@ class ArkavoService {
         }
     }
 
+    private func handleStreamProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
+        guard let streamService else {
+            print("Stream service is not initialized")
+            return
+        }
+        do {
+            // Handle the stream profile using the stream service
+            try await streamService.handle(payload, policy: policy, nano: nano)
+        } catch {
+            print("Error handling stream profile: \(error)")
+        }
+    }
+
     private func handleThought(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
         guard let thoughtService else { return }
         do {
             try await thoughtService.handle(payload, policy: policy, nano: nano)
         } catch {
-//            print("Error handling thought: \(error)")
-            // FIXME: hack since only .thought and .videoFrame is supported, assume failed .thought
-            #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-                await handleVideoFrame(payload: payload)
-            #endif
+            print("Error handling thought: \(error)")
         }
     }
 
