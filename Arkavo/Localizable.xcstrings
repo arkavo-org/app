@@ -70,6 +70,9 @@
     "Admission Policy:" : {
 
     },
+    "Admission: %@" : {
+
+    },
     "Assurance" : {
 
     },
@@ -165,6 +168,9 @@
         }
       }
     },
+    "Empty" : {
+
+    },
     "Encryption" : {
 
     },
@@ -221,6 +227,9 @@
       }
     },
     "Interaction Policy:" : {
+
+    },
+    "Interaction: %@" : {
 
     },
     "Interests" : {
@@ -291,9 +300,6 @@
       }
     },
     "Loading stream..." : {
-
-    },
-    "Loading..." : {
 
     },
     "Location" : {
@@ -471,6 +477,9 @@
           }
         }
       }
+    },
+    "Public ID" : {
+
     },
     "Ready to join?" : {
       "extractionState" : "stale",

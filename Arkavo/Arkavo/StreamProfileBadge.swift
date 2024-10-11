@@ -137,7 +137,7 @@ struct StreamProfileBadge: View {
 
 struct StreamProfileBadge_Previews: PreviewProvider {
     static var previews: some View {
-        let previewStream = Stream(account: Account(), profile: Profile(name: "Preview Stream", blurb: "This is a preview stream"), admissionPolicy: .open, interactionPolicy: .open)
+        let previewStream = Stream(creatorPublicID: Data(), profile: Profile(name: "Preview Stream", blurb: "This is a preview stream"), admissionPolicy: .open, interactionPolicy: .open)
         let ownerProfile = AccountProfileViewModel(profile: Profile(name: "Owner"), activityService: ActivityServiceModel())
         let membersProfile = [
             AccountProfileViewModel(profile: Profile(name: "Member 1"), activityService: ActivityServiceModel()),

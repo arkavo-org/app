@@ -35,7 +35,7 @@ struct StreamView: View {
                     ) {
                         if streams.isEmpty {
                             VStack {
-                                Text("Loading...")
+                                Text("Empty")
                             }
                         } else {
                             ForEach(streams) { stream in
@@ -113,7 +113,10 @@ struct StreamView: View {
 
     private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
         let account = try await PersistenceController.shared.getOrCreateAccount()
-        let stream = Stream(account: account, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+        guard let creatorPublicID = account.profile?.publicID else {
+            fatalError("Account profile must have a public ID to create a stream")
+        }
+        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
         account.streams.append(stream)
         try await PersistenceController.shared.saveChanges()
     }
@@ -126,8 +129,11 @@ struct StreamView: View {
 
 private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
     let account = try await PersistenceController.shared.getOrCreateAccount()
+    guard let creatorPublicID = account.profile?.publicID else {
+        fatalError("Account profile must have a public ID to create a stream")
+    }
     do {
-        let stream = Stream(account: account, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
         try account.addStream(stream)
         try await PersistenceController.shared.saveChanges()
     } catch {
@@ -179,7 +185,7 @@ struct StreamManagementView_Previews: PreviewProvider {
                 Profile(name: "Stream 3", blurb: "This is the third stream"),
             ]
             for profile in profiles {
-                let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .moderated)
+                let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .moderated)
                 account.streams.append(stream)
                 try context.save()
             }

@@ -37,8 +37,13 @@ struct DetailedStreamProfileView: View {
                         }
                     }
                     Section(header: Text("Policies")) {
-                        Text("Admission: \(viewModel.stream!.admissionPolicy)")
-                        Text("Interaction: \(viewModel.stream!.interactionPolicy)")
+                        Text("Admission: \(viewModel.stream!.admissionPolicy.rawValue)")
+                        Text("Interaction: \(viewModel.stream!.interactionPolicy.rawValue)")
+                    }
+                    Section(header: Text("Public ID")) {
+                        Text(viewModel.stream!.publicID.base58EncodedString)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
                     }
                 }
             }
@@ -209,9 +214,8 @@ class CreateStreamViewModel: ObservableObject {
 
 extension StreamProfileView_Previews {
     static var previewStream: Stream {
-        let account = Account()
         let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-        return Stream(account: account, profile: profile, admissionPolicy: .closed, interactionPolicy: .closed)
+        return Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .closed, interactionPolicy: .closed)
     }
 }
 
@@ -246,7 +250,7 @@ struct StreamProfileView_Previews: PreviewProvider {
             try context.save()
 
             let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+            let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .open)
             account.streams.append(stream)
             try context.save()
 
