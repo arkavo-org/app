@@ -294,10 +294,11 @@ class ThoughtStreamViewModel: StreamViewModel {
         // dedupe PersistenceController.shared
         let found = try await PersistenceController.shared.fetchThought(withPublicID: thoughtServiceModel.publicID)
         if found != nil {
-            print("Thought already exists")
-            return
+            // FIXME: is it saved multiple places, should we return
+            print("Thought already exists \(thoughtServiceModel.publicID.base58EncodedString)")
+//            return
         }
-        if stream.publicID != thoughtServiceModel.publicID {
+        if stream.publicID != thoughtServiceModel.streamPublicID {
             print("Wrong stream")
             return
         }
@@ -311,7 +312,7 @@ class ThoughtStreamViewModel: StreamViewModel {
         stream.thoughts.append(thought)
         try await PersistenceController.shared.saveChanges()
         // show
-        let creatorProfile = Profile(name: thoughtServiceModel.creatorID.uuidString)
+        let creatorProfile = Profile(name: thoughtServiceModel.creatorPublicID.base58EncodedString)
         let streamPublicIDString = stream.publicID.base58EncodedString
         let viewModel: ThoughtViewModel
         switch thoughtServiceModel.mediaType {

@@ -5,15 +5,17 @@ import OpenTDFKit
 // for transmission, serializes to payload
 struct ThoughtServiceModel: Codable {
     var publicID: Data
-    var creatorID: UUID
+    var creatorPublicID: Data
+    var streamPublicID: Data
     var mediaType: MediaType
     var content: Data
 
-    init(creatorID: UUID, mediaType: MediaType, content: Data) {
-        self.creatorID = creatorID
+    init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, content: Data) {
+        self.creatorPublicID = creatorPublicID
+        self.streamPublicID = streamPublicID
         self.mediaType = mediaType
         self.content = content
-        let hashData = creatorID.uuidString.data(using: .utf8)! + mediaType.rawValue.data(using: .utf8)! + content
+        let hashData = creatorPublicID + streamPublicID + content
         publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
 }
@@ -72,7 +74,8 @@ class ThoughtService {
 
     func createPayload(viewModel: ThoughtViewModel) throws -> Data {
         // TODO: replace with Flatbuffers
-        let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: viewModel.content)
+        let streamPublicID = Base58.decode(viewModel.streamPublicIDString)
+        let thoughtServiceModel = ThoughtServiceModel(creatorPublicID: viewModel.creator.publicID, streamPublicID: Data(streamPublicID!), mediaType: viewModel.mediaType, content: viewModel.content)
         let payload = try thoughtServiceModel.serialize()
         return payload
     }
