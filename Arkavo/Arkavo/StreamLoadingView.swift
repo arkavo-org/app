@@ -41,31 +41,43 @@ struct StreamLoadingView: View {
             }
         }
         .task {
-            await loadStream()
+            await loadStreamWithRetry()
         }
     }
 
     @MainActor
-    func loadStream() async {
+    func loadStreamWithRetry() async {
         state = .loading
-        do {
-            if let stream = try await service.requestStream(withPublicID: publicID) {
-                self.stream = stream
-                streamBadgeViewModel = createStreamBadgeViewModel(from: stream)
-                state = .loaded
-            } else {
-                state = .notFound
-                print("Stream not found for publicID: \(publicID.base58EncodedString)")
+        let maxRetries = 3
+        let retryDelay: TimeInterval = 0.5
+
+        for attempt in 1 ... maxRetries {
+            do {
+                if let stream = try await service.requestStream(withPublicID: publicID) {
+                    self.stream = stream
+                    streamBadgeViewModel = createStreamBadgeViewModel(from: stream)
+                    state = .loaded
+                    return
+                } else if attempt == maxRetries {
+                    state = .notFound
+                    print("Stream not found for publicID: \(publicID.base58EncodedString)")
+                    return
+                }
+            } catch {
+                if attempt == maxRetries {
+                    state = .error(error)
+                    print("Error loading stream: \(error.localizedDescription)")
+                    return
+                }
             }
-        } catch {
-            state = .error(error)
-            print("Error loading stream: \(error.localizedDescription)")
+
+            // Wait before the next retry
+            try? await Task.sleep(for: .milliseconds(Int(retryDelay * 1000)))
         }
     }
 
     private func createStreamBadgeViewModel(from stream: Stream) -> StreamBadgeViewModel {
-        // Here you would populate the ViewModel with actual data from the stream
-        // For now, we'll use placeholder data
+        // TODO: populate
         StreamBadgeViewModel(
             stream: stream,
             isHighlighted: false,

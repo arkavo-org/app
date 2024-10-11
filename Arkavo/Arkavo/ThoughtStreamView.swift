@@ -169,6 +169,15 @@ struct ThoughtStreamView: View {
         Task {
             let account = try await PersistenceController.shared.getOrCreateAccount()
             accountProfile = account.profile
+            if let stream = viewModel.stream {
+                for thought in stream.thoughts {
+                    do {
+                        try service.sendThought(thought.nano)
+                    } catch {
+                        print("sendThought error: \(error)")
+                    }
+                }
+            }
         }
     }
 
@@ -300,6 +309,13 @@ class ThoughtStreamViewModel: StreamViewModel {
         }
         if stream.publicID != thoughtServiceModel.streamPublicID {
             print("Wrong stream")
+            return
+        }
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        guard let accountProfile = account.profile,
+              accountProfile.publicID != thoughtServiceModel.creatorPublicID
+        else {
+            // mine, just return
             return
         }
         // persist
