@@ -32,15 +32,23 @@ struct ThoughtStreamView: View {
             .edgesIgnoringSafeArea(.top)
             .navigationBarBackButtonHidden(true)
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Back") { dismiss() }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button("Back") { dismiss() }
+                }
+                #endif
             }
             .onAppear(perform: onAppear)
             .onDisappear(perform: onDisappear)
             .onTapGesture { isInputFocused = true }
+            #if os(iOS)
             .sheet(isPresented: $isShowingImagePicker) { imagePicker }
             .sheet(isPresented: $isShowingCamera) { cameraPicker }
+            #endif
             .sheet(isPresented: $isShowingLocationPicker) { locationPicker }
             .sheet(isPresented: $isShowingStickerPicker) { stickerPicker }
             .sheet(isPresented: $isShareSheetPresented) { shareSheet }
@@ -100,13 +108,13 @@ struct ThoughtStreamView: View {
             }
             TextField("Type a message...", text: $inputText)
                 .padding(10)
-                .background(Color(.systemGray6))
+                .background(Color.gray)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .focused($isInputFocused)
             sendButton
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color.blue.opacity(0.1))
     }
 
     private var sendButton: some View {
@@ -121,7 +129,7 @@ struct ThoughtStreamView: View {
         }
         .disabled(isSending)
     }
-
+    #if os(iOS)
     private var imagePicker: some View {
         ImagePicker(sourceType: .photoLibrary) { image in
             guard let imageData = image.heifData() else {
@@ -145,7 +153,7 @@ struct ThoughtStreamView: View {
             }
         }
     }
-
+    #endif
     private var locationPicker: some View {
         LocationPicker { _ in
             // Handle selected location

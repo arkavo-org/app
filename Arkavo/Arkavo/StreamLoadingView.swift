@@ -20,17 +20,15 @@ struct StreamLoadingView: View {
                     Button("Join stream") {
                         showThoughtStream = true
                     }
+                    #if os(iOS)
                     .fullScreenCover(isPresented: $showThoughtStream) {
-                        if let stream,
-                           let thoughtService = service.service.thoughtService,
-                           let streamBadgeViewModel
-                        {
-                            let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService, stream: stream)
-                            ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
-                        } else {
-                            Text("Service misconfigured")
-                        }
+                        thoughtStreamView
                     }
+                    #else
+                    .sheet(isPresented: $showThoughtStream) {
+                        thoughtStreamView
+                    }
+                    #endif
                 } else {
                     Text("Stream corrupted")
                 }
@@ -45,6 +43,19 @@ struct StreamLoadingView: View {
         }
     }
 
+    @ViewBuilder
+    var thoughtStreamView: some View {
+        if let stream,
+           let thoughtService = service.service.thoughtService,
+           let streamBadgeViewModel
+        {
+            let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService, stream: stream)
+            ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
+        } else {
+            Text("Service misconfigured")
+        }
+    }
+    
     @MainActor
     func loadStreamWithRetry() async {
         state = .loading
