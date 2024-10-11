@@ -19,10 +19,12 @@ final class Account {
     }
 
     func addStream(_ stream: Stream) throws {
-        guard streams.count < streamLimit else {
+        guard streams.count < streamLimit,
+              let creatorPublicID = profile?.publicID
+        else {
             throw StreamLimitError.exceededLimit
         }
-        stream.account = self
+        stream.creatorPublicID = creatorPublicID
         streams.append(stream)
     }
 

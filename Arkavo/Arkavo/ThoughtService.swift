@@ -5,15 +5,17 @@ import OpenTDFKit
 // for transmission, serializes to payload
 struct ThoughtServiceModel: Codable {
     var publicID: Data
-    var creatorID: UUID
+    var creatorPublicID: Data
+    var streamPublicID: Data
     var mediaType: MediaType
     var content: Data
 
-    init(creatorID: UUID, mediaType: MediaType, content: Data) {
-        self.creatorID = creatorID
+    init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, content: Data) {
+        self.creatorPublicID = creatorPublicID
+        self.streamPublicID = streamPublicID
         self.mediaType = mediaType
         self.content = content
-        let hashData = creatorID.uuidString.data(using: .utf8)! + mediaType.rawValue.data(using: .utf8)! + content
+        let hashData = creatorPublicID + streamPublicID + content
         publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
 }
@@ -42,6 +44,7 @@ extension ThoughtServiceModel {
 class ThoughtService {
     private let service: ArkavoService
     public var streamViewModel: StreamViewModel?
+    weak var thoughtStreamViewModel: ThoughtStreamViewModel?
 
     init(_ service: ArkavoService) {
         self.service = service
@@ -61,7 +64,7 @@ class ThoughtService {
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
         // smart contract
-        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
+        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.thought.rawValue)!
         // FIXME: use stream to determine metadata and abac
         var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
@@ -70,9 +73,37 @@ class ThoughtService {
     }
 
     func createPayload(viewModel: ThoughtViewModel) throws -> Data {
-        let thoughtServiceModel = ThoughtServiceModel(creatorID: viewModel.creator.id, mediaType: viewModel.mediaType, content: viewModel.content)
+        // TODO: replace with Flatbuffers
+        let streamPublicID = Base58.decode(viewModel.streamPublicIDString)
+        let thoughtServiceModel = ThoughtServiceModel(creatorPublicID: viewModel.creator.publicID, streamPublicID: Data(streamPublicID!), mediaType: viewModel.mediaType, content: viewModel.content)
         let payload = try thoughtServiceModel.serialize()
         return payload
+    }
+
+    func send(viewModel: ThoughtViewModel, stream: Stream) async {
+        do {
+            let nano = try createNano(viewModel, stream: stream)
+            // persist
+            // FIXME: always fails on unique constraint
+//            let thought = Thought(id: UUID(), nano: nano)
+//            thought.stream = stream
+//            stream.thoughts.append(thought)
+//            try await PersistenceController.shared.saveChanges()
+            // send
+            try sendThought(nano)
+        } catch {
+            print("error sending thought: \(error.localizedDescription)")
+        }
+    }
+
+    func loadAndDecrypt(for stream: Stream) {
+        for thought in stream.thoughts {
+            do {
+                try sendThought(thought.nano)
+            } catch {
+                print("sendThought error: \(error)")
+            }
+        }
     }
 
     func sendThought(_ nano: Data) throws {
@@ -88,30 +119,11 @@ class ThoughtService {
         }
     }
 
-    /// Reconstructs a Thought object from unencrypted Data.
-    /// - Parameter thought: The Thought object containing encrypted data.
-    /// - Returns: A reconstructed Thought object, or nil if decryption fails.
-    @MainActor func handle(_ decryptedData: Data, policy _: ArkavoPolicy, nano: NanoTDF) async throws {
-        guard let thoughtStreamViewModel = streamViewModel?.thoughtStreamViewModel else {
+    @MainActor func handle(_ decryptedData: Data, policy: ArkavoPolicy, nano: NanoTDF) async throws {
+        guard let thoughtStreamViewModel else {
             throw ThoughtServiceError.missingThoughtStreamViewModel
         }
-        // FIXME: dedupe
-        let thoughtServiceModel = try ThoughtServiceModel.deserialize(from: decryptedData)
-        // don't process if creator
-        if streamViewModel?.accountProfile?.id == thoughtServiceModel.creatorID {
-//            print("Ignoring thought from self")
-            return
-        }
-        // persist
-        let thought = Thought(nano: nano.toData())
-        thought.publicID = thoughtServiceModel.publicID
-        thought.nano = nano.toData()
-        thought.stream = streamViewModel?.thoughtStreamViewModel.stream
-        PersistenceController.shared.container.mainContext.insert(thought)
-        streamViewModel?.thoughtStreamViewModel.stream?.thoughts.append(thought)
-        try await PersistenceController.shared.saveChanges()
-        // show
-        thoughtStreamViewModel.receive(thoughtServiceModel)
+        try await thoughtStreamViewModel.handle(decryptedData, policy: policy, nano: nano)
     }
 
     enum ThoughtServiceError: Error {
