@@ -67,7 +67,16 @@
         }
       }
     },
+    "Admission Policy:" : {
+
+    },
+    "Admission: %@" : {
+
+    },
     "Assurance" : {
+
+    },
+    "Back" : {
 
     },
     "Blurb" : {
@@ -159,6 +168,9 @@
         }
       }
     },
+    "Empty" : {
+
+    },
     "Encryption" : {
 
     },
@@ -211,6 +223,12 @@
         }
       }
     },
+    "Interaction Policy:" : {
+
+    },
+    "Interaction: %@" : {
+
+    },
     "Interests" : {
       "localizations" : {
         "es-US" : {
@@ -220,6 +238,9 @@
           }
         }
       }
+    },
+    "Join stream" : {
+
     },
     "Last known location: %lf, %lf" : {
       "localizations" : {
@@ -381,6 +402,9 @@
         }
       }
     },
+    "No Stream Service for %@" : {
+
+    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -454,6 +478,9 @@
         }
       }
     },
+    "Public ID" : {
+
+    },
     "Ready to join?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -490,6 +517,9 @@
           }
         }
       }
+    },
+    "Service misconfigured" : {
+
     },
     "Settings" : {
 
@@ -588,6 +618,9 @@
         }
       }
     },
+    "Stream corrupted" : {
+
+    },
     "Stream ID" : {
       "localizations" : {
         "es-US" : {
@@ -599,6 +632,9 @@
       }
     },
     "Stream not found" : {
+
+    },
+    "Stream not set" : {
 
     },
     "Streams" : {

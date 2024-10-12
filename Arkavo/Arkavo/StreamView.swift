@@ -1,66 +1,53 @@
-import CryptoKit
 import SwiftData
 import SwiftUI
 
-final class StreamViewModel: ObservableObject, Identifiable {
-    var thoughtStreamViewModel: ThoughtStreamViewModel
-    var accountProfile: Profile?
-
-    init(thoughtStreamViewModel: ThoughtStreamViewModel) {
-        self.thoughtStreamViewModel = thoughtStreamViewModel
-    }
-}
-
 struct StreamView: View {
-    @Query private var accounts: [Account]
-    @State private var showingCreateStream = false
-    @State private var selectedStream: Stream?
-    @State private var showingThoughtView = false
-    @StateObject var viewModel: StreamViewModel
+    @State var service: StreamService
+    @State var showingCreateStream = false
+    @State var showingThoughtView = false
+    @State var showingDetailedStreamProfileView = false
+    @State var selectedStream: Stream?
+    @Query var streams: [Stream]
+    @State var accountProfile: Profile?
 
     var body: some View {
-        if showingThoughtView, let selectedStream {
-            let account = accounts.first { $0.id == selectedStream.account.id }
-            ThoughtStreamView(viewModel: viewModel.thoughtStreamViewModel)
-                .onAppear {
-                    viewModel.accountProfile = account?.profile
-                    viewModel.thoughtStreamViewModel.stream = selectedStream
-                    viewModel.thoughtStreamViewModel.creatorProfile = account?.profile
-                    viewModel.thoughtStreamViewModel.loadAndDecrypt(for: selectedStream)
-                }
-        } else {
+        VStack {
+            Spacer(minLength: 40)
             VStack {
-                Spacer(minLength: 40)
-                VStack {
-                    HStack {
-                        Text("Streams")
-                            .font(.title)
-                        Spacer()
-                    }
-                    .padding()
-                    List {
-                        Section(header:
-                            HStack {
-                                Text("Mine")
-                                Spacer()
-                                Button(action: {
-                                    showingCreateStream = true
-                                }) {
-                                    Image(systemName: "plus.circle")
-                                        .foregroundColor(.blue)
-                                }
+                HStack {
+                    Text("Streams")
+                        .font(.title)
+                    Spacer()
+                }
+                .padding()
+                List {
+                    Section(header:
+                        HStack {
+                            Text("Mine")
+                            Spacer()
+                            Button(action: {
+                                showingCreateStream = true
+                            }) {
+                                Image(systemName: "plus.circle")
+                                    .foregroundColor(.blue)
                             }
-                        ) {
-                            ForEach(accounts.first?.streams ?? []) { stream in
+                        }
+                    ) {
+                        if streams.isEmpty {
+                            VStack {
+                                Text("Empty")
+                            }
+                        } else {
+                            ForEach(streams) { stream in
                                 HStack {
-                                    CompactStreamProfileView(viewModel: StreamProfileViewModel(stream: stream))
+                                    CompactStreamProfileView(viewModel: StreamViewModel(stream: stream))
                                         .onTapGesture {
-                                            viewModel.thoughtStreamViewModel.stream = stream
+                                            selectedStream = stream
+                                            showingDetailedStreamProfileView = true
                                         }
                                     Spacer()
                                     Button(action: {
                                         selectedStream = stream
-                                        viewModel.thoughtStreamViewModel.stream = stream
                                         showingThoughtView = true
                                     }) {
                                         Image(systemName: "arrow.right.circle")
@@ -70,56 +57,99 @@ struct StreamView: View {
                             }
                             .onDelete { indexSet in
                                 Task {
-                                    await deleteStreams(at: indexSet)
+                                    try await deleteStreams(at: indexSet)
                                 }
                             }
                         }
                     }
                 }
-                .safeAreaInset(edge: .top) {
-                    Color.clear.frame(height: 0)
+            }
+            .safeAreaInset(edge: .top) {
+                Color.clear.frame(height: 0)
+            }
+        }
+        .sheet(isPresented: $showingCreateStream) {
+            CreateStreamProfileView { profile, admissionPolicy, interactionPolicy in
+                Task {
+                    try await saveNewStream(with: profile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
                 }
             }
-            .sheet(isPresented: $showingCreateStream) {
-                CreateStreamProfileView { profile, admissionPolicy, interactionPolicy in
-                    Task {
-                        await saveNewStream(with: profile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
-                    }
-                }
+        }
+        .sheet(isPresented: $showingThoughtView) {
+            if let thoughtService = service.service.thoughtService,
+               let accountProfile,
+               let selectedStream
+            {
+                let accountProfileViewModel = AccountProfileViewModel(profile: accountProfile)
+                let streamBadgeViewModel = StreamBadgeViewModel(stream: selectedStream, ownerProfile: accountProfileViewModel)
+                let thoughtStreamViewModel = ThoughtStreamViewModel(service: thoughtService, stream: selectedStream)
+                ThoughtStreamView(service: thoughtService, streamService: service, viewModel: thoughtStreamViewModel, streamBadgeViewModel: streamBadgeViewModel)
+            } else {
+                Text("Stream not set")
             }
-            .sheet(item: $selectedStream) { stream in
-                DetailedStreamProfileView(viewModel: StreamProfileViewModel(stream: stream))
+        }
+        .sheet(isPresented: $showingDetailedStreamProfileView) {
+            if let selectedStream {
+                DetailedStreamProfileView(viewModel: StreamViewModel(stream: selectedStream))
+            }
+        }
+        .onChange(of: showingThoughtView) { _, newValue in
+            if newValue == false {
+                selectedStream = nil
+            }
+        }
+        .onChange(of: showingDetailedStreamProfileView) { _, newValue in
+            if newValue == false {
+                selectedStream = nil
+            }
+        }
+        .onAppear {
+            Task {
+                let account = try await PersistenceController.shared.getOrCreateAccount()
+                accountProfile = account.profile
             }
         }
     }
 
-    private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async {
-        guard let account = accounts.first else {
-            print("No account found")
-            return
+    private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        guard let creatorPublicID = account.profile?.publicID else {
+            fatalError("Account profile must have a public ID to create a stream")
         }
-        do {
-            let stream = Stream(account: account, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
-            try account.addStream(stream)
-            try await PersistenceController.shared.saveChanges()
-        } catch {
-            print("Stream creation failed: \(error.localizedDescription)")
-        }
+        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+        account.streams.append(stream)
+        try await PersistenceController.shared.saveChanges()
     }
 
-    private func deleteStreams(at offsets: IndexSet) async {
-        guard let account = accounts.first else {
-            print("No account found")
-            return
-        }
-        for offset in offsets {
-            if offset < account.streams.count {
-                account.streams.remove(at: offset)
-                do {
-                    try await PersistenceController.shared.saveChanges()
-                } catch {
-                    print("Failed to delete stream(s): \(error)")
-                }
+    private func deleteStreams(at offsets: IndexSet) async throws {
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        try await PersistenceController.shared.deleteStreams(at: offsets, from: account)
+    }
+}
+
+private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
+    let account = try await PersistenceController.shared.getOrCreateAccount()
+    guard let creatorPublicID = account.profile?.publicID else {
+        fatalError("Account profile must have a public ID to create a stream")
+    }
+    do {
+        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+        try account.addStream(stream)
+        try await PersistenceController.shared.saveChanges()
+    } catch {
+        print("Stream creation failed: \(error.localizedDescription)")
+    }
+}
+
+private func deleteStreams(at offsets: IndexSet) async throws {
+    let account = try await PersistenceController.shared.getOrCreateAccount()
+    for offset in offsets {
+        if offset < account.streams.count {
+            account.streams.remove(at: offset)
+            do {
+                try await PersistenceController.shared.saveChanges()
+            } catch {
+                print("Failed to delete stream(s): \(error)")
             }
         }
     }
@@ -154,9 +184,8 @@ struct StreamManagementView_Previews: PreviewProvider {
                 Profile(name: "Stream 2", blurb: "This is the second stream"),
                 Profile(name: "Stream 3", blurb: "This is the third stream"),
             ]
-//            let profiles: [Profile] = []
             for profile in profiles {
-                let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .moderated)
+                let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .moderated)
                 account.streams.append(stream)
                 try context.save()
             }

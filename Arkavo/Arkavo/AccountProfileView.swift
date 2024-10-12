@@ -168,7 +168,7 @@ class AccountProfileViewModel: ObservableObject {
     @Published var profileImage = Image(systemName: "person.fill")
     @Published var activityServiceModel: ActivityServiceModel?
 
-    init(profile: Profile, activityService: ActivityServiceModel) {
+    init(profile: Profile, activityService: ActivityServiceModel = ActivityServiceModel()) {
         self.profile = profile
         activityServiceModel = activityService
     }

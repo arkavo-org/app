@@ -1,12 +1,20 @@
 import SwiftData
 import SwiftUI
 
+class StreamViewModel: ObservableObject {
+    @Published var stream: Stream?
+
+    init(stream: Stream) {
+        self.stream = stream
+    }
+}
+
 struct CompactStreamProfileView: View {
-    @ObservedObject var viewModel: StreamProfileViewModel
+    @StateObject var viewModel: StreamViewModel
 
     var body: some View {
         HStack {
-            Text(viewModel.stream.profile.name)
+            Text(viewModel.stream!.profile.name)
                 .font(.headline)
             Spacer()
         }
@@ -15,7 +23,7 @@ struct CompactStreamProfileView: View {
 }
 
 struct DetailedStreamProfileView: View {
-    @ObservedObject var viewModel: StreamProfileViewModel
+    @StateObject var viewModel: StreamViewModel
     @State var isShareSheetPresented: Bool = false
 
     var body: some View {
@@ -23,20 +31,25 @@ struct DetailedStreamProfileView: View {
             VStack {
                 Form {
                     Section(header: Text("Profile")) {
-                        Text("\(viewModel.stream.profile.name)")
-                        if let blurb = viewModel.stream.profile.blurb {
+                        Text("\(viewModel.stream!.profile.name)")
+                        if let blurb = viewModel.stream!.profile.blurb {
                             Text("\(blurb)")
                         }
                     }
                     Section(header: Text("Policies")) {
-                        Text("Admission: \(viewModel.stream.admissionPolicy)")
-                        Text("Interaction: \(viewModel.stream.interactionPolicy)")
+                        Text("Admission: \(viewModel.stream!.admissionPolicy.rawValue)")
+                        Text("Interaction: \(viewModel.stream!.interactionPolicy.rawValue)")
+                    }
+                    Section(header: Text("Public ID")) {
+                        Text(viewModel.stream!.publicID.base58EncodedString)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
                     }
                 }
             }
             .navigationTitle("Stream")
             .toolbar {
-                if viewModel.stream.admissionPolicy != .closed {
+                if viewModel.stream!.admissionPolicy != .closed {
                     ToolbarItem(placement: .primaryAction) {
                         Button(action: {
                             isShareSheetPresented = true
@@ -47,7 +60,7 @@ struct DetailedStreamProfileView: View {
                 }
             }
             .sheet(isPresented: $isShareSheetPresented) {
-                ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream.publicID.base58EncodedString)")!],
+                ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream!.publicID.base58EncodedString)")!],
                            isPresented: $isShareSheetPresented)
             }
         }
@@ -95,17 +108,9 @@ struct DetailedStreamProfileView: View {
     }
 #endif
 
-class StreamProfileViewModel: ObservableObject {
-    @Published var stream: Stream
-
-    init(stream: Stream) {
-        self.stream = stream
-    }
-}
-
 struct CreateStreamProfileView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel = CreateStreamProfileViewModel()
+    @StateObject private var viewModel = CreateStreamViewModel()
     var onSave: (Profile, AdmissionPolicy, InteractionPolicy) -> Void
 
     var body: some View {
@@ -164,7 +169,7 @@ struct CreateStreamProfileView: View {
     }
 }
 
-class CreateStreamProfileViewModel: ObservableObject {
+class CreateStreamViewModel: ObservableObject {
     @Published var name: String = ""
     @Published var blurb: String = ""
     @Published var participantCount: Int = 2
@@ -209,20 +214,19 @@ class CreateStreamProfileViewModel: ObservableObject {
 
 extension StreamProfileView_Previews {
     static var previewStream: Stream {
-        let account = Account()
         let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-        return Stream(account: account, profile: profile, admissionPolicy: .closed, interactionPolicy: .closed)
+        return Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .closed, interactionPolicy: .closed)
     }
 }
 
 struct StreamProfileView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            CompactStreamProfileView(viewModel: StreamProfileViewModel(stream: previewStream))
+            CompactStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
                 .previewLayout(.sizeThatFits)
                 .previewDisplayName("Compact Stream Profile")
 
-            DetailedStreamProfileView(viewModel: StreamProfileViewModel(stream: previewStream))
+            DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
                 .previewDisplayName("Detailed Stream Profile")
 
             CreateStreamProfileView { _, _, _ in
@@ -246,7 +250,7 @@ struct StreamProfileView_Previews: PreviewProvider {
             try context.save()
 
             let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+            let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .open)
             account.streams.append(stream)
             try context.save()
 

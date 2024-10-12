@@ -10,7 +10,7 @@ import SwiftUI
 struct ArkavoView: View {
     @Environment(\.locale) var locale
     // service
-    @State private var service = ArkavoService()
+    @State var service: ArkavoService
     // data
     @State private var persistenceController: PersistenceController?
     // map
@@ -27,7 +27,9 @@ struct ArkavoView: View {
     @State private var tokenCheckTimer: Timer?
     @Query private var accounts: [Account]
 
-    init() {}
+    init(service: ArkavoService) {
+        self.service = service
+    }
 
     enum SelectedView {
         case welcome
@@ -85,15 +87,8 @@ struct ArkavoView: View {
                         VideoStreamView(viewModel: videoStreamViewModel)
                     #endif
                 case .streamList:
-                    if let thoughtService = service.thoughtService,
-                       let streamService = service.streamService
-                    {
-                        let thoughtStreamViewModel = ThoughtStreamViewModel(thoughtService: thoughtService, streamService: streamService)
-                        let streamViewModel = StreamViewModel(thoughtStreamViewModel: thoughtStreamViewModel)
-                        StreamView(viewModel: streamViewModel)
-                            .onAppear {
-                                thoughtService.streamViewModel = streamViewModel
-                            }
+                    if let streamService = service.streamService {
+                        StreamView(service: streamService)
                     } else {
                         Text("Thought service is unavailable")
                     }

@@ -33,7 +33,9 @@ chmod +x pkl-gen-swift
 
 ### Initialize
 
-Flatbuffers (if changed)
+#### Flatbuffers (if changed)
+
+Events
 
 ```shell
 flatc --binary --swift -o Arkavo/Arkavo idl/event.fbs
@@ -41,7 +43,15 @@ cd Arkavo/Arkavo
 mv event_generated.swift EventServiceModel.swift
 ```
 
-Pkl (if changed)
+Entities
+
+```shell
+flatc --binary --swift -o Arkavo/Arkavo idl/entity.fbs
+cd Arkavo/Arkavo
+mv entity_generated.swift EntityServiceModel.swift
+```
+
+#### Pkl (if changed)
 
 ```shell
 ./pkl-gen-swift pkl/Topics.pkl -o Arkavo/Arkavo/

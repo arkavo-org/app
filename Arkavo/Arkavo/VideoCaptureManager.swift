@@ -251,7 +251,7 @@
             let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 
             // Smart contract
-            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "5GnJAVumy3NBdo2u9ZEK1MQAXdiVnZWzzso4diP2JszVgSJQ")!
+            let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.videoFrame.rawValue)!
             var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
 
             // Increment IV for each frame
