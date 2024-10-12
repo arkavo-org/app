@@ -90,6 +90,7 @@ struct RegistrationView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .disabled(currentStep == .chooseScreenName && selectedScreenName.isEmpty)
 
                         ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                             .padding()
@@ -165,8 +166,11 @@ struct RegistrationView: View {
             case .generateScreenName:
                 generatedScreenNames = generateScreenNames()
                 currentStep = .chooseScreenName
+                selectedScreenName = "" // Reset selection when generating new names
             case .chooseScreenName:
-                currentStep = .selectInterests
+                if !selectedScreenName.isEmpty {
+                    currentStep = .selectInterests
+                }
             case .selectInterests:
                 onComplete()
             }
@@ -199,6 +203,11 @@ struct RegistrationView: View {
                         .cornerRadius(8)
                 }
             }
+            if selectedScreenName.isEmpty {
+                Text("Please select a screen name to continue")
+                    .foregroundColor(.red)
+                    .padding(.top)
+            }
         }
         .padding()
     }
@@ -223,12 +232,6 @@ struct RegistrationView: View {
                     }
                 }
             }
-
-            Button("Complete Registration") {
-                onComplete()
-            }
-            .buttonStyle(.borderedProminent)
-            .padding(.top)
         }
         .padding()
     }
