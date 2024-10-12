@@ -44,7 +44,7 @@ struct ArkavoView: View {
             ZStack {
                 switch selectedView {
                 case .welcome:
-                    WelcomeView(onCreateProfile: {
+                    RegisterationWelcomeView(onCreateProfile: {
                         showingProfileCreation = true
                     })
                     .sheet(isPresented: $showingProfileCreation) {
@@ -182,16 +182,6 @@ struct ArkavoView: View {
             }
         } else {
             print("No profile no webSocket no token")
-        }
-        if let account = accounts.first {
-            if account.profile == nil {
-                selectedView = .welcome
-            } else {
-                selectedView = .streamMap
-            }
-        } else {
-            selectedView = .welcome
-            // TODO: check if account needs to be created in edge case when deleted app and reinstalled
         }
     }
 

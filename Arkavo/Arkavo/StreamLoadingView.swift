@@ -26,8 +26,8 @@ struct StreamLoadingView: View {
                     }
                     #else
                     .sheet(isPresented: $showThoughtStream) {
-                        thoughtStreamView
-                    }
+                                thoughtStreamView
+                            }
                     #endif
                 } else {
                     Text("Stream corrupted")
@@ -55,7 +55,7 @@ struct StreamLoadingView: View {
             Text("Service misconfigured")
         }
     }
-    
+
     @MainActor
     func loadStreamWithRetry() async {
         state = .loading

@@ -20,7 +20,7 @@ struct Bucket: Identifiable {
     var topics: [TopicNode] = []
 }
 
-struct InteractiveTopicGraphView: View {
+struct RegistrationInterestsView: View {
     @State private var topics: [TopicNode] = []
     @State private var selectedTopic: TopicNode?
     @State private var buckets: [Bucket]
@@ -215,6 +215,6 @@ extension CGPoint {
 // Preview
 struct InteractiveTopicGraphView_Previews: PreviewProvider {
     static var previews: some View {
-        InteractiveTopicGraphView()
+        RegistrationInterestsView()
     }
 }

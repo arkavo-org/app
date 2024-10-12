@@ -73,6 +73,9 @@
     "Admission: %@" : {
 
     },
+    "Arkavo" : {
+
+    },
     "Assurance" : {
 
     },
@@ -99,6 +102,9 @@
 
     },
     "Classification settings go here" : {
+
+    },
+    "Complete Registration" : {
 
     },
     "Create Account Profile" : {
@@ -194,6 +200,9 @@
 
     },
     "Features" : {
+
+    },
+    "Generate Screen Names" : {
 
     },
     "Granularity" : {
@@ -311,6 +320,9 @@
     "Location: %@" : {
 
     },
+    "logo" : {
+
+    },
     "Map" : {
       "localizations" : {
         "es-US" : {
@@ -391,6 +403,9 @@
         }
       }
     },
+    "Next" : {
+
+    },
     "No stream profile" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -416,6 +431,9 @@
       }
     },
     "Owner:" : {
+
+    },
+    "Pick one of the following options:" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
@@ -650,6 +668,9 @@
     "Take control of your content — anytime, anywhere." : {
 
     },
+    "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
     "Thought service is unavailable" : {
       "localizations" : {
         "es-US" : {
@@ -743,6 +764,9 @@
         }
       }
     },
+    "What topics are you interested in?" : {
+
+    },
     "Your content is always under your control - everywhere" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -764,6 +788,9 @@
           }
         }
       }
+    },
+    "Your profile will be public. Other users can see this. Use the generator to create a screen name and pick one." : {
+
     }
   },
   "version" : "1.0"

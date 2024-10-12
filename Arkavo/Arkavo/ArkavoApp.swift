@@ -4,36 +4,45 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
+    @State private var selectedView: AppView = .registration
     let persistenceController = PersistenceController.shared
     let service = ArkavoService()
+
     #if os(macOS)
         @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
+
     var body: some Scene {
         WindowGroup {
-            NavigationStack(path: $navigationPath) {
-                ArkavoView(service: service)
-                #if os(iOS)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarHidden(true)
-                #endif
-                    .modelContainer(persistenceController.container)
-                    .task {
-                        await ensureAccountExists()
-                    }
-                    .navigationDestination(for: DeepLinkDestination.self) { destination in
-                        switch destination {
-                        case let .stream(publicID):
-                            if service.streamService == nil {
-                                Text("No Stream Service for \(publicID)")
-                            } else {
-                                StreamLoadingView(service: service.streamService!, publicID: publicID)
+            Group {
+                switch selectedView {
+                case .registration:
+                    RegistrationView(onComplete: { selectedView = .main })
+                case .main:
+                    NavigationStack(path: $navigationPath) {
+                        ArkavoView(service: service)
+                        #if os(iOS)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .navigationBarHidden(true)
+                        #endif
+                            .modelContainer(persistenceController.container)
+                            .navigationDestination(for: DeepLinkDestination.self) { destination in
+                                switch destination {
+                                case let .stream(publicID):
+                                    if service.streamService == nil {
+                                        Text("No Stream Service for \(publicID)")
+                                    } else {
+                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
+                                    }
+                                case let .profile(publicID):
+                                    Text("Profile View for \(publicID)")
+                                }
                             }
-                        case let .profile(publicID):
-                            // TODO: account profile
-                            Text("Profile View for \(publicID)")
-                        }
                     }
+                }
+            }
+            .task {
+                await checkAccountStatus()
             }
             .onOpenURL { url in
                 handleIncomingURL(url)
@@ -52,7 +61,7 @@ struct ArkavoApp: App {
             switch newPhase {
             case .active:
                 Task {
-                    await ensureAccountExists()
+                    await checkAccountStatus()
                 }
             case .background:
                 Task {
@@ -72,12 +81,17 @@ struct ArkavoApp: App {
     }
 
     @MainActor
-    private func ensureAccountExists() async {
+    private func checkAccountStatus() async {
         do {
-            _ = try await persistenceController.getOrCreateAccount()
-//            print("ArkavoApp: Account ensured with ID: \(account.id)")
+            let account = try await persistenceController.getOrCreateAccount()
+            if account.profile == nil {
+                selectedView = .registration
+            } else {
+//                selectedView = .main
+            }
         } catch {
-            print("ArkavoApp: Error ensuring Account exists: \(error.localizedDescription)")
+            print("ArkavoApp: Error checking account status: \(error.localizedDescription)")
+            selectedView = .registration
         }
     }
 
@@ -134,6 +148,11 @@ struct ArkavoApp: App {
         }
     }
 #endif
+
+enum AppView {
+    case registration
+    case main
+}
 
 enum DeepLinkDestination: Hashable {
     case stream(publicID: Data)

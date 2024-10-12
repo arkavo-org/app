@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct WelcomeView: View {
+struct RegisterationWelcomeView: View {
     var onCreateProfile: () -> Void
 
     var body: some View {
@@ -79,6 +79,6 @@ struct BulletPoint: View {
 
 struct WelcomeView_Previews: PreviewProvider {
     static var previews: some View {
-        WelcomeView(onCreateProfile: {})
+        RegisterationWelcomeView(onCreateProfile: {})
     }
 }
