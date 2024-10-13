@@ -224,11 +224,18 @@ struct RegistrationView: View {
             Text("Your profile name will be revealed only to those fortunate enough to earn your approval.")
                 .padding()
             HStack {
-                TextField("Enter profile name", text: $selectedScreenName)
-                    .writingToolsBehavior(.automatic)
-                    .padding()
-                    .disableAutocorrection(true)
-                    .border(.secondary)
+                #if os(iOS)
+                    TextField("Enter profile name", text: $selectedScreenName)
+                        .writingToolsBehavior(.automatic)
+                        .padding()
+                        .disableAutocorrection(true)
+                        .border(.secondary)
+                #else
+                    TextField("Enter profile name", text: $selectedScreenName)
+                        .padding()
+                        .disableAutocorrection(true)
+                        .border(.secondary)
+                #endif
                 Button(action: generateScreenNames) {
                     Image(systemName: "wand.and.stars")
                         .foregroundColor(.white)
