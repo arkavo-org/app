@@ -25,6 +25,7 @@
       }
     },
     "•" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -131,9 +132,6 @@
           }
         }
       }
-    },
-    "Create your profile in seconds using Apple Passkey — no passwords, no hassle." : {
-
     },
     "Created: %@" : {
       "extractionState" : "stale",
@@ -513,9 +511,6 @@
         }
       }
     },
-    "Ready to Secure Your Socials?" : {
-
-    },
     "Refine Interests" : {
 
     },
@@ -668,9 +663,6 @@
           }
         }
       }
-    },
-    "Take control of your content — anytime, anywhere." : {
-
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 

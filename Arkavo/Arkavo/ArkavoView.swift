@@ -129,7 +129,7 @@ struct ArkavoView: View {
             }
         }
     }
-    
+
     private func initialSetup() {
         persistenceController = PersistenceController.shared
         service.setupCallbacks()

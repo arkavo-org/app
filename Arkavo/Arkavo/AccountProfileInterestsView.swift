@@ -20,7 +20,7 @@ struct Bucket: Identifiable {
     var topics: [TopicNode] = []
 }
 
-struct RegistrationInterestsView: View {
+struct AccountProfileInterestsView: View {
     @State private var topics: [TopicNode] = []
     @State private var selectedTopic: TopicNode?
     @State private var buckets: [Bucket]
@@ -33,7 +33,7 @@ struct RegistrationInterestsView: View {
     }
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ZStack {
                 // Draw nodes
                 ForEach($topics) { $topic in
@@ -57,7 +57,7 @@ struct RegistrationInterestsView: View {
 
                                     // Check if the topic should be dropped into a bucket
                                     if let bucketIndex = getBucketIndexAtPosition(value.location) {
-                                        dropTopicIntoBucket(topic, bucketIndex: bucketIndex)
+                                        dropTopicIntoBucket(topic, bucketIndex: bucketIndex, screenSize: geometry.size)
                                     }
                                 }
                         )
@@ -82,9 +82,9 @@ struct RegistrationInterestsView: View {
                         .position(bucket.position)
                 }
             }
-        }
-        .onAppear {
-            loadTopics()
+            .onAppear {
+                loadTopics(screenSize: geometry.size)
+            }
         }
     }
 
@@ -100,7 +100,7 @@ struct RegistrationInterestsView: View {
         }
     }
 
-    private func dropTopicIntoBucket(_ topic: TopicNode, bucketIndex: Int) {
+    private func dropTopicIntoBucket(_ topic: TopicNode, bucketIndex: Int, screenSize: CGSize) {
         print("Dropped \(topic.name) into \(buckets[bucketIndex].name) bucket")
 
         // Remove the topic from the main topics list
@@ -123,15 +123,15 @@ struct RegistrationInterestsView: View {
 
             for (index, var subtopic) in subtopics.enumerated() {
                 let angle = CGFloat(index) * angleStep
-                let x = radius * cos(angle) + UIScreen.main.bounds.width / 2
-                let y = radius * sin(angle) + UIScreen.main.bounds.height / 2
+                let x = radius * cos(angle) + screenSize.width / 2
+                let y = radius * sin(angle) + screenSize.height / 2
                 subtopic.position = CGPoint(x: x, y: y)
                 topics.append(subtopic)
             }
         }
     }
 
-    private func loadTopics() {
+    private func loadTopics(screenSize: CGSize) {
         let mainTopics = [
             ("Self", Color.blue),
             ("Career", Color.green),
@@ -144,8 +144,8 @@ struct RegistrationInterestsView: View {
             let (topicName, topicColor) = topicInfo
             let angle = 2 * .pi * Double(index) / Double(mainTopics.count)
             let radius = 160.0 // Adjusted radius to ensure topics are within the screen
-            let x = radius * cos(angle) + UIScreen.main.bounds.width / 2
-            let y = radius * sin(angle) + UIScreen.main.bounds.height / 2
+            let x = radius * cos(angle) + screenSize.width / 2
+            let y = radius * sin(angle) + screenSize.height / 2
             return TopicNode(name: topicName, position: CGPoint(x: x, y: y), color: topicColor, isMainTopic: true, subtopics: getSubtopics(for: topicName, color: topicColor))
         }
     }
@@ -215,6 +215,6 @@ extension CGPoint {
 // Preview
 struct InteractiveTopicGraphView_Previews: PreviewProvider {
     static var previews: some View {
-        RegistrationInterestsView()
+        AccountProfileInterestsView()
     }
 }

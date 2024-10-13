@@ -19,7 +19,7 @@ struct ArkavoApp: App {
             Group {
                 switch selectedView {
                 case .registration:
-                    RegistrationView(onComplete: {profile in
+                    RegistrationView(onComplete: { profile in
                         Task {
                             await saveProfile(profile: profile)
                             selectedView = .main
@@ -106,7 +106,7 @@ struct ArkavoApp: App {
             selectedView = .registration
         }
     }
-    
+
     @MainActor
     private func saveProfile(profile: Profile) async {
         do {
@@ -118,14 +118,14 @@ struct ArkavoApp: App {
             tokenCheckTimer?.invalidate() // Invalidate any existing timer
             tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                 Task { @MainActor in
-                    await self.checkForAuthenticationToken(account: account)
+                    await checkForAuthenticationToken(account: account)
                 }
             }
         } catch {
             print("Failed to save profile: \(error)")
         }
     }
-    
+
     @MainActor
     private func checkForAuthenticationToken(account: Account) async {
         tokenCheckTimer?.invalidate()
@@ -136,7 +136,7 @@ struct ArkavoApp: App {
             print("Authentication token is nil")
         }
     }
-    
+
     @MainActor
     private func saveChanges() async {
         do {

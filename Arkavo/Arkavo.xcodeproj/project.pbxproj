@@ -14,7 +14,6 @@
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
-		DA11D51E2C8DF250005D1946 /* RegisterationWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D51D2C8DF250005D1946 /* RegisterationWelcomeView.swift */; };
 		DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
 		DA179AE62CA0DE8B0083EB99 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AE52CA0DE8B0083EB99 /* Extension.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
@@ -28,7 +27,7 @@
 		DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2212272CB0BB0900C220B0 /* StreamProfileBadge.swift */; };
 		DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */; };
 		DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA22122F2CB0D1D200C220B0 /* ActivityService.swift */; };
-		DA24F9142CB1C872003211CD /* RegistrationInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F9132CB1C870003211CD /* RegistrationInterestsView.swift */; };
+		DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */; };
 		DA24F91F2CB1D046003211CD /* Topics.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F91E2CB1D044003211CD /* Topics.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */; };
@@ -79,7 +78,6 @@
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
-		DA11D51D2C8DF250005D1946 /* RegisterationWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterationWelcomeView.swift; sourceTree = "<group>"; };
 		DA179AD92CA0BBDC0083EB99 /* UserAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserAction.swift; sourceTree = "<group>"; };
 		DA179AE52CA0DE8B0083EB99 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -93,7 +91,7 @@
 		DA2212272CB0BB0900C220B0 /* StreamProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamProfileBadge.swift; sourceTree = "<group>"; };
 		DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountProfileBadge.swift; sourceTree = "<group>"; };
 		DA22122F2CB0D1D200C220B0 /* ActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityService.swift; sourceTree = "<group>"; };
-		DA24F9132CB1C870003211CD /* RegistrationInterestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationInterestsView.swift; sourceTree = "<group>"; };
+		DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountProfileInterestsView.swift; sourceTree = "<group>"; };
 		DA24F91E2CB1D044003211CD /* Topics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Topics.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "MyRecommender 1.mlpackage"; sourceTree = "<group>"; };
@@ -191,6 +189,7 @@
 				DACCD61E2CAF5D2C00A9060C /* AccountView.swift */,
 				DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
+				DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */,
 				DA9D34492C6AE68000D39ED4 /* StreamView.swift */,
 				DA1C90662CB3099100806E8A /* StreamLoadingView.swift */,
 				DA73B3342C6436EF00393056 /* StreamCloudView.swift */,
@@ -208,8 +207,6 @@
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
-				DA24F9132CB1C870003211CD /* RegistrationInterestsView.swift */,
-				DA11D51D2C8DF250005D1946 /* RegisterationWelcomeView.swift */,
 				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
@@ -398,7 +395,7 @@
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
-				DA24F9142CB1C872003211CD /* RegistrationInterestsView.swift in Sources */,
+				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
@@ -417,7 +414,6 @@
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
-				DA11D51E2C8DF250005D1946 /* RegisterationWelcomeView.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,

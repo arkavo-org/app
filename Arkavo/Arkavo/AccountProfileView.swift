@@ -22,7 +22,7 @@ struct AccountProfileDetailedView: View {
                 NavigationLink(destination: AccountView()) {
                     Text("My Account")
                 }
-                NavigationLink(destination: RegistrationInterestsView()) {
+                NavigationLink(destination: AccountProfileInterestsView()) {
                     Text("Refine Interests")
                 }
             }

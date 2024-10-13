@@ -117,7 +117,9 @@ struct RegistrationView: View {
                     }
                 }
                 .navigationTitle(currentStep.title)
-                .navigationBarTitleDisplayMode(.large)
+                #if ios
+                    .navigationBarTitleDisplayMode(.large)
+                #endif
             }
         }
     }
@@ -241,14 +243,14 @@ struct RegistrationView: View {
                     Button(action: {
                         selectedScreenName = name
                     }) {
-                            Text(name)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(selectedScreenName == name ? Color.blue : Color.gray.opacity(0.2))
-                                .foregroundColor(selectedScreenName == name ? .white : .primary)
-                                .cornerRadius(20)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
+                        Text(name)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(selectedScreenName == name ? Color.blue : Color.gray.opacity(0.2))
+                            .foregroundColor(selectedScreenName == name ? .white : .primary)
+                            .cornerRadius(20)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                     }
                 }
             }
@@ -326,6 +328,6 @@ enum SlideDirection {
 }
 
 #Preview {
-    RegistrationView(onComplete: {profile in })
+    RegistrationView(onComplete: { _ in })
         .modelContainer(for: Profile.self, inMemory: true)
 }
