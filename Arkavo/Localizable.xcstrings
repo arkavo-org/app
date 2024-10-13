@@ -82,9 +82,6 @@
     "Back" : {
 
     },
-    "Blurb" : {
-
-    },
     "Blurb: %@" : {
 
     },
@@ -105,6 +102,7 @@
 
     },
     "Create Account Profile" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -242,6 +240,7 @@
 
     },
     "Interests" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -346,6 +345,7 @@
 
     },
     "Message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -520,6 +520,7 @@
 
     },
     "Register" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {

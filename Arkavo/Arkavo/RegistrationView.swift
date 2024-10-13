@@ -36,8 +36,7 @@ enum RegistrationStep: Int, CaseIterable {
 }
 
 struct RegistrationView: View {
-    @Environment(\.modelContext) private var modelContext
-    var onComplete: () -> Void
+    var onComplete: (_ profile: Profile) async -> Void
 
     @State private var currentStep: RegistrationStep = .welcome
     @State private var slideDirection: SlideDirection = .right
@@ -205,7 +204,15 @@ struct RegistrationView: View {
             case .generateScreenName:
                 currentStep = .enablePasskeys
             case .enablePasskeys:
-                onComplete()
+                let newProfile = Profile(
+                    name: selectedScreenName,
+                    interests: Array(selectedInterests).joined(separator: ","),
+                    hasHighEncryption: true,
+                    hasHighIdentityAssurance: true
+                )
+                Task {
+                    await onComplete(newProfile)
+                }
             }
         }
     }
@@ -229,21 +236,19 @@ struct RegistrationView: View {
                 }
             }
             .padding()
-            VStack {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
                 ForEach(generatedScreenNames, id: \.self) { name in
                     Button(action: {
                         selectedScreenName = name
                     }) {
-                        Button(action: {
-                            selectedScreenName = name
-                        }) {
                             Text(name)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(selectedScreenName == name ? Color.blue : Color.gray.opacity(0.2))
                                 .foregroundColor(selectedScreenName == name ? .white : .primary)
                                 .cornerRadius(20)
-                        }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
                     }
                 }
             }
@@ -297,7 +302,9 @@ struct InterestButton: View {
                 .padding(.vertical, 5)
                 .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
                 .foregroundColor(isSelected ? .white : .primary)
-                .cornerRadius(15)
+                .cornerRadius(20)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
         }
     }
 }
@@ -319,6 +326,6 @@ enum SlideDirection {
 }
 
 #Preview {
-    RegistrationView(onComplete: {})
+    RegistrationView(onComplete: {profile in })
         .modelContainer(for: Profile.self, inMemory: true)
 }
