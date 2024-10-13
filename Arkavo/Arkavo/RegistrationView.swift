@@ -2,20 +2,23 @@ import SwiftUI
 
 enum RegistrationStep: Int, CaseIterable {
     case welcome
+    case selectInterests
     case generateScreenName
     case chooseScreenName
-    case selectInterests
+    case enablePasskeys
 
     var title: String {
         switch self {
         case .welcome:
             "Welcome"
-        case .generateScreenName:
-            "Generate Screen Name"
-        case .chooseScreenName:
-            "Choose Screen Name"
         case .selectInterests:
-            "Select Interests"
+            "Select Interests" // What topics are you interested in?
+        case .generateScreenName:
+            "Create Profile"
+        case .chooseScreenName:
+            "Create Profile"
+        case .enablePasskeys:
+            "Create Passkey"
         }
     }
 
@@ -23,12 +26,14 @@ enum RegistrationStep: Int, CaseIterable {
         switch self {
         case .welcome:
             "Get Started"
-        case .generateScreenName:
-            "Generate Screen Names"
-        case .chooseScreenName:
-            "Continue"
         case .selectInterests:
             "Continue"
+        case .generateScreenName:
+            "Generate Names"
+        case .chooseScreenName:
+            "Continue"
+        case .enablePasskeys:
+            "Enable Face ID"
         }
     }
 }
@@ -62,21 +67,23 @@ struct RegistrationView: View {
                                 switch step {
                                 case .welcome:
                                     welcomeView
+                                case .selectInterests:
+                                    chooseInterestsView
                                 case .generateScreenName:
                                     generateScreenNameView
                                 case .chooseScreenName:
                                     chooseScreenNameView
-                                case .selectInterests:
-                                    chooseInterestsView
+                                case .enablePasskeys:
+                                    enablePasskeysView
                                 }
                             }
+                            .frame(width: geometry.size.width, alignment: .top)
                             .opacity(currentStep == step ? 1 : 0)
                             .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
-                            .padding(.top, 20)
                         }
                     }
                     .animation(.easeInOut(duration: 0.3), value: currentStep)
-                    .frame(height: geometry.size.height * 0.7)
+                    .frame(height: geometry.size.height * 0.7, alignment: .top)
 
                     Spacer()
 
@@ -105,7 +112,7 @@ struct RegistrationView: View {
                                 }
                             }
                             Spacer()
-                            if currentStep != .selectInterests {
+                            if currentStep != .enablePasskeys {
                                 Button("Next") {
                                     handleButtonAction()
                                 }
@@ -157,11 +164,47 @@ struct RegistrationView: View {
         }
     }
 
+    private var enablePasskeysView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "faceid")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 100)
+                .foregroundColor(.blue)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 2)
+                )
+
+            Text("Enable passkeys")
+                .font(.title)
+                .fontWeight(.bold)
+
+            Text("Use your face ID to verify it's you.\nThere's no need for a password.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Text("Learn more, view our")
+                .foregroundColor(.secondary)
+
+            Button("Face ID Terms & Conditions") {
+                // Action to show terms and conditions
+            }
+            .foregroundColor(.blue)
+        }
+        .padding()
+    }
+
     private func handleButtonAction() {
         withAnimation(.easeInOut(duration: 0.3)) {
             slideDirection = .left
             switch currentStep {
             case .welcome:
+                currentStep = .selectInterests
+            case .selectInterests:
                 currentStep = .generateScreenName
             case .generateScreenName:
                 generatedScreenNames = generateScreenNames()
@@ -169,9 +212,9 @@ struct RegistrationView: View {
                 selectedScreenName = "" // Reset selection when generating new names
             case .chooseScreenName:
                 if !selectedScreenName.isEmpty {
-                    currentStep = .selectInterests
+                    currentStep = .enablePasskeys
                 }
-            case .selectInterests:
+            case .enablePasskeys:
                 onComplete()
             }
         }
@@ -214,9 +257,6 @@ struct RegistrationView: View {
 
     private var chooseInterestsView: some View {
         VStack(spacing: 20) {
-            Text("What topics are you interested in?")
-                .padding()
-
             Text("Tell us your likes or dislikes. This helps us match your preference best.")
                 .font(.caption)
                 .padding(.bottom)
