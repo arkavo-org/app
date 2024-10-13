@@ -20,7 +20,10 @@ struct AccountProfileDetailedView: View {
 //                    Text("Created: \(viewModel.profile.dateCreated, formatter: DateFormatter.shortDateTime)")
 //                }
                 NavigationLink(destination: AccountView()) {
-                    Text("Go to Account")
+                    Text("My Account")
+                }
+                NavigationLink(destination: AccountProfileInterestsView()) {
+                    Text("Refine Interests")
                 }
             }
             .navigationTitle("Account Profile")
@@ -58,105 +61,6 @@ class Interest {
     init(name: String, isSelected: Bool) {
         self.name = name
         self.isSelected = isSelected
-    }
-}
-
-struct AccountProfileCreateView: View {
-    @StateObject var viewModel = AccountProfileCreateViewModel()
-    @Environment(\.dismiss) private var dismiss
-    var onSave: (Profile) -> Void
-    @Binding var selectedView: ArkavoView.SelectedView
-
-    @State private var interests: [Interest] = [
-        Interest(name: "Sports", isSelected: false),
-        Interest(name: "Music", isSelected: false),
-        Interest(name: "Food", isSelected: false),
-        Interest(name: "Politics", isSelected: false),
-        Interest(name: "Gaming", isSelected: false),
-    ]
-
-    @State private var areSelected: [Bool] = [false, false, false, false, false]
-
-    var currentInterest: String {
-        var curInterest: [String] = []
-
-        for interest in interests {
-            if interest.isSelected {
-                curInterest.append(interest.name)
-            }
-        }
-
-        return curInterest.joined(separator: ",")
-    }
-
-    var body: some View {
-        VStack {
-            Spacer()
-
-            HStack {
-                Text("Create Profile")
-                    .font(.title3)
-                    .padding(.leading, 20)
-                Spacer()
-                Button(action: {
-                    dismiss()
-                }, label: {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 20, weight: .light))
-                })
-                .padding(.trailing, 10)
-            }
-
-            Form {
-                Section(header: Text("Profile Information")) {
-                    TextField("Name", text: $viewModel.name)
-
-                    //                if let nameError = viewModel.nameError {
-                    //                    Text(nameError).foregroundColor(.red)
-                    //                }
-
-                    TextField("Blurb", text: $viewModel.blurb)
-                    if let blurbError = viewModel.blurbError {
-                        Text(blurbError).foregroundColor(.red)
-                    }
-                }
-                Section(header: Text("Interests")) {
-                    List {
-                        ForEach(interests.indices, id: \.self) { i in
-                            HStack {
-                                Text(interests[i].name)
-
-                                Spacer()
-
-                                Button(action: {
-                                    areSelected[i].toggle()
-                                    interests[i].isSelected = areSelected[i]
-
-                                }, label: {
-                                    Image(systemName: areSelected[i] ? "circle.fill" : "circle")
-                                        .font(.system(size: 20, weight: .light))
-                                })
-                            }
-                        }
-                    }
-                }
-                Button(action: {
-                    let profile = Profile(name: viewModel.name, blurb: viewModel.blurb.isEmpty ? nil : viewModel.blurb, interests: currentInterest)
-                    onSave(profile)
-                    dismiss()
-                }) {
-                    Text("Register")
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .frame(minWidth: 200)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                }
-                .disabled(!viewModel.isValid)
-            }
-            .navigationTitle("Create Account Profile")
-        }
     }
 }
 
@@ -211,10 +115,6 @@ struct AccountProfileDetailedView_Previews: PreviewProvider {
         let viewModel = AccountProfileViewModel(profile: sampleProfile, activityService: ActivityServiceModel())
 
         Group {
-            AccountProfileCreateView(onSave: { _ in }, selectedView: .constant(.streamList))
-                .previewDisplayName("Create")
-                .previewDevice("iPhone 13")
-
             AccountProfileDetailedView(viewModel: viewModel)
                 .previewDisplayName("Detailed")
                 .previewDevice("iPhone 13")

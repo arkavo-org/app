@@ -25,6 +25,7 @@
       }
     },
     "•" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -73,13 +74,13 @@
     "Admission: %@" : {
 
     },
+    "Arkavo" : {
+
+    },
     "Assurance" : {
 
     },
     "Back" : {
-
-    },
-    "Blurb" : {
 
     },
     "Blurb: %@" : {
@@ -102,6 +103,7 @@
 
     },
     "Create Account Profile" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -130,9 +132,6 @@
           }
         }
       }
-    },
-    "Create your profile in seconds using Apple Passkey — no passwords, no hassle." : {
-
     },
     "Created: %@" : {
       "extractionState" : "stale",
@@ -171,7 +170,13 @@
     "Empty" : {
 
     },
+    "Enable passkeys" : {
+
+    },
     "Encryption" : {
+
+    },
+    "Enter profile name" : {
 
     },
     "Error" : {
@@ -193,10 +198,10 @@
     "Face" : {
 
     },
-    "Features" : {
+    "Face ID Terms & Conditions" : {
 
     },
-    "Go to Account" : {
+    "Features" : {
 
     },
     "Granularity" : {
@@ -233,6 +238,7 @@
 
     },
     "Interests" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -289,6 +295,9 @@
         }
       }
     },
+    "Learn more, view our" : {
+
+    },
     "List" : {
       "localizations" : {
         "es-US" : {
@@ -314,6 +323,9 @@
     "Location: %@" : {
 
     },
+    "logo" : {
+
+    },
     "Map" : {
       "localizations" : {
         "es-US" : {
@@ -331,6 +343,7 @@
 
     },
     "Message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -361,6 +374,9 @@
         }
       }
     },
+    "My Account" : {
+
+    },
     "Name" : {
       "localizations" : {
         "es-US" : {
@@ -390,6 +406,9 @@
           }
         }
       }
+    },
+    "Next" : {
+
     },
     "No stream profile" : {
       "extractionState" : "stale",
@@ -492,10 +511,11 @@
         }
       }
     },
-    "Ready to Secure Your Socials?" : {
+    "Refine Interests" : {
 
     },
     "Register" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -644,7 +664,7 @@
         }
       }
     },
-    "Take control of your content — anytime, anywhere." : {
+    "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
     "Thought service is unavailable" : {
@@ -677,6 +697,9 @@
 
     },
     "Unable to load image" : {
+
+    },
+    "Use your face ID to verify it's you.\nThere's no need for a password." : {
 
     },
     "Video" : {
@@ -761,6 +784,9 @@
           }
         }
       }
+    },
+    "Your profile name will be revealed only to those fortunate enough to earn your approval." : {
+
     }
   },
   "version" : "1.0"

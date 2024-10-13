@@ -10,6 +10,15 @@ https://github.com/google/flatbuffers
 brew install flatbuffers
 ```
 
+Apple Pkl
+https://pkl-lang.org
+https://pkl-lang.org/swift/current/quickstart.html
+
+```shell
+curl -L https://github.com/apple/pkl-swift/releases/download/0.2.1/pkl-gen-swift-macos.bin -o pkl-gen-swift
+chmod +x pkl-gen-swift
+```
+
 ## Design
 
 ### Entity
@@ -23,6 +32,8 @@ brew install flatbuffers
 ## Development
 
 ### Initialize
+
+#### Flatbuffers (if changed)
 
 Events
 
@@ -38,6 +49,12 @@ Entities
 flatc --binary --swift -o Arkavo/Arkavo idl/entity.fbs
 cd Arkavo/Arkavo
 mv entity_generated.swift EntityServiceModel.swift
+```
+
+#### Pkl (if changed)
+
+```shell
+./pkl-gen-swift pkl/Topics.pkl -o Arkavo/Arkavo/
 ```
 
 ### Dependencies 

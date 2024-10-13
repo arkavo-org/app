@@ -33,25 +33,25 @@ struct ThoughtStreamView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") { dismiss() }
-                }
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Back") { dismiss() }
+                    }
                 #else
-                ToolbarItem(placement: .automatic) {
-                    Button("Back") { dismiss() }
-                }
+                    ToolbarItem(placement: .automatic) {
+                        Button("Back") { dismiss() }
+                    }
                 #endif
             }
             .onAppear(perform: onAppear)
             .onDisappear(perform: onDisappear)
             .onTapGesture { isInputFocused = true }
             #if os(iOS)
-            .sheet(isPresented: $isShowingImagePicker) { imagePicker }
-            .sheet(isPresented: $isShowingCamera) { cameraPicker }
+                .sheet(isPresented: $isShowingImagePicker) { imagePicker }
+                .sheet(isPresented: $isShowingCamera) { cameraPicker }
             #endif
-            .sheet(isPresented: $isShowingLocationPicker) { locationPicker }
-            .sheet(isPresented: $isShowingStickerPicker) { stickerPicker }
-            .sheet(isPresented: $isShareSheetPresented) { shareSheet }
+                .sheet(isPresented: $isShowingLocationPicker) { locationPicker }
+                .sheet(isPresented: $isShowingStickerPicker) { stickerPicker }
+                .sheet(isPresented: $isShareSheetPresented) { shareSheet }
         }
     }
 
@@ -129,30 +129,31 @@ struct ThoughtStreamView: View {
         }
         .disabled(isSending)
     }
-    #if os(iOS)
-    private var imagePicker: some View {
-        ImagePicker(sourceType: .photoLibrary) { image in
-            guard let imageData = image.heifData() else {
-                print("Failed to convert image to HEIF data")
-                return
-            }
-            Task {
-                try await sendImageThought(imageData)
-            }
-        }
-    }
 
-    private var cameraPicker: some View {
-        ImagePicker(sourceType: .camera) { image in
-            guard let imageData = image.heifData() else {
-                print("Failed to convert image to HEIF data")
-                return
-            }
-            Task {
-                try await sendImageThought(imageData)
+    #if os(iOS)
+        private var imagePicker: some View {
+            ImagePicker(sourceType: .photoLibrary) { image in
+                guard let imageData = image.heifData() else {
+                    print("Failed to convert image to HEIF data")
+                    return
+                }
+                Task {
+                    try await sendImageThought(imageData)
+                }
             }
         }
-    }
+
+        private var cameraPicker: some View {
+            ImagePicker(sourceType: .camera) { image in
+                guard let imageData = image.heifData() else {
+                    print("Failed to convert image to HEIF data")
+                    return
+                }
+                Task {
+                    try await sendImageThought(imageData)
+                }
+            }
+        }
     #endif
     private var locationPicker: some View {
         LocationPicker { _ in
