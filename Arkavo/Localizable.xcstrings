@@ -180,6 +180,9 @@
     "Encryption" : {
 
     },
+    "Enter profile name" : {
+
+    },
     "Error" : {
       "localizations" : {
         "es-US" : {
@@ -203,9 +206,6 @@
 
     },
     "Features" : {
-
-    },
-    "Generate Screen Names" : {
 
     },
     "Granularity" : {
@@ -439,13 +439,7 @@
     "Owner:" : {
 
     },
-    "Pick one of the following options:" : {
-
-    },
     "Please grant location permission in Settings to use this feature." : {
-
-    },
-    "Please select a screen name to continue" : {
 
     },
     "Policies" : {
@@ -775,9 +769,6 @@
           }
         }
       }
-    },
-    "What topics are you interested in?" : {
-
     },
     "Your content is always under your control - everywhere" : {
       "extractionState" : "stale",

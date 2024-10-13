@@ -31,6 +31,7 @@
 		DA24F9142CB1C872003211CD /* RegistrationInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F9132CB1C870003211CD /* RegistrationInterestsView.swift */; };
 		DA24F91F2CB1D046003211CD /* Topics.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F91E2CB1D044003211CD /* Topics.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
+		DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
 		DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598BE2C95EE540021A8FC /* ThoughtService.swift */; };
@@ -95,6 +96,7 @@
 		DA24F9132CB1C870003211CD /* RegistrationInterestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationInterestsView.swift; sourceTree = "<group>"; };
 		DA24F91E2CB1D044003211CD /* Topics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Topics.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
+		DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "MyRecommender 1.mlpackage"; sourceTree = "<group>"; };
 		DA36F2032CBA1A4500762668 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
 		DA7598BE2C95EE540021A8FC /* ThoughtService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtService.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
+				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
 			);
 			path = Arkavo;
 			sourceTree = "<group>";
@@ -416,6 +419,7 @@
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA11D51E2C8DF250005D1946 /* RegisterationWelcomeView.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
+				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,

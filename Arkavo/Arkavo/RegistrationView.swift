@@ -1,10 +1,11 @@
+import CoreML
+import NaturalLanguage
 import SwiftUI
 
 enum RegistrationStep: Int, CaseIterable {
     case welcome
     case selectInterests
     case generateScreenName
-    case chooseScreenName
     case enablePasskeys
 
     var title: String {
@@ -14,8 +15,6 @@ enum RegistrationStep: Int, CaseIterable {
         case .selectInterests:
             "Select Interests" // What topics are you interested in?
         case .generateScreenName:
-            "Create Profile"
-        case .chooseScreenName:
             "Create Profile"
         case .enablePasskeys:
             "Create Passkey"
@@ -29,8 +28,6 @@ enum RegistrationStep: Int, CaseIterable {
         case .selectInterests:
             "Continue"
         case .generateScreenName:
-            "Generate Names"
-        case .chooseScreenName:
             "Continue"
         case .enablePasskeys:
             "Enable Face ID"
@@ -71,8 +68,6 @@ struct RegistrationView: View {
                                     chooseInterestsView
                                 case .generateScreenName:
                                     generateScreenNameView
-                                case .chooseScreenName:
-                                    chooseScreenNameView
                                 case .enablePasskeys:
                                     enablePasskeysView
                                 }
@@ -97,7 +92,7 @@ struct RegistrationView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(currentStep == .chooseScreenName && selectedScreenName.isEmpty)
+                        .disabled(currentStep == .generateScreenName && selectedScreenName.isEmpty)
 
                         ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                             .padding()
@@ -112,11 +107,11 @@ struct RegistrationView: View {
                                 }
                             }
                             Spacer()
-                            if currentStep != .enablePasskeys {
+                            if currentStep == .welcome {
                                 Button("Next") {
                                     handleButtonAction()
                                 }
-                                .disabled(currentStep == .chooseScreenName && selectedScreenName.isEmpty)
+                                .disabled(currentStep == .generateScreenName && selectedScreenName.isEmpty)
                             }
                         }
                         .padding()
@@ -206,14 +201,9 @@ struct RegistrationView: View {
                 currentStep = .selectInterests
             case .selectInterests:
                 currentStep = .generateScreenName
+                generatedScreenNames = []
             case .generateScreenName:
-                generatedScreenNames = generateScreenNames()
-                currentStep = .chooseScreenName
-                selectedScreenName = "" // Reset selection when generating new names
-            case .chooseScreenName:
-                if !selectedScreenName.isEmpty {
-                    currentStep = .enablePasskeys
-                }
+                currentStep = .enablePasskeys
             case .enablePasskeys:
                 onComplete()
             }
@@ -224,43 +214,61 @@ struct RegistrationView: View {
         VStack(spacing: 20) {
             Text("Your profile name will be revealed only to those fortunate enough to earn your approval.")
                 .padding()
+            HStack {
+                TextField("Enter profile name", text: $selectedScreenName)
+                    .writingToolsBehavior(.automatic)
+                    .padding()
+                    .disableAutocorrection(true)
+                    .border(.secondary)
+                Button(action: generateScreenNames) {
+                    Image(systemName: "wand.and.stars")
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.blue)
+                        .cornerRadius(8)
+                }
+            }
+            .padding()
+            VStack {
+                ForEach(generatedScreenNames, id: \.self) { name in
+                    Button(action: {
+                        selectedScreenName = name
+                    }) {
+                        Button(action: {
+                            selectedScreenName = name
+                        }) {
+                            Text(name)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(selectedScreenName == name ? Color.blue : Color.gray.opacity(0.2))
+                                .foregroundColor(selectedScreenName == name ? .white : .primary)
+                                .cornerRadius(20)
+                        }
+                    }
+                }
+            }
         }
         .multilineTextAlignment(.leading)
         .padding()
     }
 
-    private var chooseScreenNameView: some View {
-        VStack(spacing: 20) {
-            Text("Pick one of the following options:")
-                .padding()
-
-            ForEach(generatedScreenNames, id: \.self) { name in
-                Button(action: {
-                    selectedScreenName = name
-                }) {
-                    Text(name)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(selectedScreenName == name ? Color.blue : Color.gray.opacity(0.2))
-                        .foregroundColor(selectedScreenName == name ? .white : .primary)
-                        .cornerRadius(8)
-                }
-            }
-            if selectedScreenName.isEmpty {
-                Text("Please select a screen name to continue")
-                    .foregroundColor(.red)
-                    .padding(.top)
-            }
+    private func generateScreenNames() {
+        do {
+            let configuration = MLModelConfiguration()
+            let recommender = try MyRecommender_1(configuration: configuration)
+            let items = Dictionary(uniqueKeysWithValues: selectedInterests.map { ($0, 1.0) })
+            let input = MyRecommender_1Input(items: items, k: 5, restrict_: nil, exclude: nil)
+            let output = try recommender.prediction(input: input)
+            generatedScreenNames = output.recommendations
+        } catch {
+            print("recommendation error: \(error.localizedDescription)")
         }
-        .padding()
     }
 
     private var chooseInterestsView: some View {
         VStack(spacing: 20) {
             Text("Tell us your likes or dislikes. This helps us match your preference best.")
-                .font(.caption)
-                .padding(.bottom)
-
+                .padding()
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
                 ForEach(interests, id: \.self) { interest in
                     InterestButton(interest: interest, isSelected: selectedInterests.contains(interest)) {
@@ -274,11 +282,6 @@ struct RegistrationView: View {
             }
         }
         .padding()
-    }
-
-    private func generateScreenNames() -> [String] {
-        // In a real app, you'd implement logic to generate unique screen names
-        ["ravioloitaly", "luckyjellyfish", "plantsarefun", "nonameismyname"]
     }
 }
 

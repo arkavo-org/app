@@ -1,0 +1,30 @@
+{
+  "Inputs" : {
+    "k" : {
+      "MLFeatureShortDescription" : "The number of items to return on a recommendation."
+    },
+    "exclude" : {
+      "MLFeatureShortDescription" : "A sequence of items to exclude from recommendations.  Defaults to the input item list if not given."
+    },
+    "items" : {
+      "MLFeatureShortDescription" : "The list of items used to generate the recommendations."
+    },
+    "restrict" : {
+      "MLFeatureShortDescription" : "A sequence of items from which to generate recommendations."
+    }
+  },
+  "Outputs" : {
+    "recommendations" : {
+      "MLFeatureShortDescription" : "The recommended items in order from most relevant to least relevant."
+    },
+    "scores" : {
+      "MLFeatureShortDescription" : "The scores for the recommended items, given as a dictionary of items and the corresponding scores."
+    }
+  },
+  "TrainingInputs" : {
+
+  },
+  "States" : {
+
+  }
+}
