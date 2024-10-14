@@ -44,11 +44,9 @@ final class ThoughtViewModel: ObservableObject, Identifiable, Equatable {
 struct MessageBubble: View {
     let viewModel: ThoughtViewModel
     let isCurrentUser: Bool
-
-    init(viewModel: ThoughtViewModel, isCurrentUser: Bool) {
-        self.viewModel = viewModel
-        self.isCurrentUser = isCurrentUser
-    }
+    @State private var isLongPressed = false
+    @State private var showMenu = false
+    @State private var isResendingOrRecalling = false
 
     var body: some View {
         HStack {
@@ -59,42 +57,83 @@ struct MessageBubble: View {
                 Text(viewModel.creator.name)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Group {
-                    switch viewModel.mediaType {
-                    case .text:
-                        if let text = String(data: viewModel.content, encoding: .utf8) {
-                            Text(text)
-                                .padding(10)
-                                .background(isCurrentUser ? Color.blue : Color(.gray))
-                                .foregroundColor(isCurrentUser ? .white : .primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        } else {
-                            Text("Unable to decode text")
-                                .foregroundColor(.red)
-                        }
-                    case .image:
-                        #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
-                            if let uiImage = UIImage(data: viewModel.content) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: 200, maxHeight: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            } else {
-                                Text("Unable to load image")
-                                    .foregroundColor(.red)
+                messageContent
+                    .padding(10)
+                    .background(isCurrentUser ? Color.blue : Color(.gray))
+                    .foregroundColor(isCurrentUser ? .white : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .scaleEffect(isLongPressed ? 1.05 : 1.0)
+                    .opacity(isResendingOrRecalling ? 0.5 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isLongPressed)
+                    .animation(.easeInOut(duration: 0.2), value: isResendingOrRecalling)
+                    .gesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onEnded { _ in
+                                isLongPressed = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    showMenu = true
+                                }
                             }
-                        #endif
-                    case .audio, .video:
-                        Text("Unsupported media type: \(viewModel.mediaType)")
-                            .foregroundColor(.red)
+                    )
+                    .contextMenu {
+                        if isCurrentUser {
+                            Button(action: resendMessage) {
+                                Label("Resend", systemImage: "arrow.clockwise")
+                            }
+                            Button(action: recallMessage) {
+                                Label("Recall", systemImage: "trash")
+                            }
+                        }
                     }
-                }
             }
             if !isCurrentUser {
                 Spacer()
             }
         }
+    }
+
+    @ViewBuilder
+    private var messageContent: some View {
+        switch viewModel.mediaType {
+        case .text:
+            if let text = String(data: viewModel.content, encoding: .utf8) {
+                Text(text)
+            } else {
+                Text("Unable to decode text")
+                    .foregroundColor(.red)
+            }
+        case .image:
+            #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+            if let uiImage = UIImage(data: viewModel.content) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 200, maxHeight: 200)
+            } else {
+                Text("Unable to load image")
+                    .foregroundColor(.red)
+            }
+            #endif
+        case .audio:
+            Text("Audio message")
+                .foregroundColor(.secondary)
+        case .video:
+            Text("Video message")
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func resendMessage() {
+        isResendingOrRecalling = true
+        // TODO Implement resend functionality
+        print("Resending message")
+    }
+
+    private func recallMessage() {
+        isResendingOrRecalling = true
+        // TODO Implement recall functionality
+        print("Recalling message")
+
     }
 }
 

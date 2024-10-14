@@ -80,6 +80,9 @@
     "Assurance" : {
 
     },
+    "Audio message" : {
+
+    },
     "Back" : {
 
     },
@@ -511,6 +514,9 @@
         }
       }
     },
+    "Recall" : {
+
+    },
     "Refine Interests" : {
 
     },
@@ -524,6 +530,9 @@
           }
         }
       }
+    },
+    "Resend" : {
+
     },
     "Save" : {
       "localizations" : {
@@ -711,6 +720,9 @@
           }
         }
       }
+    },
+    "Video message" : {
+
     },
     "View Secure Stream" : {
       "localizations" : {
