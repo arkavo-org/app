@@ -104,15 +104,15 @@ struct MessageBubble: View {
             }
         case .image:
             #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
-            if let uiImage = UIImage(data: viewModel.content) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 200, maxHeight: 200)
-            } else {
-                Text("Unable to load image")
-                    .foregroundColor(.red)
-            }
+                if let uiImage = UIImage(data: viewModel.content) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 200, maxHeight: 200)
+                } else {
+                    Text("Unable to load image")
+                        .foregroundColor(.red)
+                }
             #endif
         case .audio:
             Text("Audio message")
@@ -125,15 +125,14 @@ struct MessageBubble: View {
 
     private func resendMessage() {
         isResendingOrRecalling = true
-        // TODO Implement resend functionality
+        // TODO: Implement resend functionality
         print("Resending message")
     }
 
     private func recallMessage() {
         isResendingOrRecalling = true
-        // TODO Implement recall functionality
+        // TODO: Implement recall functionality
         print("Recalling message")
-
     }
 }
 
@@ -143,19 +142,20 @@ struct MessageBubble_Previews: PreviewProvider {
             MessageBubble(viewModel: ThoughtViewModel.createText(
                 creatorProfile: Profile(name: "John Doe"),
                 streamPublicIDString: "stream1",
-                text: "Hello, this is a test message!"),
-                          isCurrentUser: true)
-            .previewDisplayName("Current User")
-            
+                text: "Hello, this is a test message!"
+            ),
+            isCurrentUser: true)
+                .previewDisplayName("Current User")
+
             MessageBubble(viewModel: ThoughtViewModel.createText(
                 creatorProfile: Profile(name: "Jane Smith"),
                 streamPublicIDString: "stream1",
-                text: "Hi there! This is a response."),
-                          isCurrentUser: false)
-            .previewDisplayName("Other User")
+                text: "Hi there! This is a response."
+            ),
+            isCurrentUser: false)
+                .previewDisplayName("Other User")
         }
         .padding()
         .previewLayout(.sizeThatFits)
     }
 }
-

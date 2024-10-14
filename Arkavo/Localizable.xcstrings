@@ -89,6 +89,15 @@
     "Blurb: %@" : {
 
     },
+    "Camera" : {
+
+    },
+    "Camera Location Protected" : {
+
+    },
+    "Camera Time Protected" : {
+
+    },
     "Cancel" : {
       "localizations" : {
         "es-US" : {
@@ -438,6 +447,9 @@
       }
     },
     "Owner:" : {
+
+    },
+    "Photo" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
