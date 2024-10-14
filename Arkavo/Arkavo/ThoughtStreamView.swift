@@ -479,7 +479,7 @@ struct ThoughtStreamView_Previews: PreviewProvider {
 
     static var previewStream: Stream {
         let profile = Profile(name: "Preview Stream")
-        return Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+        return Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
     }
 
     static var previewContainer: ModelContainer {
@@ -495,7 +495,7 @@ struct ThoughtStreamView_Previews: PreviewProvider {
             try context.save()
 
             let profile = Profile(name: "Preview Stream")
-            let stream = Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+            let stream = Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
             account.streams.append(stream)
             try context.save()
 
