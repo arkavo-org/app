@@ -74,16 +74,37 @@
     "Admission: %@" : {
 
     },
+    "Age" : {
+
+    },
+    "Age Policy:" : {
+
+    },
+    "Age Policy: %@" : {
+
+    },
     "Arkavo" : {
 
     },
     "Assurance" : {
 
     },
+    "Audio message" : {
+
+    },
     "Back" : {
 
     },
     "Blurb: %@" : {
+
+    },
+    "Camera" : {
+
+    },
+    "Camera Location Protected" : {
+
+    },
+    "Camera Time Protected" : {
 
     },
     "Cancel" : {
@@ -437,6 +458,9 @@
     "Owner:" : {
 
     },
+    "Photo" : {
+
+    },
     "Please grant location permission in Settings to use this feature." : {
 
     },
@@ -511,6 +535,9 @@
         }
       }
     },
+    "Recall" : {
+
+    },
     "Refine Interests" : {
 
     },
@@ -524,6 +551,9 @@
           }
         }
       }
+    },
+    "Resend" : {
+
     },
     "Save" : {
       "localizations" : {
@@ -711,6 +741,9 @@
           }
         }
       }
+    },
+    "Video message" : {
+
     },
     "View Secure Stream" : {
       "localizations" : {

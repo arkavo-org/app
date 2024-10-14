@@ -147,7 +147,7 @@ class MockStreamService: StreamService {
             try await Task.sleep(for: .seconds(100))
             return nil
         case .loaded:
-            return Stream(creatorPublicID: Data(), profile: Profile(name: "Mock Stream"), admissionPolicy: .open, interactionPolicy: .open)
+            return Stream(creatorPublicID: Data(), profile: Profile(name: "Mock Stream"), admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
         case let .error(error):
             throw error
         case .notFound:

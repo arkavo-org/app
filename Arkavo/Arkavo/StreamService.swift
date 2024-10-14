@@ -216,8 +216,9 @@ class StreamService {
                 id: UUID(),
                 creatorPublicID: Data(creatorPublicId),
                 profile: Profile(name: name),
-                admissionPolicy: .open, // map
-                interactionPolicy: .open, // map
+                admissionPolicy: .open,
+                interactionPolicy: .open,
+                agePolicy: .forAll,
                 publicID: Data(publicId)
             )
             try PersistenceController.shared.saveStream(stream)
