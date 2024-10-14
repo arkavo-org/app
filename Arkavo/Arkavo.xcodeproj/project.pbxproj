@@ -591,7 +591,7 @@
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = beta.2;
+				CURRENT_PROJECT_VERSION = beta.3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
@@ -639,7 +639,7 @@
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = beta.2;
+				CURRENT_PROJECT_VERSION = beta.3;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
