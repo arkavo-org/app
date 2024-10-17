@@ -81,7 +81,7 @@ struct ArkavoView: View {
                             Button("Map") {
                                 selectedView = .streamMap
                             }
-                            Button("List") {
+                            Button("Streams") {
                                 selectedView = .streamList
                             }
                             #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
@@ -117,9 +117,7 @@ struct ArkavoView: View {
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")
-                            .padding()
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
+                            .padding(.top, 40)
                     }
                     .menuStyle(DefaultMenuStyle())
                     .padding(.top, 40)
