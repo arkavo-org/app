@@ -139,7 +139,7 @@ struct ArkavoView: View {
 
         // TODO: replace with session token
         if let account = accounts.first, let profile = account.profile {
-            let token = service.authenticationManager.createJWT(profileName: profile.name)
+            let token = service.authenticationManager.createJWT(publicID: profile.publicID.base58EncodedString)
             if let token {
                 service.setupWebSocketManager(token: token)
             } else {

@@ -4,6 +4,50 @@ import FlatBuffers
 import Foundation
 import OpenTDFKit
 
+struct NATSMessage {
+    let messageType: Data
+    let payload: Data
+
+    init(payload: Data) {
+        messageType = Data([0x05])
+        self.payload = payload
+    }
+
+    init(data: Data) {
+        messageType = data.prefix(1)
+        payload = data.suffix(from: 1)
+    }
+
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType)
+        data.append(payload)
+        return data
+    }
+}
+
+struct NATSEvent {
+    let messageType: Data
+    let payload: Data
+
+    init(payload: Data) {
+        messageType = Data([0x06])
+        self.payload = payload
+    }
+
+    init(data: Data) {
+        messageType = data.prefix(1)
+        payload = data.suffix(from: 1)
+    }
+
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType)
+        data.append(payload)
+        return data
+    }
+}
+
 class ArkavoService {
     public static var kasPublicKey: P256.KeyAgreement.PublicKey?
     let webSocketManager: WebSocketManager
@@ -123,9 +167,20 @@ class ArkavoService {
             if let cacheEvent = event.data(type: Arkavo_CacheEvent.self) {
                 handleCacheEvent(cacheEvent)
             }
+        case .routeevent:
+            if let routeEvent = event.data(type: Arkavo_RouteEvent.self) {
+                handleRouteEvent(routeEvent)
+            }
         case .none_:
             print("  No event data")
         }
+    }
+
+    private func handleRouteEvent(_ routeEvent: Arkavo_RouteEvent) {
+        print("Route Event:")
+        print("  Source Type: \(routeEvent.sourceType)")
+        print("  Target Type: \(routeEvent.targetType)")
+        print("  Source ID: \(Data(routeEvent.sourceId).base64EncodedString())")
     }
 
     private func handleUserEvent(_ userEvent: Arkavo_UserEvent) {

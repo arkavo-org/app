@@ -14,7 +14,6 @@
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
-		DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AD92CA0BBDC0083EB99 /* UserAction.swift */; };
 		DA179AE62CA0DE8B0083EB99 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AE52CA0DE8B0083EB99 /* Extension.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
@@ -78,7 +77,6 @@
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
-		DA179AD92CA0BBDC0083EB99 /* UserAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserAction.swift; sourceTree = "<group>"; };
 		DA179AE52CA0DE8B0083EB99 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
@@ -180,7 +178,6 @@
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
-				DA179AD92CA0BBDC0083EB99 /* UserAction.swift */,
 				DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */,
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
@@ -390,7 +387,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA179ADD2CA0C9360083EB99 /* UserAction.swift in Sources */,
 				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,

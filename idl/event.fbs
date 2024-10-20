@@ -26,7 +26,15 @@ enum ActionStatus: byte {
 enum EntityType: byte {
     unused = 0,
     stream_profile = 1,
-    account_profile = 2
+    account_profile = 2,
+    server = 3
+}
+
+// Enum to represent entity attributes
+enum AttributeType: byte {
+    unused = 0,
+    time = 1,
+    location = 2
 }
 
 // Table for User Event
@@ -35,9 +43,11 @@ table UserEvent {
     target_type: EntityType;
     source_id: [ubyte];       // public ID (array of bytes to represent Data)
     target_id: [ubyte];       // public ID (array of bytes to represent Data)
+    attribute_type: [AttributeType];
+    entity_type: EntityType;
 }
 
-// Table for Cache Event
+// Table for Cache Event - stores a TDF on server
 table CacheEvent {
     target_id: [ubyte];       // public ID (array of bytes to represent Data)
     target_payload: [ubyte];  // Binary payload
@@ -45,8 +55,18 @@ table CacheEvent {
     one_time_access: bool;    // One-Time Access flag
 }
 
+table RouteEvent {
+    target_type: EntityType;
+    target_id: [ubyte];       // public ID (array of bytes to represent Data)
+    source_type: EntityType;
+    source_id: [ubyte];       // public ID (array of bytes to represent Data)
+    attribute_type: AttributeType;
+    entity_type: EntityType;
+    payload: [ubyte];  // Binary payload
+}
+
 // Union to represent different event types
-union EventData { UserEvent, CacheEvent }
+union EventData { UserEvent, CacheEvent, RouteEvent }
 
 // Root Event table
 table Event {
