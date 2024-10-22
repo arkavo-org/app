@@ -105,7 +105,7 @@ struct ThoughtStreamView: View {
                     Label("Camera", systemImage: "camera")
                 }
                 Button(action: {
-                    // TODO: Handle Camera Location Protected action
+                    onLocationProtected()
                 }) {
                     Label("Camera Location Protected", systemImage: "camera.viewfinder")
                 }
@@ -189,6 +189,21 @@ struct ThoughtStreamView: View {
     private var shareSheet: some View {
         ShareSheet(activityItems: [shareURL].compactMap { $0 },
                    isPresented: $isShareSheetPresented)
+    }
+
+    private func onLocationProtected() {
+        print("Handle Camera Location Protected action")
+        // relative location -
+        // TODO: get all stream members, then request location from all
+        if let stream = viewModel.stream {
+            let memberPublicID = stream.creatorPublicID
+            Task {
+                let locationData = try await streamService.requestLocationAndWait(for: memberPublicID)
+                await MainActor.run {
+                    print("Received locationData: \(locationData.latitude), \(locationData.longitude)")
+                }
+            }
+        }
     }
 
     private func onAppear() {

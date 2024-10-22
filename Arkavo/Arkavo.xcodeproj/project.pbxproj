@@ -31,6 +31,7 @@
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
+		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
 		DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598BE2C95EE540021A8FC /* ThoughtService.swift */; };
 		DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598C02C96108C0021A8FC /* ArkavoService.swift */; };
@@ -94,6 +95,7 @@
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "MyRecommender 1.mlpackage"; sourceTree = "<group>"; };
 		DA36F2032CBA1A4500762668 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
+		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
 		DA7598BE2C95EE540021A8FC /* ThoughtService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtService.swift; sourceTree = "<group>"; };
 		DA7598C02C96108C0021A8FC /* ArkavoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoService.swift; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 				DA22122F2CB0D1D200C220B0 /* ActivityService.swift */,
 				DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
+				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
@@ -395,6 +398,7 @@
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,

@@ -1,4 +1,3 @@
-import CoreLocation
 import SwiftUI
 
 enum LocationGranularity: String, CaseIterable {
@@ -69,7 +68,7 @@ struct AccountView: View {
                     }
                     .padding(.leading, 10)
                     if let location = locationManager.lastLocation {
-                        Text("Last known location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                        Text("Last known location: \(location.latitude), \(location.longitude)")
                     }
                 }
                 Toggle("Face", isOn: $isFaceEnabled)
@@ -120,39 +119,6 @@ struct AccountView: View {
 
     private func requestLocationPermission() {
         locationManager.requestLocation()
-    }
-}
-
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let locationManager = CLLocationManager()
-    @Published var lastLocation: CLLocation?
-    @Published var locationStatus: CLAuthorizationStatus?
-    @Published var lastLocationError: Error?
-
-    override init() {
-        super.init()
-        locationManager.delegate = self
-    }
-
-    func requestLocation() {
-        locationManager.requestWhenInUseAuthorization()
-        locationManager.requestLocation()
-    }
-
-    func locationManager(_: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        lastLocation = locations.last
-        if let location = lastLocation {
-            print("Location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        }
-    }
-
-    func locationManager(_: CLLocationManager, didFailWithError error: Error) {
-        print("Location Error: \(error.localizedDescription)")
-        lastLocationError = error
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        locationStatus = manager.authorizationStatus
     }
 }
 
