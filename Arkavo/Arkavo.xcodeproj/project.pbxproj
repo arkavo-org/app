@@ -30,6 +30,8 @@
 		DA24F91F2CB1D046003211CD /* Topics.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F91E2CB1D044003211CD /* Topics.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
 		DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */; };
+		DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */; };
+		DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
@@ -94,6 +96,8 @@
 		DA24F91E2CB1D044003211CD /* Topics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Topics.swift; sourceTree = "<group>"; };
 		DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = "MyRecommender 1.mlpackage"; sourceTree = "<group>"; };
+		DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeVerificationManager.swift; sourceTree = "<group>"; };
+		DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IDCardScannerViewController.swift; sourceTree = "<group>"; };
 		DA36F2032CBA1A4500762668 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
@@ -201,6 +205,8 @@
 				DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */,
 				DAF458A32C70320F004B44FE /* VideoStreamView.swift */,
 				DA22122F2CB0D1D200C220B0 /* ActivityService.swift */,
+				DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */,
+				DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */,
 				DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */,
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
@@ -396,6 +402,7 @@
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
+				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
@@ -424,6 +431,7 @@
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
 				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,
 				DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */,
+				DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
 			);

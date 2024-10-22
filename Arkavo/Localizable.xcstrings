@@ -83,6 +83,9 @@
     "Age Policy: %@" : {
 
     },
+    "Age Verification" : {
+
+    },
     "Arkavo" : {
 
     },
@@ -464,6 +467,9 @@
     "Please grant location permission in Settings to use this feature." : {
 
     },
+    "Please provide a valid government-issued ID and a selfie to verify your age." : {
+
+    },
     "Policies" : {
       "localizations" : {
         "es-US" : {
@@ -641,6 +647,9 @@
           }
         }
       }
+    },
+    "Start Verification" : {
+
     },
     "Sticker Picker Placeholder" : {
 
