@@ -448,6 +448,9 @@
     "No Stream Service for %@" : {
 
     },
+    "Not available on macOS" : {
+
+    },
     "OK" : {
       "localizations" : {
         "es-US" : {

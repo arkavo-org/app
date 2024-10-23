@@ -1,10 +1,12 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct AccountView: View {
     @Query private var accounts: [Account]
     @StateObject private var locationManager = LocationManager()
-    @StateObject private var ageVerificationManager = AgeVerificationManager()
+    #if !os(macOS)
+        @StateObject private var ageVerificationManager = AgeVerificationManager()
+    #endif
     @State private var isLocationEnabled = false
     @State private var isFaceEnabled = false
     @State private var isVoiceEnabled = false
@@ -15,11 +17,11 @@ struct AccountView: View {
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
-    
+
     private var account: Account? {
         accounts.first
     }
-    
+
     var body: some View {
         List {
             Section(header: Text("Identity")) {
@@ -29,20 +31,22 @@ struct AccountView: View {
                     Text(account?.identityAssuranceLevel.rawValue ?? IdentityAssuranceLevel.ial0.rawValue)
                 }
 
-                HStack {
-                    Text("Age Verification")
-                    Spacer()
-                    Text(account?.ageVerificationStatus.rawValue ?? AgeVerificationStatus.unverified.rawValue)
-                        .foregroundColor(verificationStatusColor)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if account?.ageVerificationStatus != .verified {
-                        showingAgeVerification = true
+                #if !os(macOS)
+                    AgeVerificationRow(
+                        account: account,
+                        showingAgeVerification: $showingAgeVerification
+                    )
+                #else
+                    HStack {
+                        Text("Age Verification")
+                        Spacer()
+                        Text("Not available on macOS")
+                            .foregroundColor(.gray)
                     }
-                }
+                #endif
             }
 
+            // Rest of the sections remain unchanged
             Section(header: Text("Privacy")) {
                 Toggle("Location", isOn: $isLocationEnabled)
                     .onChange(of: isLocationEnabled) { _, newValue in
@@ -96,6 +100,7 @@ struct AccountView: View {
         } message: {
             Text("Please grant location permission in Settings to use this feature.")
         }
+        #if !os(macOS)
         .sheet(isPresented: $showingAgeVerification) {
             AgeVerificationView(ageVerificationManager: ageVerificationManager)
         }
@@ -107,6 +112,7 @@ struct AccountView: View {
                 showingAgeVerification = false
             }
         }
+        #endif
         .onChange(of: locationManager.locationStatus) { _, newValue in
             if newValue == .denied || newValue == .restricted {
                 isLocationEnabled = false
@@ -114,33 +120,21 @@ struct AccountView: View {
             }
         }
         .task {
-            // Initialize UI state from account
-            if let account = account {
+            if let account {
                 identityAssuranceLevel = account.identityAssuranceLevel
-                ageVerificationManager.verificationStatus = account.ageVerificationStatus
+                #if !os(macOS)
+                    ageVerificationManager.verificationStatus = account.ageVerificationStatus
+                #endif
             }
-        }
-    }
-
-    private var verificationStatusColor: Color {
-        switch account?.ageVerificationStatus ?? .unverified {
-        case .unverified:
-            return .gray
-        case .pending:
-            return .orange
-        case .verified:
-            return .green
-        case .failed:
-            return .red
         }
     }
 
     private func requestLocationPermission() {
         locationManager.requestLocation()
     }
-    
+
     private func updateAccountVerification(status: AgeVerificationStatus) async {
-        guard let account = account else { return }
+        guard let account else { return }
         account.updateVerificationStatus(status)
         do {
             try await PersistenceController.shared.saveChanges()
@@ -150,56 +144,92 @@ struct AccountView: View {
     }
 }
 
-struct AgeVerificationView: View {
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var ageVerificationManager: AgeVerificationManager
+#if !os(macOS)
+    // Helper view to keep the age verification row logic contained
+    struct AgeVerificationRow: View {
+        let account: Account?
+        @Binding var showingAgeVerification: Bool
 
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
+        var body: some View {
+            HStack {
                 Text("Age Verification")
-                    .font(.title)
-                    .padding()
-
-                Text("Please provide a valid government-issued ID and a selfie to verify your age.")
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-
-                if ageVerificationManager.isVerifying {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                } else {
-                    Button(action: {
-                        ageVerificationManager.startVerification()
-                    }) {
-                        Text("Start Verification")
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.blue)
-                            .cornerRadius(10)
-                    }
+                Spacer()
+                Text(account?.ageVerificationStatus.rawValue ?? AgeVerificationStatus.unverified.rawValue)
+                    .foregroundColor(verificationStatusColor)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if account?.ageVerificationStatus != .verified {
+                    showingAgeVerification = true
                 }
             }
-            .navigationBarItems(trailing: Button("Cancel") {
-                dismiss()
-            })
-            .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
-                IDCardScannerView(
-                    onCapture: { _ in
-                        ageVerificationManager.showingScanner = false
-                        ageVerificationManager.isVerifying = false
-                        ageVerificationManager.verificationStatus = .verified
-                    },
-                    onCancel: {
-                        ageVerificationManager.showingScanner = false
-                        ageVerificationManager.isVerifying = false
-                        ageVerificationManager.verificationStatus = .unverified
-                    }
-                )
+        }
+
+        private var verificationStatusColor: Color {
+            switch account?.ageVerificationStatus ?? .unverified {
+            case .unverified:
+                .gray
+            case .pending:
+                .orange
+            case .verified:
+                .green
+            case .failed:
+                .red
             }
         }
     }
-}
+
+    struct AgeVerificationView: View {
+        @Environment(\.dismiss) var dismiss
+        @ObservedObject var ageVerificationManager: AgeVerificationManager
+
+        var body: some View {
+            NavigationView {
+                VStack(spacing: 20) {
+                    Text("Age Verification")
+                        .font(.title)
+                        .padding()
+
+                    Text("Please provide a valid government-issued ID and a selfie to verify your age.")
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+
+                    if ageVerificationManager.isVerifying {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    } else {
+                        Button(action: {
+                            ageVerificationManager.startVerification()
+                        }) {
+                            Text("Start Verification")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                    }
+                }
+                .navigationBarItems(trailing: Button("Cancel") {
+                    dismiss()
+                })
+                .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
+                    IDCardScannerView(
+                        onCapture: { _ in
+                            ageVerificationManager.showingScanner = false
+                            ageVerificationManager.isVerifying = false
+                            ageVerificationManager.verificationStatus = .verified
+                        },
+                        onCancel: {
+                            ageVerificationManager.showingScanner = false
+                            ageVerificationManager.isVerifying = false
+                            ageVerificationManager.verificationStatus = .unverified
+                        }
+                    )
+                }
+            }
+        }
+    }
+#endif
 
 struct ClassificationView: View {
     var body: some View {

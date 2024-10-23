@@ -9,7 +9,7 @@ final class Account {
     var streams: [Stream] = []
     var _identityAssuranceLevel: String = IdentityAssuranceLevel.ial0.rawValue
     var _ageVerificationStatus: String = AgeVerificationStatus.unverified.rawValue
-    
+
     // Computed properties for type-safe enum access
     var identityAssuranceLevel: IdentityAssuranceLevel {
         get {
@@ -19,7 +19,7 @@ final class Account {
             _identityAssuranceLevel = newValue.rawValue
         }
     }
-    
+
     var ageVerificationStatus: AgeVerificationStatus {
         get {
             AgeVerificationStatus(rawValue: _ageVerificationStatus) ?? .unverified
@@ -28,7 +28,7 @@ final class Account {
             _ageVerificationStatus = newValue.rawValue
         }
     }
-    
+
     var streamLimit: Int {
         // TODO: handle feature payment for more
         10
@@ -38,12 +38,13 @@ final class Account {
          profile: Profile? = nil,
          authenticationToken: String? = nil,
          identityAssuranceLevel: IdentityAssuranceLevel = .ial0,
-         ageVerificationStatus: AgeVerificationStatus = .unverified) {
+         ageVerificationStatus: AgeVerificationStatus = .unverified)
+    {
         self.id = id // There should only ever be one account with id 0
         self.profile = profile
         self.authenticationToken = authenticationToken
-        self._identityAssuranceLevel = identityAssuranceLevel.rawValue
-        self._ageVerificationStatus = ageVerificationStatus.rawValue
+        _identityAssuranceLevel = identityAssuranceLevel.rawValue
+        _ageVerificationStatus = ageVerificationStatus.rawValue
     }
 
     func addStream(_ stream: Stream) throws {
@@ -55,11 +56,11 @@ final class Account {
         stream.creatorPublicID = creatorPublicID
         streams.append(stream)
     }
-    
+
     func updateVerificationStatus(_ status: AgeVerificationStatus) {
-        self.ageVerificationStatus = status
+        ageVerificationStatus = status
         if status == .verified {
-            self.identityAssuranceLevel = .ial2
+            identityAssuranceLevel = .ial2
         }
     }
 
