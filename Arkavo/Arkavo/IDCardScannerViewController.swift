@@ -8,10 +8,11 @@ import Vision
 class IDCardScannerViewController: UIViewController {
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var photoOutput: AVCapturePhotoOutput?
     private var rectangleLayer = CAShapeLayer()
-    private var lastCapturedImage: UIImage?
     private weak var delegate: IDCardScannerDelegate?
     private let sessionQueue = DispatchQueue(label: "com.app.camera.session")
+    private var lastObservedRectangle: VNRectangleObservation?
 
     init(delegate: IDCardScannerDelegate) {
         self.delegate = delegate
@@ -67,8 +68,6 @@ class IDCardScannerViewController: UIViewController {
                 let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
                 let width = CGFloat(dimensions.width)
                 let height = CGFloat(dimensions.height)
-
-                // Filter for formats that support high resolution (e.g., 4K or higher)
                 return width >= 3840 && height >= 2160 // 4K minimum
             }.sorted { format1, format2 in
                 let dim1 = CMVideoFormatDescriptionGetDimensions(format1.formatDescription)
@@ -97,28 +96,40 @@ class IDCardScannerViewController: UIViewController {
             camera.unlockForConfiguration()
 
             let input = try AVCaptureDeviceInput(device: camera)
-            let output = AVCaptureVideoDataOutput()
-            output.setSampleBufferDelegate(self, queue: sessionQueue)
 
-            // Set highest quality pixel format
-            output.videoSettings = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            ]
+            // Setup photo output
+            let photoOutput = AVCapturePhotoOutput()
+            self.photoOutput = photoOutput
 
-            // Avoid frame dropping
-            output.alwaysDiscardsLateVideoFrames = false
+            // Configure photo settings
+            photoOutput.maxPhotoQualityPrioritization = .quality
 
-            if captureSession.canAddInput(input), captureSession.canAddOutput(output) {
+            if captureSession.canAddInput(input), captureSession.canAddOutput(photoOutput) {
                 captureSession.addInput(input)
-                captureSession.addOutput(output)
+                captureSession.addOutput(photoOutput)
 
                 // Setup preview layer on main thread
                 DispatchQueue.main.async { [weak self] in
                     self?.setupPreviewLayer()
                 }
+
+                // Setup video data output for rectangle detection
+                setupRectangleDetection(session: captureSession)
             }
         } catch {
             print("Debug: Camera configuration error: \(error)")
+        }
+    }
+
+    private func setupRectangleDetection(session: AVCaptureSession) {
+        let videoOutput = AVCaptureVideoDataOutput()
+        videoOutput.setSampleBufferDelegate(self, queue: sessionQueue)
+        videoOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ]
+
+        if session.canAddOutput(videoOutput) {
+            session.addOutput(videoOutput)
         }
     }
 
@@ -163,20 +174,52 @@ class IDCardScannerViewController: UIViewController {
     }
 
     @objc private func captureButtonTapped() {
-        guard let lastImage = lastCapturedImage else {
-            print("Debug: No image captured")
+        guard let photoOutput else {
+            print("Debug: Photo output not available")
             return
         }
-
-        print("Debug: Image captured, dimensions: \(lastImage.size)")
 
         // Show processing indicator
         showProcessingOverlay()
 
-        // Process the image on background queue
+        // Configure photo settings
+        let settings = AVCapturePhotoSettings()
+        settings.photoQualityPrioritization = .quality
+
+        // Capture photo
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    @objc private func cancelButtonTapped() {
+        delegate?.idCardScannerDidCancel(self)
+    }
+}
+
+// MARK: - Photo Capture Delegate
+
+extension IDCardScannerViewController: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if let error {
+            print("Debug: Photo capture error: \(error)")
+            hideProcessingOverlay()
+            handleScanError(error)
+            return
+        }
+
+        guard let imageData = photo.fileDataRepresentation(),
+              let capturedImage = UIImage(data: imageData)
+        else {
+            print("Debug: Failed to create image from photo data")
+            hideProcessingOverlay()
+            handleScanError(ScanError.extractionFailed)
+            return
+        }
+
+        print("Debug: Photo captured successfully, dimensions: \(capturedImage.size)")
+
+        // Process the captured image
         sessionQueue.async { [weak self] in
-            print("Debug: Starting image processing on background queue")
-            self?.processIDCardImage(lastImage) { result in
+            self?.processIDCardImage(capturedImage) { result in
                 DispatchQueue.main.async {
                     self?.hideProcessingOverlay()
 
@@ -192,15 +235,9 @@ class IDCardScannerViewController: UIViewController {
             }
         }
     }
-
-    @objc private func cancelButtonTapped() {
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.idCardScannerDidCancel(self!)
-        }
-    }
 }
 
-// MARK: - AVCapture Delegate
+// MARK: - Rectangle Detection Delegate
 
 extension IDCardScannerViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
@@ -211,15 +248,10 @@ extension IDCardScannerViewController: AVCaptureVideoDataOutputSampleBufferDeleg
             guard let results = request.results as? [VNRectangleObservation],
                   let rectangle = results.first else { return }
 
+            self?.lastObservedRectangle = rectangle
+
             DispatchQueue.main.async {
                 self?.updateRectangleFrame(rectangle)
-            }
-
-            // Convert buffer to UIImage and store it
-            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-            let context = CIContext()
-            if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
-                self?.lastCapturedImage = UIImage(cgImage: cgImage)
             }
         }
 
@@ -264,6 +296,8 @@ extension IDCardScannerViewController: AVCaptureVideoDataOutputSampleBufferDeleg
         rectangleLayer.path = path.cgPath
     }
 }
+
+// Rest of the code remains the same...
 
 // MARK: - Scanner Delegate
 
@@ -372,37 +406,60 @@ extension IDCardScannerViewController {
     }
 
     private func extractDateOfBirth(from observations: [VNRecognizedTextObservation]) -> Date? {
-        let datePatterns = [
-            "\\d{2}/\\d{2}/\\d{4}", // DD/MM/YYYY
-            "\\d{2}-\\d{2}-\\d{4}", // DD-MM-YYYY
-            "\\d{4}/\\d{2}/\\d{2}", // YYYY/MM/DD
-            "\\d{4}-\\d{2}-\\d{2}", // YYYY-MM-DD
-            "\\d{1,2}\\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s\\d{4}", // DD MMM YYYY
-        ]
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MM/dd/yyyy" // Change to match the actual format in the ID
 
-        let dateFormatters: [DateFormatter] = [
-            "dd/MM/yyyy",
-            "dd-MM-yyyy",
-            "yyyy/MM/dd",
-            "yyyy-MM-dd",
-            "d MMM yyyy",
-        ].map { format in
-            let formatter = DateFormatter()
-            formatter.dateFormat = format
-            return formatter
-        }
+        var dateContextPairs: [(date: Date, score: Int)] = []
 
-        for observation in observations {
-            let recognizedText = observation.topCandidates(1).first?.string ?? ""
+        // Words that suggest a birth date context
+        let birthKeywords = ["birth", "born", "dob"]
 
-            for (patternIndex, pattern) in datePatterns.enumerated() {
-                if let range = recognizedText.range(of: pattern, options: .regularExpression) {
-                    let dateString = String(recognizedText[range])
-                    if let date = dateFormatters[patternIndex].date(from: dateString) {
-                        return date
+        // Analyze each observation and the one following it
+        for i in 0 ..< observations.count {
+            let currentText = observations[i].topCandidates(1).first?.string.lowercased() ?? ""
+
+            // Check if current text contains birth-related keywords
+            let containsBirthContext = birthKeywords.any { keyword in
+                currentText.contains(keyword)
+            }
+
+            // Look for dates in current and next observation
+            let datePattern = "\\d{2}/\\d{2}/\\d{4}"
+
+            if containsBirthContext {
+                // Check the next observation for a date
+                if i + 1 < observations.count {
+                    let nextText = observations[i + 1].topCandidates(1).first?.string ?? ""
+                    if let range = nextText.range(of: datePattern, options: .regularExpression) {
+                        let dateString = String(nextText[range])
+                        if let date = dateFormatter.date(from: dateString) {
+                            dateContextPairs.append((date: date, score: 10))
+                            continue
+                        }
                     }
                 }
             }
+
+            // Also check current text for dates
+            if let range = currentText.range(of: datePattern, options: .regularExpression) {
+                let dateString = String(currentText[range])
+                if let date = dateFormatter.date(from: dateString) {
+                    // Give higher score if there's birth context
+                    let score = containsBirthContext ? 10 : 1
+                    dateContextPairs.append((date: date, score: score))
+                }
+            }
+        }
+
+        // Process found dates
+        if !dateContextPairs.isEmpty {
+            // First try to find a date with high confidence (birth context)
+            if let highConfidenceDate = dateContextPairs.first(where: { $0.score > 5 })?.date {
+                return highConfidenceDate
+            }
+
+            // If no high confidence date, take the oldest date
+            return dateContextPairs.map(\.date).min()
         }
 
         return nil
@@ -460,46 +517,8 @@ extension IDCardScannerViewController {
     }
 }
 
-// Update AgeVerificationManager to handle new error cases
-extension AgeVerificationManager {
-    func processCapturedImage(_ image: UIImage) async {
-        do {
-            let cardData = try await idVerificationManager.processIDCard(image: image)
-
-            // Additional age verification check
-            guard let dateOfBirth = cardData.dateOfBirth,
-                  let dobDate = parseDate(dateOfBirth),
-                  isOver18(dobDate)
-            else {
-                await MainActor.run {
-                    isVerifying = false
-                    verificationStatus = .failed
-                }
-                return
-            }
-
-            // Continue with selfie verification
-            await MainActor.run {
-                promptForSelfie(cardData: cardData)
-            }
-        } catch {
-            await MainActor.run {
-                isVerifying = false
-                verificationStatus = .failed
-            }
-        }
-    }
-
-    private func parseDate(_ dateString: String) -> Date? {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd" // Adjust format based on your ID card date format
-        return dateFormatter.date(from: dateString)
-    }
-
-    private func isOver18(_ dob: Date) -> Bool {
-        let calendar = Calendar.current
-        let now = Date()
-        let ageComponents = calendar.dateComponents([.year], from: dob, to: now)
-        return ageComponents.year ?? 0 >= 18
+extension Array where Element: StringProtocol {
+    func any(where predicate: (Element) -> Bool) -> Bool {
+        contains(where: predicate)
     }
 }

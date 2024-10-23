@@ -11,7 +11,7 @@ struct ArkavoView: View {
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     #endif
-    @State private var selectedView: SelectedView = .streamList
+    @State private var selectedView: SelectedView = .streamMap
     @Query private var accounts: [Account]
 
     init(service: ArkavoService) {

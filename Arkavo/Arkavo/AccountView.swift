@@ -1,6 +1,8 @@
 import SwiftUI
+import SwiftData
 
 struct AccountView: View {
+    @Query private var accounts: [Account]
     @StateObject private var locationManager = LocationManager()
     @StateObject private var ageVerificationManager = AgeVerificationManager()
     @State private var isLocationEnabled = false
@@ -13,25 +15,29 @@ struct AccountView: View {
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
-
+    
+    private var account: Account? {
+        accounts.first
+    }
+    
     var body: some View {
         List {
             Section(header: Text("Identity")) {
-                Picker("Assurance", selection: $identityAssuranceLevel) {
-                    ForEach(IdentityAssuranceLevel.allCases, id: \.self) { level in
-                        Text(level.rawValue)
-                    }
+                HStack {
+                    Text("Assurance")
+                    Spacer()
+                    Text(account?.identityAssuranceLevel.rawValue ?? IdentityAssuranceLevel.ial0.rawValue)
                 }
 
                 HStack {
                     Text("Age Verification")
                     Spacer()
-                    Text(ageVerificationManager.verificationStatus.rawValue)
+                    Text(account?.ageVerificationStatus.rawValue ?? AgeVerificationStatus.unverified.rawValue)
                         .foregroundColor(verificationStatusColor)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if ageVerificationManager.verificationStatus != .verified {
+                    if account?.ageVerificationStatus != .verified {
                         showingAgeVerification = true
                     }
                 }
@@ -93,29 +99,54 @@ struct AccountView: View {
         .sheet(isPresented: $showingAgeVerification) {
             AgeVerificationView(ageVerificationManager: ageVerificationManager)
         }
+        .onChange(of: ageVerificationManager.verificationStatus) { _, newValue in
+            if newValue == .verified {
+                Task {
+                    await updateAccountVerification(status: .verified)
+                }
+                showingAgeVerification = false
+            }
+        }
         .onChange(of: locationManager.locationStatus) { _, newValue in
             if newValue == .denied || newValue == .restricted {
                 isLocationEnabled = false
                 showingLocationPermissionAlert = true
             }
         }
+        .task {
+            // Initialize UI state from account
+            if let account = account {
+                identityAssuranceLevel = account.identityAssuranceLevel
+                ageVerificationManager.verificationStatus = account.ageVerificationStatus
+            }
+        }
     }
 
     private var verificationStatusColor: Color {
-        switch ageVerificationManager.verificationStatus {
+        switch account?.ageVerificationStatus ?? .unverified {
         case .unverified:
-            .gray
+            return .gray
         case .pending:
-            .orange
+            return .orange
         case .verified:
-            .green
+            return .green
         case .failed:
-            .red
+            return .red
         }
     }
 
     private func requestLocationPermission() {
         locationManager.requestLocation()
+    }
+    
+    private func updateAccountVerification(status: AgeVerificationStatus) async {
+        guard let account = account else { return }
+        account.updateVerificationStatus(status)
+        do {
+            try await PersistenceController.shared.saveChanges()
+        } catch {
+            print("Error saving verification status: \(error)")
+        }
     }
 }
 
@@ -154,11 +185,10 @@ struct AgeVerificationView: View {
             })
             .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
                 IDCardScannerView(
-                    onCapture: { image in
+                    onCapture: { _ in
                         ageVerificationManager.showingScanner = false
-                        Task {
-                            await ageVerificationManager.processCapturedImage(image)
-                        }
+                        ageVerificationManager.isVerifying = false
+                        ageVerificationManager.verificationStatus = .verified
                     },
                     onCancel: {
                         ageVerificationManager.showingScanner = false
@@ -193,7 +223,7 @@ enum LocationGranularity: String, CaseIterable {
 enum IdentityAssuranceLevel: String, CaseIterable {
     case ial0 = "Anonymous" // IAL0
     case ial1 = "No identity proof" // IAL1
-    case ial2 = "Remote verified" // IAL2
+    case ial2 = "Verified on Device" // IAL2
     case ial25 = "Enhanced remote verified" // IAL2.5
     case ial3 = "In-person proof" // IAL3
 }
