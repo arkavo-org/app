@@ -39,6 +39,7 @@
 		DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598C02C96108C0021A8FC /* ArkavoService.swift */; };
 		DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */; };
 		DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA78EF882C85FE4F00B89422 /* PersistenceController.swift */; };
+		DA88DD0A2CC9D3F9005DA044 /* ContentServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA88DD092CC9D3F9005DA044 /* ContentServiceModel.swift */; };
 		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
@@ -105,6 +106,7 @@
 		DA7598C02C96108C0021A8FC /* ArkavoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoService.swift; sourceTree = "<group>"; };
 		DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoPolicy.swift; sourceTree = "<group>"; };
 		DA78EF882C85FE4F00B89422 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
+		DA88DD092CC9D3F9005DA044 /* ContentServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentServiceModel.swift; sourceTree = "<group>"; };
 		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -184,6 +186,7 @@
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
+				DA88DD092CC9D3F9005DA044 /* ContentServiceModel.swift */,
 				DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */,
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
@@ -401,6 +404,7 @@
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
+				DA88DD0A2CC9D3F9005DA044 /* ContentServiceModel.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,

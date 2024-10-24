@@ -1,0 +1,41 @@
+namespace Content;
+
+enum RatingLevel: byte {
+  unused = 0,
+  none = 1,
+  mild = 2,
+  moderate = 3,
+  severe = 4
+}
+
+table Rating {
+  violent: RatingLevel;
+  sexual: RatingLevel;
+  profane: RatingLevel;
+  substance: RatingLevel;
+  hate: RatingLevel;
+  harm: RatingLevel;
+  mature: RatingLevel;
+  bully: RatingLevel;
+}
+
+table Purpose {
+  educational: float;
+  entertainment: float;
+  news: float;
+  promotional: float;
+  personal: float;
+  opinion: float;
+  transactional: float;
+  harmful: float;
+  confidence: float;
+}
+
+table Metadata {
+  created: int64;
+  rating: Rating;
+  purpose: Purpose;
+  topics: [uint32];
+}
+
+root_type Metadata;
