@@ -430,10 +430,9 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         }.resume()
     }
 
-    func createJWT(publicID: String) -> String? {
+    func createJWT(account: Account, publicID: String) -> String? {
         // Create JWT header
         let header = ["alg": "HS256", "typ": "JWT"]
-
         // Create JWT payload
         let payload: [String: Any] = [
             "sub": publicID,
@@ -441,6 +440,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             "iat": Int(Date().timeIntervalSince1970),
             "iss": "Arkavo App",
             "aud": ["kas.arkavo.net"],
+            "age": account.ageVerificationStatus.rawValue,
         ]
 
         // Encode header and payload
