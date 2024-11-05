@@ -25,6 +25,7 @@ struct CompactStreamProfileView: View {
 struct DetailedStreamProfileView: View {
     @StateObject var viewModel: StreamViewModel
     @State var isShareSheetPresented: Bool = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -50,12 +51,22 @@ struct DetailedStreamProfileView: View {
             }
             .navigationTitle("Stream")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "x.circle")
+                    }
+                }
                 if viewModel.stream!.admissionPolicy != .closed {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItem(placement: .topBarTrailing) {
                         Button(action: {
                             isShareSheetPresented = true
                         }) {
-                            Image(systemName: "square.and.arrow.up")
+                            HStack {
+                                Text("Invite Friends")
+                                Image(systemName: "square.and.arrow.up")
+                            }
                         }
                     }
                 }
@@ -127,12 +138,16 @@ struct CreateStreamProfileView: View {
                 .padding(.trailing, 16)
             }
             Form {
+                Section  {
+                    Text("A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream.")
+                        .font(.footnote)
+                }
                 Section {
-                    TextField("Name", text: $viewModel.name)
+                    TextField("What We are Discussing", text: $viewModel.name)
                     if !viewModel.nameError.isEmpty {
                         Text(viewModel.nameError).foregroundColor(.red)
                     }
-                    TextField("Description", text: $viewModel.blurb)
+                    TextField("Topic of Interest", text: $viewModel.blurb)
                     if !viewModel.blurbError.isEmpty {
                         Text(viewModel.blurbError).foregroundColor(.red)
                     }

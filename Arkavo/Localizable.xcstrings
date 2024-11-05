@@ -24,16 +24,8 @@
         }
       }
     },
-    "•" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "•"
-          }
-        }
-      }
+    "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
+
     },
     "Account" : {
       "localizations" : {
@@ -126,16 +118,8 @@
     "Classification settings go here" : {
 
     },
-    "Create Account Profile" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crear perfil de cuenta"
-          }
-        }
-      }
+    "Create New Stream" : {
+
     },
     "Create Profile" : {
       "localizations" : {
@@ -157,29 +141,8 @@
         }
       }
     },
-    "Created: %@" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Creado: %@"
-          }
-        }
-      }
-    },
     "Data mode" : {
 
-    },
-    "Description" : {
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descripción"
-          }
-        }
-      }
     },
     "Done" : {
       "localizations" : {
@@ -231,17 +194,6 @@
     "Granularity" : {
 
     },
-    "ID: %@" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ID: %@"
-          }
-        }
-      }
-    },
     "Identity" : {
 
     },
@@ -261,16 +213,8 @@
     "Interaction: %@" : {
 
     },
-    "Interests" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intereses"
-          }
-        }
-      }
+    "Invite Friends" : {
+
     },
     "Join stream" : {
 
@@ -322,16 +266,6 @@
     "Learn more, view our" : {
 
     },
-    "List" : {
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lista"
-          }
-        }
-      }
-    },
     "Loading stream..." : {
 
     },
@@ -366,50 +300,11 @@
     "Members:" : {
 
     },
-    "Message" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje"
-          }
-        }
-      }
-    },
-    "Military-grade data security powered by OpenTDF." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seguridad de datos de grado militar impulsado por OpenTDF."
-          }
-        }
-      }
-    },
-    "Mine" : {
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mine"
-          }
-        }
-      }
-    },
     "My Account" : {
 
     },
-    "Name" : {
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre"
-          }
-        }
-      }
+    "My Streams" : {
+
     },
     "Name: %@" : {
       "localizations" : {
@@ -434,16 +329,8 @@
     "Next" : {
 
     },
-    "No stream profile" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin perfil de transmisión"
-          }
-        }
-      }
+    "No Active Streams" : {
+
     },
     "No Stream Service for %@" : {
 
@@ -492,17 +379,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Perfil"
-          }
-        }
-      }
-    },
-    "Profile Details" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Detalles del perfil"
           }
         }
       }
@@ -719,6 +595,9 @@
         }
       }
     },
+    "Topic of Interest" : {
+
+    },
     "Topic Tags:" : {
 
     },
@@ -797,38 +676,8 @@
         }
       }
     },
-    "What makes us different?" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "¿Qué nos hace diferentes?"
-          }
-        }
-      }
-    },
-    "Your content is always under your control - everywhere" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu contenido siempre está bajo tu control, en todas partes"
-          }
-        }
-      }
-    },
-    "Your privacy is our priority. Create your profile using just your name and Apple Passkey — no passwords, no hassle." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "es-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Su privacidad es nuestra prioridad. Crea tu perfil usando solo tu nombre y la clave de acceso de Apple, sin contraseñas y sin complicaciones."
-          }
-        }
-      }
+    "What We are Discussing" : {
+
     },
     "Your profile name will be revealed only to those fortunate enough to earn your approval." : {
 

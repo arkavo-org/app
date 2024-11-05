@@ -23,8 +23,10 @@ struct StreamView: View {
                 List {
                     Section(header:
                         HStack {
-                            Text("Mine")
+                            Text("My Streams")
+                            .font(.title3)
                             Spacer()
+                            Text("Create New Stream")
                             Button(action: {
                                 showingCreateStream = true
                             }) {
@@ -35,7 +37,7 @@ struct StreamView: View {
                     ) {
                         if streams.isEmpty {
                             VStack {
-                                Text("Empty")
+                                Text("No Active Streams")
                             }
                         } else {
                             ForEach(streams) { stream in
