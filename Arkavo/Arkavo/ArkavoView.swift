@@ -1,28 +1,17 @@
-import AuthenticationServices
-import Combine
-import CryptoKit
-import LocalAuthentication
-import MapKit
 import OpenTDFKit
 import SwiftData
 import SwiftUI
 
 struct ArkavoView: View {
     @Environment(\.locale) var locale
-    // service
     @State var service: ArkavoService
-    // data
     @State private var persistenceController: PersistenceController?
-    // map
     @State private var streamMapView: StreamMapView?
-    // account
     @State private var showingProfileDetails = false
-    // video
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     #endif
-    // view control
-    @State private var selectedView: SelectedView = .streamList
+    @State private var selectedView: SelectedView = .streamMap
     @Query private var accounts: [Account]
 
     init(service: ArkavoService) {
@@ -137,7 +126,7 @@ struct ArkavoView: View {
 
         // TODO: replace with session token
         if let account = accounts.first, let profile = account.profile {
-            let token = service.authenticationManager.createJWT(profileName: profile.name)
+            let token = service.authenticationManager.createJWT(account: account, publicID: profile.publicID.base58EncodedString)
             if let token {
                 service.setupWebSocketManager(token: token)
             } else {
@@ -146,82 +135,5 @@ struct ArkavoView: View {
         } else {
             print("No profile no webSocket no token")
         }
-    }
-}
-
-class NanoTDFManager: ObservableObject {
-    private var nanoTDFs: [Data: NanoTDF] = [:]
-    @Published private(set) var count: Int = 0
-    @Published private(set) var inProcessCount: Int = 0
-    @Published private(set) var processDuration: TimeInterval = 0
-
-    private var processTimer: Timer?
-    private var processStartTime: Date?
-
-    func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
-        DispatchQueue.main.async {
-            self.nanoTDFs[identifier] = nanoTDF
-            self.count += 1
-            self.updateInProcessCount(self.inProcessCount + 1)
-        }
-    }
-
-    func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
-        nanoTDFs[identifier]
-    }
-
-    func removeNanoTDF(withIdentifier identifier: Data) {
-        guard identifier.count > 32 else {
-            print("Identifier must be greater than 32 bytes long")
-            return
-        }
-        DispatchQueue.main.async {
-            if self.nanoTDFs.removeValue(forKey: identifier) != nil {
-                self.count -= 1
-                self.updateInProcessCount(self.inProcessCount - 1)
-            }
-        }
-    }
-
-    private func updateInProcessCount(_ newCount: Int) {
-        DispatchQueue.main.async {
-            if newCount > 0, self.inProcessCount == 0 {
-                self.startProcessTimer()
-            } else if newCount == 0, self.inProcessCount > 0 {
-                self.stopProcessTimer()
-            }
-            self.inProcessCount = newCount
-//            print("inProcessCount \(self.inProcessCount)")
-        }
-    }
-
-    private func startProcessTimer() {
-        DispatchQueue.main.async {
-            self.processStartTime = Date()
-            self.processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self, let startTime = processStartTime else { return }
-                DispatchQueue.main.async {
-                    self.processDuration = Date().timeIntervalSince(startTime)
-                    print("rewrapDuration \(String(format: "%.4f", self.processDuration))")
-                    if self.processDuration > 2.0 {
-                        self.stopProcessTimer()
-                    }
-                }
-            }
-        }
-    }
-
-    private func stopProcessTimer() {
-        DispatchQueue.main.async {
-            guard let startTime = self.processStartTime else { return }
-            self.processDuration = Date().timeIntervalSince(startTime)
-            self.processTimer?.invalidate()
-            self.processTimer = nil
-            self.processStartTime = nil
-        }
-    }
-
-    func isEmpty() -> Bool {
-        nanoTDFs.isEmpty
     }
 }

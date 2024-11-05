@@ -71,7 +71,7 @@ struct StreamView: View {
             }
         }
         .sheet(isPresented: $showingCreateStream) {
-            CreateStreamProfileView { profile, admissionPolicy, interactionPolicy in
+            CreateStreamProfileView { profile, admissionPolicy, interactionPolicy, _ in
                 Task {
                     try await saveNewStream(with: profile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
                 }
@@ -118,7 +118,7 @@ struct StreamView: View {
         guard let creatorPublicID = account.profile?.publicID else {
             fatalError("Account profile must have a public ID to create a stream")
         }
-        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
+        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy, agePolicy: .forAll)
         account.streams.append(stream)
         try await PersistenceController.shared.saveChanges()
     }
@@ -129,38 +129,10 @@ struct StreamView: View {
     }
 }
 
-private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
-    let account = try await PersistenceController.shared.getOrCreateAccount()
-    guard let creatorPublicID = account.profile?.publicID else {
-        fatalError("Account profile must have a public ID to create a stream")
-    }
-    do {
-        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy)
-        try account.addStream(stream)
-        try await PersistenceController.shared.saveChanges()
-    } catch {
-        print("Stream creation failed: \(error.localizedDescription)")
-    }
-}
-
-private func deleteStreams(at offsets: IndexSet) async throws {
-    let account = try await PersistenceController.shared.getOrCreateAccount()
-    for offset in offsets {
-        if offset < account.streams.count {
-            account.streams.remove(at: offset)
-            do {
-                try await PersistenceController.shared.saveChanges()
-            } catch {
-                print("Failed to delete stream(s): \(error)")
-            }
-        }
-    }
-}
-
 struct StreamManagementView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            CreateStreamProfileView { _, _, _ in
+            CreateStreamProfileView { _, _, _, _ in
                 // This is just for preview, so we'll leave the closure empty
             }
             .previewDisplayName("Create Stream")
@@ -187,7 +159,7 @@ struct StreamManagementView_Previews: PreviewProvider {
                 Profile(name: "Stream 3", blurb: "This is the third stream"),
             ]
             for profile in profiles {
-                let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .moderated)
+                let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .moderated, agePolicy: .forAll)
                 account.streams.append(stream)
                 try context.save()
             }

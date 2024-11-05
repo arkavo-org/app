@@ -51,6 +51,14 @@ cd Arkavo/Arkavo
 mv entity_generated.swift EntityServiceModel.swift
 ```
 
+Metadata
+
+```shell
+flatc --binary --swift -o Arkavo/Arkavo idl/metadata.fbs
+cd Arkavo/Arkavo
+mv metadata_generated.swift MetadataServiceModel.swift
+```
+
 #### Pkl (if changed)
 
 ```shell

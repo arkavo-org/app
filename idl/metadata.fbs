@@ -1,0 +1,105 @@
+include "entity.fbs";
+
+namespace Arkavo;
+
+enum RatingLevel: byte {
+  unused = 0,
+  none = 1,
+  mild = 2,
+  moderate = 3,
+  severe = 4
+}
+
+table Rating {
+  violent: RatingLevel;
+  sexual: RatingLevel;
+  profane: RatingLevel;
+  substance: RatingLevel;
+  hate: RatingLevel;
+  harm: RatingLevel;
+  mature: RatingLevel;
+  bully: RatingLevel;
+}
+
+table Purpose {
+  educational: float;
+  entertainment: float;
+  news: float;
+  promotional: float;
+  personal: float;
+  opinion: float;
+  transactional: float;
+  harmful: float;
+  confidence: float;
+}
+
+// Content format within the media type
+enum FormatType : byte {
+    // Text formats
+    plain = 0,
+    html = 1,
+    csv = 2,
+    xml = 3,
+    json = 4,
+    // Image formats
+    jpeg = 10,
+    png = 11,
+    svg = 12,
+    gif = 13,
+    // Application formats
+    pdf = 30,
+}
+// Data encoding methods
+enum DataEncoding : byte {
+    binary = 0,
+    utf8 = 1,
+    utf16 = 2,
+    ascii = 3,
+    base64 = 4,
+    quoted_printable = 5
+}
+// Archive types
+enum ArchiveType : byte {
+    none = 0,
+    zip = 1,
+    tar = 2,
+    gzip = 3,
+    bzip2 = 4,
+    xz = 5,
+    zstd = 6,
+    lz4 = 7
+}
+// Format information
+table FormatInfo {
+    type: FormatType;              // Specific format
+    version: string;               // Format version
+    profile: string;               // Format profile, schema, class
+}
+// Archive information
+table ArchiveInfo {
+    type: ArchiveType;            // Type of archive/compression
+    version: string;              // Archive version
+    profile: string;              // Archive profile
+}
+// Basic content format information
+table ContentFormat {
+    // Primary type identification
+    media_type: MediaType;        // Basic category
+    // Encoding
+    data_encoding: DataEncoding;  // How the data is encoded
+    // Format details
+    format: FormatInfo;          // Format metadata
+}
+// Content information
+table Metadata {
+  created: int64;
+  id: [uint8];          // publicID 32 bytes array 256-bit
+  related:  [uint8];    // publicID 32 bytes array 256-bit
+  rating: Rating;
+  purpose: Purpose;
+  topics: [uint32];
+  archive: ArchiveInfo;        // Archive/compression information
+  content: ContentFormat;       // Original content format
+}
+
+root_type Metadata;

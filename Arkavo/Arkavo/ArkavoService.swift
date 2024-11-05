@@ -14,6 +14,7 @@ class ArkavoService {
     let authenticationManager = AuthenticationManager()
     var thoughtService: ThoughtService?
     var streamService: StreamService?
+    private let locationManager = LocationManager()
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         var videoStreamViewModel: VideoStreamViewModel?
     #endif
@@ -75,12 +76,11 @@ class ArkavoService {
             return
         }
         let messageType = data.prefix(1)
+        // FIXME: copy of data after first byte
+        let subData = data.subdata(in: 1 ..< data.count)
         switch messageType[0] {
-        case 0x05, 0x06:
+        case 0x05:
             do {
-                // FIXME: copy of data after first byte
-                let subData = data.subdata(in: 1 ..< data.count)
-                // Create a NanoTDF from the payload
                 let parser = BinaryParser(data: subData)
                 let header = try parser.parseHeader()
                 let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
@@ -89,7 +89,23 @@ class ArkavoService {
             } catch let error as ParsingError {
                 handleParsingError(error)
             } catch {
-                print("Unexpected error: \(error.localizedDescription)")
+                print("Unexpected 0x05 error: \(error.localizedDescription)")
+            }
+        case 0x06:
+            do {
+                let parser = BinaryParser(data: subData)
+                let header = try parser.parseHeader()
+                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+                let nanoTDF = NanoTDF(header: header, payload: payload, signature: nil)
+                sendRewrapNanoTDF(nano: nanoTDF)
+            } catch let error as ParsingError {
+                if error == .invalidFormat || error == .invalidMagicNumber {
+                    handleNATSEvent(payload: subData)
+                } else {
+                    handleParsingError(error)
+                }
+            } catch {
+                print("Unexpected 0x06 error: \(error.localizedDescription)")
             }
         default:
             print("Unknown message type: \(messageType.base64EncodedString())")
@@ -101,19 +117,17 @@ class ArkavoService {
     private func handleNATSEvent(payload: Data) {
         print("Received NATS event: \(payload.base64EncodedString())")
         var bb = ByteBuffer(data: payload)
+        let rootOffset = bb.read(def: Int32.self, position: 0)
         do {
             var verifier = try Verifier(buffer: &bb)
-            try Arkavo_Event.verify(&verifier, at: 0, of: Arkavo_Event.self)
+            try Arkavo_Event.verify(&verifier, at: Int(rootOffset), of: Arkavo_Event.self)
             print("The bytes represent a valid Arkavo_Event")
         } catch {
             print("Verification failed: \(error)")
             return
         }
-
-        let event = Arkavo_Event(bb, o: 0)
-
+        let event = Arkavo_Event(bb, o: Int32(Int(rootOffset)))
         print("  Action: \(event.action)")
-
         switch event.dataType {
         case .userevent:
             if let userEvent = event.data(type: Arkavo_UserEvent.self) {
@@ -123,8 +137,109 @@ class ArkavoService {
             if let cacheEvent = event.data(type: Arkavo_CacheEvent.self) {
                 handleCacheEvent(cacheEvent)
             }
+        case .routeevent:
+            if event.status == .fulfilled,
+               let routeEvent = event.data(type: Arkavo_RouteEvent.self)
+            {
+                print("Route Event: fulfilled")
+                if let streamService {
+                    streamService.handleRouteEventFulfilled(routeEvent)
+                }
+                return
+            }
+            if event.status == .preparing,
+               let routeEvent = event.data(type: Arkavo_RouteEvent.self)
+            {
+                handleRouteEvent(routeEvent)
+            }
         case .none_:
             print("  No event data")
+        }
+    }
+
+    private func handleRouteEvent(_ routeEvent: Arkavo_RouteEvent) {
+        print("Route Event:")
+        print("  Source Type: \(routeEvent.sourceType)")
+        print("  Target Type: \(routeEvent.targetType)")
+        print("  Source ID: \(Data(routeEvent.sourceId).base58EncodedString)")
+        print("  Attribute Type: \(routeEvent.attributeType)")
+        switch routeEvent.attributeType {
+        case .unused:
+            print("handleRouteEvent unused")
+        case .location:
+            print("handleRouteEvent location")
+            // Check if we have permission to access location
+            if let status = locationManager.locationStatus {
+                switch status {
+                case .authorizedWhenInUse, .authorizedAlways:
+                    // We have permission
+                    print("Location access is allowed")
+                    Task {
+                        do {
+                            let locationData = try await locationManager.requestLocationAsync()
+                            // TODO: use flatbuffers
+                            let jsonEncoder = JSONEncoder()
+                            let jsonData = try jsonEncoder.encode(locationData)
+                            print("Location: \(String(decoding: jsonData, as: UTF8.self))")
+                            // FIXME: add to encrypted metadata of nanotdf
+                            // Create new RouteEvent, switch source and target, add jsonData as payload
+                            // Create a new RouteEvent
+                            var builder = FlatBufferBuilder()
+                            // Create the payload (location data)
+                            let payloadVector = builder.createVector(bytes: jsonData)
+                            // Switch source and target
+                            let sourceIdVector = builder.createVector(routeEvent.targetId)
+                            let targetIdVector = builder.createVector(routeEvent.sourceId)
+                            let routeEventOffset = Arkavo_RouteEvent.createRouteEvent(
+                                &builder,
+                                targetType: .accountProfile,
+                                targetIdVectorOffset: targetIdVector,
+                                sourceType: .accountProfile,
+                                sourceIdVectorOffset: sourceIdVector,
+                                attributeType: .location,
+                                entityType: .unused,
+                                payloadVectorOffset: payloadVector
+                            )
+//                            print("Debug: Created RouteEvent, offset: \(routeEventOffset)")
+                            // Create Event
+                            let eventOffset = Arkavo_Event.createEvent(
+                                &builder,
+                                action: .share,
+                                timestamp: UInt64(Date().timeIntervalSince1970),
+                                status: .fulfilled,
+                                dataType: .routeevent,
+                                dataOffset: routeEventOffset
+                            )
+//                            print("Debug: Created Event, offset: \(eventOffset)")
+                            builder.finish(offset: eventOffset)
+                            // Get the bytes of the FlatBuffer
+//                            print("Debug: Finished builder")
+                            let buffer = builder.sizedBuffer
+//                            print("Debug: Got sized buffer, size: \(buffer.size), capacity: \(buffer.capacity)")
+                            // Convert ByteBuffer to Data for base64 encoding and sending
+                            let data = Data(bytes: buffer.memory.advanced(by: buffer.reader), count: Int(buffer.size))
+                            // Send the event
+                            try self.sendEvent(data)
+                            print("Sent location RouteEvent")
+                        } catch {
+                            print("Error getting location: \(error)")
+                        }
+                    }
+                case .denied, .restricted:
+                    print("Location access is denied or restricted")
+                // Handle lack of permission
+                case .notDetermined:
+                    print("Location permission not determined")
+                    locationManager.requestLocation()
+                @unknown default:
+                    print("Unknown location authorization status")
+                }
+            } else {
+                print("Location status is not available")
+                locationManager.requestLocation()
+            }
+        case .time:
+            print("  Attribute Value: \(routeEvent.attributeType)")
         }
     }
 
@@ -132,14 +247,14 @@ class ArkavoService {
         print("User Event:")
         print("  Source Type: \(userEvent.sourceType)")
         print("  Target Type: \(userEvent.targetType)")
-        print("  Source ID: \(Data(userEvent.sourceId).base64EncodedString())")
-        print("  Target ID: \(Data(userEvent.targetId).base64EncodedString())")
+        print("  Source ID: \(Data(userEvent.sourceId).base58EncodedString)")
+        print("  Target ID: \(Data(userEvent.targetId).base58EncodedString)")
         // Add any additional processing for user events here
     }
 
     private func handleCacheEvent(_ cacheEvent: Arkavo_CacheEvent) {
         print("Cache Event:")
-        print("  Target ID: \(Data(cacheEvent.targetId).base64EncodedString())")
+        print("  Target ID: \(Data(cacheEvent.targetId).base58EncodedString)")
         print("  TTL: \(cacheEvent.ttl)")
         print("  One-Time Access: \(cacheEvent.oneTimeAccess)")
         // Add any additional processing for cache events here
@@ -173,10 +288,8 @@ class ArkavoService {
             do {
                 // Decrypt payload within the Task
                 let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-
                 // Determine payload type based on policy metadata
                 let policy = ArkavoPolicy(nano.header.policy)
-
                 // Handle different policy types
                 switch policy.type {
                 case .accountProfile:
@@ -281,5 +394,131 @@ class ArkavoService {
         case .invalidSigning:
             print("Invalid NanoTDF signing")
         }
+    }
+}
+
+// FIXME: covert to CheckedContinuation, remove performance metrics
+class NanoTDFManager: ObservableObject {
+    private var nanoTDFs: [Data: NanoTDF] = [:]
+    @Published private(set) var count: Int = 0
+    @Published private(set) var inProcessCount: Int = 0
+    @Published private(set) var processDuration: TimeInterval = 0
+
+    private var processTimer: Timer?
+    private var processStartTime: Date?
+
+    deinit {
+        processTimer?.invalidate()
+    }
+
+    func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
+        DispatchQueue.main.async {
+            self.nanoTDFs[identifier] = nanoTDF
+            self.count += 1
+            self.updateInProcessCount(self.inProcessCount + 1)
+        }
+    }
+
+    func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
+        nanoTDFs[identifier]
+    }
+
+    func removeNanoTDF(withIdentifier identifier: Data) {
+        guard identifier.count > 32 else {
+            print("Identifier must be greater than 32 bytes long")
+            return
+        }
+        DispatchQueue.main.async {
+            if self.nanoTDFs.removeValue(forKey: identifier) != nil {
+                self.count -= 1
+                self.updateInProcessCount(self.inProcessCount - 1)
+            }
+        }
+    }
+
+    private func updateInProcessCount(_ newCount: Int) {
+        DispatchQueue.main.async {
+            if newCount > 0, self.inProcessCount == 0 {
+                self.startProcessTimer()
+            } else if newCount == 0, self.inProcessCount > 0 {
+                self.stopProcessTimer()
+            }
+            self.inProcessCount = newCount
+//            print("inProcessCount \(self.inProcessCount)")
+        }
+    }
+
+    private func startProcessTimer() {
+        DispatchQueue.main.async {
+            self.processStartTime = Date()
+            self.processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self, let startTime = processStartTime else { return }
+                DispatchQueue.main.async {
+                    self.processDuration = Date().timeIntervalSince(startTime)
+                    print("rewrapDuration \(String(format: "%.4f", self.processDuration))")
+                    if self.processDuration > 2.0 {
+                        self.stopProcessTimer()
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopProcessTimer() {
+        DispatchQueue.main.async {
+            guard let startTime = self.processStartTime else { return }
+            self.processDuration = Date().timeIntervalSince(startTime)
+            self.processTimer?.invalidate()
+            self.processTimer = nil
+            self.processStartTime = nil
+        }
+    }
+
+    func isEmpty() -> Bool {
+        nanoTDFs.isEmpty
+    }
+}
+
+struct NATSMessage {
+    let messageType: Data
+    let payload: Data
+
+    init(payload: Data) {
+        messageType = Data([0x05])
+        self.payload = payload
+    }
+
+    init(data: Data) {
+        messageType = data.prefix(1)
+        payload = data.suffix(from: 1)
+    }
+
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType)
+        data.append(payload)
+        return data
+    }
+}
+
+struct NATSEvent {
+    let messageType: Data
+    let payload: Data
+
+    init(payload: Data) {
+        messageType = Data([0x06])
+        self.payload = payload
+    }
+
+    init(data: Data) {
+        messageType = data.prefix(1)
+        payload = data.suffix(from: 1)
+    }
+
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType)
+        data.append(payload)
+        return data
     }
 }

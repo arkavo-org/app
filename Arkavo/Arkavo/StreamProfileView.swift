@@ -40,6 +40,7 @@ struct DetailedStreamProfileView: View {
                     Section(header: Text("Policies")) {
                         Text("Admission: \(viewModel.stream!.admissionPolicy.rawValue)")
                         Text("Interaction: \(viewModel.stream!.interactionPolicy.rawValue)")
+                        Text("Age Policy: \(viewModel.stream!.agePolicy.rawValue)")
                     }
                     Section(header: Text("Public ID")) {
                         Text(viewModel.stream!.publicID.base58EncodedString)
@@ -49,6 +50,7 @@ struct DetailedStreamProfileView: View {
                 }
             }
             .navigationTitle("Stream")
+            #if !os(macOS)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: {
@@ -74,6 +76,7 @@ struct DetailedStreamProfileView: View {
                 ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream!.publicID.base58EncodedString)")!],
                            isPresented: $isShareSheetPresented)
             }
+            #endif
         }
     }
 }
@@ -122,8 +125,8 @@ struct DetailedStreamProfileView: View {
 struct CreateStreamProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = CreateStreamViewModel()
-    var onSave: (Profile, AdmissionPolicy, InteractionPolicy) -> Void
-    
+    var onSave: (Profile, AdmissionPolicy, InteractionPolicy, AgePolicy) -> Void
+
     var body: some View {
         VStack {
             HStack {
@@ -162,11 +165,16 @@ struct CreateStreamProfileView: View {
                             Text(policy.rawValue).tag(policy)
                         }
                     }
+                    Picker("Age", selection: $viewModel.agePolicy) {
+                        ForEach(AgePolicy.allCases, id: \.self) { policy in
+                            Text(policy.rawValue).tag(policy)
+                        }
+                    }
                 }
             }
             Button(action: {
                 let profile = Profile(name: viewModel.name, blurb: viewModel.blurb)
-                onSave(profile, viewModel.admissionPolicy, viewModel.interactionPolicy)
+                onSave(profile, viewModel.admissionPolicy, viewModel.interactionPolicy, viewModel.agePolicy)
                 dismiss()
             }) {
                 Text("Save")
@@ -190,6 +198,7 @@ class CreateStreamViewModel: ObservableObject {
     @Published var participantCount: Int = 2
     @Published var admissionPolicy: AdmissionPolicy = .open
     @Published var interactionPolicy: InteractionPolicy = .open
+    @Published var agePolicy: AgePolicy = .forAll
     @Published var nameError: String = ""
     @Published var blurbError: String = ""
     @Published var isValid: Bool = false
@@ -230,7 +239,7 @@ class CreateStreamViewModel: ObservableObject {
 extension StreamProfileView_Previews {
     static var previewStream: Stream {
         let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-        return Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .closed, interactionPolicy: .closed)
+        return Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .closed, interactionPolicy: .closed, agePolicy: .forAll)
     }
 }
 
@@ -244,7 +253,7 @@ struct StreamProfileView_Previews: PreviewProvider {
             DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
                 .previewDisplayName("Detailed Stream Profile")
 
-            CreateStreamProfileView { _, _, _ in
+            CreateStreamProfileView { _, _, _, _ in
                 // This closure is just for preview, so we'll leave it empty
             }
             .previewDisplayName("Create Stream Profile")
@@ -265,7 +274,7 @@ struct StreamProfileView_Previews: PreviewProvider {
             try context.save()
 
             let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-            let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .open)
+            let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
             account.streams.append(stream)
             try context.save()
 

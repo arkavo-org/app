@@ -12,14 +12,16 @@ final class Stream: @unchecked Sendable {
     var profile: Profile
     var admissionPolicy: AdmissionPolicy
     var interactionPolicy: InteractionPolicy
+    var agePolicy: AgePolicy
     var thoughts: [Thought] = []
 
-    init(id: UUID = UUID(), creatorPublicID: Data, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, thoughts: [Thought] = [], publicID: Data? = nil) {
+    init(id: UUID = UUID(), creatorPublicID: Data, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, agePolicy: AgePolicy, thoughts: [Thought] = [], publicID: Data? = nil) {
         self.id = id
         self.creatorPublicID = creatorPublicID
         self.profile = profile
         self.admissionPolicy = admissionPolicy
         self.interactionPolicy = interactionPolicy
+        self.agePolicy = agePolicy
         self.thoughts = thoughts
         if let publicID {
             self.publicID = publicID
@@ -46,6 +48,13 @@ enum InteractionPolicy: String, Codable, CaseIterable {
     case open = "Open"
     case moderated = "Moderated"
     case closed = "Closed"
+}
+
+enum AgePolicy: String, Codable, CaseIterable {
+    case onlyAdults = "Only Adults"
+    case onlyKids = "Only Kids"
+    case forAll = "For All"
+    case onlyTeens = "Only Teens"
 }
 
 extension Stream: AppEntity {

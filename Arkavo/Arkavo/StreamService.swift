@@ -27,6 +27,7 @@ extension StreamServiceModel {
 class StreamService {
     let service: ArkavoService
     public var streamViewModel: StreamViewModel?
+    private var locationContinuation: CheckedContinuation<(LocationData, Data), Error>?
 
     init(_ service: ArkavoService) {
         self.service = service
@@ -144,6 +145,79 @@ class StreamService {
         try service.sendEvent(data)
     }
 
+    func requestLocationAndWait(for publicID: Data) async throws -> LocationData {
+        let (coordinate, _) = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(LocationData, Data), Error>?) in
+            locationContinuation = continuation
+            Task {
+                do {
+                    try await requestLocation(withPublicID: publicID)
+                } catch {
+                    if let cont = self.locationContinuation {
+                        cont.resume(throwing: error)
+                        self.locationContinuation = nil
+                    }
+                }
+            }
+        }
+        return coordinate
+    }
+
+    @MainActor
+    public func requestLocation(withPublicID publicID: Data) async throws {
+        let account = try await PersistenceController.shared.getOrCreateAccount()
+        let accountProfile = account.profile
+        guard let accountProfilePublicID = accountProfile?.publicID
+        else {
+            throw StreamServiceError.missingAccountOrProfile
+        }
+        // Create RouteEvent
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        let targetIdVector = builder.createVector(bytes: publicID)
+        let sourceIdVector = builder.createVector(bytes: accountProfilePublicID)
+        let routeEventOffset = Arkavo_RouteEvent.createRouteEvent(
+            &builder,
+            targetType: .accountProfile,
+            targetIdVectorOffset: targetIdVector,
+            sourceType: .accountProfile,
+            sourceIdVectorOffset: sourceIdVector,
+            attributeType: .location,
+            entityType: .streamProfile
+        )
+//        print("Debug: Created RouteEvent, offset: \(routeEventOffset)")
+        // Create Event
+        let eventOffset = Arkavo_Event.createEvent(
+            &builder,
+            action: .share,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing,
+            dataType: .routeevent,
+            dataOffset: routeEventOffset
+        )
+//        print("Debug: Created Event, offset: \(eventOffset)")
+        builder.finish(offset: eventOffset)
+//        print("Debug: Finished builder")
+        var buffer = builder.sizedBuffer
+//        print("Debug: Got sized buffer, size: \(buffer.size), capacity: \(buffer.capacity)")
+        // Convert ByteBuffer to Data for base64 encoding and sending
+        let data = Data(bytes: buffer.memory.advanced(by: buffer.reader), count: Int(buffer.size))
+//        print("Debug: Converted buffer to Data, size: \(data.count)")
+//        print("Debug: route event (base64): \(data.base64EncodedString())")
+        // Print hex representation for more detailed view
+//        print("Debug: route event (hex): \(data.map { String(format: "%02hhx", $0) }.joined())")
+        // FlatBuffers verification
+        do {
+//            print("Debug: Starting FlatBuffer verification")
+            let rootOffset = buffer.read(def: Int32.self, position: 0)
+            var verifier = try Verifier(buffer: &buffer)
+            try Arkavo_Event.verify(&verifier, at: Int(rootOffset), of: Arkavo_Event.self)
+            print("FlatBuffer verification passed")
+        } catch {
+            print("FlatBuffer verification failed: \(error)")
+            throw error // or handle the error as appropriate for your application
+        }
+        try service.sendEvent(data)
+    }
+
     @MainActor
     public func requestStream(withPublicID publicID: Data) async throws -> Stream? {
         let account = try await PersistenceController.shared.getOrCreateAccount()
@@ -216,13 +290,45 @@ class StreamService {
                 id: UUID(),
                 creatorPublicID: Data(creatorPublicId),
                 profile: Profile(name: name),
-                admissionPolicy: .open, // map
-                interactionPolicy: .open, // map
+                admissionPolicy: .open,
+                interactionPolicy: .open,
+                agePolicy: .forAll,
                 publicID: Data(publicId)
             )
             try PersistenceController.shared.saveStream(stream)
         } else {
             throw StreamError.invalidEntityType
+        }
+    }
+
+    func handleRouteEventFulfilled(_ routeEvent: Arkavo_RouteEvent) {
+        print("Route Event Fulfilled:")
+        print("  Source Type: \(routeEvent.sourceType)")
+        print("  Target Type: \(routeEvent.targetType)")
+        print("  Source ID: \(Data(routeEvent.sourceId).base58EncodedString)")
+        print("  Attribute Type: \(routeEvent.attributeType)")
+
+        if !routeEvent.hasPayload {
+            print("No payload in fulfilled route event")
+            return
+        }
+        let payloadData = Data(routeEvent.payload)
+        do {
+            if let jsonString = String(data: payloadData, encoding: .utf8),
+               let jsonData = jsonString.data(using: .utf8)
+            {
+                let locationData = try JSONDecoder().decode(LocationData.self, from: jsonData)
+                if let continuation = locationContinuation {
+                    continuation.resume(returning: (locationData, Data(routeEvent.targetId)))
+                    locationContinuation = nil
+                }
+            } else {
+                print("Failed to convert payload to JSON string")
+                return
+            }
+        } catch {
+            print("Failed to decode location data: \(error)")
+            return
         }
     }
 
@@ -274,6 +380,7 @@ class StreamService {
         case missingKASkey
         case flatBufferCreationFailed
         case missingRequiredFields
+        case serviceNotInitialized
     }
 
     enum StreamError: Error {

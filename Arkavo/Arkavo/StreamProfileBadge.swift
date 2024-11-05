@@ -107,6 +107,17 @@ struct StreamProfileBadge: View {
                             .background(Color.blue.opacity(0.2))
                             .cornerRadius(5)
                     }
+
+                    HStack {
+                        Text("Age Policy:")
+                            .font(.subheadline)
+                            .bold()
+                        Text(viewModel.stream?.agePolicy.rawValue ?? "")
+                            .font(.caption)
+                            .padding(8)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(5)
+                    }
                 }
             }
         }
@@ -137,7 +148,7 @@ struct StreamProfileBadge: View {
 
 struct StreamProfileBadge_Previews: PreviewProvider {
     static var previews: some View {
-        let previewStream = Stream(creatorPublicID: Data(), profile: Profile(name: "Preview Stream", blurb: "This is a preview stream"), admissionPolicy: .open, interactionPolicy: .open)
+        let previewStream = Stream(creatorPublicID: Data(), profile: Profile(name: "Preview Stream", blurb: "This is a preview stream"), admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
         let ownerProfile = AccountProfileViewModel(profile: Profile(name: "Owner"), activityService: ActivityServiceModel())
         let membersProfile = [
             AccountProfileViewModel(profile: Profile(name: "Member 1"), activityService: ActivityServiceModel()),

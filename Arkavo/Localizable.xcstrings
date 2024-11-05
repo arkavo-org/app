@@ -66,16 +66,40 @@
     "Admission: %@" : {
 
     },
+    "Age" : {
+
+    },
+    "Age Policy:" : {
+
+    },
+    "Age Policy: %@" : {
+
+    },
+    "Age Verification" : {
+
+    },
     "Arkavo" : {
 
     },
     "Assurance" : {
 
     },
+    "Audio message" : {
+
+    },
     "Back" : {
 
     },
     "Blurb: %@" : {
+
+    },
+    "Camera" : {
+
+    },
+    "Camera Location Protected" : {
+
+    },
+    "Camera Time Protected" : {
 
     },
     "Cancel" : {
@@ -311,6 +335,9 @@
     "No Stream Service for %@" : {
 
     },
+    "Not available on macOS" : {
+
+    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -324,7 +351,13 @@
     "Owner:" : {
 
     },
+    "Photo" : {
+
+    },
     "Please grant location permission in Settings to use this feature." : {
+
+    },
+    "Please provide a valid government-issued ID and a selfie to verify your age." : {
 
     },
     "Policies" : {
@@ -376,7 +409,35 @@
     "Public ID" : {
 
     },
+    "Ready to join?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Listo para unirte?"
+          }
+        }
+      }
+    },
+    "Recall" : {
+
+    },
     "Refine Interests" : {
+
+    },
+    "Register" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registro"
+          }
+        }
+      }
+    },
+    "Resend" : {
 
     },
     "Save" : {
@@ -454,6 +515,20 @@
           }
         }
       }
+    },
+    "Start group chats now, with more exciting features coming soon!" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicie chats grupales ahora, ¡próximamente habrá más funciones interesantes!"
+          }
+        }
+      }
+    },
+    "Start Verification" : {
+
     },
     "Sticker Picker Placeholder" : {
 
@@ -557,6 +632,9 @@
           }
         }
       }
+    },
+    "Video message" : {
+
     },
     "View Secure Stream" : {
       "localizations" : {

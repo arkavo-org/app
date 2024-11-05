@@ -45,9 +45,23 @@ public enum Arkavo_EntityType: Int8, Enum, Verifiable {
   case unused = 0
   case streamProfile = 1
   case accountProfile = 2
+  case server = 3
 
-  public static var max: Arkavo_EntityType { return .accountProfile }
+  public static var max: Arkavo_EntityType { return .server }
   public static var min: Arkavo_EntityType { return .unused }
+}
+
+
+public enum Arkavo_AttributeType: Int8, Enum, Verifiable {
+  public typealias T = Int8
+  public static var byteSize: Int { return MemoryLayout<Int8>.size }
+  public var value: Int8 { return self.rawValue }
+  case unused = 0
+  case time = 1
+  case location = 2
+
+  public static var max: Arkavo_AttributeType { return .location }
+  public static var min: Arkavo_AttributeType { return .unused }
 }
 
 
@@ -63,8 +77,9 @@ public enum Arkavo_EventData: UInt8, UnionEnum {
   case none_ = 0
   case userevent = 1
   case cacheevent = 2
+  case routeevent = 3
 
-  public static var max: Arkavo_EventData { return .cacheevent }
+  public static var max: Arkavo_EventData { return .routeevent }
   public static var min: Arkavo_EventData { return .none_ }
 }
 
@@ -83,6 +98,8 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
     case targetType = 6
     case sourceId = 8
     case targetId = 10
+    case attributeType = 12
+    case entityType = 14
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
@@ -97,24 +114,34 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
   public var targetIdCount: Int32 { let o = _accessor.offset(VTOFFSET.targetId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func targetId(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.targetId.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
   public var targetId: [UInt8] { return _accessor.getVector(at: VTOFFSET.targetId.v) ?? [] }
-  public static func startUserEvent(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 4) }
+  public var hasAttributeType: Bool { let o = _accessor.offset(VTOFFSET.attributeType.v); return o == 0 ? false : true }
+  public var attributeTypeCount: Int32 { let o = _accessor.offset(VTOFFSET.attributeType.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func attributeType(at index: Int32) -> Arkavo_AttributeType? { let o = _accessor.offset(VTOFFSET.attributeType.v); return o == 0 ? Arkavo_AttributeType.unused : Arkavo_AttributeType(rawValue: _accessor.directRead(of: Int8.self, offset: _accessor.vector(at: o) + index * 1)) }
+  public var entityType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.entityType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public static func startUserEvent(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 6) }
   public static func add(sourceType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: sourceType.rawValue, def: 0, at: VTOFFSET.sourceType.p) }
   public static func add(targetType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: targetType.rawValue, def: 0, at: VTOFFSET.targetType.p) }
   public static func addVectorOf(sourceId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: sourceId, at: VTOFFSET.sourceId.p) }
   public static func addVectorOf(targetId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: targetId, at: VTOFFSET.targetId.p) }
+  public static func addVectorOf(attributeType: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: attributeType, at: VTOFFSET.attributeType.p) }
+  public static func add(entityType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: entityType.rawValue, def: 0, at: VTOFFSET.entityType.p) }
   public static func endUserEvent(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
   public static func createUserEvent(
     _ fbb: inout FlatBufferBuilder,
     sourceType: Arkavo_EntityType = .unused,
     targetType: Arkavo_EntityType = .unused,
     sourceIdVectorOffset sourceId: Offset = Offset(),
-    targetIdVectorOffset targetId: Offset = Offset()
+    targetIdVectorOffset targetId: Offset = Offset(),
+    attributeTypeVectorOffset attributeType: Offset = Offset(),
+    entityType: Arkavo_EntityType = .unused
   ) -> Offset {
     let __start = Arkavo_UserEvent.startUserEvent(&fbb)
     Arkavo_UserEvent.add(sourceType: sourceType, &fbb)
     Arkavo_UserEvent.add(targetType: targetType, &fbb)
     Arkavo_UserEvent.addVectorOf(sourceId: sourceId, &fbb)
     Arkavo_UserEvent.addVectorOf(targetId: targetId, &fbb)
+    Arkavo_UserEvent.addVectorOf(attributeType: attributeType, &fbb)
+    Arkavo_UserEvent.add(entityType: entityType, &fbb)
     return Arkavo_UserEvent.endUserEvent(&fbb, start: __start)
   }
 
@@ -124,6 +151,8 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
     try _v.visit(field: VTOFFSET.targetType.p, fieldName: "targetType", required: false, type: Arkavo_EntityType.self)
     try _v.visit(field: VTOFFSET.sourceId.p, fieldName: "sourceId", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     try _v.visit(field: VTOFFSET.targetId.p, fieldName: "targetId", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
+    try _v.visit(field: VTOFFSET.attributeType.p, fieldName: "attributeType", required: false, type: ForwardOffset<Vector<Arkavo_AttributeType, Arkavo_AttributeType>>.self)
+    try _v.visit(field: VTOFFSET.entityType.p, fieldName: "entityType", required: false, type: Arkavo_EntityType.self)
     _v.finish()
   }
 }
@@ -184,6 +213,86 @@ public struct Arkavo_CacheEvent: FlatBufferObject, Verifiable {
     try _v.visit(field: VTOFFSET.targetPayload.p, fieldName: "targetPayload", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     try _v.visit(field: VTOFFSET.ttl.p, fieldName: "ttl", required: false, type: UInt32.self)
     try _v.visit(field: VTOFFSET.oneTimeAccess.p, fieldName: "oneTimeAccess", required: false, type: Bool.self)
+    _v.finish()
+  }
+}
+
+public struct Arkavo_RouteEvent: FlatBufferObject, Verifiable {
+
+  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  public var __buffer: ByteBuffer! { return _accessor.bb }
+  private var _accessor: Table
+
+  private init(_ t: Table) { _accessor = t }
+  public init(_ bb: ByteBuffer, o: Int32) { _accessor = Table(bb: bb, position: o) }
+
+  private enum VTOFFSET: VOffset {
+    case targetType = 4
+    case targetId = 6
+    case sourceType = 8
+    case sourceId = 10
+    case attributeType = 12
+    case entityType = 14
+    case payload = 16
+    var v: Int32 { Int32(self.rawValue) }
+    var p: VOffset { self.rawValue }
+  }
+
+  public var targetType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.targetType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public var hasTargetId: Bool { let o = _accessor.offset(VTOFFSET.targetId.v); return o == 0 ? false : true }
+  public var targetIdCount: Int32 { let o = _accessor.offset(VTOFFSET.targetId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func targetId(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.targetId.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
+  public var targetId: [UInt8] { return _accessor.getVector(at: VTOFFSET.targetId.v) ?? [] }
+  public var sourceType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.sourceType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public var hasSourceId: Bool { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? false : true }
+  public var sourceIdCount: Int32 { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func sourceId(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.sourceId.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
+  public var sourceId: [UInt8] { return _accessor.getVector(at: VTOFFSET.sourceId.v) ?? [] }
+  public var attributeType: Arkavo_AttributeType { let o = _accessor.offset(VTOFFSET.attributeType.v); return o == 0 ? .unused : Arkavo_AttributeType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public var entityType: Arkavo_EntityType { let o = _accessor.offset(VTOFFSET.entityType.v); return o == 0 ? .unused : Arkavo_EntityType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
+  public var hasPayload: Bool { let o = _accessor.offset(VTOFFSET.payload.v); return o == 0 ? false : true }
+  public var payloadCount: Int32 { let o = _accessor.offset(VTOFFSET.payload.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func payload(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.payload.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
+  public var payload: [UInt8] { return _accessor.getVector(at: VTOFFSET.payload.v) ?? [] }
+  public static func startRouteEvent(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 7) }
+  public static func add(targetType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: targetType.rawValue, def: 0, at: VTOFFSET.targetType.p) }
+  public static func addVectorOf(targetId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: targetId, at: VTOFFSET.targetId.p) }
+  public static func add(sourceType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: sourceType.rawValue, def: 0, at: VTOFFSET.sourceType.p) }
+  public static func addVectorOf(sourceId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: sourceId, at: VTOFFSET.sourceId.p) }
+  public static func add(attributeType: Arkavo_AttributeType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: attributeType.rawValue, def: 0, at: VTOFFSET.attributeType.p) }
+  public static func add(entityType: Arkavo_EntityType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: entityType.rawValue, def: 0, at: VTOFFSET.entityType.p) }
+  public static func addVectorOf(payload: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: payload, at: VTOFFSET.payload.p) }
+  public static func endRouteEvent(_ fbb: inout FlatBufferBuilder, start: UOffset) -> Offset { let end = Offset(offset: fbb.endTable(at: start)); return end }
+  public static func createRouteEvent(
+    _ fbb: inout FlatBufferBuilder,
+    targetType: Arkavo_EntityType = .unused,
+    targetIdVectorOffset targetId: Offset = Offset(),
+    sourceType: Arkavo_EntityType = .unused,
+    sourceIdVectorOffset sourceId: Offset = Offset(),
+    attributeType: Arkavo_AttributeType = .unused,
+    entityType: Arkavo_EntityType = .unused,
+    payloadVectorOffset payload: Offset = Offset()
+  ) -> Offset {
+    let __start = Arkavo_RouteEvent.startRouteEvent(&fbb)
+    Arkavo_RouteEvent.add(targetType: targetType, &fbb)
+    Arkavo_RouteEvent.addVectorOf(targetId: targetId, &fbb)
+    Arkavo_RouteEvent.add(sourceType: sourceType, &fbb)
+    Arkavo_RouteEvent.addVectorOf(sourceId: sourceId, &fbb)
+    Arkavo_RouteEvent.add(attributeType: attributeType, &fbb)
+    Arkavo_RouteEvent.add(entityType: entityType, &fbb)
+    Arkavo_RouteEvent.addVectorOf(payload: payload, &fbb)
+    return Arkavo_RouteEvent.endRouteEvent(&fbb, start: __start)
+  }
+
+  public static func verify<T>(_ verifier: inout Verifier, at position: Int, of type: T.Type) throws where T: Verifiable {
+    var _v = try verifier.visitTable(at: position)
+    try _v.visit(field: VTOFFSET.targetType.p, fieldName: "targetType", required: false, type: Arkavo_EntityType.self)
+    try _v.visit(field: VTOFFSET.targetId.p, fieldName: "targetId", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
+    try _v.visit(field: VTOFFSET.sourceType.p, fieldName: "sourceType", required: false, type: Arkavo_EntityType.self)
+    try _v.visit(field: VTOFFSET.sourceId.p, fieldName: "sourceId", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
+    try _v.visit(field: VTOFFSET.attributeType.p, fieldName: "attributeType", required: false, type: Arkavo_AttributeType.self)
+    try _v.visit(field: VTOFFSET.entityType.p, fieldName: "entityType", required: false, type: Arkavo_EntityType.self)
+    try _v.visit(field: VTOFFSET.payload.p, fieldName: "payload", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     _v.finish()
   }
 }
@@ -249,6 +358,8 @@ public struct Arkavo_Event: FlatBufferObject, Verifiable {
         try ForwardOffset<Arkavo_UserEvent>.verify(&verifier, at: pos, of: Arkavo_UserEvent.self)
       case .cacheevent:
         try ForwardOffset<Arkavo_CacheEvent>.verify(&verifier, at: pos, of: Arkavo_CacheEvent.self)
+      case .routeevent:
+        try ForwardOffset<Arkavo_RouteEvent>.verify(&verifier, at: pos, of: Arkavo_RouteEvent.self)
       }
     })
     _v.finish()

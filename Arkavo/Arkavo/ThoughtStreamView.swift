@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreLocation
+import CryptoKit
 import FlatBuffers
 import OpenTDFKit
 import SwiftData
@@ -98,19 +99,36 @@ struct ThoughtStreamView: View {
 
     private var messageInputArea: some View {
         HStack(alignment: .bottom) {
-            Button(action: { isShowingCamera = true }) {
-                Image(systemName: "camera")
+            Menu {
+                Button(action: { isShowingCamera = true
+                }) {
+                    Label("Camera", systemImage: "camera")
+                }
+                Button(action: {
+                    onLocationProtected()
+                }) {
+                    Label("Camera Location Protected", systemImage: "camera.viewfinder")
+                }
+                Button(action: {
+                    // TODO: Handle Camera Time Protected action
+                }) {
+                    Label("Camera Time Protected", systemImage: "camera.aperture")
+                }
+                Button(action: { isShowingImagePicker = true }) {
+                    Label("Photo", systemImage: "photo")
+                }
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 24))
                     .foregroundColor(.blue)
             }
-            Button(action: { isShowingImagePicker = true }) {
-                Image(systemName: "photo")
-                    .foregroundColor(.blue)
-            }
+
             TextField("Type a message...", text: $inputText)
                 .padding(10)
               //  .background(Color.)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .focused($isInputFocused)
+
             sendButton
         }
         .padding()
@@ -123,11 +141,12 @@ struct ThoughtStreamView: View {
                 try await sendThought()
             }
         }) {
-            Image(systemName: inputText.isEmpty ? "mic" : "arrow.up.circle.fill")
-                .foregroundColor(.blue)
+            Image(systemName: inputText.isEmpty ? "mic.slash" : "arrow.up.circle.fill")
+                .foregroundColor(inputText.isEmpty ? .gray : .blue)
                 .font(.system(size: 24))
         }
-        .disabled(isSending)
+        .disabled(inputText.isEmpty || isSending)
+        .opacity(inputText.isEmpty || isSending ? 0.5 : 1.0) // Dim the button when disabled
     }
 
     #if os(iOS)
@@ -170,6 +189,21 @@ struct ThoughtStreamView: View {
     private var shareSheet: some View {
         ShareSheet(activityItems: [shareURL].compactMap { $0 },
                    isPresented: $isShareSheetPresented)
+    }
+
+    private func onLocationProtected() {
+        print("Handle Camera Location Protected action")
+        // relative location -
+        // TODO: get all stream members, then request location from all
+        if let stream = viewModel.stream {
+            let memberPublicID = stream.creatorPublicID
+            Task {
+                let locationData = try await streamService.requestLocationAndWait(for: memberPublicID)
+                await MainActor.run {
+                    print("Received locationData: \(locationData.latitude), \(locationData.longitude)")
+                }
+            }
+        }
     }
 
     private func onAppear() {
@@ -361,57 +395,6 @@ class ThoughtStreamViewModel: StreamViewModel {
     }
 }
 
-// struct ThoughtStreamView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        ThoughtStreamView(viewModel: previewViewModel)
-//            .modelContainer(previewContainer)
-//    }
-//
-//    static var previewViewModel: ThoughtStreamViewModel {
-//        let arkavo = ArkavoService()
-//        let service = ThoughtService(arkavo)
-//        let streamService = StreamService(arkavo)
-//        let viewModel = ThoughtStreamViewModel(thoughtService: service, streamService: streamService, stream: previewStream)
-//        // Add some sample thoughts
-//        viewModel.thoughts = [
-//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Alice"), streamPublicIDString: "abc123", text: "Hello, this is a test message!"),
-//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
-//            ThoughtViewModel.createText(creatorProfile: Profile(name: "Preview User"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
-//        ]
-//
-//        return viewModel
-//    }
-//
-//    static var previewStream: Stream {
-//        let account = Account()
-//        let profile = Profile(name: "Preview Stream")
-//        return Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-//    }
-//
-//    static var previewContainer: ModelContainer {
-//        let schema = Schema([Account.self, Profile.self, Stream.self])
-//        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-//
-//        do {
-//            let container = try ModelContainer(for: schema, configurations: [configuration])
-//            let context = container.mainContext
-//
-//            // Create and save sample data
-//            let account = Account()
-//            try context.save()
-//
-//            let profile = Profile(name: "Preview Stream")
-//            let stream = Stream(account: account, profile: profile, admissionPolicy: .open, interactionPolicy: .open)
-//            account.streams.append(stream)
-//            try context.save()
-//
-//            return container
-//        } catch {
-//            fatalError("Failed to create preview container: \(error.localizedDescription)")
-//        }
-//    }
-// }
-
 // Extension to convert UIImage to HEIF data
 #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
     extension UIImage {
@@ -451,3 +434,89 @@ class ThoughtStreamViewModel: StreamViewModel {
         }
     }
 #endif
+
+struct ThoughtStreamView_Previews: PreviewProvider {
+    static var previews: some View {
+        ThoughtStreamView(
+            service: previewThoughtService,
+            streamService: previewStreamService,
+            viewModel: previewViewModel,
+            streamBadgeViewModel: previewStreamBadgeViewModel,
+            accountProfile: previewProfile
+        )
+        .modelContainer(previewContainer)
+    }
+
+    static var creatorUUID = UUID()
+    static var creatorPublicID: Data {
+        withUnsafeBytes(of: creatorUUID) { buffer in
+            Data(SHA256.hash(data: buffer))
+        }
+    }
+
+    static var previewThoughtService: ThoughtService {
+        ThoughtService(ArkavoService())
+    }
+
+    static var previewStreamService: StreamService {
+        StreamService(ArkavoService())
+    }
+
+    static var previewViewModel: ThoughtStreamViewModel {
+        let arkavo = ArkavoService()
+        let service = ThoughtService(arkavo)
+        let viewModel = ThoughtStreamViewModel(service: service, stream: previewStream)
+        // Add some sample thoughts
+        viewModel.thoughts = [
+            ThoughtViewModel.createText(creatorProfile: Profile(id: creatorUUID, name: "Alice"), streamPublicIDString: creatorPublicID.base58EncodedString, text: "Hello, this is a test message!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
+            ThoughtViewModel.createText(creatorProfile: Profile(name: "Eve"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
+        ]
+        return viewModel
+    }
+
+    static var previewStreamBadgeViewModel: StreamBadgeViewModel {
+        StreamBadgeViewModel(
+            stream: previewStream,
+            topicTags: ["Swift", "iOS", "Programming"],
+            membersProfile: [
+                AccountProfileViewModel(profile: Profile(name: "Bob"), activityService: ActivityServiceModel()),
+                AccountProfileViewModel(profile: Profile(name: "Eve"), activityService: ActivityServiceModel()),
+            ],
+            ownerProfile: AccountProfileViewModel(profile: Profile(id: creatorUUID, name: "Alice"), activityService: ActivityServiceModel()),
+            activityLevel: .medium
+        )
+    }
+
+    static var previewProfile: Profile {
+        Profile(name: "Preview User")
+    }
+
+    static var previewStream: Stream {
+        let profile = Profile(name: "Preview Stream")
+        return Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
+    }
+
+    static var previewContainer: ModelContainer {
+        let schema = Schema([Account.self, Profile.self, Stream.self, Thought.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+
+        do {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let context = container.mainContext
+
+            // Create and save sample data
+            let account = Account()
+            try context.save()
+
+            let profile = Profile(name: "Preview Stream")
+            let stream = Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
+            account.streams.append(stream)
+            try context.save()
+
+            return container
+        } catch {
+            fatalError("Failed to create preview container: \(error.localizedDescription)")
+        }
+    }
+}

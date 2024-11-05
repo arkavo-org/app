@@ -3,50 +3,6 @@ import CryptoKit
 import Foundation
 import OpenTDFKit
 
-struct NATSMessage {
-    let messageType: Data
-    let payload: Data
-
-    init(payload: Data) {
-        messageType = Data([0x05])
-        self.payload = payload
-    }
-
-    init(data: Data) {
-        messageType = data.prefix(1)
-        payload = data.suffix(from: 1)
-    }
-
-    func toData() -> Data {
-        var data = Data()
-        data.append(messageType)
-        data.append(payload)
-        return data
-    }
-}
-
-struct NATSEvent {
-    let messageType: Data
-    let payload: Data
-
-    init(payload: Data) {
-        messageType = Data([0x06])
-        self.payload = payload
-    }
-
-    init(data: Data) {
-        messageType = data.prefix(1)
-        payload = data.suffix(from: 1)
-    }
-
-    func toData() -> Data {
-        var data = Data()
-        data.append(messageType)
-        data.append(payload)
-        return data
-    }
-}
-
 final class WebSocketManager: ObservableObject {
     // MARK: - Singleton Instance
 
