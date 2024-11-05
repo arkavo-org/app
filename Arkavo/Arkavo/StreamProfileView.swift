@@ -50,6 +50,7 @@ struct DetailedStreamProfileView: View {
                 }
             }
             .navigationTitle("Stream")
+            #if !os(macOS)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: {
@@ -75,6 +76,7 @@ struct DetailedStreamProfileView: View {
                 ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream!.publicID.base58EncodedString)")!],
                            isPresented: $isShareSheetPresented)
             }
+            #endif
         }
     }
 }
