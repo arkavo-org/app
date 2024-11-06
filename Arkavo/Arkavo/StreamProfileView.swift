@@ -51,31 +51,31 @@ struct DetailedStreamProfileView: View {
             }
             .navigationTitle("Stream")
             #if !os(macOS)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "x.circle")
-                    }
-                }
-                if viewModel.stream!.admissionPolicy != .closed {
-                    ToolbarItem(placement: .topBarTrailing) {
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
                         Button(action: {
-                            isShareSheetPresented = true
+                            dismiss()
                         }) {
-                            HStack {
-                                Text("Invite Friends")
-                                Image(systemName: "square.and.arrow.up")
+                            Image(systemName: "x.circle")
+                        }
+                    }
+                    if viewModel.stream!.admissionPolicy != .closed {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(action: {
+                                isShareSheetPresented = true
+                            }) {
+                                HStack {
+                                    Text("Invite Friends")
+                                    Image(systemName: "square.and.arrow.up")
+                                }
                             }
                         }
                     }
                 }
-            }
-            .sheet(isPresented: $isShareSheetPresented) {
-                ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream!.publicID.base58EncodedString)")!],
-                           isPresented: $isShareSheetPresented)
-            }
+                .sheet(isPresented: $isShareSheetPresented) {
+                    ShareSheet(activityItems: [URL(string: "https://app.arkavo.com/stream/\(viewModel.stream!.publicID.base58EncodedString)")!],
+                               isPresented: $isShareSheetPresented)
+                }
             #endif
         }
     }
@@ -140,7 +140,7 @@ struct CreateStreamProfileView: View {
                 .padding(.trailing, 16)
             }
             Form {
-                Section  {
+                Section {
                     Text("A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream.")
                         .font(.footnote)
                 }

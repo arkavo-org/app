@@ -125,7 +125,7 @@ struct ThoughtStreamView: View {
 
             TextField("Type a message...", text: $inputText)
                 .padding(10)
-              //  .background(Color.)
+                //  .background(Color.)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .focused($isInputFocused)
 

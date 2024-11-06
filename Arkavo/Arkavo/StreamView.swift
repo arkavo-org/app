@@ -24,7 +24,7 @@ struct StreamView: View {
                     Section(header:
                         HStack {
                             Text("My Streams")
-                            .font(.title3)
+                                .font(.title3)
                             Spacer()
                             Text("Create New Stream")
                             Button(action: {
