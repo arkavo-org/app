@@ -18,10 +18,16 @@
         private var frontCamera: AVCaptureDevice?
         private var backCamera: AVCaptureDevice?
         private var currentCameraInput: AVCaptureDeviceInput?
+        private var videoConnection: AVCaptureConnection?
 
         override func viewDidLoad() {
             super.viewDidLoad()
             setupCaptureSession()
+            // Add observer for orientation changes
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(orientationChanged),
+                                                   name: UIDevice.orientationDidChangeNotification,
+                                                   object: nil)
         }
 
         func setupCaptureSession() {
@@ -49,6 +55,9 @@
 
             if captureSession.canAddOutput(videoOutput) {
                 captureSession.addOutput(videoOutput)
+                // Store video connection for orientation updates
+                videoConnection = videoOutput.connection(with: .video)
+                updateVideoOrientation()
             }
 
             setupPreviewLayer()
@@ -59,6 +68,54 @@
             previewLayer.videoGravity = .resizeAspectFill
             previewLayer.frame = view.bounds
             view.layer.addSublayer(previewLayer)
+            updatePreviewLayerOrientation()
+        }
+
+        @objc private func orientationChanged() {
+            updateVideoOrientation()
+            updatePreviewLayerOrientation()
+        }
+
+        private func updateVideoOrientation() {
+            guard let videoConnection else { return }
+
+            let currentDevice = UIDevice.current
+            let orientation = currentDevice.orientation
+
+            switch orientation {
+            case .portrait:
+                videoConnection.videoOrientation = .portrait
+            case .portraitUpsideDown:
+                videoConnection.videoOrientation = .portraitUpsideDown
+            case .landscapeLeft:
+                // This might seem counterintuitive, but it's correct
+                videoConnection.videoOrientation = .landscapeRight
+            case .landscapeRight:
+                // This might seem counterintuitive, but it's correct
+                videoConnection.videoOrientation = .landscapeLeft
+            default:
+                videoConnection.videoOrientation = .portrait
+            }
+        }
+
+        private func updatePreviewLayerOrientation() {
+            guard let connection = previewLayer?.connection else { return }
+
+            let currentDevice = UIDevice.current
+            let orientation = currentDevice.orientation
+
+            switch orientation {
+            case .portrait:
+                connection.videoOrientation = .portrait
+            case .portraitUpsideDown:
+                connection.videoOrientation = .portraitUpsideDown
+            case .landscapeLeft:
+                connection.videoOrientation = .landscapeRight
+            case .landscapeRight:
+                connection.videoOrientation = .landscapeLeft
+            default:
+                connection.videoOrientation = .portrait
+            }
         }
 
         func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
@@ -77,8 +134,10 @@
                 print("Failed to create CGImage")
                 return
             }
-            let image = UIImage(cgImage: cgImage)
-            
+
+            // Create UIImage with proper orientation
+            let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: getImageOrientation())
+
             // Compress the image data with JPEG compression
             guard let compressedData = image.jpegData(compressionQuality: 0.5) else {
                 print("Failed to compress image")
@@ -96,30 +155,22 @@
             }
         }
 
-        func checkCameraPermissions() {
-            switch AVCaptureDevice.authorizationStatus(for: .video) {
-            case .authorized:
-                DispatchQueue.main.async {
-                    self.hasCameraAccess = true
-                }
-                setupCaptureSession()
-            case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                    DispatchQueue.main.async {
-                        self?.hasCameraAccess = granted
-                        if granted {
-                            self?.setupCaptureSession()
-                        }
-                    }
-                }
-            case .denied, .restricted:
-                DispatchQueue.main.async {
-                    self.hasCameraAccess = false
-                }
+        private func getImageOrientation() -> UIImage.Orientation {
+            guard let videoConnection else { return .up }
+
+            let isUsingFrontCamera = isFrontCameraActive
+
+            switch videoConnection.videoOrientation {
+            case .portrait:
+                return isUsingFrontCamera ? .leftMirrored : .right
+            case .portraitUpsideDown:
+                return isUsingFrontCamera ? .rightMirrored : .left
+            case .landscapeRight:
+                return isUsingFrontCamera ? .upMirrored : .up
+            case .landscapeLeft:
+                return isUsingFrontCamera ? .downMirrored : .down
             @unknown default:
-                DispatchQueue.main.async {
-                    self.hasCameraAccess = false
-                }
+                return .up
             }
         }
 
@@ -215,7 +266,7 @@
             encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
         }
 
-        func encryptFrame(_ compressedData: Data, timestamp: CMTime, width: Int, height: Int, completion: @escaping (Data?) -> Void) {
+        func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) {
             do {
                 let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
                 completion(nanoTDFBytes)
@@ -232,6 +283,10 @@
 
         func setupEncryption(kasPublicKey: P256.KeyAgreement.PublicKey) {
             self.kasPublicKey = kasPublicKey
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
 
         func encrypt(input: Data) throws -> Data {
