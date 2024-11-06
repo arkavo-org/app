@@ -4,11 +4,12 @@
     import OpenTDFKit
     import UIKit
 
-    class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
-        @Published var isCameraActive: Bool = true
+    class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate, ObservableObject {
+        @Published var isCameraActive: Bool = false
         @Published var isStreaming: Bool = false
         @Published var hasCameraAccess = false
         @Published var isFrontCameraActive: Bool = false
+
         var captureSession: AVCaptureSession!
         var previewLayer: AVCaptureVideoPreviewLayer!
         var streamingService: StreamingService?
@@ -17,10 +18,16 @@
         private var frontCamera: AVCaptureDevice?
         private var backCamera: AVCaptureDevice?
         private var currentCameraInput: AVCaptureDeviceInput?
+        private var videoConnection: AVCaptureConnection?
 
         override func viewDidLoad() {
             super.viewDidLoad()
             setupCaptureSession()
+            // Add observer for orientation changes
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(orientationChanged),
+                                                   name: UIDevice.orientationDidChangeNotification,
+                                                   object: nil)
         }
 
         func setupCaptureSession() {
@@ -48,6 +55,9 @@
 
             if captureSession.canAddOutput(videoOutput) {
                 captureSession.addOutput(videoOutput)
+                // Store video connection for orientation updates
+                videoConnection = videoOutput.connection(with: .video)
+                updateVideoOrientation()
             }
 
             setupPreviewLayer()
@@ -58,6 +68,54 @@
             previewLayer.videoGravity = .resizeAspectFill
             previewLayer.frame = view.bounds
             view.layer.addSublayer(previewLayer)
+            updatePreviewLayerOrientation()
+        }
+
+        @objc private func orientationChanged() {
+            updateVideoOrientation()
+            updatePreviewLayerOrientation()
+        }
+
+        private func updateVideoOrientation() {
+            guard let videoConnection else { return }
+
+            let currentDevice = UIDevice.current
+            let orientation = currentDevice.orientation
+
+            switch orientation {
+            case .portrait:
+                videoConnection.videoOrientation = .portrait
+            case .portraitUpsideDown:
+                videoConnection.videoOrientation = .portraitUpsideDown
+            case .landscapeLeft:
+                // This might seem counterintuitive, but it's correct
+                videoConnection.videoOrientation = .landscapeRight
+            case .landscapeRight:
+                // This might seem counterintuitive, but it's correct
+                videoConnection.videoOrientation = .landscapeLeft
+            default:
+                videoConnection.videoOrientation = .portrait
+            }
+        }
+
+        private func updatePreviewLayerOrientation() {
+            guard let connection = previewLayer?.connection else { return }
+
+            let currentDevice = UIDevice.current
+            let orientation = currentDevice.orientation
+
+            switch orientation {
+            case .portrait:
+                connection.videoOrientation = .portrait
+            case .portraitUpsideDown:
+                connection.videoOrientation = .portraitUpsideDown
+            case .landscapeLeft:
+                connection.videoOrientation = .landscapeRight
+            case .landscapeRight:
+                connection.videoOrientation = .landscapeLeft
+            default:
+                connection.videoOrientation = .portrait
+            }
         }
 
         func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
@@ -68,67 +126,51 @@
                 print("Failed to get pixel buffer from sample buffer")
                 return
             }
-            // Define the target size
-            let targetWidth = 80
-            let targetHeight = 80
-            // Downscale the image
+
+            // Convert pixel buffer to UIImage for compression
             let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-            let scaleX = CGFloat(targetWidth) / CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-            let scaleY = CGFloat(targetHeight) / CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-            let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-
             let context = CIContext()
-            var downscaledPixelBuffer: CVPixelBuffer?
+            guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+                print("Failed to create CGImage")
+                return
+            }
 
-            let attributes: [String: Any] = [
-                kCVPixelBufferCGImageCompatibilityKey as String: true,
-                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
-            ]
-            CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &downscaledPixelBuffer)
+            // Create UIImage with proper orientation
+            let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: getImageOrientation())
 
-            if let downscaledPixelBuffer {
-                if CVPixelBufferLockBaseAddress(downscaledPixelBuffer, .readOnly) == kCVReturnSuccess {
-                    context.render(scaledImage, to: downscaledPixelBuffer)
+            // Compress the image data with JPEG compression
+            guard let compressedData = image.jpegData(compressionQuality: 0.5) else {
+                print("Failed to compress image")
+                return
+            }
 
-                    // Convert downscaled pixel buffer to Data
-                    let baseAddress = CVPixelBufferGetBaseAddress(downscaledPixelBuffer)
-                    let bytesPerRow = CVPixelBufferGetBytesPerRow(downscaledPixelBuffer)
-                    let data = Data(bytes: baseAddress!, count: bytesPerRow * targetHeight)
-                    CVPixelBufferUnlockBaseAddress(downscaledPixelBuffer, .readOnly)
+            let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-                    let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-
-                    videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: targetWidth, height: targetHeight) { encryptedData in
-                        if let encryptedData {
-                            streamingService.sendVideoFrame(encryptedData)
-                        } else {
-                            print("Failed to encrypt frame")
-                        }
-                    }
+            videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: Int(image.size.width), height: Int(image.size.height)) { encryptedData in
+                if let encryptedData {
+                    streamingService.sendVideoFrame(encryptedData)
                 } else {
-                    print("Failed to lock base address of pixel buffer")
+                    print("Failed to encrypt frame")
                 }
             }
         }
 
-        func checkCameraPermissions() {
-            switch AVCaptureDevice.authorizationStatus(for: .video) {
-            case .authorized:
-                hasCameraAccess = true
-                setupCaptureSession()
-            case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                    DispatchQueue.main.async {
-                        self?.hasCameraAccess = granted
-                        if granted {
-                            self?.setupCaptureSession()
-                        }
-                    }
-                }
-            case .denied, .restricted:
-                hasCameraAccess = false
+        private func getImageOrientation() -> UIImage.Orientation {
+            guard let videoConnection else { return .up }
+
+            let isUsingFrontCamera = isFrontCameraActive
+
+            switch videoConnection.videoOrientation {
+            case .portrait:
+                return isUsingFrontCamera ? .leftMirrored : .right
+            case .portraitUpsideDown:
+                return isUsingFrontCamera ? .rightMirrored : .left
+            case .landscapeRight:
+                return isUsingFrontCamera ? .upMirrored : .up
+            case .landscapeLeft:
+                return isUsingFrontCamera ? .downMirrored : .down
             @unknown default:
-                hasCameraAccess = false
+                return .up
             }
         }
 
@@ -243,6 +285,10 @@
             self.kasPublicKey = kasPublicKey
         }
 
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
         func encrypt(input: Data) throws -> Data {
             guard let kasPublicKey else {
                 throw EncryptionError.missingKasPublicKey
@@ -267,48 +313,12 @@
     }
 
     class VideoDecoder {
-        private var videoWidth = 80
-        private var videoHeight = 80
-
         func decodeFrame(_ frameData: Data, completion: @escaping (UIImage?) -> Void) {
-            let bytesPerRow = videoWidth * 4 // 32-bit BGRA format
-            let expectedDataSize = videoHeight * bytesPerRow
-
-            guard frameData.count == expectedDataSize else {
-                print("Unexpected frame data size. Expected: \(expectedDataSize), Actual: \(frameData.count)")
-                completion(nil)
-                return
-            }
-
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-
-            guard let context = CGContext(data: nil,
-                                          width: videoWidth,
-                                          height: videoHeight,
-                                          bitsPerComponent: 8,
-                                          bytesPerRow: bytesPerRow,
-                                          space: colorSpace,
-                                          bitmapInfo: bitmapInfo.rawValue)
-            else {
-                print("Failed to create CGContext")
-                completion(nil)
-                return
-            }
-
-            frameData.withUnsafeBytes { bufferPointer in
-                guard let baseAddress = bufferPointer.baseAddress else {
-                    completion(nil)
-                    return
-                }
-                context.data?.copyMemory(from: baseAddress, byteCount: frameData.count)
-            }
-
-            if let cgImage = context.makeImage() {
-                let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+            // Decode JPEG data directly to UIImage
+            if let image = UIImage(data: frameData) {
                 completion(image)
             } else {
-                print("Failed to create CGImage")
+                print("Failed to decode JPEG data")
                 completion(nil)
             }
         }

@@ -3,8 +3,6 @@ import OpenTDFKit
 import SwiftUI
 
 struct StreamMapView: View {
-    @ObservedObject var webSocketManager: WebSocketManager
-    @ObservedObject var nanoTDFManager: NanoTDFManager
 //    @StateObject private var locationManager = MapLocationManager()
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var isTrackingUser = false

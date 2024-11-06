@@ -29,13 +29,7 @@ struct ArkavoView: View {
             ZStack {
                 switch selectedView {
                 case .streamMap:
-                    StreamMapView(webSocketManager: service.webSocketManager,
-                                  nanoTDFManager: service.nanoTDFManager)
-                        .onAppear {
-                            // Store reference to StreamMapView when it appears
-                            streamMapView = StreamMapView(webSocketManager: service.webSocketManager,
-                                                          nanoTDFManager: service.nanoTDFManager)
-                        }
+                    StreamMapView()
                         .sheet(isPresented: $showingProfileDetails) {
                             if let account = accounts.first, let profile = account.profile {
                                 AccountProfileDetailedView(viewModel: AccountProfileViewModel(profile: profile, activityService: ActivityServiceModel()))
