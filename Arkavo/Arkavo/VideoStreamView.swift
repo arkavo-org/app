@@ -40,11 +40,11 @@
                             systemImage: videoCaptureViewController.isStreaming ? "stop.circle.fill" : "play.circle.fill"
                         )
                         .padding()
-                        .background(videoCaptureViewController.isCameraActive && !videoCaptureViewController.isStreaming ? Color.green : Color.gray)
+                        .background(videoCaptureViewController.isCameraActive ? Color.green : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                     }
-                    .disabled(!videoCaptureViewController.isCameraActive || videoCaptureViewController.isStreaming)
+                    .disabled(!videoCaptureViewController.isCameraActive)
                     Button(action: switchCamera) {
                         Image(systemName: "camera.rotate.fill")
                             .padding()
@@ -93,11 +93,6 @@
 
         private func toggleVideoSource() {
             isShowingLocalVideo.toggle()
-        }
-
-        private func sendComment() {
-            print("Sending comment: \(commentText)")
-            commentText = ""
         }
     }
 
