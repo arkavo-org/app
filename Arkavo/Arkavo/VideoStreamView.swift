@@ -10,13 +10,13 @@
         @FocusState private var isInputFocused: Bool
         @State private var showingErrorAlert = false
         @State private var errorMessage = ""
-        @State private var videoCaptureViewController = VideoCaptureViewController()
+        @StateObject private var videoCaptureViewController = VideoCaptureViewController()
         @State private var isShowingLocalVideo = true
 
         var body: some View {
             ZStack {
                 if isShowingLocalVideo {
-                    VideoPreviewArea(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: viewModel)
+                    VideoPreviewArea(videoCaptureViewController: videoCaptureViewController, incomingVideoViewModel: viewModel)
                         .edgesIgnoringSafeArea(.all)
                 } else {
                     VideoIncomingArea(viewModel: viewModel)
@@ -40,11 +40,11 @@
                             systemImage: videoCaptureViewController.isStreaming ? "stop.circle.fill" : "play.circle.fill"
                         )
                         .padding()
-                        .background(videoCaptureViewController.isCameraActive ? Color.green : Color.gray)
+                        .background(videoCaptureViewController.isCameraActive && !videoCaptureViewController.isStreaming ? Color.green : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                     }
-                    .disabled(!videoCaptureViewController.isCameraActive)
+                    .disabled(!videoCaptureViewController.isCameraActive || videoCaptureViewController.isStreaming)
                     Button(action: switchCamera) {
                         Image(systemName: "camera.rotate.fill")
                             .padding()
@@ -69,6 +69,10 @@
 
         private func toggleCamera() {
             if videoCaptureViewController.isCameraActive {
+                // First stop streaming if it's active
+                if videoCaptureViewController.isStreaming {
+                    videoCaptureViewController.stopStreaming()
+                }
                 videoCaptureViewController.stopCapture()
             } else {
                 videoCaptureViewController.startCapture()
@@ -98,7 +102,7 @@
     }
 
     struct VideoPreviewArea: View {
-        @Binding var videoCaptureViewController: VideoCaptureViewController
+        @StateObject var videoCaptureViewController: VideoCaptureViewController
         var incomingVideoViewModel: VideoStreamViewModel
 
         var body: some View {
@@ -107,7 +111,7 @@
                 if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
                     MockVideoPreviewArea()
                 } else {
-                    VideoPreviewAreaImpl(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
+                    VideoPreviewAreaImpl(videoCaptureViewController: videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
                 }
             #else
                 VideoPreviewAreaImpl(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
@@ -179,7 +183,7 @@
 
     // Actual VideoPreviewArea implementation
     struct VideoPreviewAreaImpl: UIViewControllerRepresentable {
-        @Binding var videoCaptureViewController: VideoCaptureViewController
+        @StateObject var videoCaptureViewController: VideoCaptureViewController
         var incomingVideoViewModel: VideoStreamViewModel
 
         func makeUIViewController(context _: Context) -> VideoCaptureViewController {

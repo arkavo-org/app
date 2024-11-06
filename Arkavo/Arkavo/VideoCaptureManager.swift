@@ -4,11 +4,12 @@
     import OpenTDFKit
     import UIKit
 
-    class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
-        @Published var isCameraActive: Bool = true
+    class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate, ObservableObject {
+        @Published var isCameraActive: Bool = false
         @Published var isStreaming: Bool = false
         @Published var hasCameraAccess = false
         @Published var isFrontCameraActive: Bool = false
+
         var captureSession: AVCaptureSession!
         var previewLayer: AVCaptureVideoPreviewLayer!
         var streamingService: StreamingService?
@@ -114,7 +115,9 @@
         func checkCameraPermissions() {
             switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .authorized:
-                hasCameraAccess = true
+                DispatchQueue.main.async {
+                    self.hasCameraAccess = true
+                }
                 setupCaptureSession()
             case .notDetermined:
                 AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
@@ -126,9 +129,13 @@
                     }
                 }
             case .denied, .restricted:
-                hasCameraAccess = false
+                DispatchQueue.main.async {
+                    self.hasCameraAccess = false
+                }
             @unknown default:
-                hasCameraAccess = false
+                DispatchQueue.main.async {
+                    self.hasCameraAccess = false
+                }
             }
         }
 
