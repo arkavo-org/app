@@ -212,6 +212,7 @@ struct AccountView: View {
                 .navigationBarItems(trailing: Button("Cancel") {
                     dismiss()
                 })
+                #if !os(visionOS)
                 .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
                     IDCardScannerView(
                         onCapture: { _ in
@@ -226,6 +227,7 @@ struct AccountView: View {
                         }
                     )
                 }
+                #endif
             }
         }
     }
