@@ -69,45 +69,29 @@
                 print("Failed to get pixel buffer from sample buffer")
                 return
             }
-            // Define the target size
-            let targetWidth = 80
-            let targetHeight = 80
-            // Downscale the image
+
+            // Convert pixel buffer to UIImage for compression
             let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-            let scaleX = CGFloat(targetWidth) / CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-            let scaleY = CGFloat(targetHeight) / CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-            let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-
             let context = CIContext()
-            var downscaledPixelBuffer: CVPixelBuffer?
+            guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+                print("Failed to create CGImage")
+                return
+            }
+            let image = UIImage(cgImage: cgImage)
+            
+            // Compress the image data with JPEG compression
+            guard let compressedData = image.jpegData(compressionQuality: 0.5) else {
+                print("Failed to compress image")
+                return
+            }
 
-            let attributes: [String: Any] = [
-                kCVPixelBufferCGImageCompatibilityKey as String: true,
-                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
-            ]
-            CVPixelBufferCreate(kCFAllocatorDefault, targetWidth, targetHeight, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &downscaledPixelBuffer)
+            let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-            if let downscaledPixelBuffer {
-                if CVPixelBufferLockBaseAddress(downscaledPixelBuffer, .readOnly) == kCVReturnSuccess {
-                    context.render(scaledImage, to: downscaledPixelBuffer)
-
-                    // Convert downscaled pixel buffer to Data
-                    let baseAddress = CVPixelBufferGetBaseAddress(downscaledPixelBuffer)
-                    let bytesPerRow = CVPixelBufferGetBytesPerRow(downscaledPixelBuffer)
-                    let data = Data(bytes: baseAddress!, count: bytesPerRow * targetHeight)
-                    CVPixelBufferUnlockBaseAddress(downscaledPixelBuffer, .readOnly)
-
-                    let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-
-                    videoEncryptor.encryptFrame(data, timestamp: presentationTimeStamp, width: targetWidth, height: targetHeight) { encryptedData in
-                        if let encryptedData {
-                            streamingService.sendVideoFrame(encryptedData)
-                        } else {
-                            print("Failed to encrypt frame")
-                        }
-                    }
+            videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: Int(image.size.width), height: Int(image.size.height)) { encryptedData in
+                if let encryptedData {
+                    streamingService.sendVideoFrame(encryptedData)
                 } else {
-                    print("Failed to lock base address of pixel buffer")
+                    print("Failed to encrypt frame")
                 }
             }
         }
@@ -231,7 +215,7 @@
             encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
         }
 
-        func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) {
+        func encryptFrame(_ compressedData: Data, timestamp: CMTime, width: Int, height: Int, completion: @escaping (Data?) -> Void) {
             do {
                 let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
                 completion(nanoTDFBytes)
@@ -274,48 +258,12 @@
     }
 
     class VideoDecoder {
-        private var videoWidth = 80
-        private var videoHeight = 80
-
         func decodeFrame(_ frameData: Data, completion: @escaping (UIImage?) -> Void) {
-            let bytesPerRow = videoWidth * 4 // 32-bit BGRA format
-            let expectedDataSize = videoHeight * bytesPerRow
-
-            guard frameData.count == expectedDataSize else {
-                print("Unexpected frame data size. Expected: \(expectedDataSize), Actual: \(frameData.count)")
-                completion(nil)
-                return
-            }
-
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-
-            guard let context = CGContext(data: nil,
-                                          width: videoWidth,
-                                          height: videoHeight,
-                                          bitsPerComponent: 8,
-                                          bytesPerRow: bytesPerRow,
-                                          space: colorSpace,
-                                          bitmapInfo: bitmapInfo.rawValue)
-            else {
-                print("Failed to create CGContext")
-                completion(nil)
-                return
-            }
-
-            frameData.withUnsafeBytes { bufferPointer in
-                guard let baseAddress = bufferPointer.baseAddress else {
-                    completion(nil)
-                    return
-                }
-                context.data?.copyMemory(from: baseAddress, byteCount: frameData.count)
-            }
-
-            if let cgImage = context.makeImage() {
-                let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+            // Decode JPEG data directly to UIImage
+            if let image = UIImage(data: frameData) {
                 completion(image)
             } else {
-                print("Failed to create CGImage")
+                print("Failed to decode JPEG data")
                 completion(nil)
             }
         }
