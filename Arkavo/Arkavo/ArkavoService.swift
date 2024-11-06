@@ -260,13 +260,44 @@ class ArkavoService {
         // Add any additional processing for cache events here
     }
 
-    /// Sends a rewrap message with the provided header.
     func sendRewrapNanoTDF(nano: NanoTDF) {
-        // Use the nanoTDFManager to handle the incoming NanoTDF
         let id = nano.header.ephemeralPublicKey
-//            print("ephemeralPublicKey: \(id.base64EncodedString())")
-        nanoTDFManager.addNanoTDF(nano, withIdentifier: id)
+
+        // First quickly send the rewrap message
         webSocketManager.sendRewrapMessage(header: nano.header)
+
+        // Then start async processing
+        Task {
+            do {
+                // Wait for symmetric key without blocking other operations
+                if let symmetricKey = try await nanoTDFManager.processNanoTDF(nano, withIdentifier: id) {
+                    // Process in background
+                    Task.detached(priority: .background) {
+                        do {
+                            let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+                            let policy = ArkavoPolicy(nano.header.policy)
+
+                            // Handle different policy types
+                            switch policy.type {
+                            case .accountProfile:
+                                // TODO: Handle account profile
+                                break
+                            case .streamProfile:
+                                await self.handleStreamProfile(payload: payload, policy: policy, nano: nano)
+                            case .thought:
+                                await self.handleThought(payload: payload, policy: policy, nano: nano)
+                            case .videoFrame:
+                                await self.handleVideoFrame(payload: payload)
+                            }
+                        } catch {
+                            print("Error processing payload: \(error)")
+                        }
+                    }
+                }
+            } catch {
+                print("Error processing NanoTDF: \(error)")
+            }
+        }
     }
 
     func handleRewrapCallback(id: Data?, symmetricKey: SymmetricKey?) {
@@ -274,38 +305,7 @@ class ArkavoService {
             print("missing id")
             return
         }
-        guard let nano = nanoTDFManager.getNanoTDF(withIdentifier: id) else {
-            print("missing nanoTDF \(id.base64EncodedString())")
-            return
-        }
-        nanoTDFManager.removeNanoTDF(withIdentifier: id)
-        guard let symmetricKey else {
-            print("DENY")
-            return
-        }
-        // Create a Task to handle the asynchronous work
-        Task {
-            do {
-                // Decrypt payload within the Task
-                let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-                // Determine payload type based on policy metadata
-                let policy = ArkavoPolicy(nano.header.policy)
-                // Handle different policy types
-                switch policy.type {
-                case .accountProfile:
-                    // TODO: Handle account profile
-                    break
-                case .streamProfile:
-                    await handleStreamProfile(payload: payload, policy: policy, nano: nano)
-                case .thought:
-                    await handleThought(payload: payload, policy: policy, nano: nano)
-                case .videoFrame:
-                    await handleVideoFrame(payload: payload)
-                }
-            } catch {
-                print("Unexpected error during nanoTDF decryption: \(error)")
-            }
-        }
+        nanoTDFManager.completeProcessing(forIdentifier: id, withKey: symmetricKey)
     }
 
     private func handleStreamProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
@@ -397,85 +397,37 @@ class ArkavoService {
     }
 }
 
-// FIXME: covert to CheckedContinuation, remove performance metrics
-class NanoTDFManager: ObservableObject {
-    private var nanoTDFs: [Data: NanoTDF] = [:]
-    @Published private(set) var count: Int = 0
-    @Published private(set) var inProcessCount: Int = 0
-    @Published private(set) var processDuration: TimeInterval = 0
+class NanoTDFManager {
+    private var nanoTDFs: [Data: (NanoTDF, CheckedContinuation<SymmetricKey?, Error>)] = [:]
+    private let queue = DispatchQueue(label: "com.arkavo.nanotdf-manager", attributes: .concurrent)
 
-    private var processTimer: Timer?
-    private var processStartTime: Date?
-
-    deinit {
-        processTimer?.invalidate()
+    func processNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) async throws -> SymmetricKey? {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async(flags: .barrier) { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: NSError(domain: "NanoTDFManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Manager deallocated"]))
+                    return
+                }
+                nanoTDFs[identifier] = (nanoTDF, continuation)
+            }
+        }
     }
 
-    func addNanoTDF(_ nanoTDF: NanoTDF, withIdentifier identifier: Data) {
-        DispatchQueue.main.async {
-            self.nanoTDFs[identifier] = nanoTDF
-            self.count += 1
-            self.updateInProcessCount(self.inProcessCount + 1)
+    func completeProcessing(forIdentifier identifier: Data, withKey symmetricKey: SymmetricKey?) {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self,
+                  let (_, continuation) = nanoTDFs.removeValue(forKey: identifier)
+            else {
+                return
+            }
+            continuation.resume(returning: symmetricKey)
         }
     }
 
     func getNanoTDF(withIdentifier identifier: Data) -> NanoTDF? {
-        nanoTDFs[identifier]
-    }
-
-    func removeNanoTDF(withIdentifier identifier: Data) {
-        guard identifier.count > 32 else {
-            print("Identifier must be greater than 32 bytes long")
-            return
+        queue.sync {
+            nanoTDFs[identifier]?.0
         }
-        DispatchQueue.main.async {
-            if self.nanoTDFs.removeValue(forKey: identifier) != nil {
-                self.count -= 1
-                self.updateInProcessCount(self.inProcessCount - 1)
-            }
-        }
-    }
-
-    private func updateInProcessCount(_ newCount: Int) {
-        DispatchQueue.main.async {
-            if newCount > 0, self.inProcessCount == 0 {
-                self.startProcessTimer()
-            } else if newCount == 0, self.inProcessCount > 0 {
-                self.stopProcessTimer()
-            }
-            self.inProcessCount = newCount
-//            print("inProcessCount \(self.inProcessCount)")
-        }
-    }
-
-    private func startProcessTimer() {
-        DispatchQueue.main.async {
-            self.processStartTime = Date()
-            self.processTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self, let startTime = processStartTime else { return }
-                DispatchQueue.main.async {
-                    self.processDuration = Date().timeIntervalSince(startTime)
-                    print("rewrapDuration \(String(format: "%.4f", self.processDuration))")
-                    if self.processDuration > 2.0 {
-                        self.stopProcessTimer()
-                    }
-                }
-            }
-        }
-    }
-
-    private func stopProcessTimer() {
-        DispatchQueue.main.async {
-            guard let startTime = self.processStartTime else { return }
-            self.processDuration = Date().timeIntervalSince(startTime)
-            self.processTimer?.invalidate()
-            self.processTimer = nil
-            self.processStartTime = nil
-        }
-    }
-
-    func isEmpty() -> Bool {
-        nanoTDFs.isEmpty
     }
 }
 
