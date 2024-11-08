@@ -5,7 +5,7 @@
     import SwiftUI
 
     struct VideoStreamView: View {
-        @ObservedObject var viewModel: VideoStreamViewModel
+        @StateObject var viewModel: VideoStreamViewModel
         @State private var commentText = ""
         @FocusState private var isInputFocused: Bool
         @State private var showingErrorAlert = false
@@ -135,7 +135,7 @@
     }
 
     struct VideoIncomingArea: View {
-        @ObservedObject var viewModel: VideoStreamViewModel
+        @StateObject var viewModel: VideoStreamViewModel
 
         var body: some View {
             GeometryReader { geometry in

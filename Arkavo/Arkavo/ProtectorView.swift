@@ -446,7 +446,7 @@ struct DashboardView: View {
 
 // MARK: - Supporting Views
 
-struct InfoCard: View {
+struct FeatureCard: View {
     let icon: String
     let title: String
     let description: String
@@ -467,12 +467,41 @@ struct InfoCard: View {
                 Text(description)
                     .font(.subheadline)
                     .foregroundColor(.arkavoSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding()
         .background(Color.white)
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Privacy Card
+
+struct PrivacyCard: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        FeatureCard(icon: icon, title: title, description: description)
+    }
+}
+
+// MARK: - Info Card
+
+struct InfoCard: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        FeatureCard(icon: icon, title: title, description: description)
     }
 }
 
@@ -569,43 +598,6 @@ struct NetworkToggleRow: View {
                     .stroke(isSelected ? Color.arkavoBrand.opacity(0.3) : Color.clear, lineWidth: 2)
             )
         }
-    }
-}
-
-// MARK: - Privacy Card
-
-struct PrivacyCard: View {
-    let icon: String
-    let title: String
-    let description: String
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .frame(width: 50, height: 50)
-                .background(Color.arkavoBrandLight)
-                .foregroundColor(.arkavoBrand)
-                .cornerRadius(12)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.arkavoText)
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.arkavoSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding()
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
-        )
     }
 }
 
