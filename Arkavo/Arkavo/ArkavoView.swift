@@ -22,6 +22,7 @@ struct ArkavoView: View {
         case streamMap
         case streamList
         case video
+        case protector
     }
 
     var body: some View {
@@ -45,6 +46,8 @@ struct ArkavoView: View {
                     } else {
                         Text("Thought service is unavailable")
                     }
+                case .protector:
+                    ProtectorView()
                 }
                 menuView()
             }
@@ -72,6 +75,9 @@ struct ArkavoView: View {
                                     selectedView = .video
                                 }
                             #endif
+                            Button("Content Protection") {
+                                selectedView = .protector
+                            }
                         }
                         Section("Account") {
                             if let account = accounts.first {
