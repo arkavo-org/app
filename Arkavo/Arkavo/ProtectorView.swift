@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 // MARK: - Main Content View
 
@@ -753,18 +758,11 @@ struct ContentView_Previews: PreviewProvider {
 }
 
 struct ShareButton: View {
+    private let shareMessage = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
+    
     var body: some View {
         Button(action: {
-            let message = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
-            let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-
-            // Get the current window scene
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController
-            {
-                rootVC.present(activityVC, animated: true)
-            }
+            shareContent(message: shareMessage)
         }) {
             HStack(spacing: 12) {
                 Image(systemName: "square.and.arrow.up")
@@ -781,58 +779,26 @@ struct ShareButton: View {
         }
         .padding(.horizontal)
     }
-}
-
-// Enhanced version with stats
-struct EnhancedShareButton: View {
-    var body: some View {
-        Button(action: {
-            let message = "🛡️ Proud to have protected 512 creators across 16 social networks with Arkavo! Join the movement to safeguard creative content."
-            let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController
-            {
-                rootVC.present(activityVC, animated: true)
-            }
-        }) {
-            VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color.arkavoBrandLight)
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(.arkavoBrand)
-                        )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Share Your Impact")
-                            .font(.headline)
-                            .foregroundColor(.arkavoText)
-
-                        Text("Inspire others to join the movement")
-                            .font(.subheadline)
-                            .foregroundColor(.arkavoSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.arkavoSecondary)
-                }
-            }
-            .padding()
-            .background(Color.white)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
-            )
+    
+    private func shareContent(message: String) {
+        #if os(iOS)
+        let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
         }
-        .padding(.horizontal)
+        #elseif os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message, forType: .string)
+        
+        let sharingServices = NSSharingService.sharingServices(forItems: [message])
+        if !sharingServices.isEmpty {
+            sharingServices[0].perform(withItems: [message])
+        }
+        #endif
     }
 }
 
@@ -841,7 +807,6 @@ struct ShareButton_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
             ShareButton()
-            EnhancedShareButton()
         }
         .padding()
         .background(Color.arkavoBackground)
