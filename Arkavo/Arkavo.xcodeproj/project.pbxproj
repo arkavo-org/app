@@ -621,6 +621,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Optional for securely sharing your location.  Required to consume geo-location content.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -669,6 +670,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Optional for securely sharing your location.  Required to consume geo-location content.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
