@@ -1,8 +1,8 @@
 import SwiftUI
 #if os(iOS)
-import UIKit
+    import UIKit
 #elseif os(macOS)
-import AppKit
+    import AppKit
 #endif
 
 // MARK: - Main Content View
@@ -759,7 +759,7 @@ struct ContentView_Previews: PreviewProvider {
 
 struct ShareButton: View {
     private let shareMessage = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
-    
+
     var body: some View {
         Button(action: {
             shareContent(message: shareMessage)
@@ -779,25 +779,26 @@ struct ShareButton: View {
         }
         .padding(.horizontal)
     }
-    
+
     private func shareContent(message: String) {
         #if os(iOS)
-        let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootVC = window.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
+            let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
+
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController
+            {
+                rootVC.present(activityVC, animated: true)
+            }
         #elseif os(macOS)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(message, forType: .string)
-        
-        let sharingServices = NSSharingService.sharingServices(forItems: [message])
-        if !sharingServices.isEmpty {
-            sharingServices[0].perform(withItems: [message])
-        }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(message, forType: .string)
+
+            let sharingServices = NSSharingService.sharingServices(forItems: [message])
+            if !sharingServices.isEmpty {
+                sharingServices[0].perform(withItems: [message])
+            }
         #endif
     }
 }

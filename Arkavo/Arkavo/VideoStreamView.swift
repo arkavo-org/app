@@ -97,7 +97,7 @@
     }
 
     struct VideoPreviewArea: View {
-        @StateObject var videoCaptureViewController: VideoCaptureViewController
+        @ObservedObject var videoCaptureViewController: VideoCaptureViewController
         var incomingVideoViewModel: VideoStreamViewModel
 
         var body: some View {
@@ -109,7 +109,7 @@
                     VideoPreviewAreaImpl(videoCaptureViewController: videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
                 }
             #else
-                VideoPreviewAreaImpl(videoCaptureViewController: $videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
+                VideoPreviewAreaImpl(videoCaptureViewController: videoCaptureViewController, incomingVideoViewModel: incomingVideoViewModel)
             #endif
         }
     }
@@ -135,7 +135,7 @@
     }
 
     struct VideoIncomingArea: View {
-        @StateObject var viewModel: VideoStreamViewModel
+        @ObservedObject var viewModel: VideoStreamViewModel
 
         var body: some View {
             GeometryReader { geometry in
@@ -178,7 +178,7 @@
 
     // Actual VideoPreviewArea implementation
     struct VideoPreviewAreaImpl: UIViewControllerRepresentable {
-        @StateObject var videoCaptureViewController: VideoCaptureViewController
+        var videoCaptureViewController: VideoCaptureViewController
         var incomingVideoViewModel: VideoStreamViewModel
 
         func makeUIViewController(context _: Context) -> VideoCaptureViewController {

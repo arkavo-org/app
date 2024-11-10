@@ -4,6 +4,7 @@
     import OpenTDFKit
     import UIKit
 
+    @available(iOS 18.0, *)
     class VideoCaptureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate, ObservableObject {
         @Published var isCameraActive: Bool = false
         @Published var isStreaming: Bool = false
@@ -23,7 +24,6 @@
         override func viewDidLoad() {
             super.viewDidLoad()
             setupCaptureSession()
-            // Add observer for orientation changes
             NotificationCenter.default.addObserver(self,
                                                    selector: #selector(orientationChanged),
                                                    name: UIDevice.orientationDidChangeNotification,
@@ -34,7 +34,6 @@
             captureSession = AVCaptureSession()
             captureSession.sessionPreset = .high
 
-            // Setup back camera by default
             guard let backCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: backCamera)
             else {
@@ -55,7 +54,6 @@
 
             if captureSession.canAddOutput(videoOutput) {
                 captureSession.addOutput(videoOutput)
-                // Store video connection for orientation updates
                 videoConnection = videoOutput.connection(with: .video)
                 updateVideoOrientation()
             }
@@ -84,17 +82,15 @@
 
             switch orientation {
             case .portrait:
-                videoConnection.videoOrientation = .portrait
+                videoConnection.videoRotationAngle = 0
             case .portraitUpsideDown:
-                videoConnection.videoOrientation = .portraitUpsideDown
+                videoConnection.videoRotationAngle = 180
             case .landscapeLeft:
-                // This might seem counterintuitive, but it's correct
-                videoConnection.videoOrientation = .landscapeRight
+                videoConnection.videoRotationAngle = 270
             case .landscapeRight:
-                // This might seem counterintuitive, but it's correct
-                videoConnection.videoOrientation = .landscapeLeft
+                videoConnection.videoRotationAngle = 90
             default:
-                videoConnection.videoOrientation = .portrait
+                videoConnection.videoRotationAngle = 0
             }
         }
 
@@ -106,15 +102,34 @@
 
             switch orientation {
             case .portrait:
-                connection.videoOrientation = .portrait
+                connection.videoRotationAngle = 0
             case .portraitUpsideDown:
-                connection.videoOrientation = .portraitUpsideDown
+                connection.videoRotationAngle = 180
             case .landscapeLeft:
-                connection.videoOrientation = .landscapeRight
+                connection.videoRotationAngle = 270
             case .landscapeRight:
-                connection.videoOrientation = .landscapeLeft
+                connection.videoRotationAngle = 90
             default:
-                connection.videoOrientation = .portrait
+                connection.videoRotationAngle = 0
+            }
+        }
+
+        private func getImageOrientation() -> UIImage.Orientation {
+            guard let videoConnection else { return .up }
+
+            let isUsingFrontCamera = isFrontCameraActive
+
+            switch videoConnection.videoRotationAngle {
+            case 0:
+                return isUsingFrontCamera ? .leftMirrored : .right
+            case 180:
+                return isUsingFrontCamera ? .rightMirrored : .left
+            case 90:
+                return isUsingFrontCamera ? .upMirrored : .up
+            case 270:
+                return isUsingFrontCamera ? .downMirrored : .down
+            default:
+                return .up
             }
         }
 
@@ -127,7 +142,6 @@
                 return
             }
 
-            // Convert pixel buffer to UIImage for compression
             let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
             let context = CIContext()
             guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
@@ -135,10 +149,8 @@
                 return
             }
 
-            // Create UIImage with proper orientation
             let image = UIImage(cgImage: cgImage, scale: 1.0, orientation: getImageOrientation())
 
-            // Compress the image data with JPEG compression
             guard let compressedData = image.jpegData(compressionQuality: 0.5) else {
                 print("Failed to compress image")
                 return
@@ -152,25 +164,6 @@
                 } else {
                     print("Failed to encrypt frame")
                 }
-            }
-        }
-
-        private func getImageOrientation() -> UIImage.Orientation {
-            guard let videoConnection else { return .up }
-
-            let isUsingFrontCamera = isFrontCameraActive
-
-            switch videoConnection.videoOrientation {
-            case .portrait:
-                return isUsingFrontCamera ? .leftMirrored : .right
-            case .portraitUpsideDown:
-                return isUsingFrontCamera ? .rightMirrored : .left
-            case .landscapeRight:
-                return isUsingFrontCamera ? .upMirrored : .up
-            case .landscapeLeft:
-                return isUsingFrontCamera ? .downMirrored : .down
-            @unknown default:
-                return .up
             }
         }
 
