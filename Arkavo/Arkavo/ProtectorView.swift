@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 // MARK: - Main Content View
 
@@ -753,18 +758,11 @@ struct ContentView_Previews: PreviewProvider {
 }
 
 struct ShareButton: View {
+    private let shareMessage = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
+    
     var body: some View {
         Button(action: {
-            let message = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
-            let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-
-            // Get the current window scene
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController
-            {
-                rootVC.present(activityVC, animated: true)
-            }
+            shareContent(message: shareMessage)
         }) {
             HStack(spacing: 12) {
                 Image(systemName: "square.and.arrow.up")
@@ -781,21 +779,38 @@ struct ShareButton: View {
         }
         .padding(.horizontal)
     }
+    
+    private func shareContent(message: String) {
+        #if os(iOS)
+        let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+        #elseif os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message, forType: .string)
+        
+        let sharingServices = NSSharingService.sharingServices(forItems: [message])
+        if !sharingServices.isEmpty {
+            sharingServices[0].perform(withItems: [message])
+        }
+        #endif
+    }
 }
+
+
 
 // Enhanced version with stats
 struct EnhancedShareButton: View {
+    private let shareMessage = "🛡️ Proud to have protected 512 creators across 16 social networks with Arkavo! Join the movement to safeguard creative content."
+    
     var body: some View {
         Button(action: {
-            let message = "🛡️ Proud to have protected 512 creators across 16 social networks with Arkavo! Join the movement to safeguard creative content."
-            let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first,
-               let rootVC = window.rootViewController
-            {
-                rootVC.present(activityVC, animated: true)
-            }
+            shareContent(message: shareMessage)
         }) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
@@ -833,6 +848,27 @@ struct EnhancedShareButton: View {
             )
         }
         .padding(.horizontal)
+    }
+    
+    private func shareContent(message: String) {
+        #if os(iOS)
+        let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+        #elseif os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message, forType: .string)
+        
+        let sharingServices = NSSharingService.sharingServices(forItems: [message])
+        if !sharingServices.isEmpty {
+            sharingServices[0].perform(withItems: [message])
+        }
+        #endif
     }
 }
 
