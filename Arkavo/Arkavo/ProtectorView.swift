@@ -27,7 +27,7 @@ struct ProtectorView: View {
             case .privacy:
                 PrivacyView(currentScreen: $currentScreen)
             case .scanning:
-                ScanningView(currentScreen: $currentScreen)
+                ScanningView(currentScreen: $currentScreen, service: service)
             case .impact:
                 ImpactView(currentScreen: $currentScreen)
             case .dashboard:
@@ -141,7 +141,7 @@ struct SettingsView: View {
     @State private var isAuthenticating = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -149,32 +149,32 @@ struct SettingsView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.arkavoText)
-                
+
                 VStack(alignment: .leading, spacing: 20) {
                     SectionTitle("When to Scan")
-                    
+
                     ToggleRow(
                         title: "Only at Night",
                         subtitle: "Scan during low-usage hours",
                         isOn: $nightOnly
                     )
-                    
+
                     ToggleRow(
                         title: "Only While Charging",
                         subtitle: "Preserve battery life",
                         isOn: $whileCharging
                     )
-                    
+
                     ToggleRow(
                         title: "Only on Wi-Fi",
                         subtitle: "Save mobile data",
                         isOn: $wifiOnly
                     )
                 }
-                
+
                 VStack(alignment: .leading, spacing: 20) {
                     SectionTitle("Networks to Scan")
-                    // TODO "Instagram", "TikTok", "Facebook", "Twitter",
+                    // TODO: "Instagram", "TikTok", "Facebook", "Twitter",
                     ForEach(["Reddit"], id: \.self) { network in
                         NetworkToggleRow(
                             network: network,
@@ -187,7 +187,7 @@ struct SettingsView: View {
                         )
                     }
                 }
-                
+
                 Button(action: {
                     withAnimation {
                         currentScreen = .privacy
@@ -217,11 +217,11 @@ struct SettingsView: View {
         .background(Color.arkavoBackground)
         .disabled(isAuthenticating)
     }
-    
+
     private func handleNetworkSelection(_ network: String) async {
         let networkLower = network.lowercased()
-        
-        if networkLower == "reddit" && !selectedNetworks.contains(networkLower) {
+
+        if networkLower == "reddit", !selectedNetworks.contains(networkLower) {
             // Adding Reddit
             isAuthenticating = true
             do {
@@ -319,77 +319,267 @@ struct PrivacyView: View {
 
 struct ScanningView: View {
     @Binding var currentScreen: ProtectorView.Screen
-    @State private var progress: CGFloat = 0.0
-    @State private var currentNetwork = "Reddit"
+    @State private var progress: [String: CGFloat] = [
+//        "instagram": 0.0,
+//        "tiktok": 0.0,
+//        "facebook": 0.0,
+//        "twitter": 0.0,
+        "reddit": 0.0
+    ]
+    @State private var currentNetwork: String?
     @State private var isPaused = false
-
-    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-
+    @State private var scanStatus: [String: String] = [:]
+    @State private var errorMessages: [String: String] = [:]
+    
+    private let scannerService: RedditScannerService
+    private let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    
+    init(currentScreen: Binding<ProtectorView.Screen>, service: ArkavoService) {
+        self._currentScreen = currentScreen
+        let apiClient = RedditAPIClient(authManager: service.redditAuthManager)
+        self.scannerService = RedditScannerService(apiClient: apiClient)
+    }
+    
+    private var isAllComplete: Bool {
+        progress.values.allSatisfy { $0 >= 1.0 }
+    }
+    
+    private func nextNetwork(after network: String) -> String? {
+        let networks = Array(progress.keys.sorted())
+        guard let currentIndex = networks.firstIndex(of: network),
+              currentIndex + 1 < networks.count
+        else { return nil }
+        return networks[currentIndex + 1]
+    }
+    
     var body: some View {
         VStack(spacing: 24) {
             Text("Protecting Creators in Progress")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.arkavoText)
-
+            
+            // Progress Circle
             ZStack {
                 Circle()
                     .stroke(lineWidth: 20)
                     .opacity(0.1)
                     .foregroundColor(.arkavoBrand)
-
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                    .foregroundColor(.arkavoBrand)
-                    .rotationEffect(Angle(degrees: -90))
-                    .animation(.linear, value: progress)
-
+                
+                ForEach(Array(progress.keys.enumerated()), id: \.element) { index, network in
+                    Circle()
+                        .trim(from: CGFloat(index) / CGFloat(progress.count),
+                              to: CGFloat(index) / CGFloat(progress.count) + progress[network]! / CGFloat(progress.count))
+                        .stroke(style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                        .foregroundColor(networkColor(network))
+                        .rotationEffect(Angle(degrees: -90))
+                        .animation(.linear(duration: 0.1), value: progress[network])
+                }
+                
                 VStack {
                     Image(systemName: "shield.checkerboard")
                         .font(.system(size: 40))
                         .foregroundColor(.arkavoBrand)
-                    Text("\(Int(progress * 100))%")
+                    Text("\(Int(averageProgress * 100))%")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.arkavoText)
                 }
             }
             .frame(width: 200, height: 200)
-
+            
+            // Network Status List
             VStack(spacing: 12) {
-                Text("Scanning \(currentNetwork)...")
-                    .font(.headline)
-                    .foregroundColor(.arkavoText)
-                Text("Next: TikTok")
-                    .font(.subheadline)
-                    .foregroundColor(.arkavoSecondary)
+                ForEach(Array(progress.keys.sorted()), id: \.self) { network in
+                    NetworkStatusRow(
+                        network: network,
+                        progress: progress[network] ?? 0,
+                        status: scanStatus[network] ?? "Waiting...",
+                        errorMessage: errorMessages[network],
+                        color: networkColor(network)
+                    )
+                }
             }
-
-            Button(action: {
-                isPaused.toggle()
-            }) {
-                Text(isPaused ? "Resume Scanning" : "Pause Scanning")
-                    .brandSecondaryButton()
-            }
-
-            if progress >= 1.0 {
+            .padding()
+            .background(Color.white)
+            .cornerRadius(12)
+            
+            // Control Buttons
+            HStack(spacing: 16) {
                 Button(action: {
-                    currentScreen = .impact
+                    isPaused.toggle()
+                    if isPaused {
+                        pauseScanning()
+                    } else {
+                        resumeScanning()
+                    }
                 }) {
-                    Text("View Results")
-                        .brandPrimaryButton()
+                    Text(isPaused ? "Resume Scanning" : "Pause Scanning")
+                        .brandSecondaryButton()
+                }
+                
+                if isAllComplete {
+                    Button(action: {
+                        currentScreen = .impact
+                    }) {
+                        Text("View Results")
+                            .brandPrimaryButton()
+                    }
                 }
             }
         }
         .padding()
         .background(Color.arkavoBackground)
+        .onAppear {
+            startScanning()
+        }
+        .onDisappear {
+            stopScanning()
+        }
         .onReceive(timer) { _ in
-            if !isPaused, progress < 1.0 {
-                progress += 0.01
+            if !isPaused {
+                updateProgress()
             }
         }
     }
+    
+    private var averageProgress: CGFloat {
+        let total = progress.values.reduce(0, +)
+        return total / CGFloat(progress.count)
+    }
+    
+    private func networkColor(_ network: String) -> Color {
+        switch network {
+        case "instagram":
+            return .purple
+        case "tiktok":
+            return .blue
+        case "facebook":
+            return .indigo
+        case "twitter":
+            return .cyan
+        case "reddit":
+            return .orange
+        default:
+            return .gray
+        }
+    }
+    
+    private func startScanning() {
+        currentNetwork = progress.keys.sorted().first
+        // Start Reddit scanning
+        if progress.keys.contains("reddit") {
+            scannerService.startScanning(subreddits: [
+                "videos",
+                "pics",
+                "gifs"
+                // TODO get relevant subreddits
+            ])
+            scanStatus["reddit"] = "Scanning..."
+            
+            // Observe Reddit scanning progress
+            NotificationCenter.default.addObserver(
+                forName: .redditScanningProgress,
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let progress = notification.userInfo?["progress"] as? Double {
+                    self.progress["reddit"] = CGFloat(progress)
+                }
+                if let status = notification.userInfo?["status"] as? String {
+                    self.scanStatus["reddit"] = status
+                }
+                if let error = notification.userInfo?["error"] as? String {
+                    self.errorMessages["reddit"] = error
+                }
+            }
+        }
+        
+        // Start other network scanning...
+    }
+    
+    private func pauseScanning() {
+        scannerService.stopScanning()
+        // Pause other networks...
+    }
+    
+    private func resumeScanning() {
+        if progress.keys.contains("reddit") {
+            scannerService.startScanning(subreddits: ["all"])
+        }
+        // Resume other networks...
+    }
+    
+    private func stopScanning() {
+        scannerService.stopScanning()
+        NotificationCenter.default.removeObserver(self)
+        // Stop other networks...
+    }
+    
+    private func updateProgress() {
+        // This is now handled by the notification observers for Reddit
+        // Update other network progress here...
+    }
+}
+
+// Supporting Views
+struct NetworkStatusRow: View {
+    let network: String
+    let progress: CGFloat
+    let status: String
+    let errorMessage: String?
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: networkIcon(network))
+                    .foregroundColor(color)
+                Text(network.capitalized)
+                    .fontWeight(.medium)
+                Spacer()
+                Text("\(Int(progress * 100))%")
+                    .foregroundColor(.arkavoSecondary)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: progress)
+                    .tint(color)
+                
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                } else {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundColor(.arkavoSecondary)
+                }
+            }
+        }
+    }
+    
+    private func networkIcon(_ network: String) -> String {
+        switch network.lowercased() {
+        case "instagram":
+            return "camera.circle.fill"
+        case "tiktok":
+            return "music.note.list"
+        case "facebook":
+            return "person.2.circle.fill"
+        case "twitter":
+            return "message.circle.fill"
+        case "reddit":
+            return "bubble.left.circle.fill"
+        default:
+            return "network"
+        }
+    }
+}
+
+// Notification extension for Reddit scanning progress
+extension Notification.Name {
+    static let redditScanningProgress = Notification.Name("RedditScanningProgress")
 }
 
 // MARK: - Impact Screen
