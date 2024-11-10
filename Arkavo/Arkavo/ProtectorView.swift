@@ -802,82 +802,11 @@ struct ShareButton: View {
     }
 }
 
-
-
-// Enhanced version with stats
-struct EnhancedShareButton: View {
-    private let shareMessage = "🛡️ Proud to have protected 512 creators across 16 social networks with Arkavo! Join the movement to safeguard creative content."
-    
-    var body: some View {
-        Button(action: {
-            shareContent(message: shareMessage)
-        }) {
-            VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color.arkavoBrandLight)
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(.arkavoBrand)
-                        )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Share Your Impact")
-                            .font(.headline)
-                            .foregroundColor(.arkavoText)
-
-                        Text("Inspire others to join the movement")
-                            .font(.subheadline)
-                            .foregroundColor(.arkavoSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.arkavoSecondary)
-                }
-            }
-            .padding()
-            .background(Color.white)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
-            )
-        }
-        .padding(.horizontal)
-    }
-    
-    private func shareContent(message: String) {
-        #if os(iOS)
-        let activityVC = UIActivityViewController(activityItems: [message], applicationActivities: nil)
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootVC = window.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
-        #elseif os(macOS)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(message, forType: .string)
-        
-        let sharingServices = NSSharingService.sharingServices(forItems: [message])
-        if !sharingServices.isEmpty {
-            sharingServices[0].perform(withItems: [message])
-        }
-        #endif
-    }
-}
-
 // Preview Provider
 struct ShareButton_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
             ShareButton()
-            EnhancedShareButton()
         }
         .padding()
         .background(Color.arkavoBackground)
