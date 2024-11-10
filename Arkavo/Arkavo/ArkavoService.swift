@@ -12,6 +12,7 @@ class ArkavoService {
     private var hasInitialConnection = false
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
+    let redditAuthManager = RedditAuthManager()
     var thoughtService: ThoughtService?
     var streamService: StreamService?
     private let locationManager = LocationManager()

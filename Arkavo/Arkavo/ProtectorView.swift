@@ -8,6 +8,7 @@ import SwiftUI
 // MARK: - Main Content View
 
 struct ProtectorView: View {
+    @State var service: ArkavoService
     @State private var currentScreen: Screen = .intro
 
     enum Screen {
@@ -22,7 +23,7 @@ struct ProtectorView: View {
             case .info:
                 InformationView(currentScreen: $currentScreen)
             case .settings:
-                SettingsView(currentScreen: $currentScreen)
+                SettingsView(currentScreen: $currentScreen, service: service)
             case .privacy:
                 PrivacyView(currentScreen: $currentScreen)
             case .scanning:
@@ -132,11 +133,15 @@ struct InformationView: View {
 
 struct SettingsView: View {
     @Binding var currentScreen: ProtectorView.Screen
+    @State var service: ArkavoService
     @State private var nightOnly = false
     @State private var whileCharging = false
     @State private var wifiOnly = false
-    @State private var selectedNetworks: Set<String> = ["instagram", "tiktok"]
-
+    @State private var selectedNetworks: Set<String> = ["reddit"]
+    @State private var isAuthenticating = false
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -144,47 +149,45 @@ struct SettingsView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.arkavoText)
-
+                
                 VStack(alignment: .leading, spacing: 20) {
                     SectionTitle("When to Scan")
-
+                    
                     ToggleRow(
                         title: "Only at Night",
                         subtitle: "Scan during low-usage hours",
                         isOn: $nightOnly
                     )
-
+                    
                     ToggleRow(
                         title: "Only While Charging",
                         subtitle: "Preserve battery life",
                         isOn: $whileCharging
                     )
-
+                    
                     ToggleRow(
                         title: "Only on Wi-Fi",
                         subtitle: "Save mobile data",
                         isOn: $wifiOnly
                     )
                 }
-
+                
                 VStack(alignment: .leading, spacing: 20) {
                     SectionTitle("Networks to Scan")
-
-                    ForEach(["Instagram", "TikTok", "Facebook", "Twitter"], id: \.self) { network in
+                    // TODO "Instagram", "TikTok", "Facebook", "Twitter",
+                    ForEach(["Reddit"], id: \.self) { network in
                         NetworkToggleRow(
                             network: network,
                             isSelected: selectedNetworks.contains(network.lowercased()),
                             action: {
-                                if selectedNetworks.contains(network.lowercased()) {
-                                    selectedNetworks.remove(network.lowercased())
-                                } else {
-                                    selectedNetworks.insert(network.lowercased())
+                                Task {
+                                    await handleNetworkSelection(network)
                                 }
                             }
                         )
                     }
                 }
-
+                
                 Button(action: {
                     withAnimation {
                         currentScreen = .privacy
@@ -195,8 +198,59 @@ struct SettingsView: View {
                 }
             }
             .padding()
+            .alert("Authentication Status", isPresented: $showingAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(alertMessage)
+            }
+            .overlay {
+                if isAuthenticating {
+                    Color.black.opacity(0.3)
+                        .edgesIgnoringSafeArea(.all)
+                    ProgressView("Authenticating...")
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(10)
+                }
+            }
         }
         .background(Color.arkavoBackground)
+        .disabled(isAuthenticating)
+    }
+    
+    private func handleNetworkSelection(_ network: String) async {
+        let networkLower = network.lowercased()
+        
+        if networkLower == "reddit" && !selectedNetworks.contains(networkLower) {
+            // Adding Reddit
+            isAuthenticating = true
+            do {
+                let success = try await service.redditAuthManager.startOAuthFlow()
+                if success {
+                    selectedNetworks.insert(networkLower)
+                    alertMessage = "Successfully connected to Reddit"
+                    showingAlert = true
+                }
+            } catch {
+                alertMessage = "Failed to authenticate with Reddit: \(error.localizedDescription)"
+                showingAlert = true
+            }
+            isAuthenticating = false
+        } else {
+            // Handle other networks or removing Reddit
+            if selectedNetworks.contains(networkLower) {
+                selectedNetworks.remove(networkLower)
+            } else {
+                selectedNetworks.insert(networkLower)
+            }
+        }
+    }
+}
+
+// Preview Provider
+struct SettingsView_Previews: PreviewProvider {
+    static var previews: some View {
+        SettingsView(currentScreen: .constant(.settings), service: ArkavoService())
     }
 }
 
@@ -266,7 +320,7 @@ struct PrivacyView: View {
 struct ScanningView: View {
     @Binding var currentScreen: ProtectorView.Screen
     @State private var progress: CGFloat = 0.0
-    @State private var currentNetwork = "Instagram"
+    @State private var currentNetwork = "Reddit"
     @State private var isPaused = false
 
     let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
@@ -570,6 +624,8 @@ struct NetworkToggleRow: View {
             "person.2.circle.fill"
         case "twitter":
             "message.circle.fill"
+        case "reddit":
+            "bubble.left.circle.fill"
         default:
             "network"
         }
@@ -693,7 +749,7 @@ struct ActivityRow: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.arkavoText)
-                Text("Instagram • 2 issues found")
+                Text("Reddit • 2 issues found")
                     .font(.caption)
                     .foregroundColor(.arkavoSecondary)
             }
@@ -753,7 +809,7 @@ extension View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ProtectorView()
+        ProtectorView(service: ArkavoService())
     }
 }
 

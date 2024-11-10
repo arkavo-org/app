@@ -10,7 +10,7 @@
 			<key>CFBundleURLIconFile</key>
 			<string></string>
 			<key>CFBundleURLName</key>
-			<string>com.arkavo.oath</string>
+			<string>com.arkavo.Arkavo</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>arkavo</string>
