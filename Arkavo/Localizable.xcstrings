@@ -430,6 +430,12 @@
     "Privacy Policy" : {
 
     },
+    "Process" : {
+
+    },
+    "Process File..." : {
+
+    },
     "Profile" : {
       "localizations" : {
         "es-US" : {
@@ -523,6 +529,9 @@
       }
     },
     "Save and Start Protecting" : {
+
+    },
+    "Scan" : {
 
     },
     "Scan Completed" : {

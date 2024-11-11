@@ -43,6 +43,8 @@
 		DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */; };
 		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
 		DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */; };
+		DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */; };
+		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
@@ -112,6 +114,8 @@
 		DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataServiceModel.swift; sourceTree = "<group>"; };
 		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
 		DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorRedditScanner.swift; sourceTree = "<group>"; };
+		DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorProcessor.swift; sourceTree = "<group>"; };
+		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
@@ -221,12 +225,14 @@
 				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
+				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
 				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
 				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
-				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
-				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
-				DAC1F9EF2C34DA7100499631 /* Preview Content */,
+				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
+				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
+				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
+				DAC1F9EF2C34DA7100499631 /* Preview Content */,
 			);
 			path = Arkavo;
 			sourceTree = "<group>";
@@ -418,6 +424,7 @@
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
+				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
 				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
@@ -434,6 +441,7 @@
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
+				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */,
