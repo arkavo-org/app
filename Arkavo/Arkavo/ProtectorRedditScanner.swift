@@ -242,7 +242,6 @@ actor RedditRateLimiter {
     }
 }
 
-// RedditAPIClient.swift
 class RedditAPIClient {
     private let rateLimiter = RedditRateLimiter()
     private let authManager: RedditAuthManager
@@ -258,6 +257,7 @@ class RedditAPIClient {
         case unauthorized
         case networkError(Error)
         case maxRetriesExceeded
+        case decodingError(Error)
 
         static func == (lhs: APIError, rhs: APIError) -> Bool {
             switch (lhs, rhs) {
@@ -265,15 +265,14 @@ class RedditAPIClient {
                  (.invalidResponse, .invalidResponse),
                  (.unauthorized, .unauthorized),
                  (.maxRetriesExceeded, .maxRetriesExceeded):
-                return true
-            case (.networkError(let lhsError), .networkError(let rhsError)):
-                return lhsError.localizedDescription == rhsError.localizedDescription
+                true
+            case let (.networkError(lhsError), .networkError(rhsError)):
+                lhsError.localizedDescription == rhsError.localizedDescription
             default:
-                return false
+                false
             }
         }
     }
-
 
     func makeRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
         var attempt = 0
@@ -287,13 +286,23 @@ class RedditAPIClient {
                 // Make the request
                 let (data, response) = try await URLSession.shared.data(for: request)
 
+                // Debug: Print response for troubleshooting
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    print("API Response: \(jsonString)")
+                }
+
                 // Handle rate limit headers if present
                 if let httpResponse = response as? HTTPURLResponse {
                     handleRateLimitHeaders(httpResponse)
 
                     switch httpResponse.statusCode {
                     case 200 ... 299:
-                        return try JSONDecoder().decode(T.self, from: data)
+                        do {
+                            return try JSONDecoder().decode(T.self, from: data)
+                        } catch {
+                            print("Decoding error: \(error)")
+                            throw APIError.decodingError(error)
+                        }
                     case 429:
                         throw APIError.rateLimitExceeded
                     case 401:
@@ -321,22 +330,7 @@ class RedditAPIClient {
         throw APIError.maxRetriesExceeded
     }
 
-    private func handleRateLimitHeaders(_ response: HTTPURLResponse) {
-        // Parse Reddit's rate limit headers
-        let remaining = response.value(forHTTPHeaderField: "x-ratelimit-remaining")
-        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset")
-        let used = response.value(forHTTPHeaderField: "x-ratelimit-used")
-
-        // Log rate limit information
-        print("Rate Limit - Remaining: \(remaining ?? "unknown"), Reset: \(reset ?? "unknown"), Used: \(used ?? "unknown")")
-    }
-
-    private func refreshTokenAndRetry() async throws {
-        // Implement token refresh logic here
-        // This should use the refresh token to get a new access token
-    }
-
-    // Example usage for content scanning
+    // Scan subreddit returning proper Reddit listing format
     func scanSubreddit(_ subreddit: String, limit: Int = 25) async throws -> [RedditPost] {
         guard let token = try await authManager.getToken() else {
             throw APIError.unauthorized
@@ -345,14 +339,49 @@ class RedditAPIClient {
         var urlComponents = URLComponents(string: "https://oauth.reddit.com/r/\(subreddit)/new")!
         urlComponents.queryItems = [
             URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "raw_json", value: "1"),
         ]
 
         var request = URLRequest(url: urlComponents.url!)
         request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("Arkavo/1.0", forHTTPHeaderField: "User-Agent")
 
-        return try await makeRequest(request)
+        // Use the correct response type (RedditListing)
+        let listing: RedditListing = try await makeRequest(request)
+        // Extract posts from the listing
+        return listing.data.children.map(\.data)
     }
+
+    private func handleRateLimitHeaders(_ response: HTTPURLResponse) {
+        // Parse Reddit's rate limit headers
+        let remaining = response.value(forHTTPHeaderField: "x-ratelimit-remaining")
+        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset")
+        let used = response.value(forHTTPHeaderField: "x-ratelimit-used")
+
+        print("Rate Limit - Remaining: \(remaining ?? "unknown"), Reset: \(reset ?? "unknown"), Used: \(used ?? "unknown")")
+    }
+
+    private func refreshTokenAndRetry() async throws {
+        // Implement token refresh logic
+        // For now, just throw unauthorized to trigger a new login
+        throw APIError.unauthorized
+    }
+}
+
+struct RedditListing: Codable {
+    let kind: String
+    let data: ListingData
+}
+
+struct ListingData: Codable {
+    let children: [RedditChild]
+    let after: String?
+    let before: String?
+}
+
+struct RedditChild: Codable {
+    let kind: String
+    let data: RedditPost
 }
 
 struct RedditPost: Codable {
@@ -365,7 +394,7 @@ struct RedditPost: Codable {
     let selftext: String?
     let thumbnail: String?
     let permalink: String
-    
+
     // Add any additional fields you need
     enum CodingKeys: String, CodingKey {
         case id, title, url, author, created_utc, subreddit, selftext, thumbnail, permalink
@@ -376,6 +405,7 @@ class RedditScannerService {
     private let apiClient: RedditAPIClient
     private var scanTask: Task<Void, Error>?
     private let contentQueue = DispatchQueue(label: "com.arkavo.redditscanner", qos: .utility)
+    private var lastScannedPostIDs: Set<String> = []
 
     init(apiClient: RedditAPIClient) {
         self.apiClient = apiClient
@@ -383,19 +413,32 @@ class RedditScannerService {
 
     func startScanning(subreddits: [String]) {
         scanTask = Task {
+            var currentProgress = 0.0
+            let progressIncrement = 1.0 / Double(subreddits.count)
+
             while !Task.isCancelled {
                 for subreddit in subreddits {
                     do {
+                        updateProgress(progress: currentProgress, status: "Scanning r/\(subreddit)")
+
                         let posts = try await apiClient.scanSubreddit(subreddit)
                         processContent(posts)
+
+                        currentProgress += progressIncrement
+                        updateProgress(progress: min(currentProgress, 1.0),
+                                       status: "Completed r/\(subreddit)")
 
                         // Add delay between subreddits to help with rate limiting
                         try await Task.sleep(nanoseconds: UInt64(2 * 1_000_000_000))
                     } catch {
                         handleScanError(error, subreddit: subreddit)
+                        // Continue with next subreddit despite error
+                        currentProgress += progressIncrement
                     }
                 }
 
+                // Reset progress for next cycle
+                currentProgress = 0.0
                 // Wait before starting next scan cycle
                 try await Task.sleep(nanoseconds: UInt64(30 * 1_000_000_000))
             }
@@ -407,22 +450,59 @@ class RedditScannerService {
         scanTask = nil
     }
 
-    private func processContent(_: [RedditPost]) {
+    private func processContent(_ posts: [RedditPost]) {
         contentQueue.async {
-            // Implement content processing logic here
-            // This could include:
-            // - Content analysis
-            // - Image/video processing
-            // - Copyright violation detection
-            // - Database storage
+            let newPosts = posts.filter { !self.lastScannedPostIDs.contains($0.id) }
+
+            for post in newPosts {
+                // Add to scanned set
+                self.lastScannedPostIDs.insert(post.id)
+
+                // Process post content
+                // Example: Check for copyrighted content
+                if let url = post.url {
+                    // Process media URL
+                    print("Processing media: \(url)")
+                }
+
+                if let text = post.selftext {
+                    // Process text content
+                    print("Processing text content length: \(text.count)")
+                }
+            }
+
+            // Limit size of tracked post IDs
+            if self.lastScannedPostIDs.count > 10000 {
+                self.lastScannedPostIDs = Set(self.lastScannedPostIDs.suffix(5000))
+            }
+        }
+    }
+
+    private func updateProgress(progress: Double, status: String) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .redditScanningProgress,
+                object: nil,
+                userInfo: [
+                    "progress": progress,
+                    "status": status,
+                ]
+            )
         }
     }
 
     private func handleScanError(_ error: Error, subreddit: String) {
-        print("Error scanning subreddit \(subreddit): \(error.localizedDescription)")
-        // Implement error handling logic
-        // - Log errors
-        // - Notify user if necessary
-        // - Adjust scan parameters
+        let errorMessage = "Error scanning r/\(subreddit): \(error.localizedDescription)"
+        print(errorMessage)
+
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .redditScanningProgress,
+                object: nil,
+                userInfo: [
+                    "error": errorMessage,
+                ]
+            )
+        }
     }
 }
