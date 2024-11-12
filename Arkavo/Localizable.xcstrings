@@ -368,6 +368,7 @@
       }
     },
     "nanoTDF info" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -428,9 +429,6 @@
 
     },
     "Privacy Policy" : {
-
-    },
-    "Process" : {
 
     },
     "Process File..." : {

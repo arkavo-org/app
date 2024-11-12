@@ -8,12 +8,14 @@ struct ArkavoView: View {
     @State private var persistenceController: PersistenceController?
     @State private var streamMapView: StreamMapView?
     @State private var showingProfileDetails = false
-    @State private var isFileDialogPresented = false
-    @State private var selectedView: SelectedView = .streamMap
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         @StateObject private var videoStreamViewModel = VideoStreamViewModel()
     #endif
+    @State private var selectedView: SelectedView = .streamMap
     @Query private var accounts: [Account]
+    @State private var isFileDialogPresented = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     init(service: ArkavoService) {
         self.service = service
@@ -68,12 +70,22 @@ struct ArkavoView: View {
                             let contentString = try String(contentsOf: url, encoding: .utf8)
                             processContent(contentString)
                         } catch {
-                            print("Error reading file: \(error.localizedDescription)")
+                            errorMessage = "Unable to read file: \(error.localizedDescription)"
+                            showingError = true
                         }
                     }
                 case let .failure(error):
-                    print("Error selecting file: \(error.localizedDescription)")
+                    errorMessage = "Failed to select file: \(error.localizedDescription)"
+                    showingError = true
                 }
+            }
+            .alert("Error", isPresented: $showingError, presenting: errorMessage) { _ in
+                Button("OK") {
+                    showingError = false
+                    errorMessage = nil
+                }
+            } message: { errorMessage in
+                Text(errorMessage)
             }
         #endif
     }
@@ -89,39 +101,6 @@ struct ArkavoView: View {
                             #if os(macOS)
                                 Button("Process File...") {
                                     isFileDialogPresented = true
-                                }
-                                Button("Process") {
-                                    Task {
-                                        let contentString = """
-                                        How BERT Works
-
-                                        Transformer Encoder
-                                        BERT is built upon the Transformer architecture, specifically utilizing the encoder part of the Transformer. The encoder comprises multiple layers of self-attention and feed-forward neural networks, allowing BERT to process input data in parallel and capture complex dependencies.
-
-                                        Bidirectional Processing
-                                        Traditional language models read text sequentially, either left-to-right or right-to-left. BERT, however, processes text in both directions simultaneously. This bidirectional approach enables BERT to grasp the full context of a word based on all surrounding words, leading to more accurate and nuanced language understanding.
-
-                                        Self-Attention Mechanism
-                                        Self-attention allows BERT to weigh the importance of different words in a sentence when encoding a particular word. For example, in the sentence "The bank can guarantee your savings," self-attention helps BERT determine whether "bank" refers to a financial institution or the side of a river based on context.
-                                        """
-                                        // On macOS: Generate signature
-                                        let preprocessor = try ContentPreprocessor()
-                                        let signature = try preprocessor.generateSignature(for: contentString)
-                                        // For batch processing
-//                                    let signatures = try preprocessor.batchProcessRedditPosts(redditPosts)
-//                                    // On iOS
-//                                    let matcher = ContentMatcher()
-//                                    let matches = matcher.findMatches(signature: signature, against: candidateSignatures)
-                                        // Save/transmit signature (example using JSON)
-                                        let encoder = JSONEncoder()
-                                        let signatureData = try encoder.encode(signature)
-                                        print("signatureData: \(signatureData.base64EncodedString())")
-                                        let compressed = try signature.compressed()
-                                        print("compressed: \(compressed)")
-                                        let decompressed = try ContentSignature.decompress(compressed)
-                                        print("decompressed: \(decompressed)")
-                                        // transmit signatureData to iOS devices
-                                    }
                                 }
                             #endif
                             Button("Scan") {
@@ -179,6 +158,27 @@ struct ArkavoView: View {
         }
     }
 
+    #if os(macOS)
+        private func processContent(_ contentString: String) {
+            Task {
+                do {
+                    let preprocessor = try ContentPreprocessor()
+                    let signature = try preprocessor.generateSignature(for: contentString)
+                    let compressed = try signature.compressed()
+                    print("Content signature compressed: \(compressed)")
+                    if let account = accounts.first, let profile = account.profile {
+                        print("Creator public ID: \(profile.publicID.base58EncodedString)")
+                        try service.protectorService?.sendContentSignatureEvent(compressed, creatorPublicID: profile.publicID)
+                    }
+//                    let decompressed = try ContentSignature.decompress(compressed)
+                } catch {
+                    errorMessage = "Error processing content: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
+        }
+    #endif
+
     private func initialSetup() {
         persistenceController = PersistenceController.shared
         service.setupCallbacks()
@@ -198,27 +198,4 @@ struct ArkavoView: View {
             print("No profile no webSocket no token")
         }
     }
-
-    #if os(macOS)
-        private func processContent(_ contentString: String) {
-            Task {
-                do {
-                    let preprocessor = try ContentPreprocessor()
-                    let signature = try preprocessor.generateSignature(for: contentString)
-
-                    let encoder = JSONEncoder()
-                    let signatureData = try encoder.encode(signature)
-                    print("signatureData: \(signatureData.base64EncodedString())")
-
-                    let compressed = try signature.compressed()
-                    print("compressed: \(compressed)")
-
-                    let decompressed = try ContentSignature.decompress(compressed)
-                    print("decompressed: \(decompressed)")
-                } catch {
-                    print("Error processing content: \(error.localizedDescription)")
-                }
-            }
-        }
-    #endif
 }

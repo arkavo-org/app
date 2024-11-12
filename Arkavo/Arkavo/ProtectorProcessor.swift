@@ -199,7 +199,7 @@ class ContentPreprocessor {
                 let phrase = (content as NSString).substring(with: tokenRange)
                 phrases.append(phrase)
             }
-            print("tag = \(String(describing: tag)), tokenRange = \(tokenRange)")
+//            print("tag = \(String(describing: tag)), tokenRange = \(tokenRange)")
         }
 
         return phrases

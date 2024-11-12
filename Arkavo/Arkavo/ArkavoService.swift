@@ -15,6 +15,7 @@ class ArkavoService {
     let redditAuthManager = RedditAuthManager()
     var thoughtService: ThoughtService?
     var streamService: StreamService?
+    var protectorService: ProtectorService?
     private let locationManager = LocationManager()
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         var videoStreamViewModel: VideoStreamViewModel?
@@ -28,6 +29,7 @@ class ArkavoService {
     func setupCallbacks() {
         thoughtService = ThoughtService(self)
         streamService = StreamService(self)
+        protectorService = ProtectorService(self)
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if ArkavoService.kasPublicKey != nil {
                 return
