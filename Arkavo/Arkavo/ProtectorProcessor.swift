@@ -5,7 +5,7 @@ import Foundation
 
 struct ContentSignature: Codable {
     let version: Int
-    let embeddings: [Float16] // Semantic embeddings from BERT
+    let embeddings: [Float] // Semantic embeddings from BERT
     let ngrams: Set<String> // Efficient n-gram sets
     let keyphrases: [String] // Key phrases extracted
     let metadata: SignatureMetadata
@@ -13,7 +13,7 @@ struct ContentSignature: Codable {
 
     var compressedSize: Int {
         // Estimate compressed size for transmission
-        embeddings.count * MemoryLayout<Float16>.size +
+        embeddings.count * MemoryLayout<Float>.size +
             ngrams.joined().utf8.count +
             keyphrases.joined().utf8.count +
             MemoryLayout<SignatureMetadata>.size
@@ -119,13 +119,13 @@ class ContentPreprocessor {
         return signatures.sorted { $0.key < $1.key }.map(\.value)
     }
 
-    func generateChecksum(embeddings: [Float16], ngrams: Set<String>, keyphrases: [String]) -> String {
+    func generateChecksum(embeddings: [Float], ngrams: Set<String>, keyphrases: [String]) -> String {
         // Create a string that combines all the signature components
         var components: [String] = []
 
         // Add embeddings
         let embeddingString = embeddings
-            .map { String(format: "%.4f", Float($0)) }
+            .map { String(format: "%.4f", $0) }
             .joined(separator: "")
         components.append(embeddingString)
 
@@ -158,7 +158,7 @@ class ContentPreprocessor {
         }
     }
 
-    private func generateEmbeddings(for content: String) throws -> [Float16] {
+    private func generateEmbeddings(for content: String) throws -> [Float] {
         // Tokenize input
         let tokens = tokenizer.tokenize(content)
 
@@ -177,8 +177,8 @@ class ContentPreprocessor {
         let input = TextEmbeddingInput(input_ids: inputIds, attention_mask: attentionMask)
         let output = try model.prediction(input: input)
 
-        // Convert to Array of Float16
-        return Array(UnsafeBufferPointer(start: output.var_547.dataPointer.assumingMemoryBound(to: Float16.self),
+        // Convert to Array of Float
+        return Array(UnsafeBufferPointer(start: output.var_547.dataPointer.assumingMemoryBound(to: Float.self),
                                          count: output.var_547.count))
     }
 
@@ -199,7 +199,6 @@ class ContentPreprocessor {
                 let phrase = (content as NSString).substring(with: tokenRange)
                 phrases.append(phrase)
             }
-//            print("tag = \(String(describing: tag)), tokenRange = \(tokenRange)")
         }
 
         return phrases
@@ -302,16 +301,16 @@ class ContentMatcher {
         return 0.7 * embeddingSimilarity + 0.3 * phraseSimilarity
     }
 
-    private func cosineSimilarity(_ v1: [Float16], _ v2: [Float16]) -> Float {
+    private func cosineSimilarity(_ v1: [Float], _ v2: [Float]) -> Float {
         // Implement cosine similarity
         var dotProduct: Float = 0
         var norm1: Float = 0
         var norm2: Float = 0
 
         for i in 0 ..< v1.count {
-            dotProduct += Float(v1[i]) * Float(v2[i])
-            norm1 += Float(v1[i]) * Float(v1[i])
-            norm2 += Float(v2[i]) * Float(v2[i])
+            dotProduct += v1[i] * v2[i]
+            norm1 += v1[i] * v1[i]
+            norm2 += v2[i] * v2[i]
         }
 
         return dotProduct / (sqrt(norm1) * sqrt(norm2))
