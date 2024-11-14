@@ -41,7 +41,10 @@
 		DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */; };
 		DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA78EF882C85FE4F00B89422 /* PersistenceController.swift */; };
 		DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */; };
-		DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */; };
+		DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */; };
+		DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */; };
+		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
+		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
@@ -109,7 +112,10 @@
 		DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoPolicy.swift; sourceTree = "<group>"; };
 		DA78EF882C85FE4F00B89422 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
 		DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataServiceModel.swift; sourceTree = "<group>"; };
-		DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInfoOverlay.swift; sourceTree = "<group>"; };
+		DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorRedditScanner.swift; sourceTree = "<group>"; };
+		DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorProcessor.swift; sourceTree = "<group>"; };
+		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
+		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
@@ -163,7 +169,6 @@
 				DAC1F9E52C34DA7000499631 /* Arkavo */,
 				DAC1F9F92C34DA7100499631 /* ArkavoTests */,
 				DAC1FA032C34DA7100499631 /* ArkavoUITests */,
-				DAEE13882CA1021500DCB5EC /* Frameworks */,
 				DAC1F9E42C34DA7000499631 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -216,14 +221,17 @@
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
-				DA8A058D2C43582200826542 /* PerformanceInfoOverlay.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
+				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
+				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
+				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
 				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
-				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
-				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
-				DAC1F9EF2C34DA7100499631 /* Preview Content */,
+				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
+				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
+				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
+				DAC1F9EF2C34DA7100499631 /* Preview Content */,
 			);
 			path = Arkavo;
 			sourceTree = "<group>";
@@ -251,13 +259,6 @@
 				DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */,
 			);
 			path = ArkavoUITests;
-			sourceTree = "<group>";
-		};
-		DAEE13882CA1021500DCB5EC /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -415,6 +416,7 @@
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
+				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
 				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
@@ -431,15 +433,17 @@
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
+				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
+				DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */,
 				DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */,
 				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,
-				DA8A058E2C43582200826542 /* PerformanceInfoOverlay.swift in Sources */,
 				DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */,
+				DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
 			);
@@ -621,6 +625,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Optional for securely sharing your location.  Required to consume geo-location content.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -669,6 +674,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to the camera for real-time video streaming and processing.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID for secure authentication.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Optional for securely sharing your location.  Required to consume geo-location content.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

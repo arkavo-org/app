@@ -13,6 +13,9 @@ struct ArkavoView: View {
     #endif
     @State private var selectedView: SelectedView = .streamMap
     @Query private var accounts: [Account]
+    @State private var isFileDialogPresented = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     init(service: ArkavoService) {
         self.service = service
@@ -47,13 +50,44 @@ struct ArkavoView: View {
                         Text("Thought service is unavailable")
                     }
                 case .protector:
-                    ProtectorView()
+                    ProtectorView(service: service)
                 }
                 menuView()
             }
             .ignoresSafeArea(edges: .all)
         }
         .onAppear(perform: initialSetup)
+        #if os(macOS)
+            .fileImporter(
+                isPresented: $isFileDialogPresented,
+                allowedContentTypes: [.text],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case let .success(urls):
+                    if let url = urls.first {
+                        do {
+                            let contentString = try String(contentsOf: url, encoding: .utf8)
+                            processContent(contentString)
+                        } catch {
+                            errorMessage = "Unable to read file: \(error.localizedDescription)"
+                            showingError = true
+                        }
+                    }
+                case let .failure(error):
+                    errorMessage = "Failed to select file: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
+            .alert("Error", isPresented: $showingError, presenting: errorMessage) { _ in
+                Button("OK") {
+                    showingError = false
+                    errorMessage = nil
+                }
+            } message: { errorMessage in
+                Text(errorMessage)
+            }
+        #endif
     }
 
     private func menuView() -> some View {
@@ -63,6 +97,16 @@ struct ArkavoView: View {
                     Spacer()
                         .frame(width: geometry.size.width * 0.8)
                     Menu {
+                        Section("Content Protection") {
+                            #if os(macOS)
+                                Button("Process File...") {
+                                    isFileDialogPresented = true
+                                }
+                            #endif
+                            Button("Scan") {
+                                selectedView = .protector
+                            }
+                        }
                         Section("Stream") {
                             Button("Map") {
                                 selectedView = .streamMap
@@ -75,9 +119,6 @@ struct ArkavoView: View {
                                     selectedView = .video
                                 }
                             #endif
-                            Button("Content Protection") {
-                                selectedView = .protector
-                            }
                         }
                         Section("Account") {
                             if let account = accounts.first {
@@ -116,6 +157,23 @@ struct ArkavoView: View {
             }
         }
     }
+
+    #if os(macOS)
+        private func processContent(_ contentString: String) {
+            Task {
+                do {
+                    let preprocessor = try ContentPreprocessor()
+                    let signature = try preprocessor.generateSignature(for: contentString)
+                    if let account = accounts.first, let profile = account.profile {
+                        try service.protectorService?.sendContentSignatureEvent(signature, creatorPublicID: profile.publicID)
+                    }
+                } catch {
+                    errorMessage = "Error processing content: \(error.localizedDescription)"
+                    showingError = true
+                }
+            }
+        }
+    #endif
 
     private func initialSetup() {
         persistenceController = PersistenceController.shared

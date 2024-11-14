@@ -99,6 +99,12 @@
     "Audio message" : {
 
     },
+    "Authenticating..." : {
+
+    },
+    "Authentication Status" : {
+
+    },
     "Back" : {
 
     },
@@ -233,9 +239,6 @@
     "Identity" : {
 
     },
-    "Instagram • 2 issues found" : {
-
-    },
     "Interaction" : {
       "localizations" : {
         "es-US" : {
@@ -365,6 +368,7 @@
       }
     },
     "nanoTDF info" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -375,9 +379,6 @@
       }
     },
     "Next" : {
-
-    },
-    "Next: TikTok" : {
 
     },
     "No Active Streams" : {
@@ -428,6 +429,9 @@
 
     },
     "Privacy Policy" : {
+
+    },
+    "Process File..." : {
 
     },
     "Profile" : {
@@ -489,6 +493,9 @@
     "Recent Activity" : {
 
     },
+    "Reddit • 2 issues found" : {
+
+    },
     "Refine Interests" : {
 
     },
@@ -522,10 +529,10 @@
     "Save and Start Protecting" : {
 
     },
-    "Scan Completed" : {
+    "Scan" : {
 
     },
-    "Scanning %@..." : {
+    "Scan Completed" : {
 
     },
     "Service misconfigured" : {

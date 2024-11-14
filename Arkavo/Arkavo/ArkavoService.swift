@@ -12,8 +12,10 @@ class ArkavoService {
     private var hasInitialConnection = false
     let nanoTDFManager = NanoTDFManager()
     let authenticationManager = AuthenticationManager()
+    let redditAuthManager = RedditAuthManager()
     var thoughtService: ThoughtService?
     var streamService: StreamService?
+    var protectorService: ProtectorService?
     private let locationManager = LocationManager()
     #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
         var videoStreamViewModel: VideoStreamViewModel?
@@ -27,6 +29,7 @@ class ArkavoService {
     func setupCallbacks() {
         thoughtService = ThoughtService(self)
         streamService = StreamService(self)
+        protectorService = ProtectorService(self)
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if ArkavoService.kasPublicKey != nil {
                 return
@@ -280,8 +283,7 @@ class ArkavoService {
                             // Handle different policy types
                             switch policy.type {
                             case .accountProfile:
-                                // TODO: Handle account profile
-                                break
+                                await self.handleAccountProfile(payload: payload, policy: policy, nano: nano)
                             case .streamProfile:
                                 await self.handleStreamProfile(payload: payload, policy: policy, nano: nano)
                             case .thought:
@@ -306,6 +308,19 @@ class ArkavoService {
             return
         }
         nanoTDFManager.completeProcessing(forIdentifier: id, withKey: symmetricKey)
+    }
+
+    private func handleAccountProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
+        // FIXME: content signature is hacked in to here
+        guard let protectorService else {
+            print("Protector service is not initialized")
+            return
+        }
+        do {
+            try await protectorService.handle(payload, policy: policy, nano: nano)
+        } catch {
+            print("Error handling account profile: \(error)")
+        }
     }
 
     private func handleStreamProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
