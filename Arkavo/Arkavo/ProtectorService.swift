@@ -4,6 +4,8 @@ import OpenTDFKit
 
 class ProtectorService {
     let service: ArkavoService
+    private var signatureReceivedContinuation: CheckedContinuation<ContentSignature, Error>?
+    private var receivedSignature: ContentSignature?
 
     init(_ service: ArkavoService) {
         self.service = service
@@ -85,12 +87,37 @@ class ProtectorService {
         try service.sendEvent(data)
     }
 
+    func waitForSignature() async throws -> ContentSignature {
+        // If we already have a signature, return it immediately
+        if let signature = receivedSignature {
+            return signature
+        }
+
+        // Otherwise wait for the signature to be received
+        return try await withCheckedThrowingContinuation { continuation in
+            signatureReceivedContinuation = continuation
+        }
+    }
+
     @MainActor
     func handle(_ data: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
-//        print("Handling content signature data: \(data.base64EncodedString())")
         print("Receiving Content signature data: \(data)")
         let decompressed = try ContentSignature.decompress(data)
-        print("Decompressed: \(decompressed)")
+//        print("Decompressed: \(decompressed)")
+
+        // Store the signature
+        receivedSignature = decompressed
+
+        // Complete the continuation if someone is waiting
+        if let continuation = signatureReceivedContinuation {
+            continuation.resume(returning: decompressed)
+            signatureReceivedContinuation = nil
+        }
+    }
+
+    func clearSignature() {
+        receivedSignature = nil
+        signatureReceivedContinuation = nil
     }
 }
 

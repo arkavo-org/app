@@ -157,9 +157,15 @@ struct RedditToken: Codable {
 class RedditScanner {
     private let authManager: RedditAuthManager
     private let apiBaseURL = "https://oauth.reddit.com"
+    private let contentMatcher = ContentMatcher()
+    private var knownSignatures: [ContentSignature] = []
 
     init(authManager: RedditAuthManager) {
         self.authManager = authManager
+    }
+
+    func addSignature(_ signature: ContentSignature) {
+        knownSignatures.append(signature)
     }
 
     func scanContent() async throws {
@@ -172,10 +178,101 @@ class RedditScanner {
         request.setValue("Arkavo/1.0", forHTTPHeaderField: "User-Agent")
 
         let (data, _) = try await URLSession.shared.data(for: request)
-        print("data \(data)")
-        // Process the response data
-        // Implement content scanning logic here
+
+        // Decode Reddit response
+        let decoder = JSONDecoder()
+        let listing: RedditListing = try decoder.decode(RedditListing.self, from: data)
+
+        // Process each post
+        let preprocessor = try ContentPreprocessor()
+
+        for post in listing.data.children.map(\.data) {
+            // Combine title and content for processing
+            let content = [post.title, post.selftext].compactMap { $0 }.joined(separator: " ")
+
+            // Generate signature for the content
+            let signature = try preprocessor.generateSignature(for: content)
+
+            // Find potential matches against known signatures
+            let matches = contentMatcher.findMatches(signature: signature, against: knownSignatures)
+
+            // Process matches based on similarity threshold
+            for match in matches {
+                switch match.matchType {
+                case .exact:
+                    handleExactMatch(post: post, match: match)
+                case .similar:
+                    handleSimilarMatch(post: post, match: match)
+                case .partial:
+                    handlePartialMatch(post: post, match: match)
+                case .weak:
+                    // Log weak matches but don't take action
+                    print("Weak match found: \(match.similarity) for post: \(post.id)")
+                }
+            }
+        }
     }
+
+    private func handleExactMatch(post: RedditPost, match: Match) {
+        print("Exact match found!")
+        print("Post ID: \(post.id)")
+        print("Similarity: \(match.similarity)")
+        print("Match details: \(match.matchDetails)")
+
+        // Notify observers about the exact match
+        NotificationCenter.default.post(
+            name: .redditContentMatch,
+            object: nil,
+            userInfo: [
+                "matchType": "exact",
+                "postId": post.id,
+                "similarity": match.similarity,
+                "permalink": post.permalink,
+                "matchDetails": match.matchDetails,
+            ]
+        )
+    }
+
+    private func handleSimilarMatch(post: RedditPost, match: Match) {
+        print("Similar match detected!")
+        print("Post ID: \(post.id)")
+        print("Similarity: \(match.similarity)")
+
+        NotificationCenter.default.post(
+            name: .redditContentMatch,
+            object: nil,
+            userInfo: [
+                "matchType": "similar",
+                "postId": post.id,
+                "similarity": match.similarity,
+                "permalink": post.permalink,
+                "matchDetails": match.matchDetails,
+            ]
+        )
+    }
+
+    private func handlePartialMatch(post: RedditPost, match: Match) {
+        print("Partial match identified")
+        print("Post ID: \(post.id)")
+        print("Similarity: \(match.similarity)")
+
+        NotificationCenter.default.post(
+            name: .redditContentMatch,
+            object: nil,
+            userInfo: [
+                "matchType": "partial",
+                "postId": post.id,
+                "similarity": match.similarity,
+                "permalink": post.permalink,
+                "matchDetails": match.matchDetails,
+            ]
+        )
+    }
+}
+
+// Notification extension for content matches
+extension Notification.Name {
+    static let redditContentMatch = Notification.Name("RedditContentMatch")
 }
 
 actor RedditRateLimiter {
@@ -244,7 +341,7 @@ actor RedditRateLimiter {
 
 class RedditAPIClient {
     private let rateLimiter = RedditRateLimiter()
-    private let authManager: RedditAuthManager
+    let authManager: RedditAuthManager
     private let retryLimit = 3
 
     init(authManager: RedditAuthManager) {
@@ -407,8 +504,12 @@ class RedditScannerService {
     private let contentQueue = DispatchQueue(label: "com.arkavo.redditscanner", qos: .utility)
     private var lastScannedPostIDs: Set<String> = []
 
+    // Expose the scanner instance
+    let scanner: RedditScanner
+
     init(apiClient: RedditAPIClient) {
         self.apiClient = apiClient
+        scanner = RedditScanner(authManager: apiClient.authManager)
     }
 
     func startScanning(subreddits: [String]) {
@@ -421,8 +522,8 @@ class RedditScannerService {
                     do {
                         updateProgress(progress: currentProgress, status: "Scanning r/\(subreddit)")
 
-                        let posts = try await apiClient.scanSubreddit(subreddit)
-                        processContent(posts)
+                        // Use the scanner instance
+                        try await scanner.scanContent()
 
                         currentProgress += progressIncrement
                         updateProgress(progress: min(currentProgress, 1.0),

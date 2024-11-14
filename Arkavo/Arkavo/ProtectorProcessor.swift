@@ -207,13 +207,17 @@ class ContentPreprocessor {
 
     private func generateNgrams(from content: String) -> Set<String> {
         let words = content.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty } // Filter out empty strings
         var ngrams = Set<String>()
 
-        // Generate 1-3 grams
+        // Generate 1-3 grams, but only if we have enough words
         for n in 1 ... 3 {
-            for i in 0 ... (words.count - n) {
-                let ngram = words[i ..< (i + n)].joined(separator: " ")
-                ngrams.insert(ngram)
+            // Only process if we have enough words for this n-gram size
+            if words.count >= n {
+                for i in 0 ... (words.count - n) {
+                    let ngram = words[i ..< (i + n)].joined(separator: " ")
+                    ngrams.insert(ngram)
+                }
             }
         }
 

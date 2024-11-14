@@ -187,13 +187,6 @@ struct SettingsView: View {
                         )
                     }
                 }
-                Button("Load") {
-                    Task {
-                        //        Creator public ID: BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i
-                        let publicID = "BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i".base58Decoded!
-                        try await service.protectorService!.requestContentSignature(withPublicID: publicID)
-                    }
-                }
                 Button(action: {
                     withAnimation {
                         currentScreen = .privacy
@@ -336,12 +329,15 @@ struct ScanningView: View {
     @State private var isPaused = false
     @State private var scanStatus: [String: String] = [:]
     @State private var errorMessages: [String: String] = [:]
+    @State private var isInitializing: Bool = true
 
     private let scannerService: RedditScannerService
     private let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    private let service: ArkavoService
 
     init(currentScreen: Binding<ProtectorView.Screen>, service: ArkavoService) {
         _currentScreen = currentScreen
+        self.service = service
         let apiClient = RedditAPIClient(authManager: service.redditAuthManager)
         scannerService = RedditScannerService(apiClient: apiClient)
     }
@@ -372,24 +368,29 @@ struct ScanningView: View {
                     .opacity(0.1)
                     .foregroundColor(.arkavoBrand)
 
-                ForEach(Array(progress.keys.enumerated()), id: \.element) { index, network in
-                    Circle()
-                        .trim(from: CGFloat(index) / CGFloat(progress.count),
-                              to: CGFloat(index) / CGFloat(progress.count) + progress[network]! / CGFloat(progress.count))
-                        .stroke(style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                        .foregroundColor(networkColor(network))
-                        .rotationEffect(Angle(degrees: -90))
-                        .animation(.linear(duration: 0.1), value: progress[network])
-                }
+                if isInitializing {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                } else {
+                    ForEach(Array(progress.keys.enumerated()), id: \.element) { index, network in
+                        Circle()
+                            .trim(from: CGFloat(index) / CGFloat(progress.count),
+                                  to: CGFloat(index) / CGFloat(progress.count) + progress[network]! / CGFloat(progress.count))
+                            .stroke(style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                            .foregroundColor(networkColor(network))
+                            .rotationEffect(Angle(degrees: -90))
+                            .animation(.linear(duration: 0.1), value: progress[network])
+                    }
 
-                VStack {
-                    Image(systemName: "shield.checkerboard")
-                        .font(.system(size: 40))
-                        .foregroundColor(.arkavoBrand)
-                    Text("\(Int(averageProgress * 100))%")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.arkavoText)
+                    VStack {
+                        Image(systemName: "shield.checkerboard")
+                            .font(.system(size: 40))
+                            .foregroundColor(.arkavoBrand)
+                        Text("\(Int(averageProgress * 100))%")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.arkavoText)
+                    }
                 }
             }
             .frame(width: 200, height: 200)
@@ -441,6 +442,8 @@ struct ScanningView: View {
         }
         .onDisappear {
             stopScanning()
+            // Clean up
+            service.protectorService?.clearSignature()
         }
         .onReceive(timer) { _ in
             if !isPaused {
@@ -472,36 +475,71 @@ struct ScanningView: View {
     }
 
     private func startScanning() {
-        currentNetwork = progress.keys.sorted().first
-        // Start Reddit scanning
-        if progress.keys.contains("reddit") {
-            scannerService.startScanning(subreddits: [
-                "videos",
-                "pics",
-                "gifs",
-                // TODO: get relevant subreddits
-            ])
-            scanStatus["reddit"] = "Scanning..."
+        Task {
+            do {
+                // First request and wait for the content signature
+                scanStatus["reddit"] = "Initializing protection..."
+                let publicID = "BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i".base58Decoded!
+                try await service.protectorService?.requestContentSignature(withPublicID: publicID)
 
-            // Observe Reddit scanning progress
-            NotificationCenter.default.addObserver(
-                forName: .redditScanningProgress,
-                object: nil,
-                queue: .main
-            ) { notification in
-                if let progress = notification.userInfo?["progress"] as? Double {
-                    self.progress["reddit"] = CGFloat(progress)
+                // Wait for the signature to be received
+                if let signature = try await service.protectorService?.waitForSignature() {
+                    // Initialize the scanner with the signature
+                    scannerService.scanner.addSignature(signature)
+
+                    // Now start the actual scanning
+                    scanStatus["reddit"] = "Starting scan..."
+                    isInitializing = false
+
+                    // Start Reddit scanning with relevant subreddits
+                    scannerService.startScanning(subreddits: [
+                        "videos",
+                        "pics",
+                        "gifs",
+                    ])
+
+                    // Set up progress monitoring
+                    setupProgressMonitoring()
                 }
-                if let status = notification.userInfo?["status"] as? String {
-                    scanStatus["reddit"] = status
-                }
-                if let error = notification.userInfo?["error"] as? String {
-                    errorMessages["reddit"] = error
-                }
+            } catch {
+                errorMessages["reddit"] = "Failed to initialize: \(error.localizedDescription)"
+                isInitializing = false
+            }
+        }
+    }
+
+    private func setupProgressMonitoring() {
+        // Observe Reddit scanning progress
+        NotificationCenter.default.addObserver(
+            forName: .redditScanningProgress,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let progress = notification.userInfo?["progress"] as? Double {
+                self.progress["reddit"] = CGFloat(progress)
+            }
+            if let status = notification.userInfo?["status"] as? String {
+                scanStatus["reddit"] = status
+            }
+            if let error = notification.userInfo?["error"] as? String {
+                errorMessages["reddit"] = error
             }
         }
 
-        // Start other network scanning...
+        // Observe content matches
+        NotificationCenter.default.addObserver(
+            forName: .redditContentMatch,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let matchType = notification.userInfo?["matchType"] as? String,
+               let postId = notification.userInfo?["postId"] as? String
+            {
+                let message = "Found \(matchType) match in post: \(postId)"
+                print(message)
+                // Could update UI here to show matches
+            }
+        }
     }
 
     private func pauseScanning() {
