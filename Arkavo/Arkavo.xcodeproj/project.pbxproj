@@ -169,7 +169,6 @@
 				DAC1F9E52C34DA7000499631 /* Arkavo */,
 				DAC1F9F92C34DA7100499631 /* ArkavoTests */,
 				DAC1FA032C34DA7100499631 /* ArkavoUITests */,
-				DAEE13882CA1021500DCB5EC /* Frameworks */,
 				DAC1F9E42C34DA7000499631 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -260,13 +259,6 @@
 				DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */,
 			);
 			path = ArkavoUITests;
-			sourceTree = "<group>";
-		};
-		DAEE13882CA1021500DCB5EC /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

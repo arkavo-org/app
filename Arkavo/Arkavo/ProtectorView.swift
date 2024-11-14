@@ -137,7 +137,7 @@ struct SettingsView: View {
     @State private var nightOnly = false
     @State private var whileCharging = false
     @State private var wifiOnly = false
-    @State private var selectedNetworks: Set<String> = ["reddit"]
+    @State private var selectedNetworks: Set<String> = []
     @State private var isAuthenticating = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
@@ -187,7 +187,13 @@ struct SettingsView: View {
                         )
                     }
                 }
-
+                Button("Load") {
+                    Task {
+                        //        Creator public ID: BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i
+                        let publicID = "BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i".base58Decoded!
+                        try await service.protectorService!.requestContentSignature(withPublicID: publicID)
+                    }
+                }
                 Button(action: {
                     withAnimation {
                         currentScreen = .privacy

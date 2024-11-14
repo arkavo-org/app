@@ -283,8 +283,7 @@ class ArkavoService {
                             // Handle different policy types
                             switch policy.type {
                             case .accountProfile:
-                                // TODO: Handle account profile
-                                break
+                                await self.handleAccountProfile(payload: payload, policy: policy, nano: nano)
                             case .streamProfile:
                                 await self.handleStreamProfile(payload: payload, policy: policy, nano: nano)
                             case .thought:
@@ -309,6 +308,19 @@ class ArkavoService {
             return
         }
         nanoTDFManager.completeProcessing(forIdentifier: id, withKey: symmetricKey)
+    }
+
+    private func handleAccountProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {
+        // FIXME: content signature is hacked in to here
+        guard let protectorService else {
+            print("Protector service is not initialized")
+            return
+        }
+        do {
+            try await protectorService.handle(payload, policy: policy, nano: nano)
+        } catch {
+            print("Error handling account profile: \(error)")
+        }
     }
 
     private func handleStreamProfile(payload: Data, policy: ArkavoPolicy, nano: NanoTDF) async {

@@ -164,13 +164,9 @@ struct ArkavoView: View {
                 do {
                     let preprocessor = try ContentPreprocessor()
                     let signature = try preprocessor.generateSignature(for: contentString)
-                    let compressed = try signature.compressed()
-                    print("Content signature compressed: \(compressed)")
                     if let account = accounts.first, let profile = account.profile {
-                        print("Creator public ID: \(profile.publicID.base58EncodedString)")
-                        try service.protectorService?.sendContentSignatureEvent(compressed, creatorPublicID: profile.publicID)
+                        try service.protectorService?.sendContentSignatureEvent(signature, creatorPublicID: profile.publicID)
                     }
-//                    let decompressed = try ContentSignature.decompress(compressed)
                 } catch {
                     errorMessage = "Error processing content: \(error.localizedDescription)"
                     showingError = true
