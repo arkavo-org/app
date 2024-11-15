@@ -18,6 +18,7 @@ class ProtectorService {
         let compressed = try signature.compressed()
         print("Sending Content signature compressed: \(compressed)")
         print("Creator public ID: \(creatorPublicID.base58EncodedString)")
+        print("Content Signature \(signature)")
         // Create Nano
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
