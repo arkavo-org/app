@@ -9,7 +9,9 @@ struct StreamMapView: View {
     @State private var mapUpdateTrigger = UUID()
     @State private var annotations: [AnnotationItem] = []
     @Environment(\.locale) var locale
-
+    private let capitolCoordinate = CLLocationCoordinate2D(latitude: 38.8899, longitude: -77.0091)
+    private let geofenceRadius: CLLocationDistance = 7500
+   
     var body: some View {
         ZStack {
             Map(position: $cameraPosition, interactionModes: .all) {
@@ -22,10 +24,14 @@ struct StreamMapView: View {
                         Marker(item.name, coordinate: item.coordinate)
                     }
                 }
+                MapCircle(center: capitolCoordinate, radius: geofenceRadius)
+                    .foregroundStyle(.red.opacity(0.2))
+                    .stroke(.red, lineWidth: 2)
             }
             .mapStyle(.imagery(elevation: .realistic))
             .task {
                 await showGlobeCenteredOnUserCountry()
+                setupAnnotations()
             }
             if locationManager.statusString == "authorizedWhenInUse" || locationManager.statusString == "authorizedAlways" {
                 VStack {
@@ -54,6 +60,17 @@ struct StreamMapView: View {
         }
     }
 
+    private func setupAnnotations() {
+        if let userLocation = locationManager.lastLocation?.coordinate {
+            annotations.append(AnnotationItem(
+                coordinate: userLocation,
+                name: "Me",
+                count: 1,
+                isCluster: false
+            ))
+        }
+    }
+    
     private func centerOnUserLocation() {
         if let userLocation = locationManager.lastLocation?.coordinate {
             withAnimation {
