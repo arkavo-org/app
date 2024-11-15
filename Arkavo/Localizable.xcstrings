@@ -603,6 +603,9 @@
         }
       }
     },
+    "Situation Report" : {
+
+    },
     "Start" : {
       "localizations" : {
         "es-US" : {
@@ -681,6 +684,9 @@
           }
         }
       }
+    },
+    "Submit" : {
+
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 

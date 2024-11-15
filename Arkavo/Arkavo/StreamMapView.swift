@@ -9,6 +9,8 @@ struct StreamMapView: View {
     @State private var mapUpdateTrigger = UUID()
     @State private var annotations: [AnnotationItem] = []
     @State private var isScanning = false
+    @State private var showReportForm = false
+    @State private var geofenceState: GeofenceState = .normal
     @Environment(\.locale) var locale
     private let capitolCoordinate = CLLocationCoordinate2D(latitude: 38.8899, longitude: -77.0091)
     private let geofenceRadius: CLLocationDistance = 7500
@@ -26,8 +28,8 @@ struct StreamMapView: View {
                     }
                 }
                 MapCircle(center: capitolCoordinate, radius: geofenceRadius)
-                    .foregroundStyle(.red.opacity(0.2))
-                    .stroke(.yellow, lineWidth: 2)
+                    .foregroundStyle(geofenceState.color.opacity(0.2))
+                    .stroke(geofenceState.color, lineWidth: 2)
             }
             .mapStyle(.imagery(elevation: .realistic))
             .task {
@@ -36,7 +38,7 @@ struct StreamMapView: View {
             }
             // Scanning overlay
             if isScanning {
-                CompactScanningOverlay(isScanning: $isScanning)
+                CompactScanningOverlay(isScanning: $isScanning, geofenceState: $geofenceState)
                     .padding(.top, getDynamicIslandPadding())
             }
             if locationManager.statusString == "authorizedWhenInUse" || locationManager.statusString == "authorizedAlways" {
@@ -44,6 +46,16 @@ struct StreamMapView: View {
                     Spacer()
                     HStack {
                         Spacer()
+                        Button(action: {
+                            showReportForm.toggle()
+                        }) {
+                            Image(systemName: "doc.text")
+                                .font(.title2)
+                                .padding()
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
+                        .padding()
                         Button(action: {
                             isScanning.toggle()
                         }) {
@@ -74,6 +86,9 @@ struct StreamMapView: View {
                 }
             }
         }
+        .sheet(isPresented: $showReportForm) {
+            ReportFormView(isPresented: $showReportForm, geofenceState: $geofenceState)
+        }
     }
 
     private func getDynamicIslandPadding() -> CGFloat {
@@ -84,7 +99,7 @@ struct StreamMapView: View {
         if let userLocation = locationManager.lastLocation?.coordinate {
             annotations.append(AnnotationItem(
                 coordinate: userLocation,
-                name: "Me",
+                name: "Asset",
                 count: 1,
                 isCluster: false
             ))
@@ -161,6 +176,23 @@ struct StreamMapView: View {
                     )
                 }
             }
+    }
+}
+
+enum GeofenceState {
+    case normal
+    case warning
+    case alert
+    
+    var color: Color {
+        switch self {
+        case .normal:
+            return .green
+        case .warning:
+            return .yellow
+        case .alert:
+            return .red
+        }
     }
 }
 
@@ -242,6 +274,7 @@ struct AnnotationItem: Identifiable {
 
 struct CompactScanningOverlay: View {
     @Binding var isScanning: Bool
+    @Binding var geofenceState: GeofenceState
     @State private var progress: [String: CGFloat] = ["reddit": 0.0]
     @State private var isPaused = false
 
@@ -307,14 +340,14 @@ struct CompactScanningOverlay: View {
             withAnimation(.linear(duration: 0.1)) {
                 for network in progress.keys {
                     if progress[network]! < 1.0 {
-                        progress[network]! += 0.001
+                        progress[network]! += 0.05
                     }
                 }
-
                 // Stop timer when all networks reach 100%
                 if progress.values.allSatisfy({ $0 >= 1.0 }) {
                     timer.invalidate()
                     isScanning = false
+                    geofenceState = .alert // Set geofence to red after scan completes
                 }
             }
         }
@@ -325,5 +358,48 @@ struct CompactScanningOverlay: View {
 struct StreamMapView_Previews: PreviewProvider {
     static var previews: some View {
         StreamMapView()
+    }
+}
+
+
+struct ReportFormView: View {
+    @Binding var isPresented: Bool
+    @Binding var geofenceState: GeofenceState
+    @State private var reportText: String = """
+SITUATION REPORT - POTOMAC RIVER
+DTG: 151300NOV24
+Heavy rains over the past 48 hours have raised the Potomac River water levels 2.5 feet above normal, causing moderate flooding at Fletcher's Boathouse and Thompson's Boat Center with debris accumulation observed near Key Bridge and Roosevelt Bridge. Commercial barge traffic is operating at 60% capacity due to enhanced safety protocols, while recreational boating has been temporarily suspended between Chain Bridge and Woodrow Wilson Bridge. Water treatment facilities are reporting increased turbidity but maintaining normal operations despite the conditions.
+"""
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                TextEditor(text: $reportText)
+                    .font(.body)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.gray))
+                    .cornerRadius(8)
+                    .padding()
+            }
+            .navigationTitle("Situation Report")
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button("Submit") {
+                        isPresented = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            withAnimation {
+                                geofenceState = .warning
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
