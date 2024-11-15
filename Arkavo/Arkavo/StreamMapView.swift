@@ -142,7 +142,7 @@ struct StreamMapView: View {
             withAnimation {
                 cameraPosition = .camera(MapCamera(
                     centerCoordinate: userLocation,
-                    distance: 1000, // Adjust this value to change the zoom level
+                    distance: 50000, // Adjust this value to change the zoom level
                     heading: 0,
                     pitch: 0
                 ))
@@ -236,21 +236,20 @@ struct PromptCard: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(geofenceState.color)
                 .font(.system(size: 24))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(geofenceState.color)
+                    .foregroundColor(.black)
 
                 Text(description)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.black)
             }
         }
         .padding()
-        .background(geofenceState.color.opacity(0.1))
+        .background(geofenceState.color)
         .cornerRadius(12)
         .transition(.move(edge: .top))
     }
