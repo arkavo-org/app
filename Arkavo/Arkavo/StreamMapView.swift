@@ -11,10 +11,22 @@ struct StreamMapView: View {
     @State private var isScanning = false
     @State private var showReportForm = false
     @State private var geofenceState: GeofenceState = .normal
+    @State private var showPrompt = false
     @Environment(\.locale) var locale
     private let capitolCoordinate = CLLocationCoordinate2D(latitude: 38.8899, longitude: -77.0091)
     private let geofenceRadius: CLLocationDistance = 7500
 
+    var promptContent: (icon: String, title: String, description: String) {
+        switch geofenceState {
+        case .normal:
+            return ("checkmark.circle.fill", "Area Secure", "Normal operations in monitored zone")
+        case .warning:
+            return ("exclamationmark.triangle.fill", "Situation Report Filed", "Monitoring elevated in target area")
+        case .alert:
+            return ("exclamationmark.circle.fill", "Alert Status", "Critical activity detected in zone")
+        }
+    }
+    
     var body: some View {
         ZStack(alignment: .top) {
             Map(position: $cameraPosition, interactionModes: .all) {
@@ -39,7 +51,16 @@ struct StreamMapView: View {
             // Scanning overlay
             if isScanning {
                 CompactScanningOverlay(isScanning: $isScanning, geofenceState: $geofenceState)
-                    .padding(.top, getDynamicIslandPadding())
+                    .padding(.bottom, getDynamicIslandPadding())
+            }
+            if showPrompt {
+                PromptCard(
+                    icon: promptContent.icon,
+                    title: promptContent.title,
+                    description: promptContent.description,
+                    geofenceState: geofenceState
+                )
+                .padding(.top, getDynamicIslandPadding())
             }
             if locationManager.statusString == "authorizedWhenInUse" || locationManager.statusString == "authorizedAlways" {
                 VStack {
@@ -88,6 +109,16 @@ struct StreamMapView: View {
         }
         .sheet(isPresented: $showReportForm) {
             ReportFormView(isPresented: $showReportForm, geofenceState: $geofenceState)
+        }
+        .onChange(of: geofenceState) { oldState, newState in
+            withAnimation {
+                showPrompt = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                withAnimation {
+                    showPrompt = false
+                }
+            }
         }
     }
 
@@ -193,6 +224,35 @@ enum GeofenceState {
         case .alert:
             return .red
         }
+    }
+}
+
+struct PromptCard: View {
+    let icon: String
+    let title: String
+    let description: String
+    let geofenceState: GeofenceState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(geofenceState.color)
+                .font(.system(size: 24))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(geofenceState.color)
+
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(geofenceState.color.opacity(0.1))
+        .cornerRadius(12)
+        .transition(.move(edge: .top))
     }
 }
 
