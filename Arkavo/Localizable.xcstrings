@@ -403,6 +403,9 @@
     "Owner:" : {
 
     },
+    "Pause" : {
+
+    },
     "Pause Scanning" : {
 
     },
@@ -513,6 +516,9 @@
     "Resend" : {
 
     },
+    "Resume" : {
+
+    },
     "Resume Scanning" : {
 
     },
@@ -533,6 +539,9 @@
 
     },
     "Scan Completed" : {
+
+    },
+    "Scanning in Progress" : {
 
     },
     "Service misconfigured" : {

@@ -8,12 +8,13 @@ struct StreamMapView: View {
     @State private var isTrackingUser = false
     @State private var mapUpdateTrigger = UUID()
     @State private var annotations: [AnnotationItem] = []
+    @State private var isScanning = false
     @Environment(\.locale) var locale
     private let capitolCoordinate = CLLocationCoordinate2D(latitude: 38.8899, longitude: -77.0091)
     private let geofenceRadius: CLLocationDistance = 7500
-   
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             Map(position: $cameraPosition, interactionModes: .all) {
                 ForEach(annotations) { item in
                     if item.isCluster {
@@ -26,18 +27,33 @@ struct StreamMapView: View {
                 }
                 MapCircle(center: capitolCoordinate, radius: geofenceRadius)
                     .foregroundStyle(.red.opacity(0.2))
-                    .stroke(.red, lineWidth: 2)
+                    .stroke(.yellow, lineWidth: 2)
             }
             .mapStyle(.imagery(elevation: .realistic))
             .task {
                 await showGlobeCenteredOnUserCountry()
                 setupAnnotations()
             }
+            // Scanning overlay
+            if isScanning {
+                CompactScanningOverlay(isScanning: $isScanning)
+                    .padding(.top, getDynamicIslandPadding())
+            }
             if locationManager.statusString == "authorizedWhenInUse" || locationManager.statusString == "authorizedAlways" {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
+                        Button(action: {
+                            isScanning.toggle()
+                        }) {
+                            Image(systemName: isScanning ? "shield.fill" : "shield")
+                                .font(.title2)
+                                .padding()
+                                .clipShape(Circle())
+                                .shadow(radius: 2)
+                        }
+                        .padding()
                         Button(action: {
                             isTrackingUser.toggle()
                             if isTrackingUser {
@@ -60,6 +76,10 @@ struct StreamMapView: View {
         }
     }
 
+    private func getDynamicIslandPadding() -> CGFloat {
+        60 // Additional padding for Dynamic Island
+    }
+
     private func setupAnnotations() {
         if let userLocation = locationManager.lastLocation?.coordinate {
             annotations.append(AnnotationItem(
@@ -70,7 +90,7 @@ struct StreamMapView: View {
             ))
         }
     }
-    
+
     private func centerOnUserLocation() {
         if let userLocation = locationManager.lastLocation?.coordinate {
             withAnimation {
@@ -218,4 +238,92 @@ struct AnnotationItem: Identifiable {
     let name: String
     let count: Int
     let isCluster: Bool
+}
+
+struct CompactScanningOverlay: View {
+    @Binding var isScanning: Bool
+    @State private var progress: [String: CGFloat] = ["reddit": 0.0]
+    @State private var isPaused = false
+
+    var body: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .foregroundColor(.arkavoBrand)
+                    Text("Scanning in Progress")
+                        .font(.headline)
+                        .foregroundColor(.arkavoText)
+                    Spacer()
+                    Button(action: {
+                        isPaused.toggle()
+                    }) {
+                        Text(isPaused ? "Resume" : "Pause")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.arkavoBrand)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.arkavoBrandLight)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                ForEach(Array(progress.keys), id: \.self) { network in
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text(network.capitalized)
+                                .font(.subheadline)
+                                .foregroundColor(.arkavoSecondary)
+                            Spacer()
+                            Text("\(Int(progress[network]! * 100))%")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.arkavoText)
+                        }
+
+                        ProgressView(value: progress[network])
+                            .tint(.orange)
+                    }
+                }
+            }
+            .padding()
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(radius: 10)
+            .padding()
+        }
+        .onAppear {
+            startProgressSimulation()
+        }
+    }
+
+    private func startProgressSimulation() {
+        // Simulated progress updates
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            guard !isPaused else { return }
+
+            withAnimation(.linear(duration: 0.1)) {
+                for network in progress.keys {
+                    if progress[network]! < 1.0 {
+                        progress[network]! += 0.001
+                    }
+                }
+
+                // Stop timer when all networks reach 100%
+                if progress.values.allSatisfy({ $0 >= 1.0 }) {
+                    timer.invalidate()
+                    isScanning = false
+                }
+            }
+        }
+    }
+}
+
+// Preview provider
+struct StreamMapView_Previews: PreviewProvider {
+    static var previews: some View {
+        StreamMapView()
+    }
 }
