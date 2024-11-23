@@ -227,6 +227,9 @@
         }
       }
     },
+    "Error Code: %@" : {
+
+    },
     "Error loading patrons" : {
 
     },
@@ -243,6 +246,9 @@
 
     },
     "Face ID Terms & Conditions" : {
+
+    },
+    "Failed to load campaigns" : {
 
     },
     "Failed to load creator profile" : {

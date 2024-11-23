@@ -98,7 +98,7 @@ public extension PatreonClient {
         )
     }
 
-    func getCampaignDetails() async throws -> Campaign {
+    func getCampaignDetails() async throws -> CampaignResponse {
         try await request(
             endpoint: .campaign(id: config.campaignId),
             accessToken: config.creatorAccessToken,
@@ -199,7 +199,7 @@ extension PatreonClient {
             components.queryItems = queryItems.map { URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)) }
             request.url = components.url
         }
-
+        print("request: \(request.url!.absoluteString)")
         let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -207,6 +207,12 @@ extension PatreonClient {
         }
         print("status code: \(httpResponse.statusCode)")
         guard 200 ... 299 ~= httpResponse.statusCode else {
+            if httpResponse.statusCode == 400 {
+                let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                if let firstError = errorResponse?.errors.first {
+                    throw PatreonError.apiError(firstError)
+                }
+            }
             throw PatreonError.httpError(statusCode: httpResponse.statusCode)
         }
         print("data: \(String(decoding: data, as: Unicode.UTF8.self))")
@@ -216,14 +222,6 @@ extension PatreonClient {
             throw PatreonError.decodingError(error)
         }
     }
-}
-
-// MARK: - Error Handling
-
-public enum PatreonError: Error {
-    case invalidResponse
-    case httpError(statusCode: Int)
-    case decodingError(Error)
 }
 
 // MARK: - Models
@@ -441,11 +439,6 @@ public struct UserIdentity: Codable {
     public let links: ResourceObject.Relationship.Links?
 }
 
-public struct Campaign: Codable {
-    public let data: CampaignData
-    public let included: [ResourceObject]
-}
-
 public struct Member: Codable {
     public let attributes: MemberAttributes
     public let id: String
@@ -484,4 +477,142 @@ private enum TierFields: String, CaseIterable {
 
 private enum MemberFields: String, CaseIterable {
     case email, fullName = "full_name", patronStatus = "patron_status"
+}
+
+extension PatreonClient {
+    public struct CampaignResponse: Codable {
+        let data: [CampaignData]
+        let included: [IncludedData]
+        let meta: MetaData
+
+        struct CampaignData: Codable {
+            let id: String
+            let type: String
+            let attributes: CampaignAttributes
+            let relationships: CampaignRelationships
+        }
+
+        struct CampaignAttributes: Codable {
+            let created_at: String
+            let creation_name: String?
+            let is_monthly: Bool
+            let is_nsfw: Bool
+            let patron_count: Int
+            let published_at: String?
+            let summary: String?
+        }
+
+        struct CampaignRelationships: Codable {
+            let creator: RelationshipData
+            let goals: Goals
+            let tiers: Tiers
+
+            struct RelationshipData: Codable {
+                let data: CreatorData
+                let links: Links
+
+                struct CreatorData: Codable {
+                    let id: String
+                    let type: String
+                }
+
+                struct Links: Codable {
+                    let related: String
+                }
+            }
+
+            struct Goals: Codable {
+                let data: String?
+            }
+
+            struct Tiers: Codable {
+                let data: [TierData]
+
+                struct TierData: Codable {
+                    let id: String
+                    let type: String
+                }
+            }
+        }
+
+        struct IncludedData: Codable {
+            let attributes: [String: AnyCodable]
+            let id: String
+            let type: String
+        }
+
+        struct MetaData: Codable {
+            let pagination: Pagination
+
+            struct Pagination: Codable {
+                let cursors: Cursors
+                let total: Int
+
+                struct Cursors: Codable {
+                    let next: String?
+                }
+            }
+        }
+    }
+
+    func getCampaigns() async throws -> CampaignResponse {
+        try await request(
+            endpoint: .campaigns,
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "creator,tiers,goals"),
+                URLQueryItem(name: "fields[campaign]", value: "summary,creation_name,patron_count,created_at,published_at,is_monthly,is_nsfw"),
+            ]
+        )
+    }
+}
+
+public enum PatreonError: LocalizedError {
+    case invalidResponse
+    case httpError(statusCode: Int)
+    case decodingError(Error)
+    case apiError(APIError)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            "Invalid response from server"
+        case let .httpError(statusCode):
+            "HTTP error: \(statusCode)"
+        case let .decodingError(error):
+            "Decoding error: \(error.localizedDescription)"
+        case let .apiError(error):
+            error.detail ?? error.title
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case let .apiError(error):
+            if error.code == 1 {
+                return "Please check the API parameters and try again"
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+}
+
+struct APIErrorResponse: Decodable {
+    let errors: [APIError]
+}
+
+public struct APIError: Decodable {
+    let code: Int
+    let code_name: String
+    let detail: String?
+    let id: String
+    let status: String
+    let title: String
+    let challenge_metadata: ChallengeMetadata?
+
+    struct ChallengeMetadata: Decodable {
+        // Add fields as needed based on what the API returns
+    }
 }

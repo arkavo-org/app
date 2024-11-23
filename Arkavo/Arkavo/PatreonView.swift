@@ -46,6 +46,10 @@ struct PatronManagementView: View {
                         LazyVStack(spacing: 16) {
                             UserIdentityView(patreonClient: patreonClient)
                                 .padding(.horizontal)
+
+                            CampaignView(patreonClient: patreonClient)
+                                .padding(.horizontal)
+
                             PatronStatsView()
 
                             ForEach(filteredPatrons) { patron in
@@ -711,4 +715,155 @@ extension Patron {
         tierAmount: 25.0,
         joinDate: Date().addingTimeInterval(-30 * 86400)
     )
+}
+
+struct Campaign: Identifiable {
+    let id: String
+    let createdAt: Date
+    let creationName: String
+    let isMonthly: Bool
+    let isNSFW: Bool
+    let patronCount: Int
+    let publishedAt: Date?
+    let summary: String?
+}
+
+struct CampaignView: View {
+    let patreonClient: PatreonClient
+    @State private var campaigns: [Campaign] = []
+    @State private var isLoading = false
+    @State private var error: PatreonError?
+
+    var body: some View {
+        VStack(spacing: 16) {
+            if isLoading {
+                ProgressView()
+            } else if let error {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundColor(.orange)
+
+                    Text("Failed to load campaigns")
+                        .font(.headline)
+
+                    Text(error.localizedDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    if let recoverySuggestion = error.recoverySuggestion {
+                        Text(recoverySuggestion)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
+
+                    if case let .apiError(apiError) = error {
+                        Text("Error Code: \(apiError.code_name)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+                    }
+
+                    Button("Retry") {
+                        Task {
+                            await loadCampaigns()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.top, 8)
+                }
+                .multilineTextAlignment(.center)
+                .padding()
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+            } else {
+                ForEach(campaigns) { campaign in
+                    CampaignCard(campaign: campaign)
+                }
+            }
+        }
+        .task {
+            await loadCampaigns()
+        }
+    }
+
+    private func loadCampaigns() async {
+        isLoading = true
+        error = nil
+
+        do {
+            let response = try await patreonClient.getCampaigns()
+            campaigns = response.data.map { campaignData in
+                let dateFormatter = ISO8601DateFormatter()
+                return Campaign(
+                    id: campaignData.id,
+                    createdAt: dateFormatter.date(from: campaignData.attributes.created_at) ?? Date(),
+                    creationName: campaignData.attributes.creation_name ?? "",
+                    isMonthly: campaignData.attributes.is_monthly,
+                    isNSFW: campaignData.attributes.is_nsfw,
+                    patronCount: campaignData.attributes.patron_count,
+                    publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
+                    summary: campaignData.attributes.summary
+                )
+            }
+        } catch {
+            self.error = error as? PatreonError ?? .decodingError(error)
+        }
+
+        isLoading = false
+    }
+}
+
+struct CampaignCard: View {
+    let campaign: Campaign
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(campaign.id)
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    HStack(spacing: 16) {
+                        StatLabel(
+                            icon: "person.2",
+                            value: "\(campaign.patronCount)",
+                            label: "Patrons"
+                        )
+
+                        StatLabel(
+                            icon: "calendar",
+                            value: campaign.createdAt.formatted(.dateTime.month().year()),
+                            label: "Created"
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+    }
+}
+
+struct StatLabel: View {
+    let icon: String
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .fontWeight(.medium)
+            }
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
 }
