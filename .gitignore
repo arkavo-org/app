@@ -93,10 +93,10 @@ iOSInjectionProject/
 /.cache/
 .idea
 /Arkavo/.fleet/
-.DS_Store
 .idea/app.iml
 .idea/vcs.xml
 Arkavo/OpenTDFKit/
 Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /default.store
 /app.iml
+*Secrets.xcconfig

@@ -9,6 +9,8 @@ struct ArkavoApp: App {
     @State private var tokenCheckTimer: Timer?
     let persistenceController = PersistenceController.shared
     let service = ArkavoService()
+    // FIXME move to above
+    let patreonService = PatreonService()
 
     #if os(macOS)
         @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -26,6 +28,9 @@ struct ArkavoApp: App {
                         }
                     })
                 case .main:
+#if os(macOS)
+                    PatronManagementView(patreonClient: patreonService.client)
+                    #else
                     NavigationStack(path: $navigationPath) {
                         ArkavoView(service: service)
                         #if os(iOS)
@@ -46,6 +51,7 @@ struct ArkavoApp: App {
                                 }
                             }
                     }
+                    #endif
                 }
             }
             .task {

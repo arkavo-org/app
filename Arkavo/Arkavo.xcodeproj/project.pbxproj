@@ -11,6 +11,10 @@
 		CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2652C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
+		DA0F81772CF0D8AB00B10773 /* PatreonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0F81762CF0D8A600B10773 /* PatreonView.swift */; };
+		DA0F81792CF13F6300B10773 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DA0F81782CF13F5900B10773 /* Secrets.xcconfig */; };
+		DA0F817B2CF14D4700B10773 /* PatreonClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0F817A2CF14D4700B10773 /* PatreonClient.swift */; };
+		DA0F817D2CF1552B00B10773 /* PatreonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0F817C2CF1552A00B10773 /* PatreonService.swift */; };
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
@@ -82,6 +86,10 @@
 /* Begin PBXFileReference section */
 		CB68E2622C9A743600FF3167 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		DA0F81762CF0D8A600B10773 /* PatreonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonView.swift; sourceTree = "<group>"; };
+		DA0F81782CF13F5900B10773 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		DA0F817A2CF14D4700B10773 /* PatreonClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonClient.swift; sourceTree = "<group>"; };
+		DA0F817C2CF1552A00B10773 /* PatreonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonService.swift; sourceTree = "<group>"; };
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
@@ -186,6 +194,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA0F817C2CF1552A00B10773 /* PatreonService.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
@@ -222,6 +231,8 @@
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
+				DA0F81762CF0D8A600B10773 /* PatreonView.swift */,
+				DA0F817A2CF14D4700B10773 /* PatreonClient.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
@@ -231,6 +242,7 @@
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
+				DA0F81782CF13F5900B10773 /* Secrets.xcconfig */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
 			);
 			path = Arkavo;
@@ -374,6 +386,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA0F81792CF13F6300B10773 /* Secrets.xcconfig in Resources */,
 				DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */,
 				DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */,
 				CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */,
@@ -413,6 +426,7 @@
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				DA0F81772CF0D8AB00B10773 /* PatreonView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
@@ -429,6 +443,7 @@
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
+				DA0F817B2CF14D4700B10773 /* PatreonClient.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
@@ -446,6 +461,7 @@
 				DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
+				DA0F817D2CF1552B00B10773 /* PatreonService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -27,6 +27,12 @@
     "%lld%%" : {
 
     },
+    "$%.2f/month" : {
+
+    },
+    "$%lf/month" : {
+
+    },
     "2m ago" : {
 
     },
@@ -57,6 +63,9 @@
       }
     },
     "across 16 Social Networks" : {
+
+    },
+    "Activity" : {
 
     },
     "Activity Level: %@" : {
@@ -194,6 +203,9 @@
 
     },
     "Encryption" : {
+
+    },
+    "Engagement" : {
 
     },
     "Enter profile name" : {
@@ -378,6 +390,9 @@
         }
       }
     },
+    "New Message" : {
+
+    },
     "Next" : {
 
     },
@@ -401,6 +416,15 @@
       }
     },
     "Owner:" : {
+
+    },
+    "Patron Details" : {
+
+    },
+    "Patron Overview" : {
+
+    },
+    "Patrons" : {
 
     },
     "Pause Scanning" : {
@@ -535,6 +559,12 @@
     "Scan Completed" : {
 
     },
+    "Search patrons..." : {
+
+    },
+    "Send" : {
+
+    },
     "Service misconfigured" : {
 
     },
@@ -593,6 +623,9 @@
           }
         }
       }
+    },
+    "Since %@" : {
+
     },
     "Start" : {
       "localizations" : {
@@ -690,6 +723,12 @@
       }
     },
     "Time Frame" : {
+
+    },
+    "Time Range" : {
+
+    },
+    "To:" : {
 
     },
     "Topic of Interest" : {
