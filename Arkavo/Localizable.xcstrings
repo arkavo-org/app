@@ -65,6 +65,9 @@
     "across 16 Social Networks" : {
 
     },
+    "Active Memberships: %lld" : {
+
+    },
     "Activity" : {
 
     },
@@ -148,6 +151,9 @@
     "Classification settings go here" : {
 
     },
+    "Connected Accounts" : {
+
+    },
     "Content Protection" : {
 
     },
@@ -221,6 +227,9 @@
         }
       }
     },
+    "Error loading patrons" : {
+
+    },
     "Error loading stream: %@" : {
 
     },
@@ -234,6 +243,9 @@
 
     },
     "Face ID Terms & Conditions" : {
+
+    },
+    "Failed to load creator profile" : {
 
     },
     "Features" : {
@@ -538,6 +550,9 @@
 
     },
     "Resume Scanning" : {
+
+    },
+    "Retry" : {
 
     },
     "Save" : {

@@ -9,7 +9,7 @@ struct ArkavoApp: App {
     @State private var tokenCheckTimer: Timer?
     let persistenceController = PersistenceController.shared
     let service = ArkavoService()
-    // FIXME move to above
+    // FIXME: move to above
     let patreonService = PatreonService()
 
     #if os(macOS)
@@ -28,29 +28,29 @@ struct ArkavoApp: App {
                         }
                     })
                 case .main:
-#if os(macOS)
-                    PatronManagementView(patreonClient: patreonService.client)
+                    #if os(macOS)
+                        PatronManagementView(patreonClient: patreonService.client)
                     #else
-                    NavigationStack(path: $navigationPath) {
-                        ArkavoView(service: service)
-                        #if os(iOS)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .navigationBarHidden(true)
-                        #endif
-                            .modelContainer(persistenceController.container)
-                            .navigationDestination(for: DeepLinkDestination.self) { destination in
-                                switch destination {
-                                case let .stream(publicID):
-                                    if service.streamService == nil {
-                                        Text("No Stream Service for \(publicID)")
-                                    } else {
-                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
+                        NavigationStack(path: $navigationPath) {
+                            ArkavoView(service: service)
+                            #if os(iOS)
+                                .navigationBarTitleDisplayMode(.inline)
+                                .navigationBarHidden(true)
+                            #endif
+                                .modelContainer(persistenceController.container)
+                                .navigationDestination(for: DeepLinkDestination.self) { destination in
+                                    switch destination {
+                                    case let .stream(publicID):
+                                        if service.streamService == nil {
+                                            Text("No Stream Service for \(publicID)")
+                                        } else {
+                                            StreamLoadingView(service: service.streamService!, publicID: publicID)
+                                        }
+                                    case let .profile(publicID):
+                                        Text("Profile View for \(publicID)")
                                     }
-                                case let .profile(publicID):
-                                    Text("Profile View for \(publicID)")
                                 }
-                            }
-                    }
+                        }
                     #endif
                 }
             }

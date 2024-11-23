@@ -9,32 +9,53 @@ struct PatronManagementView: View {
     @State private var patrons: [Patron] = []
     @State private var isLoading = false
     @State private var error: Error?
-    
+
     enum PatronFilter: String, CaseIterable {
         case all = "All"
         case active = "Active"
         case inactive = "Inactive"
         case new = "New"
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 // Search and Filter Bar
                 PatronSearchBar(searchText: $searchText, selectedFilter: $selectedFilter)
-                
-                // Main Content
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        PatronStatsView()
-                        
-                        ForEach(filteredPatrons) { patron in
-                            PatronCard(patron: patron) {
-                                selectedPatron = patron
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error {
+                    VStack {
+                        Text("Error loading patrons")
+                            .font(.headline)
+                        Text(error.localizedDescription)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("Retry") {
+                            Task {
+                                await loadPatrons()
                             }
                         }
+                        .buttonStyle(.bordered)
                     }
-                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Main Content
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            UserIdentityView(patreonClient: patreonClient)
+                                .padding(.horizontal)
+                            PatronStatsView()
+
+                            ForEach(filteredPatrons) { patron in
+                                PatronCard(patron: patron) {
+                                    selectedPatron = patron
+                                }
+                            }
+                        }
+                        .padding()
+                    }
                 }
             }
             .navigationTitle("Patrons")
@@ -56,13 +77,13 @@ struct PatronManagementView: View {
             }
         }
     }
-    
+
     private var filteredPatrons: [Patron] {
         let filtered = patrons.filter { patron in
             if searchText.isEmpty { return true }
             return patron.name.localizedCaseInsensitiveContains(searchText)
         }
-        
+
         switch selectedFilter {
         case .all:
             return filtered
@@ -74,32 +95,32 @@ struct PatronManagementView: View {
             return filtered.filter { $0.status == .new }
         }
     }
-    
+
     private func loadPatrons() async {
         isLoading = true
         error = nil
-        
-        do {
-            let members = try await patreonClient.getCampaignMembers()
-            patrons = members.map { member in
-                Patron(
-                    id: member.id,
-                    name: member.attributes.fullName,
-                    avatarURL: nil, // Would need to be fetched from included relationships
-                    status: patronStatus(from: member.attributes.patronStatus),
-                    tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
-                    joinDate: ISO8601DateFormatter().date(from: member.attributes.lastChargeDate ?? "") ?? Date()
-                )
-            }
-        } catch {
-            self.error = error
-        }
-        
+
+//        do {
+//            let members = try await patreonClient.getCampaignMembers()
+//            patrons = members.map { member in
+//                Patron(
+//                    id: member.id,
+//                    name: member.attributes.fullName,
+//                    avatarURL: nil, // Would need to be fetched from included relationships
+//                    status: patronStatus(from: member.attributes.patronStatus),
+//                    tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
+//                    joinDate: ISO8601DateFormatter().date(from: member.attributes.lastChargeDate ?? "") ?? Date()
+//                )
+//            }
+//        } catch {
+//            self.error = error
+//        }
+
         isLoading = false
     }
-    
+
     private func patronStatus(from status: String?) -> Patron.PatronStatus {
-        guard let status = status else { return .inactive }
+        guard let status else { return .inactive }
         switch status.lowercased() {
         case "active_patron": return .active
         case "declined_patron": return .inactive
@@ -112,13 +133,13 @@ struct PatronManagementView: View {
 struct PatronSearchBar: View {
     @Binding var searchText: String
     @Binding var selectedFilter: PatronManagementView.PatronFilter
-    
+
     var body: some View {
         VStack(spacing: 12) {
             TextField("Search patrons...", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(PatronManagementView.PatronFilter.allCases, id: \.self) { filter in
@@ -143,11 +164,11 @@ struct PatronStatsView: View {
         VStack(spacing: 16) {
             Text("Patron Overview")
                 .font(.headline)
-            
+
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible()),
-                GridItem(.flexible())
+                GridItem(.flexible()),
             ], spacing: 16) {
                 StatBox(title: "Total", value: "1,234")
                 StatBox(title: "Active", value: "987")
@@ -163,12 +184,12 @@ struct PatronStatsView: View {
 struct PatronCard: View {
     let patron: Patron
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 16) {
                 PatronAvatar(url: patron.avatarURL)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(patron.name)
                         .font(.headline)
@@ -176,9 +197,9 @@ struct PatronCard: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(patron.status.rawValue)
                         .font(.caption)
@@ -187,7 +208,7 @@ struct PatronCard: View {
                         .background(patron.status.color.opacity(0.1))
                         .foregroundColor(patron.status.color)
                         .cornerRadius(8)
-                    
+
                     Text("Since \(patron.joinDate, formatter: dateFormatter)")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -199,7 +220,7 @@ struct PatronCard: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     private let dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateStyle = .medium
@@ -212,15 +233,15 @@ struct PatronDetailView: View {
     let patron: Patron
     @Environment(\.dismiss) var dismiss
     @State private var showingMessageComposer = false
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
                     PatronHeaderView(patron: patron)
-                    
+
                     PatronActivityView(patron: patron)
-                    
+
                     PatronEngagementView(patron: patron)
                 }
                 .padding()
@@ -249,7 +270,7 @@ struct FilterChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Text(title)
@@ -266,7 +287,7 @@ struct FilterChip: View {
 struct StatBox: View {
     let title: String
     let value: String
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Text(title)
@@ -285,7 +306,7 @@ struct StatBox: View {
 
 struct PatronAvatar: View {
     let url: URL?
-    
+
     var body: some View {
         AsyncImage(url: url) { image in
             image
@@ -303,11 +324,11 @@ struct MessageComposerView: View {
     var recipient: Patron?
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
-                if let recipient = recipient {
+                if let recipient {
                     HStack {
                         Text("To:")
                         Text(recipient.name)
@@ -316,7 +337,7 @@ struct MessageComposerView: View {
                     }
                     .padding(.horizontal)
                 }
-                
+
                 TextEditor(text: $messageText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(8)
@@ -349,17 +370,17 @@ struct Patron: Identifiable {
     let status: PatronStatus
     let tierAmount: Double
     let joinDate: Date
-    
+
     enum PatronStatus: String {
         case active = "Active"
         case inactive = "Inactive"
         case new = "New"
-        
+
         var color: Color {
             switch self {
-            case .active: return .green
-            case .inactive: return .red
-            case .new: return .blue
+            case .active: .green
+            case .inactive: .red
+            case .new: .blue
             }
         }
     }
@@ -367,22 +388,22 @@ struct Patron: Identifiable {
 
 struct PatronHeaderView: View {
     let patron: Patron
-    
+
     var body: some View {
         VStack(spacing: 16) {
             PatronAvatar(url: patron.avatarURL)
                 .frame(width: 80, height: 80)
-            
+
             VStack(spacing: 4) {
                 Text(patron.name)
                     .font(.title2)
                     .fontWeight(.bold)
-                
+
                 Text("$\(patron.tierAmount, specifier: "%.2f")/month")
                     .font(.headline)
                     .foregroundColor(.arkavoBrand)
             }
-            
+
             HStack(spacing: 24) {
                 StatPill(title: "Months", value: "12")
                 StatPill(title: "Total", value: "$240")
@@ -399,23 +420,23 @@ struct PatronActivityView: View {
     let patron: Patron
     @State private var selectedTimeRange = 1
     let timeRanges = ["Week", "Month", "Year"]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Activity")
                 .font(.headline)
-            
+
             Picker("Time Range", selection: $selectedTimeRange) {
-                ForEach(0..<timeRanges.count, id: \.self) { index in
+                ForEach(0 ..< timeRanges.count, id: \.self) { index in
                     Text(timeRanges[index]).tag(index)
                 }
             }
             .pickerStyle(.segmented)
-            
+
             VStack(spacing: 12) {
                 PatronActivityRow(date: Date(), action: "Commented", content: "Great work on the latest video!")
                 PatronActivityRow(date: Date().addingTimeInterval(-86400), action: "Liked", content: "Behind the scenes photo")
-                PatronActivityRow(date: Date().addingTimeInterval(-172800), action: "Downloaded", content: "Project files")
+                PatronActivityRow(date: Date().addingTimeInterval(-172_800), action: "Downloaded", content: "Project files")
             }
         }
         .padding()
@@ -424,14 +445,137 @@ struct PatronActivityView: View {
     }
 }
 
+struct UserIdentityView: View {
+    let patreonClient: PatreonClient
+    @State private var identity: UserIdentity?
+    @State private var isLoading = false
+    @State private var error: Error?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            if isLoading {
+                ProgressView()
+            } else if let error {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundColor(.orange)
+                    Text("Failed to load creator profile")
+                        .font(.headline)
+                    Text(error.localizedDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Button("Retry") {
+                        Task {
+                            await loadIdentity()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else if let identity {
+                creatorProfileView(identity: identity)
+            }
+        }
+        .task {
+            await loadIdentity()
+        }
+    }
+
+    private func creatorProfileView(identity: UserIdentity) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                AsyncImage(url: URL(string: identity.data.attributes.imageUrl ?? "")) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color.gray.opacity(0.2)
+                }
+                .frame(width: 80, height: 80)
+                .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(identity.data.attributes.fullName)
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    if let email = identity.data.attributes.email {
+                        Text(email)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if let socials = identity.data.attributes.socialConnections {
+                socialConnectionsView(socials)
+            }
+
+            Divider()
+
+            // Memberships section if needed
+            if !identity.data.relationships.memberships.data.isEmpty {
+                Text("Active Memberships: \(identity.data.relationships.memberships.data.count)")
+                    .font(.headline)
+            }
+        }
+        .padding()
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+    }
+
+    private func socialConnectionsView(_ socials: SocialConnections) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Connected Accounts")
+                .font(.headline)
+
+            HStack(spacing: 16) {
+                if let discord = socials.discord {
+                    socialButton("discord", URL(string: discord.url ?? ""))
+                }
+                if let twitter = socials.twitter {
+                    socialButton("twitter", URL(string: twitter.url ?? ""))
+                }
+                if let youtube = socials.youtube {
+                    socialButton("youtube", URL(string: youtube.url ?? ""))
+                }
+                if let twitch = socials.twitch {
+                    socialButton("twitch", URL(string: twitch.url ?? ""))
+                }
+            }
+        }
+    }
+
+    private func socialButton(_ platform: String, _: URL?) -> some View {
+        Image(platform)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 24, height: 24)
+            .foregroundColor(.secondary)
+            .opacity(0.5)
+    }
+
+    private func loadIdentity() async {
+        isLoading = true
+        error = nil
+        do {
+            // Use the creator access token from the client's config
+            identity = try await patreonClient.getUserIdentity()
+        } catch {
+            self.error = error
+        }
+        isLoading = false
+    }
+}
+
 struct PatronEngagementView: View {
     let patron: Patron
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Engagement")
                 .font(.headline)
-            
+
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 EngagementCard(title: "Comments", value: "24", trend: "+3")
                 EngagementCard(title: "Likes", value: "156", trend: "+12")
@@ -450,7 +594,7 @@ struct PatronEngagementView: View {
 struct StatPill: View {
     let title: String
     let value: String
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Text(title)
@@ -471,14 +615,14 @@ struct PatronActivityRow: View {
     let date: Date
     let action: String
     let content: String
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(date, style: .relative)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .leading)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(action)
                     .font(.subheadline)
@@ -495,17 +639,17 @@ struct EngagementCard: View {
     let title: String
     let value: String
     let trend: String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-            
+
             Text(value)
                 .font(.title2)
                 .fontWeight(.bold)
-            
+
             HStack {
                 Image(systemName: trend.hasPrefix("+") ? "arrow.up.right" : "arrow.down.right")
                 Text(trend)
@@ -546,8 +690,7 @@ struct PatronEngagementView_Previews: PreviewProvider {
     }
 }
 
-
-//struct PatronManagementView_Previews: PreviewProvider {
+// struct PatronManagementView_Previews: PreviewProvider {
 //    static let patreonService = PatreonService()
 //    static var previews: some View {
 //        VStack(spacing: 20) {
@@ -556,8 +699,7 @@ struct PatronEngagementView_Previews: PreviewProvider {
 //        .padding()
 //        .background(Color.arkavoBackground)
 //    }
-//}
-
+// }
 
 // Preview Helper
 extension Patron {
@@ -567,6 +709,6 @@ extension Patron {
         avatarURL: nil,
         status: .active,
         tierAmount: 25.0,
-        joinDate: Date().addingTimeInterval(-30*86400)
+        joinDate: Date().addingTimeInterval(-30 * 86400)
     )
 }

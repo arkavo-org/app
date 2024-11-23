@@ -621,9 +621,9 @@ enum MatchType: String, Codable {
     case partial
 
     /// Low similarity but above threshold
-    case weak
+    case /// Factory method to determine match type from similarity score
+        weak
 
-    /// Factory method to determine match type from similarity score
     static func from(similarity: Float) -> MatchType {
         switch similarity {
         case 0.95 ... 1.0:
