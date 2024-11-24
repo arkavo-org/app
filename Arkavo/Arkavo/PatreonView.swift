@@ -71,7 +71,7 @@ struct PatronManagementView: View {
                 }
             }
             .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView()
+                MessageComposerView(availableTiers: PreviewData.sampleTiers)
             }
             .sheet(item: $selectedPatron) { patron in
                 PatronDetailView(patron: patron)
@@ -262,7 +262,7 @@ struct PatronDetailView: View {
                 }
             }
             .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(recipient: patron)
+                MessageComposerView(recipient: patron, availableTiers: PreviewData.sampleTiers)
             }
         }
     }
@@ -321,48 +321,6 @@ struct PatronAvatar: View {
         }
         .frame(width: 48, height: 48)
         .clipShape(Circle())
-    }
-}
-
-struct MessageComposerView: View {
-    var recipient: Patron?
-    @Environment(\.dismiss) var dismiss
-    @State private var messageText = ""
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                if let recipient {
-                    HStack {
-                        Text("To:")
-                        Text(recipient.name)
-                            .fontWeight(.medium)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                }
-
-                TextEditor(text: $messageText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(8)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                    .padding(.horizontal)
-            }
-            .navigationTitle("New Message")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Send") {
-                        // Send message logic
-                        dismiss()
-                    }
-                    .disabled(messageText.isEmpty)
-                }
-            }
-        }
     }
 }
 
@@ -866,4 +824,168 @@ struct StatLabel: View {
                 .foregroundColor(.secondary)
         }
     }
+}
+
+struct MessageComposerView: View {
+    var recipient: Patron?
+    @Environment(\.dismiss) var dismiss
+
+    @State private var subject = ""
+    @State private var messageText = ""
+    @State private var selectedTemplate: MessageTemplate?
+    @State private var showingTemplates = false
+    @State private var showingPreview = false
+    @State private var isScheduling = false
+    @State private var scheduledDate: Date = .init()
+    @State private var selectedTier: PatreonTier?
+
+    // Example property for available tiers - in practice, this would come from your API
+    let availableTiers: [PatreonTier]
+
+    enum MessageTemplate: String, CaseIterable {
+        case welcome = "Welcome Message"
+        case announcement = "New Content"
+        case thanks = "Thank You"
+        case update = "Status Update"
+    }
+
+    var body: some View {
+        Form {
+            // Recipient Section
+            if recipient == nil {
+                Section("Recipients") {
+                    HStack {
+                        Text("To:")
+                            .foregroundColor(.secondary)
+                        Text(selectedTier?.name ?? "All Patrons")
+                            .fontWeight(.medium)
+                    }
+
+                    Menu {
+                        Button("All Patrons") {
+                            selectedTier = nil
+                        }
+                        ForEach(availableTiers) { tier in
+                            Button(tier.name) {
+                                selectedTier = tier
+                            }
+                        }
+                    } label: {
+                        Label("Filter by Tier", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+
+            // Message Content Section
+            Section("Message") {
+                TextField("Subject", text: $subject)
+
+                ZStack(alignment: .topLeading) {
+                    if messageText.isEmpty {
+                        Text("Write your message...")
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                    }
+                    TextEditor(text: $messageText)
+                        .frame(minHeight: 100)
+                }
+
+                HStack {
+                    Button {
+                        showingTemplates.toggle()
+                    } label: {
+                        Label("Templates", systemImage: "doc.text")
+                    }
+
+                    Spacer()
+
+                    Button {
+                        showingPreview.toggle()
+                    } label: {
+                        Label("Preview", systemImage: "eye")
+                    }
+                }
+            }
+
+            // Scheduling Section
+            Section {
+                Toggle("Schedule Message", isOn: $isScheduling)
+
+                if isScheduling {
+                    DatePicker(
+                        "Send Date",
+                        selection: $scheduledDate,
+                        in: Date()...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                }
+            }
+
+            // Action Buttons Section
+            Section {
+                HStack {
+                    Button(role: .cancel) {
+                        dismiss()
+                    } label: {
+                        Text("Cancel")
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    Button {
+                        sendMessage()
+                    } label: {
+                        Text(isScheduling ? "Schedule" : "Send")
+                            .frame(maxWidth: .infinity)
+                            .bold()
+                    }
+                    .disabled(subject.isEmpty || messageText.isEmpty)
+                }
+            }
+        }
+        .navigationTitle(recipient != nil ? "Message to \(recipient!.name)" : "New Message")
+    }
+
+    private func sendMessage() {
+        // Implement message sending logic
+        dismiss()
+    }
+}
+
+// Model for Patreon tiers
+struct PatreonTier: Identifiable {
+    let id: String
+    let name: String
+    let amount: Double
+    // Add other tier properties as needed
+}
+
+struct MessageComposerView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            // Preview with recipient
+            MessageComposerView(
+                recipient: Patron.previewPatron,
+                availableTiers: PreviewData.sampleTiers
+            )
+            .previewDisplayName("With Recipient")
+
+            // Preview without recipient (broadcast message)
+            MessageComposerView(
+                recipient: nil,
+                availableTiers: PreviewData.sampleTiers
+            )
+            .previewDisplayName("Broadcast Message")
+        }
+    }
+}
+
+// Preview helper for sample data
+enum PreviewData {
+    static let sampleTiers = [
+        PatreonTier(id: "1", name: "Bronze Tier", amount: 5.0),
+        PatreonTier(id: "2", name: "Silver Tier", amount: 10.0),
+        PatreonTier(id: "3", name: "Gold Tier", amount: 25.0),
+        PatreonTier(id: "4", name: "Platinum Tier", amount: 50.0),
+    ]
 }

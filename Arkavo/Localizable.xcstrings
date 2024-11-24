@@ -102,6 +102,9 @@
     "Age Verification" : {
 
     },
+    "All Patrons" : {
+
+    },
     "Arkavo" : {
 
     },
@@ -257,6 +260,9 @@
     "Features" : {
 
     },
+    "Filter by Tier" : {
+
+    },
     "Granularity" : {
 
     },
@@ -381,6 +387,12 @@
     "Members:" : {
 
     },
+    "Message" : {
+
+    },
+    "Message to %@" : {
+
+    },
     "My Account" : {
 
     },
@@ -467,6 +479,9 @@
         }
       }
     },
+    "Preview" : {
+
+    },
     "Privacy" : {
 
     },
@@ -535,6 +550,9 @@
     "Recent Activity" : {
 
     },
+    "Recipients" : {
+
+    },
     "Reddit • 2 issues found" : {
 
     },
@@ -580,10 +598,19 @@
     "Scan Completed" : {
 
     },
+    "Schedule" : {
+
+    },
+    "Schedule Message" : {
+
+    },
     "Search patrons..." : {
 
     },
     "Send" : {
+
+    },
+    "Send Date" : {
 
     },
     "Service misconfigured" : {
@@ -727,7 +754,13 @@
         }
       }
     },
+    "Subject" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
+    "Templates" : {
 
     },
     "Thank You for Making a Difference!" : {
@@ -840,6 +873,9 @@
       }
     },
     "What We are Discussing" : {
+
+    },
+    "Write your message..." : {
 
     },
     "You helped protect" : {
