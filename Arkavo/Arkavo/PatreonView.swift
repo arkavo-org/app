@@ -71,10 +71,10 @@ struct PatronManagementView: View {
                 }
             }
             .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(availableTiers: PreviewData.sampleTiers)
+                MessageComposerView(patreonClient: patreonClient)
             }
             .sheet(item: $selectedPatron) { patron in
-                PatronDetailView(patron: patron)
+                PatronDetailView(patron: patron, patreonClient: patreonClient)
             }
             .task {
                 await loadPatrons()
@@ -235,6 +235,7 @@ struct PatronCard: View {
 
 struct PatronDetailView: View {
     let patron: Patron
+    let patreonClient: PatreonClient
     @Environment(\.dismiss) var dismiss
     @State private var showingMessageComposer = false
 
@@ -262,7 +263,7 @@ struct PatronDetailView: View {
                 }
             }
             .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(recipient: patron, availableTiers: PreviewData.sampleTiers)
+                MessageComposerView(patreonClient: patreonClient)
             }
         }
     }
@@ -828,6 +829,7 @@ struct StatLabel: View {
 
 struct MessageComposerView: View {
     var recipient: Patron?
+    let patreonClient: PatreonClient
     @Environment(\.dismiss) var dismiss
 
     @State private var subject = ""
@@ -839,8 +841,10 @@ struct MessageComposerView: View {
     @State private var scheduledDate: Date = .init()
     @State private var selectedTier: PatreonTier?
 
-    // Example property for available tiers - in practice, this would come from your API
-    let availableTiers: [PatreonTier]
+    // States for data loading
+    @State private var tiers: [PatreonTier] = []
+    @State private var isLoadingTiers = false
+    @State private var tiersError: Error?
 
     enum MessageTemplate: String, CaseIterable {
         case welcome = "Welcome Message"
@@ -861,17 +865,34 @@ struct MessageComposerView: View {
                             .fontWeight(.medium)
                     }
 
-                    Menu {
-                        Button("All Patrons") {
-                            selectedTier = nil
-                        }
-                        ForEach(availableTiers) { tier in
-                            Button(tier.name) {
-                                selectedTier = tier
+                    if isLoadingTiers {
+                        ProgressView("Loading tiers...")
+                    } else if let error = tiersError {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Failed to load tiers")
+                                .foregroundColor(.red)
+                            Text(error.localizedDescription)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Button("Retry") {
+                                Task {
+                                    await loadTiers()
+                                }
                             }
                         }
-                    } label: {
-                        Label("Filter by Tier", systemImage: "line.3.horizontal.decrease.circle")
+                    } else {
+                        Menu {
+                            Button("All Patrons") {
+                                selectedTier = nil
+                            }
+                            ForEach(tiers) { tier in
+                                Button("\(tier.name) ($\(String(format: "%.2f", tier.amount)))") {
+                                    selectedTier = tier
+                                }
+                            }
+                        } label: {
+                            Label("Filter by Tier", systemImage: "line.3.horizontal.decrease.circle")
+                        }
                     }
                 }
             }
@@ -944,6 +965,22 @@ struct MessageComposerView: View {
             }
         }
         .navigationTitle(recipient != nil ? "Message to \(recipient!.name)" : "New Message")
+        .task {
+            await loadTiers()
+        }
+    }
+
+    private func loadTiers() async {
+        isLoadingTiers = true
+        tiersError = nil
+
+        do {
+            tiers = try await patreonClient.getTiers()
+        } catch {
+            tiersError = error
+        }
+
+        isLoadingTiers = false
     }
 
     private func sendMessage() {
@@ -952,40 +989,34 @@ struct MessageComposerView: View {
     }
 }
 
-// Model for Patreon tiers
-struct PatreonTier: Identifiable {
-    let id: String
-    let name: String
-    let amount: Double
-    // Add other tier properties as needed
-}
-
+// Updated preview provider
 struct MessageComposerView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             // Preview with recipient
             MessageComposerView(
                 recipient: Patron.previewPatron,
-                availableTiers: PreviewData.sampleTiers
+                patreonClient: PatreonClient(config: .preview)
             )
             .previewDisplayName("With Recipient")
 
             // Preview without recipient (broadcast message)
             MessageComposerView(
                 recipient: nil,
-                availableTiers: PreviewData.sampleTiers
+                patreonClient: PatreonClient(config: .preview)
             )
             .previewDisplayName("Broadcast Message")
         }
     }
 }
 
-// Preview helper for sample data
-enum PreviewData {
-    static let sampleTiers = [
-        PatreonTier(id: "1", name: "Bronze Tier", amount: 5.0),
-        PatreonTier(id: "2", name: "Silver Tier", amount: 10.0),
-        PatreonTier(id: "3", name: "Gold Tier", amount: 25.0),
-        PatreonTier(id: "4", name: "Platinum Tier", amount: 50.0),
-    ]
+extension PatreonConfig {
+    static let preview = PatreonConfig(
+        clientId: ProcessInfo.processInfo.environment["PATREON_CLIENT_ID"] ?? "preview-client-id",
+        clientSecret: ProcessInfo.processInfo.environment["PATREON_CLIENT_SECRET"] ?? "preview-secret",
+        creatorAccessToken: ProcessInfo.processInfo.environment["PATREON_ACCESS_TOKEN"] ?? "preview-token",
+        creatorRefreshToken: ProcessInfo.processInfo.environment["PATREON_REFRESH_TOKEN"] ?? "preview-refresh-token",
+        redirectURI: ProcessInfo.processInfo.environment["PATREON_REDIRECT_URI"] ?? "preview://oauth",
+        campaignId: ProcessInfo.processInfo.environment["PATREON_CAMPAIGN_ID"] ?? "preview-campaign"
+    )
 }

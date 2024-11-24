@@ -14,6 +14,16 @@
         }
       }
     },
+    "%@ ($%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ ($%2$@)"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
         "es-US" : {
@@ -257,6 +267,9 @@
     "Failed to load creator profile" : {
 
     },
+    "Failed to load tiers" : {
+
+    },
     "Features" : {
 
     },
@@ -354,6 +367,9 @@
 
     },
     "Loading stream..." : {
+
+    },
+    "Loading tiers..." : {
 
     },
     "Location" : {

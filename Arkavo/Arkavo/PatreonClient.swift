@@ -562,6 +562,7 @@ extension PatreonClient {
             queryItems: [
                 URLQueryItem(name: "include", value: "creator,tiers,goals"),
                 URLQueryItem(name: "fields[campaign]", value: "summary,creation_name,patron_count,created_at,published_at,is_monthly,is_nsfw"),
+                URLQueryItem(name: "fields[tier]", value: "amount_cents,description,title,patron_count,discord_role_ids,edited_at,image_url,published,published_at,remaining,requires_shipping,user_limit"),
             ]
         )
     }
@@ -615,4 +616,56 @@ public struct APIError: Decodable {
     struct ChallengeMetadata: Decodable {
         // Add fields as needed based on what the API returns
     }
+}
+
+// MARK: - Tier Models
+
+extension PatreonClient {
+    public struct TierData: Codable {
+        let id: String
+        let attributes: TierAttributes
+        let type: String
+
+        struct TierAttributes: Codable {
+            let amount_cents: Int
+            let description: String?
+            let title: String
+            let patron_count: Int?
+
+            var amount: Double {
+                Double(amount_cents) / 100.0
+            }
+        }
+    }
+
+    func getTiers() async throws -> [PatreonTier] {
+        let response = try await getCampaigns()
+
+        // Find tiers in the included data
+        let tierData = response.included.filter { $0.type == "tier" }
+
+        return tierData.compactMap { included -> PatreonTier? in
+            guard let amountCents = included.attributes["amount_cents"]?.value as? Int,
+                  let title = included.attributes["title"]?.value as? String
+            else {
+                return nil
+            }
+
+            return PatreonTier(
+                id: included.id,
+                name: title,
+                description: included.attributes["description"]?.value as? String,
+                amount: Double(amountCents) / 100.0,
+                patronCount: included.attributes["patron_count"]?.value as? Int
+            )
+        }
+    }
+}
+
+struct PatreonTier: Identifiable {
+    let id: String
+    let name: String
+    let description: String?
+    let amount: Double
+    let patronCount: Int?
 }
