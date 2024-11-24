@@ -18,67 +18,72 @@ struct PatronManagementView: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Search and Filter Bar
-                PatronSearchBar(searchText: $searchText, selectedFilter: $selectedFilter)
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error {
-                    VStack {
-                        Text("Error loading patrons")
-                            .font(.headline)
-                        Text(error.localizedDescription)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Button("Retry") {
-                            Task {
-                                await loadPatrons()
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                    }
+        VStack(spacing: 0) {
+            PatronSearchBar(searchText: $searchText, selectedFilter: $selectedFilter)
+
+            if isLoading {
+                ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Main Content
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            UserIdentityView(patreonClient: patreonClient)
-                                .padding(.horizontal)
-
-                            CampaignView(patreonClient: patreonClient)
-                                .padding(.horizontal)
-
-                            PatronStatsView()
-
-                            ForEach(filteredPatrons) { patron in
-                                PatronCard(patron: patron) {
-                                    selectedPatron = patron
-                                }
-                            }
+            } else if let error {
+                VStack {
+                    Text("Error loading patrons")
+                        .font(.headline)
+                    Text(error.localizedDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Button("Retry") {
+                        Task {
+                            await loadPatrons()
                         }
-                        .padding()
                     }
+                    .buttonStyle(.bordered)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        UserIdentityView(patreonClient: patreonClient)
+                            .padding(.horizontal)
+
+                        CampaignView(patreonClient: patreonClient)
+                            .padding(.horizontal)
+
+                        PatronStatsView(
+                            totalCount: patrons.count,
+                            activeCount: patrons.filter { $0.status == .active }.count,
+                            newCount: patrons.filter { $0.status == .new }.count
+                        )
+
+                        ForEach(filteredPatrons) { patron in
+                            PatronCard(patron: patron) {
+                                selectedPatron = patron
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .padding()
+                }
+                .refreshable {
+                    await loadPatrons()
                 }
             }
-            .navigationTitle("Patrons")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingMessageComposer = true }) {
-                        Image(systemName: "envelope")
-                    }
+        }
+        .navigationTitle("Patrons")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingMessageComposer = true }) {
+                    Image(systemName: "envelope")
                 }
             }
-            .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(patreonClient: patreonClient)
-            }
-            .sheet(item: $selectedPatron) { patron in
-                PatronDetailView(patron: patron, patreonClient: patreonClient)
-            }
-            .task {
-                await loadPatrons()
-            }
+        }
+        .sheet(isPresented: $showingMessageComposer) {
+            MessageComposerView(patreonClient: patreonClient)
+        }
+        .sheet(item: $selectedPatron) { patron in
+            PatronDetailView(patron: patron, patreonClient: patreonClient)
+        }
+        .task {
+            await loadPatrons()
         }
     }
 
@@ -104,33 +109,42 @@ struct PatronManagementView: View {
         isLoading = true
         error = nil
 
-//        do {
-//            let members = try await patreonClient.getCampaignMembers()
-//            patrons = members.map { member in
-//                Patron(
-//                    id: member.id,
-//                    name: member.attributes.fullName,
-//                    avatarURL: nil, // Would need to be fetched from included relationships
-//                    status: patronStatus(from: member.attributes.patronStatus),
-//                    tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
-//                    joinDate: ISO8601DateFormatter().date(from: member.attributes.lastChargeDate ?? "") ?? Date()
-//                )
-//            }
-//        } catch {
-//            self.error = error
-//        }
+        do {
+            patrons = try await patreonClient.getMembers()
+        } catch {
+            self.error = error
+        }
 
         isLoading = false
     }
+}
 
-    private func patronStatus(from status: String?) -> Patron.PatronStatus {
-        guard let status else { return .inactive }
-        switch status.lowercased() {
-        case "active_patron": return .active
-        case "declined_patron": return .inactive
-        case "former_patron": return .inactive
-        default: return .new
+// MARK: - PatronStatsView
+
+struct PatronStatsView: View {
+    let totalCount: Int
+    let activeCount: Int
+    let newCount: Int
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Patron Overview")
+                .font(.headline)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+            ], spacing: 16) {
+                StatBox(title: "Total", value: "\(totalCount)")
+                StatBox(title: "Active", value: "\(activeCount)")
+                StatBox(title: "New", value: "\(newCount)")
+            }
         }
+        .padding()
+        .background(Color(.textBackgroundColor))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
     }
 }
 
@@ -163,28 +177,6 @@ struct PatronSearchBar: View {
     }
 }
 
-struct PatronStatsView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Patron Overview")
-                .font(.headline)
-
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-            ], spacing: 16) {
-                StatBox(title: "Total", value: "1,234")
-                StatBox(title: "Active", value: "987")
-                StatBox(title: "This Month", value: "+45")
-            }
-        }
-        .padding()
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
-    }
-}
-
 struct PatronCard: View {
     let patron: Patron
     let onTap: () -> Void
@@ -197,7 +189,12 @@ struct PatronCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(patron.name)
                         .font(.headline)
-                    Text("$\(patron.tierAmount)/month")
+                    if let email = patron.email {
+                        Text(email)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("$\(patron.tierAmount, specifier: "%.2f")/month")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -213,7 +210,11 @@ struct PatronCard: View {
                         .foregroundColor(patron.status.color)
                         .cornerRadius(8)
 
-                    Text("Since \(patron.joinDate, formatter: dateFormatter)")
+                    Text("Since \(patron.joinDate.formatted(.dateTime.month().day().year()))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("Total: $\(patron.lifetimeSupport, specifier: "%.2f")")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -224,13 +225,6 @@ struct PatronCard: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-
-    private let dateFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        return df
-    }()
 }
 
 struct PatronDetailView: View {
@@ -240,31 +234,29 @@ struct PatronDetailView: View {
     @State private var showingMessageComposer = false
 
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    PatronHeaderView(patron: patron)
+        ScrollView {
+            VStack(spacing: 24) {
+                PatronHeaderView(patron: patron)
 
-                    PatronActivityView(patron: patron)
+                PatronActivityView(patron: patron)
 
-                    PatronEngagementView(patron: patron)
-                }
-                .padding()
+                PatronEngagementView(patron: patron)
             }
-            .navigationTitle("Patron Details")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingMessageComposer = true }) {
-                        Image(systemName: "envelope")
-                    }
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+            .padding()
+        }
+        .navigationTitle("Patron Details")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingMessageComposer = true }) {
+                    Image(systemName: "envelope")
                 }
             }
-            .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(patreonClient: patreonClient)
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { dismiss() }
             }
+        }
+        .sheet(isPresented: $showingMessageComposer) {
+            MessageComposerView(patreonClient: patreonClient)
         }
     }
 }
@@ -325,14 +317,18 @@ struct PatronAvatar: View {
     }
 }
 
-// Models
+// MARK: - Patron Model
+
 struct Patron: Identifiable {
     let id: String
     let name: String
+    let email: String?
     let avatarURL: URL?
     let status: PatronStatus
     let tierAmount: Double
+    let lifetimeSupport: Double
     let joinDate: Date
+    let url: URL?
 
     enum PatronStatus: String {
         case active = "Active"
@@ -653,26 +649,27 @@ struct PatronEngagementView_Previews: PreviewProvider {
     }
 }
 
-// struct PatronManagementView_Previews: PreviewProvider {
-//    static let patreonService = PatreonService()
-//    static var previews: some View {
-//        VStack(spacing: 20) {
-//            PatronManagementView(patreonClient: patreonService.client)
-//        }
-//        .padding()
-//        .background(Color.arkavoBackground)
-//    }
-// }
+struct PatronManagementView_Previews: PreviewProvider {
+    static let patreonService = PatreonService()
+    static var previews: some View {
+        VStack(spacing: 20) {
+            PatronManagementView(patreonClient: patreonService.client)
+        }
+        .padding()
+        .background(Color.arkavoBackground)
+    }
+}
 
 // Preview Helper
 extension Patron {
     static let previewPatron = Patron(
         id: "1",
         name: "John Doe",
-        avatarURL: nil,
+        email: "a@a.co", avatarURL: nil,
         status: .active,
         tierAmount: 25.0,
-        joinDate: Date().addingTimeInterval(-30 * 86400)
+        lifetimeSupport: 1.1, joinDate: Date().addingTimeInterval(-30 * 86400),
+        url: nil
     )
 }
 

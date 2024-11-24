@@ -669,3 +669,149 @@ struct PatreonTier: Identifiable {
     let amount: Double
     let patronCount: Int?
 }
+
+// MARK: - Member Response Models
+
+extension PatreonClient {
+    struct MemberResponse: Codable {
+        let data: [MemberData]
+        let included: [IncludedData]
+        let meta: MetaData
+
+        struct MemberData: Codable {
+            let attributes: MemberAttributes
+            let id: String
+            let relationships: MemberRelationships
+            let type: String
+        }
+
+        struct MemberAttributes: Codable {
+            let currentlyEntitledAmountCents: Int
+            let email: String?
+            let fullName: String
+            let lastChargeDate: String?
+            let lifetimeSupportCents: Int
+            let patronStatus: String
+
+            enum CodingKeys: String, CodingKey {
+                case currentlyEntitledAmountCents = "currently_entitled_amount_cents"
+                case email
+                case fullName = "full_name"
+                case lastChargeDate = "last_charge_date"
+                case lifetimeSupportCents = "lifetime_support_cents"
+                case patronStatus = "patron_status"
+            }
+        }
+
+        struct MemberRelationships: Codable {
+            let currentlyEntitledTiers: TierRelationship
+            let user: UserRelationship
+
+            enum CodingKeys: String, CodingKey {
+                case currentlyEntitledTiers = "currently_entitled_tiers"
+                case user
+            }
+
+            struct TierRelationship: Codable {
+                let data: [TierData]
+
+                struct TierData: Codable {
+                    let id: String
+                    let type: String
+                }
+            }
+
+            struct UserRelationship: Codable {
+                let data: UserData
+                let links: Links
+
+                struct UserData: Codable {
+                    let id: String
+                    let type: String
+                }
+
+                struct Links: Codable {
+                    let related: String
+                }
+            }
+        }
+
+        struct IncludedData: Codable {
+            let attributes: IncludedAttributes
+            let id: String
+            let type: String
+
+            struct IncludedAttributes: Codable {
+                let thumbUrl: String?
+                let url: String?
+
+                enum CodingKeys: String, CodingKey {
+                    case thumbUrl = "thumb_url"
+                    case url
+                }
+            }
+        }
+
+        struct MetaData: Codable {
+            let pagination: Pagination
+
+            struct Pagination: Codable {
+                let cursors: Cursors
+                let total: Int
+
+                struct Cursors: Codable {
+                    let next: String?
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Memebers
+
+extension PatreonClient {
+    func getMembers() async throws -> [Patron] {
+        let response: MemberResponse = try await request(
+            endpoint: .campaignMembers(id: config.campaignId),
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "user,currently_entitled_tiers"),
+                URLQueryItem(name: "fields[member]", value: "full_name,email,patron_status,last_charge_date,currently_entitled_amount_cents,lifetime_support_cents"),
+                URLQueryItem(name: "fields[user]", value: "thumb_url,url"),
+                URLQueryItem(name: "page[count]", value: "100"),
+            ]
+        )
+
+        return response.data.map { member in
+            // Find user data in included array
+            let userData = response.included.first { included in
+                included.id == member.relationships.user.data.id &&
+                    included.type == "user"
+            }
+
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            return Patron(
+                id: member.id,
+                name: member.attributes.fullName,
+                email: member.attributes.email,
+                avatarURL: URL(string: userData?.attributes.thumbUrl ?? ""),
+                status: patronStatus(from: member.attributes.patronStatus),
+                tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
+                lifetimeSupport: Double(member.attributes.lifetimeSupportCents) / 100.0,
+                joinDate: member.attributes.lastChargeDate.flatMap { dateFormatter.date(from: $0) } ?? Date(),
+                url: URL(string: userData?.attributes.url ?? "")
+            )
+        }
+    }
+
+    private func patronStatus(from status: String) -> Patron.PatronStatus {
+        switch status.lowercased() {
+        case "active_patron": .active
+        case "declined_patron": .inactive
+        case "former_patron": .inactive
+        default: .new
+        }
+    }
+}

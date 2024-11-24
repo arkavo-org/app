@@ -807,6 +807,9 @@
     "Topic Tags:" : {
 
     },
+    "Total: $%.2f" : {
+
+    },
     "Trust Level: %@" : {
 
     },
