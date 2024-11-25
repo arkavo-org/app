@@ -29,7 +29,7 @@ struct ArkavoApp: App {
                     })
                 case .main:
                     #if os(macOS)
-                        PatronManagementView(patreonClient: patreonService.client)
+                        PatreonRootView(client: patreonService.client, config: patreonService.config)
                     #else
                         NavigationStack(path: $navigationPath) {
                             ArkavoView(service: service)

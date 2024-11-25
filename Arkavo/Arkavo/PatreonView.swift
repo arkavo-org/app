@@ -1,5 +1,67 @@
 import SwiftUI
 
+struct PatreonRootView: View {
+    @StateObject private var authViewModel: PatreonAuthViewModel
+    let client: PatreonClient
+
+    init(client: PatreonClient, config: PatreonConfig) {
+        self.client = client
+        _authViewModel = StateObject(wrappedValue: PatreonAuthViewModel(client: client, config: config))
+    }
+
+    var body: some View {
+        Group {
+            if authViewModel.isAuthenticated {
+                PatronManagementView(patreonClient: client)
+            } else {
+                PatreonLoginView(viewModel: authViewModel)
+            }
+        }
+    }
+}
+
+struct PatreonLoginView: View {
+    @ObservedObject var viewModel: PatreonAuthViewModel
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Manage Your Patrons")
+                .font(.title)
+                .fontWeight(.bold)
+
+            Text("Connect your Patreon account to get started")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            if viewModel.isLoading {
+                ProgressView()
+            } else {
+                Button(action: {
+                    viewModel.startOAuthFlow()
+                }) {
+                    HStack {
+                        Image(systemName: "lock.shield")
+                        Text("Login with Patreon")
+                    }
+                    .frame(width: 200)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.arkavoBrand)
+            }
+
+            if let error = viewModel.error {
+                Text(error.localizedDescription)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct PatronManagementView: View {
     let patreonClient: PatreonClient
     @State private var searchText = ""

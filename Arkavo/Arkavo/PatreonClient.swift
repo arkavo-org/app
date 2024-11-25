@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Core API Client
 
 public actor PatreonClient {
-    private let config: PatreonConfig
+    let config: PatreonConfig
     private let urlSession: URLSession
 
     public init(config: PatreonConfig) {
@@ -23,25 +23,51 @@ public actor PatreonClient {
 public struct PatreonConfig {
     let clientId: String
     let clientSecret: String
-    let creatorAccessToken: String
-    let creatorRefreshToken: String
     let redirectURI: String
     let campaignId: String
 
     public init(
         clientId: String,
         clientSecret: String,
-        creatorAccessToken: String,
-        creatorRefreshToken: String,
+        creatorAccessToken _: String,
+        creatorRefreshToken _: String,
         redirectURI: String,
         campaignId: String
     ) {
         self.clientId = clientId
         self.clientSecret = clientSecret
-        self.creatorAccessToken = creatorAccessToken
-        self.creatorRefreshToken = creatorRefreshToken
         self.redirectURI = redirectURI
         self.campaignId = campaignId
+    }
+}
+
+extension PatreonConfig {
+    var creatorAccessToken: String? {
+        get { KeychainManager.getAccessToken() }
+        set {
+            if let newValue {
+                try? KeychainManager.save(newValue.data(using: .utf8)!,
+                                          service: "com.arkavo.patreon",
+                                          account: "access_token")
+            } else {
+                try? KeychainManager.delete(service: "com.arkavo.patreon",
+                                            account: "access_token")
+            }
+        }
+    }
+
+    var creatorRefreshToken: String? {
+        get { KeychainManager.getRefreshToken() }
+        set {
+            if let newValue {
+                try? KeychainManager.save(newValue.data(using: .utf8)!,
+                                          service: "com.arkavo.patreon",
+                                          account: "refresh_token")
+            } else {
+                try? KeychainManager.delete(service: "com.arkavo.patreon",
+                                            account: "refresh_token")
+            }
+        }
     }
 }
 
@@ -569,13 +595,17 @@ extension PatreonClient {
 }
 
 public enum PatreonError: LocalizedError {
+    case invalidURL
     case invalidResponse
+    case authorizationFailed
     case httpError(statusCode: Int)
     case decodingError(Error)
     case apiError(APIError)
 
     public var errorDescription: String? {
         switch self {
+        case .invalidURL:
+            "Invalid URL"
         case .invalidResponse:
             "Invalid response from server"
         case let .httpError(statusCode):
@@ -584,6 +614,8 @@ public enum PatreonError: LocalizedError {
             "Decoding error: \(error.localizedDescription)"
         case let .apiError(error):
             error.detail ?? error.title
+        case .authorizationFailed:
+            "Authorization failed"
         }
     }
 

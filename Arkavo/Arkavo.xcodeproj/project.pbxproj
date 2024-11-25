@@ -50,6 +50,8 @@
 		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
+		DAAE39FD2CF3F48E00DAAA7A /* PatreonAuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */; };
+		DAAE39FF2CF3F6FF00DAAA7A /* ArkavoConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -125,6 +127,8 @@
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonAuthenticationManager.swift; sourceTree = "<group>"; };
+		DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoConfiguration.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -194,17 +198,17 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
-				DA0F817C2CF1552A00B10773 /* PatreonService.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
 				DA0FEC402C586DF700C0A010 /* Stream.swift */,
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
-				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */,
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */,
+				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
+				DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
@@ -233,6 +237,8 @@
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
 				DA0F81762CF0D8A600B10773 /* PatreonView.swift */,
 				DA0F817A2CF14D4700B10773 /* PatreonClient.swift */,
+				DA0F817C2CF1552A00B10773 /* PatreonService.swift */,
+				DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
@@ -416,6 +422,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DAAE39FF2CF3F6FF00DAAA7A /* ArkavoConfiguration.swift in Sources */,
 				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
@@ -431,6 +438,7 @@
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
 				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
+				DAAE39FD2CF3F48E00DAAA7A /* PatreonAuthenticationManager.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
 				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
@@ -557,6 +565,10 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PATREON_CLIENT_ID = "";
+				"PATREON_CLIENT_ID[arch=*]" = "$(PATREON_CLIENT_ID)";
+				PATREON_CLIENT_SECRET = "";
+				"PATREON_CLIENT_SECRET[arch=*]" = "$(PATREON_CLIENT_SECRET)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -615,6 +627,10 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				PATREON_CLIENT_ID = "";
+				"PATREON_CLIENT_ID[arch=*]" = "$(PATREON_CLIENT_ID)";
+				PATREON_CLIENT_SECRET = "";
+				"PATREON_CLIENT_SECRET[arch=*]" = "$(PATREON_CLIENT_SECRET)";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -622,6 +638,7 @@
 		};
 		DAC1FA0B2C34DA7100499631 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DA0F81782CF13F5900B10773 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

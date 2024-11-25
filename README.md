@@ -33,6 +33,15 @@ chmod +x pkl-gen-swift
 
 ### Initialize
 
+#### Secrets
+
+Secrets.xcconfig
+
+```
+PATREON_CLIENT_ID=
+PATREON_CLIENT_SECRET=
+```
+
 #### Flatbuffers (if changed)
 
 Events

@@ -124,6 +124,9 @@
     "Audio message" : {
 
     },
+    "Authenticated!" : {
+
+    },
     "Authenticating..." : {
 
     },
@@ -162,6 +165,9 @@
 
     },
     "Classification settings go here" : {
+
+    },
+    "Connect your Patreon account to get started" : {
 
     },
     "Connected Accounts" : {
@@ -384,7 +390,16 @@
     "Location: %@" : {
 
     },
+    "Login with Patreon" : {
+
+    },
     "logo" : {
+
+    },
+    "Logout" : {
+
+    },
+    "Manage Your Patrons" : {
 
     },
     "Map" : {
@@ -480,6 +495,9 @@
 
     },
     "Please grant location permission in Settings to use this feature." : {
+
+    },
+    "Please login to continue" : {
 
     },
     "Please provide a valid government-issued ID and a selfie to verify your age." : {
