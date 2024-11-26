@@ -130,6 +130,9 @@
     "Authenticating..." : {
 
     },
+    "Authentication Error" : {
+
+    },
     "Authentication Status" : {
 
     },
@@ -167,7 +170,7 @@
     "Classification settings go here" : {
 
     },
-    "Connect your Patreon account to get started" : {
+    "Connect with Patreon" : {
 
     },
     "Connected Accounts" : {
@@ -397,9 +400,6 @@
 
     },
     "Logout" : {
-
-    },
-    "Manage Your Patrons" : {
 
     },
     "Map" : {
@@ -719,6 +719,9 @@
         }
       }
     },
+    "Start Authentication" : {
+
+    },
     "Start group chats now, with more exciting features coming soon!" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -829,6 +832,9 @@
 
     },
     "Trust Level: %@" : {
+
+    },
+    "Try Again" : {
 
     },
     "Type a message..." : {

@@ -24,7 +24,6 @@ struct ArkavoSecrets {
     let patreonCreatorAccessToken: String
     let patreonCreatorRefreshToken: String
     let patreonCampaignId: String
-    let patreonRedirectURI: String
 
     private init() {
         // Read from Secrets.xcconfig bundle
@@ -50,6 +49,5 @@ struct ArkavoSecrets {
         patreonCreatorAccessToken = secrets["PATREON_CREATOR_ACCESS_TOKEN"] ?? ""
         patreonCreatorRefreshToken = secrets["PATREON_CREATOR_REFRESH_TOKEN"] ?? ""
         patreonCampaignId = secrets["PATREON_CAMPAIGN_ID"] ?? ""
-        patreonRedirectURI = secrets["PATREON_REDIRECT_URI"] ?? ""
     }
 }

@@ -11,7 +11,6 @@ class PatreonService {
             clientSecret: secrets.patreonClientSecret,
             creatorAccessToken: secrets.patreonCreatorAccessToken,
             creatorRefreshToken: secrets.patreonCreatorRefreshToken,
-            redirectURI: secrets.patreonRedirectURI,
             campaignId: secrets.patreonCampaignId
         )
         client = PatreonClient(config: config)

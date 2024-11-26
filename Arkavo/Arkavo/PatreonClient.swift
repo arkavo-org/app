@@ -4,6 +4,7 @@ import Foundation
 
 public actor PatreonClient {
     let config: PatreonConfig
+    public static let redirectURI = "https://webauthn.arkavo.net/oauth/patreon"
     private let urlSession: URLSession
 
     public init(config: PatreonConfig) {
@@ -23,7 +24,6 @@ public actor PatreonClient {
 public struct PatreonConfig {
     let clientId: String
     let clientSecret: String
-    let redirectURI: String
     let campaignId: String
 
     public init(
@@ -31,12 +31,10 @@ public struct PatreonConfig {
         clientSecret: String,
         creatorAccessToken _: String,
         creatorRefreshToken _: String,
-        redirectURI: String,
         campaignId: String
     ) {
         self.clientId = clientId
         self.clientSecret = clientSecret
-        self.redirectURI = redirectURI
         self.campaignId = campaignId
     }
 }
@@ -159,7 +157,7 @@ public extension PatreonClient {
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: config.redirectURI),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
         ]
         return components.url!
     }
@@ -170,7 +168,7 @@ public extension PatreonClient {
             "grant_type": "authorization_code",
             "client_id": config.clientId,
             "client_secret": config.clientSecret,
-            "redirect_uri": config.redirectURI,
+            "redirect_uri": PatreonClient.redirectURI,
         ]
 
         return try await request(

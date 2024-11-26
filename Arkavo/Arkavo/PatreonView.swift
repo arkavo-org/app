@@ -1,4 +1,5 @@
 import SwiftUI
+@preconcurrency import WebKit
 
 struct PatreonRootView: View {
     @StateObject private var authViewModel: PatreonAuthViewModel
@@ -20,47 +21,145 @@ struct PatreonRootView: View {
     }
 }
 
-struct PatreonLoginView: View {
-    @ObservedObject var viewModel: PatreonAuthViewModel
+// MARK: - WebView Coordinator
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Manage Your Patrons")
-                .font(.title)
-                .fontWeight(.bold)
+class WebViewCoordinator: NSObject, WKNavigationDelegate {
+    var parent: WebView
+    var viewModel: PatreonAuthViewModel
 
-            Text("Connect your Patreon account to get started")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+    init(_ parent: WebView, viewModel: PatreonAuthViewModel) {
+        self.parent = parent
+        self.viewModel = viewModel
+    }
 
-            if viewModel.isLoading {
-                ProgressView()
-            } else {
-                Button(action: {
-                    viewModel.startOAuthFlow()
-                }) {
-                    HStack {
-                        Image(systemName: "lock.shield")
-                        Text("Login with Patreon")
-                    }
-                    .frame(width: 200)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.arkavoBrand)
+    func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url,
+           url.scheme == "arkavo",
+           let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+           .queryItems?
+           .first(where: { $0.name == "code" })?
+           .value
+        {
+            // Handle the OAuth callback
+            Task {
+                await viewModel.handleAuthCode(code)
             }
-
-            if let error = viewModel.error {
-                Text(error.localizedDescription)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 300)
-            }
+            decisionHandler(.cancel)
+            return
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        decisionHandler(.allow)
     }
 }
+
+// MARK: - WebView Representative
+
+struct WebView: NSViewRepresentable {
+    let viewModel: PatreonAuthViewModel
+    let url: URL
+
+    func makeCoordinator() -> WebViewCoordinator {
+        WebViewCoordinator(self, viewModel: viewModel)
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.navigationDelegate = context.coordinator
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context _: Context) {
+        let request = URLRequest(url: url)
+        webView.load(request)
+    }
+}
+
+// MARK: - Patreon Login View
+
+struct PatreonLoginView: View {
+    @StateObject var viewModel: PatreonAuthViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            if viewModel.isLoading {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = viewModel.error {
+                VStack(spacing: 16) {
+                    Text("Authentication Error")
+                        .font(.headline)
+                    Text(error.localizedDescription)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                    Button("Try Again") {
+                        viewModel.startOAuthFlow()
+                    }
+                }
+                .padding()
+            } else if let url = viewModel.authURL {
+                WebView(viewModel: viewModel, url: url)
+            } else {
+                VStack(spacing: 16) {
+                    Text("Connect with Patreon")
+                        .font(.title2)
+                    Button("Start Authentication") {
+                        viewModel.startOAuthFlow()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .frame(width: 800, height: 600)
+        .onChange(of: viewModel.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                dismiss()
+            }
+        }
+    }
+}
+
+// struct PatreonLoginView: View {
+//    @ObservedObject var viewModel: PatreonAuthViewModel
+//
+//    var body: some View {
+//        VStack(spacing: 24) {
+//            Text("Manage Your Patrons")
+//                .font(.title)
+//                .fontWeight(.bold)
+//
+//            Text("Connect your Patreon account to get started")
+//                .font(.subheadline)
+//                .foregroundColor(.secondary)
+//
+//            if viewModel.isLoading {
+//                ProgressView()
+//            } else {
+//                Button(action: {
+//                    viewModel.startOAuthFlow()
+//                }) {
+//                    HStack {
+//                        Image(systemName: "lock.shield")
+//                        Text("Login with Patreon")
+//                    }
+//                    .frame(width: 200)
+//                }
+//                .buttonStyle(.borderedProminent)
+//                .tint(.arkavoBrand)
+//            }
+//
+//            if let error = viewModel.error {
+//                Text(error.localizedDescription)
+//                    .font(.caption)
+//                    .foregroundColor(.red)
+//                    .multilineTextAlignment(.center)
+//                    .frame(maxWidth: 300)
+//            }
+//        }
+//        .padding()
+//        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//    }
+// }
 
 struct PatronManagementView: View {
     let patreonClient: PatreonClient
@@ -1075,7 +1174,6 @@ extension PatreonConfig {
         clientSecret: ProcessInfo.processInfo.environment["PATREON_CLIENT_SECRET"] ?? "preview-secret",
         creatorAccessToken: ProcessInfo.processInfo.environment["PATREON_ACCESS_TOKEN"] ?? "preview-token",
         creatorRefreshToken: ProcessInfo.processInfo.environment["PATREON_REFRESH_TOKEN"] ?? "preview-refresh-token",
-        redirectURI: ProcessInfo.processInfo.environment["PATREON_REDIRECT_URI"] ?? "preview://oauth",
         campaignId: ProcessInfo.processInfo.environment["PATREON_CAMPAIGN_ID"] ?? "preview-campaign"
     )
 }

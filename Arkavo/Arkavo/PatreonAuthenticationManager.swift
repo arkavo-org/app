@@ -4,7 +4,7 @@ import SwiftUI
 
 class AuthenticationWindowController: NSObject, ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        NSApplication.shared.windows.first ?? NSWindow()
+        NSApp.keyWindow ?? ASPresentationAnchor()
     }
 }
 
@@ -13,7 +13,6 @@ class PatreonAuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
     @Published var error: Error?
-
     private let client: PatreonClient
     private var authSession: ASWebAuthenticationSession?
     private let config: PatreonConfig
@@ -35,8 +34,13 @@ class PatreonAuthViewModel: ObservableObject {
     func startOAuthFlow() {
         isLoading = true
         error = nil
-
-        let scopes = ["identity", "identity[email]", "campaigns", "campaigns.members"]
+        let scopes = [
+            "identity",
+//            "identity.memberships",
+//            "identity[email]",
+//            "campaigns",
+//            "campaigns.members"
+        ]
         let scopeString = scopes.joined(separator: "%20")
 
         var components = URLComponents()
@@ -46,7 +50,7 @@ class PatreonAuthViewModel: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: config.redirectURI),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
             URLQueryItem(name: "scope", value: scopeString),
         ]
 
@@ -55,15 +59,20 @@ class PatreonAuthViewModel: ObservableObject {
             isLoading = false
             return
         }
-
-        let callbackURLScheme = URL(string: config.redirectURI)?.scheme ?? "arkavo"
+        print("authURL: \(authURL.absoluteString)")
+        let callbackURLScheme = URL(string: PatreonClient.redirectURI)?.scheme ?? "arkavo"
 
         authSession = ASWebAuthenticationSession(
             url: authURL,
             callbackURLScheme: callbackURLScheme
         ) { [weak self] callbackURL, error in
             guard let self else { return }
+            print("Callback received - URL: \(String(describing: callbackURL))")
+            print("Error if any: \(String(describing: error))")
 
+            if let callbackURL {
+                print("Query Items: \(String(describing: URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems))")
+            }
             if let error {
                 Task { @MainActor in
                     self.error = error
@@ -91,7 +100,7 @@ class PatreonAuthViewModel: ObservableObject {
         }
 
         authSession?.presentationContextProvider = windowController
-        authSession?.prefersEphemeralWebBrowserSession = true
+        authSession?.prefersEphemeralWebBrowserSession = false
 
         authSession?.start()
     }
@@ -117,6 +126,56 @@ class PatreonAuthViewModel: ObservableObject {
     func logout() {
         KeychainManager.deleteTokens()
         isAuthenticated = false
+    }
+}
+
+// MARK: - Auth ViewModel Extension
+
+extension PatreonAuthViewModel {
+    @MainActor
+    var authURL: URL? {
+        guard isLoading else { return nil }
+
+        let scopes = [
+            "identity",
+            "identity.memberships",
+            "identity[email]",
+            "campaigns",
+            "campaigns.members",
+        ]
+        let scopeString = scopes.joined(separator: "%20")
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
+            URLQueryItem(name: "scope", value: scopeString),
+        ]
+
+        return components.url
+    }
+
+    @MainActor
+    func handleAuthCode(_ code: String) async {
+        do {
+            let token = try await client.exchangeCode(code)
+
+            // Save tokens
+            try KeychainManager.saveTokens(
+                accessToken: token.accessToken,
+                refreshToken: token.refreshToken
+            )
+
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            self.error = error
+            isLoading = false
+        }
     }
 }
 
@@ -251,7 +310,6 @@ class PatreonAuthManager: ObservableObject {
     private let serviceIdentifier = "com.arkavo.Arkavo"
     private let clientId = ArkavoConfiguration.patreonClientId
     private let clientSecret = ArkavoConfiguration.patreonClientSecret
-    private let redirectUri = "arkavo://oauth/callback"
     @Published var isAuthenticated = false
     private var authSession: ASWebAuthenticationSession?
 
@@ -267,14 +325,14 @@ class PatreonAuthManager: ObservableObject {
         let urlString = "https://www.patreon.com/oauth2/authorize?" +
             "response_type=code&" +
             "client_id=\(clientId)&" +
-            "redirect_uri=\(redirectUri)&" +
+            "redirect_uri=\(PatreonClient.redirectURI)&" +
             "scope=\(scopeString)"
 
         guard let url = URL(string: urlString) else { return }
-
+        print("OAuth URL: %@", url)
         authSession = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: "yourapp"
+            callbackURLScheme: "arkavor"
         ) { [weak self] callbackURL, error in
             guard let self,
                   let callbackURL,
@@ -304,7 +362,7 @@ class PatreonAuthManager: ObservableObject {
             "grant_type": "authorization_code",
             "client_id": clientId,
             "client_secret": clientSecret,
-            "redirect_uri": redirectUri,
+            "redirect_uri": PatreonClient.redirectURI,
         ]
 
         request.httpBody = params
