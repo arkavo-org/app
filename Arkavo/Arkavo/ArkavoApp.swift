@@ -92,6 +92,11 @@ struct ArkavoApp: App {
         #if os(macOS)
         .windowStyle(HiddenTitleBarWindowStyle())
         .defaultSize(width: 1200, height: 800)
+        .handlesExternalEvents(matching: Set(arrayLiteral: "*")) // Handle all external events
+        .commands {
+            // Disable New Window command
+            CommandGroup(replacing: .newItem) {}
+        }
         #endif
     }
 
@@ -188,9 +193,69 @@ struct ArkavoApp: App {
 }
 
 #if os(macOS)
+    // Add this class to manage windows
+    class WindowManager: ObservableObject {
+        static let shared = WindowManager()
+        private var mainWindow: NSWindow?
+
+        func setMainWindow(_ window: NSWindow?) {
+            if mainWindow == nil {
+                mainWindow = window
+            }
+        }
+
+        func focusMainWindow() {
+            if let window = mainWindow {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+    }
+
+    struct WindowCaptureModifier: ViewModifier {
+        func body(content: Content) -> some View {
+            content.background(WindowCapture())
+        }
+    }
+
+    // Helper view to capture window reference
+    struct WindowCapture: NSViewRepresentable {
+        func makeNSView(context _: Context) -> NSView {
+            let view = NSView()
+            DispatchQueue.main.async {
+                WindowManager.shared.setMainWindow(view.window)
+            }
+            return view
+        }
+
+        func updateNSView(_: NSView, context _: Context) {}
+    }
+
     class AppDelegate: NSObject, NSApplicationDelegate {
+        func applicationDidFinishLaunching(_: Notification) {
+            NSWindow.allowsAutomaticWindowTabbing = false
+
+            // Register for Apple events (handles Universal Links)
+            NSAppleEventManager.shared().setEventHandler(
+                self,
+                andSelector: #selector(handleURLEvent(_:with:)),
+                forEventClass: AEEventClass(kInternetEventClass),
+                andEventID: AEEventID(kAEGetURL)
+            )
+        }
+
+        @objc func handleURLEvent(_ event: NSAppleEventDescriptor, with _: NSAppleEventDescriptor) {
+            guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+                  let url = URL(string: urlString) else { return }
+
+            WindowManager.shared.focusMainWindow()
+            NotificationCenter.default.post(name: .handleIncomingURL, object: url)
+        }
+
         func application(_: NSApplication, open urls: [URL]) {
             if let url = urls.first {
+                NSApp.activate(ignoringOtherApps: true)
+                WindowManager.shared.focusMainWindow()
                 NotificationCenter.default.post(name: .handleIncomingURL, object: url)
             }
         }

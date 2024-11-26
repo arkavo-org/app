@@ -596,6 +596,8 @@ public enum PatreonError: LocalizedError {
     case invalidURL
     case invalidResponse
     case authorizationFailed
+    case tokenExchangeFailed
+    case networkError
     case httpError(statusCode: Int)
     case decodingError(Error)
     case apiError(APIError)
@@ -614,6 +616,10 @@ public enum PatreonError: LocalizedError {
             error.detail ?? error.title
         case .authorizationFailed:
             "Authorization failed"
+        case .tokenExchangeFailed:
+            "Token exchange failed"
+        case .networkError:
+            "Network error"
         }
     }
 

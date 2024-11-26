@@ -107,9 +107,48 @@ class PatreonAuthViewModel: ObservableObject {
 
     private func exchangeCodeForTokens(_ code: String) async {
         do {
-            let token = try await client.exchangeCode(code)
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = "www.patreon.com"
+            components.path = "/api/oauth2/token" // Updated endpoint path
 
-            // Save tokens
+            guard let url = components.url else {
+                throw PatreonError.invalidURL
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+            let params = [
+                "code": code,
+                "grant_type": "authorization_code",
+                "client_id": config.clientId,
+                "client_secret": config.clientSecret,
+                "redirect_uri": PatreonClient.redirectURI,
+            ]
+
+            let body = params
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: "&")
+            request.httpBody = body.data(using: .utf8)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw PatreonError.networkError
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                print("Token exchange failed with status code: \(httpResponse.statusCode)")
+                if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("Error response: \(errorJson)")
+                }
+                throw PatreonError.tokenExchangeFailed
+            }
+
+            let token = try JSONDecoder().decode(PatreonAuthResponse.self, from: data)
+
             try KeychainManager.saveTokens(
                 accessToken: token.accessToken,
                 refreshToken: token.refreshToken
@@ -489,30 +528,33 @@ class PatreonAuthManager: ObservableObject {
 // MARK: - Auth View
 
 struct PatreonAuthView: View {
-    @StateObject private var authManager = PatreonAuthManager()
+    @StateObject var viewModel: PatreonAuthViewModel
 
     var body: some View {
         VStack(spacing: 20) {
-            if authManager.isAuthenticated {
+            if viewModel.isAuthenticated {
                 Text("Authenticated!")
                     .font(.headline)
                 Button("Logout") {
-                    authManager.logout()
+                    viewModel.logout()
                 }
             } else {
                 Text("Please login to continue")
                     .font(.headline)
                 Button("Login with Patreon") {
-                    authManager.startOAuthFlow()
+                    viewModel.startOAuthFlow()
                 }
+            }
+
+            if viewModel.isLoading {
+                ProgressView()
+            }
+
+            if let error = viewModel.error {
+                Text("Error: \(error.localizedDescription)")
+                    .foregroundColor(.red)
             }
         }
         .frame(width: 300, height: 200)
-    }
-}
-
-struct PatreonAuthView_Previews: PreviewProvider {
-    static var previews: some View {
-        PatreonAuthView()
     }
 }
