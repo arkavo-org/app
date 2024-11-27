@@ -33,6 +33,20 @@ chmod +x pkl-gen-swift
 
 ### Initialize
 
+#### Secrets
+
+Create `.env`
+
+```
+PATREON_CLIENT_ID=
+PATREON_CLIENT_SECRET=
+```
+
+```shell
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+```
+
+
 #### Flatbuffers (if changed)
 
 Events

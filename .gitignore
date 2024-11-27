@@ -4,7 +4,7 @@
 
 ## User settings
 xcuserdata/
-
+*.xcuserstate
 ## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
 *.xcscmblueprint
 *.xccheckout
@@ -93,10 +93,11 @@ iOSInjectionProject/
 /.cache/
 .idea
 /Arkavo/.fleet/
-.DS_Store
 .idea/app.iml
 .idea/vcs.xml
 Arkavo/OpenTDFKit/
 Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /default.store
 /app.iml
+*Secrets.*
+.env

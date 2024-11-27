@@ -4,7 +4,7 @@ import Security
 
 class RedditAuthManager: NSObject, ASWebAuthenticationPresentationContextProviding {
     private let clientId = "5Yf5m-g6oyKSWjMZO1nCHQ"
-    private let redirectUri = "arkavo://oath/callback"
+    private let redirectUri = "arkavo://oauth/callback"
     private let clientSecret = "" // not needed for this flow
     private let tokenKeychainKey = "com.arkavo.redditToken"
     private var authenticationSession: ASWebAuthenticationSession?

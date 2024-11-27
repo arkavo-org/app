@@ -15,6 +15,16 @@
 			<array>
 				<string>arkavo</string>
 			</array>
+			<key>LSMultipleInstancesProhibited</key>
+            <true/>
+            <key>NSSupportsAutomaticWindowTabbing</key>
+            <false/>
+            <key>NSQuitAlwaysKeepsWindows</key>
+            <false/>
+            <key>com.apple.developer.associated-domains</key>
+            <array>
+                <string>applinks:app.arkavo.com</string>
+            </array>
 			<key>NSDocumentsFolderUsageDescription</key>
 			<string>Arkavo requires access to your Documents folder to read and protect your content.</string>		
 		</dict>

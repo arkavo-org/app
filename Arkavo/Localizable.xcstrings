@@ -14,6 +14,16 @@
         }
       }
     },
+    "%@ ($%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ ($%2$@)"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
         "es-US" : {
@@ -25,6 +35,12 @@
       }
     },
     "%lld%%" : {
+
+    },
+    "$%.2f/month" : {
+
+    },
+    "$%lf/month" : {
 
     },
     "2m ago" : {
@@ -59,6 +75,12 @@
     "across 16 Social Networks" : {
 
     },
+    "Active Memberships: %lld" : {
+
+    },
+    "Activity" : {
+
+    },
     "Activity Level: %@" : {
 
     },
@@ -90,6 +112,9 @@
     "Age Verification" : {
 
     },
+    "All Patrons" : {
+
+    },
     "Arkavo" : {
 
     },
@@ -99,7 +124,13 @@
     "Audio message" : {
 
     },
+    "Authenticated!" : {
+
+    },
     "Authenticating..." : {
+
+    },
+    "Authentication Error" : {
 
     },
     "Authentication Status" : {
@@ -137,6 +168,12 @@
 
     },
     "Classification settings go here" : {
+
+    },
+    "Connect with Patreon" : {
+
+    },
+    "Connected Accounts" : {
 
     },
     "Content Protection" : {
@@ -196,6 +233,9 @@
     "Encryption" : {
 
     },
+    "Engagement" : {
+
+    },
     "Enter profile name" : {
 
     },
@@ -209,7 +249,16 @@
         }
       }
     },
+    "Error Code: %@" : {
+
+    },
+    "Error loading patrons" : {
+
+    },
     "Error loading stream: %@" : {
+
+    },
+    "Error: %@" : {
 
     },
     "Every day, content creators face challenges protecting their work online. You can make a real difference!" : {
@@ -224,7 +273,19 @@
     "Face ID Terms & Conditions" : {
 
     },
+    "Failed to load campaigns" : {
+
+    },
+    "Failed to load creator profile" : {
+
+    },
+    "Failed to load tiers" : {
+
+    },
     "Features" : {
+
+    },
+    "Filter by Tier" : {
 
     },
     "Granularity" : {
@@ -320,6 +381,9 @@
     "Loading stream..." : {
 
     },
+    "Loading tiers..." : {
+
+    },
     "Location" : {
 
     },
@@ -332,7 +396,13 @@
     "Location: %@" : {
 
     },
+    "Login with Patreon" : {
+
+    },
     "logo" : {
+
+    },
+    "Logout" : {
 
     },
     "Map" : {
@@ -349,6 +419,12 @@
 
     },
     "Members:" : {
+
+    },
+    "Message" : {
+
+    },
+    "Message to %@" : {
 
     },
     "My Account" : {
@@ -378,6 +454,9 @@
         }
       }
     },
+    "New Message" : {
+
+    },
     "Next" : {
 
     },
@@ -403,6 +482,18 @@
     "Owner:" : {
 
     },
+    "Patreon" : {
+
+    },
+    "Patron Details" : {
+
+    },
+    "Patron Overview" : {
+
+    },
+    "Patrons" : {
+
+    },
     "Pause Scanning" : {
 
     },
@@ -410,6 +501,9 @@
 
     },
     "Please grant location permission in Settings to use this feature." : {
+
+    },
+    "Please login to continue" : {
 
     },
     "Please provide a valid government-issued ID and a selfie to verify your age." : {
@@ -424,6 +518,9 @@
           }
         }
       }
+    },
+    "Preview" : {
+
     },
     "Privacy" : {
 
@@ -493,6 +590,9 @@
     "Recent Activity" : {
 
     },
+    "Recipients" : {
+
+    },
     "Reddit • 2 issues found" : {
 
     },
@@ -516,6 +616,9 @@
     "Resume Scanning" : {
 
     },
+    "Retry" : {
+
+    },
     "Save" : {
       "localizations" : {
         "es-US" : {
@@ -533,6 +636,21 @@
 
     },
     "Scan Completed" : {
+
+    },
+    "Schedule" : {
+
+    },
+    "Schedule Message" : {
+
+    },
+    "Search patrons..." : {
+
+    },
+    "Send" : {
+
+    },
+    "Send Date" : {
 
     },
     "Service misconfigured" : {
@@ -594,6 +712,9 @@
         }
       }
     },
+    "Since %@" : {
+
+    },
     "Start" : {
       "localizations" : {
         "es-US" : {
@@ -603,6 +724,9 @@
           }
         }
       }
+    },
+    "Start Authentication" : {
+
     },
     "Start group chats now, with more exciting features coming soon!" : {
       "extractionState" : "stale",
@@ -673,7 +797,13 @@
         }
       }
     },
+    "Subject" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
+    "Templates" : {
 
     },
     "Thank You for Making a Difference!" : {
@@ -692,13 +822,25 @@
     "Time Frame" : {
 
     },
+    "Time Range" : {
+
+    },
+    "To:" : {
+
+    },
     "Topic of Interest" : {
 
     },
     "Topic Tags:" : {
 
     },
+    "Total: $%.2f" : {
+
+    },
     "Trust Level: %@" : {
+
+    },
+    "Try Again" : {
 
     },
     "Type a message..." : {
@@ -731,6 +873,9 @@
       }
     },
     "Video message" : {
+
+    },
+    "View" : {
 
     },
     "View Dashboard" : {
@@ -780,6 +925,9 @@
       }
     },
     "What We are Discussing" : {
+
+    },
+    "Write your message..." : {
 
     },
     "You helped protect" : {
