@@ -36,7 +36,7 @@
 		DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */; };
 		DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
-		DA44D87F2CF6C63B0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D87E2CF6C63B0007C89B /* Secrets.swift */; };
+		DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D8842CF6E16F0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
@@ -112,7 +112,7 @@
 		DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeVerificationManager.swift; sourceTree = "<group>"; };
 		DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IDCardScannerViewController.swift; sourceTree = "<group>"; };
 		DA36F2032CBA1A4500762668 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
-		DA44D87E2CF6C63B0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		DA44D8842CF6E16F0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
@@ -196,7 +196,6 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
-				DA44D87E2CF6C63B0007C89B /* Secrets.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
@@ -242,6 +241,7 @@
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
 				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
 				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
+				DA44D8842CF6E16F0007C89B /* Secrets.swift */,
 				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
@@ -417,7 +417,6 @@
 /* Begin PBXShellScriptBuildPhase section */
 		DA44D8802CF6D3910007C89B /* Run Script */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -429,11 +428,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"${SRCROOT}/Arkavo/Arkavo/Secrets.swift",
+				"${SRCROOT}/Arkavo/Secrets.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let apiKey = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let secretToken = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/Arkavo/Secrets.swift\"\n";
+			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let patreonClientId = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let patreonClientSecret = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/Arkavo/Secrets.swift\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -443,7 +442,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
-				DA44D87F2CF6C63B0007C89B /* Secrets.swift in Sources */,
+				DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
 				DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */,
