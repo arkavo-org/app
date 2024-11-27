@@ -36,6 +36,7 @@
 		DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */; };
 		DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
+		DA44D87F2CF6C63B0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D87E2CF6C63B0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
@@ -48,10 +49,8 @@
 		DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */; };
 		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
-		DA9571962CF6A31D002A20E7 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DA9571952CF6A31D002A20E7 /* Secrets.xcconfig */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
 		DAAE39FD2CF3F48E00DAAA7A /* PatreonAuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */; };
-		DAAE39FF2CF3F6FF00DAAA7A /* ArkavoConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -113,6 +112,7 @@
 		DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeVerificationManager.swift; sourceTree = "<group>"; };
 		DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IDCardScannerViewController.swift; sourceTree = "<group>"; };
 		DA36F2032CBA1A4500762668 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
+		DA44D87E2CF6C63B0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
@@ -125,10 +125,8 @@
 		DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorProcessor.swift; sourceTree = "<group>"; };
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
-		DA9571952CF6A31D002A20E7 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonAuthenticationManager.swift; sourceTree = "<group>"; };
-		DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoConfiguration.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -198,7 +196,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
-				DA9571952CF6A31D002A20E7 /* Secrets.xcconfig */,
+				DA44D87E2CF6C63B0007C89B /* Secrets.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
@@ -209,7 +207,6 @@
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
-				DAAE39FE2CF3F6EA00DAAA7A /* ArkavoConfiguration.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
@@ -392,7 +389,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA9571962CF6A31D002A20E7 /* Secrets.xcconfig in Resources */,
 				DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */,
 				DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */,
 				CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */,
@@ -422,8 +418,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DAAE39FF2CF3F6FF00DAAA7A /* ArkavoConfiguration.swift in Sources */,
 				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
+				DA44D87F2CF6C63B0007C89B /* Secrets.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
 				DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */,
@@ -565,10 +561,6 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PATREON_CLIENT_ID = "";
-				"PATREON_CLIENT_ID[arch=*]" = "$(PATREON_CLIENT_ID)";
-				PATREON_CLIENT_SECRET = "";
-				"PATREON_CLIENT_SECRET[arch=*]" = "$(PATREON_CLIENT_SECRET)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -627,10 +619,6 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PATREON_CLIENT_ID = "";
-				"PATREON_CLIENT_ID[arch=*]" = "$(PATREON_CLIENT_ID)";
-				PATREON_CLIENT_SECRET = "";
-				"PATREON_CLIENT_SECRET[arch=*]" = "$(PATREON_CLIENT_SECRET)";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};

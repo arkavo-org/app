@@ -6,10 +6,10 @@ class PatreonService {
 
     init() {
         config = PatreonConfig(
-            clientId: ArkavoConfiguration.patreonClientId,
-            clientSecret: ArkavoConfiguration.patreonClientSecret,
-            creatorAccessToken: "", // These values should be handled separately
-            creatorRefreshToken: "", // perhaps through secure storage or auth flow
+            clientId: Secrets.patreonClientId,
+            clientSecret: Secrets.patreonClientSecret,
+            creatorAccessToken: "",
+            creatorRefreshToken: "",
             campaignId: ""
         )
         client = PatreonClient(config: config)
