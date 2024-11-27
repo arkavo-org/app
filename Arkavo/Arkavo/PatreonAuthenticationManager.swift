@@ -153,6 +153,31 @@ class KeychainManager {
     static func deleteTokens() {
         try? delete(service: "com.arkavo.patreon", account: "access_token")
         try? delete(service: "com.arkavo.patreon", account: "refresh_token")
+        try? delete(service: "com.arkavo.patreon", account: "campaign_id")
+    }
+}
+
+extension KeychainManager {
+    static func saveCampaignId(_ campaignId: String) throws {
+        try save(campaignId.data(using: .utf8)!,
+                 service: "com.arkavo.patreon",
+                 account: "campaign_id")
+    }
+
+    static func getCampaignId() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.patreon", account: "campaign_id")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            print("Error retrieving campaign ID:", error)
+            return nil
+        }
+    }
+
+    static func deleteTokensAndCampaignId() {
+        try? delete(service: "com.arkavo.patreon", account: "access_token")
+        try? delete(service: "com.arkavo.patreon", account: "refresh_token")
+        try? delete(service: "com.arkavo.patreon", account: "campaign_id")
     }
 }
 
@@ -185,10 +210,6 @@ class PatreonAuthViewModel: ObservableObject {
         error = nil
         let scopes = [
             "identity",
-            "identity.memberships",
-            "identity[email]",
-            "campaigns",
-            "campaigns.members",
         ]
         let scopeString = scopes.joined(separator: "%20")
 
@@ -304,6 +325,16 @@ class PatreonAuthViewModel: ObservableObject {
     func logout() {
         KeychainManager.deleteTokens()
         isAuthenticated = false
+        // Verify tokens are actually deleted
+        if KeychainManager.getAccessToken() != nil || KeychainManager.getRefreshToken() != nil {
+            print("Warning: Tokens were not properly deleted during logout")
+        }
+        // Reset authentication state
+        isAuthenticated = false
+        error = nil
+        // Cancel any pending auth session
+        authSession?.cancel()
+        authSession = nil
     }
 }
 

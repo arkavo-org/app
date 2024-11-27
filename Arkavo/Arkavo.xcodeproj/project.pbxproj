@@ -233,10 +233,10 @@
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
+				DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */,
 				DA0F81762CF0D8A600B10773 /* PatreonView.swift */,
 				DA0F817A2CF14D4700B10773 /* PatreonClient.swift */,
 				DA0F817C2CF1552A00B10773 /* PatreonService.swift */,
-				DAAE39FC2CF3F47A00DAAA7A /* PatreonAuthenticationManager.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
@@ -283,6 +283,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DAC1FA0A2C34DA7100499631 /* Build configuration list for PBXNativeTarget "Arkavo" */;
 			buildPhases = (
+				DA44D8802CF6D3910007C89B /* Run Script */,
 				DAC1F9DF2C34DA7000499631 /* Sources */,
 				DAC1F9E02C34DA7000499631 /* Frameworks */,
 				DAC1F9E12C34DA7000499631 /* Resources */,
@@ -412,6 +413,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		DA44D8802CF6D3910007C89B /* Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"${SRCROOT}/Arkavo/Arkavo/Secrets.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let apiKey = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let secretToken = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/Arkavo/Arkavo/Secrets.swift\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DAC1F9DF2C34DA7000499631 /* Sources */ = {

@@ -10,7 +10,7 @@ class PatreonService {
             clientSecret: Secrets.patreonClientSecret,
             creatorAccessToken: "",
             creatorRefreshToken: "",
-            campaignId: ""
+            campaignId: KeychainManager.getCampaignId() ?? ""
         )
         client = PatreonClient(config: config)
     }

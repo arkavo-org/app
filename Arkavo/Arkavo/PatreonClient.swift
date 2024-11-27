@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Core API Client
 
 public actor PatreonClient {
-    let config: PatreonConfig
+    var config: PatreonConfig
     public static let redirectURI = "https://webauthn.arkavo.net/oauth/patreon"
     private let urlSession: URLSession
 
@@ -24,7 +24,7 @@ public actor PatreonClient {
 public struct PatreonConfig {
     let clientId: String
     let clientSecret: String
-    let campaignId: String
+    var campaignId: String
 
     public init(
         clientId: String,
@@ -807,6 +807,9 @@ extension PatreonClient {
 
 extension PatreonClient {
     func getMembers() async throws -> [Patron] {
+        if config.campaignId == "" {
+            config.campaignId = KeychainManager.getCampaignId() ?? ""
+        }
         let response: MemberResponse = try await request(
             endpoint: .campaignMembers(id: config.campaignId),
             accessToken: config.creatorAccessToken,

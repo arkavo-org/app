@@ -13,7 +13,17 @@ struct PatreonRootView: View {
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
-                PatronManagementView(patreonClient: client)
+                HStack {
+                    UserIdentityView(patreonClient: client)
+                        .padding(.horizontal)
+                    Spacer()
+                    Button("Logout") {
+                        authViewModel.logout()
+                    }
+                }
+                CampaignView(patreonClient: client)
+                    .padding(.horizontal)
+                PatronManagementView(viewModel: authViewModel, patreonClient: client)
             } else {
                 PatreonLoginView(viewModel: authViewModel)
             }
@@ -101,6 +111,7 @@ extension View {
 }
 
 struct PatronManagementView: View {
+    @StateObject var viewModel: PatreonAuthViewModel
     let patreonClient: PatreonClient
     @State private var searchText = ""
     @State private var selectedFilter: PatronFilter = .all
@@ -138,17 +149,15 @@ struct PatronManagementView: View {
                         }
                     }
                     .buttonStyle(.bordered)
+                    Spacer()
+                    Button("Logout") {
+                        viewModel.logout()
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        UserIdentityView(patreonClient: patreonClient)
-                            .padding(.horizontal)
-
-                        CampaignView(patreonClient: patreonClient)
-                            .padding(.horizontal)
-
                         PatronStatsView(
                             totalCount: patrons.count,
                             activeCount: patrons.filter { $0.status == .active }.count,
@@ -751,17 +760,6 @@ struct PatronEngagementView_Previews: PreviewProvider {
     }
 }
 
-struct PatronManagementView_Previews: PreviewProvider {
-    static let patreonService = PatreonService()
-    static var previews: some View {
-        VStack(spacing: 20) {
-            PatronManagementView(patreonClient: patreonService.client)
-        }
-        .padding()
-        .background(Color.arkavoBackground)
-    }
-}
-
 // Preview Helper
 extension Patron {
     static let previewPatron = Patron(
@@ -852,6 +850,10 @@ struct CampaignView: View {
 
         do {
             let response = try await patreonClient.getCampaigns()
+            if let firstCampaignId = response.data.first?.id {
+                print("Found campaign ID: \(firstCampaignId)")
+                try KeychainManager.saveCampaignId(firstCampaignId)
+            }
             campaigns = response.data.map { campaignData in
                 let dateFormatter = ISO8601DateFormatter()
                 return Campaign(
