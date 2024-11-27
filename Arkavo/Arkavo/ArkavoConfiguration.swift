@@ -1,53 +1,47 @@
 import Foundation
 
 enum ArkavoConfiguration {
-    private enum Keys {
-        #if DEBUG
-            static let patreonClientId = ArkavoSecrets.shared.patreonClientId
-            static let patreonClientSecret = ArkavoSecrets.shared.patreonClientSecret
-        #else
-            // Values injected at build time via -D compiler flags
-            static let patreonClientId = PATREON_CLIENT_ID // Will be replaced by actual value
-            static let patreonClientSecret = PATREON_CLIENT_SECRET // Will be replaced by actual value
-        #endif
-    }
-
-    static let patreonClientId: String = Keys.patreonClientId
-    static let patreonClientSecret: String = Keys.patreonClientSecret
-}
-
-struct ArkavoSecrets {
-    static let shared = ArkavoSecrets()
-
-    let patreonClientId: String
-    let patreonClientSecret: String
-    let patreonCreatorAccessToken: String
-    let patreonCreatorRefreshToken: String
-    let patreonCampaignId: String
-
-    private init() {
-        // Read from Secrets.xcconfig bundle
-        guard let path = Bundle.main.path(forResource: "Secrets", ofType: "xcconfig"),
-              let config = try? String(contentsOfFile: path, encoding: .utf8)
-        else {
-            fatalError("Secrets.xcconfig not found")
-        }
-
-        let lines = config.components(separatedBy: .newlines)
-        var secrets: [String: String] = [:]
-
-        for line in lines {
-            let parts = line.components(separatedBy: "=").map { $0.trimmingCharacters(in: .whitespaces) }
-            if parts.count == 2 {
-                secrets[parts[0]] = parts[1]
+    #if DEBUG
+        static let patreonClientId: String = {
+            guard let value = ProcessInfo.processInfo.environment["PATREON_CLIENT_ID"] else {
+                fatalError("""
+                    
+                    🚨 PATREON_CLIENT_ID environment variable not set
+                    
+                    To fix this:
+                    1. Go to Xcode -> Your Scheme -> Edit Scheme...
+                    2. Select "Run" on the left
+                    3. Select "Arguments" tab
+                    4. Under "Environment Variables", click "+"
+                    5. Add PATREON_CLIENT_ID with your development client ID
+                    
+                    If you don't have a client ID, get one from the Patreon developer portal.
+                    """)
             }
-        }
-
-        // Extract values with default empty strings
-        patreonClientId = secrets["PATREON_CLIENT_ID"] ?? ""
-        patreonClientSecret = secrets["PATREON_CLIENT_SECRET"] ?? ""
-        patreonCreatorAccessToken = secrets["PATREON_CREATOR_ACCESS_TOKEN"] ?? ""
-        patreonCreatorRefreshToken = secrets["PATREON_CREATOR_REFRESH_TOKEN"] ?? ""
-        patreonCampaignId = secrets["PATREON_CAMPAIGN_ID"] ?? ""
-    }
+            return value
+        }()
+        
+        static let patreonClientSecret: String = {
+            guard let value = ProcessInfo.processInfo.environment["PATREON_CLIENT_SECRET"] else {
+                fatalError("""
+                    
+                    🚨 PATREON_CLIENT_SECRET environment variable not set
+                    
+                    To fix this:
+                    1. Go to Xcode -> Your Scheme -> Edit Scheme...
+                    2. Select "Run" on the left
+                    3. Select "Arguments" tab
+                    4. Under "Environment Variables", click "+"
+                    5. Add PATREON_CLIENT_SECRET with your development client secret
+                    
+                    If you don't have a client secret, get one from the Patreon developer portal.
+                    """)
+            }
+            return value
+        }()
+    #else
+        // Values injected at build time via -D compiler flags for release builds
+        static let patreonClientId = PATREON_CLIENT_ID
+        static let patreonClientSecret = PATREON_CLIENT_SECRET
+    #endif
 }

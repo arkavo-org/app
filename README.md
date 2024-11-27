@@ -35,7 +35,7 @@ chmod +x pkl-gen-swift
 
 #### Secrets
 
-Secrets.xcconfig
+Set Scheme Environment variables
 
 ```
 PATREON_CLIENT_ID=

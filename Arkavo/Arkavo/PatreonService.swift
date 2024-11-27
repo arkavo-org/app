@@ -5,13 +5,12 @@ class PatreonService {
     let config: PatreonConfig
 
     init() {
-        let secrets = ArkavoSecrets.shared
         config = PatreonConfig(
-            clientId: secrets.patreonClientId,
-            clientSecret: secrets.patreonClientSecret,
-            creatorAccessToken: secrets.patreonCreatorAccessToken,
-            creatorRefreshToken: secrets.patreonCreatorRefreshToken,
-            campaignId: secrets.patreonCampaignId
+            clientId: ArkavoConfiguration.patreonClientId,
+            clientSecret: ArkavoConfiguration.patreonClientSecret,
+            creatorAccessToken: "", // These values should be handled separately
+            creatorRefreshToken: "", // perhaps through secure storage or auth flow
+            campaignId: ""
         )
         client = PatreonClient(config: config)
     }
