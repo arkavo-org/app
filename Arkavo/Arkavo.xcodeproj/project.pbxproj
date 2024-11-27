@@ -433,7 +433,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"Current directory: $(pwd)\"\nls -l \"${SCRIPT_DIR}\"\n\necho \"// Do not commit.\\nstruct Secrets {\\n    static let apiKey = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let secretToken = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/Arkavo/Arkavo/Secrets.swift\"\nls -l \"${SRCROOT}/Arkavo/Arkavo\"\n";
+			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let apiKey = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let secretToken = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/Arkavo/Secrets.swift\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
