@@ -21,58 +21,6 @@ struct PatreonRootView: View {
     }
 }
 
-// MARK: - WebView Coordinator
-
-class WebViewCoordinator: NSObject, WKNavigationDelegate {
-    var parent: WebView
-    var viewModel: PatreonAuthViewModel
-
-    init(_ parent: WebView, viewModel: PatreonAuthViewModel) {
-        self.parent = parent
-        self.viewModel = viewModel
-    }
-
-    func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if let url = navigationAction.request.url,
-           url.scheme == "arkavo",
-           let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-           .queryItems?
-           .first(where: { $0.name == "code" })?
-           .value
-        {
-            // Handle the OAuth callback
-            Task {
-                await viewModel.handleAuthCode(code)
-            }
-            decisionHandler(.cancel)
-            return
-        }
-        decisionHandler(.allow)
-    }
-}
-
-// MARK: - WebView Representative
-
-struct WebView: NSViewRepresentable {
-    let viewModel: PatreonAuthViewModel
-    let url: URL
-
-    func makeCoordinator() -> WebViewCoordinator {
-        WebViewCoordinator(self, viewModel: viewModel)
-    }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let webView = WKWebView()
-        webView.navigationDelegate = context.coordinator
-        return webView
-    }
-
-    func updateNSView(_ webView: WKWebView, context _: Context) {
-        let request = URLRequest(url: url)
-        webView.load(request)
-    }
-}
-
 // MARK: - Patreon Login View
 
 struct PatreonLoginView: View {
@@ -80,7 +28,7 @@ struct PatreonLoginView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 16) {
             if viewModel.isLoading {
                 ProgressView()
                     .scaleEffect(1.5)
@@ -97,8 +45,6 @@ struct PatreonLoginView: View {
                     }
                 }
                 .padding()
-            } else if let url = viewModel.authURL {
-                WebView(viewModel: viewModel, url: url)
             } else {
                 VStack(spacing: 16) {
                     Text("Connect with Patreon")
@@ -110,7 +56,8 @@ struct PatreonLoginView: View {
                 }
             }
         }
-        .frame(width: 800, height: 600)
+        .adaptiveFrame()
+        .adaptiveBackgroundStyle()
         .onChange(of: viewModel.isAuthenticated) { _, isAuthenticated in
             if isAuthenticated {
                 dismiss()
@@ -119,47 +66,39 @@ struct PatreonLoginView: View {
     }
 }
 
-// struct PatreonLoginView: View {
-//    @ObservedObject var viewModel: PatreonAuthViewModel
-//
-//    var body: some View {
-//        VStack(spacing: 24) {
-//            Text("Manage Your Patrons")
-//                .font(.title)
-//                .fontWeight(.bold)
-//
-//            Text("Connect your Patreon account to get started")
-//                .font(.subheadline)
-//                .foregroundColor(.secondary)
-//
-//            if viewModel.isLoading {
-//                ProgressView()
-//            } else {
-//                Button(action: {
-//                    viewModel.startOAuthFlow()
-//                }) {
-//                    HStack {
-//                        Image(systemName: "lock.shield")
-//                        Text("Login with Patreon")
-//                    }
-//                    .frame(width: 200)
-//                }
-//                .buttonStyle(.borderedProminent)
-//                .tint(.arkavoBrand)
-//            }
-//
-//            if let error = viewModel.error {
-//                Text(error.localizedDescription)
-//                    .font(.caption)
-//                    .foregroundColor(.red)
-//                    .multilineTextAlignment(.center)
-//                    .frame(maxWidth: 300)
-//            }
-//        }
-//        .padding()
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//    }
-// }
+// MARK: - Platform Adaptations
+
+extension View {
+    func adaptiveFrame() -> some View {
+        #if os(macOS)
+            frame(width: 800, height: 600)
+        #elseif os(visionOS)
+            frame(width: 500, height: 400)
+                .padding(.horizontal, 40)
+        #else
+            frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
+    }
+
+    func adaptiveBackgroundStyle() -> some View {
+        #if os(visionOS)
+            backgroundStyle(.glass)
+        #else
+            background(.background)
+        #endif
+    }
+
+    func adaptiveListStyle() -> some View {
+        #if os(visionOS)
+            listStyle(.plain)
+                .scrollContentBackground(.hidden)
+        #elseif os(macOS)
+            listStyle(.inset)
+        #else
+            listStyle(.insetGrouped)
+        #endif
+    }
+}
 
 struct PatronManagementView: View {
     let patreonClient: PatreonClient
@@ -181,6 +120,7 @@ struct PatronManagementView: View {
     var body: some View {
         VStack(spacing: 0) {
             PatronSearchBar(searchText: $searchText, selectedFilter: $selectedFilter)
+                .adaptiveBackgroundStyle()
 
             if isLoading {
                 ProgressView()
@@ -224,28 +164,31 @@ struct PatronManagementView: View {
                     }
                     .padding()
                 }
+                .adaptiveListStyle()
                 .refreshable {
                     await loadPatrons()
                 }
             }
         }
         .navigationTitle("Patrons")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingMessageComposer = true }) {
-                    Image(systemName: "envelope")
+        #if !os(visionOS)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { showingMessageComposer = true }) {
+                        Image(systemName: "envelope")
+                    }
                 }
             }
-        }
-        .sheet(isPresented: $showingMessageComposer) {
-            MessageComposerView(patreonClient: patreonClient)
-        }
-        .sheet(item: $selectedPatron) { patron in
-            PatronDetailView(patron: patron, patreonClient: patreonClient)
-        }
-        .task {
-            await loadPatrons()
-        }
+        #endif
+            .sheet(isPresented: $showingMessageComposer) {
+                MessageComposerView(patreonClient: patreonClient)
+            }
+            .sheet(item: $selectedPatron) { patron in
+                PatronDetailView(patron: patron, patreonClient: patreonClient)
+            }
+            .task {
+                await loadPatrons()
+            }
     }
 
     private var filteredPatrons: [Patron] {
@@ -303,7 +246,6 @@ struct PatronStatsView: View {
             }
         }
         .padding()
-        .background(Color(.textBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
     }
@@ -436,7 +378,6 @@ struct FilterChip: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(isSelected ? Color.arkavoBrand : Color.gray.opacity(0.1))
-                .foregroundColor(isSelected ? .white : .primary)
                 .cornerRadius(16)
         }
     }

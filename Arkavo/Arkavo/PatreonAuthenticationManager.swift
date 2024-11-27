@@ -2,220 +2,34 @@ import AuthenticationServices
 import Security
 import SwiftUI
 
-class AuthenticationWindowController: NSObject, ASWebAuthenticationPresentationContextProviding {
-    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        NSApp.keyWindow ?? ASPresentationAnchor()
-    }
-}
+// MARK: - Platform-specific type aliases and protocols
 
-@MainActor
-class PatreonAuthViewModel: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var isLoading = false
-    @Published var error: Error?
-    private let client: PatreonClient
-    private var authSession: ASWebAuthenticationSession?
-    private let config: PatreonConfig
-    private let windowController = AuthenticationWindowController()
+#if os(macOS)
+    typealias ASPresentationAnchorProtocol = ASPresentationAnchor
+#else
+    typealias ASPresentationAnchorProtocol = UIWindow
+#endif
 
-    init(client: PatreonClient, config: PatreonConfig) {
-        self.client = client
-        self.config = config
-        checkExistingAuth()
-    }
+// MARK: - Authentication Context Provider
 
-    private func checkExistingAuth() {
-        // Check keychain for existing tokens
-        if KeychainManager.getAccessToken() != nil {
-            isAuthenticated = true
+class AuthenticationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    #if os(macOS)
+        func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            NSApp.keyWindow ?? ASPresentationAnchor()
         }
-    }
-
-    func startOAuthFlow() {
-        isLoading = true
-        error = nil
-        let scopes = [
-            "identity",
-//            "identity.memberships",
-//            "identity[email]",
-//            "campaigns",
-//            "campaigns.members"
-        ]
-        let scopeString = scopes.joined(separator: "%20")
-
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "www.patreon.com"
-        components.path = "/oauth2/authorize"
-        components.queryItems = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
-            URLQueryItem(name: "scope", value: scopeString),
-        ]
-
-        guard let authURL = components.url else {
-            error = PatreonError.invalidURL
-            isLoading = false
-            return
-        }
-        print("authURL: \(authURL.absoluteString)")
-        let callbackURLScheme = URL(string: PatreonClient.redirectURI)?.scheme ?? "arkavo"
-
-        authSession = ASWebAuthenticationSession(
-            url: authURL,
-            callbackURLScheme: callbackURLScheme
-        ) { [weak self] callbackURL, error in
-            guard let self else { return }
-            print("Callback received - URL: \(String(describing: callbackURL))")
-            print("Error if any: \(String(describing: error))")
-
-            if let callbackURL {
-                print("Query Items: \(String(describing: URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems))")
-            }
-            if let error {
-                Task { @MainActor in
-                    self.error = error
-                    self.isLoading = false
-                }
-                return
-            }
-
-            guard let callbackURL,
-                  let code = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
-                  .queryItems?
-                  .first(where: { $0.name == "code" })?
-                  .value
+    #else
+        func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            guard let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                let window = windowScene.windows.first(where: { $0.isKeyWindow })
             else {
-                Task { @MainActor in
-                    self.error = PatreonError.authorizationFailed
-                    self.isLoading = false
-                }
-                return
+                let window = UIWindow()
+                window.makeKeyAndVisible()
+                return window
             }
-
-            Task {
-                await self.exchangeCodeForTokens(code)
-            }
+            return window
         }
-
-        authSession?.presentationContextProvider = windowController
-        authSession?.prefersEphemeralWebBrowserSession = false
-
-        authSession?.start()
-    }
-
-    private func exchangeCodeForTokens(_ code: String) async {
-        do {
-            var components = URLComponents()
-            components.scheme = "https"
-            components.host = "www.patreon.com"
-            components.path = "/api/oauth2/token" // Updated endpoint path
-
-            guard let url = components.url else {
-                throw PatreonError.invalidURL
-            }
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-            let params = [
-                "code": code,
-                "grant_type": "authorization_code",
-                "client_id": config.clientId,
-                "client_secret": config.clientSecret,
-                "redirect_uri": PatreonClient.redirectURI,
-            ]
-
-            let body = params
-                .map { "\($0.key)=\($0.value)" }
-                .joined(separator: "&")
-            request.httpBody = body.data(using: .utf8)
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw PatreonError.networkError
-            }
-
-            guard httpResponse.statusCode == 200 else {
-                print("Token exchange failed with status code: \(httpResponse.statusCode)")
-                if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("Error response: \(errorJson)")
-                }
-                throw PatreonError.tokenExchangeFailed
-            }
-
-            let token = try JSONDecoder().decode(PatreonAuthResponse.self, from: data)
-
-            try KeychainManager.saveTokens(
-                accessToken: token.accessToken,
-                refreshToken: token.refreshToken
-            )
-
-            isAuthenticated = true
-            isLoading = false
-        } catch {
-            self.error = error
-            isLoading = false
-        }
-    }
-
-    func logout() {
-        KeychainManager.deleteTokens()
-        isAuthenticated = false
-    }
-}
-
-// MARK: - Auth ViewModel Extension
-
-extension PatreonAuthViewModel {
-    @MainActor
-    var authURL: URL? {
-        guard isLoading else { return nil }
-
-        let scopes = [
-            "identity",
-            "identity.memberships",
-            "identity[email]",
-            "campaigns",
-            "campaigns.members",
-        ]
-        let scopeString = scopes.joined(separator: "%20")
-
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "www.patreon.com"
-        components.path = "/oauth2/authorize"
-        components.queryItems = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
-            URLQueryItem(name: "scope", value: scopeString),
-        ]
-
-        return components.url
-    }
-
-    @MainActor
-    func handleAuthCode(_ code: String) async {
-        do {
-            let token = try await client.exchangeCode(code)
-
-            // Save tokens
-            try KeychainManager.saveTokens(
-                accessToken: token.accessToken,
-                refreshToken: token.refreshToken
-            )
-
-            isAuthenticated = true
-            isLoading = false
-        } catch {
-            self.error = error
-            isLoading = false
-        }
-    }
+    #endif
 }
 
 // MARK: - Auth Models
@@ -256,7 +70,6 @@ class KeychainManager {
         let status = SecItemAdd(query as CFDictionary, nil)
 
         if status == errSecDuplicateItem {
-            // Item already exists, update it
             let attributes: [String: AnyObject] = [
                 kSecValueData as String: data as AnyObject,
             ]
@@ -305,9 +118,9 @@ class KeychainManager {
             throw KeychainError.unknown(status)
         }
     }
-}
 
-extension KeychainManager {
+    // MARK: - Token Management Convenience Methods
+
     static func getAccessToken() -> String? {
         do {
             let data = try load(service: "com.arkavo.patreon", account: "access_token")
@@ -343,185 +156,154 @@ extension KeychainManager {
     }
 }
 
-// MARK: - Auth Manager
+// MARK: - Auth ViewModel
 
-class PatreonAuthManager: ObservableObject {
-    private let serviceIdentifier = "com.arkavo.Arkavo"
-    private let clientId = ArkavoConfiguration.patreonClientId
-    private let clientSecret = ArkavoConfiguration.patreonClientSecret
+@MainActor
+class PatreonAuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
+    @Published var isLoading = false
+    @Published var error: Error?
+    private let client: PatreonClient
     private var authSession: ASWebAuthenticationSession?
+    private let config: PatreonConfig
+    private let contextProvider = AuthenticationContextProvider()
 
-    init() {
-        // Check for existing tokens on launch
-        isAuthenticated = getAccessToken() != nil
+    init(client: PatreonClient, config: PatreonConfig) {
+        self.client = client
+        self.config = config
+        checkExistingAuth()
+    }
+
+    private func checkExistingAuth() {
+        if KeychainManager.getAccessToken() != nil {
+            isAuthenticated = true
+        }
     }
 
     func startOAuthFlow() {
-        let scopes = ["identity", "identity[email]", "campaigns", "campaigns.members"]
+        isLoading = true
+        error = nil
+        let scopes = [
+            "identity",
+            "identity.memberships",
+            "identity[email]",
+            "campaigns",
+            "campaigns.members",
+        ]
         let scopeString = scopes.joined(separator: "%20")
 
-        let urlString = "https://www.patreon.com/oauth2/authorize?" +
-            "response_type=code&" +
-            "client_id=\(clientId)&" +
-            "redirect_uri=\(PatreonClient.redirectURI)&" +
-            "scope=\(scopeString)"
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
+            URLQueryItem(name: "scope", value: scopeString),
+        ]
 
-        guard let url = URL(string: urlString) else { return }
-        print("OAuth URL: %@", url)
+        guard let authURL = components.url else {
+            error = PatreonError.invalidURL
+            isLoading = false
+            return
+        }
+
+        let callbackURLScheme = URL(string: PatreonClient.redirectURI)?.scheme ?? "arkavo"
+
         authSession = ASWebAuthenticationSession(
-            url: url,
-            callbackURLScheme: "arkavor"
+            url: authURL,
+            callbackURLScheme: callbackURLScheme
         ) { [weak self] callbackURL, error in
-            guard let self,
-                  let callbackURL,
+            guard let self else { return }
+
+            if let error {
+                Task { @MainActor in
+                    self.error = error
+                    self.isLoading = false
+                }
+                return
+            }
+
+            guard let callbackURL,
                   let code = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
                   .queryItems?
                   .first(where: { $0.name == "code" })?
                   .value
             else {
-                print("OAuth error:", error?.localizedDescription ?? "Unknown error")
-                return
-            }
-
-            exchangeCodeForTokens(code)
-        }
-
-        authSession?.presentationContextProvider = NSApplication.shared.keyWindow as? ASWebAuthenticationPresentationContextProviding
-        authSession?.start()
-    }
-
-    private func exchangeCodeForTokens(_ code: String) {
-        let url = URL(string: "https://www.patreon.com/api/oauth2/token")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-
-        let params = [
-            "code": code,
-            "grant_type": "authorization_code",
-            "client_id": clientId,
-            "client_secret": clientSecret,
-            "redirect_uri": PatreonClient.redirectURI,
-        ]
-
-        request.httpBody = params
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: "&")
-            .data(using: .utf8)
-
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
-            guard let data,
-                  let authResponse = try? JSONDecoder().decode(PatreonAuthResponse.self, from: data)
-            else {
-                print("Token exchange error:", error?.localizedDescription ?? "Unknown error")
-                return
-            }
-
-            self?.saveTokens(authResponse)
-
-            DispatchQueue.main.async {
-                self?.isAuthenticated = true
-            }
-        }.resume()
-    }
-
-    // MARK: - Token Management
-
-    private func saveTokens(_ auth: PatreonAuthResponse) {
-        do {
-            // Save access token
-            let accessTokenData = auth.accessToken.data(using: .utf8)!
-            try KeychainManager.save(accessTokenData,
-                                     service: serviceIdentifier,
-                                     account: "patreon_access_token")
-
-            // Save refresh token
-            let refreshTokenData = auth.refreshToken.data(using: .utf8)!
-            try KeychainManager.save(refreshTokenData,
-                                     service: serviceIdentifier,
-                                     account: "patreon_refresh_token")
-
-            // Save expiration date
-            let expirationDate = Date().addingTimeInterval(TimeInterval(auth.expiresIn))
-            UserDefaults.standard.set(expirationDate, forKey: "patreon_token_expiration")
-        } catch {
-            print("Error saving tokens:", error)
-        }
-    }
-
-    func getAccessToken() -> String? {
-        guard let expirationDate = UserDefaults.standard.object(forKey: "patreon_token_expiration") as? Date,
-              expirationDate > Date()
-        else {
-            // Token expired, try to refresh
-            refreshTokens()
-            return nil
-        }
-
-        do {
-            let data = try KeychainManager.load(service: serviceIdentifier,
-                                                account: "patreon_access_token")
-            return String(data: data, encoding: .utf8)
-        } catch {
-            print("Error retrieving access token:", error)
-            return nil
-        }
-    }
-
-    private func refreshTokens() {
-        guard let refreshTokenData = try? KeychainManager.load(
-            service: serviceIdentifier,
-            account: "patreon_refresh_token"
-        ),
-            let refreshToken = String(data: refreshTokenData, encoding: .utf8)
-        else { return }
-
-        let url = URL(string: "https://www.patreon.com/api/oauth2/token")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-
-        let params = [
-            "grant_type": "refresh_token",
-            "refresh_token": refreshToken,
-            "client_id": clientId,
-            "client_secret": clientSecret,
-        ]
-
-        request.httpBody = params
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: "&")
-            .data(using: .utf8)
-
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
-            guard let data,
-                  let authResponse = try? JSONDecoder().decode(PatreonAuthResponse.self, from: data)
-            else {
-                print("Token refresh error:", error?.localizedDescription ?? "Unknown error")
-                DispatchQueue.main.async {
-                    self?.isAuthenticated = false
+                Task { @MainActor in
+                    self.error = PatreonError.authorizationFailed
+                    self.isLoading = false
                 }
                 return
             }
 
-            self?.saveTokens(authResponse)
-        }.resume()
+            Task {
+                await self.exchangeCodeForTokens(code)
+            }
+        }
+
+        authSession?.presentationContextProvider = contextProvider
+        authSession?.prefersEphemeralWebBrowserSession = false
+        authSession?.start()
+    }
+
+    private func exchangeCodeForTokens(_ code: String) async {
+        do {
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = "www.patreon.com"
+            components.path = "/api/oauth2/token"
+
+            guard let url = components.url else {
+                throw PatreonError.invalidURL
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+            let params = [
+                "code": code,
+                "grant_type": "authorization_code",
+                "client_id": config.clientId,
+                "client_secret": config.clientSecret,
+                "redirect_uri": PatreonClient.redirectURI,
+            ]
+
+            let body = params
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: "&")
+            request.httpBody = body.data(using: .utf8)
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw PatreonError.networkError
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                throw PatreonError.tokenExchangeFailed
+            }
+
+            let token = try JSONDecoder().decode(PatreonAuthResponse.self, from: data)
+
+            try KeychainManager.saveTokens(
+                accessToken: token.accessToken,
+                refreshToken: token.refreshToken
+            )
+
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            self.error = error
+            isLoading = false
+        }
     }
 
     func logout() {
-        do {
-            try KeychainManager.delete(service: serviceIdentifier,
-                                       account: "patreon_access_token")
-            try KeychainManager.delete(service: serviceIdentifier,
-                                       account: "patreon_refresh_token")
-            UserDefaults.standard.removeObject(forKey: "patreon_token_expiration")
-            isAuthenticated = false
-        } catch {
-            print("Error logging out:", error)
-        }
+        KeychainManager.deleteTokens()
+        isAuthenticated = false
     }
 }
 
@@ -538,12 +320,14 @@ struct PatreonAuthView: View {
                 Button("Logout") {
                     viewModel.logout()
                 }
+                .buttonStyle(.borderedProminent)
             } else {
                 Text("Please login to continue")
                     .font(.headline)
                 Button("Login with Patreon") {
                     viewModel.startOAuthFlow()
                 }
+                .buttonStyle(.borderedProminent)
             }
 
             if viewModel.isLoading {
@@ -555,6 +339,10 @@ struct PatreonAuthView: View {
                     .foregroundColor(.red)
             }
         }
-        .frame(width: 300, height: 200)
+        .frame(maxWidth: 300)
+        .padding()
+        #if os(macOS)
+            .frame(height: 200)
+        #endif
     }
 }

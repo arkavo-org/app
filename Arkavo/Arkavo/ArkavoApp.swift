@@ -4,7 +4,11 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-    @State private var selectedView: AppView = .registration
+    #if os(macOS)
+        @State private var selectedView: AppView = .patreon
+    #else
+        @State private var selectedView: AppView = .registration
+    #endif
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     let persistenceController = PersistenceController.shared
@@ -29,7 +33,14 @@ struct ArkavoApp: App {
                     })
                 case .main:
                     #if os(macOS)
-                        PatreonRootView(client: patreonService.client, config: patreonService.config)
+                        VStack(spacing: 0) {
+                            ViewSwitcher(selectedView: $selectedView)
+                            MainContentView(
+                                service: service,
+                                patreonService: patreonService,
+                                navigationPath: $navigationPath
+                            )
+                        }
                     #else
                         NavigationStack(path: $navigationPath) {
                             ArkavoView(service: service)
@@ -50,6 +61,13 @@ struct ArkavoApp: App {
                                         Text("Profile View for \(publicID)")
                                     }
                                 }
+                        }
+                    #endif
+                case .patreon:
+                    #if os(macOS)
+                        VStack(spacing: 0) {
+                            ViewSwitcher(selectedView: $selectedView)
+                            PatreonRootView(client: patreonService.client, config: patreonService.config)
                         }
                     #endif
                 }
@@ -92,10 +110,21 @@ struct ArkavoApp: App {
         #if os(macOS)
         .windowStyle(HiddenTitleBarWindowStyle())
         .defaultSize(width: 1200, height: 800)
-        .handlesExternalEvents(matching: Set(arrayLiteral: "*")) // Handle all external events
+        .handlesExternalEvents(matching: Set(arrayLiteral: "*"))
         .commands {
-            // Disable New Window command
             CommandGroup(replacing: .newItem) {}
+            // Add view switching commands
+            CommandMenu("View") {
+                Button("Arkavo") {
+                    selectedView = .main
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Patreon") {
+                    selectedView = .patreon
+                }
+                .keyboardShortcut("2", modifiers: .command)
+            }
         }
         #endif
     }
@@ -110,7 +139,9 @@ struct ArkavoApp: App {
             if account.profile == nil {
                 selectedView = .registration
             } else {
-                selectedView = .main
+                #if !os(macOS)
+                    selectedView = .main
+                #endif
             }
         } catch {
             print("ArkavoApp: Error checking account status: \(error.localizedDescription)")
@@ -193,7 +224,53 @@ struct ArkavoApp: App {
 }
 
 #if os(macOS)
-    // Add this class to manage windows
+    struct ViewSwitcher: View {
+        @Binding var selectedView: AppView
+
+        var body: some View {
+            HStack {
+                Picker("View", selection: $selectedView) {
+                    Text("Patreon").tag(AppView.patreon)
+                    Text("Arkavo").tag(AppView.main)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .frame(width: 200)
+            }
+            .background(Color(NSColor.windowBackgroundColor))
+            .overlay(
+                Divider(),
+                alignment: .bottom
+            )
+        }
+    }
+
+    struct MainContentView: View {
+        let service: ArkavoService
+        let patreonService: PatreonService
+        @Binding var navigationPath: NavigationPath
+
+        var body: some View {
+            NavigationStack(path: $navigationPath) {
+                ArkavoView(service: service)
+                    .modelContainer(PersistenceController.shared.container)
+                    .navigationDestination(for: DeepLinkDestination.self) { destination in
+                        switch destination {
+                        case let .stream(publicID):
+                            if service.streamService == nil {
+                                Text("No Stream Service for \(publicID)")
+                            } else {
+                                StreamLoadingView(service: service.streamService!, publicID: publicID)
+                            }
+                        case let .profile(publicID):
+                            Text("Profile View for \(publicID)")
+                        }
+                    }
+            }
+        }
+    }
+
     class WindowManager: ObservableObject {
         static let shared = WindowManager()
         private var mainWindow: NSWindow?
@@ -265,6 +342,7 @@ struct ArkavoApp: App {
 enum AppView {
     case registration
     case main
+    case patreon
 }
 
 enum DeepLinkDestination: Hashable {
