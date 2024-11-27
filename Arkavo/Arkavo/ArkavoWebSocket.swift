@@ -1,7 +1,7 @@
 import Combine
-import OpenTDFKit
 import CryptoKit
 import Foundation
+import OpenTDFKit
 
 public enum WebSocketConnectionState {
     case disconnected
@@ -250,7 +250,7 @@ public class KASWebSocket: @unchecked Sendable {
         let symmetricKey = HKDF<SHA256>.deriveKey(inputKeyMaterial: sharedSecretKey, salt: salt, info: info, outputByteCount: outputByteCount)
         return symmetricKey
     }
-    
+
     public func sendPublicKey() {
         let myPublicKey = myPrivateKey.publicKey
 //        let hexData = myPublicKey.compressedRepresentation.map { String(format: "%02x", $0) }.joined()
