@@ -51,7 +51,7 @@ class ThoughtService {
         self.service = service
     }
 
-    func createNano(_ viewModel: ThoughtViewModel, stream: Stream) throws -> Data {
+    func createNano(_ viewModel: ThoughtViewModel, stream: Stream) async throws -> Data {
         guard let kasPublicKey = ArkavoService.kasPublicKey else {
             print("KAS public key not available")
             return Data()
@@ -177,8 +177,8 @@ class ThoughtService {
         let payload = try createPayload(viewModel: viewModel)
         // Create a NanoTDF
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
-        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: payload)
+        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+        let nanoTDF = try await createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: payload)
         print("nanoTDF: \(nanoTDF.toData().base64EncodedString())")
         return nanoTDF.toData()
     }
@@ -193,7 +193,7 @@ class ThoughtService {
 
     func send(viewModel: ThoughtViewModel, stream: Stream) async {
         do {
-            let nano = try createNano(viewModel, stream: stream)
+            let nano = try await createNano(viewModel, stream: stream)
             // persist
             // FIXME: always fails on unique constraint
 //            let thought = Thought(id: UUID(), nano: nano)

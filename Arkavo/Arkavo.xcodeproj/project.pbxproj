@@ -59,6 +59,7 @@
 		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
 		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61E2CAF5D2C00A9060C /* AccountView.swift */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
@@ -138,6 +139,7 @@
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoWebSocket.swift; sourceTree = "<group>"; };
 		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DACCD61E2CAF5D2C00A9060C /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
+				DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */,
 				DACCD61E2CAF5D2C00A9060C /* AccountView.swift */,
 				DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
@@ -470,6 +473,7 @@
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
+				DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */,
 				DA0F817B2CF14D4700B10773 /* PatreonClient.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
@@ -886,7 +890,7 @@
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = exactVersion;
-				version = 2.2.1;
+				version = 3.0.0;
 			};
 		};
 		DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */ = {

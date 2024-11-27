@@ -165,7 +165,7 @@ struct ArkavoView: View {
                     let preprocessor = try ContentPreprocessor()
                     let signature = try preprocessor.generateSignature(for: contentString)
                     if let account = accounts.first, let profile = account.profile {
-                        try service.protectorService?.sendContentSignatureEvent(signature, creatorPublicID: profile.publicID)
+                        try await service.protectorService?.sendContentSignatureEvent(signature, creatorPublicID: profile.publicID)
                     }
                 } catch {
                     errorMessage = "Error processing content: \(error.localizedDescription)"
