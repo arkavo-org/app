@@ -11,7 +11,7 @@ class ProtectorService {
         self.service = service
     }
 
-    func sendContentSignatureEvent(_ signature: ContentSignature, creatorPublicID: Data) throws {
+    func sendContentSignatureEvent(_ signature: ContentSignature, creatorPublicID: Data) async throws {
         guard let kasPublicKey = ArkavoService.kasPublicKey else {
             throw ProtectorError.missingKASkey
         }
@@ -20,11 +20,11 @@ class ProtectorService {
         print("Creator public ID: \(creatorPublicID.base58EncodedString)")
         // Create Nano
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
         // FIXME: fix this hack - accountProfile is being used for content signature
         let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.accountProfile.rawValue)!
         var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: compressed)
+        let nanoTDF = try await createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: compressed)
         let targetPayload = nanoTDF.toData()
         // Create CacheEvent
         var builder = FlatBufferBuilder(initialSize: 12000)

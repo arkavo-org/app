@@ -91,11 +91,7 @@ extension View {
     }
 
     func adaptiveBackgroundStyle() -> some View {
-        #if os(visionOS)
-            backgroundStyle(.glass)
-        #else
-            background(.background)
-        #endif
+        background(.background)
     }
 
     func adaptiveListStyle() -> some View {

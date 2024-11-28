@@ -277,7 +277,7 @@ class ArkavoService {
                     // Process in background
                     Task.detached(priority: .background) {
                         do {
-                            let payload = try nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+                            let payload = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
                             let policy = ArkavoPolicy(nano.header.policy)
 
                             // Handle different policy types

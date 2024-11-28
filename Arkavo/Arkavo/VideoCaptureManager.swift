@@ -133,7 +133,7 @@
             }
         }
 
-        func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
+        func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) async {
             guard isStreaming, let streamingService, let videoEncryptor else {
                 return
             }
@@ -158,7 +158,7 @@
 
             let presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-            videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: Int(image.size.width), height: Int(image.size.height)) { encryptedData in
+            await videoEncryptor.encryptFrame(compressedData, timestamp: presentationTimeStamp, width: Int(image.size.width), height: Int(image.size.height)) { encryptedData in
                 if let encryptedData {
                     streamingService.sendVideoFrame(encryptedData)
                 } else {
@@ -259,9 +259,9 @@
             encryptionSession.setupEncryption(kasPublicKey: kasPublicKey)
         }
 
-        func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) {
+        func encryptFrame(_ compressedData: Data, timestamp _: CMTime, width _: Int, height _: Int, completion: @escaping (Data?) -> Void) async {
             do {
-                let nanoTDFBytes = try encryptionSession.encrypt(input: compressedData)
+                let nanoTDFBytes = try await encryptionSession.encrypt(input: compressedData)
                 completion(nanoTDFBytes)
             } catch {
                 print("Error encrypting video frame: \(error)")
@@ -282,12 +282,12 @@
             NotificationCenter.default.removeObserver(self)
         }
 
-        func encrypt(input: Data) throws -> Data {
+        func encrypt(input: Data) async throws -> Data {
             guard let kasPublicKey else {
                 throw EncryptionError.missingKasPublicKey
             }
             let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-            let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+            let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 
             // Smart contract
             let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.videoFrame.rawValue)!
@@ -296,7 +296,7 @@
             // Increment IV for each frame
             iv += 1
             // FIXME: pass int , iv: iv
-            let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: input)
+            let nanoTDF = try await createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: input)
             return nanoTDF.toData()
         }
     }

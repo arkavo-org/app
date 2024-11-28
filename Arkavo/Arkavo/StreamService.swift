@@ -33,7 +33,7 @@ class StreamService {
         self.service = service
     }
 
-    func sendStreamEvent(_ stream: Stream) throws {
+    func sendStreamEvent(_ stream: Stream) async throws {
         guard let kasPublicKey = ArkavoService.kasPublicKey else {
             throw StreamServiceError.missingKASkey
         }
@@ -114,10 +114,10 @@ class StreamService {
         let nanoPayload = builder.data
         // Create Nano
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-        let kasMetadata = KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
+        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
         let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.streamProfile.rawValue)!
         var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)
-        let nanoTDF = try createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: nanoPayload)
+        let nanoTDF = try await createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: nanoPayload)
         let targetPayload = nanoTDF.toData()
         // Create CacheEvent
         builder = FlatBufferBuilder(initialSize: 1024)

@@ -92,7 +92,11 @@ struct ThoughtStreamView: View {
     }
 
     private var shareButton: some View {
-        Button(action: prepareShare) {
+        Button(action: {
+            Task {
+                await prepareShare()
+            }
+        }) {
             Image(systemName: "square.and.arrow.up")
         }
     }
@@ -228,7 +232,7 @@ struct ThoughtStreamView: View {
         viewModel.service.thoughtStreamViewModel = nil
     }
 
-    private func prepareShare() {
+    private func prepareShare() async {
         guard let stream = viewModel.stream
         else {
             print("streamCacheEvent: No stream to cache")
@@ -236,7 +240,7 @@ struct ThoughtStreamView: View {
         }
         // cache stream for later retrieval
         do {
-            try streamService.sendStreamEvent(stream)
+            try await streamService.sendStreamEvent(stream)
             isShareSheetPresented = true
         } catch {
             print("streamCacheEvent: \(error)")
