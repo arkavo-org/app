@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 73;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -69,6 +69,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		DA1273AF2CF7FFE60069AF78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DAC1F9DB2C34DA7000499631 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DA12739B2CF7FFE40069AF78;
+			remoteInfo = ArkavoCreator;
+		};
+		DA1273B92CF7FFE60069AF78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DAC1F9DB2C34DA7000499631 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DA12739B2CF7FFE40069AF78;
+			remoteInfo = ArkavoCreator;
+		};
 		DAC1F9F72C34DA7100499631 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DAC1F9DB2C34DA7000499631 /* Project object */;
@@ -94,6 +108,9 @@
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
+		DA12739C2CF7FFE40069AF78 /* ArkavoCreator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ArkavoCreator.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA1273AE2CF7FFE60069AF78 /* ArkavoCreatorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoCreatorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA1273B82CF7FFE60069AF78 /* ArkavoCreatorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoCreatorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA179AE52CA0DE8B0083EB99 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
@@ -147,7 +164,44 @@
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		DA1273CC2CF805680069AF78 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = DA12739A2CF7FFE40069AF78 /* Resources */;
+			membershipExceptions = (
+				PatronManagementView.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		DA12739D2CF7FFE40069AF78 /* ArkavoCreator */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DA1273CC2CF805680069AF78 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreator; sourceTree = "<group>"; };
+		DA1273B12CF7FFE60069AF78 /* ArkavoCreatorTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreatorTests; sourceTree = "<group>"; };
+		DA1273BB2CF7FFE60069AF78 /* ArkavoCreatorUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreatorUITests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		DA1273992CF7FFE40069AF78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273AB2CF7FFE60069AF78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273B52CF7FFE60069AF78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DAC1F9E02C34DA7000499631 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -181,6 +235,9 @@
 				DAC1F9E52C34DA7000499631 /* Arkavo */,
 				DAC1F9F92C34DA7100499631 /* ArkavoTests */,
 				DAC1FA032C34DA7100499631 /* ArkavoUITests */,
+				DA12739D2CF7FFE40069AF78 /* ArkavoCreator */,
+				DA1273B12CF7FFE60069AF78 /* ArkavoCreatorTests */,
+				DA1273BB2CF7FFE60069AF78 /* ArkavoCreatorUITests */,
 				DAC1F9E42C34DA7000499631 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -191,6 +248,9 @@
 				DAC1F9E32C34DA7000499631 /* Arkavo.app */,
 				DAC1F9F62C34DA7100499631 /* ArkavoTests.xctest */,
 				DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */,
+				DA12739C2CF7FFE40069AF78 /* ArkavoCreator.app */,
+				DA1273AE2CF7FFE60069AF78 /* ArkavoCreatorTests.xctest */,
+				DA1273B82CF7FFE60069AF78 /* ArkavoCreatorUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -282,6 +342,74 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		DA12739B2CF7FFE40069AF78 /* ArkavoCreator */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA1273C02CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreator" */;
+			buildPhases = (
+				DA1273982CF7FFE40069AF78 /* Sources */,
+				DA1273992CF7FFE40069AF78 /* Frameworks */,
+				DA12739A2CF7FFE40069AF78 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DA12739D2CF7FFE40069AF78 /* ArkavoCreator */,
+			);
+			name = ArkavoCreator;
+			packageProductDependencies = (
+			);
+			productName = ArkavoCreator;
+			productReference = DA12739C2CF7FFE40069AF78 /* ArkavoCreator.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DA1273AD2CF7FFE60069AF78 /* ArkavoCreatorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA1273C32CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreatorTests" */;
+			buildPhases = (
+				DA1273AA2CF7FFE60069AF78 /* Sources */,
+				DA1273AB2CF7FFE60069AF78 /* Frameworks */,
+				DA1273AC2CF7FFE60069AF78 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA1273B02CF7FFE60069AF78 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DA1273B12CF7FFE60069AF78 /* ArkavoCreatorTests */,
+			);
+			name = ArkavoCreatorTests;
+			packageProductDependencies = (
+			);
+			productName = ArkavoCreatorTests;
+			productReference = DA1273AE2CF7FFE60069AF78 /* ArkavoCreatorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		DA1273B72CF7FFE60069AF78 /* ArkavoCreatorUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA1273C62CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreatorUITests" */;
+			buildPhases = (
+				DA1273B42CF7FFE60069AF78 /* Sources */,
+				DA1273B52CF7FFE60069AF78 /* Frameworks */,
+				DA1273B62CF7FFE60069AF78 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA1273BA2CF7FFE60069AF78 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				DA1273BB2CF7FFE60069AF78 /* ArkavoCreatorUITests */,
+			);
+			name = ArkavoCreatorUITests;
+			packageProductDependencies = (
+			);
+			productName = ArkavoCreatorUITests;
+			productReference = DA1273B82CF7FFE60069AF78 /* ArkavoCreatorUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		DAC1F9E22C34DA7000499631 /* Arkavo */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DAC1FA0A2C34DA7100499631 /* Build configuration list for PBXNativeTarget "Arkavo" */;
@@ -347,9 +475,20 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
+				LastSwiftUpdateCheck = 1610;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
+					DA12739B2CF7FFE40069AF78 = {
+						CreatedOnToolsVersion = 16.1;
+					};
+					DA1273AD2CF7FFE60069AF78 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = DA12739B2CF7FFE40069AF78;
+					};
+					DA1273B72CF7FFE60069AF78 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = DA12739B2CF7FFE40069AF78;
+					};
 					DAC1F9E22C34DA7000499631 = {
 						CreatedOnToolsVersion = 16.0;
 					};
@@ -364,7 +503,6 @@
 				};
 			};
 			buildConfigurationList = DAC1F9DE2C34DA7000499631 /* Build configuration list for PBXProject "Arkavo" */;
-			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -377,6 +515,7 @@
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 			);
+			preferredProjectObjectVersion = 60;
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -384,11 +523,35 @@
 				DAC1F9E22C34DA7000499631 /* Arkavo */,
 				DAC1F9F52C34DA7100499631 /* ArkavoTests */,
 				DAC1F9FF2C34DA7100499631 /* ArkavoUITests */,
+				DA12739B2CF7FFE40069AF78 /* ArkavoCreator */,
+				DA1273AD2CF7FFE60069AF78 /* ArkavoCreatorTests */,
+				DA1273B72CF7FFE60069AF78 /* ArkavoCreatorUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		DA12739A2CF7FFE40069AF78 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273AC2CF7FFE60069AF78 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273B62CF7FFE60069AF78 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DAC1F9E12C34DA7000499631 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -440,6 +603,27 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		DA1273982CF7FFE40069AF78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273AA2CF7FFE60069AF78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1273B42CF7FFE60069AF78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DAC1F9DF2C34DA7000499631 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -516,6 +700,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		DA1273B02CF7FFE60069AF78 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DA12739B2CF7FFE40069AF78 /* ArkavoCreator */;
+			targetProxy = DA1273AF2CF7FFE60069AF78 /* PBXContainerItemProxy */;
+		};
+		DA1273BA2CF7FFE60069AF78 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DA12739B2CF7FFE40069AF78 /* ArkavoCreator */;
+			targetProxy = DA1273B92CF7FFE60069AF78 /* PBXContainerItemProxy */;
+		};
 		DAC1F9F82C34DA7100499631 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = DAC1F9E22C34DA7000499631 /* Arkavo */;
@@ -529,6 +723,174 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		DA1273C12CF7FFE60069AF78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		DA1273C22CF7FFE60069AF78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
+		DA1273C42CF7FFE60069AF78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ArkavoCreator.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ArkavoCreator";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		DA1273C52CF7FFE60069AF78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ArkavoCreator.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ArkavoCreator";
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
+		DA1273C72CF7FFE60069AF78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = ArkavoCreator;
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Debug;
+		};
+		DA1273C82CF7FFE60069AF78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = ArkavoCreator;
+				XROS_DEPLOYMENT_TARGET = 2.1;
+			};
+			name = Release;
+		};
 		DAC1FA082C34DA7100499631 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -846,6 +1208,33 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		DA1273C02CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA1273C12CF7FFE60069AF78 /* Debug */,
+				DA1273C22CF7FFE60069AF78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DA1273C32CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreatorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA1273C42CF7FFE60069AF78 /* Debug */,
+				DA1273C52CF7FFE60069AF78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DA1273C62CF7FFE60069AF78 /* Build configuration list for PBXNativeTarget "ArkavoCreatorUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA1273C72CF7FFE60069AF78 /* Debug */,
+				DA1273C82CF7FFE60069AF78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		DAC1F9DE2C34DA7000499631 /* Build configuration list for PBXProject "Arkavo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
