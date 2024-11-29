@@ -1,4 +1,5 @@
 import SwiftUI
+import ArkavoSocial
 @preconcurrency import WebKit
 
 struct PatreonRootView: View {
@@ -426,32 +427,6 @@ struct PatronAvatar: View {
 
 // MARK: - Patron Model
 
-struct Patron: Identifiable {
-    let id: String
-    let name: String
-    let email: String?
-    let avatarURL: URL?
-    let status: PatronStatus
-    let tierAmount: Double
-    let lifetimeSupport: Double
-    let joinDate: Date
-    let url: URL?
-
-    enum PatronStatus: String {
-        case active = "Active"
-        case inactive = "Inactive"
-        case new = "New"
-
-        var color: Color {
-            switch self {
-            case .active: .green
-            case .inactive: .red
-            case .new: .blue
-            }
-        }
-    }
-}
-
 struct PatronHeaderView: View {
     let patron: Patron
 
@@ -728,45 +703,6 @@ struct EngagementCard: View {
         .background(Color.gray.opacity(0.05))
         .cornerRadius(8)
     }
-}
-
-// Preview Providers
-
-struct PatronHeaderView_Previews: PreviewProvider {
-    static var previews: some View {
-        PatronHeaderView(patron: .previewPatron)
-            .padding()
-            .previewLayout(.sizeThatFits)
-    }
-}
-
-struct PatronActivityView_Previews: PreviewProvider {
-    static var previews: some View {
-        PatronActivityView(patron: .previewPatron)
-            .padding()
-            .previewLayout(.sizeThatFits)
-    }
-}
-
-struct PatronEngagementView_Previews: PreviewProvider {
-    static var previews: some View {
-        PatronEngagementView(patron: .previewPatron)
-            .padding()
-            .previewLayout(.sizeThatFits)
-    }
-}
-
-// Preview Helper
-extension Patron {
-    static let previewPatron = Patron(
-        id: "1",
-        name: "John Doe",
-        email: "a@a.co", avatarURL: nil,
-        status: .active,
-        tierAmount: 25.0,
-        lifetimeSupport: 1.1, joinDate: Date().addingTimeInterval(-30 * 86400),
-        url: nil
-    )
 }
 
 struct Campaign: Identifiable {
@@ -1083,27 +1019,6 @@ struct MessageComposerView: View {
     private func sendMessage() {
         // Implement message sending logic
         dismiss()
-    }
-}
-
-// Updated preview provider
-struct MessageComposerView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            // Preview with recipient
-            MessageComposerView(
-                recipient: Patron.previewPatron,
-                patreonClient: PatreonClient(config: .preview)
-            )
-            .previewDisplayName("With Recipient")
-
-            // Preview without recipient (broadcast message)
-            MessageComposerView(
-                recipient: nil,
-                patreonClient: PatreonClient(config: .preview)
-            )
-            .previewDisplayName("Broadcast Message")
-        }
     }
 }
 
