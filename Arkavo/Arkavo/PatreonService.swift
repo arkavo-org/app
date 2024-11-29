@@ -1,4 +1,5 @@
 import Foundation
+import ArkavoSocial
 
 class PatreonService {
     let client: PatreonClient

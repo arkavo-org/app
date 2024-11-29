@@ -101,3 +101,8 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /app.iml
 *Secrets.*
 .env
+*/.build
+*/Packages
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc

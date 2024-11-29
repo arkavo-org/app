@@ -1,4 +1,31 @@
 import Foundation
+import SwiftUI
+
+public struct Patron: Identifiable {
+    public let id: String
+    public let name: String
+    public let email: String?
+    public let avatarURL: URL?
+    public let status: PatronStatus
+    public let tierAmount: Double
+    public let lifetimeSupport: Double
+    public let joinDate: Date
+    public let url: URL?
+
+    public enum PatronStatus: String {
+        case active = "Active"
+        case inactive = "Inactive"
+        case new = "New"
+
+        public var color: Color {
+            switch self {
+            case .active: .green
+            case .inactive: .red
+            case .new: .blue
+            }
+        }
+    }
+}
 
 // MARK: - Core API Client
 
@@ -505,67 +532,67 @@ private enum MemberFields: String, CaseIterable {
 
 extension PatreonClient {
     public struct CampaignResponse: Codable {
-        let data: [CampaignData]
-        let included: [IncludedData]
-        let meta: MetaData
+        public let data: [CampaignData]
+        public let included: [IncludedData]
+        public let meta: MetaData
 
-        struct CampaignData: Codable {
-            let id: String
-            let type: String
-            let attributes: CampaignAttributes
-            let relationships: CampaignRelationships
+        public struct CampaignData: Codable {
+            public let id: String
+            public let type: String
+            public let attributes: CampaignAttributes
+            public let relationships: CampaignRelationships
         }
 
-        struct CampaignAttributes: Codable {
-            let created_at: String
-            let creation_name: String?
-            let is_monthly: Bool
-            let is_nsfw: Bool
-            let patron_count: Int
-            let published_at: String?
-            let summary: String?
+        public struct CampaignAttributes: Codable {
+            public let created_at: String
+            public let creation_name: String?
+            public let is_monthly: Bool
+            public let is_nsfw: Bool
+            public let patron_count: Int
+            public let published_at: String?
+            public let summary: String?
         }
 
-        struct CampaignRelationships: Codable {
-            let creator: RelationshipData
-            let goals: Goals
-            let tiers: Tiers
+        public struct CampaignRelationships: Codable {
+            public let creator: RelationshipData
+            public let goals: Goals
+            public let tiers: Tiers
 
-            struct RelationshipData: Codable {
-                let data: CreatorData
-                let links: Links
+            public struct RelationshipData: Codable {
+                public let data: CreatorData
+                public let links: Links
 
-                struct CreatorData: Codable {
-                    let id: String
-                    let type: String
+                public struct CreatorData: Codable {
+                    public let id: String
+                    public let type: String
                 }
 
-                struct Links: Codable {
-                    let related: String
+                public struct Links: Codable {
+                    public let related: String
                 }
             }
 
-            struct Goals: Codable {
-                let data: String?
+            public struct Goals: Codable {
+                public let data: String?
             }
 
-            struct Tiers: Codable {
-                let data: [TierData]
+            public struct Tiers: Codable {
+                public let data: [TierData]
 
-                struct TierData: Codable {
-                    let id: String
-                    let type: String
+                public struct TierData: Codable {
+                    public let id: String
+                    public let type: String
                 }
             }
         }
 
-        struct IncludedData: Codable {
+        public struct IncludedData: Codable {
             let attributes: [String: AnyCodable]
             let id: String
             let type: String
         }
 
-        struct MetaData: Codable {
+        public struct MetaData: Codable {
             let pagination: Pagination
 
             struct Pagination: Codable {
@@ -579,7 +606,7 @@ extension PatreonClient {
         }
     }
 
-    func getCampaigns() async throws -> CampaignResponse {
+    public func getCampaigns() async throws -> CampaignResponse {
         try await request(
             endpoint: .campaigns,
             accessToken: config.creatorAccessToken,
@@ -640,16 +667,16 @@ struct APIErrorResponse: Decodable {
     let errors: [APIError]
 }
 
-public struct APIError: Decodable {
-    let code: Int
-    let code_name: String
-    let detail: String?
-    let id: String
-    let status: String
-    let title: String
-    let challenge_metadata: ChallengeMetadata?
+public struct APIError: Decodable, Sendable {
+    public let code: Int
+    public let code_name: String
+    public let detail: String?
+    public let id: String
+    public let status: String
+    public let title: String
+    public let challenge_metadata: ChallengeMetadata?
 
-    struct ChallengeMetadata: Decodable {
+    public struct ChallengeMetadata: Decodable, Sendable {
         // Add fields as needed based on what the API returns
     }
 }
@@ -674,7 +701,7 @@ extension PatreonClient {
         }
     }
 
-    func getTiers() async throws -> [PatreonTier] {
+    public func getTiers() async throws -> [PatreonTier] {
         let response = try await getCampaigns()
 
         // Find tiers in the included data
@@ -698,12 +725,12 @@ extension PatreonClient {
     }
 }
 
-struct PatreonTier: Identifiable {
-    let id: String
-    let name: String
-    let description: String?
-    let amount: Double
-    let patronCount: Int?
+public struct PatreonTier: Identifiable {
+    public let id: String
+    public let name: String
+    public let description: String?
+    public let amount: Double
+    public let patronCount: Int?
 }
 
 // MARK: - Member Response Models
@@ -806,7 +833,7 @@ extension PatreonClient {
 // MARK: - Memebers
 
 extension PatreonClient {
-    func getMembers() async throws -> [Patron] {
+    public func getMembers() async throws -> [Patron] {
         if config.campaignId == "" {
             config.campaignId = KeychainManager.getCampaignId() ?? ""
         }

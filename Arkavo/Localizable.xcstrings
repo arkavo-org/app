@@ -124,9 +124,6 @@
     "Audio message" : {
 
     },
-    "Authenticated!" : {
-
-    },
     "Authenticating..." : {
 
     },
@@ -396,9 +393,6 @@
     "Location: %@" : {
 
     },
-    "Login with Patreon" : {
-
-    },
     "logo" : {
 
     },
@@ -501,9 +495,6 @@
 
     },
     "Please grant location permission in Settings to use this feature." : {
-
-    },
-    "Please login to continue" : {
 
     },
     "Please provide a valid government-issued ID and a selfie to verify your age." : {
