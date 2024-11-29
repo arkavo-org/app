@@ -44,6 +44,209 @@ public actor PatreonClient {
     deinit {
         urlSession.finishTasksAndInvalidate()
     }
+
+    // API Endpoints
+    private enum Endpoint {
+        case identity
+        case campaigns
+        case campaign(id: String)
+        case campaignMembers(id: String)
+        case member(id: String)
+        case oauthToken
+
+        var path: String {
+            switch self {
+            case .identity: return "identity"
+            case .campaigns: return "campaigns"
+            case let .campaign(id): return "campaigns/\(id)"
+            case let .campaignMembers(id): return "campaigns/\(id)/members"
+            case let .member(id): return "members/\(id)"
+            case .oauthToken: return "token"
+            }
+        }
+
+        var url: URL {
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = "www.patreon.com"
+            components.path = "/api/oauth2/v2/\(path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)"
+            return components.url!
+        }
+    }
+
+    // Public API Methods
+    public func getUserIdentity() async throws -> UserIdentity {
+        try await request(
+            endpoint: .identity,
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "memberships.campaign,memberships.currently_entitled_tiers"),
+                URLQueryItem(name: "fields[user]", value: UserFields.allCases.map(\.rawValue).joined(separator: ",")),
+                URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
+            ]
+        )
+    }
+
+    public func getCampaignDetails() async throws -> CampaignResponse {
+        try await request(
+            endpoint: .campaign(id: config.campaignId),
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "creator,tiers,benefits.tiers,goals"),
+                URLQueryItem(name: "fields[campaign]", value: CampaignFields.allCases.map(\.rawValue).joined(separator: ",")),
+                URLQueryItem(name: "fields[tier]", value: TierFields.allCases.map(\.rawValue).joined(separator: ",")),
+            ]
+        )
+    }
+
+    public func getCampaignMembers() async throws -> [Member] {
+        try await request(
+            endpoint: .campaignMembers(id: config.campaignId),
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "user,address,campaign,currently_entitled_tiers"),
+                URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
+            ]
+        )
+    }
+
+    public func getOAuthURL() -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
+        ]
+        return components.url!
+    }
+
+    public func exchangeCode(_ code: String) async throws -> OAuthToken {
+        let params = [
+            "code": code,
+            "grant_type": "authorization_code",
+            "client_id": config.clientId,
+            "client_secret": config.clientSecret,
+            "redirect_uri": PatreonClient.redirectURI,
+        ]
+
+        return try await request(
+            endpoint: .oauthToken,
+            method: "POST",
+            body: params
+        )
+    }
+
+    public func refreshToken(_ refreshToken: String) async throws -> OAuthToken {
+        let params = [
+            "grant_type": "refresh_token",
+            "refresh_token": refreshToken,
+            "client_id": config.clientId,
+            "client_secret": config.clientSecret,
+        ]
+
+        return try await request(
+            endpoint: .oauthToken,
+            method: "POST",
+            body: params
+        )
+    }
+
+    public func getMembers() async throws -> [Patron] {
+        if config.campaignId == "" {
+            config.campaignId = KeychainManager.getCampaignId() ?? ""
+        }
+        let response: MemberResponse = try await request(
+            endpoint: .campaignMembers(id: config.campaignId),
+            accessToken: config.creatorAccessToken,
+            queryItems: [
+                URLQueryItem(name: "include", value: "user,currently_entitled_tiers"),
+                URLQueryItem(name: "fields[member]", value: "full_name,email,patron_status,last_charge_date,currently_entitled_amount_cents,lifetime_support_cents"),
+                URLQueryItem(name: "fields[user]", value: "thumb_url,url"),
+                URLQueryItem(name: "page[count]", value: "100"),
+            ]
+        )
+
+        return response.data.map { member in
+            let userData = response.included.first { included in
+                included.id == member.relationships.user.data.id && included.type == "user"
+            }
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            return Patron(
+                id: member.id,
+                name: member.attributes.fullName,
+                email: member.attributes.email,
+                avatarURL: URL(string: userData?.attributes.thumbUrl ?? ""),
+                status: patronStatus(from: member.attributes.patronStatus),
+                tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
+                lifetimeSupport: Double(member.attributes.lifetimeSupportCents) / 100.0,
+                joinDate: member.attributes.lastChargeDate.flatMap { dateFormatter.date(from: $0) } ?? Date(),
+                url: URL(string: userData?.attributes.url ?? "")
+            )
+        }
+    }
+
+    private func patronStatus(from status: String) -> Patron.PatronStatus {
+        switch status.lowercased() {
+        case "active_patron": return .active
+        case "declined_patron", "former_patron": return .inactive
+        default: return .new
+        }
+    }
+
+    private func request<T: Decodable>(
+        endpoint: Endpoint,
+        method: String = "GET",
+        accessToken: String? = nil,
+        queryItems: [URLQueryItem] = [],
+        body: [String: String]? = nil
+    ) async throws -> T {
+        var request = URLRequest(url: endpoint.url)
+        request.httpMethod = method
+
+        if let accessToken {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let body {
+            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body.map { key, value in
+                "\(key)=\(value)"
+            }.joined(separator: "&").data(using: .utf8)
+        }
+
+        if !queryItems.isEmpty {
+            var components = URLComponents(url: endpoint.url, resolvingAgainstBaseURL: false)!
+            components.queryItems = queryItems.map { URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)) }
+            request.url = components.url
+        }
+
+        let (data, response) = try await urlSession.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PatreonError.invalidResponse
+        }
+
+        guard 200...299 ~= httpResponse.statusCode else {
+            if httpResponse.statusCode == 400 {
+                let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                if let firstError = errorResponse?.errors.first {
+                    throw PatreonError.apiError(firstError)
+                }
+            }
+            throw PatreonError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw PatreonError.decodingError(error)
+        }
+    }
 }
 
 // MARK: - Configuration
@@ -90,185 +293,6 @@ public struct PatreonConfig:Sendable {
                 try? KeychainManager.delete(service: "com.arkavo.patreon",
                                             account: "refresh_token")
             }
-        }
-    }
-}
-
-// MARK: - API Endpoints
-
-extension PatreonClient {
-    private enum Endpoint {
-        case identity
-        case campaigns
-        case campaign(id: String)
-        case campaignMembers(id: String)
-        case member(id: String)
-        case oauthToken
-
-        var path: String {
-            switch self {
-            case .identity:
-                "identity"
-            case .campaigns:
-                "campaigns"
-            case let .campaign(id):
-                "campaigns/\(id)"
-            case let .campaignMembers(id):
-                "campaigns/\(id)/members"
-            case let .member(id):
-                "members/\(id)"
-            case .oauthToken:
-                "token"
-            }
-        }
-
-        var url: URL {
-            var components = URLComponents()
-            components.scheme = "https"
-            components.host = "www.patreon.com"
-            components.path = "/api/oauth2/v2/\(path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)"
-            return components.url!
-        }
-    }
-}
-
-// MARK: - API Methods
-
-public extension PatreonClient {
-    func getUserIdentity() async throws -> UserIdentity {
-        try await request(
-            endpoint: .identity,
-            accessToken: config.creatorAccessToken,
-            queryItems: [
-                URLQueryItem(name: "include", value: "memberships.campaign,memberships.currently_entitled_tiers"),
-                URLQueryItem(name: "fields[user]", value: UserFields.allCases.map(\.rawValue).joined(separator: ",")),
-                URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
-        )
-    }
-
-    func getCampaignDetails() async throws -> CampaignResponse {
-        try await request(
-            endpoint: .campaign(id: config.campaignId),
-            accessToken: config.creatorAccessToken,
-            queryItems: [
-                URLQueryItem(name: "include", value: "creator,tiers,benefits.tiers,goals"),
-                URLQueryItem(name: "fields[campaign]", value: CampaignFields.allCases.map(\.rawValue).joined(separator: ",")),
-                URLQueryItem(name: "fields[tier]", value: TierFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
-        )
-    }
-
-    func getCampaignMembers() async throws -> [Member] {
-        try await request(
-            endpoint: .campaignMembers(id: config.campaignId),
-            accessToken: config.creatorAccessToken,
-            queryItems: [
-                URLQueryItem(name: "include", value: "user,address,campaign,currently_entitled_tiers"),
-                URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
-        )
-    }
-}
-
-// MARK: - OAuth Methods
-
-public extension PatreonClient {
-    func getOAuthURL() -> URL {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "www.patreon.com"
-        components.path = "/oauth2/authorize"
-        components.queryItems = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
-        ]
-        return components.url!
-    }
-
-    func exchangeCode(_ code: String) async throws -> OAuthToken {
-        let params = [
-            "code": code,
-            "grant_type": "authorization_code",
-            "client_id": config.clientId,
-            "client_secret": config.clientSecret,
-            "redirect_uri": PatreonClient.redirectURI,
-        ]
-
-        return try await request(
-            endpoint: .oauthToken,
-            method: "POST",
-            body: params
-        )
-    }
-
-    func refreshToken(_ refreshToken: String) async throws -> OAuthToken {
-        let params = [
-            "grant_type": "refresh_token",
-            "refresh_token": refreshToken,
-            "client_id": config.clientId,
-            "client_secret": config.clientSecret,
-        ]
-
-        return try await request(
-            endpoint: .oauthToken,
-            method: "POST",
-            body: params
-        )
-    }
-}
-
-// MARK: - Networking
-
-extension PatreonClient {
-    private func request<T: Decodable>(
-        endpoint: Endpoint,
-        method: String = "GET",
-        accessToken: String? = nil,
-        queryItems: [URLQueryItem] = [],
-        body: [String: String]? = nil
-    ) async throws -> T {
-        var request = URLRequest(url: endpoint.url)
-        request.httpMethod = method
-
-        if let accessToken {
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        }
-
-        if let body {
-            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            request.httpBody = body.map { key, value in
-                "\(key)=\(value)"
-            }.joined(separator: "&").data(using: .utf8)
-        }
-
-        if !queryItems.isEmpty {
-            var components = URLComponents(url: endpoint.url, resolvingAgainstBaseURL: false)!
-            components.queryItems = queryItems.map { URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)) }
-            request.url = components.url
-        }
-        print("request: \(request.url!.absoluteString)")
-        let (data, response) = try await urlSession.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PatreonError.invalidResponse
-        }
-        print("status code: \(httpResponse.statusCode)")
-        guard 200 ... 299 ~= httpResponse.statusCode else {
-            if httpResponse.statusCode == 400 {
-                let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-                if let firstError = errorResponse?.errors.first {
-                    throw PatreonError.apiError(firstError)
-                }
-            }
-            throw PatreonError.httpError(statusCode: httpResponse.statusCode)
-        }
-        print("data: \(String(decoding: data, as: Unicode.UTF8.self))")
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw PatreonError.decodingError(error)
         }
     }
 }
@@ -863,58 +887,6 @@ extension PatreonClient {
                     let next: String?
                 }
             }
-        }
-    }
-}
-
-// MARK: - Memebers
-
-extension PatreonClient {
-    public func getMembers() async throws -> [Patron] {
-        if config.campaignId == "" {
-            config.campaignId = KeychainManager.getCampaignId() ?? ""
-        }
-        let response: MemberResponse = try await request(
-            endpoint: .campaignMembers(id: config.campaignId),
-            accessToken: config.creatorAccessToken,
-            queryItems: [
-                URLQueryItem(name: "include", value: "user,currently_entitled_tiers"),
-                URLQueryItem(name: "fields[member]", value: "full_name,email,patron_status,last_charge_date,currently_entitled_amount_cents,lifetime_support_cents"),
-                URLQueryItem(name: "fields[user]", value: "thumb_url,url"),
-                URLQueryItem(name: "page[count]", value: "100"),
-            ]
-        )
-
-        return response.data.map { member in
-            // Find user data in included array
-            let userData = response.included.first { included in
-                included.id == member.relationships.user.data.id &&
-                    included.type == "user"
-            }
-
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            return Patron(
-                id: member.id,
-                name: member.attributes.fullName,
-                email: member.attributes.email,
-                avatarURL: URL(string: userData?.attributes.thumbUrl ?? ""),
-                status: patronStatus(from: member.attributes.patronStatus),
-                tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
-                lifetimeSupport: Double(member.attributes.lifetimeSupportCents) / 100.0,
-                joinDate: member.attributes.lastChargeDate.flatMap { dateFormatter.date(from: $0) } ?? Date(),
-                url: URL(string: userData?.attributes.url ?? "")
-            )
-        }
-    }
-
-    private func patronStatus(from status: String) -> Patron.PatronStatus {
-        switch status.lowercased() {
-        case "active_patron": .active
-        case "declined_patron": .inactive
-        case "former_patron": .inactive
-        default: .new
         }
     }
 }

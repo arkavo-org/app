@@ -43,7 +43,8 @@ PATREON_CLIENT_SECRET=
 ```
 
 ```shell
-source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/ArkavoCreator/Secrets.swift"
 ```
 
 
