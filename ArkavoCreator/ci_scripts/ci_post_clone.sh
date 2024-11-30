@@ -4,7 +4,7 @@
 set -e
 
 # Define the Secrets.swift file path relative to the Git repository root
-SECRETS_FILE="../Arkavo/Secrets.swift"
+SECRETS_FILE="../ArkavoCreator/Secrets.swift"
 
 # Ensure required environment variables are set
 if [[ -z "${PATREON_CLIENT_ID}" || -z "${PATREON_CLIENT_SECRET}" ]]; then

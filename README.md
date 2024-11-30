@@ -43,8 +43,8 @@ PATREON_CLIENT_SECRET=
 ```
 
 ```shell
-source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
-source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/ArkavoCreator/Secrets.swift"
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
 ```
 
 Note adding `[ -f "${SRCROOT}/.env" ] && source "${SRCROOT}/.env";` to the Run Script in Build Phases may be needed.
@@ -93,7 +93,18 @@ swiftformat --swiftversion 6.0 .
 
 ### Release build
 
+#### Arkavo
+
 ```shell
+cd Arkavo
 xcodebuild -scheme Arkavo -sdk macosx -configuration Release build
 xcodebuild -scheme Arkavo -sdk iphoneos -configuration Release build
+```
+
+#### ArkavoCreator
+
+```shell
+cd ArkavoCreator
+xcodebuild -scheme ArkavoCreator -sdk macosx -configuration Release build
+xcodebuild -scheme ArkavoCreator -sdk iphoneos -configuration Release build
 ```

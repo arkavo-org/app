@@ -106,3 +106,4 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+/ArkavoSocial/.swiftpm/
