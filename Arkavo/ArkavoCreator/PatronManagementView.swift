@@ -447,212 +447,171 @@ struct StatusBadgeView: View {
 
 struct NewTierSheet: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var tierName = ""
     @State private var tierPrice = ""
     @State private var tierDescription = ""
-    @State private var benefits: [String] = [""]
-    @State private var selectedColor: Color = .blue
     @State private var isOneTime = false
-    @State private var currentStep = 0
     @State private var showingImagePicker = false
     @State private var tierImage: NSImage?
+    @State private var selectedColor: Color = .blue
 
-    private let predefinedColors: [Color] = [
-        .blue, .purple, .pink, .red, .orange,
-        .yellow, .green, .mint, .teal, .cyan,
+    private let predefinedColors: [[Color]] = [
+        [.blue, .purple, .pink, .red, .orange],
+        [.yellow, .green, .mint, .cyan, .teal],
     ]
 
-    var isValidTier: Bool {
-        !tierName.isEmpty &&
-            !tierPrice.isEmpty &&
-            Double(tierPrice) != nil &&
-            !benefits.filter { !$0.isEmpty }.isEmpty
+    // Dynamic colors based on color scheme
+    private var backgroundColor: Color {
+        Color(NSColor.windowBackgroundColor)
+    }
+
+    private var secondaryBackgroundColor: Color {
+        Color(NSColor.controlBackgroundColor)
+    }
+
+    private var borderColor: Color {
+        Color(NSColor.separatorColor)
+    }
+
+    private var placeholderImageColor: Color {
+        colorScheme == .dark ?
+            Color(white: 0.2) :
+            Color(white: 0.9)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(currentStep == 0 ? "Create New Tier" : "Configure Benefits")
-                    .font(.title2)
+                Text("Create New Tier")
+                    .font(.title3)
                     .fontWeight(.semibold)
                 Spacer()
                 Button("Cancel") {
                     dismiss()
                 }
-                .keyboardShortcut(.cancelAction)
             }
             .padding()
+            .background(backgroundColor)
 
-            // Content
-            TabView(selection: $currentStep) {
-                // Basic Info View
-                basicInfoView
-                    .tag(0)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Basic Information Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Basic Information")
+                            .font(.headline)
 
-                // Benefits View
-                benefitsView
-                    .tag(1)
+                        VStack(spacing: 12) {
+                            TextField("Name", text: $tierName)
+                                .textFieldStyle(.roundedBorder)
+
+                            HStack {
+                                Text("$")
+                                    .foregroundColor(.secondary)
+                                TextField("Price", text: $tierPrice)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            Toggle("One-time payment", isOn: $isOneTime)
+
+                            TextEditor(text: $tierDescription)
+                                .frame(height: 100)
+                                .scrollContentBackground(.hidden)
+                                .background(secondaryBackgroundColor)
+                                .cornerRadius(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        }
+                    }
+
+                    // Appearance Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Appearance")
+                            .font(.headline)
+
+                        HStack(spacing: 16) {
+                            // Image Selection
+                            VStack {
+                                if let image = tierImage {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 100, height: 100)
+                                        .cornerRadius(8)
+                                } else {
+                                    Rectangle()
+                                        .fill(placeholderImageColor)
+                                        .frame(width: 100, height: 100)
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.secondary)
+                                        )
+                                }
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button("Choose Image") {
+                                    showingImagePicker = true
+                                }
+                                .buttonStyle(.bordered)
+
+                                Text("Recommended size: 300x300")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Color Selection
+                        VStack(spacing: 8) {
+                            ForEach(predefinedColors, id: \.self) { row in
+                                HStack(spacing: 16) {
+                                    ForEach(row, id: \.self) { color in
+                                        Circle()
+                                            .fill(color)
+                                            .frame(width: 32, height: 32)
+                                            .overlay(
+                                                Circle()
+                                                    .strokeBorder(
+                                                        selectedColor == color ?
+                                                            (colorScheme == .dark ? .white : .black) :
+                                                            .clear,
+                                                        lineWidth: 2
+                                                    )
+                                            )
+                                            .onTapGesture {
+                                                selectedColor = color
+                                            }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
             }
-            .tabViewStyle(.automatic)
 
             // Footer
             HStack {
-                if currentStep > 0 {
-                    Button("Back") {
-                        withAnimation {
-                            currentStep -= 1
-                        }
-                    }
-                }
-
                 Spacer()
-
-                Button(currentStep == 0 ? "Next" : "Create") {
-                    if currentStep == 0 {
-                        withAnimation {
-                            currentStep += 1
-                        }
-                    } else {
-                        createTier()
-                    }
+                Button("Create") {
+                    // Create tier logic
+                    dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!isValidTier)
             }
             .padding()
+            .background(backgroundColor)
         }
-        .frame(width: 600)
-        .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private var basicInfoView: some View {
-        Form {
-            Section {
-                TextField("Tier Name", text: $tierName)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack {
-                    Text("$")
-                    TextField("Price", text: $tierPrice)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                Toggle("One-time payment", isOn: $isOneTime)
-
-                TextEditor(text: $tierDescription)
-                    .frame(height: 100)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
-            } header: {
-                Text("Basic Information")
-            }
-
-            Section {
-                HStack {
-                    if let image = tierImage {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 100, height: 100)
-                            .cornerRadius(8)
-                    } else {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.secondary.opacity(0.1))
-                            .frame(width: 100, height: 100)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.secondary)
-                            )
-                    }
-
-                    VStack(alignment: .leading) {
-                        Button("Choose Image") {
-                            showingImagePicker = true
-                        }
-
-                        Text("Recommended size: 300x300")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                LazyVGrid(columns: Array(repeating: .init(.flexible()), count: 5)) {
-                    ForEach(predefinedColors, id: \.self) { color in
-                        Circle()
-                            .fill(color)
-                            .frame(width: 30, height: 30)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(Color.primary, lineWidth: selectedColor == color ? 2 : 0)
-                            )
-                            .onTapGesture {
-                                selectedColor = color
-                            }
-                    }
-                }
-            } header: {
-                Text("Appearance")
-            }
-        }
-        .padding()
-        .sheet(isPresented: $showingImagePicker) {
-            // Image picker view would go here
-        }
-    }
-
-    private var benefitsView: some View {
-        Form {
-            Section {
-                ForEach(benefits.indices, id: \.self) { index in
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(selectedColor)
-
-                        TextField("Describe this benefit", text: $benefits[index])
-                            .textFieldStyle(.roundedBorder)
-
-                        if benefits.count > 1 {
-                            Button(action: { removeBenefit(at: index) }) {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                Button(action: addBenefit) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Benefit")
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
-            } header: {
-                Text("Tier Benefits")
-            } footer: {
-                Text("Describe what patrons will receive at this tier")
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-    }
-
-    private func addBenefit() {
-        benefits.append("")
-    }
-
-    private func removeBenefit(at index: Int) {
-        benefits.remove(at: index)
-    }
-
-    private func createTier() {
-        // Create new tier logic
-        dismiss()
+        .frame(width: 500)
+        .background(backgroundColor)
     }
 }
 
