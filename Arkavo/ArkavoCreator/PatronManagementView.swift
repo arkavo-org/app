@@ -141,24 +141,27 @@ struct CampaignsSidebar: View {
                     ForEach(campaigns) { campaign in
                         CampaignRow(campaign: campaign)
                             .tag(campaign)
+                            .contextMenu {
+                                Button("Edit") {}
+                                Button("Duplicate") {}
+                                Divider()
+                                Button("Archive", role: .destructive) {}
+                            }
                     }
                 }
             } header: {
                 HStack {
                     Text("Campaigns")
                     Spacer()
-                    HStack(spacing: 2) {
-                        Button(action: { showNewCampaignSheet = true }) {
-                            Image(systemName: "plus")
-                                .font(.caption)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.borderless)
+                    Button(action: { showNewCampaignSheet = true }) {
+                        Image(systemName: "plus")
+                            .font(.caption)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.borderless)
                 }
             }
         }
-        .listStyle(.sidebar)
         .task {
             await loadCampaigns()
         }
@@ -241,22 +244,29 @@ struct CampaignRow: View {
     let campaign: Campaign
 
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack {
+            Circle()
+                .fill(campaign.isMonthly ? Color.blue : Color.green)
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(campaign.creationName.isEmpty ? "Your Campaign" : campaign.creationName)
-                    .font(.subheadline)
                     .fontWeight(.medium)
 
-                HStack(spacing: 8) {
-                    Label("\(campaign.patronCount)", systemImage: "person.2")
-                        .font(.caption)
-                    Text("•")
+                HStack {
+                    Text("\(campaign.patronCount) patrons")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(campaign.isMonthly ? "Monthly" : "Per Creation")
-                        .font(.caption)
+
+                    if campaign.tiers.count > 0 {
+                        Text("•")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(campaign.tiers.count) tiers")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .foregroundColor(.secondary)
             }
 
             Spacer()
@@ -266,8 +276,13 @@ struct CampaignRow: View {
                     .font(.caption)
                     .foregroundColor(.orange)
             }
+
+            Text(campaign.isMonthly ? "Monthly" : "Per Creation")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
@@ -313,6 +328,7 @@ struct TiersSidebar: View {
 }
 
 // MARK: - Patron List View
+
 struct PatronListView: View {
     let patreonClient: PatreonClient
     @Binding var searchText: String
@@ -367,7 +383,7 @@ struct PatronListView: View {
             await loadPatrons()
         }
     }
-    
+
     private func loadPatrons() async {
         if isLoading { return }
         isLoading = true
