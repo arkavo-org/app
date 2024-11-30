@@ -708,7 +708,7 @@ struct Campaign: Identifiable, Hashable {
     let publishedAt: Date?
     let summary: String?
     var tiers: [PatronTier]
-    
+
     // Implementing Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -721,18 +721,18 @@ struct Campaign: Identifiable, Hashable {
         hasher.combine(summary)
         hasher.combine(tiers)
     }
-    
+
     // Implementing Equatable
     static func == (lhs: Campaign, rhs: Campaign) -> Bool {
-        return lhs.id == rhs.id &&
-               lhs.createdAt == rhs.createdAt &&
-               lhs.creationName == rhs.creationName &&
-               lhs.isMonthly == rhs.isMonthly &&
-               lhs.isNSFW == rhs.isNSFW &&
-               lhs.patronCount == rhs.patronCount &&
-               lhs.publishedAt == rhs.publishedAt &&
-               lhs.summary == rhs.summary &&
-               lhs.tiers == rhs.tiers
+        lhs.id == rhs.id &&
+            lhs.createdAt == rhs.createdAt &&
+            lhs.creationName == rhs.creationName &&
+            lhs.isMonthly == rhs.isMonthly &&
+            lhs.isNSFW == rhs.isNSFW &&
+            lhs.patronCount == rhs.patronCount &&
+            lhs.publishedAt == rhs.publishedAt &&
+            lhs.summary == rhs.summary &&
+            lhs.tiers == rhs.tiers
     }
 }
 
@@ -750,15 +750,15 @@ struct PatronTier: Identifiable, Hashable {
     var patronCount: Int
     var color: Color
     var description: String
-    
+
     // Implementing Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     // Implementing Equatable
     static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
-        return lhs.id == rhs.id
+        lhs.id == rhs.id
     }
 }
 
