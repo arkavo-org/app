@@ -2,7 +2,7 @@ import AuthenticationServices
 import Foundation
 import SwiftUI
 
-public struct Patron: Identifiable, Sendable {
+public struct Patron: Identifiable, Sendable, Hashable {
     public let id: String
     public let name: String
     public let email: String?

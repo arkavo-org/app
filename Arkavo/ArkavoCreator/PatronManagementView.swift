@@ -18,7 +18,7 @@ struct PatronManagementView: View {
     @State private var showNewTierSheet = false
     @State private var sortOrder = [KeyPathComparator(\Patron.name)]
     @State private var filterStatus: PatronStatus?
-    @State private var selectedPatrons: Set<String> = []
+    @State private var selectedPatrons: Set<Patron> = []
     @State private var showingExportMenu = false
     @State private var isEditingMode = false
     // Environment values for system appearance
@@ -52,6 +52,7 @@ struct PatronManagementView: View {
 
             // Right side - Patron list
             PatronListView(
+                patreonClient: patreonClient,
                 searchText: $searchText,
                 filterStatus: $filterStatus,
                 selectedPatrons: $selectedPatrons
@@ -180,13 +181,11 @@ struct CampaignsSidebar: View {
                         .filter { $0.type == "tier" }
                         .map { ($0.id, $0) }
                 )
-
                 // Map tier IDs to PatronTier objects
                 let tiers = campaignData.relationships.tiers.data.compactMap { tierRelation -> PatronTier? in
                     guard let tierData = tierDataDict[tierRelation.id] else { return nil }
                     // Extract tier attributes
                     let attributes = tierData.attributes
-                    print("attributes: \(attributes)")
                     guard let title = attributes["title"]?.value as? String,
                           let amountCents = attributes["amount_cents"]?.value as? Int,
                           let description = attributes["description"]?.value as? String,
@@ -314,15 +313,13 @@ struct TiersSidebar: View {
 }
 
 // MARK: - Patron List View
-
 struct PatronListView: View {
+    let patreonClient: PatreonClient
     @Binding var searchText: String
-    @State private var sortOrder: [KeyPathComparator<Patron>] = [
-        KeyPathComparator(\Patron.name),
-        KeyPathComparator(\Patron.joinDate),
-    ]
     @Binding var filterStatus: PatronStatus?
-    @Binding var selectedPatrons: Set<String>
+    @Binding var selectedPatrons: Set<Patron>
+    @State private var isLoading = false
+    @State private var error: Error?
     @State private var patrons: [Patron] = []
 
     var body: some View {
@@ -351,29 +348,36 @@ struct PatronListView: View {
 
             Divider()
 
-            Table(selection: $selectedPatrons, sortOrder: $sortOrder) {
-                TableColumn("Name", value: \.name) { patron in
-                    PatronNameCell(patron: patron)
+            Table(patrons) {
+                TableColumn("Name") { patron in
+                    Text(patron.name)
                 }
-//                TableColumn("Status", value: \.status.rawValue) { patron in
-//                    StatusBadgeView(status: patron.status)
-//                }
-//                TableColumn("Tier", value: \.tier.name)
-//                TableColumn("Join Date", value: \.joinDate) { patron in
-//                    Text(patron.joinDate.formatted(date: .abbreviated, time: .omitted))
-//                }
-//                TableColumn("Last Payment", value: \.lastPayment) { patron in
-//                    Text(patron.lastPayment.formatted(date: .abbreviated, time: .omitted))
-//                }
-//                TableColumn("Total", value: \.totalContribution) { patron in
-//                    Text(patron.totalContribution.formatted(.currency(code: "USD")))
-//                }
-            } rows: {
-                ForEach(patrons) { patron in
-                    TableRow(patron)
+                TableColumn("Email") { patron in
+                    Text(patron.email ?? "N/A")
+                }
+                TableColumn("Status") { patron in
+                    Text(patron.status.rawValue)
+                }
+                TableColumn("Amount") { patron in
+                    Text("$\(patron.tierAmount, specifier: "%.2f")")
                 }
             }
         }
+        .task {
+            await loadPatrons()
+        }
+    }
+    
+    private func loadPatrons() async {
+        if isLoading { return }
+        isLoading = true
+        error = nil
+        do {
+            patrons = try await patreonClient.getPatrons()
+        } catch {
+            self.error = error
+        }
+        isLoading = false
     }
 }
 
