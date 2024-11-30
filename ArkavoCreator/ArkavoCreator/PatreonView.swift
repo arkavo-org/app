@@ -8,14 +8,8 @@ struct PatreonRootView: View {
     var body: some View {
         Group {
             if patreonClient.isAuthenticated {
-                HStack {
-                    UserIdentityView(patreonClient: patreonClient)
-                        .padding(.horizontal)
-                    Spacer()
-                    Button("Logout") {
-                        patreonClient.logout()
-                    }
-                }
+                UserIdentityView(patreonClient: patreonClient)
+                    .padding(.horizontal)
                 CampaignView(patreonClient: patreonClient)
                     .padding(.horizontal)
                 PatronView(patreonClient: patreonClient)
@@ -141,7 +135,7 @@ struct PatronView: View {
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("Logout") {
+                    Button("Sign out") {
                         patreonClient.logout()
                     }
                 }

@@ -21,19 +21,22 @@ struct ContentView: View {
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
-                ToolbarItemGroup {
-                    Button(action: {}) {
-                        Image(systemName: "bell")
-                    }
-                    .help("Notifications")
-
-                    Menu {
-                        Button("Profile", action: {})
-                        Button("Preferences...", action: {})
-                        Divider()
-                        Button("Sign Out", action: {})
-                    } label: {
-                        Image(systemName: "person.circle")
+                if patreonClient.isAuthenticated {
+                    ToolbarItemGroup {
+                        Button(action: {}) {
+                            Image(systemName: "bell")
+                        }
+                        .help("Notifications")
+                        Menu {
+                            Button("Profile", action: {})
+                            Button("Preferences...", action: {})
+                            Divider()
+                            Button("Sign Out", action: {
+                                patreonClient.logout()
+                            })
+                        } label: {
+                            Image(systemName: "person.circle")
+                        }
                     }
                 }
             }
