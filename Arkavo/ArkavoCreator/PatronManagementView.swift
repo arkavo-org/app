@@ -837,29 +837,3 @@ struct TierRowView: View {
         }
     }
 }
-
-enum PatronStatus: String, CaseIterable {
-    case active = "Active"
-    case inactive = "Inactive"
-    case pending = "Pending"
-}
-
-struct PatronTier: Identifiable, Hashable {
-    let id: String
-    var name: String
-    var price: Double
-    var benefits: [String]
-    var patronCount: Int
-    var color: Color
-    var description: String
-    
-    // Implementing Hashable
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    // Implementing Equatable
-    static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
-        return lhs.id == rhs.id
-    }
-}

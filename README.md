@@ -89,3 +89,10 @@ mv metadata_generated.swift MetadataServiceModel.swift
 ```shell
 swiftformat --swiftversion 6.0 .
 ```
+
+### Release build
+
+```shell
+xcodebuild -scheme Arkavo -sdk macosx -configuration Release build
+xcodebuild -scheme Arkavo -sdk iphoneos -configuration Release build
+```
