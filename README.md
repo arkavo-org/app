@@ -35,7 +35,7 @@ chmod +x pkl-gen-swift
 
 #### Secrets
 
-Create `.env`
+Under `Arkavo/` create `.env`
 
 ```
 PATREON_CLIENT_ID=
@@ -47,6 +47,7 @@ source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let ap
 source Arkavo/.env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/ArkavoCreator/Secrets.swift"
 ```
 
+Note adding `[ -f "${SRCROOT}/.env" ] && source "${SRCROOT}/.env";` to the Run Script in Build Phases may be needed.
 
 #### Flatbuffers (if changed)
 

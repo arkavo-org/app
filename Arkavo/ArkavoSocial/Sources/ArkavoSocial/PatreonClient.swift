@@ -357,7 +357,7 @@ public actor PatreonClient: ObservableObject {
             components.queryItems = queryItems.map { URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)) }
             request.url = components.url
         }
-        print("rewritten url: \(request.url!)")
+//        print("rewritten url: \(request.url!)")
         let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {

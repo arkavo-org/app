@@ -625,7 +625,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "[ -f \"${SRCROOT}/.env\" ] && source \"${SRCROOT}/.env\"; echo \"// Do not commit.\\nstruct Secrets {\\n    static let patreonClientId = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let patreonClientSecret = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/ArkavoCreator/Secrets.swift\"\n";
+			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let patreonClientId = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let patreonClientSecret = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/ArkavoCreator/Secrets.swift\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
