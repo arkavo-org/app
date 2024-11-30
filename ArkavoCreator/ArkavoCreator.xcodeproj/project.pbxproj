@@ -106,7 +106,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DA91A9E12CFB625100BE9912 /* Build configuration list for PBXNativeTarget "ArkavoCreator" */;
 			buildPhases = (
-				DA91AA0F2CFB65B900BE9912 /* ShellScript */,
 				DA91A9B62CFB625000BE9912 /* Sources */,
 				DA91A9B72CFB625000BE9912 /* Frameworks */,
 				DA91A9B82CFB625000BE9912 /* Resources */,
@@ -243,29 +242,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		DA91AA0F2CFB65B900BE9912 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"",
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/ArkavoCreator/Secrets.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "echo \"// Do not commit.\\nstruct Secrets {\\n    static let patreonClientId = \\\"${PATREON_CLIENT_ID}\\\"\\n    static let patreonClientSecret = \\\"${PATREON_CLIENT_SECRET}\\\"\\n}\" > \"${SRCROOT}/ArkavoCreator/Secrets.swift\"\n";
-			showEnvVarsInLog = 0;
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DA91A9B62CFB625000BE9912 /* Sources */ = {
