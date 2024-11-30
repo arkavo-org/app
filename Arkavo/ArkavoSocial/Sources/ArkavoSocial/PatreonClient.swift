@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import SwiftUI
 
@@ -27,18 +28,23 @@ public struct Patron: Identifiable, Sendable {
     }
 }
 
-// MARK: - Core API Client
+// MARK: - Patreon API Client
 
-public actor PatreonClient {
-    var config: PatreonConfig
+public actor PatreonClient: ObservableObject {
+    public var config: PatreonConfig
     public static let redirectURI = "https://webauthn.arkavo.net/oauth/patreon"
     private let urlSession: URLSession
 
+    @MainActor @Published public var isAuthenticated = false
+    @MainActor @Published public var isLoading = false
+    @MainActor @Published public var error: Error?
+
     public init(config: PatreonConfig) {
         self.config = config
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
-        urlSession = URLSession(configuration: configuration)
+        urlSession = URLSession(configuration: URLSessionConfiguration.default)
+        Task { @MainActor in
+            checkExistingAuth()
+        }
     }
 
     deinit {
@@ -56,12 +62,12 @@ public actor PatreonClient {
 
         var path: String {
             switch self {
-            case .identity: return "identity"
-            case .campaigns: return "campaigns"
-            case let .campaign(id): return "campaigns/\(id)"
-            case let .campaignMembers(id): return "campaigns/\(id)/members"
-            case let .member(id): return "members/\(id)"
-            case .oauthToken: return "token"
+            case .identity: "identity"
+            case .campaigns: "campaigns"
+            case let .campaign(id): "campaigns/\(id)"
+            case let .campaignMembers(id): "campaigns/\(id)/members"
+            case let .member(id): "members/\(id)"
+            case .oauthToken: "token"
             }
         }
 
@@ -72,6 +78,131 @@ public actor PatreonClient {
             components.path = "/api/oauth2/v2/\(path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)"
             return components.url!
         }
+    }
+
+    // MARK: - Authentication Methods
+
+    @MainActor
+    private func checkExistingAuth() {
+        isAuthenticated = KeychainManager.getAccessToken() != nil
+    }
+
+    @MainActor
+    public func startOAuthFlow() async {
+        isLoading = true
+        error = nil
+
+        let scopes = ["identity"]
+        let scopeString = scopes.joined(separator: "%20")
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = await [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "redirect_uri", value: Self.redirectURI),
+            URLQueryItem(name: "scope", value: scopeString),
+        ]
+
+        guard let authURL = components.url else {
+            error = PatreonError.invalidURL
+            isLoading = false
+            return
+        }
+
+        let callbackURLScheme = URL(string: Self.redirectURI)?.scheme ?? "arkavo"
+        // Create a new property to hold the auth session
+        let session = ASWebAuthenticationSession(
+            url: authURL,
+            callbackURLScheme: callbackURLScheme
+        ) { [self] callbackURL, error in
+
+            Task { @MainActor in
+                if let error {
+                    self.error = error
+                    self.isLoading = false
+                    print("Error startOAuthFlow: \(error)")
+                    return
+                }
+
+                guard let callbackURL,
+                      let code = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
+                      .queryItems?
+                      .first(where: { $0.name == "code" })?
+                      .value
+                else {
+                    self.error = PatreonError.authorizationFailed
+                    self.isLoading = false
+                    return
+                }
+
+                do {
+                    try await self.exchangeCodeForTokens(code)
+                } catch {
+                    self.error = error
+                    self.isLoading = false
+                }
+            }
+        }
+        session.start()
+    }
+
+    private func exchangeCodeForTokens(_ code: String) async throws {
+        let token = try await exchangeCode(code)
+
+        try KeychainManager.saveTokens(
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken
+        )
+
+        await MainActor.run {
+            isAuthenticated = true
+            isLoading = false
+        }
+    }
+
+    @MainActor
+    public func logout() {
+        KeychainManager.deleteTokens()
+        isAuthenticated = false
+        error = nil
+    }
+
+    // MARK: - API Methods
+
+    public func getPatrons() async throws -> [Patron] {
+        let members = try await getMembers()
+        let sortedMembers = members.sorted { $0.tierAmount > $1.tierAmount }
+        return sortedMembers
+    }
+
+    public func getTierDetails() async throws -> [PatreonTier] {
+        let tiers = try await getTiers()
+        return tiers.sorted { $0.amount > $1.amount }
+    }
+
+    public func getCampaignStats() async throws -> (totalPatrons: Int, monthlyIncome: Double) {
+        let campaign = try await getCampaignDetails()
+        guard let firstCampaign = campaign.data.first else {
+            throw PatreonError.invalidResponse
+        }
+
+        let patronCount = firstCampaign.attributes.patron_count
+        let patrons = try await getPatrons()
+        let monthlyIncome = patrons.reduce(0.0) { $0 + $1.tierAmount }
+
+        return (patronCount, monthlyIncome)
+    }
+
+    public func refreshAuthIfNeeded() async throws {
+        guard let rToken = KeychainManager.getRefreshToken() else { return }
+        let token = try await refreshToken(rToken)
+        try KeychainManager.saveTokens(
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken
+        )
     }
 
     // Public API Methods
@@ -88,8 +219,9 @@ public actor PatreonClient {
     }
 
     public func getCampaignDetails() async throws -> CampaignResponse {
-        try await request(
-            endpoint: .campaign(id: config.campaignId),
+        guard let campaignId = config.campaignId else { throw PatreonError.missingCampaignId }
+        let response: CampaignResponse = try await request(
+            endpoint: .campaign(id: campaignId),
             accessToken: config.creatorAccessToken,
             queryItems: [
                 URLQueryItem(name: "include", value: "creator,tiers,benefits.tiers,goals"),
@@ -97,17 +229,20 @@ public actor PatreonClient {
                 URLQueryItem(name: "fields[tier]", value: TierFields.allCases.map(\.rawValue).joined(separator: ",")),
             ]
         )
+        return response
     }
 
     public func getCampaignMembers() async throws -> [Member] {
-        try await request(
-            endpoint: .campaignMembers(id: config.campaignId),
+        guard let campaignId = config.campaignId else { throw PatreonError.missingCampaignId }
+        let response: [Member] = try await request(
+            endpoint: .campaignMembers(id: campaignId),
             accessToken: config.creatorAccessToken,
             queryItems: [
                 URLQueryItem(name: "include", value: "user,address,campaign,currently_entitled_tiers"),
                 URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
             ]
         )
+        return response
     }
 
     public func getOAuthURL() -> URL {
@@ -155,11 +290,9 @@ public actor PatreonClient {
     }
 
     public func getMembers() async throws -> [Patron] {
-        if config.campaignId == "" {
-            config.campaignId = KeychainManager.getCampaignId() ?? ""
-        }
+        guard let campaignId = config.campaignId else { throw PatreonError.missingCampaignId }
         let response: MemberResponse = try await request(
-            endpoint: .campaignMembers(id: config.campaignId),
+            endpoint: .campaignMembers(id: campaignId),
             accessToken: config.creatorAccessToken,
             queryItems: [
                 URLQueryItem(name: "include", value: "user,currently_entitled_tiers"),
@@ -192,9 +325,9 @@ public actor PatreonClient {
 
     private func patronStatus(from status: String) -> Patron.PatronStatus {
         switch status.lowercased() {
-        case "active_patron": return .active
-        case "declined_patron", "former_patron": return .inactive
-        default: return .new
+        case "active_patron": .active
+        case "declined_patron", "former_patron": .inactive
+        default: .new
         }
     }
 
@@ -224,14 +357,14 @@ public actor PatreonClient {
             components.queryItems = queryItems.map { URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)) }
             request.url = components.url
         }
-
+        print("rewritten url: \(request.url!)")
         let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PatreonError.invalidResponse
         }
 
-        guard 200...299 ~= httpResponse.statusCode else {
+        guard 200 ... 299 ~= httpResponse.statusCode else {
             if httpResponse.statusCode == 400 {
                 let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
                 if let firstError = errorResponse?.errors.first {
@@ -251,21 +384,13 @@ public actor PatreonClient {
 
 // MARK: - Configuration
 
-public struct PatreonConfig:Sendable {
+public struct PatreonConfig: Sendable {
     let clientId: String
     let clientSecret: String
-    var campaignId: String
 
-    public init(
-        clientId: String,
-        clientSecret: String,
-        creatorAccessToken _: String,
-        creatorRefreshToken _: String,
-        campaignId: String
-    ) {
+    public init(clientId: String, clientSecret: String) {
         self.clientId = clientId
         self.clientSecret = clientSecret
-        self.campaignId = campaignId
     }
 
     var creatorAccessToken: String? {
@@ -293,6 +418,17 @@ public struct PatreonConfig:Sendable {
                 try? KeychainManager.delete(service: "com.arkavo.patreon",
                                             account: "refresh_token")
             }
+        }
+    }
+
+    var campaignId: String? {
+        get { KeychainManager.getCampaignId() }
+        set {
+            if let newValue {
+                try? KeychainManager.save(newValue.data(using: .utf8)!,
+                                          service: "com.arkavo.patreon",
+                                          account: "campaign_id")
+            } else {}
         }
     }
 }
@@ -456,31 +592,31 @@ public struct AnyCodable: Codable, Sendable {
         case array([AnyCodable])
         case dictionary([String: AnyCodable])
     }
-    
+
     private let storage: Storage
-    
+
     public var value: Any {
         switch storage {
         case .null:
-            return NSNull()
-        case .bool(let value):
-            return value
-        case .int(let value):
-            return value
-        case .double(let value):
-            return value
-        case .string(let value):
-            return value
-        case .array(let value):
-            return value.map(\.value)
-        case .dictionary(let value):
-            return value.mapValues(\.value)
+            NSNull()
+        case let .bool(value):
+            value
+        case let .int(value):
+            value
+        case let .double(value):
+            value
+        case let .string(value):
+            value
+        case let .array(value):
+            value.map(\.value)
+        case let .dictionary(value):
+            value.mapValues(\.value)
         }
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        
+
         if container.decodeNil() {
             storage = .null
         } else if let bool = try? container.decode(Bool.self) {
@@ -502,28 +638,28 @@ public struct AnyCodable: Codable, Sendable {
             )
         }
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        
+
         switch storage {
         case .null:
             try container.encodeNil()
-        case .bool(let value):
+        case let .bool(value):
             try container.encode(value)
-        case .int(let value):
+        case let .int(value):
             try container.encode(value)
-        case .double(let value):
+        case let .double(value):
             try container.encode(value)
-        case .string(let value):
+        case let .string(value):
             try container.encode(value)
-        case .array(let value):
+        case let .array(value):
             try container.encode(value)
-        case .dictionary(let value):
+        case let .dictionary(value):
             try container.encode(value)
         }
     }
-    
+
     public init(_ value: Any) {
         switch value {
         case is NSNull:
@@ -591,8 +727,8 @@ private enum MemberFields: String, CaseIterable {
     case email, fullName = "full_name", patronStatus = "patron_status"
 }
 
-extension PatreonClient {
-    public struct CampaignResponse: Codable, Sendable {
+public extension PatreonClient {
+    struct CampaignResponse: Codable, Sendable {
         public let data: [CampaignData]
         public let included: [IncludedData]
         public let meta: MetaData
@@ -634,7 +770,7 @@ extension PatreonClient {
             }
 
             public struct Goals: Codable, Sendable {
-                public let data: String?
+                public let data: [String]?
             }
 
             public struct Tiers: Codable, Sendable {
@@ -667,7 +803,7 @@ extension PatreonClient {
         }
     }
 
-    public func getCampaigns() async throws -> CampaignResponse {
+    func getCampaigns() async throws -> CampaignResponse {
         try await request(
             endpoint: .campaigns,
             accessToken: config.creatorAccessToken,
@@ -686,6 +822,7 @@ public enum PatreonError: LocalizedError {
     case authorizationFailed
     case tokenExchangeFailed
     case networkError
+    case missingCampaignId
     case httpError(statusCode: Int)
     case decodingError(Error)
     case apiError(APIError)
@@ -708,6 +845,8 @@ public enum PatreonError: LocalizedError {
             "Token exchange failed"
         case .networkError:
             "Network error"
+        case .missingCampaignId:
+            "Missing campaign ID"
         }
     }
 
@@ -744,8 +883,8 @@ public struct APIError: Decodable, Sendable {
 
 // MARK: - Tier Models
 
-extension PatreonClient {
-    public struct TierData: Codable {
+public extension PatreonClient {
+    struct TierData: Codable {
         let id: String
         let attributes: TierAttributes
         let type: String
@@ -762,7 +901,7 @@ extension PatreonClient {
         }
     }
 
-    public func getTiers() async throws -> [PatreonTier] {
+    func getTiers() async throws -> [PatreonTier] {
         let response = try await getCampaigns()
 
         // Find tiers in the included data
