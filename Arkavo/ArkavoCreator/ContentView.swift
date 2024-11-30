@@ -1,16 +1,22 @@
+import ArkavoSocial
 import SwiftUI
 
 // MARK: - Main Content View
+
 struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
     @Environment(\.colorScheme) var colorScheme
-    
+    let patreonClient: PatreonClient
+
     var body: some View {
         NavigationSplitView {
             Sidebar(selectedSection: $selectedSection)
         } detail: {
             VStack(spacing: 0) {
-                SectionContainer(selectedSection: selectedSection)
+                SectionContainer(
+                    selectedSection: selectedSection,
+                    patreonClient: patreonClient
+                )
             }
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
@@ -20,7 +26,7 @@ struct ContentView: View {
                         Image(systemName: "bell")
                     }
                     .help("Notifications")
-                    
+
                     Menu {
                         Button("Profile", action: {})
                         Button("Preferences...", action: {})
@@ -36,6 +42,7 @@ struct ContentView: View {
 }
 
 // MARK: - Navigation Section Updates
+
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
     case content = "Content Manager"
@@ -43,40 +50,47 @@ enum NavigationSection: String, CaseIterable {
     case protection = "Content Protection"
     case social = "Social Distribution"
     case settings = "Settings"
-    
+
     var systemImage: String {
         switch self {
-        case .dashboard: return "square.grid.2x2"
-        case .content: return "doc.badge.plus"
-        case .patrons: return "person.2.circle"
-        case .protection: return "lock.shield"
-        case .social: return "square.and.arrow.up.circle"
-        case .settings: return "gear"
+        case .dashboard: "square.grid.2x2"
+        case .content: "doc.badge.plus"
+        case .patrons: "person.2.circle"
+        case .protection: "lock.shield"
+        case .social: "square.and.arrow.up.circle"
+        case .settings: "gear"
         }
     }
-    
+
     var subtitle: String {
         switch self {
-        case .dashboard: return "Overview"
-        case .content: return "Manage Your Content"
-        case .patrons: return "Manage Your Community"
-        case .protection: return "Content Security"
-        case .social: return "Share Your Content"
-        case .settings: return "App Settings"
+        case .dashboard: "Overview"
+        case .content: "Manage Your Content"
+        case .patrons: "Manage Your Community"
+        case .protection: "Content Security"
+        case .social: "Share Your Content"
+        case .settings: "App Settings"
         }
     }
 }
 
 // MARK: - Section Container View
+
 struct SectionContainer: View {
     let selectedSection: NavigationSection
+    let patreonClient: PatreonClient
     @Namespace private var animation
-    
+
     var body: some View {
         ZStack {
             switch selectedSection {
+            case .dashboard:
+                // Pass client and config to PatreonRootView
+                PatreonRootView(patreonClient: patreonClient)
+                    .transition(.moveAndFade())
+                    .id("dashboard")
             case .patrons:
-                PatronManagementView()
+                PatronManagementView(patreonClient: patreonClient)
                     .transition(.moveAndFade())
                     .id("patrons")
             case .content:
@@ -94,16 +108,17 @@ struct SectionContainer: View {
 }
 
 // MARK: - Default Section View
+
 struct DefaultSectionView: View {
     let section: NavigationSection
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(section.rawValue)
                     .font(.title)
                     .padding(.bottom)
-                
+
                 ContentCard()
             }
             .padding()
@@ -112,6 +127,7 @@ struct DefaultSectionView: View {
 }
 
 // MARK: - Custom Transitions
+
 extension AnyTransition {
     static func moveAndFade() -> AnyTransition {
         AnyTransition.asymmetric(
@@ -122,13 +138,14 @@ extension AnyTransition {
 }
 
 // MARK: - Sidebar View
+
 struct Sidebar: View {
     @Binding var selectedSection: NavigationSection
-    
+
     var body: some View {
         List(selection: $selectedSection) {
             Section {
-                ForEach(NavigationSection.allCases[0..<5], id: \.self) { section in
+                ForEach(NavigationSection.allCases[0 ..< 5], id: \.self) { section in
                     NavigationLink(value: section) {
                         Label(section.rawValue, systemImage: section.systemImage)
                     }
@@ -146,9 +163,10 @@ struct Sidebar: View {
 }
 
 // MARK: - Sidebar Row View
+
 struct SidebarRow: View {
     let section: NavigationSection
-    
+
     var body: some View {
         Label(
             title: { Text(section.rawValue) },
@@ -158,26 +176,27 @@ struct SidebarRow: View {
 }
 
 // MARK: - Top Bar View
+
 struct TopBar: View {
     let title: String
     @State private var showNotifications = false
     @State private var showProfileMenu = false
-    
+
     var body: some View {
         HStack {
             Text(title)
                 .font(.title2)
                 .fontWeight(.semibold)
-            
+
             Spacer()
-            
+
             HStack(spacing: 16) {
                 Button(action: { showNotifications.toggle() }) {
                     Image(systemName: "bell")
                         .symbolVariant(showNotifications ? .fill : .none)
                 }
                 .help("Notifications")
-                
+
                 Menu {
                     Button("Profile", action: {})
                     Button("Preferences", action: {})
@@ -204,13 +223,14 @@ struct TopBar: View {
 }
 
 // MARK: - Content Card View
+
 struct ContentCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Recent Activity")
                 .font(.headline)
-            
-            ForEach(0..<3) { index in
+
+            ForEach(0 ..< 3) { _ in
                 HStack {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color.accentColor.opacity(0.1))
@@ -219,7 +239,7 @@ struct ContentCard: View {
                             Image(systemName: "doc.text")
                                 .foregroundStyle(Color.accentColor)
                         )
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Content Title")
                             .font(.body)
@@ -227,9 +247,9 @@ struct ContentCard: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("View") {
                         // Action
                     }

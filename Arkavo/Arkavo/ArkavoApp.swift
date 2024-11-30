@@ -4,7 +4,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-        @State private var selectedView: AppView = .registration
+    @State private var selectedView: AppView = .registration
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     let persistenceController = PersistenceController.shared
@@ -22,26 +22,26 @@ struct ArkavoApp: App {
                         }
                     })
                 case .main:
-                        NavigationStack(path: $navigationPath) {
-                            ArkavoView(service: service)
-                            #if os(iOS)
-                                .navigationBarTitleDisplayMode(.inline)
-                                .navigationBarHidden(true)
-                            #endif
-                                .modelContainer(persistenceController.container)
-                                .navigationDestination(for: DeepLinkDestination.self) { destination in
-                                    switch destination {
-                                    case let .stream(publicID):
-                                        if service.streamService == nil {
-                                            Text("No Stream Service for \(publicID)")
-                                        } else {
-                                            StreamLoadingView(service: service.streamService!, publicID: publicID)
-                                        }
-                                    case let .profile(publicID):
-                                        Text("Profile View for \(publicID)")
+                    NavigationStack(path: $navigationPath) {
+                        ArkavoView(service: service)
+                        #if os(iOS)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .navigationBarHidden(true)
+                        #endif
+                            .modelContainer(persistenceController.container)
+                            .navigationDestination(for: DeepLinkDestination.self) { destination in
+                                switch destination {
+                                case let .stream(publicID):
+                                    if service.streamService == nil {
+                                        Text("No Stream Service for \(publicID)")
+                                    } else {
+                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
                                     }
+                                case let .profile(publicID):
+                                    Text("Profile View for \(publicID)")
                                 }
-                        }
+                            }
+                    }
                 }
             }
             .task {

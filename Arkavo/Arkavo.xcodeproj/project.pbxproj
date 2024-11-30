@@ -11,7 +11,6 @@
 		CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2652C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
-		DA0F817D2CF1552B00B10773 /* PatreonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0F817C2CF1552A00B10773 /* PatreonService.swift */; };
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
@@ -105,7 +104,6 @@
 /* Begin PBXFileReference section */
 		CB68E2622C9A743600FF3167 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
-		DA0F817C2CF1552A00B10773 /* PatreonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonService.swift; sourceTree = "<group>"; };
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
@@ -173,17 +171,10 @@
 			);
 			target = DAC1F9E22C34DA7000499631 /* Arkavo */;
 		};
-		DA91A9AB2CFA6D5F00BE9912 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				PatreonView.swift,
-			);
-			target = DA12739B2CF7FFE40069AF78 /* ArkavoCreator */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		DA12739D2CF7FFE40069AF78 /* ArkavoCreator */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DA91A9AA2CFA6D5F00BE9912 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, DA91A9AB2CFA6D5F00BE9912 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreator; sourceTree = "<group>"; };
+		DA12739D2CF7FFE40069AF78 /* ArkavoCreator */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DA91A9AA2CFA6D5F00BE9912 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreator; sourceTree = "<group>"; };
 		DA1273B12CF7FFE60069AF78 /* ArkavoCreatorTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreatorTests; sourceTree = "<group>"; };
 		DA1273BB2CF7FFE60069AF78 /* ArkavoCreatorUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ArkavoCreatorUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -307,7 +298,6 @@
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
-				DA0F817C2CF1552A00B10773 /* PatreonService.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
@@ -711,7 +701,6 @@
 				DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
-				DA0F817D2CF1552B00B10773 /* PatreonService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

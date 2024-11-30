@@ -1,18 +1,28 @@
+//
+//  PatronManagementView.swift
+//  Arkavo
+//
+//  Created by Paul Flynn on 11/29/24.
+//
+
+import ArkavoSocial
 import SwiftUI
 
 // MARK: - Main View
+
 struct PatronManagementView: View {
+    let patreonClient: PatreonClient
     @State private var selectedTier: PatronTier?
     @State private var searchText = ""
     @State private var showNewTierSheet = false
     @State private var sortOrder = [KeyPathComparator(\Patron.name)]
     @State private var filterStatus: PatronStatus?
-    @State private var selectedPatrons: Set<UUID> = []
+    @State private var selectedPatrons: Set<String> = []
     @State private var showingExportMenu = false
     @State private var isEditingMode = false
     // Environment values for system appearance
     @Environment(\.colorScheme) var colorScheme
-    
+
     var body: some View {
         HStack(spacing: 0) {
             // Left side - Tiers
@@ -22,27 +32,26 @@ struct PatronManagementView: View {
                 isEditingMode: $isEditingMode
             )
             .frame(minWidth: 250, maxWidth: 300)
-            
+
             // Divider between sidebar and content
             Divider()
-            
+
             // Right side - Patron list
-            PatronDetailView(
+            PatronListView(
                 searchText: $searchText,
-                sortOrder: $sortOrder,
                 filterStatus: $filterStatus,
                 selectedPatrons: $selectedPatrons
             )
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Menu {
-                        Button("CSV", action: { })
-                        Button("Excel", action: { })
-                        Button("PDF", action: { })
+                        Button("CSV", action: {})
+                        Button("Excel", action: {})
+                        Button("PDF", action: {})
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
-                    
+
                     if !selectedPatrons.isEmpty {
                         Menu {
                             Button("Send Message", action: sendMessageToSelected)
@@ -62,26 +71,27 @@ struct PatronManagementView: View {
                 .frame(minWidth: 500, minHeight: 600)
         }
     }
-    
+
     private func sendMessageToSelected() {
         // Implement send message functionality
     }
-    
+
     private func exportSelectedData() {
         // Implement export functionality
     }
-    
+
     private func removeSelected() {
         // Implement remove functionality with confirmation
     }
 }
 
 // MARK: - Tiers Sidebar
+
 struct TiersSidebar: View {
     @Binding var selectedTier: PatronTier?
     @Binding var showNewTierSheet: Bool
     @Binding var isEditingMode: Bool
-    
+
     var body: some View {
         List(selection: $selectedTier) {
             Section {
@@ -94,7 +104,7 @@ struct TiersSidebar: View {
                             Button("Delete", role: .destructive) { /* Implementation */ }
                         }
                 }
-                .onMove { source, destination in
+                .onMove { _, _ in
                     // Handle reordering
                 }
             } header: {
@@ -117,13 +127,18 @@ struct TiersSidebar: View {
     }
 }
 
-// MARK: - Patron Detail View
-struct PatronDetailView: View {
+// MARK: - Patron List View
+
+struct PatronListView: View {
     @Binding var searchText: String
-    @Binding var sortOrder: [KeyPathComparator<Patron>]
+    @State private var sortOrder: [KeyPathComparator<Patron>] = [
+        KeyPathComparator(\Patron.name),
+        KeyPathComparator(\Patron.joinDate),
+    ]
     @Binding var filterStatus: PatronStatus?
-    @Binding var selectedPatrons: Set<UUID>
-    
+    @Binding var selectedPatrons: Set<String>
+    @State private var patrons: [Patron] = []
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -136,7 +151,7 @@ struct PatronDetailView: View {
                 .padding(8)
                 .background(Color(.textBackgroundColor))
                 .cornerRadius(8)
-                
+
                 Picker("Status", selection: $filterStatus) {
                     Text("All").tag(nil as PatronStatus?)
                     ForEach(PatronStatus.allCases, id: \.self) { status in
@@ -147,28 +162,28 @@ struct PatronDetailView: View {
                 .frame(width: 300)
             }
             .padding()
-            
+
             Divider()
-            
+
             Table(selection: $selectedPatrons, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.name) { patron in
                     PatronNameCell(patron: patron)
                 }
-                TableColumn("Status", value: \.status.rawValue) { patron in
-                    StatusBadgeView(status: patron.status)
-                }
-                TableColumn("Tier", value: \.tier.name)
-                TableColumn("Join Date", value: \.joinDate) { patron in
-                    Text(patron.joinDate.formatted(date: .abbreviated, time: .omitted))
-                }
-                TableColumn("Last Payment", value: \.lastPayment) { patron in
-                    Text(patron.lastPayment.formatted(date: .abbreviated, time: .omitted))
-                }
-                TableColumn("Total", value: \.totalContribution) { patron in
-                    Text(patron.totalContribution.formatted(.currency(code: "USD")))
-                }
+//                TableColumn("Status", value: \.status.rawValue) { patron in
+//                    StatusBadgeView(status: patron.status)
+//                }
+//                TableColumn("Tier", value: \.tier.name)
+//                TableColumn("Join Date", value: \.joinDate) { patron in
+//                    Text(patron.joinDate.formatted(date: .abbreviated, time: .omitted))
+//                }
+//                TableColumn("Last Payment", value: \.lastPayment) { patron in
+//                    Text(patron.lastPayment.formatted(date: .abbreviated, time: .omitted))
+//                }
+//                TableColumn("Total", value: \.totalContribution) { patron in
+//                    Text(patron.totalContribution.formatted(.currency(code: "USD")))
+//                }
             } rows: {
-                ForEach(samplePatrons) { patron in
+                ForEach(patrons) { patron in
                     TableRow(patron)
                 }
             }
@@ -177,26 +192,23 @@ struct PatronDetailView: View {
 }
 
 // MARK: - Supporting Views
+
 struct PatronNameCell: View {
     let patron: Patron
-    
+
     var body: some View {
         HStack {
             Circle()
-                .fill(patron.avatarColor)
                 .frame(width: 28, height: 28)
                 .overlay(
-                    Text(patron.initials)
+                    Text(patron.name)
                         .foregroundColor(.white)
                         .font(.system(.caption, design: .rounded, weight: .medium))
                 )
-            
+
             VStack(alignment: .leading) {
                 Text(patron.name)
                     .font(.body)
-                Text(patron.email)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -205,15 +217,15 @@ struct PatronNameCell: View {
 
 struct StatusBadgeView: View {
     let status: PatronStatus
-    
+
     var statusColor: Color {
         switch status {
-        case .active: return .green
-        case .inactive: return .gray
-        case .pending: return .orange
+        case .active: .green
+        case .inactive: .gray
+        case .pending: .orange
         }
     }
-    
+
     var body: some View {
         Text(status.rawValue)
             .font(.caption)
@@ -226,6 +238,7 @@ struct StatusBadgeView: View {
 }
 
 // MARK: - New Tier Sheet
+
 struct NewTierSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var tierName = ""
@@ -237,19 +250,19 @@ struct NewTierSheet: View {
     @State private var currentStep = 0
     @State private var showingImagePicker = false
     @State private var tierImage: NSImage?
-    
+
     private let predefinedColors: [Color] = [
         .blue, .purple, .pink, .red, .orange,
-        .yellow, .green, .mint, .teal, .cyan
+        .yellow, .green, .mint, .teal, .cyan,
     ]
-    
+
     var isValidTier: Bool {
         !tierName.isEmpty &&
-        !tierPrice.isEmpty &&
-        Double(tierPrice) != nil &&
-        !benefits.filter { !$0.isEmpty }.isEmpty
+            !tierPrice.isEmpty &&
+            Double(tierPrice) != nil &&
+            !benefits.filter { !$0.isEmpty }.isEmpty
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -264,19 +277,19 @@ struct NewTierSheet: View {
                 .keyboardShortcut(.cancelAction)
             }
             .padding()
-            
+
             // Content
             TabView(selection: $currentStep) {
                 // Basic Info View
                 basicInfoView
                     .tag(0)
-                
+
                 // Benefits View
                 benefitsView
                     .tag(1)
             }
             .tabViewStyle(.automatic)
-            
+
             // Footer
             HStack {
                 if currentStep > 0 {
@@ -286,9 +299,9 @@ struct NewTierSheet: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Button(currentStep == 0 ? "Next" : "Create") {
                     if currentStep == 0 {
                         withAnimation {
@@ -306,21 +319,21 @@ struct NewTierSheet: View {
         .frame(width: 600)
         .fixedSize(horizontal: true, vertical: false)
     }
-    
+
     private var basicInfoView: some View {
         Form {
             Section {
                 TextField("Tier Name", text: $tierName)
                     .textFieldStyle(.roundedBorder)
-                
+
                 HStack {
                     Text("$")
                     TextField("Price", text: $tierPrice)
                         .textFieldStyle(.roundedBorder)
                 }
-                
+
                 Toggle("One-time payment", isOn: $isOneTime)
-                
+
                 TextEditor(text: $tierDescription)
                     .frame(height: 100)
                     .overlay(
@@ -330,7 +343,7 @@ struct NewTierSheet: View {
             } header: {
                 Text("Basic Information")
             }
-            
+
             Section {
                 HStack {
                     if let image = tierImage {
@@ -348,18 +361,18 @@ struct NewTierSheet: View {
                                     .foregroundColor(.secondary)
                             )
                     }
-                    
+
                     VStack(alignment: .leading) {
                         Button("Choose Image") {
                             showingImagePicker = true
                         }
-                        
+
                         Text("Recommended size: 300x300")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-                
+
                 LazyVGrid(columns: Array(repeating: .init(.flexible()), count: 5)) {
                     ForEach(predefinedColors, id: \.self) { color in
                         Circle()
@@ -383,7 +396,7 @@ struct NewTierSheet: View {
             // Image picker view would go here
         }
     }
-    
+
     private var benefitsView: some View {
         Form {
             Section {
@@ -391,10 +404,10 @@ struct NewTierSheet: View {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(selectedColor)
-                        
+
                         TextField("Describe this benefit", text: $benefits[index])
                             .textFieldStyle(.roundedBorder)
-                        
+
                         if benefits.count > 1 {
                             Button(action: { removeBenefit(at: index) }) {
                                 Image(systemName: "minus.circle.fill")
@@ -404,7 +417,7 @@ struct NewTierSheet: View {
                         }
                     }
                 }
-                
+
                 Button(action: addBenefit) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
@@ -422,15 +435,15 @@ struct NewTierSheet: View {
         }
         .padding()
     }
-    
+
     private func addBenefit() {
         benefits.append("")
     }
-    
+
     private func removeBenefit(at index: Int) {
         benefits.remove(at: index)
     }
-    
+
     private func createTier() {
         // Create new tier logic
         dismiss()
@@ -438,10 +451,11 @@ struct NewTierSheet: View {
 }
 
 // MARK: - Tier Row View
+
 struct TierRowView: View {
     let tier: PatronTier
     let isEditing: Bool
-    
+
     var body: some View {
         HStack {
             if isEditing {
@@ -449,16 +463,16 @@ struct TierRowView: View {
                     .foregroundColor(.secondary)
                     .padding(.trailing, 4)
             }
-            
+
             Circle()
                 .fill(tier.color)
                 .frame(width: 12, height: 12)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(tier.name)
                         .fontWeight(.medium)
-                    
+
                     if tier.isOneTime {
                         Text("One-time")
                             .font(.caption2)
@@ -468,12 +482,12 @@ struct TierRowView: View {
                             .cornerRadius(4)
                     }
                 }
-                
+
                 HStack {
                     Text("\(tier.patronCount) patrons")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+
                     if !tier.benefits.isEmpty {
                         Text("•")
                             .font(.caption)
@@ -484,45 +498,20 @@ struct TierRowView: View {
                     }
                 }
             }
-            
+
             Spacer()
-            
+
             Text(tier.price.formatted(.currency(code: "USD")))
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Edit") { }
-            Button("Duplicate") { }
+            Button("Edit") {}
+            Button("Duplicate") {}
             Divider()
-            Button("Archive", role: .destructive) { }
+            Button("Archive", role: .destructive) {}
         }
-    }
-}
-
-// MARK: - Patron Management Models
-struct Patron: Identifiable, Hashable {
-    let id: UUID
-    var name: String
-    var email: String
-    var tier: PatronTier
-    var joinDate: Date
-    var lastPayment: Date
-    var totalContribution: Double
-    var status: PatronStatus
-    var avatarColor: Color
-    
-    var initials: String {
-        String(name.prefix(1))
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    static func == (lhs: Patron, rhs: Patron) -> Bool {
-        return lhs.id == rhs.id
     }
 }
 
@@ -541,25 +530,20 @@ struct PatronTier: Identifiable, Hashable {
     var color: Color
     var description: String
     var isOneTime: Bool
-    
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
-        return lhs.id == rhs.id
+        lhs.id == rhs.id
     }
 }
 
 // MARK: - Sample Data
+
 let sampleTiers = [
     PatronTier(id: UUID(), name: "Bronze", price: 5.0, benefits: ["Basic Access"], patronCount: 125, color: .brown, description: "Basic tier with essential features", isOneTime: false),
     PatronTier(id: UUID(), name: "Silver", price: 10.0, benefits: ["Basic Access", "Early Access"], patronCount: 75, color: .gray, description: "Enhanced access with early content", isOneTime: false),
-    PatronTier(id: UUID(), name: "Gold", price: 25.0, benefits: ["Basic Access", "Early Access", "Exclusive Content"], patronCount: 30, color: .yellow, description: "Premium tier with all features", isOneTime: false)
-]
-
-let samplePatrons = [
-    Patron(id: UUID(), name: "John Doe", email: "john@email.com", tier: sampleTiers[2], joinDate: Date(), lastPayment: Date(), totalContribution: 75.0, status: .active, avatarColor: .blue),
-    Patron(id: UUID(), name: "Jane Smith", email: "jane@email.com", tier: sampleTiers[1], joinDate: Date(), lastPayment: Date(), totalContribution: 45.0, status: .active, avatarColor: .purple),
-    Patron(id: UUID(), name: "Bob Wilson", email: "bob@email.com", tier: sampleTiers[0], joinDate: Date(), lastPayment: Date(), totalContribution: 15.0, status: .inactive, avatarColor: .green)
+    PatronTier(id: UUID(), name: "Gold", price: 25.0, benefits: ["Basic Access", "Early Access", "Exclusive Content"], patronCount: 30, color: .yellow, description: "Premium tier with all features", isOneTime: false),
 ]
