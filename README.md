@@ -35,7 +35,7 @@ chmod +x pkl-gen-swift
 
 #### Secrets
 
-Create `.env`
+Under `Arkavo/` create `.env`
 
 ```
 PATREON_CLIENT_ID=
@@ -44,8 +44,10 @@ PATREON_CLIENT_SECRET=
 
 ```shell
 source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let apiKey = \"${PATREON_CLIENT_ID}\"\n    static let secretToken = \"${PATREON_CLIENT_SECRET}\"\n}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
 ```
 
+Note adding `[ -f "${SRCROOT}/.env" ] && source "${SRCROOT}/.env";` to the Run Script in Build Phases may be needed.
 
 #### Flatbuffers (if changed)
 
@@ -87,4 +89,22 @@ mv metadata_generated.swift MetadataServiceModel.swift
 
 ```shell
 swiftformat --swiftversion 6.0 .
+```
+
+### Release build
+
+#### Arkavo
+
+```shell
+cd Arkavo
+xcodebuild -scheme Arkavo -sdk macosx -configuration Release build
+xcodebuild -scheme Arkavo -sdk iphoneos -configuration Release build
+```
+
+#### ArkavoCreator
+
+```shell
+cd ArkavoCreator
+xcodebuild -scheme ArkavoCreator -sdk macosx -configuration Release build
+xcodebuild -scheme ArkavoCreator -sdk iphoneos -configuration Release build
 ```

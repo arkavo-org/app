@@ -1,32 +1,31 @@
-import SwiftUI
 import ArkavoSocial
+import SwiftUI
 @preconcurrency import WebKit
 
 struct PatreonRootView: View {
-    @StateObject private var authViewModel: PatreonAuthViewModel
-    let client: PatreonClient
-
-    init(client: PatreonClient, config: PatreonConfig) {
-        self.client = client
-        _authViewModel = StateObject(wrappedValue: PatreonAuthViewModel(client: client, config: config))
-    }
+    @ObservedObject var patreonClient: PatreonClient
 
     var body: some View {
         Group {
-            if authViewModel.isAuthenticated {
+            if patreonClient.isAuthenticated {
                 HStack {
-                    UserIdentityView(patreonClient: client)
+                    UserIdentityView(patreonClient: patreonClient)
                         .padding(.horizontal)
                     Spacer()
                     Button("Logout") {
-                        authViewModel.logout()
+                        patreonClient.logout()
                     }
                 }
-                CampaignView(patreonClient: client)
+                CampaignView(patreonClient: patreonClient)
                     .padding(.horizontal)
-                PatronManagementView(viewModel: authViewModel, patreonClient: client)
+                PatronView(patreonClient: patreonClient)
             } else {
-                PatreonLoginView(viewModel: authViewModel)
+                PatreonLoginView(patreonClient: patreonClient)
+            }
+        }
+        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                print("User authenticated")
             }
         }
     }
@@ -35,16 +34,15 @@ struct PatreonRootView: View {
 // MARK: - Patreon Login View
 
 struct PatreonLoginView: View {
-    @StateObject var viewModel: PatreonAuthViewModel
-    @Environment(\.dismiss) private var dismiss
+    let patreonClient: PatreonClient
 
     var body: some View {
         VStack(spacing: 16) {
-            if viewModel.isLoading {
+            if patreonClient.isLoading {
                 ProgressView()
                     .scaleEffect(1.5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = viewModel.error {
+            } else if let error = patreonClient.error {
                 VStack(spacing: 16) {
                     Text("Authentication Error")
                         .font(.headline)
@@ -52,7 +50,9 @@ struct PatreonLoginView: View {
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
                     Button("Try Again") {
-                        viewModel.startOAuthFlow()
+                        Task {
+                            await patreonClient.startOAuthFlow()
+                        }
                     }
                 }
                 .padding()
@@ -61,17 +61,12 @@ struct PatreonLoginView: View {
                     Text("Connect with Patreon")
                         .font(.title2)
                     Button("Start Authentication") {
-                        viewModel.startOAuthFlow()
+                        Task {
+                            await patreonClient.startOAuthFlow()
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }
-            }
-        }
-        .adaptiveFrame()
-        .adaptiveBackgroundStyle()
-        .onChange(of: viewModel.isAuthenticated) { _, isAuthenticated in
-            if isAuthenticated {
-                dismiss()
             }
         }
     }
@@ -107,8 +102,14 @@ extension View {
     }
 }
 
-struct PatronManagementView: View {
-    @StateObject var viewModel: PatreonAuthViewModel
+public enum PatronFilter: String, CaseIterable {
+    case all = "All"
+    case active = "Active"
+    case inactive = "Inactive"
+    case new = "New"
+}
+
+struct PatronView: View {
     let patreonClient: PatreonClient
     @State private var searchText = ""
     @State private var selectedFilter: PatronFilter = .all
@@ -117,13 +118,6 @@ struct PatronManagementView: View {
     @State private var patrons: [Patron] = []
     @State private var isLoading = false
     @State private var error: Error?
-
-    enum PatronFilter: String, CaseIterable {
-        case all = "All"
-        case active = "Active"
-        case inactive = "Inactive"
-        case new = "New"
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -148,7 +142,7 @@ struct PatronManagementView: View {
                     .buttonStyle(.bordered)
                     Spacer()
                     Button("Logout") {
-                        viewModel.logout()
+                        patreonClient.logout()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -218,7 +212,6 @@ struct PatronManagementView: View {
     private func loadPatrons() async {
         isLoading = true
         error = nil
-
         do {
             patrons = try await patreonClient.getMembers()
         } catch {
@@ -226,6 +219,40 @@ struct PatronManagementView: View {
         }
 
         isLoading = false
+    }
+}
+
+struct PatronDetailView: View {
+    let patron: Patron
+    let patreonClient: PatreonClient
+    @Environment(\.dismiss) var dismiss
+    @State private var showingMessageComposer = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                PatronHeaderView(patron: patron)
+
+                PatronActivityView(patron: patron)
+
+                PatronEngagementView(patron: patron)
+            }
+            .padding()
+        }
+        .navigationTitle("Patron Details")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingMessageComposer = true }) {
+                    Image(systemName: "envelope")
+                }
+            }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .sheet(isPresented: $showingMessageComposer) {
+            MessageComposerView(patreonClient: patreonClient)
+        }
     }
 }
 
@@ -259,7 +286,7 @@ struct PatronStatsView: View {
 
 struct PatronSearchBar: View {
     @Binding var searchText: String
-    @Binding var selectedFilter: PatronManagementView.PatronFilter
+    @Binding var selectedFilter: PatronFilter
 
     var body: some View {
         VStack(spacing: 12) {
@@ -269,7 +296,7 @@ struct PatronSearchBar: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(PatronManagementView.PatronFilter.allCases, id: \.self) { filter in
+                    ForEach(PatronFilter.allCases, id: \.self) { filter in
                         FilterChip(
                             title: filter.rawValue,
                             isSelected: selectedFilter == filter
@@ -336,40 +363,6 @@ struct PatronCard: View {
     }
 }
 
-struct PatronDetailView: View {
-    let patron: Patron
-    let patreonClient: PatreonClient
-    @Environment(\.dismiss) var dismiss
-    @State private var showingMessageComposer = false
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                PatronHeaderView(patron: patron)
-
-                PatronActivityView(patron: patron)
-
-                PatronEngagementView(patron: patron)
-            }
-            .padding()
-        }
-        .navigationTitle("Patron Details")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingMessageComposer = true }) {
-                    Image(systemName: "envelope")
-                }
-            }
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Done") { dismiss() }
-            }
-        }
-        .sheet(isPresented: $showingMessageComposer) {
-            MessageComposerView(patreonClient: patreonClient)
-        }
-    }
-}
-
 // Supporting Views and Models
 
 struct FilterChip: View {
@@ -383,7 +376,7 @@ struct FilterChip: View {
                 .font(.subheadline)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.arkavoBrand : Color.gray.opacity(0.1))
+                .background(Color.gray.opacity(0.1))
                 .cornerRadius(16)
         }
     }
@@ -442,7 +435,7 @@ struct PatronHeaderView: View {
 
                 Text("$\(patron.tierAmount, specifier: "%.2f")/month")
                     .font(.headline)
-                    .foregroundColor(.arkavoBrand)
+                    .foregroundColor(.white)
             }
 
             HStack(spacing: 24) {
@@ -705,7 +698,7 @@ struct EngagementCard: View {
     }
 }
 
-struct Campaign: Identifiable {
+struct Campaign: Identifiable, Hashable {
     let id: String
     let createdAt: Date
     let creationName: String
@@ -714,6 +707,59 @@ struct Campaign: Identifiable {
     let patronCount: Int
     let publishedAt: Date?
     let summary: String?
+    var tiers: [PatronTier]
+    
+    // Implementing Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(createdAt)
+        hasher.combine(creationName)
+        hasher.combine(isMonthly)
+        hasher.combine(isNSFW)
+        hasher.combine(patronCount)
+        hasher.combine(publishedAt)
+        hasher.combine(summary)
+        hasher.combine(tiers)
+    }
+    
+    // Implementing Equatable
+    static func == (lhs: Campaign, rhs: Campaign) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.creationName == rhs.creationName &&
+               lhs.isMonthly == rhs.isMonthly &&
+               lhs.isNSFW == rhs.isNSFW &&
+               lhs.patronCount == rhs.patronCount &&
+               lhs.publishedAt == rhs.publishedAt &&
+               lhs.summary == rhs.summary &&
+               lhs.tiers == rhs.tiers
+    }
+}
+
+enum PatronStatus: String, CaseIterable {
+    case active = "Active"
+    case inactive = "Inactive"
+    case pending = "Pending"
+}
+
+struct PatronTier: Identifiable, Hashable {
+    let id: String
+    var name: String
+    var price: Double
+    var benefits: [String]
+    var patronCount: Int
+    var color: Color
+    var description: String
+    
+    // Implementing Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    // Implementing Equatable
+    static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
 
 struct CampaignView: View {
@@ -782,8 +828,9 @@ struct CampaignView: View {
 
         do {
             let response = try await patreonClient.getCampaigns()
-            if let firstCampaignId = response.data.first?.id {
-                print("Found campaign ID: \(firstCampaignId)")
+            if KeychainManager.getCampaignId() == nil,
+               let firstCampaignId = response.data.first?.id
+            {
                 try KeychainManager.saveCampaignId(firstCampaignId)
             }
             campaigns = response.data.map { campaignData in
@@ -796,7 +843,8 @@ struct CampaignView: View {
                     isNSFW: campaignData.attributes.is_nsfw,
                     patronCount: campaignData.attributes.patron_count,
                     publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
-                    summary: campaignData.attributes.summary
+                    summary: campaignData.attributes.summary,
+                    tiers: []
                 )
             }
         } catch {
@@ -1020,14 +1068,4 @@ struct MessageComposerView: View {
         // Implement message sending logic
         dismiss()
     }
-}
-
-extension PatreonConfig {
-    static let preview = PatreonConfig(
-        clientId: ProcessInfo.processInfo.environment["PATREON_CLIENT_ID"] ?? "preview-client-id",
-        clientSecret: ProcessInfo.processInfo.environment["PATREON_CLIENT_SECRET"] ?? "preview-secret",
-        creatorAccessToken: ProcessInfo.processInfo.environment["PATREON_ACCESS_TOKEN"] ?? "preview-token",
-        creatorRefreshToken: ProcessInfo.processInfo.environment["PATREON_REFRESH_TOKEN"] ?? "preview-refresh-token",
-        campaignId: ProcessInfo.processInfo.environment["PATREON_CAMPAIGN_ID"] ?? "preview-campaign"
-    )
 }

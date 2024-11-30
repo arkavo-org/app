@@ -1,5 +1,5 @@
-import XCTest
 @testable import ArkavoSocial
+import XCTest
 
 final class ArkavoSocialTests: XCTestCase {
     func testExample() throws {

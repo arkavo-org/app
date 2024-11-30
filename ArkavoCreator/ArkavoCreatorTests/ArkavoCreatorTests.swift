@@ -2,10 +2,11 @@
 //  ArkavoCreatorTests.swift
 //  ArkavoCreatorTests
 //
-//  Created by Paul Flynn on 11/27/24.
+//  Created by Paul Flynn on 11/30/24.
 //
 
 import XCTest
+@testable import ArkavoCreator
 
 final class ArkavoCreatorTests: XCTestCase {
 
@@ -27,7 +28,7 @@ final class ArkavoCreatorTests: XCTestCase {
 
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
-        measure {
+        self.measure {
             // Put the code you want to measure the time of here.
         }
     }
