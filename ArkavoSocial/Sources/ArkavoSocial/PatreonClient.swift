@@ -88,7 +88,7 @@ public actor PatreonClient: ObservableObject {
     }
 
     @MainActor
-    public func startOAuthFlow(window: NSWindow?) async {
+    public func startOAuthFlow(window: Any? = nil) async {
         isLoading = true
         error = nil
 
@@ -131,7 +131,7 @@ public actor PatreonClient: ObservableObject {
                     self.isLoading = false
                     return
                 }
-                
+
                 // Handle both success and error cases from the authnz-rs server
                 let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
                 if let code = components?.queryItems?.first(where: { $0.name == "code" })?.value {
@@ -153,8 +153,8 @@ public actor PatreonClient: ObservableObject {
         }
 
         #if os(macOS)
-            if let window {
-                session.presentationContextProvider = window as! any ASWebAuthenticationPresentationContextProviding
+            if let macWindow = window as? NSWindow {
+                session.presentationContextProvider = macWindow as? ASWebAuthenticationPresentationContextProviding
             }
         #endif
 

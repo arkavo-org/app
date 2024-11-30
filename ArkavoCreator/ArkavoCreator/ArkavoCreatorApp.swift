@@ -36,12 +36,14 @@ struct ArkavoCreatorApp: App {
                     print("ac url: \(url.absoluteString)")
                     guard url.scheme == "arkavocreator",
                           url.host == "oauth",
-                          url.path == "/patreon" else {
+                          url.path == "/patreon"
+                    else {
                         return
                     }
-                    
+
                     if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-                       let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                       let code = components.queryItems?.first(where: { $0.name == "code" })?.value
+                    {
                         Task {
                             do {
                                 let token = try await patreonClient.exchangeCode(code)
