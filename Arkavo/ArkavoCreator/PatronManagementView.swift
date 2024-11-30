@@ -166,8 +166,7 @@ struct CampaignsSidebar: View {
             await loadCampaigns()
         }
         .sheet(isPresented: $showNewCampaignSheet) {
-            Text("New Campaign")
-                .frame(width: 400, height: 300)
+            NewCampaignSheet()
         }
     }
 
@@ -284,6 +283,174 @@ struct CampaignRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
+}
+
+struct NewCampaignSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+
+    // Basic Information
+    @State private var creationName = ""
+    @State private var summary = ""
+    @State private var isMonthly = true
+    @State private var isNSFW = false
+    @State private var showingImagePicker = false
+    @State private var campaignImage: NSImage?
+    @State private var pledgeUrl = ""
+
+    // Dynamic colors based on color scheme
+    private var backgroundColor: Color {
+        Color(NSColor.windowBackgroundColor)
+    }
+
+    private var secondaryBackgroundColor: Color {
+        Color(NSColor.controlBackgroundColor)
+    }
+
+    private var borderColor: Color {
+        Color(NSColor.separatorColor)
+    }
+
+    private var placeholderImageColor: Color {
+        colorScheme == .dark ?
+            Color(white: 0.2) :
+            Color(white: 0.9)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Create New Campaign")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            .padding()
+            .background(backgroundColor)
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Basic Information Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Basic Information")
+                            .font(.headline)
+
+                        VStack(spacing: 12) {
+                            TextField("Creation Name", text: $creationName)
+                                .textFieldStyle(.roundedBorder)
+                                .help("The name of your creation or project")
+
+                            TextEditor(text: $summary)
+                                .frame(height: 100)
+                                .scrollContentBackground(.hidden)
+                                .background(secondaryBackgroundColor)
+                                .cornerRadius(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                                .overlay(
+                                    Group {
+                                        if summary.isEmpty {
+                                            Text("Describe your campaign...")
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 8)
+                                        }
+                                    }
+                                )
+                        }
+                    }
+                }
+
+                // Campaign Settings
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Campaign Settings")
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("Monthly Campaign", isOn: $isMonthly)
+                            .help(isMonthly ?
+                                "Patrons will be charged monthly" :
+                                "Patrons will be charged per creation")
+
+                        Toggle("Adult Content (NSFW)", isOn: $isNSFW)
+                            .help("Mark this campaign as containing mature content")
+
+                        TextField("Pledge URL", text: $pledgeUrl)
+                            .textFieldStyle(.roundedBorder)
+                            .help("Custom URL for your campaign page")
+                    }
+                }
+
+                // Appearance Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Appearance")
+                        .font(.headline)
+
+                    HStack(spacing: 16) {
+                        // Image Selection
+                        VStack {
+                            if let image = campaignImage {
+                                Image(nsImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 100, height: 100)
+                                    .cornerRadius(8)
+                            } else {
+                                Rectangle()
+                                    .fill(placeholderImageColor)
+                                    .frame(width: 100, height: 100)
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .foregroundColor(.secondary)
+                                    )
+                            }
+                        }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button("Choose Image") {
+                                showingImagePicker = true
+                            }
+                            .buttonStyle(.bordered)
+
+                            Text("Recommended size: 300x300")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding()
+        }
+
+        // Footer
+        HStack {
+            Spacer()
+            Button("Create Campaign") {
+                createCampaign()
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(!isValidCampaign)
+        }
+        .padding()
+        .background(backgroundColor)
+    }
+
+    var isValidCampaign: Bool {
+        true
+    }
+
+    func createCampaign() {}
 }
 
 // MARK: - Tiers Sidebar
