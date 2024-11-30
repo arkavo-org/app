@@ -741,7 +741,33 @@ struct Campaign: Identifiable, Hashable {
     let patronCount: Int
     let publishedAt: Date?
     let summary: String?
-    var tiers: [PatronTier] = []
+    var tiers: [PatronTier]
+    
+    // Implementing Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(createdAt)
+        hasher.combine(creationName)
+        hasher.combine(isMonthly)
+        hasher.combine(isNSFW)
+        hasher.combine(patronCount)
+        hasher.combine(publishedAt)
+        hasher.combine(summary)
+        hasher.combine(tiers)
+    }
+    
+    // Implementing Equatable
+    static func == (lhs: Campaign, rhs: Campaign) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.creationName == rhs.creationName &&
+               lhs.isMonthly == rhs.isMonthly &&
+               lhs.isNSFW == rhs.isNSFW &&
+               lhs.patronCount == rhs.patronCount &&
+               lhs.publishedAt == rhs.publishedAt &&
+               lhs.summary == rhs.summary &&
+               lhs.tiers == rhs.tiers
+    }
 }
 
 struct CampaignView: View {
@@ -825,7 +851,8 @@ struct CampaignView: View {
                     isNSFW: campaignData.attributes.is_nsfw,
                     patronCount: campaignData.attributes.patron_count,
                     publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
-                    summary: campaignData.attributes.summary
+                    summary: campaignData.attributes.summary,
+                    tiers: []
                 )
             }
         } catch {

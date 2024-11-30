@@ -852,12 +852,14 @@ struct PatronTier: Identifiable, Hashable {
     var patronCount: Int
     var color: Color
     var description: String
-
+    
+    // Implementing Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-
+    
+    // Implementing Equatable
     static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
-        lhs.id == rhs.id
+        return lhs.id == rhs.id
     }
 }
