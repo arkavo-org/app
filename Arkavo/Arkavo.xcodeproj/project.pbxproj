@@ -33,6 +33,7 @@
 		DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */; };
 		DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */; };
 		DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36F2032CBA1A4500762668 /* RegistrationView.swift */; };
+		DA3A752D2CFB85FA004472CD /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA3A752C2CFB85FA004472CD /* ArkavoSocial */; };
 		DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D8842CF6E16F0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
@@ -146,6 +147,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA3A752D2CFB85FA004472CD /* ArkavoSocial in Frameworks */,
 				DA73E7F52CF961180078D943 /* ArkavoSocial in Frameworks */,
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
 				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
@@ -293,6 +295,7 @@
 				DAEE13892CA1021500DCB5EC /* FlatBuffers */,
 				DA73E7F42CF961180078D943 /* ArkavoSocial */,
 				DA91AA0A2CFB655900BE9912 /* ArkavoSocial */,
+				DA3A752C2CFB85FA004472CD /* ArkavoSocial */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -370,6 +373,7 @@
 			packageReferences = (
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
+				DA3A752B2CFB85FA004472CD /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -878,6 +882,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		DA3A752B2CFB85FA004472CD /* XCLocalSwiftPackageReference "../ArkavoSocial" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoSocial;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -898,6 +909,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DA3A752C2CFB85FA004472CD /* ArkavoSocial */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArkavoSocial;
+		};
 		DA73E7F42CF961180078D943 /* ArkavoSocial */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArkavoSocial;
