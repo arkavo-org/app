@@ -784,20 +784,20 @@ public extension PatreonClient {
         }
 
         public struct IncludedData: Codable, Sendable {
-            let attributes: [String: AnyCodable]
-            let id: String
-            let type: String
+            public let attributes: [String: AnyCodable]
+            public let id: String
+            public let type: String
         }
 
         public struct MetaData: Codable, Sendable {
-            let pagination: Pagination
+            public let pagination: Pagination
 
-            struct Pagination: Codable, Sendable {
-                let cursors: Cursors
-                let total: Int
+            public struct Pagination: Codable, Sendable {
+                public let cursors: Cursors
+                public let total: Int
 
-                struct Cursors: Codable, Sendable {
-                    let next: String?
+                public struct Cursors: Codable, Sendable {
+                    public let next: String?
                 }
             }
         }

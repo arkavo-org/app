@@ -732,7 +732,7 @@ struct EngagementCard: View {
     }
 }
 
-struct Campaign: Identifiable {
+struct Campaign: Identifiable, Hashable {
     let id: String
     let createdAt: Date
     let creationName: String
@@ -741,6 +741,7 @@ struct Campaign: Identifiable {
     let patronCount: Int
     let publishedAt: Date?
     let summary: String?
+    var tiers: [PatronTier] = []
 }
 
 struct CampaignView: View {

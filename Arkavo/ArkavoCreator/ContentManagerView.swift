@@ -166,22 +166,22 @@ struct PatronAccessSheet: View {
             Text("Set Patron Access")
                 .font(.title)
 
-            List(sampleTiers, selection: $selectedTiers) { tier in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(tier.name)
-                            .font(.headline)
-                        Text("\(tier.patronCount) patrons")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Text("$\(tier.price, specifier: "%.2f")/month")
-                        .foregroundStyle(.secondary)
-                }
-            }
+//            List(sampleTiers, selection: $selectedTiers) { tier in
+//                HStack {
+//                    VStack(alignment: .leading) {
+//                        Text(tier.name)
+//                            .font(.headline)
+//                        Text("\(tier.patronCount) patrons")
+//                            .font(.caption)
+//                            .foregroundStyle(.secondary)
+//                    }
+//
+//                    Spacer()
+//
+//                    Text("$\(tier.price, specifier: "%.2f")/month")
+//                        .foregroundStyle(.secondary)
+//                }
+//            }
 
             HStack {
                 Button("Cancel", action: { dismiss() })
@@ -277,7 +277,7 @@ let sampleContent: [ContentItem] = [
         createdDate: Date().addingTimeInterval(-86400 * 2),
         lastModified: Date().addingTimeInterval(-3600 * 2),
         protectionStatus: .protected(Date().addingTimeInterval(-3600)),
-        patronAccess: [sampleTiers[0], sampleTiers[1]],
+        patronAccess: [],
         views: 156,
         engagement: 78.5
     ),
@@ -375,58 +375,4 @@ struct ContentRow: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
-}
-
-// MARK: - Preview Provider
-
-#Preview("Content Row") {
-    List {
-        ForEach(sampleContent) { content in
-            ContentRow(content: content)
-        }
-    }
-    .frame(width: 600)
-}
-
-#Preview("Content Row States") {
-    VStack(spacing: 20) {
-        // Show different protection states
-        ContentRow(content: ContentItem(
-            id: UUID(),
-            title: "Unprotected Content",
-            type: .blogPost,
-            createdDate: Date(),
-            lastModified: Date(),
-            protectionStatus: .unprotected,
-            patronAccess: [],
-            views: 0,
-            engagement: 0
-        ))
-
-        ContentRow(content: ContentItem(
-            id: UUID(),
-            title: "Protected Content",
-            type: .video,
-            createdDate: Date(),
-            lastModified: Date(),
-            protectionStatus: .protected(Date()),
-            patronAccess: sampleTiers,
-            views: 1250,
-            engagement: 85.5
-        ))
-
-        ContentRow(content: ContentItem(
-            id: UUID(),
-            title: "Failed Protection",
-            type: .document,
-            createdDate: Date(),
-            lastModified: Date(),
-            protectionStatus: .failed("Network Error"),
-            patronAccess: [],
-            views: 0,
-            engagement: 0
-        ))
-    }
-    .padding()
-    .frame(width: 600)
 }

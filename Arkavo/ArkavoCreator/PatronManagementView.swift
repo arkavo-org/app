@@ -13,6 +13,7 @@ import SwiftUI
 struct PatronManagementView: View {
     let patreonClient: PatreonClient
     @State private var selectedTier: PatronTier?
+    @State private var selectedCampaign: Campaign?
     @State private var searchText = ""
     @State private var showNewTierSheet = false
     @State private var sortOrder = [KeyPathComparator(\Patron.name)]
@@ -25,12 +26,25 @@ struct PatronManagementView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left side - Tiers
-            TiersSidebar(
-                selectedTier: $selectedTier,
-                showNewTierSheet: $showNewTierSheet,
-                isEditingMode: $isEditingMode
-            )
+            // Left side - Campaigns & Tiers
+            VStack(spacing: 0) {
+                // Campaigns Sidebar
+                CampaignsSidebar(
+                    patreonClient: patreonClient,
+                    selectedCampaign: $selectedCampaign
+                )
+                .frame(height: 120)
+
+                Divider()
+
+                // Tiers Sidebar
+                TiersSidebar(
+                    selectedCampaign: $selectedCampaign,
+                    selectedTier: $selectedTier,
+                    showNewTierSheet: $showNewTierSheet,
+                    isEditingMode: $isEditingMode
+                )
+            }
             .frame(minWidth: 250, maxWidth: 300)
 
             // Divider between sidebar and content
@@ -85,9 +99,183 @@ struct PatronManagementView: View {
     }
 }
 
+// MARK: - Campaigns Sidebar
+
+struct CampaignsSidebar: View {
+    let patreonClient: PatreonClient
+    @Binding var selectedCampaign: Campaign?
+    @State private var campaigns: [Campaign] = []
+    @State private var isLoading = false
+    @State private var error: Error?
+    @State private var showNewCampaignSheet = false
+
+    var body: some View {
+        List(selection: $selectedCampaign) {
+            Section {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                } else if let error {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        VStack(alignment: .leading) {
+                            Text("Error loading campaigns")
+                                .font(.caption)
+                            Text(error.localizedDescription)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("Retry") {
+                            Task {
+                                await loadCampaigns()
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(campaigns) { campaign in
+                        CampaignRow(campaign: campaign)
+                            .tag(campaign)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Campaigns")
+                    Spacer()
+                    HStack(spacing: 2) {
+                        Button(action: { showNewCampaignSheet = true }) {
+                            Image(systemName: "plus")
+                                .font(.caption)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .task {
+            await loadCampaigns()
+        }
+        .sheet(isPresented: $showNewCampaignSheet) {
+            Text("New Campaign")
+                .frame(width: 400, height: 300)
+        }
+    }
+
+    private func loadCampaigns() async {
+        isLoading = true
+        error = nil
+        do {
+            let response = try await patreonClient.getCampaigns()
+            let dateFormatter = ISO8601DateFormatter()
+            campaigns = response.data.map { campaignData in
+                // Create a dictionary of tier data from included array
+                let tierDataDict = Dictionary(
+                    uniqueKeysWithValues: response.included
+                        .filter { $0.type == "tier" }
+                        .map { ($0.id, $0) }
+                )
+
+                // Map tier IDs to PatronTier objects
+                let tiers = campaignData.relationships.tiers.data.compactMap { tierRelation -> PatronTier? in
+                    guard let tierData = tierDataDict[tierRelation.id] else { return nil }
+                    // Extract tier attributes
+                    let attributes = tierData.attributes
+                    print("attributes: \(attributes)")
+                    guard let title = attributes["title"]?.value as? String,
+                          let amountCents = attributes["amount_cents"]?.value as? Int,
+                          let description = attributes["description"]?.value as? String,
+                          let patronCount = attributes["patron_count"]?.value as? Int
+                    else {
+                        return nil
+                    }
+
+                    // Convert amount from cents to dollars
+                    let priceInDollars = Double(amountCents) / 100.0
+
+                    // Extract benefits from description
+                    let benefits = description
+                        .components(separatedBy: "\n")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+
+                    return PatronTier(
+                        id: tierRelation.id,
+                        name: title,
+                        price: priceInDollars,
+                        benefits: benefits,
+                        patronCount: patronCount,
+                        color: .blue,
+                        description: description
+                    )
+                }
+                return Campaign(
+                    id: campaignData.id,
+                    createdAt: dateFormatter.date(from: campaignData.attributes.created_at) ?? Date(),
+                    creationName: campaignData.attributes.creation_name ?? "",
+                    isMonthly: campaignData.attributes.is_monthly,
+                    isNSFW: campaignData.attributes.is_nsfw,
+                    patronCount: campaignData.attributes.patron_count,
+                    publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
+                    summary: campaignData.attributes.summary,
+                    tiers: tiers
+                )
+            }
+
+            // Auto-select first campaign if none selected
+            if selectedCampaign == nil, !campaigns.isEmpty {
+                selectedCampaign = campaigns.first
+            }
+        } catch {
+            self.error = error
+        }
+        isLoading = false
+    }
+}
+
+struct CampaignRow: View {
+    let campaign: Campaign
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(campaign.creationName.isEmpty ? "Your Campaign" : campaign.creationName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+
+                HStack(spacing: 8) {
+                    Label("\(campaign.patronCount)", systemImage: "person.2")
+                        .font(.caption)
+                    Text("•")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(campaign.isMonthly ? "Monthly" : "Per Creation")
+                        .font(.caption)
+                }
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if campaign.isNSFW {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - Tiers Sidebar
 
 struct TiersSidebar: View {
+    @Binding var selectedCampaign: Campaign?
     @Binding var selectedTier: PatronTier?
     @Binding var showNewTierSheet: Bool
     @Binding var isEditingMode: Bool
@@ -95,7 +283,7 @@ struct TiersSidebar: View {
     var body: some View {
         List(selection: $selectedTier) {
             Section {
-                ForEach(sampleTiers) { tier in
+                ForEach(selectedCampaign?.tiers ?? []) { tier in
                     TierRowView(tier: tier, isEditing: isEditingMode)
                         .contextMenu {
                             Button("Edit Tier") { /* Implementation */ }
@@ -111,19 +299,17 @@ struct TiersSidebar: View {
                 HStack {
                     Text("Tiers")
                     Spacer()
-                    Button(action: { isEditingMode.toggle() }) {
-                        Text(isEditingMode ? "Done" : "Edit")
+                    HStack(spacing: 2) {
+                        Button(action: { showNewTierSheet = true }) {
+                            Image(systemName: "plus")
+                                .font(.caption)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
             }
         }
-//        .toolbar {
-//            ToolbarItem(placement: .primaryAction) {
-//                Button(action: { showNewTierSheet.toggle() }) {
-//                    Label("Add Tier", systemImage: "plus")
-//                }
-//            }
-//        }
     }
 }
 
@@ -472,15 +658,6 @@ struct TierRowView: View {
                 HStack {
                     Text(tier.name)
                         .fontWeight(.medium)
-
-                    if tier.isOneTime {
-                        Text("One-time")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-                    }
                 }
 
                 HStack {
@@ -522,14 +699,13 @@ enum PatronStatus: String, CaseIterable {
 }
 
 struct PatronTier: Identifiable, Hashable {
-    let id: UUID
+    let id: String
     var name: String
     var price: Double
     var benefits: [String]
     var patronCount: Int
     var color: Color
     var description: String
-    var isOneTime: Bool
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -539,11 +715,3 @@ struct PatronTier: Identifiable, Hashable {
         lhs.id == rhs.id
     }
 }
-
-// MARK: - Sample Data
-
-let sampleTiers = [
-    PatronTier(id: UUID(), name: "Bronze", price: 5.0, benefits: ["Basic Access"], patronCount: 125, color: .brown, description: "Basic tier with essential features", isOneTime: false),
-    PatronTier(id: UUID(), name: "Silver", price: 10.0, benefits: ["Basic Access", "Early Access"], patronCount: 75, color: .gray, description: "Enhanced access with early content", isOneTime: false),
-    PatronTier(id: UUID(), name: "Gold", price: 25.0, benefits: ["Basic Access", "Early Access", "Exclusive Content"], patronCount: 30, color: .yellow, description: "Premium tier with all features", isOneTime: false),
-]
