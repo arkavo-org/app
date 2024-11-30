@@ -1,4 +1,5 @@
 import ArkavoSocial
+import AuthenticationServices
 import SwiftUI
 @preconcurrency import WebKit
 
@@ -8,14 +9,8 @@ struct PatreonRootView: View {
     var body: some View {
         Group {
             if patreonClient.isAuthenticated {
-                HStack {
-                    UserIdentityView(patreonClient: patreonClient)
-                        .padding(.horizontal)
-                    Spacer()
-                    Button("Logout") {
-                        patreonClient.logout()
-                    }
-                }
+                UserIdentityView(patreonClient: patreonClient)
+                    .padding(.horizontal)
                 CampaignView(patreonClient: patreonClient)
                     .padding(.horizontal)
                 PatronView(patreonClient: patreonClient)
@@ -31,10 +26,10 @@ struct PatreonRootView: View {
     }
 }
 
-// MARK: - Patreon Login View
-
 struct PatreonLoginView: View {
     let patreonClient: PatreonClient
+    @StateObject private var windowAccessor = WindowAccessor.shared
+    @State private var showingError = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -50,9 +45,7 @@ struct PatreonLoginView: View {
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
                     Button("Try Again") {
-                        Task {
-                            await patreonClient.startOAuthFlow()
-                        }
+                        startAuth()
                     }
                 }
                 .padding()
@@ -61,44 +54,73 @@ struct PatreonLoginView: View {
                     Text("Connect with Patreon")
                         .font(.title2)
                     Button("Start Authentication") {
-                        Task {
-                            await patreonClient.startOAuthFlow()
-                        }
+                        startAuth()
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
         }
+        .alert("Authentication Error",
+               isPresented: $showingError,
+               actions: {
+                   Button("OK", role: .cancel) {}
+               },
+               message: {
+                   Text("Could not start authentication. Please try again.")
+               })
+    }
+
+    private func startAuth() {
+        // Debug print to help diagnose window issues
+//        print("All windows:", NSApplication.shared.windows.map {
+//            "Window: \($0), isMain: \($0.isMainWindow), isKey: \($0.isKeyWindow), isVisible: \($0.isVisible)"
+//        })
+
+        guard let window = windowAccessor.window ?? NSApplication.shared.windows.first(where: { $0.isVisible }) else {
+            showingError = true
+            return
+        }
+
+        Task {
+            await patreonClient.startOAuthFlow(window: window)
+        }
     }
 }
 
-// MARK: - Platform Adaptations
+// MARK: - Window Environment Key
+
+private struct WindowKey: EnvironmentKey {
+    static let defaultValue: NSWindow? = nil
+}
+
+extension EnvironmentValues {
+    var window: NSWindow? {
+        get { self[WindowKey.self] }
+        set { self[WindowKey.self] = newValue }
+    }
+}
+
+// MARK: - Window Environment Modifier
+
+struct WindowEnvironmentModifier: ViewModifier {
+    let window: NSWindow?
+
+    func body(content: Content) -> some View {
+        content.environment(\.window, window)
+    }
+}
 
 extension View {
-    func adaptiveFrame() -> some View {
-        #if os(macOS)
-            frame(width: 800, height: 600)
-        #elseif os(visionOS)
-            frame(width: 500, height: 400)
-                .padding(.horizontal, 40)
-        #else
-            frame(maxWidth: .infinity, maxHeight: .infinity)
-        #endif
+    func provideWindow(_ window: NSWindow?) -> some View {
+        modifier(WindowEnvironmentModifier(window: window))
     }
+}
 
-    func adaptiveBackgroundStyle() -> some View {
-        background(.background)
-    }
+// MARK: - ASWebAuthenticationSession Presenter
 
-    func adaptiveListStyle() -> some View {
-        #if os(visionOS)
-            listStyle(.plain)
-                .scrollContentBackground(.hidden)
-        #elseif os(macOS)
-            listStyle(.inset)
-        #else
-            listStyle(.insetGrouped)
-        #endif
+extension NSWindow: @retroactive ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        self
     }
 }
 
@@ -122,7 +144,6 @@ struct PatronView: View {
     var body: some View {
         VStack(spacing: 0) {
             PatronSearchBar(searchText: $searchText, selectedFilter: $selectedFilter)
-                .adaptiveBackgroundStyle()
 
             if isLoading {
                 ProgressView()
@@ -141,7 +162,7 @@ struct PatronView: View {
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("Logout") {
+                    Button("Sign out") {
                         patreonClient.logout()
                     }
                 }
@@ -164,7 +185,6 @@ struct PatronView: View {
                     }
                     .padding()
                 }
-                .adaptiveListStyle()
                 .refreshable {
                     await loadPatrons()
                 }
@@ -708,7 +728,7 @@ struct Campaign: Identifiable, Hashable {
     let publishedAt: Date?
     let summary: String?
     var tiers: [PatronTier]
-    
+
     // Implementing Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -721,18 +741,18 @@ struct Campaign: Identifiable, Hashable {
         hasher.combine(summary)
         hasher.combine(tiers)
     }
-    
+
     // Implementing Equatable
     static func == (lhs: Campaign, rhs: Campaign) -> Bool {
-        return lhs.id == rhs.id &&
-               lhs.createdAt == rhs.createdAt &&
-               lhs.creationName == rhs.creationName &&
-               lhs.isMonthly == rhs.isMonthly &&
-               lhs.isNSFW == rhs.isNSFW &&
-               lhs.patronCount == rhs.patronCount &&
-               lhs.publishedAt == rhs.publishedAt &&
-               lhs.summary == rhs.summary &&
-               lhs.tiers == rhs.tiers
+        lhs.id == rhs.id &&
+            lhs.createdAt == rhs.createdAt &&
+            lhs.creationName == rhs.creationName &&
+            lhs.isMonthly == rhs.isMonthly &&
+            lhs.isNSFW == rhs.isNSFW &&
+            lhs.patronCount == rhs.patronCount &&
+            lhs.publishedAt == rhs.publishedAt &&
+            lhs.summary == rhs.summary &&
+            lhs.tiers == rhs.tiers
     }
 }
 
@@ -750,15 +770,15 @@ struct PatronTier: Identifiable, Hashable {
     var patronCount: Int
     var color: Color
     var description: String
-    
+
     // Implementing Hashable
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     // Implementing Equatable
     static func == (lhs: PatronTier, rhs: PatronTier) -> Bool {
-        return lhs.id == rhs.id
+        lhs.id == rhs.id
     }
 }
 

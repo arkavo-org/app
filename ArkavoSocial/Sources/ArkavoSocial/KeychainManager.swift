@@ -76,7 +76,7 @@ public class KeychainManager {
             let data = try load(service: "com.arkavo.patreon", account: "access_token")
             return String(data: data, encoding: .utf8)
         } catch {
-            print("Error retrieving access token:", error)
+//            print("Error retrieving access token:", error)
             return nil
         }
     }
@@ -86,7 +86,7 @@ public class KeychainManager {
             let data = try load(service: "com.arkavo.patreon", account: "refresh_token")
             return String(data: data, encoding: .utf8)
         } catch {
-            print("Error retrieving refresh token:", error)
+//            print("Error retrieving refresh token:", error)
             return nil
         }
     }
