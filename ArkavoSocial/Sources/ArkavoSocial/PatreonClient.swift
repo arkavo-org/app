@@ -88,7 +88,7 @@ public actor PatreonClient: ObservableObject {
     }
 
     @MainActor
-    public func startOAuthFlow() async {
+    public func startOAuthFlow(window: NSWindow?) async {
         isLoading = true
         error = nil
 
@@ -113,12 +113,11 @@ public actor PatreonClient: ObservableObject {
         }
 
         let callbackURLScheme = URL(string: Self.redirectURI)?.scheme ?? "arkavo"
-        // Create a new property to hold the auth session
+
         let session = ASWebAuthenticationSession(
             url: authURL,
             callbackURLScheme: callbackURLScheme
         ) { [self] callbackURL, error in
-
             Task { @MainActor in
                 if let error {
                     self.error = error
@@ -146,6 +145,14 @@ public actor PatreonClient: ObservableObject {
                 }
             }
         }
+
+        #if os(macOS)
+            if let window {
+                session.presentationContextProvider = window as! any ASWebAuthenticationPresentationContextProviding
+            }
+        #endif
+
+        session.prefersEphemeralWebBrowserSession = true
         session.start()
     }
 
