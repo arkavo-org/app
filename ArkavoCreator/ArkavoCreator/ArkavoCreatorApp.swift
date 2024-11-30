@@ -32,6 +32,27 @@ struct ArkavoCreatorApp: App {
                         windowAccessor.window = newValue.first { $0.isVisible }
                     }
                 }
+                .onOpenURL { url in
+                    print("ac url: \(url.absoluteString)")
+                    guard url.scheme == "arkavocreator",
+                          url.host == "oauth",
+                          url.path == "/patreon" else {
+                        return
+                    }
+                    
+                    if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+                       let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                        Task {
+                            do {
+                                let token = try await patreonClient.exchangeCode(code)
+                                // Handle successful token here
+                                print("Received token: \(token.accessToken)")
+                            } catch {
+                                print("OAuth error: \(error)")
+                            }
+                        }
+                    }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)

@@ -1,17 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist>
-<dict>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>arkavo</string>
-			</array>
-			<key>CFBundleURLName</key>
-			<string>com.arkavo.ArkavoCreator</string>
-		</dict>
-	</array>
-</dict>
+<plist version="1.0">
+	<dict>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>arkavocreator</string>
+				</array>
+				<key>CFBundleURLName</key>
+				<string>com.arkavo.ArkavoCreator</string>
+				<key>CFBundleTypeRole</key>
+				<string>Viewer</string>
+				<key>LSHandlerRank</key>
+				<string>Owner</string>
+			</dict>
+		</array>
+		<key>LSApplicationCategoryType</key>
+		<string>public.app-category.developer-tools</string>
+		<key>LSMinimumSystemVersion</key>
+		<string>10.15</string>
+		<key>LSHandlerRank</key>
+		<string>Owner</string>
+	</dict>
 </plist>
