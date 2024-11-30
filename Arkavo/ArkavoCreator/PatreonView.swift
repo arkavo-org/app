@@ -363,40 +363,6 @@ struct PatronCard: View {
     }
 }
 
-struct PatronViewDetailView: View {
-    let patron: Patron
-    let patreonClient: PatreonClient
-    @Environment(\.dismiss) var dismiss
-    @State private var showingMessageComposer = false
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                PatronHeaderView(patron: patron)
-
-                PatronActivityView(patron: patron)
-
-                PatronEngagementView(patron: patron)
-            }
-            .padding()
-        }
-        .navigationTitle("Patron Details")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingMessageComposer = true }) {
-                    Image(systemName: "envelope")
-                }
-            }
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Done") { dismiss() }
-            }
-        }
-        .sheet(isPresented: $showingMessageComposer) {
-            MessageComposerView(patreonClient: patreonClient)
-        }
-    }
-}
-
 // Supporting Views and Models
 
 struct FilterChip: View {
