@@ -28,6 +28,7 @@ struct PatreonRootView: View {
 
 struct PatreonLoginView: View {
     let patreonClient: PatreonClient
+    @StateObject private var authManager = RedditClient()
     @StateObject private var windowAccessor = WindowAccessor.shared
     @State private var showingError = false
 
@@ -57,9 +58,16 @@ struct PatreonLoginView: View {
                         startAuth()
                     }
                     .buttonStyle(.borderedProminent)
+                    Button("Login with Reddit") {
+                        authManager.startOAuth()
+                    }
+                }
+                .sheet(isPresented: $authManager.showingWebView) {
+                    WebView(url: authManager.authURL, callbackHandler: authManager.handleCallback)
                 }
             }
         }
+        .frame(height: 600)
         .alert("Authentication Error",
                isPresented: $showingError,
                actions: {
