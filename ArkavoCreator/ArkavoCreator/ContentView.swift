@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
-    @StateObject private var redditClient = RedditClient(clientId: Secrets.redditClientId)
+    @StateObject var redditClient: RedditClient
 
     var body: some View {
         NavigationSplitView {
