@@ -55,7 +55,7 @@ public actor PatreonClient: ObservableObject {
     }
 
     // API Endpoints
-    private enum Endpoint {
+    private enum Endpoint: Equatable {
         case identity
         case campaigns
         case campaign(id: String)
@@ -78,7 +78,9 @@ public actor PatreonClient: ObservableObject {
             var components = URLComponents()
             components.scheme = "https"
             components.host = "www.patreon.com"
-            components.path = "/api/oauth2/v2/\(path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)"
+            components.path = self == .oauthToken
+                ? "/api/oauth2/token"
+                : "/api/oauth2/v2/\(path)"
             return components.url!
         }
     }

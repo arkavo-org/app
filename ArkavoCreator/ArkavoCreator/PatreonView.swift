@@ -18,11 +18,6 @@ struct PatreonRootView: View {
                 PatreonLoginView(patreonClient: patreonClient)
             }
         }
-        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
-            if isAuthenticated {
-                print("User authenticated")
-            }
-        }
     }
 }
 
