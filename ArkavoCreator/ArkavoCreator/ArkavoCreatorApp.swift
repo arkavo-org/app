@@ -14,10 +14,7 @@ class WindowAccessor: ObservableObject {
 struct ArkavoCreatorApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
 
-    let patreonClient = PatreonClient(config: PatreonConfig(
-        clientId: Secrets.patreonClientId,
-        clientSecret: Secrets.patreonClientSecret
-    ))
+    let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
 
     var body: some Scene {
         WindowGroup {
@@ -41,18 +38,29 @@ struct ArkavoCreatorApp: App {
                         return
                     }
 
-                    if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-                       let code = components.queryItems?.first(where: { $0.name == "code" })?.value
-                    {
-                        Task {
-                            do {
-                                let token = try await patreonClient.exchangeCode(code)
-                                // Handle successful token here
-                                print("Received token: \(token.accessToken)")
-                            } catch {
-                                print("OAuth error: \(error)")
+                    if url.path == "/patreon" {
+                        if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+                           let code = components.queryItems?.first(where: { $0.name == "code" })?.value
+                        {
+                            Task {
+                                do {
+                                    let token = try await patreonClient.exchangeCode(code)
+                                    // Handle successful token here
+                                    print("Received token: \(token.accessToken)")
+                                } catch {
+                                    print("OAuth error: \(error)")
+                                }
                             }
                         }
+                    } else if url.path == "/reddit" {
+                        // Create a NotificationCenter name for Reddit OAuth callback
+                        let notificationName = Notification.Name("RedditOAuthCallback")
+                        // Post the URL to any listeners
+                        NotificationCenter.default.post(
+                            name: notificationName,
+                            object: nil,
+                            userInfo: ["url": url]
+                        )
                     }
                 }
         }
