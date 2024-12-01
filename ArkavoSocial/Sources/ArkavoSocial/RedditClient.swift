@@ -71,7 +71,7 @@ public class RedditClient: ObservableObject {
         showingWebView = false
     }
 
-    func logout() {
+    public func logout() {
 //        KeychainManager.delete(service: "com.arkavo.reddit", account: "access_token")
 //        KeychainManager.delete(service: "com.arkavo.reddit", account: "refresh_token")
 //        KeychainManager.delete(service: "com.arkavo.reddit", account: "token_expiration")
@@ -86,7 +86,7 @@ public class RedditClient: ObservableObject {
     // MARK: - API Methods
 
     @MainActor
-    func fetchUserInfo() async throws -> RedditUserInfo {
+    public func fetchUserInfo() async throws -> RedditUserInfo {
         try await withCheckedThrowingContinuation { continuation in
             Task {
                 do {
@@ -283,13 +283,13 @@ struct RedditTokenResponse: Codable {
     let scope: String
 }
 
-struct RedditUserInfo: Codable {
-    let id: String
-    let name: String
-    let created: Double
-    let link_karma: Int
-    let comment_karma: Int
-    let has_verified_email: Bool
+public struct RedditUserInfo: Codable {
+    public let id: String
+    public let name: String
+    public let created: Double
+    public let link_karma: Int
+    public let comment_karma: Int
+    public let has_verified_email: Bool
 }
 
 public enum RedditError: LocalizedError {

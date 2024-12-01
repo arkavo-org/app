@@ -6,11 +6,12 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
     @Environment(\.colorScheme) var colorScheme
-    let patreonClient: PatreonClient
+    @StateObject var patreonClient: PatreonClient
+    @State private var isCreator: Bool = false
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(selectedSection: $selectedSection)
+            Sidebar(selectedSection: $selectedSection, patreonClient: patreonClient)
         } detail: {
             VStack(spacing: 0) {
                 SectionContainer(
@@ -28,16 +29,33 @@ struct ContentView: View {
                         }
                         .help("Notifications")
                         Menu {
-                            Button("Profile", action: {})
-                            Button("Preferences...", action: {})
-                            Divider()
-                            Button("Sign Out", action: {
+//                            Button("Profile", action: {})
+//                            Button("Preferences...", action: {})
+//                            Divider()
+                            Button("Patreon Sign Out", action: {
                                 patreonClient.logout()
                             })
                         } label: {
                             Image(systemName: "person.circle")
                         }
                     }
+                }
+            }
+        }
+        .task {
+            if patreonClient.isAuthenticated {
+                isCreator = await patreonClient.isCreator()
+            }
+        }
+        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                Task {
+                    isCreator = await patreonClient.isCreator()
+                }
+            } else {
+                isCreator = false
+                if selectedSection == .patrons {
+                    selectedSection = .dashboard
                 }
             }
         }
@@ -53,6 +71,14 @@ enum NavigationSection: String, CaseIterable {
     case protection = "Content Protection"
     case social = "Social Distribution"
     case settings = "Settings"
+
+    static func availableSections(isCreator: Bool) -> [NavigationSection] {
+        if isCreator {
+            allCases
+        } else {
+            allCases.filter { $0 != .patrons }
+        }
+    }
 
     var systemImage: String {
         switch self {
@@ -144,14 +170,17 @@ extension AnyTransition {
 
 struct Sidebar: View {
     @Binding var selectedSection: NavigationSection
+    @State private var isCreator: Bool = false
+    @ObservedObject var patreonClient: PatreonClient
 
     var body: some View {
         List(selection: $selectedSection) {
             Section {
-                ForEach(NavigationSection.allCases[0 ..< 5], id: \.self) { section in
+                ForEach(NavigationSection.availableSections(isCreator: isCreator).filter { $0 != .settings }, id: \.self) { section in
                     NavigationLink(value: section) {
                         Label(section.rawValue, systemImage: section.systemImage)
                     }
+                    .disabled(!patreonClient.isAuthenticated && section == .patrons)
                 }
             }
             Section {
@@ -162,6 +191,23 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .task {
+            if patreonClient.isAuthenticated {
+                isCreator = await patreonClient.isCreator()
+            }
+        }
+        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                Task {
+                    isCreator = await patreonClient.isCreator()
+                }
+            } else {
+                isCreator = false
+                if selectedSection == .patrons {
+                    selectedSection = .dashboard
+                }
+            }
+        }
     }
 }
 
