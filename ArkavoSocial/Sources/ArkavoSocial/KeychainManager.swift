@@ -9,6 +9,14 @@ public class KeychainManager {
         case itemNotFound
     }
 
+    static func save(value: String, service: String, account: String) {
+        do {
+            try save(value.data(using: .utf8)!, service: service, account: account)
+        } catch {
+            // ignore, use save(data...) throws
+        }
+    }
+
     static func save(_ data: Data, service: String, account: String) throws {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -54,6 +62,15 @@ public class KeychainManager {
         }
 
         return data
+    }
+
+    static func getValue(service: String, account: String) -> String? {
+        do {
+            let data = try load(service: service, account: account)
+            return String(data: data, encoding: .utf8)!
+        } catch {
+            return nil
+        }
     }
 
     static func delete(service: String, account: String) throws {

@@ -43,8 +43,8 @@ PATREON_CLIENT_SECRET=
 ```
 
 ```shell
-source .env; echo "// Do not commit.\nstruct Secrets {\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
-source .env; echo "// Do not commit.\nstruct Secrets {\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let redditClientId = \"${REDDIT_CLIENT_ID}\"\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
+source .env; echo "// Do not commit.\nstruct Secrets {\n    static let redditClientId = \"${REDDIT_CLIENT_ID}\"\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
 ```
 
 Note adding `[ -f "${SRCROOT}/.env" ] && source "${SRCROOT}/.env";` to the Run Script in Build Phases may be needed.

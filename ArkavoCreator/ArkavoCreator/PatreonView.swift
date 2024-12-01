@@ -27,7 +27,9 @@ struct PatreonRootView: View {
 }
 
 struct PatreonLoginView: View {
-    let patreonClient: PatreonClient
+    @ObservedObject var patreonClient: PatreonClient
+    @StateObject private var authManager = RedditClient(clientId: Secrets.redditClientId)
+    @StateObject private var webViewPresenter = WebViewPresenter()
     @StateObject private var windowAccessor = WindowAccessor.shared
     @State private var showingError = false
 
@@ -44,22 +46,39 @@ struct PatreonLoginView: View {
                     Text(error.localizedDescription)
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
-                    Button("Try Again") {
-                        startAuth()
-                    }
                 }
                 .padding()
             } else {
                 VStack(spacing: 16) {
-                    Text("Connect with Patreon")
-                        .font(.title2)
-                    Button("Start Authentication") {
-                        startAuth()
+                    Button("Login with Patreon") {
+                        webViewPresenter.present(
+                            url: patreonClient.authURL,
+                            handleCallback: { url in
+                                Task {
+                                    do {
+                                        try await patreonClient.handleCallback(url)
+                                        webViewPresenter.dismiss()
+                                    } catch {
+                                        print("Patreon OAuth error: \(error)")
+                                        // Keep the window open on error to show any error pages
+                                    }
+                                }
+                            }
+                        )
                     }
-                    .buttonStyle(.borderedProminent)
+                    Button("Login with Reddit") {
+                        webViewPresenter.present(
+                            url: authManager.authURL,
+                            handleCallback: { url in
+                                authManager.handleCallback(url)
+                                webViewPresenter.dismiss()
+                            }
+                        )
+                    }
                 }
             }
         }
+        .frame(height: 600)
         .alert("Authentication Error",
                isPresented: $showingError,
                actions: {
@@ -68,22 +87,6 @@ struct PatreonLoginView: View {
                message: {
                    Text("Could not start authentication. Please try again.")
                })
-    }
-
-    private func startAuth() {
-        // Debug print to help diagnose window issues
-//        print("All windows:", NSApplication.shared.windows.map {
-//            "Window: \($0), isMain: \($0.isMainWindow), isKey: \($0.isKeyWindow), isVisible: \($0.isVisible)"
-//        })
-
-        guard let window = windowAccessor.window ?? NSApplication.shared.windows.first(where: { $0.isVisible }) else {
-            showingError = true
-            return
-        }
-
-        Task {
-            await patreonClient.startOAuthFlow(window: window)
-        }
     }
 }
 

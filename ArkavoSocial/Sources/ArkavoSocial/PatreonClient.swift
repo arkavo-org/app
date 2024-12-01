@@ -31,7 +31,9 @@ public struct Patron: Identifiable, Sendable, Hashable {
 // MARK: - Patreon API Client
 
 public actor PatreonClient: ObservableObject {
-    public var config: PatreonConfig
+    let clientId: String
+    let clientSecret: String
+    public var config: PatreonConfig = .init()
     public static let redirectURI = "https://webauthn.arkavo.net/oauth/arkavocreator/patreon"
     private let urlSession: URLSession
 
@@ -39,8 +41,9 @@ public actor PatreonClient: ObservableObject {
     @MainActor @Published public var isLoading = false
     @MainActor @Published public var error: Error?
 
-    public init(config: PatreonConfig) {
-        self.config = config
+    public init(clientId: String, clientSecret: String) {
+        self.clientId = clientId
+        self.clientSecret = clientSecret
         urlSession = URLSession(configuration: URLSessionConfiguration.default)
         Task { @MainActor in
             checkExistingAuth()
@@ -88,81 +91,23 @@ public actor PatreonClient: ObservableObject {
     }
 
     @MainActor
-    public func startOAuthFlow(window: Any? = nil) async {
+    public func handleCallback(_ url: URL) async throws {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let code = components.queryItems?.first(where: { $0.name == "code" })?.value
+        else {
+            throw PatreonError.invalidCallback
+        }
+
         isLoading = true
         error = nil
 
-        let scopes = ["identity"]
-        let scopeString = scopes.joined(separator: "%20")
-
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "www.patreon.com"
-        components.path = "/oauth2/authorize"
-        components.queryItems = await [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: Self.redirectURI),
-            URLQueryItem(name: "scope", value: scopeString),
-        ]
-
-        guard let authURL = components.url else {
-            error = PatreonError.invalidURL
+        do {
+            try await exchangeCodeForTokens(code)
             isLoading = false
-            return
-        }
-
-        let callbackURLScheme = URL(string: Self.redirectURI)?.scheme ?? "arkavo"
-
-        let session = ASWebAuthenticationSession(
-            url: authURL,
-            callbackURLScheme: callbackURLScheme
-        ) { [self] callbackURL, error in
-            Task { @MainActor in
-                if let error {
-                    self.error = error
-                    self.isLoading = false
-                    print("Error startOAuthFlow: \(error)")
-                    return
-                }
-
-                guard let callbackURL else {
-                    self.error = PatreonError.authorizationFailed
-                    self.isLoading = false
-                    return
-                }
-
-                // Handle both success and error cases from the authnz-rs server
-                let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
-                if let code = components?.queryItems?.first(where: { $0.name == "code" })?.value {
-                    do {
-                        try await self.exchangeCodeForTokens(code)
-                    } catch {
-                        self.error = error
-                        self.isLoading = false
-                    }
-                } else if let error = components?.queryItems?.first(where: { $0.name == "error" })?.value {
-                    self.error = PatreonError.authorizationFailed
-                    print("OAuth Error: \(error)")
-                    self.isLoading = false
-                } else {
-                    self.error = PatreonError.authorizationFailed
-                    self.isLoading = false
-                }
-            }
-        }
-
-        #if os(macOS)
-            if let macWindow = window as? NSWindow {
-                session.presentationContextProvider = macWindow as? ASWebAuthenticationPresentationContextProviding
-            }
-        #endif
-
-        session.prefersEphemeralWebBrowserSession = true
-        let started = session.start()
-        if !started {
-            error = PatreonError.authorizationFailed
+        } catch {
+            self.error = error as? PatreonError ?? .authorizationFailed
             isLoading = false
+            throw error
         }
     }
 
@@ -262,6 +207,23 @@ public actor PatreonClient: ObservableObject {
         return response
     }
 
+    @MainActor
+    public var authURL: URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
+            URLQueryItem(name: "scope", value: "identity"),
+            URLQueryItem(name: "state", value: UUID().uuidString),
+        ]
+
+        return components.url!
+    }
+
     public func getOAuthURL() -> URL {
         var components = URLComponents()
         components.scheme = "https"
@@ -269,9 +231,12 @@ public actor PatreonClient: ObservableObject {
         components.path = "/oauth2/authorize"
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: config.clientId),
+            URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: PatreonClient.redirectURI),
+            URLQueryItem(name: "scope", value: "identity"),
+            URLQueryItem(name: "state", value: UUID().uuidString),
         ]
+
         return components.url!
     }
 
@@ -279,8 +244,8 @@ public actor PatreonClient: ObservableObject {
         let params = [
             "code": code,
             "grant_type": "authorization_code",
-            "client_id": config.clientId,
-            "client_secret": config.clientSecret,
+            "client_id": clientId,
+            "client_secret": clientSecret,
             "redirect_uri": PatreonClient.redirectURI,
         ]
 
@@ -295,8 +260,8 @@ public actor PatreonClient: ObservableObject {
         let params = [
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
-            "client_id": config.clientId,
-            "client_secret": config.clientSecret,
+            "client_id": clientId,
+            "client_secret": clientSecret,
         ]
 
         return try await request(
@@ -402,14 +367,6 @@ public actor PatreonClient: ObservableObject {
 // MARK: - Configuration
 
 public struct PatreonConfig: Sendable {
-    let clientId: String
-    let clientSecret: String
-
-    public init(clientId: String, clientSecret: String) {
-        self.clientId = clientId
-        self.clientSecret = clientSecret
-    }
-
     var creatorAccessToken: String? {
         get { KeychainManager.getAccessToken() }
         set {
@@ -835,6 +792,7 @@ public extension PatreonClient {
 
 public enum PatreonError: LocalizedError {
     case invalidURL
+    case invalidCallback
     case invalidResponse
     case authorizationFailed
     case tokenExchangeFailed
@@ -848,6 +806,8 @@ public enum PatreonError: LocalizedError {
         switch self {
         case .invalidURL:
             "Invalid URL"
+        case .invalidCallback:
+            "Invalid callback URL"
         case .invalidResponse:
             "Invalid response from server"
         case let .httpError(statusCode):

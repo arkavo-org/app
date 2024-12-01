@@ -30,6 +30,8 @@
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.arkavo.Arkavo</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.patreon</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.reddit</string>
 	</array>
 </dict>
 </plist>
