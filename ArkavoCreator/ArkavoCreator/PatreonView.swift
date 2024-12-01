@@ -6,7 +6,7 @@ import SwiftUI
 struct PatreonRootView: View {
     @ObservedObject var patreonClient: PatreonClient
     @State private var isCreator: Bool = false
-    
+
     var body: some View {
         Group {
             if patreonClient.isAuthenticated {
