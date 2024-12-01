@@ -230,7 +230,7 @@ struct PatronView: View {
     private func loadPatrons() async {
         isLoading = true
         error = nil
-        
+
         // First attempt
         do {
             patrons = try await patreonClient.getMembers()
@@ -239,7 +239,7 @@ struct PatronView: View {
         } catch PatreonError.missingCampaignId {
             // If we failed due to missing campaign ID, wait and retry once
             try? await Task.sleep(for: .seconds(1))
-            
+
             // Second attempt
             do {
                 patrons = try await patreonClient.getMembers()
@@ -249,7 +249,7 @@ struct PatronView: View {
         } catch {
             self.error = error
         }
-        
+
         isLoading = false
     }
 }

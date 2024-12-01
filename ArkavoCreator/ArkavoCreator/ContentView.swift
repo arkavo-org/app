@@ -7,16 +7,19 @@ struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
-    @State private var isCreator: Bool = false
+    @StateObject private var redditClient = RedditClient(clientId: Secrets.redditClientId)
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(selectedSection: $selectedSection, patreonClient: patreonClient)
+            Sidebar(selectedSection: $selectedSection,
+                    patreonClient: patreonClient,
+                    redditClient: redditClient)
         } detail: {
             VStack(spacing: 0) {
                 SectionContainer(
                     selectedSection: selectedSection,
-                    patreonClient: patreonClient
+                    patreonClient: patreonClient,
+                    redditClient: redditClient
                 )
             }
             .navigationTitle(selectedSection.rawValue)
@@ -29,33 +32,18 @@ struct ContentView: View {
                         }
                         .help("Notifications")
                         Menu {
-//                            Button("Profile", action: {})
-//                            Button("Preferences...", action: {})
-//                            Divider()
                             Button("Patreon Sign Out", action: {
                                 patreonClient.logout()
                             })
+                            if redditClient.isAuthenticated {
+                                Button("Reddit Sign Out", action: {
+                                    redditClient.logout()
+                                })
+                            }
                         } label: {
                             Image(systemName: "person.circle")
                         }
                     }
-                }
-            }
-        }
-        .task {
-            if patreonClient.isAuthenticated {
-                isCreator = await patreonClient.isCreator()
-            }
-        }
-        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
-            if isAuthenticated {
-                Task {
-                    isCreator = await patreonClient.isCreator()
-                }
-            } else {
-                isCreator = false
-                if selectedSection == .patrons {
-                    selectedSection = .dashboard
                 }
             }
         }
@@ -107,17 +95,64 @@ enum NavigationSection: String, CaseIterable {
 
 struct SectionContainer: View {
     let selectedSection: NavigationSection
-    let patreonClient: PatreonClient
+    @ObservedObject var patreonClient: PatreonClient
+    @ObservedObject var redditClient: RedditClient
+    @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
 
     var body: some View {
         ZStack {
             switch selectedSection {
             case .dashboard:
-                // Pass client and config to PatreonRootView
-                PatreonRootView(patreonClient: patreonClient)
-                    .transition(.moveAndFade())
-                    .id("dashboard")
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Patreon Section
+                        DashboardCard(title: "Patreon") {
+                            if patreonClient.isAuthenticated {
+                                PatreonRootView(patreonClient: patreonClient)
+                            } else {
+                                Button("Login with Patreon") {
+                                    webViewPresenter.present(
+                                        url: patreonClient.authURL,
+                                        handleCallback: { url in
+                                            Task {
+                                                do {
+                                                    try await patreonClient.handleCallback(url)
+                                                    webViewPresenter.dismiss()
+                                                } catch {
+                                                    print("Patreon OAuth error: \(error)")
+                                                    // Keep the window open on error to show any error pages
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+
+                        // Reddit Section
+                        DashboardCard(title: "Reddit") {
+                            if redditClient.isAuthenticated {
+                                RedditRootView(redditClient: redditClient)
+                            } else {
+                                Button("Login with Reddit") {
+                                    webViewPresenter.present(
+                                        url: redditClient.authURL,
+                                        handleCallback: { url in
+                                            redditClient.handleCallback(url)
+                                            webViewPresenter.dismiss()
+                                        }
+                                    )
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .transition(.moveAndFade())
+                .id("dashboard")
             case .patrons:
                 PatronManagementView(patreonClient: patreonClient)
                     .transition(.moveAndFade())
@@ -133,6 +168,30 @@ struct SectionContainer: View {
             }
         }
         .animation(.smooth, value: selectedSection)
+    }
+}
+
+struct DashboardCard<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -170,17 +229,25 @@ extension AnyTransition {
 
 struct Sidebar: View {
     @Binding var selectedSection: NavigationSection
-    @State private var isCreator: Bool = false
     @ObservedObject var patreonClient: PatreonClient
+    @ObservedObject var redditClient: RedditClient
+    @State private var isCreator: Bool = false
+
+    var availableSections: [NavigationSection] {
+        var sections = NavigationSection.availableSections(isCreator: isCreator)
+        if !redditClient.isAuthenticated {
+            sections = sections.filter { $0 != .social }
+        }
+        return sections
+    }
 
     var body: some View {
         List(selection: $selectedSection) {
             Section {
-                ForEach(NavigationSection.availableSections(isCreator: isCreator).filter { $0 != .settings }, id: \.self) { section in
+                ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
                     NavigationLink(value: section) {
                         Label(section.rawValue, systemImage: section.systemImage)
                     }
-                    .disabled(!patreonClient.isAuthenticated && section == .patrons)
                 }
             }
             Section {
