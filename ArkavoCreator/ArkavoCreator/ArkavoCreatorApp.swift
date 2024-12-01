@@ -15,11 +15,15 @@ struct ArkavoCreatorApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
+    let redditClient = RedditClient(clientId: Secrets.redditClientId)
 
     var body: some Scene {
         WindowGroup {
-            ContentView(patreonClient: patreonClient)
+            ContentView(patreonClient: patreonClient, redditClient: redditClient)
                 .onAppear {
+                    // Load stored tokens for Reddit
+                    redditClient.loadStoredTokens()
+                    // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         windowAccessor.window = NSApplication.shared.windows.first { $0.isVisible }
                     }

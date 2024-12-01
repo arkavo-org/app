@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 
 // MARK: - WebView Coordinator
+
 class WebViewCoordinator: NSObject, WKNavigationDelegate {
     let parent: WebViewRepresentable
 
@@ -9,7 +10,7 @@ class WebViewCoordinator: NSObject, WKNavigationDelegate {
         self.parent = parent
     }
 
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
+    func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
         if let url = navigationAction.request.url {
             if url.scheme == "arkavocreator" {
                 parent.handleCallback(url)
@@ -20,20 +21,20 @@ class WebViewCoordinator: NSObject, WKNavigationDelegate {
         decisionHandler(.allow)
     }
 
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
         parent.isLoading = true
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    func webView(_: WKWebView, didFinish _: WKNavigation!) {
         parent.isLoading = false
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
         parent.isLoading = false
         parent.error = error
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
         parent.isLoading = false
         parent.error = error
     }

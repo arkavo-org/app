@@ -19,6 +19,15 @@ public class RedditClient: ObservableObject {
     private var refreshToken: String?
     private var tokenExpirationDate: Date?
 
+    // MARK: - Keychain Constants
+
+    private let keychainServiceBase = "com.arkavo.reddit"
+    private enum KeychainKey {
+        static let accessToken = "access_token"
+        static let refreshToken = "refresh_token"
+        static let tokenExpiration = "token_expiration"
+    }
+
     // MARK: - Initialization
 
     public init(clientId: String, redirectUri: String = "arkavocreator://oauth/reddit") {
@@ -33,6 +42,35 @@ public class RedditClient: ObservableObject {
 //            guard let url = notification.userInfo?["url"] as? URL else { return }
 //            self?.handleCallback(url)
 //        }
+    }
+
+    // MARK: - Token Management
+
+    @MainActor
+    public func loadStoredTokens() {
+        accessToken = KeychainManager.getValue(
+            service: keychainServiceBase,
+            account: KeychainKey.accessToken
+        )
+        refreshToken = KeychainManager.getValue(
+            service: keychainServiceBase,
+            account: KeychainKey.refreshToken
+        )
+
+        if let expirationString = KeychainManager.getValue(
+            service: keychainServiceBase,
+            account: KeychainKey.tokenExpiration
+        ) {
+            tokenExpirationDate = ISO8601DateFormatter().date(from: expirationString)
+        }
+
+        isAuthenticated = accessToken != nil
+
+        if isAuthenticated {
+            Task {
+                await fetchUsername()
+            }
+        }
     }
 
     // MARK: - Authentication URL
@@ -71,11 +109,39 @@ public class RedditClient: ObservableObject {
         showingWebView = false
     }
 
-    func logout() {
-//        KeychainManager.delete(service: "com.arkavo.reddit", account: "access_token")
-//        KeychainManager.delete(service: "com.arkavo.reddit", account: "refresh_token")
-//        KeychainManager.delete(service: "com.arkavo.reddit", account: "token_expiration")
+    private func saveTokens(accessToken: String, refreshToken: String?, expirationDate: Date) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        tokenExpirationDate = expirationDate
 
+        // Save to Keychain
+        KeychainManager.save(
+            value: accessToken,
+            service: keychainServiceBase,
+            account: KeychainKey.accessToken
+        )
+
+        if let refreshToken {
+            KeychainManager.save(
+                value: refreshToken,
+                service: keychainServiceBase,
+                account: KeychainKey.refreshToken
+            )
+        }
+
+        KeychainManager.save(
+            value: ISO8601DateFormatter().string(from: expirationDate),
+            service: keychainServiceBase,
+            account: KeychainKey.tokenExpiration
+        )
+    }
+
+    public func logout() {
+        // Clear Keychain
+        try! KeychainManager.delete(service: keychainServiceBase, account: KeychainKey.accessToken)
+        try! KeychainManager.delete(service: keychainServiceBase, account: KeychainKey.refreshToken)
+        try! KeychainManager.delete(service: keychainServiceBase, account: KeychainKey.tokenExpiration)
+        // Clear memory
         accessToken = nil
         refreshToken = nil
         tokenExpirationDate = nil
@@ -86,7 +152,7 @@ public class RedditClient: ObservableObject {
     // MARK: - API Methods
 
     @MainActor
-    func fetchUserInfo() async throws -> RedditUserInfo {
+    public func fetchUserInfo() async throws -> RedditUserInfo {
         try await withCheckedThrowingContinuation { continuation in
             Task {
                 do {
@@ -108,23 +174,6 @@ public class RedditClient: ObservableObject {
                 } catch {
                     continuation.resume(throwing: error)
                 }
-            }
-        }
-    }
-
-    @MainActor
-    public func loadStoredTokens() {
-        accessToken = KeychainManager.getValue(service: "com.arkavo.reddit", account: "access_token")
-        refreshToken = KeychainManager.getValue(service: "com.arkavo.reddit", account: "refresh_token")
-        if let expirationString = KeychainManager.getValue(service: "com.arkavo.reddit", account: "token_expiration") {
-            tokenExpirationDate = ISO8601DateFormatter().date(from: expirationString)
-        }
-
-        isAuthenticated = accessToken != nil
-
-        if isAuthenticated {
-            Task { @MainActor in
-                await fetchUsername()
             }
         }
     }
@@ -209,19 +258,12 @@ public class RedditClient: ObservableObject {
 
     @MainActor
     private func handleTokenResponse(_ response: RedditTokenResponse) {
-        accessToken = response.access_token
-        if let refreshToken = response.refresh_token {
-            self.refreshToken = refreshToken
-            KeychainManager.save(value: refreshToken, service: "com.arkavo.reddit", account: "refresh_token")
-        }
-
         let expirationDate = Date().addingTimeInterval(TimeInterval(response.expires_in))
-        tokenExpirationDate = expirationDate
-
-        KeychainManager.save(value: response.access_token, service: "com.arkavo.reddit", account: "access_token")
-        KeychainManager.save(value: ISO8601DateFormatter().string(from: expirationDate),
-                             service: "com.arkavo.reddit",
-                             account: "token_expiration")
+        saveTokens(
+            accessToken: response.access_token,
+            refreshToken: response.refresh_token,
+            expirationDate: expirationDate
+        )
 
         isAuthenticated = true
         Task {
@@ -229,6 +271,7 @@ public class RedditClient: ObservableObject {
         }
     }
 
+    @MainActor
     private func getValidAccessToken() async throws -> String {
         if let tokenExpirationDate,
            let accessToken,
@@ -237,10 +280,21 @@ public class RedditClient: ObservableObject {
             return accessToken
         }
 
-        guard let accessToken else {
-            throw RedditError.noAccessToken
+        // Token expired or will expire soon, try to refresh
+        if let refreshToken {
+            do {
+                try await refreshAccessToken()
+                if let newAccessToken = accessToken {
+                    return newAccessToken
+                }
+            } catch {
+                // If refresh fails, clear tokens and throw error
+                logout()
+                throw RedditError.noAccessToken
+            }
         }
-        return accessToken
+
+        throw RedditError.noAccessToken
     }
 
     private func makeAuthorizedRequest(url: URL) throws -> URLRequest {
@@ -283,13 +337,13 @@ struct RedditTokenResponse: Codable {
     let scope: String
 }
 
-struct RedditUserInfo: Codable {
-    let id: String
-    let name: String
-    let created: Double
-    let link_karma: Int
-    let comment_karma: Int
-    let has_verified_email: Bool
+public struct RedditUserInfo: Codable {
+    public let id: String
+    public let name: String
+    public let created: Double
+    public let link_karma: Int
+    public let comment_karma: Int
+    public let has_verified_email: Bool
 }
 
 public enum RedditError: LocalizedError {

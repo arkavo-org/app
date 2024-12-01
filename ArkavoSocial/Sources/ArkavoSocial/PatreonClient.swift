@@ -93,6 +93,20 @@ public actor PatreonClient: ObservableObject {
     }
 
     @MainActor
+    public func isCreator() async -> Bool {
+        guard isAuthenticated else { return false }
+
+        do {
+            let identity = try await getUserIdentity()
+            let campaigns = try await getCampaigns()
+            // User is considered a creator if they have any campaigns
+            return !campaigns.data.isEmpty
+        } catch {
+            return false
+        }
+    }
+
+    @MainActor
     public func handleCallback(_ url: URL) async throws {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let code = components.queryItems?.first(where: { $0.name == "code" })?.value
