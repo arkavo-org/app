@@ -5,17 +5,34 @@ import SwiftUI
 
 struct PatreonRootView: View {
     @ObservedObject var patreonClient: PatreonClient
-
+    @State private var isCreator: Bool = false
+    
     var body: some View {
         Group {
             if patreonClient.isAuthenticated {
                 UserIdentityView(patreonClient: patreonClient)
                     .padding(.horizontal)
-                CampaignView(patreonClient: patreonClient)
-                    .padding(.horizontal)
-                PatronView(patreonClient: patreonClient)
+                if isCreator {
+                    CampaignView(patreonClient: patreonClient)
+                        .padding(.horizontal)
+                    PatronView(patreonClient: patreonClient)
+                }
             } else {
                 PatreonLoginView(patreonClient: patreonClient)
+            }
+        }
+        .task {
+            if patreonClient.isAuthenticated {
+                isCreator = await patreonClient.isCreator()
+            }
+        }
+        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                Task {
+                    isCreator = await patreonClient.isCreator()
+                }
+            } else {
+                isCreator = false
             }
         }
     }

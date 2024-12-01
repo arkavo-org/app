@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
     @StateObject var redditClient: RedditClient
+    @StateObject var micropubClient: MicropubClient
 
     var body: some View {
         NavigationSplitView {
@@ -19,7 +20,8 @@ struct ContentView: View {
                 SectionContainer(
                     selectedSection: selectedSection,
                     patreonClient: patreonClient,
-                    redditClient: redditClient
+                    redditClient: redditClient,
+                    micropubClient: micropubClient
                 )
             }
             .navigationTitle(selectedSection.rawValue)
@@ -97,6 +99,7 @@ struct SectionContainer: View {
     let selectedSection: NavigationSection
     @ObservedObject var patreonClient: PatreonClient
     @ObservedObject var redditClient: RedditClient
+    @ObservedObject var micropubClient: MicropubClient
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
 
@@ -142,6 +145,29 @@ struct SectionContainer: View {
                                         handleCallback: { url in
                                             redditClient.handleCallback(url)
                                             webViewPresenter.dismiss()
+                                        }
+                                    )
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        // Micro.blog Section
+                        DashboardCard(title: "Micro.blog") {
+                            if micropubClient.isAuthenticated {
+                                MicroblogRootView(micropubClient: micropubClient)
+                            } else {
+                                Button("Login with Micro.blog") {
+                                    webViewPresenter.present(
+                                        url: micropubClient.authURL,
+                                        handleCallback: { url in
+                                            Task {
+                                                do {
+                                                    try await micropubClient.handleCallback(url)
+                                                    webViewPresenter.dismiss()
+                                                } catch {
+                                                    print("Micro.blog OAuth error: \(error)")
+                                                }
+                                            }
                                         }
                                     )
                                 }
