@@ -44,9 +44,7 @@ struct ArkavoCreatorApp: App {
                         {
                             Task {
                                 do {
-                                    let token = try await patreonClient.exchangeCode(code)
-                                    // Handle successful token here
-                                    print("Received token: \(token.accessToken)")
+                                    let _ = try await patreonClient.exchangeCode(code)
                                 } catch {
                                     print("OAuth error: \(error)")
                                 }
