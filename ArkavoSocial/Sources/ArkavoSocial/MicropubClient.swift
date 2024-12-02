@@ -36,10 +36,28 @@ public class MicropubClient: ObservableObject {
             service: keychainServiceBase,
             account: KeychainKey.accessToken
         )
+        let micropubEndpoint = KeychainManager.getValue(
+            service: keychainServiceBase,
+            account: KeychainKey.micropubEndpoint
+        )
 
         isAuthenticated = accessToken != nil
-
         if isAuthenticated {
+            if let micropubEndpoint {
+                // Create config from stored endpoint
+                siteConfig = MicropubConfig(
+                    micropubEndpoint: micropubEndpoint,
+                    mediaEndpoint: KeychainManager.getValue(
+                        service: keychainServiceBase,
+                        account: KeychainKey.mediaEndpoint
+                    ),
+                    destinations: [],
+                    postTypes: [],
+                    channels: [],
+                    syndicateTo: []
+                )
+            }
+
             Task {
                 await fetchConfig()
             }
@@ -91,6 +109,8 @@ public class MicropubClient: ObservableObject {
             try await exchangeCodeForToken(code)
             await fetchConfig()
             isAuthenticated = true
+            // Immediately fetch config after getting token
+            await fetchConfig()
         } catch {
             handleError(error)
             throw error
@@ -160,11 +180,17 @@ public class MicropubClient: ObservableObject {
 
     @MainActor
     public func createPost(content: String, title: String? = nil, images: [URL] = []) async throws -> URL {
+        // First ensure we have config
+        if siteConfig == nil {
+            await fetchConfig()
+        }
+
         guard let micropubEndpoint = siteConfig?.micropubEndpoint else {
             throw MicropubError.missingEndpoint
         }
 
-        var properties: [String: Any] = [
+        // Format according to Micropub spec
+        var properties: [String: [String]] = [
             "content": [content],
         ]
 
@@ -187,8 +213,17 @@ public class MicropubClient: ObservableObject {
             contentType: "application/json"
         )
 
+        // Log request for debugging
+//        print("Request URL: \(request.url?.absoluteString ?? "nil")")
+//        print("Request Headers: \(request.allHTTPHeaderFields ?? [:])")
+
         let jsonData = try JSONSerialization.data(withJSONObject: postData)
         request.httpBody = jsonData
+
+        // Log request body
+//        if let jsonString = String(data: jsonData, encoding: .utf8) {
+//            print("Request Body: \(jsonString)")
+//        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -196,12 +231,33 @@ public class MicropubClient: ObservableObject {
             throw MicropubError.invalidResponse
         }
 
-        if httpResponse.statusCode == 201,
-           let location = httpResponse.allHeaderFields["Location"] as? String,
-           let postURL = URL(string: location)
-        {
-            return postURL
-        } else {
+        switch httpResponse.statusCode {
+        case 200, 201, 202:
+            if let location = httpResponse.allHeaderFields["Location"] as? String,
+               let postURL = URL(string: location)
+            {
+                return postURL
+            } else {
+                // Some Micropub endpoints don't return Location header
+                return URL(string: "https://micro.blog")!
+            }
+        case 400:
+            // Try to decode the error response
+            if let errorResponse = try? JSONDecoder().decode(MicropubErrorResponse.self, from: data) {
+                if errorResponse.error == "invalid_request",
+                   errorResponse.error_description.contains("payment method")
+                {
+                    throw MicropubError.paymentRequired
+                } else {
+                    throw MicropubError.apiError(
+                        error: errorResponse.error,
+                        description: errorResponse.error_description
+                    )
+                }
+            } else {
+                throw MicropubError.httpError(statusCode: httpResponse.statusCode)
+            }
+        default:
             throw MicropubError.httpError(statusCode: httpResponse.statusCode)
         }
     }
@@ -256,7 +312,28 @@ public class MicropubClient: ObservableObject {
         }
 
         if httpResponse.statusCode == 200 {
-            return try JSONDecoder().decode(MicropubConfig.self, from: data)
+            do {
+                let decoder = JSONDecoder()
+                var config = try decoder.decode(MicropubConfig.self, from: data)
+
+                // Set default endpoint if not provided
+                if config.micropubEndpoint == nil {
+                    // Create mutable copy with default endpoint
+                    config = MicropubConfig(
+                        micropubEndpoint: "https://micro.blog/micropub",
+                        mediaEndpoint: config.mediaEndpoint,
+                        destinations: config.destinations,
+                        postTypes: config.postTypes,
+                        channels: config.channels,
+                        syndicateTo: config.syndicateTo
+                    )
+                }
+
+                return config
+            } catch {
+                print("Config decoding error: \(error)")
+                throw MicropubError.decodingError(error)
+            }
         } else {
             throw MicropubError.httpError(statusCode: httpResponse.statusCode)
         }
@@ -292,21 +369,69 @@ public class MicropubClient: ObservableObject {
 
 // MARK: - Supporting Types
 
-public struct MicropubConfig: Codable, Sendable {
-    public let micropubEndpoint: String?
-    public let mediaEndpoint: String?
-    public let syndicateTo: [SyndicationTarget]?
+struct MicropubConfigResponse: Codable {
+    let micropubEndpoint: String?
+    let mediaEndpoint: String?
+    let syndicateTo: [SyndicationTarget]?
 
     private enum CodingKeys: String, CodingKey {
         case micropubEndpoint = "micropub-endpoint"
         case mediaEndpoint = "media-endpoint"
         case syndicateTo = "syndicate-to"
     }
+}
 
-    public struct SyndicationTarget: Codable, Sendable {
-        public let uid: String
-        public let name: String
+public struct MicropubConfig: Codable {
+    public let micropubEndpoint: String?
+    public let mediaEndpoint: String?
+    public let destinations: [Destination]
+    public let postTypes: [PostType]
+    public let channels: [Channel]
+    public let syndicateTo: [SyndicationTarget]
+
+    private enum CodingKeys: String, CodingKey {
+        case micropubEndpoint = "micropub-endpoint"
+        case mediaEndpoint = "media-endpoint"
+        case destinations = "destination"
+        case postTypes = "post-types"
+        case channels
+        case syndicateTo = "syndicate-to"
     }
+}
+
+public struct Destination: Codable, Identifiable {
+    public var id: String { uid }
+    public let uid: String
+    public let name: String
+    public let microblogAudio: Bool
+    public let microblogDefault: Bool
+    public let microblogTitle: String
+
+    private enum CodingKeys: String, CodingKey {
+        case uid, name
+        case microblogAudio = "microblog-audio"
+        case microblogDefault = "microblog-default"
+        case microblogTitle = "microblog-title"
+    }
+}
+
+public struct PostType: Codable, Identifiable, Hashable {
+    public var id: String { type }
+    public let type: String
+    public let name: String
+    public let properties: [String]
+}
+
+public struct Channel: Codable, Identifiable, Hashable {
+    public var id: String { uid }
+    public let uid: String
+    public let name: String
+}
+
+public struct SyndicationTarget: Codable, Identifiable {
+    public var id: String { uid }
+    public let uid: String
+    public let name: String
 }
 
 struct TokenResponse: Codable {
@@ -315,13 +440,22 @@ struct TokenResponse: Codable {
     let me: String
 }
 
+private struct MicropubErrorResponse: Decodable {
+    let error: String
+    let error_description: String
+}
+
 public enum MicropubError: LocalizedError {
     case invalidCallback
     case invalidResponse
     case noAccessToken
     case missingEndpoint
     case httpError(statusCode: Int)
+    case badRequest(String)
     case unknown(Error)
+    case decodingError(Error)
+    case apiError(error: String, description: String)
+    case paymentRequired
 
     public var errorDescription: String? {
         switch self {
@@ -335,6 +469,14 @@ public enum MicropubError: LocalizedError {
             "Micropub endpoint not configured"
         case let .httpError(statusCode):
             "HTTP error: \(statusCode)"
+        case let .badRequest(message):
+            "Bad request: \(message)"
+        case let .decodingError(error):
+            "Decoding error: \(error.localizedDescription)"
+        case .paymentRequired:
+            "A payment method is required to post during your Micro.blog trial"
+        case let .apiError(error, description):
+            description
         case let .unknown(error):
             "Unknown error: \(error.localizedDescription)"
         }

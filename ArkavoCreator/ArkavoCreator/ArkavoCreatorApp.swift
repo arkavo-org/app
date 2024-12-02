@@ -16,7 +16,7 @@ struct ArkavoCreatorApp: App {
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
-    let micropubClient = MicropubClient(clientId: "your-client-id")
+    let micropubClient = MicropubClient(clientId: "https://app.arkavo.com/microblog-creator.json")
 
     var body: some Scene {
         WindowGroup {

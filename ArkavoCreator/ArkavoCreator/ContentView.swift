@@ -27,19 +27,26 @@ struct ContentView: View {
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
-                if patreonClient.isAuthenticated {
+                if patreonClient.isAuthenticated || redditClient.isAuthenticated {
                     ToolbarItemGroup {
                         Button(action: {}) {
                             Image(systemName: "bell")
                         }
                         .help("Notifications")
                         Menu {
-                            Button("Patreon Sign Out", action: {
-                                patreonClient.logout()
-                            })
+                            if patreonClient.isAuthenticated {
+                                Button("Patreon Sign Out", action: {
+                                    patreonClient.logout()
+                                })
+                            }
                             if redditClient.isAuthenticated {
                                 Button("Reddit Sign Out", action: {
                                     redditClient.logout()
+                                })
+                            }
+                            if micropubClient.isAuthenticated {
+                                Button("Micro.blog Sign Out", action: {
+                                    micropubClient.logout()
                                 })
                             }
                         } label: {
