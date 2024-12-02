@@ -16,13 +16,15 @@ struct ArkavoCreatorApp: App {
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
+    let micropubClient = MicropubClient(clientId: "https://app.arkavo.com/microblog-creator.json")
 
     var body: some Scene {
         WindowGroup {
-            ContentView(patreonClient: patreonClient, redditClient: redditClient)
+            ContentView(patreonClient: patreonClient, redditClient: redditClient, micropubClient: micropubClient)
                 .onAppear {
-                    // Load stored tokens for Reddit
+                    // Load stored tokens
                     redditClient.loadStoredTokens()
+                    micropubClient.loadStoredTokens()
                     // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         windowAccessor.window = NSApplication.shared.windows.first { $0.isVisible }
