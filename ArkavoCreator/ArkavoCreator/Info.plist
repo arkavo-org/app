@@ -17,11 +17,9 @@
 				<string>Owner</string>
 			</dict>
 		</array>
-		<key>LSApplicationCategoryType</key>
-		<string>public.app-category.developer-tools</string>
 		<key>LSMinimumSystemVersion</key>
 		<string>10.15</string>
-		<key>LSHandlerRank</key>
-		<string>Owner</string>
+		<key>NSFileUsageDescription</key>
+		<string>Arkavo Creator requires access to encrypt and protect your content.</string>
 	</dict>
 </plist>

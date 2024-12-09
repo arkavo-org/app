@@ -1,4 +1,3 @@
-import ArkavoSocial
 import Foundation
 import SwiftUI
 
@@ -156,7 +155,7 @@ public class RedditClient: ObservableObject {
         try await withCheckedThrowingContinuation { continuation in
             Task {
                 do {
-                    let accessToken = try await getValidAccessToken()
+                    _ = try await getValidAccessToken()
                     let request = try makeAuthorizedRequest(url: URL(string: "https://oauth.reddit.com/api/v1/me")!)
 
                     let (data, response) = try await URLSession.shared.data(for: request)
@@ -281,7 +280,7 @@ public class RedditClient: ObservableObject {
         }
 
         // Token expired or will expire soon, try to refresh
-        if let refreshToken {
+        if refreshToken != nil {
             do {
                 try await refreshAccessToken()
                 if let newAccessToken = accessToken {
