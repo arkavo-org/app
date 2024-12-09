@@ -144,4 +144,68 @@ public class KeychainManager {
         try? delete(service: "com.arkavo.patreon", account: "refresh_token")
         try? delete(service: "com.arkavo.patreon", account: "campaign_id")
     }
+
+    static func saveBlueskyTokens(accessToken: String, refreshToken: String) throws {
+        try save(accessToken.data(using: .utf8)!,
+                 service: "com.arkavo.bluesky",
+                 account: "access_token")
+        try save(refreshToken.data(using: .utf8)!,
+                 service: "com.arkavo.bluesky",
+                 account: "refresh_token")
+    }
+
+    static func getBlueskyAccessToken() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.bluesky", account: "access_token")
+            return String(data: data, encoding: .utf8)
+        } catch {
+//            print("Error retrieving access token:", error)
+            return nil
+        }
+    }
+
+    static func saveBlueskyHandle(_ handle: String) throws {
+        try save(handle.data(using: .utf8)!,
+                 service: "com.arkavo.bluesky",
+                 account: "handle")
+    }
+
+    static func getBlueskyRefreshToken() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.bluesky", account: "refresh_token")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    static func getBlueskyHandle() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.bluesky", account: "handle")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    static func saveBlueskyDID(_ did: String) throws {
+        try save(did.data(using: .utf8)!,
+                 service: "com.arkavo.bluesky",
+                 account: "did")
+    }
+
+    static func getBlueskyHDID() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.bluesky", account: "did")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    static func deleteBlueskyTokens() {
+        try? delete(service: "com.arkavo.bluesky", account: "access_token")
+        try? delete(service: "com.arkavo.bluesky", account: "refresh_token")
+        try? delete(service: "com.arkavo.bluesky", account: "handle")
+    }
 }

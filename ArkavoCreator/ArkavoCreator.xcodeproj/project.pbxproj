@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA072CFB643300BE9912 /* ArkavoSocial */; };
 		DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA0D2CFB659800BE9912 /* ArkavoSocial */; };
+		DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */ = {isa = PBXBuildFile; productRef = DACF22322CFE9B4B00814332 /* ArkavoContent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 			files = (
 				DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */,
 				DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */,
+				DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +123,7 @@
 			packageProductDependencies = (
 				DA91AA072CFB643300BE9912 /* ArkavoSocial */,
 				DA91AA0D2CFB659800BE9912 /* ArkavoSocial */,
+				DACF22322CFE9B4B00814332 /* ArkavoContent */,
 			);
 			productName = ArkavoCreator;
 			productReference = DA91A9BA2CFB625000BE9912 /* ArkavoCreator.app */;
@@ -206,6 +209,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DA91AA0C2CFB659800BE9912 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
+				DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -575,6 +579,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoSocial;
 		};
+		DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoContent;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -585,6 +593,10 @@
 		DA91AA0D2CFB659800BE9912 /* ArkavoSocial */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArkavoSocial;
+		};
+		DACF22322CFE9B4B00814332 /* ArkavoContent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArkavoContent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

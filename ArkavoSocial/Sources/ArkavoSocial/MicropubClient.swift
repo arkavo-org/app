@@ -283,7 +283,7 @@ public class MicropubClient: ObservableObject {
 
         request.httpBody = bodyData
 
-        let (responseData, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw MicropubError.invalidResponse
@@ -475,7 +475,7 @@ public enum MicropubError: LocalizedError {
             "Decoding error: \(error.localizedDescription)"
         case .paymentRequired:
             "A payment method is required to post during your Micro.blog trial"
-        case let .apiError(error, description):
+        case let .apiError(_, description):
             description
         case let .unknown(error):
             "Unknown error: \(error.localizedDescription)"

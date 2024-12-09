@@ -97,7 +97,7 @@ public actor PatreonClient: ObservableObject {
         guard isAuthenticated else { return false }
 
         do {
-            let identity = try await getUserIdentity()
+            _ = try await getUserIdentity()
             let campaigns = try await getCampaigns()
             // User is considered a creator if they have any campaigns
             return !campaigns.data.isEmpty
