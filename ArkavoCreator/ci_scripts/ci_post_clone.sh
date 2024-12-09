@@ -21,6 +21,8 @@ struct Secrets {
     static let redditClientId = "${REDDIT_CLIENT_ID}"
     static let patreonClientId = "${PATREON_CLIENT_ID}"
     static let patreonClientSecret = "${PATREON_CLIENT_SECRET}"
+    static let youtubeClientId = "${YOUTUBE_CLIENT_ID}"
+    static let youtubeClientSecret = "${YOUTUBE_CLIENT_SECRET}"
 }
 EOT
 
