@@ -84,3 +84,18 @@ struct ArkavoCreatorApp: App {
         .windowToolbarStyle(.unified)
     }
 }
+
+// MARK: - App State for Feedback
+
+class AppState: ObservableObject {
+    @Published var isFeedbackEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isFeedbackEnabled, forKey: "isFeedbackEnabled")
+        }
+    }
+
+    init() {
+        // Default to enabled if no value is set
+        isFeedbackEnabled = UserDefaults.standard.object(forKey: "isFeedbackEnabled") as? Bool ?? true
+    }
+}

@@ -1,13 +1,12 @@
 import ArkavoContent
 import ArkavoSocial
-import CoreML
 import SwiftUI
 
 // MARK: - Main Content View
 
 struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
-    @State private var isFileDialogPresented: Bool = false
+    @StateObject private var appState = AppState()
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
     @StateObject var redditClient: RedditClient
@@ -36,10 +35,12 @@ struct ContentView: View {
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
-                if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated {
+                if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated || micropubClient.isAuthenticated ||
+                    blueskyClient.isAuthenticated
+                {
                     ToolbarItemGroup {
                         Button(action: {
-                            isFileDialogPresented = true
+                            selectedSection = .social
                         }) {
                             Image(systemName: "bell")
                         }
@@ -76,138 +77,8 @@ struct ContentView: View {
                     }
                 }
             }
-            .fileImporter(
-                isPresented: $isFileDialogPresented,
-                allowedContentTypes: [.quickTimeMovie],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case let .success(urls):
-                    if let url = urls.first {
-                        Task {
-                            do {
-                                try await processContent(url)
-                            } catch {
-                                print("Unable to read file: \(error.localizedDescription)")
-                            }
-                        }
-                    }
-                case let .failure(error):
-                    print("Failed to select file: \(error.localizedDescription)")
-                }
-            }
         }
-    }
-
-    private func processContent(_ url: URL) async throws {
-        print(url)
-        do {
-            // Initialize the processor with GPU acceleration if available
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = .all
-            let processor = try VideoSegmentationProcessor(configuration: configuration)
-
-            // Create a proper file URL
-            let fileManager = FileManager.default
-
-            // Verify file exists and is accessible
-            // Debug info
-            let inputPath = url.absoluteString
-            let path: String = if inputPath.starts(with: "file://") {
-                String(inputPath.dropFirst(7))
-            } else {
-                inputPath
-            }
-            print("Current working directory: \(fileManager.currentDirectoryPath)")
-            print("Checking file: \(path)")
-
-            let videoURL = URL(fileURLWithPath: path)
-
-            // Check file existence
-            if fileManager.fileExists(atPath: path) {
-                print("✅ File exists")
-
-                // Get file attributes
-                if let attrs = try? fileManager.attributesOfItem(atPath: path) {
-                    print("File size: \(attrs[.size] ?? "unknown")")
-                    print("File permissions: \(attrs[.posixPermissions] ?? "unknown")")
-                    print("File type: \(attrs[.type] ?? "unknown")")
-                }
-
-                // Check read permissions
-                if fileManager.isReadableFile(atPath: path) {
-                    print("✅ File is readable")
-                } else {
-                    print("❌ File is not readable")
-                }
-            } else {
-                print("❌ File does not exist")
-
-                // List Downloads directory contents
-                print("\nContents of Downloads directory:")
-                if let contents = try? fileManager.contentsOfDirectory(atPath: "/Users/paul/Downloads") {
-                    for item in contents {
-                        if item.hasSuffix(".mov") {
-                            print("📹 \(item)")
-                        }
-                    }
-                } else {
-                    print("❌ Could not read Downloads directory")
-                }
-            }
-            guard fileManager.fileExists(atPath: videoURL.path),
-                  fileManager.isReadableFile(atPath: videoURL.path)
-            else {
-                print("Video file doesn't exist or isn't readable")
-                return
-            }
-            // VideoSceneDetector
-            let detector = try VideoSceneDetector()
-            let referenceURL1 = url
-            let referenceMetadata1 = try await detector.generateMetadata(for: referenceURL1)
-            // Create scene match detector with reference metadata
-            let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata1]
-            )
-
-            // Process the video with progress updates
-            let segmentations = try await processor.processVideo(url: url) { progress in
-                print("Processing progress: \(Int(progress * 100))%")
-            }
-
-            print("Processed \(segmentations.count) frames")
-
-            // Analyze segmentations for significant changes
-            let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
-
-            print("Found \(changes.count) significant scene changes")
-            for (timestamp, similarity) in changes {
-                print("Scene change at \(String(format: "%.2f", timestamp))s (similarity: \(String(format: "%.2f", similarity)))")
-            }
-
-            // Optionally save processed frames
-            print("tmp out \(FileManager.default.temporaryDirectory)")
-            let outputDirectory = URL(fileURLWithPath: FileManager.default.temporaryDirectory.absoluteString)
-            for segmentation in segmentations {
-                try processor.saveFrameWithSegmentation(segmentation, toDirectory: outputDirectory)
-            }
-
-            for segmentation in segmentations {
-                let sceneData = try await detector.processSegmentation(segmentation)
-                let matches = await matchDetector.findMatches(for: sceneData)
-
-                if !matches.isEmpty {
-                    print("Found matches at \(sceneData.timestamp):")
-                    for match in matches {
-                        print("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
-                    }
-                }
-            }
-
-            print("Finished processing video")
-        } catch {
-            print("Error: \(error)")
-        }
+        .environmentObject(appState)
     }
 }
 
@@ -215,7 +86,7 @@ struct ContentView: View {
 
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
-    case content = "Content Manager"
+    case content = "Workflow"
     case patrons = "Patron Management"
     case protection = "Content Protection"
     case social = "Social Distribution"
@@ -456,6 +327,10 @@ struct SectionContainer: View {
                 ContentManagerView()
                     .transition(.moveAndFade())
                     .id("content")
+            case .settings:
+                SettingsContent()
+                    .transition(.moveAndFade())
+                    .id("settings")
             default:
                 DefaultSectionView(section: selectedSection)
                     .transition(.moveAndFade())
@@ -539,15 +414,130 @@ struct DefaultSectionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(section.rawValue)
-                    .font(.title)
+            VStack(alignment: .leading) {
+                // Header section using the new text styling
+                Text(section.subtitle)
+                    .font(.largeTitle)
+                    .bold()
                     .padding(.bottom)
 
-                ContentCard()
+                // Preview Alert for upcoming features
+                if section == .protection || section == .social {
+                    PreviewAlert()
+                }
+
+                // Feature grid using the new layout system
+                Grid(alignment: .topLeading, horizontalSpacing: 20, verticalSpacing: 20) {
+                    GridRow {
+                        switch section {
+                        case .protection:
+                            FeatureCard(
+                                title: "Creator Ownership Control",
+                                description: "Maintain full ownership and control of your content across sharing platforms and AI model interactions",
+                                symbol: "shield.lefthalf.filled"
+                            )
+
+                            FeatureCard(
+                                title: "Attribution & Compensation",
+                                description: "Ensure proper citation and fair compensation when your content is shared with third parties",
+                                symbol: "creditcard.circle"
+                            )
+
+                        case .social:
+                            FeatureCard(
+                                title: "Cross-Platform Sharing",
+                                description: "Share content across multiple platforms with customized previews using native macOS integration",
+                                symbol: "square.and.arrow.up"
+                            )
+
+                            FeatureCard(
+                                title: "Analytics Dashboard",
+                                description: "Track engagement and performance with detailed metrics and customizable reports",
+                                symbol: "chart.line.uptrend.xyaxis"
+                            )
+
+                        default:
+                            ContentCard()
+                        }
+                    }
+
+                    if section == .social {
+                        GridRow {
+                            FeatureCard(
+                                title: "Notification Management",
+                                description: "Sync and manage notifications across all your connected social platforms",
+                                symbol: "bell.badge"
+                            )
+                            .gridCellColumns(2)
+                        }
+                    }
+                }
             }
             .padding()
         }
+        .navigationTitle(section.rawValue)
+        .navigationSubtitle(section.subtitle)
+    }
+}
+
+struct PreviewAlert: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .symbolRenderingMode(.multicolor)
+                .font(.title2)
+
+            VStack(alignment: .leading) {
+                Text("Coming Soon!")
+                    .font(.headline)
+                Text("This feature is in the works—we'd love to hear your thoughts!")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Send Feedback") {
+                if let url = URL(string: "mailto:info@arkavo.com") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .background(.background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct FeatureCard: View {
+    let title: String
+    let description: String
+    let symbol: String
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Image(systemName: symbol)
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.title)
+
+                Text(title)
+                    .font(.headline)
+            }
+            .padding(.bottom, 8)
+
+            Text(description)
+                .foregroundStyle(.secondary)
+                .lineLimit(3...)
+
+            Spacer()
+        }
+        .padding()
+        .frame(height: 160)
+        .background(.background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -565,6 +555,7 @@ extension AnyTransition {
 // MARK: - Sidebar View
 
 struct Sidebar: View {
+    @EnvironmentObject private var appState: AppState
     @Binding var selectedSection: NavigationSection
     @ObservedObject var patreonClient: PatreonClient
     @ObservedObject var redditClient: RedditClient
@@ -581,19 +572,36 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        List(selection: $selectedSection) {
-            Section {
-                ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
-                    NavigationLink(value: section) {
-                        Label(section.rawValue, systemImage: section.systemImage)
+        VStack(spacing: 0) {
+            List(selection: $selectedSection) {
+                Section {
+                    ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                        NavigationLink(value: section) {
+                            Label(section.rawValue, systemImage: section.systemImage)
+                        }
+                    }
+                }
+                Section {
+                    NavigationLink(value: NavigationSection.settings) {
+                        Label(NavigationSection.settings.rawValue,
+                              systemImage: NavigationSection.settings.systemImage)
                     }
                 }
             }
-            Section {
-                NavigationLink(value: NavigationSection.settings) {
-                    Label(NavigationSection.settings.rawValue,
-                          systemImage: NavigationSection.settings.systemImage)
+            if appState.isFeedbackEnabled {
+                Divider()
+                Button(action: {
+                    if let url = URL(string: "mailto:info@arkavo.com") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "envelope")
+                        Text("Send Feedback")
+                    }
                 }
+                .buttonStyle(.plain)
+                .padding(10)
             }
         }
         .listStyle(.sidebar)
@@ -626,53 +634,6 @@ struct SidebarRow: View {
         Label(
             title: { Text(section.rawValue) },
             icon: { Image(systemName: section.systemImage) }
-        )
-    }
-}
-
-// MARK: - Top Bar View
-
-struct TopBar: View {
-    let title: String
-    @State private var showNotifications = false
-    @State private var showProfileMenu = false
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            HStack(spacing: 16) {
-                Button(action: { showNotifications.toggle() }) {
-                    Image(systemName: "bell")
-                        .symbolVariant(showNotifications ? .fill : .none)
-                }
-                .help("Notifications")
-
-                Menu {
-                    Button("Profile", action: {})
-                    Button("Preferences", action: {})
-                    Divider()
-                    Button("Sign Out", action: {})
-                } label: {
-                    HStack {
-                        Circle()
-                            .fill(Color.purple)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "chevron.down")
-                            .imageScale(.small)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(NSColor.windowBackgroundColor))
-        .overlay(
-            Divider(),
-            alignment: .bottom
         )
     }
 }
@@ -719,5 +680,31 @@ struct ContentCard: View {
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct SettingsContent: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Feedback Toggle Section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Feedback")
+                    .font(.headline)
+
+                Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
+                    .toggleStyle(.switch)
+
+                Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
+                    .foregroundColor(.secondary)
+                    .font(.callout)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            Spacer()
+        }
     }
 }
