@@ -961,35 +961,35 @@ struct MessageComposerView: View {
     var recipient: Patron?
     let patreonClient: PatreonClient
     @Environment(\.dismiss) private var dismiss
-    
+
     // Message content
     @State private var subject = ""
     @State private var messageText = ""
-    
+
     // Advanced options
     @State private var isShowingAdvancedOptions = false
     @State private var scheduledDate = Date()
     @State private var selectedTier: PatronTier?
-    
+
     // Template state
     @State private var isShowingTemplates = false
     @State private var isShowingPreview = false
-    
+
     // Loading states
     @State private var tiers: [PatronTier] = []
     @State private var isLoadingTiers = false
     @State private var tiersError: Error?
-    
+
     // Message templates
     enum MessageTemplate: String, CaseIterable, Identifiable {
         case welcome = "Welcome Message"
         case announcement = "New Content"
         case thanks = "Thank You"
         case update = "Status Update"
-        
+
         var id: String { rawValue }
     }
-    
+
     var body: some View {
         NavigationStack {
             List {
@@ -997,18 +997,18 @@ struct MessageComposerView: View {
                 if recipient == nil {
                     Section("To") {
                         recipientPicker
-                        
+
                         if let error = tiersError {
                             Text(error.localizedDescription)
                                 .foregroundColor(.red)
                         }
                     }
                 }
-                
+
                 // Message content
                 Section("Message") {
                     TextField("Subject", text: $subject)
-                    
+
                     TextEditor(text: $messageText)
                         .frame(minHeight: 150)
                         .overlay {
@@ -1024,7 +1024,7 @@ struct MessageComposerView: View {
                             }
                         }
                 }
-                
+
                 // Advanced options
                 Section("Options") {
                     DisclosureGroup("Scheduling Options", isExpanded: $isShowingAdvancedOptions) {
@@ -1032,7 +1032,7 @@ struct MessageComposerView: View {
                             get: { scheduledDate > Date() },
                             set: { if $0 { scheduledDate = Date() + 3600 } else { scheduledDate = Date() } }
                         ))
-                        
+
                         if scheduledDate > Date() {
                             DatePicker(
                                 "Send Date",
@@ -1051,21 +1051,21 @@ struct MessageComposerView: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .primaryAction) {
                     Button("Send") {
                         sendMessage()
                     }
                     .disabled(subject.isEmpty || messageText.isEmpty)
                 }
-                
+
                 ToolbarItemGroup {
                     Button {
                         isShowingTemplates.toggle()
                     } label: {
                         Label("Templates", systemImage: "doc.text")
                     }
-                    
+
                     Button {
                         isShowingPreview.toggle()
                     } label: {
@@ -1100,7 +1100,7 @@ struct MessageComposerView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(subject)
                                 .font(.headline)
-                            
+
                             Text(messageText)
                                 .font(.body)
                         }
@@ -1123,7 +1123,7 @@ struct MessageComposerView: View {
             await loadTiers()
         }
     }
-    
+
     private var recipientPicker: some View {
         Group {
             if isLoadingTiers {
@@ -1145,11 +1145,11 @@ struct MessageComposerView: View {
             }
         }
     }
-    
+
     private func loadTiers() async {
         isLoadingTiers = true
         tiersError = nil
-        
+
         do {
             let patreonTiers = try await patreonClient.getTiers()
             // Convert PatreonTier to PatronTier
@@ -1167,10 +1167,10 @@ struct MessageComposerView: View {
         } catch {
             tiersError = error
         }
-        
+
         isLoadingTiers = false
     }
-    
+
     private func applyTemplate(_ template: MessageTemplate) {
         switch template {
         case .welcome:
@@ -1187,7 +1187,7 @@ struct MessageComposerView: View {
             messageText = "Here's the latest update on..."
         }
     }
-    
+
     private func sendMessage() {
         // Implement message sending logic
         dismiss()

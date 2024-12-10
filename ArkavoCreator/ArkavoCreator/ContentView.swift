@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
     @State private var isFileDialogPresented: Bool = false
+    @StateObject private var appState = AppState()
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
     @StateObject var redditClient: RedditClient
@@ -36,7 +37,9 @@ struct ContentView: View {
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
-                if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated {
+                if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated || micropubClient.isAuthenticated ||
+                    blueskyClient.isAuthenticated
+                {
                     ToolbarItemGroup {
                         Button(action: {
                             isFileDialogPresented = true
@@ -97,6 +100,7 @@ struct ContentView: View {
                 }
             }
         }
+        .environmentObject(appState)
     }
 
     private func processContent(_ url: URL) async throws {
@@ -456,6 +460,10 @@ struct SectionContainer: View {
                 ContentManagerView()
                     .transition(.moveAndFade())
                     .id("content")
+            case .settings:
+                SettingsContent()
+                    .transition(.moveAndFade())
+                    .id("settings")
             default:
                 DefaultSectionView(section: selectedSection)
                     .transition(.moveAndFade())
@@ -565,6 +573,7 @@ extension AnyTransition {
 // MARK: - Sidebar View
 
 struct Sidebar: View {
+    @EnvironmentObject private var appState: AppState
     @Binding var selectedSection: NavigationSection
     @ObservedObject var patreonClient: PatreonClient
     @ObservedObject var redditClient: RedditClient
@@ -581,19 +590,36 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        List(selection: $selectedSection) {
-            Section {
-                ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
-                    NavigationLink(value: section) {
-                        Label(section.rawValue, systemImage: section.systemImage)
+        VStack(spacing: 0) {
+            List(selection: $selectedSection) {
+                Section {
+                    ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                        NavigationLink(value: section) {
+                            Label(section.rawValue, systemImage: section.systemImage)
+                        }
+                    }
+                }
+                Section {
+                    NavigationLink(value: NavigationSection.settings) {
+                        Label(NavigationSection.settings.rawValue,
+                              systemImage: NavigationSection.settings.systemImage)
                     }
                 }
             }
-            Section {
-                NavigationLink(value: NavigationSection.settings) {
-                    Label(NavigationSection.settings.rawValue,
-                          systemImage: NavigationSection.settings.systemImage)
+            if appState.isFeedbackEnabled {
+                Divider()
+                Button(action: {
+                    if let url = URL(string: "mailto:info@arkavo.com") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "envelope")
+                        Text("Send Feedback")
+                    }
                 }
+                .buttonStyle(.plain)
+                .padding(10)
             }
         }
         .listStyle(.sidebar)
@@ -719,5 +745,31 @@ struct ContentCard: View {
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct SettingsContent: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Feedback Toggle Section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Feedback")
+                    .font(.headline)
+
+                Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
+                    .toggleStyle(.switch)
+
+                Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
+                    .foregroundColor(.secondary)
+                    .font(.callout)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            Spacer()
+        }
     }
 }
