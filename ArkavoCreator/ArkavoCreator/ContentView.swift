@@ -547,15 +547,130 @@ struct DefaultSectionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(section.rawValue)
-                    .font(.title)
+            VStack(alignment: .leading) {
+                // Header section using the new text styling
+                Text(section.subtitle)
+                    .font(.largeTitle)
+                    .bold()
                     .padding(.bottom)
 
-                ContentCard()
+                // Preview Alert for upcoming features
+                if section == .protection || section == .social {
+                    PreviewAlert()
+                }
+
+                // Feature grid using the new layout system
+                Grid(alignment: .topLeading, horizontalSpacing: 20, verticalSpacing: 20) {
+                    GridRow {
+                        switch section {
+                        case .protection:
+                            FeatureCard(
+                                title: "Creator Ownership Control",
+                                description: "Maintain full ownership and control of your content across sharing platforms and AI model interactions",
+                                symbol: "shield.lefthalf.filled"
+                            )
+
+                            FeatureCard(
+                                title: "Attribution & Compensation",
+                                description: "Ensure proper citation and fair compensation when your content is shared with third parties",
+                                symbol: "creditcard.circle"
+                            )
+
+                        case .social:
+                            FeatureCard(
+                                title: "Cross-Platform Sharing",
+                                description: "Share content across multiple platforms with customized previews using native macOS integration",
+                                symbol: "square.and.arrow.up"
+                            )
+
+                            FeatureCard(
+                                title: "Analytics Dashboard",
+                                description: "Track engagement and performance with detailed metrics and customizable reports",
+                                symbol: "chart.line.uptrend.xyaxis"
+                            )
+
+                        default:
+                            ContentCard()
+                        }
+                    }
+
+                    if section == .social {
+                        GridRow {
+                            FeatureCard(
+                                title: "Notification Management",
+                                description: "Sync and manage notifications across all your connected social platforms",
+                                symbol: "bell.badge"
+                            )
+                            .gridCellColumns(2)
+                        }
+                    }
+                }
             }
             .padding()
         }
+        .navigationTitle(section.rawValue)
+        .navigationSubtitle(section.subtitle)
+    }
+}
+
+struct PreviewAlert: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .symbolRenderingMode(.multicolor)
+                .font(.title2)
+
+            VStack(alignment: .leading) {
+                Text("Coming Soon!")
+                    .font(.headline)
+                Text("This feature is in the works—we'd love to hear your thoughts!")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Send Feedback") {
+                if let url = URL(string: "mailto:info@arkavo.com") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .background(.background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct FeatureCard: View {
+    let title: String
+    let description: String
+    let symbol: String
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Image(systemName: symbol)
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.title)
+
+                Text(title)
+                    .font(.headline)
+            }
+            .padding(.bottom, 8)
+
+            Text(description)
+                .foregroundStyle(.secondary)
+                .lineLimit(3...)
+
+            Spacer()
+        }
+        .padding()
+        .frame(height: 160)
+        .background(.background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
