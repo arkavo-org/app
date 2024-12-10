@@ -1,13 +1,11 @@
 import ArkavoContent
 import ArkavoSocial
-import CoreML
 import SwiftUI
 
 // MARK: - Main Content View
 
 struct ContentView: View {
     @State private var selectedSection: NavigationSection = .dashboard
-    @State private var isFileDialogPresented: Bool = false
     @StateObject private var appState = AppState()
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
@@ -42,7 +40,7 @@ struct ContentView: View {
                 {
                     ToolbarItemGroup {
                         Button(action: {
-                            isFileDialogPresented = true
+                            selectedSection = .social
                         }) {
                             Image(systemName: "bell")
                         }
@@ -79,139 +77,8 @@ struct ContentView: View {
                     }
                 }
             }
-            .fileImporter(
-                isPresented: $isFileDialogPresented,
-                allowedContentTypes: [.quickTimeMovie],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case let .success(urls):
-                    if let url = urls.first {
-                        Task {
-                            do {
-                                try await processContent(url)
-                            } catch {
-                                print("Unable to read file: \(error.localizedDescription)")
-                            }
-                        }
-                    }
-                case let .failure(error):
-                    print("Failed to select file: \(error.localizedDescription)")
-                }
-            }
         }
         .environmentObject(appState)
-    }
-
-    private func processContent(_ url: URL) async throws {
-        print(url)
-        do {
-            // Initialize the processor with GPU acceleration if available
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = .all
-            let processor = try VideoSegmentationProcessor(configuration: configuration)
-
-            // Create a proper file URL
-            let fileManager = FileManager.default
-
-            // Verify file exists and is accessible
-            // Debug info
-            let inputPath = url.absoluteString
-            let path: String = if inputPath.starts(with: "file://") {
-                String(inputPath.dropFirst(7))
-            } else {
-                inputPath
-            }
-            print("Current working directory: \(fileManager.currentDirectoryPath)")
-            print("Checking file: \(path)")
-
-            let videoURL = URL(fileURLWithPath: path)
-
-            // Check file existence
-            if fileManager.fileExists(atPath: path) {
-                print("✅ File exists")
-
-                // Get file attributes
-                if let attrs = try? fileManager.attributesOfItem(atPath: path) {
-                    print("File size: \(attrs[.size] ?? "unknown")")
-                    print("File permissions: \(attrs[.posixPermissions] ?? "unknown")")
-                    print("File type: \(attrs[.type] ?? "unknown")")
-                }
-
-                // Check read permissions
-                if fileManager.isReadableFile(atPath: path) {
-                    print("✅ File is readable")
-                } else {
-                    print("❌ File is not readable")
-                }
-            } else {
-                print("❌ File does not exist")
-
-                // List Downloads directory contents
-                print("\nContents of Downloads directory:")
-                if let contents = try? fileManager.contentsOfDirectory(atPath: "/Users/paul/Downloads") {
-                    for item in contents {
-                        if item.hasSuffix(".mov") {
-                            print("📹 \(item)")
-                        }
-                    }
-                } else {
-                    print("❌ Could not read Downloads directory")
-                }
-            }
-            guard fileManager.fileExists(atPath: videoURL.path),
-                  fileManager.isReadableFile(atPath: videoURL.path)
-            else {
-                print("Video file doesn't exist or isn't readable")
-                return
-            }
-            // VideoSceneDetector
-            let detector = try VideoSceneDetector()
-            let referenceURL1 = url
-            let referenceMetadata1 = try await detector.generateMetadata(for: referenceURL1)
-            // Create scene match detector with reference metadata
-            let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata1]
-            )
-
-            // Process the video with progress updates
-            let segmentations = try await processor.processVideo(url: url) { progress in
-                print("Processing progress: \(Int(progress * 100))%")
-            }
-
-            print("Processed \(segmentations.count) frames")
-
-            // Analyze segmentations for significant changes
-            let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
-
-            print("Found \(changes.count) significant scene changes")
-            for (timestamp, similarity) in changes {
-                print("Scene change at \(String(format: "%.2f", timestamp))s (similarity: \(String(format: "%.2f", similarity)))")
-            }
-
-            // Optionally save processed frames
-            print("tmp out \(FileManager.default.temporaryDirectory)")
-            let outputDirectory = URL(fileURLWithPath: FileManager.default.temporaryDirectory.absoluteString)
-            for segmentation in segmentations {
-                try processor.saveFrameWithSegmentation(segmentation, toDirectory: outputDirectory)
-            }
-
-            for segmentation in segmentations {
-                let sceneData = try await detector.processSegmentation(segmentation)
-                let matches = await matchDetector.findMatches(for: sceneData)
-
-                if !matches.isEmpty {
-                    print("Found matches at \(sceneData.timestamp):")
-                    for match in matches {
-                        print("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
-                    }
-                }
-            }
-
-            print("Finished processing video")
-        } catch {
-            print("Error: \(error)")
-        }
     }
 }
 
@@ -767,53 +634,6 @@ struct SidebarRow: View {
         Label(
             title: { Text(section.rawValue) },
             icon: { Image(systemName: section.systemImage) }
-        )
-    }
-}
-
-// MARK: - Top Bar View
-
-struct TopBar: View {
-    let title: String
-    @State private var showNotifications = false
-    @State private var showProfileMenu = false
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            HStack(spacing: 16) {
-                Button(action: { showNotifications.toggle() }) {
-                    Image(systemName: "bell")
-                        .symbolVariant(showNotifications ? .fill : .none)
-                }
-                .help("Notifications")
-
-                Menu {
-                    Button("Profile", action: {})
-                    Button("Preferences", action: {})
-                    Divider()
-                    Button("Sign Out", action: {})
-                } label: {
-                    HStack {
-                        Circle()
-                            .fill(Color.purple)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "chevron.down")
-                            .imageScale(.small)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(NSColor.windowBackgroundColor))
-        .overlay(
-            Divider(),
-            alignment: .bottom
         )
     }
 }
