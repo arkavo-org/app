@@ -215,7 +215,7 @@ struct ContentView: View {
 
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
-    case content = "Content Manager"
+    case content = "Workflow"
     case patrons = "Patron Management"
     case protection = "Content Protection"
     case social = "Social Distribution"

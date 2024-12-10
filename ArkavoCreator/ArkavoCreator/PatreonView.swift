@@ -960,159 +960,234 @@ struct StatLabel: View {
 struct MessageComposerView: View {
     var recipient: Patron?
     let patreonClient: PatreonClient
-    @Environment(\.dismiss) var dismiss
-
+    @Environment(\.dismiss) private var dismiss
+    
+    // Message content
     @State private var subject = ""
     @State private var messageText = ""
-    @State private var selectedTemplate: MessageTemplate?
-    @State private var showingTemplates = false
-    @State private var showingPreview = false
-    @State private var isScheduling = false
-    @State private var scheduledDate: Date = .init()
-    @State private var selectedTier: PatreonTier?
-
-    // States for data loading
-    @State private var tiers: [PatreonTier] = []
+    
+    // Advanced options
+    @State private var isShowingAdvancedOptions = false
+    @State private var scheduledDate = Date()
+    @State private var selectedTier: PatronTier?
+    
+    // Template state
+    @State private var isShowingTemplates = false
+    @State private var isShowingPreview = false
+    
+    // Loading states
+    @State private var tiers: [PatronTier] = []
     @State private var isLoadingTiers = false
     @State private var tiersError: Error?
-
-    enum MessageTemplate: String, CaseIterable {
+    
+    // Message templates
+    enum MessageTemplate: String, CaseIterable, Identifiable {
         case welcome = "Welcome Message"
         case announcement = "New Content"
         case thanks = "Thank You"
         case update = "Status Update"
+        
+        var id: String { rawValue }
     }
-
+    
     var body: some View {
-        Form {
-            // Recipient Section
-            if recipient == nil {
-                Section("Recipients") {
-                    HStack {
-                        Text("To:")
-                            .foregroundColor(.secondary)
-                        Text(selectedTier?.name ?? "All Patrons")
-                            .fontWeight(.medium)
-                    }
-
-                    if isLoadingTiers {
-                        ProgressView("Loading tiers...")
-                    } else if let error = tiersError {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Failed to load tiers")
-                                .foregroundColor(.red)
+        NavigationStack {
+            List {
+                // Recipients section
+                if recipient == nil {
+                    Section("To") {
+                        recipientPicker
+                        
+                        if let error = tiersError {
                             Text(error.localizedDescription)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Button("Retry") {
-                                Task {
-                                    await loadTiers()
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+                
+                // Message content
+                Section("Message") {
+                    TextField("Subject", text: $subject)
+                    
+                    TextEditor(text: $messageText)
+                        .frame(minHeight: 150)
+                        .overlay {
+                            if messageText.isEmpty {
+                                HStack {
+                                    Text("Write your message...")
+                                        .foregroundColor(.secondary)
+                                    Spacer()
                                 }
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                                .allowsHitTesting(false)
                             }
                         }
-                    } else {
-                        Menu {
-                            Button("All Patrons") {
-                                selectedTier = nil
-                            }
-                            ForEach(tiers) { tier in
-                                Button("\(tier.name) ($\(String(format: "%.2f", tier.amount)))") {
-                                    selectedTier = tier
-                                }
-                            }
-                        } label: {
-                            Label("Filter by Tier", systemImage: "line.3.horizontal.decrease.circle")
+                }
+                
+                // Advanced options
+                Section("Options") {
+                    DisclosureGroup("Scheduling Options", isExpanded: $isShowingAdvancedOptions) {
+                        Toggle("Schedule for Later", isOn: .init(
+                            get: { scheduledDate > Date() },
+                            set: { if $0 { scheduledDate = Date() + 3600 } else { scheduledDate = Date() } }
+                        ))
+                        
+                        if scheduledDate > Date() {
+                            DatePicker(
+                                "Send Date",
+                                selection: $scheduledDate,
+                                in: Date()...,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
                         }
                     }
                 }
             }
-
-            // Message Content Section
-            Section("Message") {
-                TextField("Subject", text: $subject)
-
-                ZStack(alignment: .topLeading) {
-                    if messageText.isEmpty {
-                        Text("Write your message...")
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
+            .navigationTitle(recipient != nil ? "Message to \(recipient!.name)" : "New Message")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", role: .cancel) {
+                        dismiss()
                     }
-                    TextEditor(text: $messageText)
-                        .frame(minHeight: 100)
                 }
-
-                HStack {
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Send") {
+                        sendMessage()
+                    }
+                    .disabled(subject.isEmpty || messageText.isEmpty)
+                }
+                
+                ToolbarItemGroup {
                     Button {
-                        showingTemplates.toggle()
+                        isShowingTemplates.toggle()
                     } label: {
                         Label("Templates", systemImage: "doc.text")
                     }
-
-                    Spacer()
-
+                    
                     Button {
-                        showingPreview.toggle()
+                        isShowingPreview.toggle()
                     } label: {
                         Label("Preview", systemImage: "eye")
                     }
                 }
             }
-
-            // Scheduling Section
-            Section {
-                Toggle("Schedule Message", isOn: $isScheduling)
-
-                if isScheduling {
-                    DatePicker(
-                        "Send Date",
-                        selection: $scheduledDate,
-                        in: Date()...,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
+            .sheet(isPresented: $isShowingTemplates) {
+                NavigationStack {
+                    List(MessageTemplate.allCases) { template in
+                        Button {
+                            applyTemplate(template)
+                            isShowingTemplates = false
+                        } label: {
+                            Text(template.rawValue)
+                        }
+                    }
+                    .navigationTitle("Message Templates")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                isShowingTemplates = false
+                            }
+                        }
+                    }
                 }
+                .frame(width: 300, height: 400)
             }
-
-            // Action Buttons Section
-            Section {
-                HStack {
-                    Button(role: .cancel) {
-                        dismiss()
-                    } label: {
-                        Text("Cancel")
-                            .frame(maxWidth: .infinity)
+            .sheet(isPresented: $isShowingPreview) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(subject)
+                                .font(.headline)
+                            
+                            Text(messageText)
+                                .font(.body)
+                        }
+                        .padding()
                     }
-
-                    Button {
-                        sendMessage()
-                    } label: {
-                        Text(isScheduling ? "Schedule" : "Send")
-                            .frame(maxWidth: .infinity)
-                            .bold()
+                    .navigationTitle("Message Preview")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                isShowingPreview = false
+                            }
+                        }
                     }
-                    .disabled(subject.isEmpty || messageText.isEmpty)
                 }
+                .frame(width: 400, height: 400)
             }
         }
-        .navigationTitle(recipient != nil ? "Message to \(recipient!.name)" : "New Message")
+        .frame(width: 600, height: 500)
         .task {
             await loadTiers()
         }
     }
-
+    
+    private var recipientPicker: some View {
+        Group {
+            if isLoadingTiers {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading tiers...")
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Picker("Recipients", selection: $selectedTier) {
+                    Text("All Patrons")
+                        .tag(nil as PatronTier?)
+                    ForEach(tiers) { tier in
+                        Text("\(tier.name) ($\(String(format: "%.2f", tier.price)))")
+                            .tag(tier as PatronTier?)
+                    }
+                }
+            }
+        }
+    }
+    
     private func loadTiers() async {
         isLoadingTiers = true
         tiersError = nil
-
+        
         do {
-            tiers = try await patreonClient.getTiers()
+            let patreonTiers = try await patreonClient.getTiers()
+            // Convert PatreonTier to PatronTier
+            tiers = patreonTiers.map { tier in
+                PatronTier(
+                    id: tier.id,
+                    name: tier.name,
+                    price: tier.amount,
+                    benefits: [],
+                    patronCount: tier.patronCount ?? 0,
+                    color: .blue,
+                    description: tier.description ?? ""
+                )
+            }
         } catch {
             tiersError = error
         }
-
+        
         isLoadingTiers = false
     }
-
+    
+    private func applyTemplate(_ template: MessageTemplate) {
+        switch template {
+        case .welcome:
+            subject = "Welcome to My Patreon!"
+            messageText = "Thank you for becoming a patron! Here's what you can expect..."
+        case .announcement:
+            subject = "New Content Available"
+            messageText = "I've just released new exclusive content..."
+        case .thanks:
+            subject = "Thank You for Your Support"
+            messageText = "I wanted to take a moment to thank you..."
+        case .update:
+            subject = "Project Status Update"
+            messageText = "Here's the latest update on..."
+        }
+    }
+    
     private func sendMessage() {
         // Implement message sending logic
         dismiss()

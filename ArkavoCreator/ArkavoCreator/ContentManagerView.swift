@@ -13,7 +13,7 @@ struct ContentManagerView: View {
                         .tag(content.id)
                 }
             }
-            .navigationTitle("Content Manager")
+            .navigationTitle("Workflow")
             .searchable(text: $searchText, prompt: "Search content")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
