@@ -141,6 +141,7 @@ struct DiscordView: View {
     @State private var selectedServer: Server? = Server.sampleServers.first
     @State private var selectedChannel: Channel?
     @State private var showingServerSheet = false
+    @State private var showingChatSheet = false
 
     var body: some View {
         HStack {
@@ -197,6 +198,16 @@ struct DiscordView: View {
                     }
                 }
                 .foregroundColor(.primary)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedChannel != nil },
+            set: { if !$0 { selectedChannel = nil } }
+        )) {
+            if let channel = selectedChannel {
+                NavigationStack {
+                    ChatView(channel: channel)
+                }
             }
         }
     }
