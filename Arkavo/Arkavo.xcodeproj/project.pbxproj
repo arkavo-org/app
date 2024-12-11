@@ -54,6 +54,8 @@
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
 		DAAFCBCE2D090740003FC56F /* DiscordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* DiscordView.swift */; };
 		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
+		DAAFCBF82D091A51003FC56F /* BlueskyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */; };
+		DAAFCBFA2D091F18003FC56F /* TikTokView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* TikTokView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -131,6 +133,8 @@
 		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DAAFCBCD2D09073A003FC56F /* DiscordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscordView.swift; sourceTree = "<group>"; };
 		DAAFCBCF2D0907BD003FC56F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueskyView.swift; sourceTree = "<group>"; };
+		DAAFCBF92D091F17003FC56F /* TikTokView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -204,6 +208,8 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DAAFCBF92D091F17003FC56F /* TikTokView.swift */,
+				DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */,
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
 				DAAFCBCD2D09073A003FC56F /* DiscordView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
@@ -470,6 +476,7 @@
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
+				DAAFCBF82D091A51003FC56F /* BlueskyView.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
 				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
 				DAAFCBCE2D090740003FC56F /* DiscordView.swift in Sources */,
@@ -504,6 +511,7 @@
 				DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */,
 				DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
+				DAAFCBFA2D091F18003FC56F /* TikTokView.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

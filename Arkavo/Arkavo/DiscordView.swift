@@ -26,7 +26,6 @@ struct Channel: Identifiable, Hashable {
     var unreadCount: Int
     var isActive: Bool
 
-    // Hashable conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
@@ -43,9 +42,17 @@ enum ChannelType {
 
     var icon: String {
         switch self {
-        case .text: "number"
-        case .voice: "speaker.wave.2.fill"
+        case .text: "text.bubble.fill"
+        case .voice: "waveform.circle.fill"
         case .announcement: "megaphone.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .text: .blue
+        case .voice: .green
+        case .announcement: .orange
         }
     }
 }
@@ -91,7 +98,40 @@ extension Server {
             unreadCount: 7,
             hasNotification: true
         ),
-        // Add more sample servers...
+        Server(
+            id: "2",
+            name: "Sewing Hub",
+            imageURL: nil,
+            channels: [],
+            categories: [
+                ChannelCategory(
+                    id: "1",
+                    name: "INFORMATION",
+                    channels: [
+                        Channel(id: "1", name: "announcements", type: .announcement, unreadCount: 0, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+                ChannelCategory(
+                    id: "2",
+                    name: "TEXT CHANNELS",
+                    channels: [
+                        Channel(id: "4", name: "off-topic", type: .text, unreadCount: 2, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+                ChannelCategory(
+                    id: "3",
+                    name: "VOICE CHANNELS",
+                    channels: [
+                        Channel(id: "5", name: "General Voice", type: .voice, unreadCount: 0, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+            ],
+            unreadCount: 7,
+            hasNotification: true
+        ),
     ]
 }
 
@@ -100,98 +140,120 @@ extension Server {
 struct DiscordView: View {
     @State private var selectedServer: Server? = Server.sampleServers.first
     @State private var selectedChannel: Channel?
-    @State private var showServerList = false // For iPhone
-    @State private var messageText = ""
-
-    var body: some View {
-        NavigationSplitView {
-            ServerListView(
-                servers: Server.sampleServers,
-                selectedServer: $selectedServer
-            )
-            .navigationTitle("Servers")
-        } content: {
-            if let server = selectedServer {
-                ChannelListView(
-                    server: server,
-                    selectedChannel: $selectedChannel
-                )
-            } else {
-                ContentUnavailableView(
-                    "Select a Server",
-                    systemImage: "server.rack",
-                    description: Text("Choose a server to see its channels")
-                )
-            }
-        } detail: {
-            if let channel = selectedChannel {
-                ChatView(channel: channel)
-            } else {
-                ContentUnavailableView(
-                    "Select a Channel",
-                    systemImage: "number.square.fill",
-                    description: Text("Choose a channel to start chatting")
-                )
-            }
-        }
-    }
-}
-
-// MARK: - Server List View
-
-struct ServerListView: View {
-    let servers: [Server]
-    @Binding var selectedServer: Server?
-
-    var body: some View {
-        List(servers, selection: $selectedServer) { server in
-            ServerRow(server: server)
-                .tag(server)
-        }
-        .listStyle(.sidebar)
-    }
-}
-
-struct ServerRow: View {
-    let server: Server
+    @State private var showingServerSheet = false
+    @State private var showingChatSheet = false
 
     var body: some View {
         HStack {
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    if let imageURL = server.imageURL {
-                        AsyncImage(url: URL(string: imageURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.gray.opacity(0.3)
-                        }
-                    } else {
-                        Text(server.name.prefix(1))
-                            .font(.title2.bold())
-                            .foregroundColor(.white)
-                            .frame(width: 48, height: 48)
-                            .background(Color.blue)
-                    }
-                }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            VStack(spacing: 0) {
+                ServerHeader(
+                    selectedServer: $selectedServer,
+                    selectedChannel: $selectedChannel,
+                    showingServerSheet: $showingServerSheet
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 8)
 
-                if server.hasNotification {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 16, height: 16)
-                        .overlay(
-                            Text("\(server.unreadCount)")
-                                .font(.caption2)
-                                .foregroundColor(.white)
-                        )
+                if let server = selectedServer {
+                    ChannelListView(
+                        server: server,
+                        selectedChannel: $selectedChannel
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Select a Server",
+                        systemImage: "server.rack",
+                        description: Text("Choose a server to see its channels")
+                    )
                 }
             }
+        }
+        .sheet(isPresented: $showingServerSheet) {
+            List(Server.sampleServers) { server in
+                Button {
+                    selectedServer = server
+                    selectedChannel = nil
+                    showingServerSheet = false
+                } label: {
+                    HStack {
+                        Label {
+                            Text(server.name)
+                                .font(.body)
+                        } icon: {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundStyle(server.id == selectedServer?.id ? .blue : .gray)
+                        }
 
-            Text(server.name)
-                .font(.headline)
+                        Spacer()
+
+                        if server.hasNotification {
+                            Text("\(server.unreadCount)")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.red)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .foregroundColor(.primary)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedChannel != nil },
+            set: { if !$0 { selectedChannel = nil } }
+        )) {
+            if let channel = selectedChannel {
+                NavigationStack {
+                    ChatView(channel: channel)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Server Header
+
+struct ServerHeader: View {
+    @Binding var selectedServer: Server?
+    @Binding var selectedChannel: Channel?
+    @Binding var showingServerSheet: Bool
+
+    var body: some View {
+        Button {
+            showingServerSheet = true
+        } label: {
+            HStack {
+                if let server = selectedServer {
+                    Label {
+                        Text(server.name)
+                            .font(.headline)
+
+                        Spacer()
+
+                        if server.hasNotification {
+                            Text("\(server.unreadCount)")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.red)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    } icon: {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                Image(systemName: "chevron.down")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .padding(8)
+            .background(.bar)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -212,19 +274,23 @@ struct ChannelListView: View {
     var body: some View {
         List(categories, selection: $selectedChannel) { category in
             Section {
-                ForEach(category.channels) { channel in
-                    ChannelRow(channel: channel)
-                        .tag(channel)
+                if category.isExpanded {
+                    ForEach(category.channels) { channel in
+                        ChannelRow(channel: channel)
+                            .tag(channel)
+                    }
                 }
             } header: {
                 CategoryHeader(category: category) {
                     if let index = categories.firstIndex(where: { $0.id == category.id }) {
-                        categories[index].isExpanded.toggle()
+                        withAnimation {
+                            categories[index].isExpanded.toggle()
+                        }
                     }
                 }
             }
         }
-        .navigationTitle(server.name)
+        .listStyle(.inset)
     }
 }
 
@@ -235,13 +301,15 @@ struct CategoryHeader: View {
     var body: some View {
         Button(action: action) {
             HStack {
-                Image(systemName: "chevron.right")
-                    .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
+                Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
                 Text(category.name)
                     .font(.caption)
                     .bold()
+                    .foregroundColor(.secondary)
             }
-            .foregroundColor(.primary)
         }
     }
 }
@@ -251,22 +319,26 @@ struct ChannelRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: channel.type.icon)
-                .foregroundColor(.secondary)
+            Label {
+                Text(channel.name)
+                    .font(.body)
+            } icon: {
+                Image(systemName: channel.type.icon)
+                    .foregroundStyle(channel.type.color)
+            }
 
-            Text(channel.name)
-                .font(.body)
+            Spacer()
 
             if channel.unreadCount > 0 {
-                Spacer()
                 Text("\(channel.unreadCount)")
                     .font(.caption2)
                     .padding(4)
-                    .background(Color.red)
+                    .background(.red)
                     .foregroundColor(.white)
                     .clipShape(Circle())
             }
         }
+        .padding(.vertical, 2)
     }
 }
 

@@ -4,6 +4,9 @@
     "" : {
 
     },
+    "@%@" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -133,13 +136,28 @@
         }
       }
     },
+    "Chat" : {
+
+    },
+    "Choose a server to see its channels" : {
+
+    },
     "Classification" : {
 
     },
     "Classification settings go here" : {
 
     },
+    "Comment text goes here" : {
+
+    },
+    "Comments" : {
+
+    },
     "Content Protection" : {
+
+    },
+    "Copy Link" : {
 
     },
     "Create New Stream" : {
@@ -177,6 +195,12 @@
     "Data mode" : {
 
     },
+    "Decentralized Identity" : {
+
+    },
+    "DID" : {
+
+    },
     "Done" : {
       "localizations" : {
         "es-US" : {
@@ -186,6 +210,9 @@
           }
         }
       }
+    },
+    "Edit Profile" : {
+
     },
     "Empty" : {
 
@@ -218,6 +245,9 @@
     "Every day, content creators face challenges protecting their work online. You can make a real difference!" : {
 
     },
+    "Exclusives" : {
+
+    },
     "Expert Level: %@" : {
 
     },
@@ -230,7 +260,25 @@
     "Features" : {
 
     },
+    "Feed" : {
+
+    },
+    "Followers" : {
+
+    },
+    "Following" : {
+
+    },
+    "For You" : {
+
+    },
     "Granularity" : {
+
+    },
+    "Help" : {
+
+    },
+    "Home" : {
 
     },
     "How It Works" : {
@@ -279,6 +327,9 @@
           }
         }
       }
+    },
+    "Latest Update" : {
+
     },
     "Leader in Content Security" : {
       "extractionState" : "manual",
@@ -354,6 +405,9 @@
     "Members:" : {
 
     },
+    "Mute User" : {
+
+    },
     "My Account" : {
 
     },
@@ -381,16 +435,19 @@
         }
       }
     },
+    "New Post" : {
+
+    },
     "Next" : {
 
     },
     "No Active Streams" : {
 
     },
-    "No Stream Service for %@" : {
+    "Not available on macOS" : {
 
     },
-    "Not available on macOS" : {
+    "Notifications" : {
 
     },
     "OK" : {
@@ -428,6 +485,15 @@
         }
       }
     },
+    "Post" : {
+
+    },
+    "Post Actions" : {
+
+    },
+    "Posts" : {
+
+    },
     "Privacy" : {
 
     },
@@ -456,9 +522,6 @@
           }
         }
       }
-    },
-    "Profile View for %@" : {
-
     },
     "Profile: %@" : {
       "localizations" : {
@@ -513,6 +576,9 @@
         }
       }
     },
+    "Report Post" : {
+
+    },
     "Resend" : {
 
     },
@@ -538,6 +604,18 @@
     "Scan Completed" : {
 
     },
+    "Search" : {
+
+    },
+    "Search Bluesky" : {
+
+    },
+    "Select a Server" : {
+
+    },
+    "Service Endpoint" : {
+
+    },
     "Service misconfigured" : {
 
     },
@@ -553,6 +631,9 @@
           }
         }
       }
+    },
+    "Share Post" : {
+
     },
     "Share Text" : {
       "localizations" : {
@@ -596,6 +677,9 @@
           }
         }
       }
+    },
+    "Social Media" : {
+
     },
     "Start" : {
       "localizations" : {
@@ -723,6 +807,9 @@
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
 
     },
+    "User" : {
+
+    },
     "Video" : {
       "localizations" : {
         "es-US" : {
@@ -732,6 +819,9 @@
           }
         }
       }
+    },
+    "Video %lld" : {
+
     },
     "Video message" : {
 
