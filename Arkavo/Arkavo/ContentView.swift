@@ -76,49 +76,145 @@ struct TikTokView: View {
     }
 }
 
-struct BlueskyView: View {
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(1 ... 10, id: \.self) { index in
-                    VStack(alignment: .leading) {
-                        Text("User \(index)")
-                            .font(.headline)
-                        Text("This is a sample post #\(index)")
-                            .font(.body)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            .navigationTitle("Timeline")
-        }
-    }
-}
-
 struct ProfileView: View {
+    @State private var selectedTab: ProfileTab = .posts
+    @State private var user = DIDUser(
+        id: "1",
+        handle: "user.bsky.social",
+        displayName: "Username",
+        avatarURL: "",
+        isVerified: false,
+        did: "did:plc:example123",
+        description: "A decentralized social network user",
+        followers: 123,
+        following: 456,
+        postsCount: 789,
+        serviceEndpoint: "https://bsky.social"
+    )
+
+    enum ProfileTab {
+        case posts, replies, media, likes
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                // Profile Header Section
                 Section {
-                    HStack {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 60))
-                        VStack(alignment: .leading) {
-                            Text("Username")
-                                .font(.headline)
-                            Text("@handle")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            AsyncImage(url: URL(string: user.avatarURL)) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } placeholder: {
+                                Image(systemName: "person.circle.fill")
+                                    .font(.system(size: 60))
+                            }
+                            .frame(width: 60, height: 60)
+                            .clipShape(Circle())
+
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Text(user.displayName)
+                                        .font(.headline)
+                                    if user.isVerified {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                Text("@\(user.handle)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(user.did)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
+
+                        if let description = user.description {
+                            Text(description)
+                                .font(.subheadline)
+                        }
+
+                        HStack(spacing: 24) {
+                            VStack {
+                                Text("\(user.following)")
+                                    .font(.headline)
+                                Text("Following")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            VStack {
+                                Text("\(user.followers)")
+                                    .font(.headline)
+                                Text("Followers")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            VStack {
+                                Text("\(user.postsCount)")
+                                    .font(.headline)
+                                Text("Posts")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.top, 4)
                     }
                     .padding(.vertical, 8)
                 }
 
+                // Settings Section
                 Section("Settings") {
-                    Label("Edit Profile", systemImage: "pencil")
-                    Label("Notifications", systemImage: "bell")
-                    Label("Privacy", systemImage: "lock")
-                    Label("Help", systemImage: "questionmark.circle")
+                    NavigationLink {
+                        // Edit Profile View
+                        Text("Edit Profile")
+                    } label: {
+                        Label("Edit Profile", systemImage: "pencil")
+                    }
+
+                    NavigationLink {
+                        // Notifications View
+                        Text("Notifications")
+                    } label: {
+                        Label("Notifications", systemImage: "bell")
+                    }
+
+                    NavigationLink {
+                        // Privacy View
+                        Text("Privacy")
+                    } label: {
+                        Label("Privacy", systemImage: "lock")
+                    }
+
+                    NavigationLink {
+                        // Help View
+                        Text("Help")
+                    } label: {
+                        Label("Help", systemImage: "questionmark.circle")
+                    }
+                }
+
+                // DID Information Section
+                Section("Decentralized Identity") {
+                    VStack(alignment: .leading) {
+                        Text("Service Endpoint")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(user.serviceEndpoint)
+                            .font(.callout)
+                    }
+
+                    VStack(alignment: .leading) {
+                        Text("DID")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(user.did)
+                            .font(.callout)
+                    }
                 }
             }
             .navigationTitle("Profile")
