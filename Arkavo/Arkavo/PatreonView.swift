@@ -185,7 +185,6 @@ extension Message {
 struct PatreonView: View {
     @State private var selectedTab = 0
     @State private var creators: [Creator] = Creator.sampleCreators
-    @State private var selectedCreator: Creator?
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
 
@@ -197,18 +196,12 @@ struct PatreonView: View {
                         Label("Exclusives", systemImage: "star.fill")
                     }
                     .tag(0)
-
-                ChatView(creator: creators.first)
-                    .tabItem {
-                        Label("Chat", systemImage: "message.fill")
-                    }
-                    .tag(1)
-
-                CreatorListView(creators: creators, selectedCreator: $selectedCreator)
+                Spacer()
+                CreatorListView(creators: creators)
                     .tabItem {
                         Label("Creators", systemImage: "person.2.fill")
                     }
-                    .tag(2)
+                    .tag(1)
             }
             .navigationTitle(navigationTitle)
         }
@@ -217,8 +210,7 @@ struct PatreonView: View {
     var navigationTitle: String {
         switch selectedTab {
         case 0: "Exclusives"
-        case 1: "Chat"
-        case 2: "Creators"
+        case 1: "Creators"
         default: ""
         }
     }
@@ -227,16 +219,15 @@ struct PatreonView: View {
 // Creator List View
 struct CreatorListView: View {
     let creators: [Creator]
-    @Binding var selectedCreator: Creator?
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(creators) { creator in
-                    CreatorCard(creator: creator)
-                        .onTapGesture {
-                            selectedCreator = creator
-                        }
+                    NavigationLink(destination: ChatView(creator: creator)) {
+                        CreatorCard(creator: creator)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding()
