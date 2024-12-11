@@ -413,7 +413,7 @@
 				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = beta.4;
+				CURRENT_PROJECT_VERSION = rc.0;
 				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -443,7 +443,7 @@
 				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = beta.4;
+				CURRENT_PROJECT_VERSION = rc.0;
 				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_HARDENED_RUNTIME = YES;
