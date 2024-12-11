@@ -33,7 +33,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            TikTokView()
+            TikTokFeedView()
                 .tabItem {
                     Label(Tab.home.title, systemImage: Tab.home.icon)
                 }
@@ -62,16 +62,6 @@ struct ContentView: View {
                     Label(Tab.profile.title, systemImage: Tab.profile.icon)
                 }
                 .tag(Tab.profile)
-        }
-    }
-}
-
-// Placeholder Views
-struct TikTokView: View {
-    var body: some View {
-        NavigationStack {
-            Text("TikTok Clone View")
-                .navigationTitle("For You")
         }
     }
 }

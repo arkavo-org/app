@@ -23,24 +23,25 @@ struct ArkavoApp: App {
                     })
                 case .main:
                     NavigationStack(path: $navigationPath) {
-                        ArkavoView(service: service)
-                        #if os(iOS)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .navigationBarHidden(true)
-                        #endif
-                            .modelContainer(persistenceController.container)
-                            .navigationDestination(for: DeepLinkDestination.self) { destination in
-                                switch destination {
-                                case let .stream(publicID):
-                                    if service.streamService == nil {
-                                        Text("No Stream Service for \(publicID)")
-                                    } else {
-                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
-                                    }
-                                case let .profile(publicID):
-                                    Text("Profile View for \(publicID)")
-                                }
-                            }
+                        ContentView()
+//                        ArkavoView(service: service)
+//                        #if os(iOS)
+//                            .navigationBarTitleDisplayMode(.inline)
+//                            .navigationBarHidden(true)
+//                        #endif
+//                            .modelContainer(persistenceController.container)
+//                            .navigationDestination(for: DeepLinkDestination.self) { destination in
+//                                switch destination {
+//                                case let .stream(publicID):
+//                                    if service.streamService == nil {
+//                                        Text("No Stream Service for \(publicID)")
+//                                    } else {
+//                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
+//                                    }
+//                                case let .profile(publicID):
+//                                    Text("Profile View for \(publicID)")
+//                                }
+//                            }
                     }
                 }
             }

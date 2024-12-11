@@ -91,7 +91,43 @@ extension Server {
             unreadCount: 7,
             hasNotification: true
         ),
-        // Add more sample servers...
+        Server(
+            id: "2",
+            name: "Sewing Hub",
+            imageURL: nil,
+            channels: [],
+            categories: [
+                ChannelCategory(
+                    id: "1",
+                    name: "INFORMATION",
+                    channels: [
+                        Channel(id: "1", name: "announcements", type: .announcement, unreadCount: 0, isActive: false),
+                        Channel(id: "2", name: "rules", type: .text, unreadCount: 0, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+                ChannelCategory(
+                    id: "2",
+                    name: "TEXT CHANNELS",
+                    channels: [
+                        Channel(id: "3", name: "general", type: .text, unreadCount: 5, isActive: true),
+                        Channel(id: "4", name: "off-topic", type: .text, unreadCount: 2, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+                ChannelCategory(
+                    id: "3",
+                    name: "VOICE CHANNELS",
+                    channels: [
+                        Channel(id: "5", name: "General Voice", type: .voice, unreadCount: 0, isActive: false),
+                        Channel(id: "6", name: "Gaming Voice", type: .voice, unreadCount: 0, isActive: false),
+                    ],
+                    isExpanded: true
+                ),
+            ],
+            unreadCount: 7,
+            hasNotification: true
+        ),
     ]
 }
 
@@ -100,17 +136,18 @@ extension Server {
 struct DiscordView: View {
     @State private var selectedServer: Server? = Server.sampleServers.first
     @State private var selectedChannel: Channel?
-    @State private var showServerList = false // For iPhone
-    @State private var messageText = ""
 
     var body: some View {
-        NavigationSplitView {
-            ServerListView(
-                servers: Server.sampleServers,
-                selectedServer: $selectedServer
+        VStack(spacing: 0) {
+            // Custom header with server selector
+            ServerHeader(
+                selectedServer: $selectedServer,
+                selectedChannel: $selectedChannel
             )
-            .navigationTitle("Servers")
-        } content: {
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(uiColor: .systemGroupedBackground))
+
             if let server = selectedServer {
                 ChannelListView(
                     server: server,
@@ -123,75 +160,57 @@ struct DiscordView: View {
                     description: Text("Choose a server to see its channels")
                 )
             }
-        } detail: {
-            if let channel = selectedChannel {
-                ChatView(channel: channel)
-            } else {
-                ContentUnavailableView(
-                    "Select a Channel",
-                    systemImage: "number.square.fill",
-                    description: Text("Choose a channel to start chatting")
-                )
-            }
         }
     }
 }
 
-// MARK: - Server List View
+// MARK: - Server Header
 
-struct ServerListView: View {
-    let servers: [Server]
+struct ServerHeader: View {
     @Binding var selectedServer: Server?
+    @Binding var selectedChannel: Channel?
 
     var body: some View {
-        List(servers, selection: $selectedServer) { server in
-            ServerRow(server: server)
-                .tag(server)
-        }
-        .listStyle(.sidebar)
-    }
-}
-
-struct ServerRow: View {
-    let server: Server
-
-    var body: some View {
-        HStack {
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    if let imageURL = server.imageURL {
-                        AsyncImage(url: URL(string: imageURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.gray.opacity(0.3)
-                        }
-                    } else {
-                        Text(server.name.prefix(1))
-                            .font(.title2.bold())
-                            .foregroundColor(.white)
-                            .frame(width: 48, height: 48)
-                            .background(Color.blue)
-                    }
-                }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                if server.hasNotification {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 16, height: 16)
-                        .overlay(
+        Menu {
+            ForEach(Server.sampleServers) { server in
+                Button {
+                    selectedServer = server
+                    selectedChannel = nil
+                } label: {
+                    HStack {
+                        Image(systemName: "bubble.left.fill")
+                            .foregroundColor(.blue)
+                            .font(.title3)
+                        Text(server.name)
+                            .font(.body)
+                        Spacer()
+                        if server.hasNotification {
                             Text("\(server.unreadCount)")
                                 .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red)
                                 .foregroundColor(.white)
-                        )
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
             }
-
-            Text(server.name)
-                .font(.headline)
+        } label: {
+            HStack {
+                if let server = selectedServer {
+                    Image(systemName: "bubble.left.fill")
+                        .foregroundColor(.blue)
+                        .font(.title3)
+                    Text(server.name)
+                        .font(.headline)
+                }
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .foregroundColor(.secondary)
+                    .font(.subheadline)
+            }
+            .padding(.vertical, 4)
         }
     }
 }
@@ -235,8 +254,6 @@ struct CategoryHeader: View {
     var body: some View {
         Button(action: action) {
             HStack {
-                Image(systemName: "chevron.right")
-                    .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
                 Text(category.name)
                     .font(.caption)
                     .bold()

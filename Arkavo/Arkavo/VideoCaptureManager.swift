@@ -133,7 +133,7 @@
             }
         }
 
-        func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) async {
+        private func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) async {
             guard isStreaming, let streamingService, let videoEncryptor else {
                 return
             }
