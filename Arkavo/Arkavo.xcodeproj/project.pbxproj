@@ -50,6 +50,10 @@
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA91AA0B2CFB655900BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA0A2CFB655900BE9912 /* ArkavoSocial */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
+		DAAFCBCA2D08F9DB003FC56F /* PatreonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBC92D08F9D4003FC56F /* PatreonView.swift */; };
+		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
+		DAAFCBCE2D090740003FC56F /* DiscordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* DiscordView.swift */; };
+		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -123,6 +127,10 @@
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		DAAFCBC92D08F9D4003FC56F /* PatreonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonView.swift; sourceTree = "<group>"; };
+		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		DAAFCBCD2D09073A003FC56F /* DiscordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscordView.swift; sourceTree = "<group>"; };
+		DAAFCBCF2D0907BD003FC56F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -196,6 +204,10 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
+				DAAFCBCD2D09073A003FC56F /* DiscordView.swift */,
+				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
+				DAAFCBC92D08F9D4003FC56F /* PatreonView.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
@@ -455,10 +467,12 @@
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
 				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
+				DAAFCBCE2D090740003FC56F /* DiscordView.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
 				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
@@ -469,11 +483,13 @@
 				DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
+				DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */,
 				DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */,
 				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
 				DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
+				DAAFCBCA2D08F9DB003FC56F /* PatreonView.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
@@ -656,7 +672,7 @@
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = beta.4;
+				CURRENT_PROJECT_VERSION = beta.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
@@ -683,7 +699,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.arkavo.${PRODUCT_NAME}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -706,7 +722,7 @@
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = beta.4;
+				CURRENT_PROJECT_VERSION = beta.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
@@ -733,7 +749,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.arkavo.${PRODUCT_NAME}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
