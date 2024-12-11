@@ -1,7 +1,6 @@
 import AVKit
 import SwiftUI
 
-// Simplified video model
 struct Video: Identifiable {
     let id: UUID = .init()
     let url: URL
@@ -15,9 +14,6 @@ struct Video: Identifiable {
 struct TikTokFeedView: View {
     @State private var currentIndex = 0
     @State private var showComments = false
-    @State private var scale = 1.0
-    @State private var rotation = 0.0
-    @State private var bounce = false
 
     // Sample videos - replace with your actual data
     @State private var videos: [Video] = [
@@ -37,119 +33,227 @@ struct TikTokFeedView: View {
             comments: 75,
             shares: 30
         ),
+        Video(
+            url: URL(string: "https://example.com/video3.mp4")!,
+            creatorName: "creator3",
+            description: "Third video",
+            likes: 150,
+            comments: 60,
+            shares: 40
+        ),
+        Video(
+            url: URL(string: "https://example.com/video3.mp4")!,
+            creatorName: "creator4",
+            description: "video",
+            likes: 2,
+            comments: 3,
+            shares: 4
+        ),
     ]
 
     var body: some View {
         GeometryReader { geometry in
-            TabView(selection: $currentIndex) {
-                ForEach(videos.indices, id: \.self) { index in
-                    ZStack {
-                        Color.black // Placeholder for video
-                            .overlay(
-                                Text("Video \(index + 1)")
-                                    .foregroundColor(.white)
-                                    .font(.largeTitle)
-                                    .scaleEffect(scale)
-                                    .rotationEffect(.degrees(rotation))
-                                    .offset(y: bounce ? -20 : 0)
-                                    .onAppear {
-                                        // Start the animations when view appears
-                                        withAnimation(
-                                            .easeInOut(duration: 2)
-                                                .repeatForever(autoreverses: true)
-                                        ) {
-                                            scale = 1.3
-                                        }
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(videos.indices, id: \.self) { index in
+                            VideoPlayerView(
+                                video: videos[index],
+                                showComments: $showComments,
+                                index: index
+                            )
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .id(index)
+                            .simultaneousGesture(
+                                DragGesture()
+                                    .onEnded { value in
+                                        let verticalMovement = value.translation.height
+                                        let threshold: CGFloat = 50 // Adjust for sensitivity
 
-                                        withAnimation(
-                                            .linear(duration: 4)
-                                                .repeatForever(autoreverses: false)
-                                        ) {
-                                            rotation = 360
-                                        }
-
-                                        withAnimation(
-                                            .spring(response: 0.5, dampingFraction: 0.5)
-                                                .repeatForever(autoreverses: true)
-                                        ) {
-                                            bounce = true
+                                        if abs(verticalMovement) > threshold {
+                                            withAnimation(.easeOut(duration: 0.3)) {
+                                                if verticalMovement > 0, currentIndex > 0 {
+                                                    currentIndex -= 1
+                                                } else if verticalMovement < 0, currentIndex < videos.count - 1 {
+                                                    currentIndex += 1
+                                                }
+                                                proxy.scrollTo(currentIndex, anchor: .center)
+                                            }
                                         }
                                     }
                             )
-
-                        // Overlay controls
-                        VStack {
-                            Spacer()
-                            HStack {
-                                // Video info
-                                VStack(alignment: .leading) {
-                                    Text("@\(videos[index].creatorName)")
-                                        .foregroundColor(.white)
-                                        .font(.headline)
-                                    Text(videos[index].description)
-                                        .foregroundColor(.white)
-                                        .font(.subheadline)
-                                }
-                                .padding()
-
-                                Spacer()
-
-                                // Action buttons
-                                VStack(spacing: 20) {
-                                    Button(action: {}) {
-                                        VStack {
-                                            Image(systemName: "heart")
-                                                .font(.title)
-                                            Text("\(videos[index].likes)")
-                                                .font(.caption)
-                                        }
-                                        .foregroundColor(.white)
-                                    }
-
-                                    Button(action: { showComments = true }) {
-                                        VStack {
-                                            Image(systemName: "message")
-                                                .font(.title)
-                                            Text("\(videos[index].comments)")
-                                                .font(.caption)
-                                        }
-                                        .foregroundColor(.white)
-                                    }
-
-                                    Button(action: {}) {
-                                        VStack {
-                                            Image(systemName: "square.and.arrow.up")
-                                                .font(.title)
-                                            Text("\(videos[index].shares)")
-                                                .font(.caption)
-                                        }
-                                        .foregroundColor(.white)
-                                    }
-                                }
-                                .padding(.trailing)
-                            }
-                            .padding(.bottom)
                         }
                     }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .tag(index)
                 }
+                .scrollDisabled(true) // Disable native scroll for custom handling
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showComments) {
-            NavigationView {
-                Text("Comments")
-                    .navigationTitle("Comments")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                showComments = false
+            CommentsView(showComments: $showComments)
+        }
+    }
+}
+
+struct VideoPlayerView: View {
+    let video: Video
+    @Binding var showComments: Bool
+    let index: Int
+
+    @State private var scale = 1.0
+    @State private var rotation = 0.0
+    @State private var bounce = false
+    @State private var isLiked = false
+    @State private var likesCount: Int
+
+    init(video: Video, showComments: Binding<Bool>, index: Int) {
+        self.video = video
+        _showComments = showComments
+        self.index = index
+        _likesCount = State(initialValue: video.likes)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black // Placeholder for video
+                .overlay(
+                    Text("Video \(index + 1)")
+                        .foregroundColor(.white)
+                        .font(.largeTitle)
+                        .scaleEffect(scale)
+                        .rotationEffect(.degrees(rotation))
+                        .offset(y: bounce ? -20 : 0)
+                        .onAppear {
+                            withAnimation(
+                                .easeInOut(duration: 2)
+                                    .repeatForever(autoreverses: true)
+                            ) {
+                                scale = 1.3
+                            }
+
+                            withAnimation(
+                                .linear(duration: 4)
+                                    .repeatForever(autoreverses: false)
+                            ) {
+                                rotation = 360
+                            }
+
+                            withAnimation(
+                                .spring(response: 0.5, dampingFraction: 0.5)
+                                    .repeatForever(autoreverses: true)
+                            ) {
+                                bounce = true
                             }
                         }
+                )
+
+            // Overlay controls
+            VStack {
+                Spacer()
+                HStack {
+                    // Video info
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("@\(video.creatorName)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+
+                        Text(video.description)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
                     }
+                    .padding()
+
+                    Spacer()
+
+                    // Action buttons
+                    VStack(spacing: 20) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                isLiked.toggle()
+                                likesCount += isLiked ? 1 : -1
+                            }
+                        }) {
+                            VStack(spacing: 4) {
+                                Image(systemName: isLiked ? "heart.fill" : "heart")
+                                    .font(.title)
+                                    .foregroundColor(isLiked ? .red : .white)
+                                Text("\(likesCount)")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            }
+                        }
+
+                        ActionButton(
+                            icon: "message",
+                            count: video.comments,
+                            action: { showComments = true }
+                        )
+
+                        ActionButton(
+                            icon: "square.and.arrow.up",
+                            count: video.shares,
+                            action: {}
+                        )
+                    }
+                    .padding(.trailing)
+                }
+                .padding(.bottom, 30)
+            }
+        }
+        // Enable double-tap to like
+        .onTapGesture(count: 2) {
+            if !isLiked {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isLiked = true
+                    likesCount += 1
+                }
+            }
+        }
+    }
+}
+
+struct ActionButton: View {
+    let icon: String
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.title)
+                Text("\(count)")
+                    .font(.caption)
+            }
+            .foregroundColor(.white)
+        }
+    }
+}
+
+struct CommentsView: View {
+    @Binding var showComments: Bool
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(0 ..< 10) { _ in
+                    VStack(alignment: .leading) {
+                        Text("User")
+                            .font(.headline)
+                        Text("Comment text goes here")
+                            .font(.body)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .navigationTitle("Comments")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showComments = false
+                    }
+                }
             }
         }
     }

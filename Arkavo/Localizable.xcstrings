@@ -148,6 +148,9 @@
     "Classification settings go here" : {
 
     },
+    "Comment text goes here" : {
+
+    },
     "Comments" : {
 
     },
@@ -802,6 +805,9 @@
 
     },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
+
+    },
+    "User" : {
 
     },
     "Video" : {
