@@ -10,7 +10,7 @@ enum Tab {
     var title: String {
         switch self {
         case .home: "Home"
-        case .communities: "Communities"
+        case .communities: "Community"
         case .social: "Social"
         case .creators: "Creators"
         case .profile: "Profile"

@@ -26,7 +26,6 @@ struct Channel: Identifiable, Hashable {
     var unreadCount: Int
     var isActive: Bool
 
-    // Hashable conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
@@ -43,9 +42,17 @@ enum ChannelType {
 
     var icon: String {
         switch self {
-        case .text: "number"
-        case .voice: "speaker.wave.2.fill"
+        case .text: "text.bubble.fill"
+        case .voice: "waveform.circle.fill"
         case .announcement: "megaphone.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .text: .blue
+        case .voice: .green
+        case .announcement: .orange
         }
     }
 }
@@ -102,7 +109,6 @@ extension Server {
                     name: "INFORMATION",
                     channels: [
                         Channel(id: "1", name: "announcements", type: .announcement, unreadCount: 0, isActive: false),
-                        Channel(id: "2", name: "rules", type: .text, unreadCount: 0, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -110,7 +116,6 @@ extension Server {
                     id: "2",
                     name: "TEXT CHANNELS",
                     channels: [
-                        Channel(id: "3", name: "general", type: .text, unreadCount: 5, isActive: true),
                         Channel(id: "4", name: "off-topic", type: .text, unreadCount: 2, isActive: false),
                     ],
                     isExpanded: true
@@ -120,7 +125,6 @@ extension Server {
                     name: "VOICE CHANNELS",
                     channels: [
                         Channel(id: "5", name: "General Voice", type: .voice, unreadCount: 0, isActive: false),
-                        Channel(id: "6", name: "Gaming Voice", type: .voice, unreadCount: 0, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -136,29 +140,63 @@ extension Server {
 struct DiscordView: View {
     @State private var selectedServer: Server? = Server.sampleServers.first
     @State private var selectedChannel: Channel?
+    @State private var showingServerSheet = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Custom header with server selector
-            ServerHeader(
-                selectedServer: $selectedServer,
-                selectedChannel: $selectedChannel
-            )
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color(uiColor: .systemGroupedBackground))
+        HStack {
+            VStack(spacing: 0) {
+                ServerHeader(
+                    selectedServer: $selectedServer,
+                    selectedChannel: $selectedChannel,
+                    showingServerSheet: $showingServerSheet
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 8)
 
-            if let server = selectedServer {
-                ChannelListView(
-                    server: server,
-                    selectedChannel: $selectedChannel
-                )
-            } else {
-                ContentUnavailableView(
-                    "Select a Server",
-                    systemImage: "server.rack",
-                    description: Text("Choose a server to see its channels")
-                )
+                if let server = selectedServer {
+                    ChannelListView(
+                        server: server,
+                        selectedChannel: $selectedChannel
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Select a Server",
+                        systemImage: "server.rack",
+                        description: Text("Choose a server to see its channels")
+                    )
+                }
+            }
+        }
+        .sheet(isPresented: $showingServerSheet) {
+            List(Server.sampleServers) { server in
+                Button {
+                    selectedServer = server
+                    selectedChannel = nil
+                    showingServerSheet = false
+                } label: {
+                    HStack {
+                        Label {
+                            Text(server.name)
+                                .font(.body)
+                        } icon: {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundStyle(server.id == selectedServer?.id ? .blue : .gray)
+                        }
+
+                        Spacer()
+
+                        if server.hasNotification {
+                            Text("\(server.unreadCount)")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.red)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .foregroundColor(.primary)
             }
         }
     }
@@ -169,48 +207,42 @@ struct DiscordView: View {
 struct ServerHeader: View {
     @Binding var selectedServer: Server?
     @Binding var selectedChannel: Channel?
+    @Binding var showingServerSheet: Bool
 
     var body: some View {
-        Menu {
-            ForEach(Server.sampleServers) { server in
-                Button {
-                    selectedServer = server
-                    selectedChannel = nil
-                } label: {
-                    HStack {
-                        Image(systemName: "bubble.left.fill")
-                            .foregroundColor(.blue)
-                            .font(.title3)
-                        Text(server.name)
-                            .font(.body)
-                        Spacer()
-                        if server.hasNotification {
-                            Text("\(server.unreadCount)")
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red)
-                                .foregroundColor(.white)
-                                .clipShape(Capsule())
-                        }
-                    }
-                }
-            }
+        Button {
+            showingServerSheet = true
         } label: {
             HStack {
                 if let server = selectedServer {
-                    Image(systemName: "bubble.left.fill")
-                        .foregroundColor(.blue)
-                        .font(.title3)
-                    Text(server.name)
-                        .font(.headline)
+                    Label {
+                        Text(server.name)
+                            .font(.headline)
+
+                        Spacer()
+
+                        if server.hasNotification {
+                            Text("\(server.unreadCount)")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.red)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    } icon: {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .foregroundStyle(.blue)
+                    }
                 }
-                Spacer()
+
                 Image(systemName: "chevron.down")
                     .foregroundColor(.secondary)
-                    .font(.subheadline)
+                    .font(.caption)
             }
-            .padding(.vertical, 4)
+            .padding(8)
+            .background(.bar)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -231,19 +263,23 @@ struct ChannelListView: View {
     var body: some View {
         List(categories, selection: $selectedChannel) { category in
             Section {
-                ForEach(category.channels) { channel in
-                    ChannelRow(channel: channel)
-                        .tag(channel)
+                if category.isExpanded {
+                    ForEach(category.channels) { channel in
+                        ChannelRow(channel: channel)
+                            .tag(channel)
+                    }
                 }
             } header: {
                 CategoryHeader(category: category) {
                     if let index = categories.firstIndex(where: { $0.id == category.id }) {
-                        categories[index].isExpanded.toggle()
+                        withAnimation {
+                            categories[index].isExpanded.toggle()
+                        }
                     }
                 }
             }
         }
-        .navigationTitle(server.name)
+        .listStyle(.inset)
     }
 }
 
@@ -254,11 +290,15 @@ struct CategoryHeader: View {
     var body: some View {
         Button(action: action) {
             HStack {
+                Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
                 Text(category.name)
                     .font(.caption)
                     .bold()
+                    .foregroundColor(.secondary)
             }
-            .foregroundColor(.primary)
         }
     }
 }
@@ -268,22 +308,26 @@ struct ChannelRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: channel.type.icon)
-                .foregroundColor(.secondary)
+            Label {
+                Text(channel.name)
+                    .font(.body)
+            } icon: {
+                Image(systemName: channel.type.icon)
+                    .foregroundStyle(channel.type.color)
+            }
 
-            Text(channel.name)
-                .font(.body)
+            Spacer()
 
             if channel.unreadCount > 0 {
-                Spacer()
                 Text("\(channel.unreadCount)")
                     .font(.caption2)
                     .padding(4)
-                    .background(Color.red)
+                    .background(.red)
                     .foregroundColor(.white)
                     .clipShape(Circle())
             }
         }
+        .padding(.vertical, 2)
     }
 }
 
