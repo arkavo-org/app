@@ -30,38 +30,97 @@ enum Tab {
 
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
+    @State private var isCollapsed = false
+    @State private var showMenuButton = true
+
+    let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TikTokFeedView()
-                .tabItem {
-                    Label(Tab.home.title, systemImage: Tab.home.icon)
-                }
-                .tag(Tab.home)
+        ZStack(alignment: .bottom) {
+            switch selectedTab {
+            case .home:
+                TikTokFeedView()
+            case .communities:
+                DiscordView()
+            case .social:
+                BlueskyView()
+            case .creators:
+                PatreonView()
+            case .profile:
+                ProfileView()
+            }
 
-            DiscordView()
-                .tabItem {
-                    Label(Tab.communities.title, systemImage: Tab.communities.icon)
+            // Container for both collapsed and expanded states
+            ZStack {
+                if !isCollapsed {
+                    // Expanded TabView
+                    HStack(spacing: 30) {
+                        ForEach([Tab.home, .communities, .social, .creators, .profile], id: \.self) { tab in
+                            Button {
+                                handleTabSelection(tab)
+                            } label: {
+                                Image(systemName: tab.icon)
+                                    .font(.title3)
+                                    .foregroundColor(selectedTab == tab ? .primary : .secondary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .transition(AnyTransition.asymmetric(
+                        insertion: .scale(scale: 0.1, anchor: .center)
+                            .combined(with: .opacity),
+                        removal: .scale(scale: 0.1, anchor: .center)
+                            .combined(with: .opacity)
+                    ))
                 }
-                .tag(Tab.communities)
 
-            BlueskyView()
-                .tabItem {
-                    Label(Tab.social.title, systemImage: Tab.social.icon)
+                // Menu button (centered)
+                if showMenuButton, isCollapsed {
+                    Button {
+                        expandMenu()
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .transition(.opacity)
                 }
-                .tag(Tab.social)
+            }
+            .padding()
+        }
+        .onReceive(collapseTimer) { _ in
+            if !isCollapsed {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.spring()) {
+                        isCollapsed = true
+                        showMenuButton = true
+                    }
+                }
+            }
+        }
+    }
 
-            PatreonView()
-                .tabItem {
-                    Label(Tab.creators.title, systemImage: Tab.creators.icon)
-                }
-                .tag(Tab.creators)
+    private func expandMenu() {
+        withAnimation(.easeOut(duration: 0.1)) {
+            showMenuButton = false
+        }
 
-            ProfileView()
-                .tabItem {
-                    Label(Tab.profile.title, systemImage: Tab.profile.icon)
-                }
-                .tag(Tab.profile)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isCollapsed = false
+        }
+    }
+
+    private func handleTabSelection(_ tab: Tab) {
+        selectedTab = tab
+
+        withAnimation(.spring()) {
+            isCollapsed = false
         }
     }
 }
