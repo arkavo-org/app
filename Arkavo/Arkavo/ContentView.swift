@@ -32,36 +32,55 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var isCollapsed = false
     @State private var showMenuButton = true
-    @State private var showRecordingView = false
+    @State private var showCreateView = false
     @StateObject private var feedViewModel = TikTokFeedViewModel()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            switch selectedTab {
-            case .home:
-                if showRecordingView {
-                    TikTokRecordingView { result in
-                        if let uploadResult = result {
-                            feedViewModel.addNewVideo(from: uploadResult)
+            ZStack(alignment: .topLeading) {
+                // Main Content
+                switch selectedTab {
+                case .home:
+                    if showCreateView {
+                        TikTokRecordingView { result in
+                            if let uploadResult = result {
+                                feedViewModel.addNewVideo(from: uploadResult)
+                            }
+                            showCreateView = false
                         }
-                        showRecordingView = false
+                    } else {
+                        TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showCreateView)
                     }
-                } else {
-                    TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showRecordingView)
+                case .communities:
+                    DiscordView()
+                case .social:
+                    BlueskyView()
+                case .creators:
+                    PatreonView()
+                case .profile:
+                    ProfileView()
                 }
-            case .communities:
-                DiscordView()
-            case .social:
-                BlueskyView()
-            case .creators:
-                PatreonView()
-            case .profile:
-                ProfileView()
+
+                // Create Button
+                if !showCreateView {
+                    Button {
+                        showCreateView = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .padding(.top, 8)
+                    .padding(.leading, 8)
+                }
             }
 
-            // Container for both collapsed and expanded states
+            // Navigation Container
             ZStack {
                 if !isCollapsed {
                     // Expanded TabView
@@ -129,8 +148,7 @@ struct ContentView: View {
 
     private func handleTabSelection(_ tab: Tab) {
         selectedTab = tab
-        // navigate from recording back to feed
-        showRecordingView = false
+        showCreateView = false
         withAnimation(.spring()) {
             isCollapsed = false
         }
