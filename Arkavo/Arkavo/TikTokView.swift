@@ -68,11 +68,10 @@ struct TikTokFeedView: View {
                 // Record button
                 if !showRecordingView {
                     VStack {
-                        Spacer()
                         RecordButton(isRecording: false) {
                             showRecordingView = true
                         }
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 80)
                     }
                 }
             }

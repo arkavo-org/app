@@ -67,6 +67,26 @@ struct TikTokRecordingView: View {
     }
 }
 
+struct PreviewViewWrapper: UIViewRepresentable {
+    @ObservedObject var viewModel: TikTokRecordingViewModel
+
+    func makeUIView(context: Context) -> UIView {
+        let previewView = UIView()
+        previewView.backgroundColor = .black
+        
+        // Call the viewModel setup function
+        Task {
+            await viewModel.setup(previewView: previewView)
+        }
+        
+        return previewView
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // No updates needed
+    }
+}
+
 // MARK: - Recording Interface
 struct RecordingInterface: View {
     @ObservedObject var viewModel: TikTokRecordingViewModel
@@ -75,7 +95,7 @@ struct RecordingInterface: View {
     var body: some View {
         ZStack {
             // Preview view
-            PreviewView(previewLayer: viewModel.previewLayer)
+            PreviewViewWrapper(viewModel: viewModel)
                 .ignoresSafeArea()
             
             // Controls overlay
@@ -142,23 +162,15 @@ struct RecordingInterface: View {
                             }
                             .buttonStyle(.borderedProminent)
                         case .error:
-                            Button("Retry") {
-                                Task {
-                                    await viewModel.setup()
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
+                            Text("Error \(viewModel.recordingState)")
+                                .foregroundColor(.red)
                         }
                         
                         Spacer()
                     }
                 }
-                .padding(.bottom, 50)
+                .padding(.bottom, 80)
             }
-        }
-        .task {
-            await viewModel.setup()
         }
     }
 }
@@ -232,11 +244,13 @@ class TikTokRecordingViewModel: ObservableObject {
     private let uploadManager = VideoUploadManager()
     private var progressTimer: Timer?
     
-    func setup() async {
+    func setup(previewView: UIView) async {
         do {
             recordingManager = try await VideoRecordingManager()
             recordingState = .setupComplete
+            self.previewLayer = recordingManager?.startPreview(in: previewView)
         } catch {
+            print("❌ Recording setup failed with error: \(error.localizedDescription)")
             recordingState = .error(error.localizedDescription)
         }
     }
@@ -252,6 +266,7 @@ class TikTokRecordingViewModel: ObservableObject {
             print("videoURL: \(videoURL)")
             // Recording continues until stopRecording is called
         } catch {
+            print("❌ Recording start failed with error: \(error.localizedDescription)")
             recordingState = .error(error.localizedDescription)
         }
     }
@@ -287,6 +302,7 @@ class TikTokRecordingViewModel: ObservableObject {
             
             recordingState = .complete(result)
         } catch {
+            print("❌ Recording stop failed with error: \(error.localizedDescription)")
             recordingState = .error(error.localizedDescription)
         }
     }

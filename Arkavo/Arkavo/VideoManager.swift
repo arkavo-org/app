@@ -11,6 +11,7 @@ enum VideoError: Error {
     case processingFailed(String)
     case uploadFailed(String)
     case exportFailed(String)
+    case setupFailed(String)
 }
 
 @MainActor
@@ -63,13 +64,17 @@ class VideoRecordingManager {
         }
     }
     
-    func startPreview(in view: UIView) {
+    func startPreview(in view: UIView) -> CALayer {
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
         previewLayer.videoGravity = .resizeAspectFill
         previewLayer.frame = view.bounds
-        view.layer.addSublayer(previewLayer)
+        view.layer.insertSublayer(previewLayer, at: 0)
         self.previewLayer = previewLayer
-        captureSession.startRunning()
+        Task.detached { @MainActor in
+            self.captureSession.startRunning()
+            print("✅ Camera preview started")
+        }
+        return previewLayer
     }
     
     func startRecording() async throws -> URL {
@@ -172,7 +177,7 @@ actor HLSProcessingManager {
             
             // Then create HLS segments
             let hlsOutputURL = outputDirectory.appendingPathComponent("index.m3u8")
-            try await generateHLSSegments(from: intermediateURL, to: hlsOutputURL)
+            try await generateMP4Segments(from: intermediateURL, to: hlsOutputURL)
             
             // Clean up intermediate file
             try? FileManager.default.removeItem(at: intermediateURL)
@@ -183,7 +188,7 @@ actor HLSProcessingManager {
             }
             
             let duration = try await asset.load(.duration).seconds
-            
+            print("✅ Video processing completed successfully")
             return ProcessingResult(
                 directory: outputDirectory,
                 thumbnail: thumbnail,
@@ -209,18 +214,25 @@ actor HLSProcessingManager {
         try await exportSession.export(to: outputURL, as: .mp4)
     }
     
-    private func generateHLSSegments(from sourceURL: URL, to outputURL: URL) async throws {
-        print("🎯 Starting HLS segment generation...")
+    private func generateMP4Segments(from sourceURL: URL, to outputURL: URL) async throws {
+        print("🎯 Starting MP4 segment generation...")
         guard let exportSession = AVAssetExportSession(asset: AVURLAsset(url: sourceURL), presetName: AVAssetExportPresetHighestQuality) else {
-            print("❌ Failed to create HLS export session")
-            throw VideoError.exportFailed("Failed to create HLS export session")
+            print("❌ Failed to create MP4 export session")
+            throw VideoError.exportFailed("Failed to create MP4 export session")
         }
-        
+        // BEGIN debug
+        let supportedFileTypes = AVAssetExportSession.allExportPresets()
+        print("📊 Supported presets: \(supportedFileTypes)")
+        guard let exportSession = AVAssetExportSession(asset: AVURLAsset(url: sourceURL), presetName: AVAssetExportPresetHighestQuality) else {
+            throw VideoError.exportFailed("Failed to create export session.")
+        }
+        print("📊 Supported file types: \(exportSession.supportedFileTypes)")
+        // END debug
         exportSession.outputURL = outputURL
-        exportSession.outputFileType = AVFileType(rawValue: "com.apple.streamingmedia.hlsPlaylist")
+        exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
-        print("📊 HLS Export status: \(exportSession.supportedFileTypes)")
-        try await exportSession.export(to: outputURL, as: AVFileType(rawValue: "com.apple.streamingmedia.hlsPlaylist"))
+        print("📊 MP4 Export status: \(exportSession.description)")
+        try await exportSession.export(to: outputURL, as: .mp4)
     }
     
     private func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
