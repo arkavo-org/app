@@ -32,6 +32,8 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var isCollapsed = false
     @State private var showMenuButton = true
+    @State private var showRecordingView = false
+    @StateObject private var feedViewModel = TikTokFeedViewModel()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
@@ -39,7 +41,16 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             switch selectedTab {
             case .home:
-                TikTokFeedView()
+                if showRecordingView {
+                    TikTokRecordingView { result in
+                        if let uploadResult = result {
+                            feedViewModel.addNewVideo(from: uploadResult)
+                        }
+                        showRecordingView = false
+                    }
+                } else {
+                    TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showRecordingView)
+                }
             case .communities:
                 DiscordView()
             case .social:
@@ -111,14 +122,15 @@ struct ContentView: View {
             showMenuButton = false
         }
 
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
             isCollapsed = false
         }
     }
 
     private func handleTabSelection(_ tab: Tab) {
         selectedTab = tab
-
+        // navigate from recording back to feed
+        showRecordingView = false
         withAnimation(.spring()) {
             isCollapsed = false
         }
