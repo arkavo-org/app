@@ -503,6 +503,9 @@
     "Process File..." : {
 
     },
+    "Processing" : {
+
+    },
     "Profile" : {
       "localizations" : {
         "es-US" : {
@@ -583,6 +586,9 @@
 
     },
     "Resume Scanning" : {
+
+    },
+    "Retry" : {
 
     },
     "Save" : {
@@ -804,6 +810,9 @@
     "Unable to load image" : {
 
     },
+    "Uploading" : {
+
+    },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
 
     },
@@ -819,9 +828,6 @@
           }
         }
       }
-    },
-    "Video %lld" : {
-
     },
     "Video message" : {
 

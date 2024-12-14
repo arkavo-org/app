@@ -56,6 +56,8 @@
 		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
 		DAAFCBF82D091A51003FC56F /* BlueskyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */; };
 		DAAFCBFA2D091F18003FC56F /* TikTokView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* TikTokView.swift */; };
+		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
+		DABD7D4A2D0D337000239F22 /* TikTokRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* TikTokRecordView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -135,6 +137,8 @@
 		DAAFCBCF2D0907BD003FC56F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueskyView.swift; sourceTree = "<group>"; };
 		DAAFCBF92D091F17003FC56F /* TikTokView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokView.swift; sourceTree = "<group>"; };
+		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
+		DABD7D492D0D336700239F22 /* TikTokRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokRecordView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -208,6 +212,8 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DABD7D492D0D336700239F22 /* TikTokRecordView.swift */,
+				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
 				DAAFCBF92D091F17003FC56F /* TikTokView.swift */,
 				DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */,
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
@@ -501,10 +507,12 @@
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
+				DABD7D4A2D0D337000239F22 /* TikTokRecordView.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
+				DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */,
 				DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */,
 				DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */,
 				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,

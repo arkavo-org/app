@@ -111,7 +111,7 @@ struct ContentView: View {
             showMenuButton = false
         }
 
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
             isCollapsed = false
         }
     }

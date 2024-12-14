@@ -1,152 +1,112 @@
-import AVKit
 import SwiftUI
+import AVFoundation
 
+// MARK: - Models
 struct Video: Identifiable {
-    let id: UUID = .init()
+    let id: String
     let url: URL
     let creatorName: String
     let description: String
     var likes: Int
     var comments: Int
     var shares: Int
+    
+    static func from(uploadResult: UploadResult, creatorName: String = "me") -> Video {
+        Video(
+            id: uploadResult.id,
+            url: URL(string: uploadResult.playbackURL)!,
+            creatorName: creatorName,
+            description: "Just recorded!",
+            likes: 0,
+            comments: 0,
+            shares: 0
+        )
+    }
 }
 
+// MARK: - Main View
 struct TikTokFeedView: View {
-    @State private var currentIndex = 0
-    @State private var showComments = false
-
-    // Sample videos - replace with your actual data
-    @State private var videos: [Video] = [
-        Video(
-            url: URL(string: "https://example.com/video1.mp4")!,
-            creatorName: "creator1",
-            description: "First video",
-            likes: 100,
-            comments: 50,
-            shares: 25
-        ),
-        Video(
-            url: URL(string: "https://example.com/video2.mp4")!,
-            creatorName: "creator2",
-            description: "Second video",
-            likes: 200,
-            comments: 75,
-            shares: 30
-        ),
-        Video(
-            url: URL(string: "https://example.com/video3.mp4")!,
-            creatorName: "creator3",
-            description: "Third video",
-            likes: 150,
-            comments: 60,
-            shares: 40
-        ),
-        Video(
-            url: URL(string: "https://example.com/video3.mp4")!,
-            creatorName: "creator4",
-            description: "video",
-            likes: 2,
-            comments: 3,
-            shares: 4
-        ),
-    ]
-
+    @StateObject private var viewModel = TikTokFeedViewModel()
+    @State private var showRecordingView = false
+    
     var body: some View {
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(videos.indices, id: \.self) { index in
-                            VideoPlayerView(
-                                video: videos[index],
-                                showComments: $showComments,
-                                index: index
-                            )
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .id(index)
-                            .simultaneousGesture(
-                                DragGesture()
-                                    .onEnded { value in
-                                        let verticalMovement = value.translation.height
-                                        let threshold: CGFloat = 50 // Adjust for sensitivity
-
-                                        if abs(verticalMovement) > threshold {
-                                            withAnimation(.easeOut(duration: 0.3)) {
-                                                if verticalMovement > 0, currentIndex > 0 {
-                                                    currentIndex -= 1
-                                                } else if verticalMovement < 0, currentIndex < videos.count - 1 {
-                                                    currentIndex += 1
-                                                }
-                                                proxy.scrollTo(currentIndex, anchor: .center)
-                                            }
-                                        }
-                                    }
-                            )
+            ZStack {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.videos) { video in
+                                VideoPlayerView(
+                                    video: video,
+                                    viewModel: viewModel,
+                                    size: geometry.size
+                                )
+                                .id(video.id)
+                            }
+                        }
+                    }
+                    .scrollDisabled(true)
+                    .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
+                        withAnimation {
+                            proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
                         }
                     }
                 }
-                .scrollDisabled(true) // Disable native scroll for custom handling
+                
+                // Recording overlay
+                if showRecordingView {
+                    RecordingInterface(
+                        viewModel: TikTokRecordingViewModel(),
+                        onComplete: {
+                            
+                        }
+                    )
+                    .transition(.opacity)
+                }
+
+                
+                // Record button
+                if !showRecordingView {
+                    VStack {
+                        Spacer()
+                        RecordButton(isRecording: false) {
+                            showRecordingView = true
+                        }
+                        .padding(.bottom, 30)
+                    }
+                }
             }
-            .ignoresSafeArea()
         }
-        .sheet(isPresented: $showComments) {
-            CommentsView(showComments: $showComments)
-        }
+        .ignoresSafeArea()
     }
 }
 
+// MARK: - Video Player View
 struct VideoPlayerView: View {
     let video: Video
-    @Binding var showComments: Bool
-    let index: Int
-
-    @State private var scale = 1.0
-    @State private var rotation = 0.0
-    @State private var bounce = false
+    @ObservedObject var viewModel: TikTokFeedViewModel
+    let size: CGSize
+    
     @State private var isLiked = false
+    @State private var showComments = false
     @State private var likesCount: Int
-
-    init(video: Video, showComments: Binding<Bool>, index: Int) {
+    
+    init(video: Video, viewModel: TikTokFeedViewModel, size: CGSize) {
         self.video = video
-        _showComments = showComments
-        self.index = index
+        self.viewModel = viewModel
+        self.size = size
         _likesCount = State(initialValue: video.likes)
     }
-
+    
     var body: some View {
         ZStack {
-            Color.black // Placeholder for video
-                .overlay(
-                    Text("Video \(index + 1)")
-                        .foregroundColor(.white)
-                        .font(.largeTitle)
-                        .scaleEffect(scale)
-                        .rotationEffect(.degrees(rotation))
-                        .offset(y: bounce ? -20 : 0)
-                        .onAppear {
-                            withAnimation(
-                                .easeInOut(duration: 2)
-                                    .repeatForever(autoreverses: true)
-                            ) {
-                                scale = 1.3
-                            }
-
-                            withAnimation(
-                                .linear(duration: 4)
-                                    .repeatForever(autoreverses: false)
-                            ) {
-                                rotation = 360
-                            }
-
-                            withAnimation(
-                                .spring(response: 0.5, dampingFraction: 0.5)
-                                    .repeatForever(autoreverses: true)
-                            ) {
-                                bounce = true
-                            }
-                        }
-                )
-
+            // Video player
+            PlayerContainerView(
+                url: video.url,
+                playerManager: viewModel.playerManager,
+                size: size
+            )
+            
             // Overlay controls
             VStack {
                 Spacer()
@@ -156,58 +116,110 @@ struct VideoPlayerView: View {
                         Text("@\(video.creatorName)")
                             .font(.headline)
                             .foregroundColor(.white)
-
+                        
                         Text(video.description)
                             .font(.subheadline)
                             .foregroundColor(.white)
                     }
                     .padding()
-
+                    
                     Spacer()
-
+                    
                     // Action buttons
                     VStack(spacing: 20) {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                isLiked.toggle()
-                                likesCount += isLiked ? 1 : -1
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: isLiked ? "heart.fill" : "heart")
-                                    .font(.title)
-                                    .foregroundColor(isLiked ? .red : .white)
-                                Text("\(likesCount)")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
-                            }
+                        LikeButton(isLiked: $isLiked, count: $likesCount)
+                        
+                        CommentButton(count: video.comments) {
+                            showComments = true
                         }
-
-                        ActionButton(
-                            icon: "message",
-                            count: video.comments,
-                            action: { showComments = true }
-                        )
-
-                        ActionButton(
-                            icon: "square.and.arrow.up",
-                            count: video.shares,
-                            action: {}
-                        )
                     }
                     .padding(.trailing)
                 }
-                .padding(.bottom, 30)
             }
         }
-        // Enable double-tap to like
-        .onTapGesture(count: 2) {
-            if !isLiked {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    isLiked = true
-                    likesCount += 1
+        .frame(width: size.width, height: size.height)
+        .onAppear {
+            viewModel.preloadVideo(url: video.url)
+        }
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    handleSwipe(translation: value.translation)
                 }
+        )
+        .sheet(isPresented: $showComments) {
+            CommentsView(showComments: $showComments)
+        }
+    }
+    
+    private func handleSwipe(translation: CGSize) {
+        let threshold: CGFloat = 50
+        if abs(translation.height) > threshold {
+            if translation.height > 0 && viewModel.currentVideoIndex > 0 {
+                viewModel.currentVideoIndex -= 1
+            } else if translation.height < 0 && viewModel.currentVideoIndex < viewModel.videos.count - 1 {
+                viewModel.currentVideoIndex += 1
             }
+        }
+    }
+}
+
+// MARK: - Player Container View
+struct PlayerContainerView: UIViewRepresentable {
+    let url: URL
+    let playerManager: VideoPlayerManager
+    let size: CGSize
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: CGRect(origin: .zero, size: size))
+        view.backgroundColor = .black
+        playerManager.setupPlayer(in: view)
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        playerManager.playVideo(url: url)
+    }
+}
+
+// MARK: - Action Buttons
+struct LikeButton: View {
+    @Binding var isLiked: Bool
+    @Binding var count: Int
+    
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                isLiked.toggle()
+                count += isLiked ? 1 : -1
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: isLiked ? "heart.fill" : "heart")
+                    .font(.title)
+                    .foregroundColor(isLiked ? .red : .white)
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
+struct CommentButton: View {
+    let count: Int
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: "message")
+                    .font(.title)
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundColor(.white)
+            }
+            .foregroundColor(.white)
         }
     }
 }
@@ -255,6 +267,43 @@ struct CommentsView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - View Model
+@MainActor
+class TikTokFeedViewModel: ObservableObject {
+    @Published var videos: [Video]
+    @Published var currentVideoIndex = 0
+    
+    let playerManager = VideoPlayerManager()
+    
+    init() {
+        // Initialize with sample videos
+        self.videos = [
+            Video(
+                id: "1",
+                url: URL(string: "https://example.com/video1.mp4")!,
+                creatorName: "creator1",
+                description: "First video",
+                likes: 100,
+                comments: 50,
+                shares: 25
+            ),
+            // Add more sample videos...
+        ]
+    }
+    
+    func addNewVideo(from uploadResult: UploadResult) {
+        let newVideo = Video.from(uploadResult: uploadResult)
+        videos.insert(newVideo, at: 0)
+        currentVideoIndex = 0
+    }
+    
+    func preloadVideo(url: URL) {
+        Task {
+            try? await playerManager.preloadVideo(url: url)
         }
     }
 }
