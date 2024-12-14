@@ -181,7 +181,7 @@ actor HLSProcessingManager {
             try await exportToMP4(asset: asset, outputURL: intermediateURL)
 
             // Then create HLS segments
-            let hlsOutputURL = outputDirectory.appendingPathComponent("index.m3u8")
+            let hlsOutputURL = outputDirectory.appendingPathComponent("index.mp4")
             try await generateMP4Segments(from: intermediateURL, to: hlsOutputURL)
 
             // Clean up intermediate file
@@ -277,6 +277,7 @@ class VideoPlayerManager {
     }
 
     func playVideo(url: URL) {
+        print("📊 Playing video: \(url)")
         if let preloadedItem = preloadedItems[url.absoluteString] {
             currentItem = preloadedItem
             player.replaceCurrentItem(with: preloadedItem)
@@ -286,7 +287,7 @@ class VideoPlayerManager {
             currentItem = item
             player.replaceCurrentItem(with: item)
         }
-
+        player.seek(to: .zero)
         player.play()
     }
 
@@ -305,14 +306,22 @@ class VideoPlayerManager {
 
 actor VideoUploadManager {
     func uploadVideo(directory: URL, metadata _: VideoMetadata) async throws -> UploadResult {
-        try await Task.sleep(for: .seconds(2))
+        // Since we're using local files, we'll simulate a brief processing delay
+        try await Task.sleep(for: .seconds(0.5))
 
-        let baseURL = "https://cdn.example.com"
-        let videoID = directory.lastPathComponent
+        // Find the MP4 file in the directory
+        let mp4File = try FileManager.default
+            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .first { $0.pathExtension == "mp4" }
 
+        guard let videoURL = mp4File else {
+            throw VideoError.uploadFailed("No MP4 file found in directory")
+        }
+
+        // Return the local file URL as the playback URL
         return UploadResult(
-            id: videoID,
-            playbackURL: "\(baseURL)/\(videoID)/index.m3u8"
+            id: directory.lastPathComponent,
+            playbackURL: videoURL.absoluteString
         )
     }
 }

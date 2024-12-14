@@ -107,15 +107,13 @@ class TikTokFeedViewModel: ObservableObject {
         let newVideo = Video.from(uploadResult: uploadResult)
         videos.insert(newVideo, at: 0)
         currentVideoIndex = 0
-        // Preload the new video
-        preloadVideo(url: newVideo.url)
-    }
-
-    func preloadVideo(url: URL) {
+        print("📊 New video added: \(newVideo)")
         Task {
-            try? await playerManager.preloadVideo(url: url)
+            try? await playerManager.preloadVideo(url: newVideo.url)
         }
     }
+
+    func preloadVideo(url _: URL) {}
 }
 
 // MARK: - Video Player View
@@ -144,7 +142,8 @@ struct VideoPlayerView: View {
             PlayerContainerView(
                 url: video.url,
                 playerManager: viewModel.playerManager,
-                size: size
+                size: size,
+                isCurrentVideo: viewModel.videos[viewModel.currentVideoIndex].id == video.id
             )
 
             // Overlay controls
@@ -223,8 +222,10 @@ struct PlayerContainerView: UIViewRepresentable {
     let url: URL
     let playerManager: VideoPlayerManager
     let size: CGSize
+    let isCurrentVideo: Bool
 
     func makeUIView(context _: Context) -> UIView {
+        print("📊 Making video view: \(url)")
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = .black
         playerManager.setupPlayer(in: view)
@@ -232,7 +233,10 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 
     func updateUIView(_: UIView, context _: Context) {
-        playerManager.playVideo(url: url)
+        print("📊 Updating video view: \(url)")
+        if isCurrentVideo {
+            playerManager.playVideo(url: url)
+        }
     }
 }
 
