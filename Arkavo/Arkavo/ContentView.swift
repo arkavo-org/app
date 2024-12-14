@@ -32,6 +32,8 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var isCollapsed = false
     @State private var showMenuButton = true
+    @State private var showRecordingView = false
+    @StateObject private var feedViewModel = TikTokFeedViewModel()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
@@ -39,7 +41,22 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             switch selectedTab {
             case .home:
-                TikTokFeedView()
+                if showRecordingView {
+                    TikTokRecordingView { result in
+                        if let uploadResult = result {
+                            feedViewModel.addNewVideo(from: uploadResult)
+                        }
+                        showRecordingView = false
+                    }
+                } else {
+                    TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showRecordingView)
+                        .overlay(alignment: .bottom) {
+                            RecordButton(isRecording: false) {
+                                showRecordingView = true
+                            }
+                            .padding(.bottom, 80)
+                        }
+                }
             case .communities:
                 DiscordView()
             case .social:
