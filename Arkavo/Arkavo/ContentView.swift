@@ -50,12 +50,6 @@ struct ContentView: View {
                     }
                 } else {
                     TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showRecordingView)
-                        .overlay(alignment: .bottom) {
-                            RecordButton(isRecording: false) {
-                                showRecordingView = true
-                            }
-                            .padding(.bottom, 80)
-                        }
                 }
             case .communities:
                 DiscordView()
@@ -135,7 +129,8 @@ struct ContentView: View {
 
     private func handleTabSelection(_ tab: Tab) {
         selectedTab = tab
-
+        // navigate from recording back to feed
+        showRecordingView = false
         withAnimation(.spring()) {
             isCollapsed = false
         }

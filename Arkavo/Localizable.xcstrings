@@ -506,7 +506,7 @@
     "Process File..." : {
 
     },
-    "Processing" : {
+    "Processing..." : {
 
     },
     "Profile" : {
@@ -810,7 +810,7 @@
     "Unable to load image" : {
 
     },
-    "Uploading" : {
+    "Uploading..." : {
 
     },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
