@@ -27,6 +27,9 @@
         }
       }
     },
+    "%lld voice channels" : {
+
+    },
     "%lld%%" : {
 
     },
@@ -93,6 +96,9 @@
     "Age Verification" : {
 
     },
+    "Announcement" : {
+
+    },
     "Arkavo" : {
 
     },
@@ -136,10 +142,19 @@
         }
       }
     },
-    "Chat" : {
+    "Category" : {
 
     },
-    "Choose a server to see its channels" : {
+    "Channel Details" : {
+
+    },
+    "Channel Name" : {
+
+    },
+    "Channel Type" : {
+
+    },
+    "Chat" : {
 
     },
     "Classification" : {
@@ -160,6 +175,12 @@
     "Copy Link" : {
 
     },
+    "Create" : {
+
+    },
+    "Create Channel" : {
+
+    },
     "Create New Stream" : {
 
     },
@@ -172,6 +193,9 @@
           }
         }
       }
+    },
+    "Create Server" : {
+
     },
     "Create Stream" : {
       "localizations" : {
@@ -613,7 +637,10 @@
     "Search Bluesky" : {
 
     },
-    "Select a Server" : {
+    "Server Details" : {
+
+    },
+    "Server Name" : {
 
     },
     "Service Endpoint" : {
@@ -766,6 +793,9 @@
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
+    "Text Channel" : {
+
+    },
     "Thank You for Making a Difference!" : {
 
     },
@@ -856,6 +886,9 @@
       }
     },
     "Voice" : {
+
+    },
+    "Voice Channel" : {
 
     },
     "Welcome to Arkavo!" : {

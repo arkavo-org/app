@@ -34,6 +34,7 @@ struct ContentView: View {
     @State private var showMenuButton = true
     @State private var showCreateView = false
     @StateObject private var feedViewModel = TikTokFeedViewModel()
+    @StateObject private var groupViewModel = DiscordViewModel()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
@@ -51,10 +52,14 @@ struct ContentView: View {
                             showCreateView = false
                         }
                     } else {
-                        TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showCreateView)
+                        TikTokFeedView(viewModel: feedViewModel, showCreateView: $showCreateView)
                     }
                 case .communities:
-                    DiscordView()
+                    if showCreateView {
+                        CreateServerView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                    } else {
+                        DiscordView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                    }
                 case .social:
                     BlueskyView()
                 case .creators:
@@ -75,7 +80,7 @@ struct ContentView: View {
                             .background(.ultraThinMaterial)
                             .clipShape(Circle())
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 0)
                     .padding(.leading, 8)
                 }
             }

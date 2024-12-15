@@ -29,7 +29,7 @@ struct Video: Identifiable {
 
 struct TikTokFeedView: View {
     @ObservedObject var viewModel: TikTokFeedViewModel
-    @Binding var showRecordingView: Bool
+    @Binding var showCreateView: Bool
 
     var body: some View {
         GeometryReader { geometry in
@@ -42,7 +42,7 @@ struct TikTokFeedView: View {
                                     video: video,
                                     viewModel: viewModel,
                                     size: geometry.size,
-                                    showRecordingView: $showRecordingView
+                                    showRecordingView: $showCreateView
                                 )
                                 .id(video.id)
                             }
