@@ -1,22 +1,39 @@
-import AVFoundation
+import Foundation
 import SwiftUI
 
 // MARK: - Models
 
+struct Contributor: Identifiable {
+    let id: String
+    let creator: Creator
+    let role: String
+
+    static let sampleContributors = [
+        Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
+        Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
+        Contributor(id: "3", creator: Creator.sampleCreators[2], role: "Featured"),
+        Contributor(id: "4", creator: Creator.sampleCreators[3], role: "Editor"),
+    ]
+}
+
 struct Video: Identifiable {
     let id: String
     let url: URL
-    let creatorName: String
+    let contributors: [Contributor]
     let description: String
     var likes: Int
     var comments: Int
     var shares: Int
 
-    static func from(uploadResult: UploadResult, creatorName: String = "me") -> Video {
+    var mainCreator: Creator {
+        contributors.first?.creator ?? Creator.sampleCreators[0]
+    }
+
+    static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
             id: uploadResult.id,
             url: URL(string: uploadResult.playbackURL)!,
-            creatorName: creatorName,
+            contributors: contributors,
             description: "Just recorded!",
             likes: 0,
             comments: 0,
@@ -61,62 +78,74 @@ struct TikTokFeedView: View {
     }
 }
 
-// MARK: - ViewModel
+struct ContributorsView: View {
+    let contributors: [Contributor]
+    @State private var showAllContributors = false
 
-@MainActor
-class TikTokFeedViewModel: ObservableObject {
-    @Published var videos: [Video]
-    @Published var currentVideoIndex = 0
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Main creator
+            if let mainContributor = contributors.first {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
+                        .foregroundColor(.blue)
 
-    let playerManager = VideoPlayerManager()
+                    VStack(alignment: .leading) {
+                        Text("@\(mainContributor.creator.name)")
+                            .font(.headline)
 
-    init() {
-        // Initialize with sample videos
-        videos = [
-            Video(
-                id: "1",
-                url: URL(string: "https://example.com/video1.mp4")!,
-                creatorName: "creator1",
-                description: "First video",
-                likes: 100,
-                comments: 50,
-                shares: 25
-            ),
-            Video(
-                id: "2",
-                url: URL(string: "https://example.com/video1.mp4")!,
-                creatorName: "2222",
-                description: "2222 video",
-                likes: 100,
-                comments: 50,
-                shares: 25
-            ),
-            Video(
-                id: "3",
-                url: URL(string: "https://example.com/video1.mp4")!,
-                creatorName: "3333",
-                description: "3333 video",
-                likes: 100,
-                comments: 50,
-                shares: 25
-            ),
-        ]
-    }
+                        Text(mainContributor.role)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
 
-    func addNewVideo(from uploadResult: UploadResult) {
-        let newVideo = Video.from(uploadResult: uploadResult)
-        videos.insert(newVideo, at: 0)
-        currentVideoIndex = 0
-        print("📊 New video added: \(newVideo)")
-        Task {
-            try? await playerManager.preloadVideo(url: newVideo.url)
+            // Other contributors (collapsed by default)
+            if contributors.count > 1 {
+                Button {
+                    withAnimation(.spring()) {
+                        showAllContributors.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text(showAllContributors ? "Hide contributors" : "Show all contributors")
+                            .font(.caption)
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .rotationEffect(.degrees(showAllContributors ? 90 : 0))
+                    }
+                    .foregroundColor(.gray)
+                }
+
+                if showAllContributors {
+                    ForEach(contributors.dropFirst()) { contributor in
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .frame(width: 24, height: 24)
+                                .clipShape(Circle())
+                                .foregroundColor(.blue.opacity(0.7))
+
+                            Text("@\(contributor.creator.name)")
+                                .font(.subheadline)
+
+                            Text("• \(contributor.role)")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.leading, 8)
+                    }
+                }
+            }
         }
+        .foregroundColor(.white)
     }
-
-    func preloadVideo(url _: URL) {}
 }
-
-// MARK: - Video Player View
 
 struct VideoPlayerView: View {
     let video: Video
@@ -127,6 +156,9 @@ struct VideoPlayerView: View {
     @State private var isLiked = false
     @State private var showComments = false
     @State private var likesCount: Int
+    @State private var dragOffset = CGSize.zero
+
+    private let swipeThreshold: CGFloat = 50
 
     init(video: Video, viewModel: TikTokFeedViewModel, size: CGSize, showRecordingView: Binding<Bool>) {
         self.video = video
@@ -137,68 +169,101 @@ struct VideoPlayerView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Video player
-            PlayerContainerView(
-                url: video.url,
-                playerManager: viewModel.playerManager,
-                size: size,
-                isCurrentVideo: viewModel.videos[viewModel.currentVideoIndex].id == video.id
-            )
+        GeometryReader { _ in
+            ZStack {
+                // Video player
+                PlayerContainerView(
+                    url: video.url,
+                    playerManager: viewModel.playerManager,
+                    size: size,
+                    isCurrentVideo: viewModel.videos[viewModel.currentVideoIndex].id == video.id
+                )
 
-            // Overlay controls
-            VStack {
-                Spacer()
-                HStack {
-                    // Video info
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("@\(video.creatorName)")
-                            .font(.headline)
-                            .foregroundColor(.white)
-
-                        Text(video.description)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+                // Content overlay
+                HStack(spacing: 0) {
+                    // Left side - Description as vertical text
+                    VStack {
+                        VerticalText(text: video.description)
+                            .padding(.leading, 12)
+                            .frame(maxHeight: .infinity)
                     }
-                    .padding()
 
                     Spacer()
 
-                    // Action buttons
-                    VStack(spacing: 20) {
-                        LikeButton(isLiked: $isLiked, count: $likesCount)
+                    // Right side - Action buttons
+                    VStack(alignment: .trailing, spacing: 20) {
+                        Spacer()
 
-                        CommentButton(count: video.comments) {
-                            showComments = true
+                        VStack(spacing: 20) {
+                            Button {
+                                withAnimation(.spring()) {
+                                    isLiked.toggle()
+                                    likesCount += isLiked ? 1 : -1
+                                }
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(isLiked ? .red : .white)
+                                    Text("\(likesCount)")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                }
+                            }
+
+                            Button {
+                                showComments = true
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "bubble.right")
+                                        .font(.system(size: 26))
+                                    Text("\(video.comments)")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.white)
+                            }
                         }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 100) // Adjust to match layout
                     }
-                    .padding(.trailing)
+                }
+
+                // Contributors section - Positioned at bottom
+                VStack {
+                    Spacer()
+                    HStack {
+                        ContributorsView(contributors: video.contributors)
+                            .padding(.horizontal)
+                            .padding(.bottom, 20) // Adjust based on your needs
+                        Spacer()
+                    }
                 }
             }
+            .gesture(
+                DragGesture()
+                    .onChanged { gesture in
+                        dragOffset = gesture.translation
+                    }
+                    .onEnded { gesture in
+                        let verticalMovement = gesture.translation.height
+                        if abs(verticalMovement) > swipeThreshold {
+                            if verticalMovement > 0, viewModel.currentVideoIndex > 0 {
+                                withAnimation {
+                                    viewModel.currentVideoIndex -= 1
+                                }
+                            } else if verticalMovement < 0, viewModel.currentVideoIndex < viewModel.videos.count - 1 {
+                                withAnimation {
+                                    viewModel.currentVideoIndex += 1
+                                }
+                            }
+                        }
+                        dragOffset = .zero
+                    }
+            )
         }
         .frame(width: size.width, height: size.height)
-        .onAppear {
-            viewModel.preloadVideo(url: video.url)
-        }
-        .gesture(
-            DragGesture()
-                .onEnded { value in
-                    handleSwipe(translation: value.translation)
-                }
-        )
         .sheet(isPresented: $showComments) {
             CommentsView(showComments: $showComments)
-        }
-    }
-
-    private func handleSwipe(translation: CGSize) {
-        let threshold: CGFloat = 50
-        if abs(translation.height) > threshold {
-            if translation.height > 0, viewModel.currentVideoIndex > 0 {
-                viewModel.currentVideoIndex -= 1
-            } else if translation.height < 0, viewModel.currentVideoIndex < viewModel.videos.count - 1 {
-                viewModel.currentVideoIndex += 1
-            }
         }
     }
 }
@@ -212,7 +277,7 @@ struct PlayerContainerView: UIViewRepresentable {
     let isCurrentVideo: Bool
 
     func makeUIView(context _: Context) -> UIView {
-        print("📊 Making video view: \(url)")
+//        print("📊 Making video view: \(url)")
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = .black
         playerManager.setupPlayer(in: view)
@@ -220,10 +285,25 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 
     func updateUIView(_: UIView, context _: Context) {
-        print("📊 Updating video view: \(url)")
+//        print("📊 Updating video view: \(url)")
         if isCurrentVideo {
             playerManager.playVideo(url: url)
         }
+    }
+}
+
+struct VerticalText: View {
+    let text: String
+    let fontSize: CGFloat = 16
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: fontSize))
+            .foregroundColor(.white)
+            .fontWeight(.medium)
+            .fixedSize()
+            .frame(width: fontSize, alignment: .leading)
+            .rotationEffect(.degrees(-90), anchor: .topLeading)
     }
 }
 
@@ -315,4 +395,224 @@ struct CommentsView: View {
             }
         }
     }
+}
+
+@MainActor
+class TikTokFeedViewModel: ObservableObject {
+    @Published var videos: [Video] = []
+    @Published var currentVideoIndex = 0
+    @Published var isLoading = false
+    @Published var error: Error?
+
+    let playerManager = VideoPlayerManager()
+
+    // Dependencies could be injected here
+    // let videoService: VideoServiceProtocol
+    // let analyticsService: AnalyticsServiceProtocol
+
+    init() {
+        loadInitialVideos()
+    }
+
+    private func loadInitialVideos() {
+        // In a real app, this would fetch from an API
+        videos = [
+            Video(
+                id: "1",
+                url: URL(string: "https://example.com/video1.mp4")!,
+                contributors: [
+                    Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
+                    Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
+                ],
+                description: "Collaborative masterpiece 🎨",
+                likes: 1500,
+                comments: 120,
+                shares: 45
+            ),
+            Video(
+                id: "2",
+                url: URL(string: "https://example.com/video2.mp4")!,
+                contributors: [
+                    Contributor(id: "3", creator: Creator.sampleCreators[1], role: "Artist"),
+                ],
+                description: "Solo music session 🎵",
+                likes: 800,
+                comments: 65,
+                shares: 30
+            ),
+            Video(
+                id: "3",
+                url: URL(string: "https://example.com/video3.mp4")!,
+                contributors: [
+                    Contributor(id: "4", creator: Creator.sampleCreators[2], role: "Chef"),
+                    Contributor(id: "5", creator: Creator.sampleCreators[3], role: "Guest Chef"),
+                ],
+                description: "Cooking collab! 👩‍🍳",
+                likes: 2200,
+                comments: 180,
+                shares: 95
+            ),
+            Video(
+                id: "4",
+                url: URL(string: "https://example.com/video4.mp4")!,
+                contributors: [
+                    Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
+                ],
+                description: "Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻",
+                likes: 950,
+                comments: 85,
+                shares: 40
+            ),
+        ]
+
+        // Preload the first video
+        if let firstVideoUrl = videos.first?.url {
+            preloadVideo(url: firstVideoUrl)
+        }
+    }
+
+    func addNewVideo(from uploadResult: UploadResult, contributors: [Contributor]) {
+        let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
+        videos.insert(newVideo, at: 0)
+        currentVideoIndex = 0
+
+        Task {
+            try? await playerManager.preloadVideo(url: newVideo.url)
+        }
+    }
+
+    func preloadVideo(url: URL) {
+        Task {
+            do {
+                try await playerManager.preloadVideo(url: url)
+            } catch {
+                self.error = error
+            }
+        }
+    }
+
+    func loadMoreVideosIfNeeded(currentIndex: Int) {
+        // Load more videos when user reaches near the end
+        if currentIndex >= videos.count - 2 {
+            loadMoreVideos()
+        }
+    }
+
+    private func loadMoreVideos() {
+        guard !isLoading else { return }
+
+        isLoading = true
+
+        // Simulate API call with delay
+        Task {
+            do {
+                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+
+                // In a real app, this would be an API call
+                let newVideos = [
+                    Video(
+                        id: UUID().uuidString,
+                        url: URL(string: "https://example.com/video4.mp4")!,
+                        contributors: [
+                            Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
+                            Contributor(id: "7", creator: Creator.sampleCreators[0], role: "UI Designer"),
+                        ],
+                        description: "Tech tutorial collab 💻",
+                        likes: 950,
+                        comments: 85,
+                        shares: 40
+                    ),
+                ]
+
+                await MainActor.run {
+                    videos.append(contentsOf: newVideos)
+                    isLoading = false
+                }
+
+                // Preload new videos
+                for video in newVideos {
+                    preloadVideo(url: video.url)
+                }
+
+            } catch {
+                await MainActor.run {
+                    self.error = error
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    // MARK: - Video Interactions
+
+    func handleLike(for _: String) {
+        // Handle like interaction
+        // In a real app, this would call an API
+    }
+
+    func handleComment(for _: String, comment _: String) {
+        // Handle comment interaction
+        // In a real app, this would call an API
+    }
+
+    func handleShare(for _: String) {
+        // Handle share interaction
+        // In a real app, this would call an API
+    }
+
+    func handleVideoView(for _: String) {
+        // Track video view
+        // In a real app, this would call analytics service
+    }
+}
+
+// MARK: - Preview Helper
+
+extension TikTokFeedViewModel {
+    static func preview() -> TikTokFeedViewModel {
+        let viewModel = TikTokFeedViewModel()
+        // Preview data is already loaded in init()
+        return viewModel
+    }
+}
+
+#Preview("TikTok Feed with ViewModel") {
+    TikTokFeedView(
+        viewModel: TikTokFeedViewModel.preview(),
+        showCreateView: .constant(false)
+    )
+}
+
+// MARK: - Previews
+
+#Preview("TikTok Feed") {
+    let viewModel = TikTokFeedViewModel()
+    viewModel.videos = [
+        Video(
+            id: "1",
+            url: URL(string: "https://example.com/video1.mp4")!,
+            contributors: [
+                Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
+                Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
+                Contributor(id: "3", creator: Creator.sampleCreators[2], role: "Featured"),
+            ],
+            description: "Amazing collaboration! 🎨 x 🎵",
+            likes: 1200,
+            comments: 85,
+            shares: 45
+        ),
+        Video(
+            id: "2",
+            url: URL(string: "https://example.com/video2.mp4")!,
+            contributors: [
+                Contributor(id: "4", creator: Creator.sampleCreators[1], role: "Artist"),
+            ],
+            description: "Solo beat preview 🎵",
+            likes: 890,
+            comments: 42,
+            shares: 31
+        ),
+    ]
+
+    return TikTokFeedView(viewModel: viewModel, showCreateView: .constant(false))
 }

@@ -47,7 +47,9 @@ struct ContentView: View {
                     if showCreateView {
                         TikTokRecordingView { result in
                             if let uploadResult = result {
-                                feedViewModel.addNewVideo(from: uploadResult)
+                                // FIXME:
+                                print("FIXME - Upload Result \(uploadResult)")
+//                                feedViewModel.addNewVideo(from: uploadResult, contributors: <#[Contributor]#>)
                             }
                             showCreateView = false
                         }
