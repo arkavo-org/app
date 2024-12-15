@@ -61,7 +61,7 @@ struct ContentView: View {
                         DiscordView(viewModel: groupViewModel, showCreateView: $showCreateView)
                     }
                 case .social:
-                    BlueskyView()
+                    BlueskyView(showCreateView: $showCreateView)
                 case .creators:
                     PatreonView()
                 case .profile:

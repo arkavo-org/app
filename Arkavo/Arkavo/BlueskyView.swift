@@ -185,7 +185,7 @@ struct BlueskyView: View {
     @State private var selectedUser: DIDUser?
     @State private var searchResults: [DIDUser] = []
     @State private var isSearching = false
-    @State private var showNewPost = false
+    @Binding var showCreateView: Bool
 
     enum Tab {
         case forYou, following
@@ -202,14 +202,10 @@ struct BlueskyView: View {
                 )
             } else {
                 HStack {
+                    Spacer()
+                    Spacer()
                     Button(action: { isSearching = true }) {
                         Image(systemName: "magnifyingglass")
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    Spacer()
-                    Button(action: { showNewPost = true }) {
-                        Image(systemName: "square.and.pencil")
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
@@ -217,7 +213,7 @@ struct BlueskyView: View {
                 FeedView(tab: selectedTab, selectedUser: $selectedUser)
             }
         }
-        .sheet(isPresented: $showNewPost) {
+        .sheet(isPresented: $showCreateView) {
             NewPostView(selectedUser: $selectedUser)
         }
     }
@@ -566,8 +562,4 @@ struct SearchResultsView: View {
             }
         }
     }
-}
-
-#Preview {
-    BlueskyView()
 }

@@ -70,6 +70,7 @@ struct CreateServerView: View {
             hasNotification: false
         )
         viewModel.servers.append(newServer)
+        showCreateView.toggle()
     }
 }
 
