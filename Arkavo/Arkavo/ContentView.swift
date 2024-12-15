@@ -32,36 +32,60 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var isCollapsed = false
     @State private var showMenuButton = true
-    @State private var showRecordingView = false
+    @State private var showCreateView = false
     @StateObject private var feedViewModel = TikTokFeedViewModel()
+    @StateObject private var groupViewModel = DiscordViewModel()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            switch selectedTab {
-            case .home:
-                if showRecordingView {
-                    TikTokRecordingView { result in
-                        if let uploadResult = result {
-                            feedViewModel.addNewVideo(from: uploadResult)
+            ZStack(alignment: .topLeading) {
+                // Main Content
+                switch selectedTab {
+                case .home:
+                    if showCreateView {
+                        TikTokRecordingView { result in
+                            if let uploadResult = result {
+                                feedViewModel.addNewVideo(from: uploadResult)
+                            }
+                            showCreateView = false
                         }
-                        showRecordingView = false
+                    } else {
+                        TikTokFeedView(viewModel: feedViewModel, showCreateView: $showCreateView)
                     }
-                } else {
-                    TikTokFeedView(viewModel: feedViewModel, showRecordingView: $showRecordingView)
+                case .communities:
+                    if showCreateView {
+                        CreateServerView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                    } else {
+                        DiscordView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                    }
+                case .social:
+                    BlueskyView(showCreateView: $showCreateView)
+                case .creators:
+                    PatreonView(showCreateView: $showCreateView)
+                case .profile:
+                    ProfileView(showCreateView: $showCreateView)
                 }
-            case .communities:
-                DiscordView()
-            case .social:
-                BlueskyView()
-            case .creators:
-                PatreonView()
-            case .profile:
-                ProfileView()
+
+                // Create Button
+                if !showCreateView {
+                    Button {
+                        showCreateView = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .padding(.top, 0)
+                    .padding(.leading, 8)
+                }
             }
 
-            // Container for both collapsed and expanded states
+            // Navigation Container
             ZStack {
                 if !isCollapsed {
                     // Expanded TabView
@@ -129,8 +153,7 @@ struct ContentView: View {
 
     private func handleTabSelection(_ tab: Tab) {
         selectedTab = tab
-        // navigate from recording back to feed
-        showRecordingView = false
+        showCreateView = false
         withAnimation(.spring()) {
             isCollapsed = false
         }
@@ -152,6 +175,7 @@ struct ProfileView: View {
         postsCount: 789,
         serviceEndpoint: "https://bsky.social"
     )
+    @Binding var showCreateView: Bool
 
     enum ProfileTab {
         case posts, replies, media, likes
@@ -228,37 +252,6 @@ struct ProfileView: View {
                     .padding(.vertical, 8)
                 }
 
-                // Settings Section
-                Section("Settings") {
-                    NavigationLink {
-                        // Edit Profile View
-                        Text("Edit Profile")
-                    } label: {
-                        Label("Edit Profile", systemImage: "pencil")
-                    }
-
-                    NavigationLink {
-                        // Notifications View
-                        Text("Notifications")
-                    } label: {
-                        Label("Notifications", systemImage: "bell")
-                    }
-
-                    NavigationLink {
-                        // Privacy View
-                        Text("Privacy")
-                    } label: {
-                        Label("Privacy", systemImage: "lock")
-                    }
-
-                    NavigationLink {
-                        // Help View
-                        Text("Help")
-                    } label: {
-                        Label("Help", systemImage: "questionmark.circle")
-                    }
-                }
-
                 // DID Information Section
                 Section("Decentralized Identity") {
                     VStack(alignment: .leading) {
@@ -278,7 +271,9 @@ struct ProfileView: View {
                     }
                 }
             }
-            .navigationTitle("Profile")
+        }
+        .sheet(isPresented: $showCreateView) {
+            Text("Create Profile things")
         }
     }
 }

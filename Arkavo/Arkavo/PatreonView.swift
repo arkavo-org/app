@@ -1,5 +1,175 @@
 import SwiftUI
 
+// Main View
+struct PatreonView: View {
+    @State private var selectedTab = 0
+    @State private var creators: [Creator] = Creator.sampleCreators
+    @State private var messages: [Message] = Message.sampleMessages
+    @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
+    @Binding var showCreateView: Bool
+
+    var body: some View {
+        NavigationStack {
+            CreatorListView(creators: creators)
+                .tabItem {
+                    Label("Creators", systemImage: "person.2.fill")
+                }
+                .tag(1)
+        }
+        .sheet(isPresented: $showCreateView) {
+            if let creator = creators.first {
+                CreatorCard(creator: creator)
+            }
+        }
+    }
+}
+
+// Creator List View
+struct CreatorListView: View {
+    let creators: [Creator]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(creators) { creator in
+                    NavigationLink(destination: ChatView(creator: creator)) {
+                        CreatorCard(creator: creator)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+struct CreatorCard: View {
+    let creator: Creator
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 12) {
+                // Profile Image
+                Image(systemName: "person.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 80, height: 80)
+                    .foregroundColor(.blue)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(creator.name)
+                            .font(.title2)
+                            .bold()
+
+                        if creator.notificationCount > 0 {
+                            Text("\(creator.notificationCount)")
+                                .font(.caption)
+                                .padding(6)
+                                .background(Color.red)
+                                .foregroundColor(.white)
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    Text(creator.tier.rawValue)
+                        .font(.subheadline)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.purple.opacity(0.2))
+                        .cornerRadius(8)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring()) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding()
+
+            // Expandable Content
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Bio
+                    Text(creator.bio)
+                        .font(.body)
+                        .padding(.horizontal)
+
+                    // Latest Update
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Latest Update")
+                            .font(.headline)
+                        Text(creator.latestUpdate)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+
+                    // Social Links
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Social Media")
+                            .font(.headline)
+
+                        ForEach(creator.socialLinks) { link in
+                            HStack {
+                                Image(systemName: link.platform.icon)
+                                Text(link.username)
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+        }
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(radius: 2)
+    }
+}
+
+struct CreatorChatButton: View {
+    let creator: Creator
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.blue : Color.gray.opacity(0.2))
+                        .frame(width: 50, height: 50)
+
+                    Text(creator.name.prefix(1))
+                        .font(.title3.bold())
+                        .foregroundColor(isSelected ? .white : .primary)
+                }
+
+                Text(creator.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+        }
+    }
+}
+
 // Models
 struct Creator: Identifiable, Hashable {
     let id: String
@@ -179,257 +349,4 @@ extension Message {
             isPinned: true
         ),
     ]
-}
-
-// Main View
-struct PatreonView: View {
-    @State private var selectedTab = 0
-    @State private var creators: [Creator] = Creator.sampleCreators
-    @State private var messages: [Message] = Message.sampleMessages
-    @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
-
-    var body: some View {
-        NavigationStack {
-            TabView(selection: $selectedTab) {
-                ExclusiveContentView(posts: exclusiveContent)
-                    .tabItem {
-                        Label("Exclusives", systemImage: "star.fill")
-                    }
-                    .tag(0)
-                Spacer()
-                CreatorListView(creators: creators)
-                    .tabItem {
-                        Label("Creators", systemImage: "person.2.fill")
-                    }
-                    .tag(1)
-            }
-            .navigationTitle(navigationTitle)
-        }
-    }
-
-    var navigationTitle: String {
-        switch selectedTab {
-        case 0: "Exclusives"
-        case 1: "Creators"
-        default: ""
-        }
-    }
-}
-
-// Creator List View
-struct CreatorListView: View {
-    let creators: [Creator]
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(creators) { creator in
-                    NavigationLink(destination: ChatView(creator: creator)) {
-                        CreatorCard(creator: creator)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding()
-        }
-    }
-}
-
-struct CreatorCard: View {
-    let creator: Creator
-    @State private var isExpanded = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                // Profile Image
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 80, height: 80)
-                    .foregroundColor(.blue)
-                    .background(Color.blue.opacity(0.1))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(creator.name)
-                            .font(.title2)
-                            .bold()
-
-                        if creator.notificationCount > 0 {
-                            Text("\(creator.notificationCount)")
-                                .font(.caption)
-                                .padding(6)
-                                .background(Color.red)
-                                .foregroundColor(.white)
-                                .clipShape(Circle())
-                        }
-                    }
-
-                    Text(creator.tier.rawValue)
-                        .font(.subheadline)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.purple.opacity(0.2))
-                        .cornerRadius(8)
-                }
-
-                Spacer()
-
-                Button {
-                    withAnimation(.spring()) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding()
-
-            // Expandable Content
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Bio
-                    Text(creator.bio)
-                        .font(.body)
-                        .padding(.horizontal)
-
-                    // Latest Update
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Latest Update")
-                            .font(.headline)
-                        Text(creator.latestUpdate)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal)
-
-                    // Social Links
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Social Media")
-                            .font(.headline)
-
-                        ForEach(creator.socialLinks) { link in
-                            HStack {
-                                Image(systemName: link.platform.icon)
-                                Text(link.username)
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.blue)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.vertical)
-            }
-        }
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 2)
-    }
-}
-
-struct CreatorChatButton: View {
-    let creator: Creator
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.blue : Color.gray.opacity(0.2))
-                        .frame(width: 50, height: 50)
-
-                    Text(creator.name.prefix(1))
-                        .font(.title3.bold())
-                        .foregroundColor(isSelected ? .white : .primary)
-                }
-
-                Text(creator.name)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .foregroundColor(isSelected ? .primary : .secondary)
-            }
-        }
-    }
-}
-
-// Exclusive Content View
-struct ExclusiveContentView: View {
-    let posts: [CreatorPost]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-            ], spacing: 16) {
-                ForEach(posts) { post in
-                    ExclusivePostCard(post: post)
-                }
-            }
-            .padding()
-        }
-    }
-}
-
-struct ExclusivePostCard: View {
-    let post: CreatorPost
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Using color rectangle as placeholder since URLs won't load in preview
-            Rectangle()
-                .fill(Color.blue.opacity(0.1))
-                .overlay(
-                    Image(systemName: "photo.fill")
-                        .foregroundColor(.blue)
-                        .font(.largeTitle)
-                )
-                .frame(height: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Text(post.content)
-                .font(.subheadline)
-                .lineLimit(3)
-
-            HStack {
-                Text(post.tierAccess.rawValue)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.purple.opacity(0.2))
-                    .cornerRadius(8)
-
-                Spacer()
-
-                Text(post.timestamp, style: .relative)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 2)
-    }
-}
-
-// Preview
-#Preview {
-    PatreonView()
-}
-
-// Dark Mode Preview
-#Preview {
-    PatreonView()
-        .preferredColorScheme(.dark)
 }

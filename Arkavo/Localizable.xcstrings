@@ -27,6 +27,9 @@
         }
       }
     },
+    "%lld voice channels" : {
+
+    },
     "%lld%%" : {
 
     },
@@ -93,6 +96,9 @@
     "Age Verification" : {
 
     },
+    "Announcement" : {
+
+    },
     "Arkavo" : {
 
     },
@@ -136,10 +142,19 @@
         }
       }
     },
-    "Chat" : {
+    "Category" : {
 
     },
-    "Choose a server to see its channels" : {
+    "Channel Details" : {
+
+    },
+    "Channel Name" : {
+
+    },
+    "Channel Type" : {
+
+    },
+    "Chat" : {
 
     },
     "Classification" : {
@@ -163,6 +178,9 @@
     "Create" : {
 
     },
+    "Create Channel" : {
+
+    },
     "Create New Stream" : {
 
     },
@@ -175,6 +193,12 @@
           }
         }
       }
+    },
+    "Create Profile things" : {
+
+    },
+    "Create Server" : {
+
     },
     "Create Stream" : {
       "localizations" : {
@@ -214,9 +238,6 @@
         }
       }
     },
-    "Edit Profile" : {
-
-    },
     "Empty" : {
 
     },
@@ -248,9 +269,6 @@
     "Every day, content creators face challenges protecting their work online. You can make a real difference!" : {
 
     },
-    "Exclusives" : {
-
-    },
     "Expert Level: %@" : {
 
     },
@@ -276,9 +294,6 @@
 
     },
     "Granularity" : {
-
-    },
-    "Help" : {
 
     },
     "Home" : {
@@ -450,9 +465,6 @@
     "Not available on macOS" : {
 
     },
-    "Notifications" : {
-
-    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -616,7 +628,10 @@
     "Search Bluesky" : {
 
     },
-    "Select a Server" : {
+    "Server Details" : {
+
+    },
+    "Server Name" : {
 
     },
     "Service Endpoint" : {
@@ -769,6 +784,9 @@
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
+    "Text Channel" : {
+
+    },
     "Thank You for Making a Difference!" : {
 
     },
@@ -859,6 +877,9 @@
       }
     },
     "Voice" : {
+
+    },
+    "Voice Channel" : {
 
     },
     "Welcome to Arkavo!" : {

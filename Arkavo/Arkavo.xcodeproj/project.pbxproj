@@ -58,6 +58,7 @@
 		DAAFCBFA2D091F18003FC56F /* TikTokView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* TikTokView.swift */; };
 		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
 		DABD7D4A2D0D337000239F22 /* TikTokRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* TikTokRecordView.swift */; };
+		DABD7D4C2D0E4BDE00239F22 /* DiscordCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4B2D0E4BD700239F22 /* DiscordCreateView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -139,6 +140,7 @@
 		DAAFCBF92D091F17003FC56F /* TikTokView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokView.swift; sourceTree = "<group>"; };
 		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
 		DABD7D492D0D336700239F22 /* TikTokRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokRecordView.swift; sourceTree = "<group>"; };
+		DABD7D4B2D0E4BD700239F22 /* DiscordCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscordCreateView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -212,14 +214,15 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DAAFCBF92D091F17003FC56F /* TikTokView.swift */,
 				DABD7D492D0D336700239F22 /* TikTokRecordView.swift */,
 				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
-				DAAFCBF92D091F17003FC56F /* TikTokView.swift */,
+				DAAFCBCD2D09073A003FC56F /* DiscordView.swift */,
+				DABD7D4B2D0E4BD700239F22 /* DiscordCreateView.swift */,
 				DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */,
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
-				DAAFCBCD2D09073A003FC56F /* DiscordView.swift */,
-				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
 				DAAFCBC92D08F9D4003FC56F /* PatreonView.swift */,
+				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
@@ -512,6 +515,7 @@
 				DA7598C12C9610930021A8FC /* ArkavoService.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
+				DABD7D4C2D0E4BDE00239F22 /* DiscordCreateView.swift in Sources */,
 				DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */,
 				DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */,
 				DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */,

@@ -29,7 +29,7 @@ struct Video: Identifiable {
 
 struct TikTokFeedView: View {
     @ObservedObject var viewModel: TikTokFeedViewModel
-    @Binding var showRecordingView: Bool
+    @Binding var showCreateView: Bool
 
     var body: some View {
         GeometryReader { geometry in
@@ -42,7 +42,7 @@ struct TikTokFeedView: View {
                                     video: video,
                                     viewModel: viewModel,
                                     size: geometry.size,
-                                    showRecordingView: $showRecordingView
+                                    showRecordingView: $showCreateView
                                 )
                                 .id(video.id)
                             }
@@ -166,19 +166,6 @@ struct VideoPlayerView: View {
 
                     // Action buttons
                     VStack(spacing: 20) {
-                        // Create button
-                        Button {
-                            showRecordingView = true
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "camera.circle.fill")
-                                    .font(.title)
-                                Text("Create")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.white)
-                        }
-
                         LikeButton(isLiked: $isLiked, count: $likesCount)
 
                         CommentButton(count: video.comments) {
