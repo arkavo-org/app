@@ -194,6 +194,9 @@
         }
       }
     },
+    "Create Profile things" : {
+
+    },
     "Create Server" : {
 
     },
@@ -235,9 +238,6 @@
         }
       }
     },
-    "Edit Profile" : {
-
-    },
     "Empty" : {
 
     },
@@ -269,9 +269,6 @@
     "Every day, content creators face challenges protecting their work online. You can make a real difference!" : {
 
     },
-    "Exclusives" : {
-
-    },
     "Expert Level: %@" : {
 
     },
@@ -297,9 +294,6 @@
 
     },
     "Granularity" : {
-
-    },
-    "Help" : {
 
     },
     "Home" : {
@@ -469,9 +463,6 @@
 
     },
     "Not available on macOS" : {
-
-    },
-    "Notifications" : {
 
     },
     "OK" : {

@@ -63,9 +63,9 @@ struct ContentView: View {
                 case .social:
                     BlueskyView(showCreateView: $showCreateView)
                 case .creators:
-                    PatreonView()
+                    PatreonView(showCreateView: $showCreateView)
                 case .profile:
-                    ProfileView()
+                    ProfileView(showCreateView: $showCreateView)
                 }
 
                 // Create Button
@@ -175,6 +175,7 @@ struct ProfileView: View {
         postsCount: 789,
         serviceEndpoint: "https://bsky.social"
     )
+    @Binding var showCreateView: Bool
 
     enum ProfileTab {
         case posts, replies, media, likes
@@ -251,37 +252,6 @@ struct ProfileView: View {
                     .padding(.vertical, 8)
                 }
 
-                // Settings Section
-                Section("Settings") {
-                    NavigationLink {
-                        // Edit Profile View
-                        Text("Edit Profile")
-                    } label: {
-                        Label("Edit Profile", systemImage: "pencil")
-                    }
-
-                    NavigationLink {
-                        // Notifications View
-                        Text("Notifications")
-                    } label: {
-                        Label("Notifications", systemImage: "bell")
-                    }
-
-                    NavigationLink {
-                        // Privacy View
-                        Text("Privacy")
-                    } label: {
-                        Label("Privacy", systemImage: "lock")
-                    }
-
-                    NavigationLink {
-                        // Help View
-                        Text("Help")
-                    } label: {
-                        Label("Help", systemImage: "questionmark.circle")
-                    }
-                }
-
                 // DID Information Section
                 Section("Decentralized Identity") {
                     VStack(alignment: .leading) {
@@ -301,7 +271,9 @@ struct ProfileView: View {
                     }
                 }
             }
-            .navigationTitle("Profile")
+        }
+        .sheet(isPresented: $showCreateView) {
+            Text("Create Profile things")
         }
     }
 }
