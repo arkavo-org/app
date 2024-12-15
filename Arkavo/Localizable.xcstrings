@@ -33,9 +33,6 @@
     "%lld%%" : {
 
     },
-    "• %@" : {
-
-    },
     "2m ago" : {
 
     },
@@ -175,6 +172,9 @@
     "Content Protection" : {
 
     },
+    "Contributors" : {
+
+    },
     "Copy Link" : {
 
     },
@@ -297,9 +297,6 @@
 
     },
     "Granularity" : {
-
-    },
-    "Hide contributors" : {
 
     },
     "Home" : {
@@ -683,9 +680,6 @@
       }
     },
     "Share Your Impact" : {
-
-    },
-    "Show all contributors" : {
 
     },
     "Sign In" : {

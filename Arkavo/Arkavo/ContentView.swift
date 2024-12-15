@@ -47,9 +47,12 @@ struct ContentView: View {
                     if showCreateView {
                         TikTokRecordingView { result in
                             if let uploadResult = result {
-                                // FIXME:
-                                print("FIXME - Upload Result \(uploadResult)")
-//                                feedViewModel.addNewVideo(from: uploadResult, contributors: <#[Contributor]#>)
+                                // Create contributors list with current user as director
+                                let currentUser = Creator.sampleCreators[0] // Replace with actual current user
+                                let contributors = [
+                                    Contributor(id: UUID().uuidString, creator: currentUser, role: "Director"),
+                                ]
+                                feedViewModel.addNewVideo(from: uploadResult, contributors: contributors)
                             }
                             showCreateView = false
                         }

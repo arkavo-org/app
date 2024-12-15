@@ -94,7 +94,7 @@ struct ContributorsView: View {
                         .foregroundColor(.blue)
 
                     VStack(alignment: .leading) {
-                        Text("@\(mainContributor.creator.name)")
+                        Text(mainContributor.creator.name)
                             .font(.headline)
 
                         Text(mainContributor.role)
@@ -106,22 +106,6 @@ struct ContributorsView: View {
 
             // Other contributors (collapsed by default)
             if contributors.count > 1 {
-                Button {
-                    withAnimation(.spring()) {
-                        showAllContributors.toggle()
-                    }
-                } label: {
-                    HStack {
-                        Text(showAllContributors ? "Hide contributors" : "Show all contributors")
-                            .font(.caption)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .rotationEffect(.degrees(showAllContributors ? 90 : 0))
-                    }
-                    .foregroundColor(.gray)
-                }
-
                 if showAllContributors {
                     ForEach(contributors.dropFirst()) { contributor in
                         HStack(spacing: 8) {
@@ -130,15 +114,32 @@ struct ContributorsView: View {
                                 .frame(width: 24, height: 24)
                                 .clipShape(Circle())
                                 .foregroundColor(.blue.opacity(0.7))
+                            VStack(alignment: .leading) {
+                                Text(contributor.creator.name)
+                                    .font(.subheadline)
 
-                            Text("@\(contributor.creator.name)")
-                                .font(.subheadline)
-
-                            Text("• \(contributor.role)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                Text(contributor.role)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
                         }
                         .padding(.leading, 8)
+                    }
+                } else {
+                    Button {
+                        withAnimation(.spring()) {
+                            showAllContributors.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Text("Contributors")
+                                .font(.caption)
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .rotationEffect(.degrees(showAllContributors ? 90 : 0))
+                        }
+                        .foregroundColor(.gray)
                     }
                 }
             }
@@ -159,6 +160,8 @@ struct VideoPlayerView: View {
     @State private var dragOffset = CGSize.zero
 
     private let swipeThreshold: CGFloat = 50
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
 
     init(video: Video, viewModel: TikTokFeedViewModel, size: CGSize, showRecordingView: Binding<Bool>) {
         self.video = video
@@ -169,7 +172,7 @@ struct VideoPlayerView: View {
     }
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ZStack {
                 // Video player
                 PlayerContainerView(
@@ -181,29 +184,36 @@ struct VideoPlayerView: View {
 
                 // Content overlay
                 HStack(spacing: 0) {
-                    // Left side - Description as vertical text
-                    VStack {
-                        VerticalText(text: video.description)
-                            .padding(.leading, 12)
-                            .frame(maxHeight: .infinity)
+                    // Left side - Vertically centered description text
+                    ZStack(alignment: .center) {
+                        GeometryReader { metrics in
+                            VerticalText(text: video.description)
+                                .frame(width: metrics.size.height, height: systemMargin)
+                                .rotationEffect(.degrees(-90), anchor: .center)
+                                .position(
+                                    x: systemMargin + geometry.safeAreaInsets.leading,
+                                    y: metrics.size.height / 2
+                                )
+                        }
                     }
+                    .frame(width: systemMargin * 2.75) // 44pt for touch target
 
                     Spacer()
 
                     // Right side - Action buttons
-                    VStack(alignment: .trailing, spacing: 20) {
+                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) { // 20pt
                         Spacer()
 
-                        VStack(spacing: 20) {
+                        VStack(spacing: systemMargin * 1.25) { // 20pt
                             Button {
                                 withAnimation(.spring()) {
                                     isLiked.toggle()
                                     likesCount += isLiked ? 1 : -1
                                 }
                             } label: {
-                                VStack(spacing: 4) {
+                                VStack(spacing: systemMargin * 0.25) { // 4pt
                                     Image(systemName: isLiked ? "heart.fill" : "heart")
-                                        .font(.system(size: 28))
+                                        .font(.system(size: systemMargin * 1.75)) // 28pt
                                         .foregroundColor(isLiked ? .red : .white)
                                     Text("\(likesCount)")
                                         .font(.caption)
@@ -214,17 +224,17 @@ struct VideoPlayerView: View {
                             Button {
                                 showComments = true
                             } label: {
-                                VStack(spacing: 4) {
+                                VStack(spacing: systemMargin * 0.25) { // 4pt
                                     Image(systemName: "bubble.right")
-                                        .font(.system(size: 26))
+                                        .font(.system(size: systemMargin * 1.625)) // 26pt
                                     Text("\(video.comments)")
                                         .font(.caption)
                                 }
                                 .foregroundColor(.white)
                             }
                         }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 100) // Adjust to match layout
+                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
+                        .padding(.bottom, systemMargin * 6.25) // 100pt
                     }
                 }
 
@@ -233,8 +243,8 @@ struct VideoPlayerView: View {
                     Spacer()
                     HStack {
                         ContributorsView(contributors: video.contributors)
-                            .padding(.horizontal)
-                            .padding(.bottom, 20) // Adjust based on your needs
+                            .padding(.horizontal, systemMargin)
+                            .padding(.bottom, systemMargin * 8)
                         Spacer()
                     }
                 }
@@ -262,9 +272,24 @@ struct VideoPlayerView: View {
             )
         }
         .frame(width: size.width, height: size.height)
+        .ignoresSafeArea()
         .sheet(isPresented: $showComments) {
             CommentsView(showComments: $showComments)
         }
+    }
+}
+
+struct VerticalText: View {
+    let text: String
+    let fontSize: CGFloat = 16
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: fontSize))
+            .foregroundColor(.white)
+            .fontWeight(.medium)
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
@@ -289,21 +314,6 @@ struct PlayerContainerView: UIViewRepresentable {
         if isCurrentVideo {
             playerManager.playVideo(url: url)
         }
-    }
-}
-
-struct VerticalText: View {
-    let text: String
-    let fontSize: CGFloat = 16
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: fontSize))
-            .foregroundColor(.white)
-            .fontWeight(.medium)
-            .fixedSize()
-            .frame(width: fontSize, alignment: .leading)
-            .rotationEffect(.degrees(-90), anchor: .topLeading)
     }
 }
 
