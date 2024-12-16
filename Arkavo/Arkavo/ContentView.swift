@@ -33,6 +33,8 @@ struct ContentView: View {
     @State private var isCollapsed = false
     @State private var showMenuButton = true
     @State private var showCreateView = false
+    @State private var selectedCreator: Creator?
+    @State private var selectedServer: Server?
     @StateObject private var feedViewModel = TikTokFeedViewModel()
     @StateObject private var groupViewModel = DiscordViewModel()
 
@@ -47,23 +49,54 @@ struct ContentView: View {
                     if showCreateView {
                         TikTokRecordingView { result in
                             if let uploadResult = result {
-                                feedViewModel.addNewVideo(from: uploadResult)
+                                // Create contributors list with current user as director
+                                let currentUser = Creator.sampleCreators[0] // Replace with actual current user
+                                let contributors = [
+                                    Contributor(id: UUID().uuidString, creator: currentUser, role: "Director"),
+                                ]
+                                feedViewModel.addNewVideo(from: uploadResult, contributors: contributors)
                             }
                             showCreateView = false
                         }
                     } else {
-                        TikTokFeedView(viewModel: feedViewModel, showCreateView: $showCreateView)
+                        TikTokFeedView(
+                            viewModel: feedViewModel,
+                            groupViewModel: groupViewModel,
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator,
+                            selectedServer: $selectedServer,
+                            selectedTab: $selectedTab
+                        )
                     }
                 case .communities:
                     if showCreateView {
                         CreateServerView(viewModel: groupViewModel, showCreateView: $showCreateView)
                     } else {
-                        DiscordView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                        DiscordView(
+                            viewModel: groupViewModel,
+                            showCreateView: $showCreateView,
+                            selectedServer: $selectedServer
+                        )
+                        .onDisappear {
+                            selectedServer = nil
+                        }
                     }
                 case .social:
                     BlueskyView(showCreateView: $showCreateView)
                 case .creators:
-                    PatreonView(showCreateView: $showCreateView)
+                    if showCreateView, selectedCreator != nil {
+                        if let creator = selectedCreator {
+                            PatreonSupportView(creator: creator) {
+                                showCreateView = false
+                                selectedCreator = nil
+                            }
+                        }
+                    } else {
+                        PatreonView(
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator
+                        )
+                    }
                 case .profile:
                     ProfileView(showCreateView: $showCreateView)
                 }

@@ -17,6 +17,9 @@
         }
       }
     },
+    "%@/month" : {
+
+    },
     "%lld" : {
       "localizations" : {
         "es-US" : {
@@ -27,19 +30,37 @@
         }
       }
     },
+    "%lld likes" : {
+
+    },
+    "%lld plays" : {
+
+    },
+    "%lld views" : {
+
+    },
     "%lld voice channels" : {
 
     },
     "%lld%%" : {
 
     },
+    "•" : {
+
+    },
     "2m ago" : {
+
+    },
+    "4.9" : {
 
     },
     "512" : {
 
     },
     "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
+
+    },
+    "About" : {
 
     },
     "Account" : {
@@ -117,6 +138,12 @@
     "Back" : {
 
     },
+    "Become a Supporter" : {
+
+    },
+    "Bio" : {
+
+    },
     "Blurb: %@" : {
 
     },
@@ -154,9 +181,6 @@
     "Channel Type" : {
 
     },
-    "Chat" : {
-
-    },
     "Classification" : {
 
     },
@@ -170,6 +194,9 @@
 
     },
     "Content Protection" : {
+
+    },
+    "Contributors" : {
 
     },
     "Copy Link" : {
@@ -195,9 +222,6 @@
       }
     },
     "Create Profile things" : {
-
-    },
-    "Create Server" : {
 
     },
     "Create Stream" : {
@@ -278,6 +302,9 @@
     "Face ID Terms & Conditions" : {
 
     },
+    "Featured Creator" : {
+
+    },
     "Features" : {
 
     },
@@ -291,6 +318,9 @@
 
     },
     "For You" : {
+
+    },
+    "Friends%@" : {
 
     },
     "Granularity" : {
@@ -416,6 +446,9 @@
           }
         }
       }
+    },
+    "Media" : {
+
     },
     "Member since: %@" : {
 
@@ -551,10 +584,19 @@
         }
       }
     },
+    "Protect" : {
+
+    },
+    "Protecting" : {
+
+    },
     "Protecting Creators in Progress" : {
 
     },
     "Public ID" : {
+
+    },
+    "Rating" : {
 
     },
     "Read Our Full Privacy Policy" : {
@@ -575,6 +617,9 @@
 
     },
     "Recent Activity" : {
+
+    },
+    "Recently Active" : {
 
     },
     "Reddit • 2 issues found" : {
@@ -622,10 +667,22 @@
     "Scan Completed" : {
 
     },
+    "Schedule" : {
+
+    },
     "Search" : {
 
     },
     "Search Bluesky" : {
+
+    },
+    "Search creators..." : {
+
+    },
+    "Search Results" : {
+
+    },
+    "Section" : {
 
     },
     "Server Details" : {
@@ -780,6 +837,15 @@
           }
         }
       }
+    },
+    "Support" : {
+
+    },
+    "Support %@" : {
+
+    },
+    "Support Tiers" : {
+
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 

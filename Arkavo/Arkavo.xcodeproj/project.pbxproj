@@ -59,6 +59,7 @@
 		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
 		DABD7D4A2D0D337000239F22 /* TikTokRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* TikTokRecordView.swift */; };
 		DABD7D4C2D0E4BDE00239F22 /* DiscordCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4B2D0E4BD700239F22 /* DiscordCreateView.swift */; };
+		DABD7D502D0F584B00239F22 /* PatreonSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4F2D0F584A00239F22 /* PatreonSupportView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
@@ -141,6 +142,7 @@
 		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
 		DABD7D492D0D336700239F22 /* TikTokRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokRecordView.swift; sourceTree = "<group>"; };
 		DABD7D4B2D0E4BD700239F22 /* DiscordCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscordCreateView.swift; sourceTree = "<group>"; };
+		DABD7D4F2D0F584A00239F22 /* PatreonSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonSupportView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -222,6 +224,7 @@
 				DAAFCBF72D091A4A003FC56F /* BlueskyView.swift */,
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
 				DAAFCBC92D08F9D4003FC56F /* PatreonView.swift */,
+				DABD7D4F2D0F584A00239F22 /* PatreonSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
@@ -474,6 +477,7 @@
 				DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */,
 				DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */,
 				DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */,
+				DABD7D502D0F584B00239F22 /* PatreonSupportView.swift in Sources */,
 				DA36F2042CBA1A4500762668 /* RegistrationView.swift in Sources */,
 				DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,

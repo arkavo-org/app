@@ -37,97 +37,31 @@ struct MessageReaction: Identifiable {
 // MARK: - Chat View
 
 struct ChatView: View {
-    let channel: Channel?
-    let creator: Creator?
-    @State private var messages: [ChatMessage] = []
+    @StateObject var viewModel: ChatViewModel
     @State private var messageText = ""
     @State private var showingAttachmentPicker = false
 
-    init(channel: Channel? = nil, creator: Creator? = nil) {
-        self.channel = channel
-        self.creator = creator
-    }
-
-    private var title: String {
-        if let channel {
-            return "#\(channel.name)"
-        }
-        if let creator {
-            return creator.name
-        }
-        return "Chat"
-    }
-
-    private var placeholder: String {
-        if let channel {
-            return "Message in #\(channel.name)"
-        }
-        if let creator {
-            return "Message in \(creator.name)'s chat"
-        }
-        return "Type a message..."
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            // Messages List
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(filteredMessages) { message in
+                    ForEach(viewModel.filteredMessages) { message in
                         MessageRow(message: message)
                     }
                 }
                 .padding()
             }
 
-            // Message Input
             MessageInputBar(
                 messageText: $messageText,
-                placeholder: placeholder,
+                placeholder: "..",
                 onAttachmentTap: { showingAttachmentPicker.toggle() },
-                onSend: sendMessage
+                onSend: {
+                    viewModel.sendMessage(content: messageText)
+                    messageText = ""
+                }
             )
         }
-        .navigationTitle(title)
-        .onAppear {
-            loadMessages()
-        }
-    }
-
-    private var filteredMessages: [ChatMessage] {
-        messages.filter { message in
-            if let channel {
-                return message.channelId == channel.id
-            }
-            if let creator {
-                return message.creatorId == creator.id
-            }
-            return false
-        }
-    }
-
-    private func loadMessages() {
-        // Load messages based on channel.id and/or creator.id
-        messages = ChatMessage.sampleMessages
-    }
-
-    private func sendMessage() {
-        guard !messageText.isEmpty else { return }
-        // Create and send message
-        _ = ChatMessage(
-            id: UUID().uuidString,
-            userId: "currentUser",
-            username: "Current User",
-            content: messageText,
-            timestamp: Date(),
-            attachments: [],
-            reactions: [],
-            isPinned: false,
-            channelId: channel?.id,
-            creatorId: creator?.id
-        )
-        // Add to messages array or send to backend
-        messageText = ""
     }
 }
 
@@ -265,35 +199,55 @@ extension ChatMessage {
     ]
 }
 
-// MARK: - Preview
+// MARK: - ChatViewModel
 
-struct ChatView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            ChatView(
-                channel: Channel(
-                    id: "channel1",
-                    name: "general",
-                    type: .text,
-                    unreadCount: 0,
-                    isActive: true
-                )
-            )
+@MainActor
+class ChatViewModel: ObservableObject {
+    @Published var messages: [ChatMessage] = []
+    @Published var channel: Channel?
+    @Published var creator: Creator?
+
+    init(channel: Channel? = nil, creator: Creator? = nil) {
+        self.channel = channel
+        self.creator = creator
+        loadInitialMessages()
+    }
+
+    private func loadInitialMessages() {
+        // In real app, fetch from backend
+        messages = ChatMessage.sampleMessages
+    }
+
+    func sendMessage(content: String) {
+        let newMessage = ChatMessage(
+            id: UUID().uuidString,
+            userId: "currentUser", // In real app, get from auth
+            username: "Current User", // In real app, get from auth
+            content: content,
+            timestamp: Date(),
+            attachments: [],
+            reactions: [],
+            isPinned: false,
+            channelId: channel?.id,
+            creatorId: creator?.id
+        )
+
+        withAnimation {
+            messages.append(newMessage)
         }
 
-        NavigationStack {
-            ChatView(
-                creator: Creator(
-                    id: "creator1",
-                    name: "Digital Art Master",
-                    imageURL: "https://example.com/creator1",
-                    latestUpdate: "Just posted a new digital painting tutorial!",
-                    tier: .premium,
-                    socialLinks: [],
-                    notificationCount: 3,
-                    bio: "Professional digital artist with 10+ years of experience."
-                )
-            )
+        // In real app, send to backend
+    }
+
+    var filteredMessages: [ChatMessage] {
+        messages.filter { message in
+            if let channel {
+                return message.channelId == channel.id
+            }
+            if let creator {
+                return message.creatorId == creator.id
+            }
+            return false
         }
     }
 }

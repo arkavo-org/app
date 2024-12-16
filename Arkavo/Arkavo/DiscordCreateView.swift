@@ -9,7 +9,7 @@ struct CreateServerView: View {
     @State private var serverName = ""
     @State private var selectedIcon: String? = nil
 
-    let icons = ["gamecontroller.fill", "leaf.fill", "book.fill", "music.note", "star.fill", "heart.fill"]
+    let icons = ["gamecontroller", "leaf", "book", "music.note", "star", "heart"]
 
     var body: some View {
         Form {
@@ -38,7 +38,6 @@ struct CreateServerView: View {
                 }
             }
         }
-        .navigationTitle("Create Server")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Create") {
@@ -55,6 +54,7 @@ struct CreateServerView: View {
             id: UUID().uuidString,
             name: serverName,
             imageURL: nil,
+            icon: selectedIcon ?? "message",
             channels: [],
             categories: [
                 ChannelCategory(
@@ -62,6 +62,7 @@ struct CreateServerView: View {
                     name: "TEXT CHANNELS",
                     channels: [
                         Channel(id: UUID().uuidString, name: "general", type: .text, unreadCount: 0, isActive: false),
+                        Channel(id: UUID().uuidString, name: "shared", type: .text, unreadCount: 0, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -69,7 +70,7 @@ struct CreateServerView: View {
             unreadCount: 0,
             hasNotification: false
         )
-        viewModel.servers.append(newServer)
+        viewModel.servers.insert(newServer, at: 0)
         showCreateView.toggle()
     }
 }

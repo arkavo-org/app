@@ -5,14 +5,40 @@ import SwiftUI
 @MainActor
 class DiscordViewModel: ObservableObject {
     @Published var servers = Server.sampleServers
-    @Published var selectedServer: Server? = Server.sampleServers.first
+    @Published var selectedVideo: Video?
     @Published var selectedChannel: Channel?
+    private var chatViewModels: [String: ChatViewModel] = [:] // Cache of ChatViewModels
+
+    func shareVideo(_ video: Video, to server: Server) {
+        // Find the "shared" channel
+        if let category = server.categories.first,
+           let sharedChannel = category.channels.first(where: { $0.name == "shared" })
+        {
+            selectedChannel = sharedChannel
+            print("Sharing video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+            selectedVideo = video
+            if let channel = selectedChannel {
+                let chatViewModel = chatViewModel(for: channel)
+                chatViewModel.sendMessage(content: "Shared video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+            }
+        }
+    }
+
+    func chatViewModel(for channel: Channel) -> ChatViewModel {
+        if let existing = chatViewModels[channel.id] {
+            return existing
+        }
+        let newViewModel = ChatViewModel(channel: channel)
+        chatViewModels[channel.id] = newViewModel
+        return newViewModel
+    }
 }
 
 struct Server: Identifiable, Hashable {
     let id: String
     let name: String
     let imageURL: String?
+    let icon: String
     let channels: [Channel]
     let categories: [ChannelCategory]
     var unreadCount: Int
@@ -72,6 +98,7 @@ extension Server {
             id: "1",
             name: "Gaming Hub",
             imageURL: nil,
+            icon: "gamecontroller",
             channels: [],
             categories: [
                 ChannelCategory(
@@ -107,8 +134,9 @@ extension Server {
         ),
         Server(
             id: "2",
-            name: "Sewing Hub",
+            name: "Book Club",
             imageURL: nil,
+            icon: "book",
             channels: [],
             categories: [
                 ChannelCategory(
@@ -145,31 +173,57 @@ extension Server {
 // MARK: - Main View
 
 struct DiscordView: View {
-    @State private var selectedServer: Server? = Server.sampleServers.first
-    @State private var selectedChannel: Channel?
     @ObservedObject var viewModel: DiscordViewModel
     @Binding var showCreateView: Bool
+    @Binding var selectedServer: Server?
+    @State private var selectedChannel: Channel?
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 20) {
-                ForEach(viewModel.servers) { server in
-                    ServerDetailView(
-                        server: server,
-                        selectedChannel: $selectedChannel
-                    )
-                    .padding(.horizontal)
+        NavigationStack(path: $navigationPath) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    if let selectedServer {
+                        // Show only the selected server
+                        ServerDetailView(
+                            server: selectedServer,
+                            selectedChannel: $selectedChannel,
+                            onChannelSelect: { channel in
+                                navigationPath.append(channel)
+                            }
+                        )
+                        .padding(.horizontal)
+                    } else {
+                        // Show all servers when none is selected
+                        ForEach(viewModel.servers) { server in
+                            ServerDetailView(
+                                server: server,
+                                selectedChannel: $selectedChannel,
+                                onChannelSelect: { channel in
+                                    navigationPath.append(channel)
+                                }
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
                 }
+                .padding(.vertical)
             }
-            .padding(.vertical)
+            .background(Color(.systemGroupedBackground))
+            .navigationDestination(for: Channel.self) { channel in
+                ChatView(
+                    viewModel: viewModel.chatViewModel(for: channel)
+                )
+                .navigationTitle("Friends\(channel.name)") // FIXME: server name
+            }
         }
-        .background(Color(.systemGroupedBackground))
     }
 }
 
 struct ServerDetailView: View {
     let server: Server
     @Binding var selectedChannel: Channel?
+    let onChannelSelect: (Channel) -> Void
     @State private var isExpanded = true
 
     var body: some View {
@@ -181,26 +235,14 @@ struct ServerDetailView: View {
                 }
             } label: {
                 HStack {
-                    // Server Icon
                     ZStack {
                         Circle()
                             .fill(Color.blue.opacity(0.1))
                             .frame(width: 40, height: 40)
 
-                        if let url = server.imageURL {
-                            AsyncImage(url: URL(string: url)) { image in
-                                image
-                                    .resizable()
-                                    .clipShape(Circle())
-                            } placeholder: {
-                                Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .foregroundStyle(.blue)
-                            }
-                            .frame(width: 40, height: 40)
-                        } else {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .foregroundStyle(.blue)
-                        }
+                        Image(systemName: server.icon)
+                            .font(.title3)
+                            .foregroundStyle(.blue)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -248,6 +290,7 @@ struct ServerDetailView: View {
                         ForEach(category.channels) { channel in
                             Button {
                                 selectedChannel = channel
+                                onChannelSelect(channel)
                             } label: {
                                 ChannelRow(channel: channel)
                                     .padding(.horizontal)
