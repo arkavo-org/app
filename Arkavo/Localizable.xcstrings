@@ -20,9 +20,6 @@
     "%@/month" : {
 
     },
-    "%lfK" : {
-
-    },
     "%lld" : {
       "localizations" : {
         "es-US" : {
@@ -48,9 +45,6 @@
     "%lld%%" : {
 
     },
-    "%lldK" : {
-
-    },
     "•" : {
 
     },
@@ -64,6 +58,9 @@
 
     },
     "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
+
+    },
+    "About" : {
 
     },
     "Account" : {
@@ -453,6 +450,9 @@
         }
       }
     },
+    "Media" : {
+
+    },
     "Member since: %@" : {
 
     },
@@ -587,6 +587,12 @@
         }
       }
     },
+    "Protect" : {
+
+    },
+    "Protecting" : {
+
+    },
     "Protecting Creators in Progress" : {
 
     },
@@ -662,6 +668,9 @@
 
     },
     "Scan Completed" : {
+
+    },
+    "Schedule" : {
 
     },
     "Search" : {

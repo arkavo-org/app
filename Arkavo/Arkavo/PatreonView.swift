@@ -19,15 +19,13 @@ struct PatreonView: View {
                 CreatorListView(creators: creators) { creator in
                     selectedCreator = creator
                 }
-                .tabItem {
-                    Label("Creators", systemImage: "person.2.fill")
-                }
-                .tag(1)
             }
         }
         .sheet(isPresented: $showCreateView) {
-            CreatorSearchView(creators: creators) { creator in
-                selectedCreator = creator
+            if let creator = selectedCreator {
+                PatreonSupportView(creator: creator) {
+                    showCreateView = false
+                }
             }
         }
     }
@@ -281,7 +279,6 @@ struct CreatorDetailView: View {
         }
     }
 
-    // Sample media items - in real app would come from API/database
     private let mediaItems: [MediaItem] = [
         MediaItem(id: "1", type: .video, title: "Behind the Scenes", thumbnailURL: "video1.jpg", duration: 180, views: 1500),
         MediaItem(id: "2", type: .image, title: "Latest Artwork", thumbnailURL: "image1.jpg", likes: 250),
@@ -291,13 +288,11 @@ struct CreatorDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                // Header
+            LazyVStack(spacing: 0) {
                 CreatorHeaderView(creator: creator) {
                     showCreateView = true
                 }
 
-                // Section Picker
                 Picker("Section", selection: $selectedSection) {
                     ForEach([DetailSection.about, .media, .posts, .schedule], id: \.self) { section in
                         Text(section.title)
@@ -307,7 +302,6 @@ struct CreatorDetailView: View {
                 .pickerStyle(.segmented)
                 .padding()
 
-                // Content
                 switch selectedSection {
                 case .about:
                     CreatorAboutSection(creator: creator)
@@ -329,50 +323,30 @@ struct CreatorHeaderView: View {
     let creator: Creator
     let onSupport: () -> Void
     @State private var isSupporting = false
+    @State private var isProtecting = false
+
+    private let profileImageSize: CGFloat = 80
+    private let statsSpacing: CGFloat = 32
+    private let buttonHeight: CGFloat = 44
 
     var body: some View {
         VStack(spacing: 16) {
-            // Profile Image and Stats
             HStack(spacing: 24) {
                 Image(systemName: "person.circle.fill")
                     .resizable()
-                    .frame(width: 80, height: 80)
+                    .frame(width: profileImageSize, height: profileImageSize)
                     .foregroundColor(.blue)
                     .background(Color.blue.opacity(0.1))
                     .clipShape(Circle())
 
-                // Stats
-                HStack(spacing: 32) {
-                    VStack {
-                        Text("Posts")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("\(324)")
-                            .font(.title3)
-                            .bold()
-                    }
-
-                    VStack {
-                        Text("Followers")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("\(15)K")
-                            .font(.title3)
-                            .bold()
-                    }
-
-                    VStack {
-                        Text("Rating")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text("4.9")
-                            .font(.title3)
-                            .bold()
-                    }
+                HStack(spacing: statsSpacing) {
+                    StatView(title: "Posts", value: "324")
+                    StatView(title: "Followers", value: "15.2K")
+                    StatView(title: "Rating", value: "4.9")
                 }
             }
+            .frame(maxWidth: .infinity)
 
-            // Action Buttons
             HStack(spacing: 16) {
                 Button {
                     onSupport()
@@ -381,8 +355,21 @@ struct CreatorHeaderView: View {
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .frame(height: buttonHeight)
                         .background(isSupporting ? Color.gray.opacity(0.2) : Color.blue)
+                        .cornerRadius(8)
+                }
+
+                Button {
+                    isSupporting.toggle()
+                    isProtecting.toggle()
+                } label: {
+                    Text(isProtecting ? "Protecting" : "Protect")
+                        .font(.headline)
+                        .foregroundColor(isSupporting ? .secondary : .white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: buttonHeight)
+                        .background(isProtecting ? Color.gray.opacity(0.2) : Color.blue)
                         .cornerRadius(8)
                 }
             }
@@ -390,6 +377,22 @@ struct CreatorHeaderView: View {
         }
         .padding()
         .background(Color(.systemBackground))
+    }
+}
+
+struct StatView: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.title3)
+                .bold()
+        }
     }
 }
 
@@ -436,11 +439,13 @@ struct CreatorMediaSection: View {
     let mediaItems: [MediaItem]
     @State private var selectedMedia: MediaItem?
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16),
+    ]
+
     var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-        ], spacing: 16) {
+        LazyVGrid(columns: columns, spacing: 16) {
             ForEach(mediaItems) { item in
                 MediaItemView(item: item)
                     .onTapGesture {
@@ -457,55 +462,61 @@ struct MediaItemView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
-            ZStack {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .cornerRadius(8)
+            GeometryReader { geometry in
+                ZStack {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .aspectRatio(16 / 9, contentMode: .fill)
+                        .frame(width: geometry.size.width)
+                        .cornerRadius(8)
+                        .clipped()
 
-                Image(systemName: item.type.icon)
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
+                    Image(systemName: item.type.icon)
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
 
-                if item.type != .image {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Text(item.formattedDuration)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.black.opacity(0.7))
-                                .cornerRadius(4)
+                    if item.type != .image, let duration = item.duration {
+                        VStack {
                             Spacer()
+                            HStack {
+                                Text(duration.formattedDuration)
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.black.opacity(0.7))
+                                    .cornerRadius(4)
+                                Spacer()
+                            }
+                            .padding(8)
                         }
-                        .padding(8)
                     }
                 }
             }
+            .frame(height: 120)
 
-            Text(item.title)
-                .font(.subheadline)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.subheadline)
+                    .lineLimit(2)
 
-            HStack {
-                switch item.type {
-                case .video:
-                    Image(systemName: "eye")
-                    Text("\(item.views ?? 0) views")
-                case .audio:
-                    Image(systemName: "play")
-                    Text("\(item.plays ?? 0) plays")
-                case .image:
-                    Image(systemName: "heart")
-                    Text("\(item.likes ?? 0) likes")
-                case .text:
-                    Image(systemName: "doc")
+                HStack {
+                    switch item.type {
+                    case .video:
+                        Image(systemName: "eye")
+                        Text("\(item.views ?? 0) views")
+                    case .audio:
+                        Image(systemName: "play")
+                        Text("\(item.plays ?? 0) plays")
+                    case .image:
+                        Image(systemName: "heart")
+                        Text("\(item.likes ?? 0) likes")
+                    case .text:
+                        Image(systemName: "doc")
+                    }
                 }
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
         }
     }
 }
@@ -770,6 +781,15 @@ extension Creator {
             bio: "Professional digital artist with 10+ years of experience. Specializing in character design and concept art."
         ),
     ]
+}
+
+// Helper Extensions
+extension Int {
+    var formattedDuration: String {
+        let minutes = self / 60
+        let seconds = self % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
 }
 
 extension CreatorPost {
