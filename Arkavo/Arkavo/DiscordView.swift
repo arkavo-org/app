@@ -7,12 +7,23 @@ class DiscordViewModel: ObservableObject {
     @Published var servers = Server.sampleServers
     @Published var selectedServer: Server? = Server.sampleServers.first
     @Published var selectedChannel: Channel?
+
+    func shareVideo(_ video: Video, to server: Server) {
+        // Find the "shared" channel
+        if let category = server.categories.first,
+           let sharedChannel = category.channels.first(where: { $0.name == "shared" })
+        {
+            // In a real app, this would make an API call to share the video
+            print("Sharing video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+        }
+    }
 }
 
 struct Server: Identifiable, Hashable {
     let id: String
     let name: String
     let imageURL: String?
+    let icon: String
     let channels: [Channel]
     let categories: [ChannelCategory]
     var unreadCount: Int
@@ -72,6 +83,7 @@ extension Server {
             id: "1",
             name: "Gaming Hub",
             imageURL: nil,
+            icon: "gamecontroller",
             channels: [],
             categories: [
                 ChannelCategory(
@@ -107,8 +119,9 @@ extension Server {
         ),
         Server(
             id: "2",
-            name: "Sewing Hub",
+            name: "Book Club",
             imageURL: nil,
+            icon: "book",
             channels: [],
             categories: [
                 ChannelCategory(
@@ -181,26 +194,14 @@ struct ServerDetailView: View {
                 }
             } label: {
                 HStack {
-                    // Server Icon
                     ZStack {
                         Circle()
                             .fill(Color.blue.opacity(0.1))
                             .frame(width: 40, height: 40)
 
-                        if let url = server.imageURL {
-                            AsyncImage(url: URL(string: url)) { image in
-                                image
-                                    .resizable()
-                                    .clipShape(Circle())
-                            } placeholder: {
-                                Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .foregroundStyle(.blue)
-                            }
-                            .frame(width: 40, height: 40)
-                        } else {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .foregroundStyle(.blue)
-                        }
+                        Image(systemName: server.icon)
+                            .font(.title3)
+                            .foregroundStyle(.blue)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -242,7 +243,6 @@ struct ServerDetailView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                // Channels List
                 VStack(spacing: 0) {
                     ForEach(server.categories) { category in
                         ForEach(category.channels) { channel in
@@ -297,5 +297,38 @@ struct ChannelRow: View {
                     .clipShape(Circle())
             }
         }
+    }
+}
+
+struct ServersList: View {
+    let servers: [Server]
+    let selectedServer: Server?
+    let onServerSelect: (Server) -> Void
+    let onShare: (Video, Server) -> Void
+    let currentVideo: Video?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(servers) { server in
+                Button {
+                    if let video = currentVideo {
+                        onShare(video, server)
+                    } else {
+                        onServerSelect(server)
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(server.id == selectedServer?.id ? Color.blue.opacity(0.2) : Color.clear)
+                            .frame(width: 48, height: 48)
+
+                        Image(systemName: server.icon)
+                            .font(.title2)
+                            .foregroundStyle(server.id == selectedServer?.id ? .blue : .primary)
+                    }
+                }
+            }
+        }
+        .padding(.vertical)
     }
 }

@@ -46,6 +46,7 @@ struct Video: Identifiable {
 
 struct TikTokFeedView: View {
     @ObservedObject var viewModel: TikTokFeedViewModel
+    @ObservedObject var groupViewModel = DiscordViewModel()
     @Binding var showCreateView: Bool
     @Binding var selectedCreator: Creator?
     @Binding var selectedTab: Tab
@@ -60,6 +61,7 @@ struct TikTokFeedView: View {
                                 VideoPlayerView(
                                     video: video,
                                     viewModel: viewModel,
+                                    groupViewModel: groupViewModel,
                                     size: geometry.size,
                                     showCreateView: $showCreateView,
                                     selectedCreator: $selectedCreator,
@@ -170,6 +172,7 @@ struct ContributorsView: View {
 struct VideoPlayerView: View {
     let video: Video
     @ObservedObject var viewModel: TikTokFeedViewModel
+    @ObservedObject var groupViewModel = DiscordViewModel()
     @Binding var showCreateView: Bool
     @Binding var selectedCreator: Creator?
     @Binding var selectedTab: Tab
@@ -186,6 +189,7 @@ struct VideoPlayerView: View {
 
     init(video: Video,
          viewModel: TikTokFeedViewModel,
+         groupViewModel: DiscordViewModel,
          size: CGSize,
          showCreateView: Binding<Bool>,
          selectedCreator: Binding<Creator?>,
@@ -193,6 +197,7 @@ struct VideoPlayerView: View {
     {
         self.video = video
         self.viewModel = viewModel
+        self.groupViewModel = groupViewModel
         self.size = size
         _showCreateView = showCreateView
         _selectedCreator = selectedCreator
@@ -234,22 +239,34 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
-                            Button {
-                                withAnimation(.spring()) {
-                                    isLiked.toggle()
-                                    likesCount += isLiked ? 1 : -1
-                                }
-                            } label: {
-                                VStack(spacing: systemMargin * 0.25) { // 4pt
-                                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                                        .font(.system(size: systemMargin * 1.75)) // 28pt
-                                        .foregroundColor(isLiked ? .red : .white)
-                                    Text("\(likesCount)")
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                }
+                            TikTokServersList(
+                                servers: groupViewModel.servers,
+                                currentVideo: video
+                            ) { video, server in
+                                groupViewModel.shareVideo(video, to: server)
                             }
-
+                            .padding(.trailing, systemMargin)
+                            .padding(.vertical, systemMargin * 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(.ultraThinMaterial.opacity(0.4))
+                                    .padding(.trailing, systemMargin / 2)
+                            )
+//                            Button {
+//                                withAnimation(.spring()) {
+//                                    isLiked.toggle()
+//                                    likesCount += isLiked ? 1 : -1
+//                                }
+//                            } label: {
+//                                VStack(spacing: systemMargin * 0.25) { // 4pt
+//                                    Image(systemName: isLiked ? "heart.fill" : "heart")
+//                                        .font(.system(size: systemMargin * 1.75)) // 28pt
+//                                        .foregroundColor(isLiked ? .red : .white)
+//                                    Text("\(likesCount)")
+//                                        .font(.caption)
+//                                        .foregroundColor(.white)
+//                                }
+//                            }
                             Button {
                                 showComments = true
                             } label: {
@@ -310,6 +327,77 @@ struct VideoPlayerView: View {
         .sheet(isPresented: $showComments) {
             CommentsView(showComments: $showComments)
         }
+    }
+}
+
+struct TikTokServersList: View {
+    let servers: [Server]
+    let currentVideo: Video
+    let onShare: (Video, Server) -> Void
+
+    @State private var selectedServer: Server?
+    @State private var showShareConfirmation = false
+    @State private var showShareSuccess = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ForEach(servers) { server in
+                Button {
+                    selectedServer = server
+                    showShareConfirmation = true
+                } label: {
+                    ServerButton(server: server, isSelected: selectedServer?.id == server.id)
+                }
+            }
+        }
+        .alert("Share to \(selectedServer?.name ?? "")", isPresented: $showShareConfirmation) {
+            Button("Cancel", role: .cancel) {
+                selectedServer = nil
+            }
+            Button("Share") {
+                if let server = selectedServer {
+                    onShare(currentVideo, server)
+                    selectedServer = nil
+                    showShareSuccess = true
+                }
+            }
+        }
+        .alert("Shared!", isPresented: $showShareSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Video shared to the server's shared channel")
+        }
+    }
+}
+
+// MARK: - Server Button Component
+
+struct ServerButton: View {
+    let server: Server
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            // Background and selection indicator
+            Circle()
+                .fill(isSelected ? Color.blue.opacity(0.2) : Color.black.opacity(0.3))
+                .frame(width: 48, height: 48)
+
+            // Server icon
+            Image(systemName: server.icon)
+                .font(.title3)
+                .foregroundStyle(isSelected ? .blue : .white)
+                .symbolEffect(.bounce, value: isSelected)
+
+            // Selection ring
+            if isSelected {
+                Circle()
+                    .strokeBorder(Color.blue, lineWidth: 2)
+                    .frame(width: 48, height: 48)
+            }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+        .contentShape(Circle())
     }
 }
 

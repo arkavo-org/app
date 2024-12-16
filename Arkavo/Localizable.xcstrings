@@ -726,6 +726,9 @@
         }
       }
     },
+    "Share to %@" : {
+
+    },
     "Share URL" : {
       "localizations" : {
         "es-US" : {
@@ -737,6 +740,9 @@
       }
     },
     "Share Your Impact" : {
+
+    },
+    "Shared!" : {
 
     },
     "Sign In" : {
@@ -917,6 +923,9 @@
       }
     },
     "Video message" : {
+
+    },
+    "Video shared to the server's shared channel" : {
 
     },
     "View Dashboard" : {

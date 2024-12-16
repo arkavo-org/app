@@ -60,6 +60,7 @@ struct ContentView: View {
                     } else {
                         TikTokFeedView(
                             viewModel: feedViewModel,
+                            groupViewModel: groupViewModel,
                             showCreateView: $showCreateView,
                             selectedCreator: $selectedCreator,
                             selectedTab: $selectedTab
