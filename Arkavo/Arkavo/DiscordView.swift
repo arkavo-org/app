@@ -5,17 +5,32 @@ import SwiftUI
 @MainActor
 class DiscordViewModel: ObservableObject {
     @Published var servers = Server.sampleServers
-    @Published var selectedServer: Server? = Server.sampleServers.first
+    @Published var selectedVideo: Video?
     @Published var selectedChannel: Channel?
+    private var chatViewModels: [String: ChatViewModel] = [:] // Cache of ChatViewModels
 
     func shareVideo(_ video: Video, to server: Server) {
         // Find the "shared" channel
         if let category = server.categories.first,
            let sharedChannel = category.channels.first(where: { $0.name == "shared" })
         {
-            // In a real app, this would make an API call to share the video
+            selectedChannel = sharedChannel
             print("Sharing video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+            selectedVideo = video
+            if let channel = selectedChannel {
+                let chatViewModel = chatViewModel(for: channel)
+                chatViewModel.sendMessage(content: "Shared video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+            }
         }
+    }
+
+    func chatViewModel(for channel: Channel) -> ChatViewModel {
+        if let existing = chatViewModels[channel.id] {
+            return existing
+        }
+        let newViewModel = ChatViewModel(channel: channel)
+        chatViewModels[channel.id] = newViewModel
+        return newViewModel
     }
 }
 
@@ -158,31 +173,57 @@ extension Server {
 // MARK: - Main View
 
 struct DiscordView: View {
-    @State private var selectedServer: Server? = Server.sampleServers.first
-    @State private var selectedChannel: Channel?
     @ObservedObject var viewModel: DiscordViewModel
     @Binding var showCreateView: Bool
+    @Binding var selectedServer: Server?
+    @State private var selectedChannel: Channel?
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 20) {
-                ForEach(viewModel.servers) { server in
-                    ServerDetailView(
-                        server: server,
-                        selectedChannel: $selectedChannel
-                    )
-                    .padding(.horizontal)
+        NavigationStack(path: $navigationPath) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    if let selectedServer {
+                        // Show only the selected server
+                        ServerDetailView(
+                            server: selectedServer,
+                            selectedChannel: $selectedChannel,
+                            onChannelSelect: { channel in
+                                navigationPath.append(channel)
+                            }
+                        )
+                        .padding(.horizontal)
+                    } else {
+                        // Show all servers when none is selected
+                        ForEach(viewModel.servers) { server in
+                            ServerDetailView(
+                                server: server,
+                                selectedChannel: $selectedChannel,
+                                onChannelSelect: { channel in
+                                    navigationPath.append(channel)
+                                }
+                            )
+                            .padding(.horizontal)
+                        }
+                    }
                 }
+                .padding(.vertical)
             }
-            .padding(.vertical)
+            .background(Color(.systemGroupedBackground))
+            .navigationDestination(for: Channel.self) { channel in
+                ChatView(
+                    viewModel: viewModel.chatViewModel(for: channel)
+                )
+                .navigationTitle("Friends\(channel.name)") // FIXME: server name
+            }
         }
-        .background(Color(.systemGroupedBackground))
     }
 }
 
 struct ServerDetailView: View {
     let server: Server
     @Binding var selectedChannel: Channel?
+    let onChannelSelect: (Channel) -> Void
     @State private var isExpanded = true
 
     var body: some View {
@@ -243,11 +284,13 @@ struct ServerDetailView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
+                // Channels List
                 VStack(spacing: 0) {
                     ForEach(server.categories) { category in
                         ForEach(category.channels) { channel in
                             Button {
                                 selectedChannel = channel
+                                onChannelSelect(channel)
                             } label: {
                                 ChannelRow(channel: channel)
                                     .padding(.horizontal)
@@ -297,38 +340,5 @@ struct ChannelRow: View {
                     .clipShape(Circle())
             }
         }
-    }
-}
-
-struct ServersList: View {
-    let servers: [Server]
-    let selectedServer: Server?
-    let onServerSelect: (Server) -> Void
-    let onShare: (Video, Server) -> Void
-    let currentVideo: Video?
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ForEach(servers) { server in
-                Button {
-                    if let video = currentVideo {
-                        onShare(video, server)
-                    } else {
-                        onServerSelect(server)
-                    }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(server.id == selectedServer?.id ? Color.blue.opacity(0.2) : Color.clear)
-                            .frame(width: 48, height: 48)
-
-                        Image(systemName: server.icon)
-                            .font(.title2)
-                            .foregroundStyle(server.id == selectedServer?.id ? .blue : .primary)
-                    }
-                }
-            }
-        }
-        .padding(.vertical)
     }
 }

@@ -49,6 +49,8 @@ struct TikTokFeedView: View {
     @ObservedObject var groupViewModel = DiscordViewModel()
     @Binding var showCreateView: Bool
     @Binding var selectedCreator: Creator?
+    @Binding var selectedServer: Server?
+//    @Binding var selectedVideo: Video?
     @Binding var selectedTab: Tab
 
     var body: some View {
@@ -65,6 +67,7 @@ struct TikTokFeedView: View {
                                     size: geometry.size,
                                     showCreateView: $showCreateView,
                                     selectedCreator: $selectedCreator,
+                                    selectedServer: $selectedServer,
                                     selectedTab: $selectedTab
                                 )
                                 .id(video.id)
@@ -172,9 +175,10 @@ struct ContributorsView: View {
 struct VideoPlayerView: View {
     let video: Video
     @ObservedObject var viewModel: TikTokFeedViewModel
-    @ObservedObject var groupViewModel = DiscordViewModel()
+    @ObservedObject var groupViewModel: DiscordViewModel
     @Binding var showCreateView: Bool
     @Binding var selectedCreator: Creator?
+    @Binding var selectedServer: Server?
     @Binding var selectedTab: Tab
     let size: CGSize
 
@@ -193,6 +197,7 @@ struct VideoPlayerView: View {
          size: CGSize,
          showCreateView: Binding<Bool>,
          selectedCreator: Binding<Creator?>,
+         selectedServer: Binding<Server?>,
          selectedTab: Binding<Tab>)
     {
         self.video = video
@@ -201,6 +206,7 @@ struct VideoPlayerView: View {
         self.size = size
         _showCreateView = showCreateView
         _selectedCreator = selectedCreator
+        _selectedServer = selectedServer
         _selectedTab = selectedTab
         _likesCount = State(initialValue: video.likes)
     }
@@ -240,7 +246,9 @@ struct VideoPlayerView: View {
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
                             TikTokServersList(
-                                servers: groupViewModel.servers,
+                                groupViewModel: groupViewModel,
+                                selectedServer: $selectedServer,
+                                selectedTab: $selectedTab,
                                 currentVideo: video
                             ) { video, server in
                                 groupViewModel.shareVideo(video, to: server)
@@ -331,41 +339,23 @@ struct VideoPlayerView: View {
 }
 
 struct TikTokServersList: View {
-    let servers: [Server]
+    @ObservedObject var groupViewModel: DiscordViewModel
+    @Binding var selectedServer: Server?
+    @Binding var selectedTab: Tab
     let currentVideo: Video
     let onShare: (Video, Server) -> Void
 
-    @State private var selectedServer: Server?
-    @State private var showShareConfirmation = false
-    @State private var showShareSuccess = false
-
     var body: some View {
         VStack(spacing: 16) {
-            ForEach(servers) { server in
+            ForEach(groupViewModel.servers) { server in
                 Button {
                     selectedServer = server
-                    showShareConfirmation = true
-                } label: {
-                    ServerButton(server: server, isSelected: selectedServer?.id == server.id)
-                }
-            }
-        }
-        .alert("Share to \(selectedServer?.name ?? "")", isPresented: $showShareConfirmation) {
-            Button("Cancel", role: .cancel) {
-                selectedServer = nil
-            }
-            Button("Share") {
-                if let server = selectedServer {
                     onShare(currentVideo, server)
-                    selectedServer = nil
-                    showShareSuccess = true
+                    selectedTab = .communities
+                } label: {
+                    ServerButton(server: server, isSelected: false) // selectedServer?.id == server.id
                 }
             }
-        }
-        .alert("Shared!", isPresented: $showShareSuccess) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Video shared to the server's shared channel")
         }
     }
 }

@@ -38,7 +38,6 @@ struct CreateServerView: View {
                 }
             }
         }
-        .navigationTitle("Create Server")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Create") {

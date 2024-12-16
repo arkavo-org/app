@@ -181,9 +181,6 @@
     "Channel Type" : {
 
     },
-    "Chat" : {
-
-    },
     "Classification" : {
 
     },
@@ -225,9 +222,6 @@
       }
     },
     "Create Profile things" : {
-
-    },
-    "Create Server" : {
 
     },
     "Create Stream" : {
@@ -324,6 +318,9 @@
 
     },
     "For You" : {
+
+    },
+    "Friends%@" : {
 
     },
     "Granularity" : {
@@ -726,9 +723,6 @@
         }
       }
     },
-    "Share to %@" : {
-
-    },
     "Share URL" : {
       "localizations" : {
         "es-US" : {
@@ -740,9 +734,6 @@
       }
     },
     "Share Your Impact" : {
-
-    },
-    "Shared!" : {
 
     },
     "Sign In" : {
@@ -923,9 +914,6 @@
       }
     },
     "Video message" : {
-
-    },
-    "Video shared to the server's shared channel" : {
 
     },
     "View Dashboard" : {

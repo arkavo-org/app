@@ -34,6 +34,7 @@ struct ContentView: View {
     @State private var showMenuButton = true
     @State private var showCreateView = false
     @State private var selectedCreator: Creator?
+    @State private var selectedServer: Server?
     @StateObject private var feedViewModel = TikTokFeedViewModel()
     @StateObject private var groupViewModel = DiscordViewModel()
 
@@ -63,6 +64,7 @@ struct ContentView: View {
                             groupViewModel: groupViewModel,
                             showCreateView: $showCreateView,
                             selectedCreator: $selectedCreator,
+                            selectedServer: $selectedServer,
                             selectedTab: $selectedTab
                         )
                     }
@@ -70,7 +72,14 @@ struct ContentView: View {
                     if showCreateView {
                         CreateServerView(viewModel: groupViewModel, showCreateView: $showCreateView)
                     } else {
-                        DiscordView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                        DiscordView(
+                            viewModel: groupViewModel,
+                            showCreateView: $showCreateView,
+                            selectedServer: $selectedServer
+                        )
+                        .onDisappear {
+                            selectedServer = nil
+                        }
                     }
                 case .social:
                     BlueskyView(showCreateView: $showCreateView)
