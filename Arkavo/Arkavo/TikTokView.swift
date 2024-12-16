@@ -47,6 +47,8 @@ struct Video: Identifiable {
 struct TikTokFeedView: View {
     @ObservedObject var viewModel: TikTokFeedViewModel
     @Binding var showCreateView: Bool
+    @Binding var selectedCreator: Creator?
+    @Binding var selectedTab: Tab
 
     var body: some View {
         GeometryReader { geometry in
@@ -59,7 +61,9 @@ struct TikTokFeedView: View {
                                     video: video,
                                     viewModel: viewModel,
                                     size: geometry.size,
-                                    showRecordingView: $showCreateView
+                                    showCreateView: $showCreateView,
+                                    selectedCreator: $selectedCreator,
+                                    selectedTab: $selectedTab
                                 )
                                 .id(video.id)
                             }
@@ -80,26 +84,35 @@ struct TikTokFeedView: View {
 
 struct ContributorsView: View {
     let contributors: [Contributor]
+    @Binding var showCreateView: Bool
+    @Binding var selectedCreator: Creator?
+    @Binding var selectedTab: Tab
     @State private var showAllContributors = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Main creator
             if let mainContributor = contributors.first {
-                HStack(spacing: 8) {
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                        .clipShape(Circle())
-                        .foregroundColor(.blue)
+                Button {
+                    selectedCreator = mainContributor.creator
+                    selectedTab = .creators
+                    showCreateView = false
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .frame(width: 32, height: 32)
+                            .clipShape(Circle())
+                            .foregroundColor(.blue)
 
-                    VStack(alignment: .leading) {
-                        Text(mainContributor.creator.name)
-                            .font(.headline)
+                        VStack(alignment: .leading) {
+                            Text(mainContributor.creator.name)
+                                .font(.headline)
 
-                        Text(mainContributor.role)
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            Text(mainContributor.role)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
                     }
                 }
             }
@@ -108,22 +121,28 @@ struct ContributorsView: View {
             if contributors.count > 1 {
                 if showAllContributors {
                     ForEach(contributors.dropFirst()) { contributor in
-                        HStack(spacing: 8) {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                                .clipShape(Circle())
-                                .foregroundColor(.blue.opacity(0.7))
-                            VStack(alignment: .leading) {
-                                Text(contributor.creator.name)
-                                    .font(.subheadline)
+                        Button {
+                            selectedCreator = contributor.creator
+                            selectedTab = .creators
+                            showCreateView = false
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.circle.fill")
+                                    .resizable()
+                                    .frame(width: 24, height: 24)
+                                    .clipShape(Circle())
+                                    .foregroundColor(.blue.opacity(0.7))
+                                VStack(alignment: .leading) {
+                                    Text(contributor.creator.name)
+                                        .font(.subheadline)
 
-                                Text(contributor.role)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                                    Text(contributor.role)
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
                             }
+                            .padding(.leading, 8)
                         }
-                        .padding(.leading, 8)
                     }
                 } else {
                     Button {
@@ -151,7 +170,9 @@ struct ContributorsView: View {
 struct VideoPlayerView: View {
     let video: Video
     @ObservedObject var viewModel: TikTokFeedViewModel
-    @Binding var showRecordingView: Bool
+    @Binding var showCreateView: Bool
+    @Binding var selectedCreator: Creator?
+    @Binding var selectedTab: Tab
     let size: CGSize
 
     @State private var isLiked = false
@@ -163,11 +184,19 @@ struct VideoPlayerView: View {
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
-    init(video: Video, viewModel: TikTokFeedViewModel, size: CGSize, showRecordingView: Binding<Bool>) {
+    init(video: Video,
+         viewModel: TikTokFeedViewModel,
+         size: CGSize,
+         showCreateView: Binding<Bool>,
+         selectedCreator: Binding<Creator?>,
+         selectedTab: Binding<Tab>)
+    {
         self.video = video
         self.viewModel = viewModel
         self.size = size
-        _showRecordingView = showRecordingView
+        _showCreateView = showCreateView
+        _selectedCreator = selectedCreator
+        _selectedTab = selectedTab
         _likesCount = State(initialValue: video.likes)
     }
 
@@ -242,9 +271,14 @@ struct VideoPlayerView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        ContributorsView(contributors: video.contributors)
-                            .padding(.horizontal, systemMargin)
-                            .padding(.bottom, systemMargin * 8)
+                        ContributorsView(
+                            contributors: video.contributors,
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator,
+                            selectedTab: $selectedTab
+                        )
+                        .padding(.horizontal, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
                         Spacer()
                     }
                 }
@@ -584,45 +618,4 @@ extension TikTokFeedViewModel {
         // Preview data is already loaded in init()
         return viewModel
     }
-}
-
-#Preview("TikTok Feed with ViewModel") {
-    TikTokFeedView(
-        viewModel: TikTokFeedViewModel.preview(),
-        showCreateView: .constant(false)
-    )
-}
-
-// MARK: - Previews
-
-#Preview("TikTok Feed") {
-    let viewModel = TikTokFeedViewModel()
-    viewModel.videos = [
-        Video(
-            id: "1",
-            url: URL(string: "https://example.com/video1.mp4")!,
-            contributors: [
-                Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
-                Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
-                Contributor(id: "3", creator: Creator.sampleCreators[2], role: "Featured"),
-            ],
-            description: "Amazing collaboration! 🎨 x 🎵",
-            likes: 1200,
-            comments: 85,
-            shares: 45
-        ),
-        Video(
-            id: "2",
-            url: URL(string: "https://example.com/video2.mp4")!,
-            contributors: [
-                Contributor(id: "4", creator: Creator.sampleCreators[1], role: "Artist"),
-            ],
-            description: "Solo beat preview 🎵",
-            likes: 890,
-            comments: 42,
-            shares: 31
-        ),
-    ]
-
-    return TikTokFeedView(viewModel: viewModel, showCreateView: .constant(false))
 }

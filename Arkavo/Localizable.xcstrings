@@ -17,6 +17,12 @@
         }
       }
     },
+    "%@/month" : {
+
+    },
+    "%lfK" : {
+
+    },
     "%lld" : {
       "localizations" : {
         "es-US" : {
@@ -27,13 +33,31 @@
         }
       }
     },
+    "%lld likes" : {
+
+    },
+    "%lld plays" : {
+
+    },
+    "%lld views" : {
+
+    },
     "%lld voice channels" : {
 
     },
     "%lld%%" : {
 
     },
+    "%lldK" : {
+
+    },
+    "•" : {
+
+    },
     "2m ago" : {
+
+    },
+    "4.9" : {
 
     },
     "512" : {
@@ -115,6 +139,12 @@
 
     },
     "Back" : {
+
+    },
+    "Become a Supporter" : {
+
+    },
+    "Bio" : {
 
     },
     "Blurb: %@" : {
@@ -279,6 +309,9 @@
 
     },
     "Face ID Terms & Conditions" : {
+
+    },
+    "Featured Creator" : {
 
     },
     "Features" : {
@@ -560,6 +593,9 @@
     "Public ID" : {
 
     },
+    "Rating" : {
+
+    },
     "Read Our Full Privacy Policy" : {
 
     },
@@ -578,6 +614,9 @@
 
     },
     "Recent Activity" : {
+
+    },
+    "Recently Active" : {
 
     },
     "Reddit • 2 issues found" : {
@@ -629,6 +668,15 @@
 
     },
     "Search Bluesky" : {
+
+    },
+    "Search creators..." : {
+
+    },
+    "Search Results" : {
+
+    },
+    "Section" : {
 
     },
     "Server Details" : {
@@ -783,6 +831,15 @@
           }
         }
       }
+    },
+    "Support" : {
+
+    },
+    "Support %@" : {
+
+    },
+    "Support Tiers" : {
+
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 

@@ -88,10 +88,3 @@ struct ThoughtMetadata: Codable {
         try decoder.decode(ThoughtMetadata.self, from: data)
     }
 }
-
-enum MediaType: String, Codable {
-    case text
-    case image
-    case audio
-    case video
-}

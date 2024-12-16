@@ -33,6 +33,7 @@ struct ContentView: View {
     @State private var isCollapsed = false
     @State private var showMenuButton = true
     @State private var showCreateView = false
+    @State private var selectedCreator: Creator?
     @StateObject private var feedViewModel = TikTokFeedViewModel()
     @StateObject private var groupViewModel = DiscordViewModel()
 
@@ -57,7 +58,12 @@ struct ContentView: View {
                             showCreateView = false
                         }
                     } else {
-                        TikTokFeedView(viewModel: feedViewModel, showCreateView: $showCreateView)
+                        TikTokFeedView(
+                            viewModel: feedViewModel,
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator,
+                            selectedTab: $selectedTab
+                        )
                     }
                 case .communities:
                     if showCreateView {
@@ -68,7 +74,19 @@ struct ContentView: View {
                 case .social:
                     BlueskyView(showCreateView: $showCreateView)
                 case .creators:
-                    PatreonView(showCreateView: $showCreateView)
+                    if showCreateView, selectedCreator != nil {
+                        if let creator = selectedCreator {
+                            PatreonSupportView(creator: creator) {
+                                showCreateView = false
+                                selectedCreator = nil
+                            }
+                        }
+                    } else {
+                        PatreonView(
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator
+                        )
+                    }
                 case .profile:
                     ProfileView(showCreateView: $showCreateView)
                 }
