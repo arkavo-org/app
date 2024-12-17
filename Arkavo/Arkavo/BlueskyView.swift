@@ -226,10 +226,6 @@ class BlueskyFeedViewModel: ObservableObject {
     @Published var currentPostIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
-
-    init() {
-        print("📊 BlueskyFeedViewModel initialized")
-    }
 }
 
 // MARK: - BlueskyView
@@ -266,28 +262,25 @@ struct BlueskyView: View {
                     }
                     .scrollDisabled(true)
                     .onChange(of: viewModel.currentPostIndex) { _, newIndex in
-                        print("📱 Index changed to: \(newIndex)")
+//                        print("📱 Index changed to: \(newIndex)")
                         withAnimation {
                             proxy.scrollTo(viewModel.posts[newIndex].id, anchor: .center)
                         }
                     }
                     .gesture(
                         DragGesture()
-                            .onChanged { gesture in
-                                print("📊 Drag distance: \(gesture.translation.height)")
-                            }
                             .onEnded { gesture in
                                 let verticalMovement = gesture.translation.height
                                 let swipeThreshold: CGFloat = 50
-                                print("📊 Swipe ended: \(verticalMovement)")
+//                                print("📊 Swipe ended: \(verticalMovement)")
 
                                 if abs(verticalMovement) > swipeThreshold {
                                     withAnimation {
                                         if verticalMovement > 0, viewModel.currentPostIndex > 0 {
-                                            print("📊 Moving to previous post")
+//                                            print("📊 Moving to previous post")
                                             viewModel.currentPostIndex -= 1
                                         } else if verticalMovement < 0, viewModel.currentPostIndex < viewModel.posts.count - 1 {
-                                            print("📊 Moving to next post")
+//                                            print("📊 Moving to next post")
                                             viewModel.currentPostIndex += 1
                                         }
                                     }
@@ -298,11 +291,6 @@ struct BlueskyView: View {
             }
         }
         .ignoresSafeArea()
-        .onAppear {
-            print("📱 BlueskyView appeared")
-            print("📱 Initial index: \(currentIndex)")
-            print("📱 Total posts available: \(SampleData.recentPosts.count)")
-        }
     }
 }
 
@@ -396,114 +384,98 @@ struct ImmersivePostCard: View {
     @Binding var selectedTab: Tab
     let isCurrentPost: Bool
 
-    @State private var dragOffset = CGSize.zero
-    private let swipeThreshold: CGFloat = 50
+    // Standard system margin from HIG, matching TikTokView
     private let systemMargin: CGFloat = 16
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background Image
+                // Background with fixed frame
                 if let firstImage = post.images?.first {
-                    AsyncImage(url: URL(string: firstImage)) { image in
-                        image
-                            .resizable()
-                            .aspectFill()
-                            .frame(width: size.width, height: size.height)
-                    } placeholder: {
-                        Color.black
+                    AsyncImage(url: URL(string: firstImage)) { phase in
+                        switch phase {
+                        case .empty:
+                            Color.black
+                                .frame(width: size.width, height: size.height)
+                        case let .success(image):
+                            image
+                                .resizable()
+                                .aspectFill()
+                                .frame(width: size.width, height: size.height)
+                        case .failure:
+                            Color.black
+                                .frame(width: size.width, height: size.height)
+                        @unknown default:
+                            Color.black
+                                .frame(width: size.width, height: size.height)
+                        }
                     }
                 } else {
                     Color.black
+                        .frame(width: size.width, height: size.height)
                 }
-
-                // Gradient overlay
-                LinearGradient(
-                    colors: [
-                        .black.opacity(0.6),
-                        .black.opacity(0.3),
-                        .clear,
-                        .black.opacity(0.3),
-                        .black.opacity(0.6),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
 
                 // Content overlay
-                HStack(spacing: 0) {
-                    // Left side - Prominent content text
+                HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
-                        GeometryReader { metrics in
-                            Text(post.content)
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: metrics.size.height * 0.6)
-                                .position(
-                                    x: systemMargin + geometry.safeAreaInsets.leading,
-                                    y: metrics.size.height / 2
-                                )
-                        }
+                        Text(post.content)
+                            .font(.system(size: 24, weight: .heavy))
+                            .foregroundColor(.white)
                     }
-                    .frame(width: systemMargin * 2.75)
-
+                    .padding(systemMargin * 2)
                     Spacer()
 
-                    // Right side - Action buttons and contributors
-                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
+                    // Right side - Action buttons
+                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) { // 20pt
                         Spacer()
 
-                        // TikTokServersList
-                        TikTokServersList(
-                            groupViewModel: groupViewModel,
-                            selectedServer: $selectedServer,
-                            selectedTab: $selectedTab,
-                            currentVideo: Video(
-                                id: post.id,
-                                url: URL(string: "placeholder")!,
-                                contributors: [
-                                    Contributor(
-                                        id: post.author.id,
-                                        creator: post.author.asCreator(),
-                                        role: "Author"
-                                    ),
-                                ],
-                                description: post.content,
-                                likes: post.likes,
-                                comments: post.replyCount,
-                                shares: post.reposts
-                            )
-                        ) { _, _ in
-                            // Handle share action
-                        }
-                        .padding(.trailing, systemMargin)
-                        .padding(.vertical, systemMargin * 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(.ultraThinMaterial.opacity(0.4))
-                                .padding(.trailing, systemMargin / 2)
-                        )
+                        VStack(spacing: systemMargin * 1.25) { // 20pt
+                            TikTokServersList(
+                                groupViewModel: groupViewModel,
+                                selectedServer: $selectedServer,
+                                selectedTab: $selectedTab,
+                                currentVideo: Video(
+                                    id: post.id,
+                                    url: URL(string: "placeholder")!,
+                                    contributors: [
+                                        Contributor(
+                                            id: post.author.id,
+                                            creator: post.author.asCreator(),
+                                            role: "Author"
+                                        ),
+                                    ],
+                                    description: post.content,
+                                    likes: post.likes,
+                                    comments: post.replyCount,
+                                    shares: post.reposts
+                                )
+                            ) { _, _ in }
+                                .padding(.trailing, systemMargin)
+                                .padding(.vertical, systemMargin * 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(.ultraThinMaterial.opacity(0.4))
+                                        .padding(.trailing, systemMargin / 2)
+                                )
 
-                        // Comment button
-                        Button {
-                            // Handle comments
-                        } label: {
-                            VStack(spacing: systemMargin * 0.25) {
-                                Image(systemName: "bubble.right")
-                                    .font(.system(size: systemMargin * 1.625))
-                                Text("\(post.replyCount)")
-                                    .font(.caption)
+                            Button {
+                                // Handle comments
+                            } label: {
+                                VStack(spacing: systemMargin * 0.25) { // 4pt
+                                    Image(systemName: "bubble.right")
+                                        .font(.system(size: systemMargin * 1.625)) // 26pt
+                                    Text("\(post.replyCount)")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.white)
                             }
-                            .foregroundColor(.white)
                         }
-
-                        Spacer()
-                            .frame(height: systemMargin * 4)
+                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
+                        .padding(.bottom, systemMargin * 6.25) // 100pt
                     }
-                    .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                 }
 
-                // Contributors section at bottom
+                // Contributors section - Positioned at bottom
                 VStack {
                     Spacer()
                     HStack {
@@ -525,7 +497,6 @@ struct ImmersivePostCard: View {
                     }
                 }
             }
-            .frame(width: size.width, height: size.height)
         }
     }
 }
