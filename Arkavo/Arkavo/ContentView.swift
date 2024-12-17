@@ -86,7 +86,7 @@ struct ContentView: View {
                         }
                     }
                 case .social:
-                    BlueskyView(showCreateView: $showCreateView)
+                    BlueskyView(showCreateView: $showCreateView, selectedTab: $selectedTab)
                 case .creators:
                     if showCreateView, selectedCreator != nil {
                         if let creator = selectedCreator {

@@ -30,6 +30,23 @@ struct DIDUser: Identifiable {
     var serviceEndpoint: String // AT Protocol service endpoint
 }
 
+// MARK: - DIDUser to Creator Adapter
+
+extension DIDUser {
+    func asCreator() -> Creator {
+        Creator(
+            id: id,
+            name: displayName,
+            imageURL: avatarURL,
+            latestUpdate: description ?? "",
+            tier: .premium, // Default to premium tier for Bluesky users
+            socialLinks: [], // Could be populated if we have social links
+            notificationCount: 0,
+            bio: description ?? ""
+        )
+    }
+}
+
 // MARK: - Models and Sample Data
 
 enum SampleData {
@@ -181,226 +198,16 @@ struct UserPreferences {
 
 struct BlueskyView: View {
     @State private var searchText = ""
-    @State private var selectedTab: Tab = .forYou
-    @State private var selectedUser: DIDUser?
-    @State private var searchResults: [DIDUser] = []
-    @State private var isSearching = false
+    @State private var selectedUser: Creator?
     @Binding var showCreateView: Bool
-
-    enum Tab {
-        case forYou, following
-    }
+    @Binding var selectedTab: Tab
 
     var body: some View {
         VStack(spacing: 0) {
-            if isSearching {
-                SearchResultsView(
-                    searchText: $searchText,
-                    searchResults: $searchResults,
-                    selectedUser: $selectedUser,
-                    isSearching: $isSearching
-                )
-            } else {
-                HStack {
-                    Spacer()
-                    Spacer()
-                    Button(action: { isSearching = true }) {
-                        Image(systemName: "magnifyingglass")
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                }
-                FeedView(tab: selectedTab, selectedUser: $selectedUser)
-            }
+            ImmersiveFeedView(selectedUser: $selectedUser, selectedTab: $selectedTab)
         }
         .sheet(isPresented: $showCreateView) {
             NewPostView(selectedUser: $selectedUser)
-        }
-    }
-}
-
-// Extracted Main Feed Container
-struct MainFeedContainer: View {
-    @Binding var searchText: String
-    @Binding var selectedTab: BlueskyView.Tab
-    @Binding var showNewPostSheet: Bool
-    @Binding var selectedUser: DIDUser?
-    @Binding var searchResults: [DIDUser]
-    @Binding var isSearching: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if !isSearching {
-                SearchBar(searchText: $searchText, isSearching: $isSearching)
-                    .padding(.horizontal)
-            }
-
-            Picker("Feed", selection: $selectedTab) {
-                Text("For You").tag(BlueskyView.Tab.forYou)
-                Text("Following").tag(BlueskyView.Tab.following)
-            }
-            .pickerStyle(.segmented)
-            .padding()
-
-            if isSearching {
-                SearchResultsView(
-                    searchText: $searchText,
-                    searchResults: $searchResults,
-                    selectedUser: $selectedUser,
-                    isSearching: $isSearching
-                )
-            } else {
-                FeedView(tab: selectedTab, selectedUser: $selectedUser)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(action: { showNewPostSheet.toggle() }) {
-                                Image(systemName: "square.and.pencil")
-                            }
-                        }
-                    }
-                    .navigationTitle("Home")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-    }
-}
-
-// Search Bar remains the same
-struct SearchBar: View {
-    @Binding var searchText: String
-    @Binding var isSearching: Bool
-
-    var body: some View {
-        Button(action: {
-            isSearching = true
-        }) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                Text("Search Bluesky")
-                    .foregroundColor(.gray)
-                Spacer()
-            }
-            .padding(8)
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
-        }
-    }
-}
-
-// MARK: - Feed View
-
-struct FeedView: View {
-    let tab: BlueskyView.Tab
-    @State private var posts: [Post] = SampleData.recentPosts
-    @Binding var selectedUser: DIDUser?
-
-    var body: some View {
-        List {
-            ForEach(posts) { post in
-                PostCard(post: post, selectedUser: $selectedUser)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .padding(.vertical, 8)
-            }
-        }
-        .listStyle(.plain)
-    }
-}
-
-// MARK: - Post Card
-
-struct PostCard: View {
-    @State var post: Post
-    @State private var showActions = false
-    @Binding var selectedUser: DIDUser?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Author Info
-            Button(action: { selectedUser = post.author }) {
-                HStack {
-                    AsyncImage(url: URL(string: post.author.avatarURL)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        Color.gray.opacity(0.3)
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(post.author.displayName)
-                                .font(.headline)
-                            if post.author.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                        Text("@\(post.author.handle)")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
-
-            // Content
-            Text(post.content)
-                .font(.body)
-
-            // Images if any
-            if let images = post.images {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(images, id: \.self) { imageURL in
-                            AsyncImage(url: URL(string: imageURL)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Color.gray.opacity(0.3)
-                            }
-                            .frame(width: 200, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                }
-            }
-
-            // Action Buttons
-            HStack(spacing: 24) {
-                Button(action: {}) {
-                    Label("\(post.replyCount)", systemImage: "bubble.left")
-                }
-
-                Button(action: { post.isReposted.toggle() }) {
-                    Label("\(post.reposts)", systemImage: post.isReposted ? "repeat.circle.fill" : "repeat.circle")
-                }
-                .foregroundColor(post.isReposted ? .green : .gray)
-
-                Button(action: { post.isLiked.toggle() }) {
-                    Label("\(post.likes)", systemImage: post.isLiked ? "heart.fill" : "heart")
-                }
-                .foregroundColor(post.isLiked ? .red : .gray)
-
-                Button(action: {}) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-            .font(.subheadline)
-            .foregroundColor(.gray)
-        }
-        .padding(.horizontal)
-        .confirmationDialog("Post Actions", isPresented: $showActions) {
-            Button("Copy Link", role: .none) {}
-            Button("Share Post", role: .none) {}
-            Button("Mute User", role: .destructive) {}
-            Button("Report Post", role: .destructive) {}
         }
     }
 }
@@ -411,7 +218,7 @@ struct NewPostView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var postText = ""
     @State private var selectedImages: [UIImage] = []
-    @Binding var selectedUser: DIDUser?
+    @Binding var selectedUser: Creator?
 
     // Function to detect mentions in text
     private func detectMentions(_ text: String) -> [(String, Range<String.Index>)] {
@@ -485,81 +292,200 @@ struct NewPostView: View {
     }
 }
 
-struct MediaGridView: View {
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-    ]
+struct ImmersiveFeedView: View {
+    @State private var currentIndex = 0
+    @State private var posts: [Post] = SampleData.recentPosts
+    @Binding var selectedUser: Creator?
+    @Binding var selectedTab: Tab
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(0 ..< 20, id: \.self) { _ in
-                Color.gray.opacity(0.3)
-                    .aspectRatio(1, contentMode: .fill)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(posts.indices, id: \.self) { index in
+                            ImmersivePostCard(
+                                post: posts[index],
+                                size: geometry.size,
+                                selectedUser: $selectedUser,
+                                selectedTab: $selectedTab,
+                                isCurrentPost: index == currentIndex
+                            )
+                            .id(posts[index].id)
+                        }
+                    }
+                }
+                .scrollDisabled(true)
+                .gesture(
+                    DragGesture()
+                        .onEnded { gesture in
+                            let verticalMovement = gesture.translation.height
+                            let swipeThreshold: CGFloat = 50
+
+                            if abs(verticalMovement) > swipeThreshold {
+                                withAnimation {
+                                    if verticalMovement > 0, currentIndex > 0 {
+                                        currentIndex -= 1
+                                        proxy.scrollTo(posts[currentIndex].id, anchor: .center)
+                                    } else if verticalMovement < 0, currentIndex < posts.count - 1 {
+                                        currentIndex += 1
+                                        proxy.scrollTo(posts[currentIndex].id, anchor: .center)
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+struct ImmersivePostCard: View {
+    @State var post: Post
+    let size: CGSize
+    @Binding var selectedUser: Creator?
+    @Binding var selectedTab: Tab
+    let isCurrentPost: Bool
+    private let systemMargin: CGFloat = 16
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Background
+                if let firstImage = post.images?.first {
+                    AsyncImage(url: URL(string: firstImage)) { image in
+                        image
+                            .resizable()
+                            .aspectFill()
+                            .frame(width: size.width, height: size.height)
+                            .overlay(
+                                LinearGradient(
+                                    colors: [
+                                        .black.opacity(0.6),
+                                        .black.opacity(0.3),
+                                        .clear,
+                                        .black.opacity(0.3),
+                                        .black.opacity(0.6),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    } placeholder: {
+                        Color.black
+                    }
+                } else {
+                    Color.black
+                }
+
+                // Content overlay using TikTok-style layout
+                HStack(spacing: 0) {
+                    // Left side - Rotated post content
+                    ZStack(alignment: .center) {
+                        GeometryReader { metrics in
+                            Text(post.content)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: metrics.size.height, height: systemMargin)
+                                .rotationEffect(.degrees(-90), anchor: .center)
+                                .position(
+                                    x: systemMargin + geometry.safeAreaInsets.leading,
+                                    y: metrics.size.height / 2
+                                )
+                        }
+                    }
+                    .frame(width: systemMargin * 2.75)
+
+                    Spacer()
+
+                    // Right side - Author info using ContributorsView style
+                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
+                        Spacer()
+
+                        // Convert DIDUser to Creator format
+                        ContributorsView(
+                            contributors: [Contributor(
+                                id: "1",
+                                creator: post.author.asCreator(),
+                                role: "Author"
+                            )],
+                            showCreateView: .constant(false),
+                            selectedCreator: $selectedUser,
+                            selectedTab: $selectedTab
+                        )
+                        .padding(.trailing, systemMargin)
+                        .padding(.vertical, systemMargin * 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(.ultraThinMaterial.opacity(0.4))
+                                .padding(.trailing, systemMargin / 2)
+                        )
+                    }
+                    .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
+                    .padding(.bottom, systemMargin * 6.25)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        }
+    }
+}
+
+// Helper View for Creators List (similar to ContributorsView in TikTokView)
+struct CreatorsList: View {
+    let creators: [Creator]
+    @Binding var showCreateView: Bool
+    @Binding var selectedCreator: DIDUser?
+    @State private var showAllCreators = false
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if let mainCreator = creators.first {
+                Button {
+                    selectedCreator = DIDUser(
+                        id: mainCreator.id,
+                        handle: mainCreator.name,
+                        displayName: mainCreator.name,
+                        avatarURL: mainCreator.imageURL,
+                        isVerified: true,
+                        did: "did:plc:\(mainCreator.id)",
+                        description: nil,
+                        followers: 0,
+                        following: 0,
+                        postsCount: 0,
+                        serviceEndpoint: "https://bsky.social/xrpc"
+                    )
+                } label: {
+                    HStack(spacing: 8) {
+                        AsyncImage(url: URL(string: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e")) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            Color.gray.opacity(0.3)
+                        }
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading) {
+                            Text(mainCreator.name)
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            Text("@\(mainCreator.name)")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-struct SearchResultsView: View {
-    @Binding var searchText: String
-    @Binding var searchResults: [DIDUser]
-    @Binding var selectedUser: DIDUser?
-    @Binding var isSearching: Bool
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(searchResults) { user in
-                    Button(action: {
-                        selectedUser = user
-                        isSearching = false
-                    }) {
-                        HStack {
-                            AsyncImage(url: URL(string: user.avatarURL)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Image(systemName: "person.circle.fill")
-                            }
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-
-                            VStack(alignment: .leading) {
-                                Text(user.displayName)
-                                    .font(.headline)
-                                Text("@\(user.handle)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search Bluesky")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        isSearching = false
-                        searchText = ""
-                    }
-                }
-            }
-        }
-        .onChange(of: searchText) { _, newValue in
-            if !newValue.isEmpty {
-                searchResults = SampleData.connections.filter {
-                    $0.handle.localizedCaseInsensitiveContains(newValue) ||
-                        $0.displayName.localizedCaseInsensitiveContains(newValue)
-                }
-            } else {
-                searchResults = []
-            }
-        }
+extension View {
+    func aspectFill() -> some View {
+        scaledToFill()
+            .clipped()
     }
 }

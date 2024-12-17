@@ -184,9 +184,6 @@
     "Contributors" : {
 
     },
-    "Copy Link" : {
-
-    },
     "Create" : {
 
     },
@@ -290,16 +287,10 @@
     "Features" : {
 
     },
-    "Feed" : {
-
-    },
     "Followers" : {
 
     },
     "Following" : {
-
-    },
-    "For You" : {
 
     },
     "Friends%@" : {
@@ -438,9 +429,6 @@
     "Members:" : {
 
     },
-    "Mute User" : {
-
-    },
     "My Account" : {
 
     },
@@ -516,9 +504,6 @@
       }
     },
     "Post" : {
-
-    },
-    "Post Actions" : {
 
     },
     "Posts" : {
@@ -621,9 +606,6 @@
         }
       }
     },
-    "Report Post" : {
-
-    },
     "Resend" : {
 
     },
@@ -650,12 +632,6 @@
 
     },
     "Schedule" : {
-
-    },
-    "Search" : {
-
-    },
-    "Search Bluesky" : {
 
     },
     "Search creators..." : {
@@ -691,9 +667,6 @@
           }
         }
       }
-    },
-    "Share Post" : {
-
     },
     "Share Text" : {
       "localizations" : {
