@@ -30,8 +30,7 @@ struct DIDUser: Identifiable {
     var serviceEndpoint: String // AT Protocol service endpoint
 }
 
-// MARK: - DIDUser to Creator Adapter
-
+// Helper extensions for model conversion
 extension DIDUser {
     func asCreator() -> Creator {
         Creator(
@@ -39,10 +38,28 @@ extension DIDUser {
             name: displayName,
             imageURL: avatarURL,
             latestUpdate: description ?? "",
-            tier: .premium, // Default to premium tier for Bluesky users
-            socialLinks: [], // Could be populated if we have social links
+            tier: .premium,
+            socialLinks: [],
             notificationCount: 0,
             bio: description ?? ""
+        )
+    }
+}
+
+extension Creator {
+    func asDIDUser() -> DIDUser {
+        DIDUser(
+            id: id,
+            handle: "",
+            displayName: name,
+            avatarURL: imageURL,
+            isVerified: false,
+            did: "did:plc:\(id)",
+            description: bio,
+            followers: 0,
+            following: 0,
+            postsCount: 0,
+            serviceEndpoint: "https://bsky.social/xrpc"
         )
     }
 }
@@ -87,6 +104,15 @@ enum SampleData {
             id: "3",
             author: user,
             content: "New blog post: 'Designing for Decentralization - A UX Perspective' 📝\n\nExploring how we can make decentralized social networks more intuitive and user-friendly while maintaining privacy and data sovereignty.",
+            timestamp: Date().addingTimeInterval(-86400),
+            likes: 256,
+            reposts: 45,
+            images: ["https://images.unsplash.com/photo-1558655146-9f40138edfeb"], replyCount: 32
+        ),
+        Post(
+            id: "4",
+            author: user,
+            content: "Old blog post: 'Designing for Decentralization - A UI Perspective' \n\nExploring how we can make centralized social networks more intuitive.",
             timestamp: Date().addingTimeInterval(-86400),
             likes: 256,
             reposts: 45,
@@ -194,20 +220,88 @@ struct UserPreferences {
     var threadMuting: Bool
 }
 
+@MainActor
+class BlueskyFeedViewModel: ObservableObject {
+    @Published var posts: [Post] = SampleData.recentPosts
+    @Published var currentPostIndex = 0
+    @Published var isLoading = false
+    @Published var error: Error?
+
+    init() {
+        print("📊 BlueskyFeedViewModel initialized")
+    }
+}
+
 // MARK: - BlueskyView
 
 struct BlueskyView: View {
-    @State private var searchText = ""
-    @State private var selectedUser: Creator?
+    @StateObject private var viewModel = BlueskyFeedViewModel()
+    @ObservedObject var groupViewModel: DiscordViewModel
+    @State private var currentIndex = 0
     @Binding var showCreateView: Bool
+    @Binding var selectedCreator: Creator?
+    @Binding var selectedServer: Server?
     @Binding var selectedTab: Tab
 
     var body: some View {
-        VStack(spacing: 0) {
-            ImmersiveFeedView(selectedUser: $selectedUser, selectedTab: $selectedTab)
+        GeometryReader { geometry in
+            ZStack {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.posts) { post in
+                                ImmersivePostCard(
+                                    post: post,
+                                    groupViewModel: groupViewModel,
+                                    size: geometry.size,
+                                    showCreateView: $showCreateView,
+                                    selectedCreator: $selectedCreator,
+                                    selectedServer: $selectedServer,
+                                    selectedTab: $selectedTab,
+                                    isCurrentPost: post.id == viewModel.posts[viewModel.currentPostIndex].id
+                                )
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                            }
+                        }
+                    }
+                    .scrollDisabled(true)
+                    .onChange(of: viewModel.currentPostIndex) { _, newIndex in
+                        print("📱 Index changed to: \(newIndex)")
+                        withAnimation {
+                            proxy.scrollTo(viewModel.posts[newIndex].id, anchor: .center)
+                        }
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { gesture in
+                                print("📊 Drag distance: \(gesture.translation.height)")
+                            }
+                            .onEnded { gesture in
+                                let verticalMovement = gesture.translation.height
+                                let swipeThreshold: CGFloat = 50
+                                print("📊 Swipe ended: \(verticalMovement)")
+
+                                if abs(verticalMovement) > swipeThreshold {
+                                    withAnimation {
+                                        if verticalMovement > 0, viewModel.currentPostIndex > 0 {
+                                            print("📊 Moving to previous post")
+                                            viewModel.currentPostIndex -= 1
+                                        } else if verticalMovement < 0, viewModel.currentPostIndex < viewModel.posts.count - 1 {
+                                            print("📊 Moving to next post")
+                                            viewModel.currentPostIndex += 1
+                                        }
+                                    }
+                                }
+                            }
+                    )
+                }
+            }
         }
-        .sheet(isPresented: $showCreateView) {
-            NewPostView(selectedUser: $selectedUser)
+        .ignoresSafeArea()
+        .onAppear {
+            print("📱 BlueskyView appeared")
+            print("📱 Initial index: \(currentIndex)")
+            print("📱 Total posts available: \(SampleData.recentPosts.count)")
         }
     }
 }
@@ -292,86 +386,30 @@ struct NewPostView: View {
     }
 }
 
-struct ImmersiveFeedView: View {
-    @State private var currentIndex = 0
-    @State private var posts: [Post] = SampleData.recentPosts
-    @Binding var selectedUser: Creator?
-    @Binding var selectedTab: Tab
-
-    var body: some View {
-        GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(posts.indices, id: \.self) { index in
-                            ImmersivePostCard(
-                                post: posts[index],
-                                size: geometry.size,
-                                selectedUser: $selectedUser,
-                                selectedTab: $selectedTab,
-                                isCurrentPost: index == currentIndex
-                            )
-                            .id(posts[index].id)
-                        }
-                    }
-                }
-                .scrollDisabled(true)
-                .gesture(
-                    DragGesture()
-                        .onEnded { gesture in
-                            let verticalMovement = gesture.translation.height
-                            let swipeThreshold: CGFloat = 50
-
-                            if abs(verticalMovement) > swipeThreshold {
-                                withAnimation {
-                                    if verticalMovement > 0, currentIndex > 0 {
-                                        currentIndex -= 1
-                                        proxy.scrollTo(posts[currentIndex].id, anchor: .center)
-                                    } else if verticalMovement < 0, currentIndex < posts.count - 1 {
-                                        currentIndex += 1
-                                        proxy.scrollTo(posts[currentIndex].id, anchor: .center)
-                                    }
-                                }
-                            }
-                        }
-                )
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
 struct ImmersivePostCard: View {
-    @State var post: Post
+    let post: Post
+    @ObservedObject var groupViewModel: DiscordViewModel
     let size: CGSize
-    @Binding var selectedUser: Creator?
+    @Binding var showCreateView: Bool
+    @Binding var selectedCreator: Creator?
+    @Binding var selectedServer: Server?
     @Binding var selectedTab: Tab
     let isCurrentPost: Bool
+
+    @State private var dragOffset = CGSize.zero
+    private let swipeThreshold: CGFloat = 50
     private let systemMargin: CGFloat = 16
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background
+                // Background Image
                 if let firstImage = post.images?.first {
                     AsyncImage(url: URL(string: firstImage)) { image in
                         image
                             .resizable()
                             .aspectFill()
                             .frame(width: size.width, height: size.height)
-                            .overlay(
-                                LinearGradient(
-                                    colors: [
-                                        .black.opacity(0.6),
-                                        .black.opacity(0.3),
-                                        .clear,
-                                        .black.opacity(0.3),
-                                        .black.opacity(0.6),
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
                     } placeholder: {
                         Color.black
                     }
@@ -379,16 +417,28 @@ struct ImmersivePostCard: View {
                     Color.black
                 }
 
-                // Content overlay using TikTok-style layout
+                // Gradient overlay
+                LinearGradient(
+                    colors: [
+                        .black.opacity(0.6),
+                        .black.opacity(0.3),
+                        .clear,
+                        .black.opacity(0.3),
+                        .black.opacity(0.6),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                // Content overlay
                 HStack(spacing: 0) {
-                    // Left side - Rotated post content
+                    // Left side - Prominent content text
                     ZStack(alignment: .center) {
                         GeometryReader { metrics in
                             Text(post.content)
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 24, weight: .semibold))
                                 .foregroundColor(.white)
-                                .frame(width: metrics.size.height, height: systemMargin)
-                                .rotationEffect(.degrees(-90), anchor: .center)
+                                .frame(width: metrics.size.height * 0.6)
                                 .position(
                                     x: systemMargin + geometry.safeAreaInsets.leading,
                                     y: metrics.size.height / 2
@@ -399,21 +449,33 @@ struct ImmersivePostCard: View {
 
                     Spacer()
 
-                    // Right side - Author info using ContributorsView style
+                    // Right side - Action buttons and contributors
                     VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
                         Spacer()
 
-                        // Convert DIDUser to Creator format
-                        ContributorsView(
-                            contributors: [Contributor(
-                                id: "1",
-                                creator: post.author.asCreator(),
-                                role: "Author"
-                            )],
-                            showCreateView: .constant(false),
-                            selectedCreator: $selectedUser,
-                            selectedTab: $selectedTab
-                        )
+                        // TikTokServersList
+                        TikTokServersList(
+                            groupViewModel: groupViewModel,
+                            selectedServer: $selectedServer,
+                            selectedTab: $selectedTab,
+                            currentVideo: Video(
+                                id: post.id,
+                                url: URL(string: "placeholder")!,
+                                contributors: [
+                                    Contributor(
+                                        id: post.author.id,
+                                        creator: post.author.asCreator(),
+                                        role: "Author"
+                                    ),
+                                ],
+                                description: post.content,
+                                likes: post.likes,
+                                comments: post.replyCount,
+                                shares: post.reposts
+                            )
+                        ) { _, _ in
+                            // Handle share action
+                        }
                         .padding(.trailing, systemMargin)
                         .padding(.vertical, systemMargin * 2)
                         .background(
@@ -421,9 +483,46 @@ struct ImmersivePostCard: View {
                                 .fill(.ultraThinMaterial.opacity(0.4))
                                 .padding(.trailing, systemMargin / 2)
                         )
+
+                        // Comment button
+                        Button {
+                            // Handle comments
+                        } label: {
+                            VStack(spacing: systemMargin * 0.25) {
+                                Image(systemName: "bubble.right")
+                                    .font(.system(size: systemMargin * 1.625))
+                                Text("\(post.replyCount)")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.white)
+                        }
+
+                        Spacer()
+                            .frame(height: systemMargin * 4)
                     }
                     .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
-                    .padding(.bottom, systemMargin * 6.25)
+                }
+
+                // Contributors section at bottom
+                VStack {
+                    Spacer()
+                    HStack {
+                        ContributorsView(
+                            contributors: [
+                                Contributor(
+                                    id: post.author.id,
+                                    creator: post.author.asCreator(),
+                                    role: "Author"
+                                ),
+                            ],
+                            showCreateView: $showCreateView,
+                            selectedCreator: $selectedCreator,
+                            selectedTab: $selectedTab
+                        )
+                        .padding(.horizontal, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
+                        Spacer()
+                    }
                 }
             }
             .frame(width: size.width, height: size.height)
