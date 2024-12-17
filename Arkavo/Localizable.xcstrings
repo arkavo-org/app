@@ -117,9 +117,6 @@
     "Age Verification" : {
 
     },
-    "Announcement" : {
-
-    },
     "Arkavo" : {
 
     },
@@ -169,18 +166,6 @@
         }
       }
     },
-    "Category" : {
-
-    },
-    "Channel Details" : {
-
-    },
-    "Channel Name" : {
-
-    },
-    "Channel Type" : {
-
-    },
     "Classification" : {
 
     },
@@ -203,9 +188,6 @@
 
     },
     "Create" : {
-
-    },
-    "Create Channel" : {
 
     },
     "Create New Stream" : {
@@ -850,9 +832,6 @@
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
-    "Text Channel" : {
-
-    },
     "Thank You for Making a Difference!" : {
 
     },
@@ -943,9 +922,6 @@
       }
     },
     "Voice" : {
-
-    },
-    "Voice Channel" : {
 
     },
     "Welcome to Arkavo!" : {
