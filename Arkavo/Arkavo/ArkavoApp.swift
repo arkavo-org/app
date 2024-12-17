@@ -1,3 +1,4 @@
+import ArkavoSocial
 import SwiftUI
 
 @main
@@ -8,7 +9,14 @@ struct ArkavoApp: App {
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     let persistenceController = PersistenceController.shared
-    let service = ArkavoService()
+    let client: ArkavoClient
+
+    init() {
+        client = ArkavoClient(
+            baseURL: URL(string: "https://webauthn.arkavo.net")!,
+            relyingPartyID: "webauthn.arkavo.net"
+        )
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -105,30 +113,23 @@ struct ArkavoApp: App {
     @MainActor
     private func saveProfile(profile: Profile) async {
         do {
-            service.authenticationManager.signUp(accountName: profile.name)
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            try await persistenceController.saveChanges()
-            // token check
-            tokenCheckTimer?.invalidate() // Invalidate any existing timer
-            tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                Task { @MainActor in
-                    await checkForAuthenticationToken(account: account)
+
+            // Connect with WebAuthn
+            do {
+                try await client.connect(accountName: profile.name)
+                // If connection is successful, we should have a token from the server
+                // Store it in the account
+                if let token = client.currentToken {
+                    account.authenticationToken = token
+                    try await persistenceController.saveChanges()
                 }
+            } catch {
+                print("Failed to connect: \(error)")
             }
         } catch {
             print("Failed to save profile: \(error)")
-        }
-    }
-
-    @MainActor
-    private func checkForAuthenticationToken(account: Account) async {
-        tokenCheckTimer?.invalidate()
-        tokenCheckTimer = nil
-        if let token = account.authenticationToken {
-            service.setupWebSocketManager(token: token)
-        } else {
-            print("Authentication token is nil")
         }
     }
 
