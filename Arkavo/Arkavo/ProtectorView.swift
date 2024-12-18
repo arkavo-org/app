@@ -8,7 +8,7 @@ import SwiftUI
 // MARK: - Main Content View
 
 struct ProtectorView: View {
-    @State var service: ArkavoService
+    @StateObject var service: ProtectorService
     @State private var currentScreen: Screen = .intro
 
     enum Screen {
@@ -133,7 +133,7 @@ struct InformationView: View {
 
 struct SettingsView: View {
     @Binding var currentScreen: ProtectorView.Screen
-    @State var service: ArkavoService
+    @StateObject var service: ProtectorService
     @State private var nightOnly = false
     @State private var whileCharging = false
     @State private var wifiOnly = false
@@ -249,7 +249,7 @@ struct SettingsView: View {
 // Preview Provider
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
-        SettingsView(currentScreen: .constant(.settings), service: ArkavoService())
+        SettingsView(currentScreen: .constant(.settings), service: ProtectorService())
     }
 }
 
@@ -333,9 +333,9 @@ struct ScanningView: View {
 
     private let scannerService: RedditScannerService
     private let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-    private let service: ArkavoService
+    private let service: ProtectorService
 
-    init(currentScreen: Binding<ProtectorView.Screen>, service: ArkavoService) {
+    init(currentScreen: Binding<ProtectorView.Screen>, service: ProtectorService) {
         _currentScreen = currentScreen
         self.service = service
         let apiClient = RedditAPIClient(authManager: service.redditAuthManager)
@@ -443,7 +443,7 @@ struct ScanningView: View {
         .onDisappear {
             stopScanning()
             // Clean up
-            service.protectorService?.clearSignature()
+            service.clearSignature()
         }
         .onReceive(timer) { _ in
             if !isPaused {
@@ -480,27 +480,26 @@ struct ScanningView: View {
                 // First request and wait for the content signature
                 scanStatus["reddit"] = "Initializing protection..."
                 let publicID = "BVrprHHtRuMqNSaVZPRk84W9arEi7An1nvTHChCSAS7i".base58Decoded!
-                try await service.protectorService?.requestContentSignature(withPublicID: publicID)
+                try await service.requestContentSignature(withPublicID: publicID)
 
                 // Wait for the signature to be received
-                if let signature = try await service.protectorService?.waitForSignature() {
-                    // Initialize the scanner with the signature
-                    scannerService.scanner.addSignature(signature)
+                let signature = try await service.waitForSignature()
+                // Initialize the scanner with the signature
+                scannerService.scanner.addSignature(signature)
 
-                    // Now start the actual scanning
-                    scanStatus["reddit"] = "Starting scan..."
-                    isInitializing = false
+                // Now start the actual scanning
+                scanStatus["reddit"] = "Starting scan..."
+                isInitializing = false
 
-                    // Start Reddit scanning with relevant subreddits
-                    scannerService.startScanning(subreddits: [
-                        "videos",
-                        "pics",
-                        "gifs",
-                    ])
+                // Start Reddit scanning with relevant subreddits
+                scannerService.startScanning(subreddits: [
+                    "videos",
+                    "pics",
+                    "gifs",
+                ])
 
-                    // Set up progress monitoring
-                    setupProgressMonitoring()
-                }
+                // Set up progress monitoring
+                setupProgressMonitoring()
             } catch {
                 errorMessages["reddit"] = "Failed to initialize: \(error.localizedDescription)"
                 isInitializing = false
@@ -1043,7 +1042,7 @@ extension View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ProtectorView(service: ArkavoService())
+        ProtectorView(service: ProtectorService())
     }
 }
 

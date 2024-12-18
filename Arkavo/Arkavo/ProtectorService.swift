@@ -2,13 +2,15 @@ import FlatBuffers
 import Foundation
 import OpenTDFKit
 
-class ProtectorService {
-    let service: ArkavoService
+class ProtectorService: ObservableObject {
+    @Published private(set) var isWaitingForSignature = false
+    @Published private(set) var hasSignature = false
+    let redditAuthManager = RedditAuthManager()
     private var signatureReceivedContinuation: CheckedContinuation<ContentSignature, Error>?
-    private var receivedSignature: ContentSignature?
-
-    init(_ service: ArkavoService) {
-        self.service = service
+    private var receivedSignature: ContentSignature? {
+        didSet {
+            hasSignature = receivedSignature != nil
+        }
     }
 
     func sendContentSignatureEvent(_ signature: ContentSignature, creatorPublicID: Data) async throws {
@@ -49,16 +51,18 @@ class ProtectorService {
         builder.finish(offset: eventOffset)
         let buffer = builder.sizedBuffer
         let data = Data(bytes: buffer.memory.advanced(by: buffer.reader), count: Int(buffer.size))
-//        print("Content signature cache event: \(data.base64EncodedString())")
-        try service.sendEvent(data)
+        print("Content signature cache event: \(data.base64EncodedString())")
+//        try service.sendEvent(data)
     }
 
     @MainActor
     public func requestContentSignature(withPublicID publicID: Data) async throws {
+        isWaitingForSignature = true
         let account = try await PersistenceController.shared.getOrCreateAccount()
         let accountProfile = account.profile
         guard let accountProfilePublicID = accountProfile?.publicID
         else {
+            isWaitingForSignature = false
             throw ProtectorError.missingAccountOrProfile
         }
         print("Content creator: \(publicID.base58EncodedString)")
@@ -84,12 +88,12 @@ class ProtectorService {
         builder.finish(offset: eventOffset)
         let data = builder.data
         print("Content invite event: \(data.base64EncodedString())")
-        try service.sendEvent(data)
     }
 
     func waitForSignature() async throws -> ContentSignature {
         // If we already have a signature, return it immediately
         if let signature = receivedSignature {
+            isWaitingForSignature = false
             return signature
         }
 
@@ -103,10 +107,10 @@ class ProtectorService {
     func handle(_ data: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async throws {
         print("Receiving Content signature data: \(data)")
         let decompressed = try ContentSignature.decompress(data)
-//        print("Decompressed: \(decompressed)")
 
         // Store the signature
         receivedSignature = decompressed
+        isWaitingForSignature = false
 
         // Complete the continuation if someone is waiting
         if let continuation = signatureReceivedContinuation {
@@ -118,6 +122,7 @@ class ProtectorService {
     func clearSignature() {
         receivedSignature = nil
         signatureReceivedContinuation = nil
+        isWaitingForSignature = false
     }
 }
 

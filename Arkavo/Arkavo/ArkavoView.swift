@@ -50,7 +50,9 @@ struct ArkavoView: View {
                         Text("Thought service is unavailable")
                     }
                 case .protector:
-                    ProtectorView(service: service)
+                    if let service = service.protectorService {
+                        ProtectorView(service: service)
+                    }
                 }
                 menuView()
             }

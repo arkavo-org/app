@@ -361,7 +361,6 @@ struct CreatorHeaderView: View {
                 }
 
                 Button {
-                    isSupporting.toggle()
                     isProtecting.toggle()
                 } label: {
                     Text(isProtecting ? "Protecting" : "Protect")

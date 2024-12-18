@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - Creation Views
-
 struct CreateServerView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: DiscordViewModel
@@ -24,18 +22,23 @@ struct CreateServerView: View {
                             } label: {
                                 Image(systemName: icon)
                                     .font(.title)
+                                    .foregroundColor(.primary)
                                     .frame(width: 60, height: 60)
-                                    .background(selectedIcon == icon ? .blue.opacity(0.2) : .clear)
-                                    .clipShape(Circle())
+                                    .background(
+                                        Circle()
+                                            .fill(selectedIcon == icon ? Color.blue.opacity(0.2) : Color.clear)
+                                    )
                                     .overlay(
                                         Circle()
-                                            .stroke(selectedIcon == icon ? .blue : .gray, lineWidth: 2)
+                                            .stroke(selectedIcon == icon ? Color.blue : Color.gray, lineWidth: 2)
                                     )
+                                    .contentShape(Circle())
                             }
                         }
                     }
                     .padding(.vertical, 8)
                 }
+                .listRowInsets(EdgeInsets())
             }
         }
         .toolbar {
@@ -72,74 +75,5 @@ struct CreateServerView: View {
         )
         viewModel.servers.insert(newServer, at: 0)
         showCreateView.toggle()
-    }
-}
-
-struct CreateChannelView: View {
-    @Environment(\.dismiss) var dismiss
-    let server: Server
-    @Binding var categories: [ChannelCategory]
-
-    @State private var channelName = ""
-    @State private var selectedType: ChannelType = .text
-    @State private var selectedCategory: ChannelCategory?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Channel Details") {
-                    TextField("Channel Name", text: $channelName)
-
-                    Picker("Channel Type", selection: $selectedType) {
-                        Label("Text Channel", systemImage: ChannelType.text.icon)
-                            .tag(ChannelType.text)
-                        Label("Voice Channel", systemImage: ChannelType.voice.icon)
-                            .tag(ChannelType.voice)
-                        Label("Announcement", systemImage: ChannelType.announcement.icon)
-                            .tag(ChannelType.announcement)
-                    }
-
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(categories) { category in
-                            Text(category.name)
-                                .tag(Optional(category))
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Create Channel")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        createChannel()
-                        dismiss()
-                    }
-                    .disabled(channelName.isEmpty || selectedCategory == nil)
-                }
-            }
-            .onAppear {
-                selectedCategory = categories.first
-            }
-        }
-    }
-
-    private func createChannel() {
-        guard let categoryIndex = categories.firstIndex(where: { $0.id == selectedCategory?.id }) else { return }
-
-        let newChannel = Channel(
-            id: UUID().uuidString,
-            name: channelName.lowercased(),
-            type: selectedType,
-            unreadCount: 0,
-            isActive: false
-        )
-
-        categories[categoryIndex].channels.append(newChannel)
     }
 }

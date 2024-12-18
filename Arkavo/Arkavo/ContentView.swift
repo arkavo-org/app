@@ -5,6 +5,7 @@ enum Tab {
     case communities
     case social
     case creators
+    case protect
     case profile
 
     var title: String {
@@ -13,6 +14,7 @@ enum Tab {
         case .communities: "Community"
         case .social: "Social"
         case .creators: "Creators"
+        case .protect: "Protect"
         case .profile: "Profile"
         }
     }
@@ -23,6 +25,7 @@ enum Tab {
         case .communities: "bubble.left.and.bubble.right.fill"
         case .social: "network"
         case .creators: "star.circle.fill"
+        case .protect: "shield.checkerboard"
         case .profile: "person.circle.fill"
         }
     }
@@ -37,6 +40,7 @@ struct ContentView: View {
     @State private var selectedServer: Server?
     @StateObject private var feedViewModel = TikTokFeedViewModel()
     @StateObject private var groupViewModel = DiscordViewModel()
+    @StateObject private var protectorService = ProtectorService()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
@@ -82,7 +86,13 @@ struct ContentView: View {
                         }
                     }
                 case .social:
-                    BlueskyView(showCreateView: $showCreateView)
+                    BlueskyView(
+                        groupViewModel: groupViewModel,
+                        showCreateView: $showCreateView,
+                        selectedCreator: $selectedCreator,
+                        selectedServer: $selectedServer,
+                        selectedTab: $selectedTab
+                    )
                 case .creators:
                     if showCreateView, selectedCreator != nil {
                         if let creator = selectedCreator {
@@ -97,6 +107,8 @@ struct ContentView: View {
                             selectedCreator: $selectedCreator
                         )
                     }
+                case .protect:
+                    ProtectorView(service: protectorService)
                 case .profile:
                     ProfileView(showCreateView: $showCreateView)
                 }
@@ -123,7 +135,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 30) {
-                        ForEach([Tab.home, .communities, .social, .creators, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .communities, .social, .creators, .protect, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {

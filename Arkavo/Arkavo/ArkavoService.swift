@@ -29,7 +29,7 @@ class ArkavoService {
     func setupCallbacks() {
         thoughtService = ThoughtService(self)
         streamService = StreamService(self)
-        protectorService = ProtectorService(self)
+        protectorService = ProtectorService()
         webSocketManager.setKASPublicKeyCallback { publicKey in
             if ArkavoService.kasPublicKey != nil {
                 return

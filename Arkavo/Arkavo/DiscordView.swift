@@ -115,7 +115,7 @@ extension Server {
                     name: "TEXT CHANNELS",
                     channels: [
                         Channel(id: "3", name: "general", type: .text, unreadCount: 5, isActive: true),
-                        Channel(id: "4", name: "off-topic", type: .text, unreadCount: 2, isActive: false),
+                        Channel(id: "4", name: "shared", type: .text, unreadCount: 2, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -123,8 +123,7 @@ extension Server {
                     id: "3",
                     name: "VOICE CHANNELS",
                     channels: [
-                        Channel(id: "5", name: "General Voice", type: .voice, unreadCount: 0, isActive: false),
-                        Channel(id: "6", name: "Gaming Voice", type: .voice, unreadCount: 0, isActive: false),
+                        Channel(id: "5", name: "Voice", type: .voice, unreadCount: 0, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -151,7 +150,7 @@ extension Server {
                     id: "2",
                     name: "TEXT CHANNELS",
                     channels: [
-                        Channel(id: "4", name: "off-topic", type: .text, unreadCount: 2, isActive: false),
+                        Channel(id: "4", name: "shared", type: .text, unreadCount: 2, isActive: false),
                     ],
                     isExpanded: true
                 ),
@@ -159,7 +158,7 @@ extension Server {
                     id: "3",
                     name: "VOICE CHANNELS",
                     channels: [
-                        Channel(id: "5", name: "General Voice", type: .voice, unreadCount: 0, isActive: false),
+                        Channel(id: "5", name: "Voice", type: .voice, unreadCount: 0, isActive: false),
                     ],
                     isExpanded: true
                 ),
