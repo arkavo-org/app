@@ -52,15 +52,14 @@ protocol ArkavoClientDelegate: AnyObject {
 /// Main ArkavoClient class handling WebAuthn authentication and WebSocket communication
 @MainActor
 public final class ArkavoClient: NSObject {
-    // MARK: - Properties
-
-    private let baseURL: URL
+    private let authURL: URL // for WebAuthn
+    private let websocketURL: URL // for WebSocket
     private let relyingPartyID: String
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
-    private var authenticationToken: String?
     private let delegateQueue = OperationQueue()
     private let socketDelegate: WebSocketDelegate
+    private var connectionContinuation: CheckedContinuation<Void, Error>?
 
     private var currentState: ArkavoClientState = .disconnected {
         didSet {
@@ -70,15 +69,13 @@ public final class ArkavoClient: NSObject {
 
     weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
-    public var currentToken: String? { authenticationToken }
+    public var currentToken: String? {
+        KeychainManager.getAuthenticationToken()
+    }
 
-    // MARK: - Initialization
-
-    public init(baseURL: URL,
-                relyingPartyID: String,
-                presentationProvider: ASAuthorizationControllerPresentationContextProviding? = nil)
-    {
-        self.baseURL = baseURL
+    public init(authURL: URL, websocketURL: URL, relyingPartyID: String, presentationProvider: ASAuthorizationControllerPresentationContextProviding? = nil) {
+        self.authURL = authURL
+        self.websocketURL = websocketURL
         self.relyingPartyID = relyingPartyID
         socketDelegate = WebSocketDelegate()
 
@@ -92,32 +89,52 @@ public final class ArkavoClient: NSObject {
 
         super.init()
 
+        // Set up state handler immediately after initialization
         socketDelegate.stateHandler = { [weak self] newState in
             Task { @MainActor in
-                self?.currentState = newState
+                guard let self else { return }
+                print("WebSocket state changing to: \(newState)")
+                self.currentState = newState
             }
         }
     }
 
     // MARK: - Public Methods
 
+    @MainActor
     public func connect(accountName: String) async throws {
-        guard currentState == .disconnected else {
+        // Allow reconnection attempts from error or disconnected states
+        switch currentState {
+        case .disconnected:
+            // OK to proceed
+            break
+        case .error:
+            // OK to proceed
+            break
+        default:
             throw ArkavoError.invalidState
         }
 
-        currentState = .authenticating
-
         do {
+            // First authenticate
+            currentState = .authenticating
             let token = try await authenticateUser(accountName: accountName)
-            authenticationToken = token
+            try KeychainManager.saveAuthenticationToken(token)
 
+            // Then establish WebSocket connection
+            currentState = .connecting
             try await setupWebSocketConnection()
-
-            currentState = .connected
+            // Wait for connection to complete
+            try await waitForConnection()
         } catch {
             currentState = .error(error)
             throw error
+        }
+    }
+
+    private func waitForConnection() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            self.connectionContinuation = continuation
         }
     }
 
@@ -128,7 +145,7 @@ public final class ArkavoClient: NSObject {
         webSocket?.cancel()
         webSocket = nil
         session = nil
-        authenticationToken = nil
+        KeychainManager.deleteAuthenticationToken()
     }
 
     public func sendMessage(_ data: Data) async throws {
@@ -160,15 +177,29 @@ public final class ArkavoClient: NSObject {
     }
 
     private func setupWebSocketConnection() async throws {
-        guard let token = authenticationToken else {
+        print("Current state before WebSocket setup: \(currentState)")
+        guard currentState == .connecting else {
+            print("Invalid state for WebSocket setup: \(currentState)")
+            throw ArkavoError.invalidState
+        }
+
+        guard let token = KeychainManager.getAuthenticationToken() else {
+            currentState = .error(ArkavoError.authenticationFailed("No authentication token"))
             throw ArkavoError.authenticationFailed("No authentication token")
         }
 
-        currentState = .connecting
+        let wsURL = websocketURL
+        print("\nWebSocket Connection Attempt:")
+        print("URL: \(wsURL)")
 
-        let wsURL = baseURL.appendingPathComponent("ws")
         var request = URLRequest(url: wsURL)
         request.setValue(token, forHTTPHeaderField: "X-Auth-Token")
+        request.setValue("websocket", forHTTPHeaderField: "Upgrade")
+        request.setValue("Upgrade", forHTTPHeaderField: "Connection")
+        request.setValue("13", forHTTPHeaderField: "Sec-WebSocket-Version")
+
+        print("\nRequest Headers:")
+        dump(request.allHTTPHeaderFields ?? [:])
 
         let session = URLSession(configuration: .default, delegate: socketDelegate, delegateQueue: delegateQueue)
         self.session = session
@@ -176,6 +207,20 @@ public final class ArkavoClient: NSObject {
         let webSocket = session.webSocketTask(with: request)
         self.webSocket = webSocket
 
+        webSocket.sendPing { [weak self] error in
+            Task { @MainActor in
+                if let error {
+                    print("Initial ping failed: \(error)")
+                    self?.connectionContinuation?.resume(throwing: error)
+                    self?.connectionContinuation = nil
+                    self?.currentState = .error(error)
+                } else {
+                    print("Initial ping successful")
+                }
+            }
+        }
+
+        print("\nWebSocket Task Created: \(webSocket)")
         webSocket.resume()
         receiveMessage()
     }
@@ -197,19 +242,20 @@ public final class ArkavoClient: NSObject {
                     @unknown default:
                         break
                     }
-                    // Continue receiving messages
                     self.receiveMessage()
 
                 case let .failure(error):
-                    self.delegate?.clientDidReceiveError(self, error: error)
+                    print("WebSocket receive error: \(error)")
                     self.currentState = .error(error)
+                    self.delegate?.clientDidReceiveError(self, error: error)
                 }
             }
         }
     }
 
     private func fetchRegistrationOptions(accountName: String) async throws -> (challenge: String, userID: String) {
-        let url = baseURL.appendingPathComponent("register/\(accountName)")
+        // Use auth URL for WebAuthn
+        let url = authURL.appendingPathComponent("register/\(accountName)")
         let (data, response) = try await URLSession.shared.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
@@ -239,7 +285,8 @@ public final class ArkavoClient: NSObject {
     }
 
     private func completeRegistration(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) async throws -> String {
-        var request = URLRequest(url: baseURL.appendingPathComponent("register"))
+        // Use auth URL for WebAuthn
+        var request = URLRequest(url: authURL.appendingPathComponent("register"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -262,7 +309,10 @@ public final class ArkavoClient: NSObject {
         else {
             throw ArkavoError.authenticationFailed("No authentication token received")
         }
-
+        // Verify token format
+        if !token.starts(with: "eyJ") {
+            throw ArkavoError.authenticationFailed("Invalid token format")
+        }
         return token
     }
 }
@@ -326,15 +376,47 @@ public final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @un
         }
     }
 
-    public func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didOpenWithProtocol _: String?) {
-        stateQueue.async {
-            self._stateHandler?(.connected)
+    public func urlSession(_: URLSession,
+                           webSocketTask _: URLSessionWebSocketTask,
+                           didOpenWithProtocol protocol: String?)
+    {
+        print("WebSocket did connect with protocol: \(`protocol` ?? "none")")
+
+        DispatchQueue.main.async { [weak self] in
+            print("Updating state to connected")
+            self?.stateHandler?(.connected)
         }
     }
 
-    public func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didCloseWith _: URLSessionWebSocketTask.CloseCode, reason _: Data?) {
-        stateQueue.async {
-            self._stateHandler?(.disconnected)
+    public func urlSession(_: URLSession,
+                           task _: URLSessionTask,
+                           didCompleteWithError error: Error?)
+    {
+        if let error {
+            print("WebSocket did complete with error: \(error)")
+            DispatchQueue.main.async { [weak self] in
+                self?.stateHandler?(.error(error))
+            }
+        } else {
+            print("WebSocket did complete normally")
+            DispatchQueue.main.async { [weak self] in
+                self?.stateHandler?(.disconnected)
+            }
+        }
+    }
+
+    public func urlSession(_: URLSession,
+                           webSocketTask _: URLSessionWebSocketTask,
+                           didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+                           reason: Data?)
+    {
+        print("WebSocket did close with code: \(closeCode)")
+        if let reason, let reasonStr = String(data: reason, encoding: .utf8) {
+            print("Close reason: \(reasonStr)")
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.stateHandler?(.disconnected)
         }
     }
 }

@@ -122,31 +122,31 @@ struct ArkavoView: View {
                                 }
                             #endif
                         }
-                        Section("Account") {
-                            if let account = accounts.first {
-                                if let profile = account.profile {
-                                    Button("Profile: \(profile.name)") {
-                                        showingProfileDetails = true
-                                    }
-                                }
-                                if let authenticationToken = account.authenticationToken {
-                                    if let profile = account.profile {
-                                        // TODO: check if session token, then change to logout
-                                        Button("Sign In") {
-                                            Task {
-                                                await service.authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    if let profile = account.profile {
-                                        Button("Sign Up") {
-                                            service.authenticationManager.signUp(accountName: profile.name)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+//                        Section("Account") {
+//                            if let account = accounts.first {
+//                                if let profile = account.profile {
+//                                    Button("Profile: \(profile.name)") {
+//                                        showingProfileDetails = true
+//                                    }
+//                                }
+//                                if let authenticationToken = account.authenticationToken {
+//                                    if let profile = account.profile {
+//                                        // TODO: check if session token, then change to logout
+//                                        Button("Sign In") {
+//                                            Task {
+//                                                await service.authenticationManager.signIn(accountName: profile.name, authenticationToken: authenticationToken)
+//                                            }
+//                                        }
+//                                    }
+//                                } else {
+//                                    if let profile = account.profile {
+//                                        Button("Sign Up") {
+//                                            service.authenticationManager.signUp(accountName: profile.name)
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
                     } label: {
                         Image(systemName: "line.3.horizontal")
                             .padding(.top, 40)

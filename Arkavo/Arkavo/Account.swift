@@ -5,10 +5,20 @@ import SwiftData
 final class Account {
     @Attribute(.unique) var id: Int
     var profile: Profile?
-    var authenticationToken: String?
     var streams: [Stream] = []
     var _identityAssuranceLevel: String = IdentityAssuranceLevel.ial0.rawValue
     var _ageVerificationStatus: String = AgeVerificationStatus.unverified.rawValue
+
+    init(id: Int = 0,
+         profile: Profile? = nil,
+         identityAssuranceLevel: IdentityAssuranceLevel = .ial0,
+         ageVerificationStatus: AgeVerificationStatus = .unverified)
+    {
+        self.id = id
+        self.profile = profile
+        _identityAssuranceLevel = identityAssuranceLevel.rawValue
+        _ageVerificationStatus = ageVerificationStatus.rawValue
+    }
 
     // Computed properties for type-safe enum access
     var identityAssuranceLevel: IdentityAssuranceLevel {
@@ -31,20 +41,7 @@ final class Account {
 
     var streamLimit: Int {
         // TODO: handle feature payment for more
-        10
-    }
-
-    init(id: Int = 0,
-         profile: Profile? = nil,
-         authenticationToken: String? = nil,
-         identityAssuranceLevel: IdentityAssuranceLevel = .ial0,
-         ageVerificationStatus: AgeVerificationStatus = .unverified)
-    {
-        self.id = id // There should only ever be one account with id 0
-        self.profile = profile
-        self.authenticationToken = authenticationToken
-        _identityAssuranceLevel = identityAssuranceLevel.rawValue
-        _ageVerificationStatus = ageVerificationStatus.rawValue
+        100
     }
 
     func addStream(_ stream: Stream) throws {
@@ -58,9 +55,9 @@ final class Account {
     }
 
     func updateVerificationStatus(_ status: AgeVerificationStatus) {
-        ageVerificationStatus = status
+        _ageVerificationStatus = status.rawValue
         if status == .verified {
-            identityAssuranceLevel = .ial2
+            _identityAssuranceLevel = IdentityAssuranceLevel.ial1.rawValue
         }
     }
 
