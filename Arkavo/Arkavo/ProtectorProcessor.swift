@@ -88,7 +88,7 @@ class ContentPreprocessor {
                 do {
                     // FIXME: Combine title and content for processing
                     let combinedContent = [post.title, post.selftext]
-                        .compactMap { $0 }
+                        .compactMap(\.self)
                         .joined(separator: " ")
 
                     // Generate signature

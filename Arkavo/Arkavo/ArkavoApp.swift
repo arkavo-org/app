@@ -5,16 +5,19 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-    @State private var selectedView: AppView = .registration
+    @State private var selectedView: AppView = .main
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
+    @State private var connectionError: ConnectionError?
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
     init() {
         client = ArkavoClient(
-            baseURL: URL(string: "https://webauthn.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net"
+            authURL: URL(string: "https://webauthn.arkavo.net")!,
+            websocketURL: URL(string: "wss://kas.arkavo.net")!,
+            relyingPartyID: "webauthn.arkavo.net",
+            curve: .p256
         )
     }
 
@@ -32,24 +35,6 @@ struct ArkavoApp: App {
                 case .main:
                     NavigationStack(path: $navigationPath) {
                         ContentView()
-//                        ArkavoView(service: service)
-//                        #if os(iOS)
-//                            .navigationBarTitleDisplayMode(.inline)
-//                            .navigationBarHidden(true)
-//                        #endif
-//                            .modelContainer(persistenceController.container)
-//                            .navigationDestination(for: DeepLinkDestination.self) { destination in
-//                                switch destination {
-//                                case let .stream(publicID):
-//                                    if service.streamService == nil {
-//                                        Text("No Stream Service for \(publicID)")
-//                                    } else {
-//                                        StreamLoadingView(service: service.streamService!, publicID: publicID)
-//                                    }
-//                                case let .profile(publicID):
-//                                    Text("Profile View for \(publicID)")
-//                                }
-//                            }
                     }
                 }
             }
@@ -63,6 +48,31 @@ struct ArkavoApp: App {
                 if let url = notification.object as? URL {
                     handleIncomingURL(url)
                 }
+            }
+            .alert(item: $connectionError) { error in
+                Alert(
+                    title: Text(error.title),
+                    message: Text(error.message),
+                    primaryButton: .default(Text(error.action)) {
+                        if error.action == "Update App" {
+                            // Open App Store
+                            if let url = URL(string: "itms-apps://apple.com/app/id<your-app-id>") { // FIXME:
+                                UIApplication.shared.open(url)
+                            }
+                        } else {
+                            // Retry connection
+                            Task {
+                                await checkAccountStatus()
+                            }
+                        }
+                    },
+                    secondaryButton: .cancel(Text("Later")) {
+                        // Only allow dismissal if error is not blocking
+                        if error.isBlocking {
+                            selectedView = .main
+                        }
+                    }
+                )
             }
             #if targetEnvironment(macCatalyst)
             .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
@@ -91,26 +101,6 @@ struct ArkavoApp: App {
     }
 
     @MainActor
-    private func checkAccountStatus() async {
-        guard !isCheckingAccountStatus else { return }
-        isCheckingAccountStatus = true
-        defer { isCheckingAccountStatus = false }
-        do {
-            let account = try await persistenceController.getOrCreateAccount()
-            if account.profile == nil {
-                selectedView = .registration
-            } else {
-                #if !targetEnvironment(macCatalyst)
-                    selectedView = .main
-                #endif
-            }
-        } catch {
-            print("ArkavoApp: Error checking account status: \(error.localizedDescription)")
-            selectedView = .registration
-        }
-    }
-
-    @MainActor
     private func saveProfile(profile: Profile) async {
         do {
             let account = try await persistenceController.getOrCreateAccount()
@@ -120,9 +110,9 @@ struct ArkavoApp: App {
             do {
                 try await client.connect(accountName: profile.name)
                 // If connection is successful, we should have a token from the server
-                // Store it in the account
+                // Store it in the keychain
                 if let token = client.currentToken {
-                    account.authenticationToken = token
+                    try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
                 }
             } catch {
@@ -140,6 +130,144 @@ struct ArkavoApp: App {
             print("ArkavoApp: Changes saved successfully")
         } catch {
             print("ArkavoApp: Error saving changes: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func checkAccountStatus() async {
+        guard !isCheckingAccountStatus else { return }
+        isCheckingAccountStatus = true
+        defer { isCheckingAccountStatus = false }
+
+        do {
+            let account = try await persistenceController.getOrCreateAccount()
+            if account.profile == nil {
+                selectedView = .registration
+                return
+            }
+
+            guard let profile = account.profile else {
+                connectionError = ConnectionError(
+                    title: "Profile Error",
+                    message: "There was an error loading your profile. Please try signing up again.",
+                    action: "Sign Up",
+                    isBlocking: true
+                )
+                selectedView = .registration
+                return
+            }
+
+            // If we're already connected, nothing to do
+            if case .connected = client.currentState {
+                print("Client already connected, no action needed")
+                selectedView = .main
+                return
+            }
+
+            // If we're in the process of connecting, wait for that to complete
+            if case .connecting = client.currentState {
+                print("Connection already in progress, waiting...")
+                return
+            }
+
+            // Try to connect with existing token if available
+            if KeychainManager.getAuthenticationToken() != nil {
+                do {
+                    print("Attempting connection with existing token")
+                    try await client.connect(accountName: profile.name)
+                    selectedView = .main
+                    print("checkAccountStatus: Connected with existing token")
+                    return
+                } catch {
+                    print("Connection with existing token failed: \(error.localizedDescription)")
+                    KeychainManager.deleteAuthenticationToken()
+                    // Fall through to fresh connection attempt
+                }
+            }
+
+            // Only reach here if no token, token connection failed, or we're disconnected
+            print("Attempting fresh connection")
+            try await client.connect(accountName: profile.name)
+            selectedView = .main
+            print("checkAccountStatus: Connected with fresh connection")
+
+        } catch let error as ArkavoError {
+            switch error {
+            case .authenticationFailed:
+                connectionError = ConnectionError(
+                    title: "Authentication Failed",
+                    message: "We couldn't verify your identity. This can happen if you've signed in on another device. Please sign in again to continue.",
+                    action: "Sign In",
+                    isBlocking: true
+                )
+                selectedView = .main
+
+            case .connectionFailed:
+                connectionError = ConnectionError(
+                    title: "Connection Failed",
+                    message: "We're having trouble reaching Arkavo servers. Please check your internet connection and try again.",
+                    action: "Retry",
+                    isBlocking: false
+                )
+                if selectedView != .main {
+                    selectedView = .main
+                }
+
+            case .invalidResponse:
+                connectionError = ConnectionError(
+                    title: "Update Required",
+                    message: "This version of Arkavo is no longer supported. Please update to the latest version from the App Store to continue.",
+                    action: "Update App",
+                    isBlocking: true
+                )
+                selectedView = .main
+
+            default:
+                connectionError = ConnectionError(
+                    title: "Connection Error",
+                    message: "Something went wrong while connecting to Arkavo. Please try again.",
+                    action: "Retry",
+                    isBlocking: false
+                )
+                selectedView = .main
+            }
+        } catch let error as URLError {
+            switch error.code {
+            case .notConnectedToInternet:
+                connectionError = ConnectionError(
+                    title: "No Internet Connection",
+                    message: "Please check your internet connection and try again.",
+                    action: "Retry",
+                    isBlocking: false
+                )
+
+            case .timedOut:
+                connectionError = ConnectionError(
+                    title: "Connection Timeout",
+                    message: "The connection to Arkavo is taking longer than expected. This might be due to a slow internet connection.",
+                    action: "Try Again",
+                    isBlocking: false
+                )
+
+            default:
+                connectionError = ConnectionError(
+                    title: "Network Error",
+                    message: "There was a problem connecting to Arkavo. Please check your internet connection and try again.",
+                    action: "Retry",
+                    isBlocking: false
+                )
+            }
+            if selectedView != .main {
+                selectedView = .main
+            }
+        } catch {
+            connectionError = ConnectionError(
+                title: "Unexpected Error",
+                message: "Something unexpected happened. Please try again or contact support if the problem persists.",
+                action: "Retry",
+                isBlocking: false
+            )
+            selectedView = .main
         }
     }
 
@@ -190,4 +318,23 @@ enum DeepLinkDestination: Hashable {
 extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
+}
+
+@MainActor
+struct ConnectionError: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let action: String
+    let isBlocking: Bool // If true, user must resolve before continuing
+}
+
+enum ArkavoError: Error {
+    case invalidURL
+    case authenticationFailed(String)
+    case connectionFailed(String)
+    case invalidResponse
+    case messageError(String)
+    case notConnected
+    case invalidState
 }

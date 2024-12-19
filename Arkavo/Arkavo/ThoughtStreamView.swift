@@ -191,7 +191,7 @@ struct ThoughtStreamView: View {
     }
 
     private var shareSheet: some View {
-        ShareSheet(activityItems: [shareURL].compactMap { $0 },
+        ShareSheet(activityItems: [shareURL].compactMap(\.self),
                    isPresented: $isShareSheetPresented)
     }
 

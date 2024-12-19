@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import OpenTDFKit
 
 #if canImport(UIKit)
     import UIKit
@@ -20,14 +21,14 @@ enum ArkavoError: Error {
 }
 
 /// Represents the current state of the ArkavoClient
-enum ArkavoClientState: Equatable, Sendable {
+public enum ArkavoClientState: Equatable, Sendable {
     case disconnected
     case connecting
     case authenticating
     case connected
     case error(Error)
 
-    static func == (lhs: ArkavoClientState, rhs: ArkavoClientState) -> Bool {
+    public static func == (lhs: ArkavoClientState, rhs: ArkavoClientState) -> Bool {
         switch (lhs, rhs) {
         case (.disconnected, .disconnected),
              (.connecting, .connecting),
@@ -52,17 +53,21 @@ protocol ArkavoClientDelegate: AnyObject {
 /// Main ArkavoClient class handling WebAuthn authentication and WebSocket communication
 @MainActor
 public final class ArkavoClient: NSObject {
-    // MARK: - Properties
-
-    private let baseURL: URL
+    private let authURL: URL // for WebAuthn
+    private let websocketURL: URL // for WebSocket
     private let relyingPartyID: String
+    private let curve: KeyExchangeCurve
+    private var keyPair: CurveKeyPair?
+    private var sharedSecret: SharedSecret?
+    private var salt: Data?
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
-    private var authenticationToken: String?
     private let delegateQueue = OperationQueue()
     private let socketDelegate: WebSocketDelegate
+    private var connectionContinuation: CheckedContinuation<Void, Error>?
+    private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
 
-    private var currentState: ArkavoClientState = .disconnected {
+    public var currentState: ArkavoClientState = .disconnected {
         didSet {
             delegate?.clientDidChangeState(self, state: currentState)
         }
@@ -70,16 +75,21 @@ public final class ArkavoClient: NSObject {
 
     weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
-    public var currentToken: String? { authenticationToken }
+    public var currentToken: String? {
+        // TODO: Check if the token has expired
+        KeychainManager.getAuthenticationToken()
+    }
 
-    // MARK: - Initialization
-
-    public init(baseURL: URL,
+    public init(authURL: URL,
+                websocketURL: URL,
                 relyingPartyID: String,
+                curve: KeyExchangeCurve = .p256,
                 presentationProvider: ASAuthorizationControllerPresentationContextProviding? = nil)
     {
-        self.baseURL = baseURL
+        self.authURL = authURL
+        self.websocketURL = websocketURL
         self.relyingPartyID = relyingPartyID
+        self.curve = curve
         socketDelegate = WebSocketDelegate()
 
         #if os(iOS)
@@ -92,32 +102,110 @@ public final class ArkavoClient: NSObject {
 
         super.init()
 
-        socketDelegate.stateHandler = { [weak self] newState in
-            Task { @MainActor in
-                self?.currentState = newState
+        socketDelegate.setStateHandler { [weak self] newState in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                print("WebSocket state changing to: \(newState)")
+                self.currentState = newState
+                
+                // Resume the continuation when connected
+                switch newState {
+                case .connected:
+                    if let continuation = self.connectionContinuation {
+                        self.connectionContinuation = nil
+                        continuation.resume(returning: ())
+                    }
+                case .error(let error):
+                    if let continuation = self.connectionContinuation {
+                        self.connectionContinuation = nil
+                        continuation.resume(throwing: error)
+                    }
+                    // Also handle any pending message handlers
+                    for handler in self.messageHandlers.values {
+                        handler.resume(throwing: error)
+                    }
+                    self.messageHandlers.removeAll()
+                case .disconnected:
+                    // Clean up any pending handlers on disconnect
+                    let error = ArkavoError.connectionFailed("Connection disconnected")
+                    for handler in self.messageHandlers.values {
+                        handler.resume(throwing: error)
+                    }
+                    self.messageHandlers.removeAll()
+                case .connecting:
+                    print("connecting")
+                case .authenticating:
+                    print("authenticating")
+                }
             }
+        }
+
+        // Start receiving messages when connection is established
+        socketDelegate.onConnect = { [weak self] in
+            self?.receiveMessage()
         }
     }
 
     // MARK: - Public Methods
 
+    @MainActor
     public func connect(accountName: String) async throws {
-        guard currentState == .disconnected else {
+        // Check current state more thoroughly
+        switch currentState {
+        case .disconnected:
+            // OK to proceed
+            break
+        case .error:
+            // First disconnect if we're in error state
+            await disconnect()
+        case .connected:
+            print("Already connected, no need to reconnect")
+            return
+        case .connecting, .authenticating:
             throw ArkavoError.invalidState
         }
 
-        currentState = .authenticating
-
         do {
+            // First authenticate
+            currentState = .authenticating
             let token = try await authenticateUser(accountName: accountName)
-            authenticationToken = token
+            try KeychainManager.saveAuthenticationToken(token)
 
+            // Then establish WebSocket connection
+            currentState = .connecting
             try await setupWebSocketConnection()
-
-            currentState = .connected
+            // Wait for connection to complete
+            try await waitForConnection()
+            // swap keys
+            try await sendInitialMessages()
         } catch {
+            print("connect error: \(error)")
             currentState = .error(error)
             throw error
+        }
+    }
+
+    private func waitForConnection() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { [weak self] continuation in
+                    guard let self else {
+                        continuation.resume(throwing: ArkavoError.connectionFailed("Client deallocated"))
+                        return
+                    }
+                    Task { @MainActor in
+                        self.connectionContinuation = continuation
+                    }
+                }
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                throw ArkavoError.connectionFailed("Connection timeout")
+            }
+
+            try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -128,7 +216,7 @@ public final class ArkavoClient: NSObject {
         webSocket?.cancel()
         webSocket = nil
         session = nil
-        authenticationToken = nil
+        KeychainManager.deleteAuthenticationToken()
     }
 
     public func sendMessage(_ data: Data) async throws {
@@ -139,7 +227,163 @@ public final class ArkavoClient: NSObject {
         try await webSocket.send(.data(data))
     }
 
+    private func waitForMessage(type: ArkavoMessageType) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            Task { @MainActor in
+                self.messageHandlers[type.rawValue] = continuation
+            }
+        }
+    }
+
+    private func sendInitialMessages() async throws {
+        print("Beginning sendInitialMessages")
+        guard let webSocket else {
+            print("Error: WebSocket is nil")
+            throw ArkavoError.notConnected
+        }
+
+        // Create key pair for the selected curve
+        print("Creating key pair for curve: \(curve)")
+        keyPair = try createKeyPair()
+        print("Successfully created key pair")
+
+        // Send public key
+        let publicKeyMessage = PublicKeyMessage(publicKey: keyPair!.publicKeyData)
+        print("Sending public key message, key length: \(publicKeyMessage.publicKey.count)")
+        try await webSocket.send(.data(publicKeyMessage.toData()))
+        print("Successfully sent public key message")
+
+        // Wait for public key response
+        do {
+            print("Waiting for public key response...")
+            let publicKeyData = try await waitForMessage(type: .publicKey)
+            print("Received public key response, length: \(publicKeyData.count)")
+
+            print("Processing public key response...")
+            try handlePublicKeyResponse(data: publicKeyData)
+            print("Successfully processed public key response")
+            print("Salt length: \(salt?.count ?? 0)")
+            print("Shared secret established: \(sharedSecret != nil)")
+        } catch {
+            print("Error handling public key response: \(error)")
+            currentState = .error(error)
+            throw error
+        }
+
+        // Send KAS key message
+        print("Sending KAS key message")
+        let kasKeyMessage = KASKeyMessage()
+        try await webSocket.send(.data(kasKeyMessage.toData()))
+        print("Successfully sent KAS key message")
+
+        // Wait for KAS key response
+        do {
+            print("Waiting for KAS key response...")
+            let kasKeyData = try await waitForMessage(type: .kasKey)
+            print("Received KAS key response, length: \(kasKeyData.count)")
+
+            print("Processing KAS key response...")
+            try handleKASKeyResponse(data: kasKeyData)
+            print("Successfully processed KAS key response")
+        } catch {
+            print("Error handling KAS key response: \(error)")
+            currentState = .error(error)
+            throw error
+        }
+
+        print("sendInitialMessages completed successfully")
+    }
+
+    // Helper method for sending messages and awaiting responses
+    private func sendAndWait(_ message: some ArkavoMessage) async throws -> Data {
+        try await webSocket?.send(.data(message.toData()))
+        return try await waitForMessage(type: message.messageType)
+    }
+
     // MARK: - Private Methods
+
+    private func createKeyPair() throws -> CurveKeyPair {
+        switch curve {
+        case .p256:
+            P256KeyPair(privateKey: P256.KeyAgreement.PrivateKey())
+        case .p384:
+            P384KeyPair(privateKey: P384.KeyAgreement.PrivateKey())
+        case .p521:
+            P521KeyPair(privateKey: P521.KeyAgreement.PrivateKey())
+        }
+    }
+
+    private func handlePublicKeyResponse(data: Data) throws {
+        print("handlePublicKeyResponse - Received data length: \(data.count)")
+
+        guard data.first == 0x01 else {
+            print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
+            throw ArkavoError.invalidResponse
+        }
+
+        let responseData = data.dropFirst()
+        let expectedLength = curve.compressedKeySize + 32 // compressed public key + salt
+        print("Expected response length: \(expectedLength), Actual length: \(responseData.count)")
+
+        guard responseData.count == expectedLength else {
+            print("Error: Response data length mismatch")
+            throw ArkavoError.messageError("Invalid public key response length")
+        }
+
+        // Set session salt
+        salt = responseData.suffix(32)
+        let publicKeyData = responseData.prefix(curve.compressedKeySize)
+        print("Extracted salt length: \(salt?.count ?? 0)")
+        print("Extracted public key length: \(publicKeyData.count)")
+
+        // Compute shared secret using the appropriate curve
+        print("Computing shared secret...")
+        sharedSecret = try keyPair?.computeSharedSecret(withPublicKeyData: publicKeyData)
+        print("Shared secret computation: \(sharedSecret != nil ? "successful" : "failed")")
+    }
+
+    private func handleKASKeyResponse(data: Data) throws {
+        print("handleKASKeyResponse - Received data length: \(data.count)")
+
+        guard data.first == 0x02 else {
+            print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
+            throw ArkavoError.invalidResponse
+        }
+
+        let kasPublicKeyData = data.dropFirst()
+        print("KAS public key length: \(kasPublicKeyData.count), Expected length: \(curve.compressedKeySize)")
+
+        guard kasPublicKeyData.count == curve.compressedKeySize else {
+            print("Error: KAS public key length mismatch")
+            throw ArkavoError.messageError("Invalid KAS public key length")
+        }
+
+        // Validate KAS public key format
+        print("Validating KAS public key format...")
+        do {
+            switch curve {
+            case .p256:
+                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            case .p384:
+                _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            case .p521:
+                _ = try P521.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            }
+            print("KAS public key validation successful")
+        } catch {
+            print("Error validating KAS public key: \(error)")
+            throw error
+        }
+    }
+
+    private func deriveSymmetricKey(sharedSecret: SharedSecret, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
+        sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: salt,
+            sharedInfo: info,
+            outputByteCount: outputByteCount
+        )
+    }
 
     private func authenticateUser(accountName: String) async throws -> String {
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
@@ -160,15 +404,29 @@ public final class ArkavoClient: NSObject {
     }
 
     private func setupWebSocketConnection() async throws {
-        guard let token = authenticationToken else {
+        print("Current state before WebSocket setup: \(currentState)")
+        guard currentState == .connecting else {
+            print("Invalid state for WebSocket setup: \(currentState)")
+            throw ArkavoError.invalidState
+        }
+
+        guard let token = KeychainManager.getAuthenticationToken() else {
+            currentState = .error(ArkavoError.authenticationFailed("No authentication token"))
             throw ArkavoError.authenticationFailed("No authentication token")
         }
 
-        currentState = .connecting
+        let wsURL = websocketURL
+        print("\nWebSocket Connection Attempt:")
+        print("URL: \(wsURL)")
 
-        let wsURL = baseURL.appendingPathComponent("ws")
         var request = URLRequest(url: wsURL)
         request.setValue(token, forHTTPHeaderField: "X-Auth-Token")
+        request.setValue("websocket", forHTTPHeaderField: "Upgrade")
+        request.setValue("Upgrade", forHTTPHeaderField: "Connection")
+        request.setValue("13", forHTTPHeaderField: "Sec-WebSocket-Version")
+
+//        print("\nRequest Headers:")
+//        dump(request.allHTTPHeaderFields ?? [:])
 
         let session = URLSession(configuration: .default, delegate: socketDelegate, delegateQueue: delegateQueue)
         self.session = session
@@ -176,40 +434,91 @@ public final class ArkavoClient: NSObject {
         let webSocket = session.webSocketTask(with: request)
         self.webSocket = webSocket
 
+        webSocket.sendPing { [weak self] error in
+            Task { @MainActor in
+                if let error {
+                    print("Initial ping failed: \(error)")
+                    self?.connectionContinuation?.resume(throwing: error)
+                    self?.connectionContinuation = nil
+                    self?.currentState = .error(error)
+                } else {
+                    print("Initial ping successful")
+                }
+            }
+        }
+
+        print("\nWebSocket Task Created: \(webSocket)")
         webSocket.resume()
         receiveMessage()
     }
 
     private func receiveMessage() {
-        webSocket?.receive { [weak self] result in
+        guard let webSocket else {
+            print("WebSocket is nil, cannot receive message")
+            return
+        }
+        webSocket.receive { [weak self] result in
             guard let self else { return }
 
             Task { @MainActor in
                 switch result {
                 case let .success(message):
+                    print("\n=== Received WebSocket Message ===")
                     switch message {
                     case let .data(data):
-                        self.delegate?.clientDidReceiveMessage(self, message: data)
+                        print("Received data message:")
+                        print("Length: \(data.count) bytes")
+                        if let messageType = data.first {
+                            print("Message type: 0x\(String(format: "%02X", messageType))")
+                        }
+                        print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+
+                        // Handle continuations first
+                        if let messageType = data.first,
+                           let continuation = self.messageHandlers.removeValue(forKey: messageType)
+                        {
+                            print("Resuming continuation for message type: 0x\(String(format: "%02X", messageType))")
+                            continuation.resume(returning: data)
+                        } else if let messageType = data.first {
+                            print("No handler found for message type: 0x\(String(format: "%02X", messageType))")
+                            // Only pass to delegate if no specific handler was waiting
+                            self.delegate?.clientDidReceiveMessage(self, message: data)
+                        }
+
                     case let .string(string):
+                        print("Received string message:")
+                        print("Length: \(string.count) characters")
+                        print("Content: \(string)")
                         if let data = string.data(using: .utf8) {
                             self.delegate?.clientDidReceiveMessage(self, message: data)
                         }
+
                     @unknown default:
-                        break
+                        print("Received unknown message type")
                     }
-                    // Continue receiving messages
+                    print("===========================\n")
                     self.receiveMessage()
 
                 case let .failure(error):
-                    self.delegate?.clientDidReceiveError(self, error: error)
+                    print("\n=== WebSocket Receive Error ===")
+                    print("Error: \(error)")
+                    print("Detailed error: \(String(describing: error))")
+                    // Resume any waiting continuations with error
+                    for continuation in self.messageHandlers.values {
+                        continuation.resume(throwing: error)
+                    }
+                    self.messageHandlers.removeAll()
+
                     self.currentState = .error(error)
+                    self.delegate?.clientDidReceiveError(self, error: error)
                 }
             }
         }
     }
 
     private func fetchRegistrationOptions(accountName: String) async throws -> (challenge: String, userID: String) {
-        let url = baseURL.appendingPathComponent("register/\(accountName)")
+        // Use auth URL for WebAuthn
+        let url = authURL.appendingPathComponent("register/\(accountName)")
         let (data, response) = try await URLSession.shared.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
@@ -239,7 +548,8 @@ public final class ArkavoClient: NSObject {
     }
 
     private func completeRegistration(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) async throws -> String {
-        var request = URLRequest(url: baseURL.appendingPathComponent("register"))
+        // Use auth URL for WebAuthn
+        var request = URLRequest(url: authURL.appendingPathComponent("register"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -262,7 +572,10 @@ public final class ArkavoClient: NSObject {
         else {
             throw ArkavoError.authenticationFailed("No authentication token received")
         }
-
+        // Verify token format
+        if !token.starts(with: "eyJ") {
+            throw ArkavoError.authenticationFailed("Invalid token format")
+        }
         return token
     }
 }
@@ -313,28 +626,56 @@ private class AuthenticationDelegate: NSObject, ASAuthorizationControllerDelegat
 
 // MARK: - WebSocket Delegate
 
-public final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
+private actor WebSocketStateHandler {
+    var stateHandler: ((ArkavoClientState) -> Void)?
+
+    func updateHandler(_ handler: @escaping (ArkavoClientState) -> Void) {
+        stateHandler = handler
+    }
+
+    func handleState(_ state: ArkavoClientState) async {
+        await stateHandler?(state)
+    }
+}
+
+private final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let stateQueue = DispatchQueue(label: "com.arkavo.websocket.state")
-    private var _stateHandler: ((ArkavoClientState) -> Void)?
+    private let stateHandler = WebSocketStateHandler()
+    private var _onConnect: (() -> Void)?
 
-    var stateHandler: ((ArkavoClientState) -> Void)? {
-        get {
-            stateQueue.sync { _stateHandler }
-        }
-        set {
-            stateQueue.sync { _stateHandler = newValue }
+    var onConnect: (() -> Void)? {
+        get { stateQueue.sync { _onConnect } }
+        set { stateQueue.sync { _onConnect = newValue } }
+    }
+
+    func setStateHandler(_ handler: @Sendable @escaping (ArkavoClientState) -> Void) {
+        Task {
+            await stateHandler.updateHandler(handler)
         }
     }
 
-    public func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didOpenWithProtocol _: String?) {
-        stateQueue.async {
-            self._stateHandler?(.connected)
+    public func urlSession(_: URLSession,
+                           webSocketTask _: URLSessionWebSocketTask,
+                           didOpenWithProtocol protocol: String?)
+    {
+        print("WebSocket did connect with protocol: \(`protocol` ?? "none")")
+        Task {
+            await stateHandler.handleState(.connected)
         }
     }
 
-    public func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didCloseWith _: URLSessionWebSocketTask.CloseCode, reason _: Data?) {
-        stateQueue.async {
-            self._stateHandler?(.disconnected)
+    public func urlSession(_: URLSession,
+                           task _: URLSessionTask,
+                           didCompleteWithError error: Error?)
+    {
+        Task {
+            if let error {
+                print("WebSocket did complete with error: \(error)")
+                await stateHandler.handleState(.error(error))
+            } else {
+                print("WebSocket did complete normally")
+                await stateHandler.handleState(.disconnected)
+            }
         }
     }
 }
@@ -403,3 +744,132 @@ private extension String {
         }
     }
 #endif
+
+// MARK: - Supporting Types
+
+// Message type identifiers
+public enum ArkavoMessageType: UInt8 {
+    case publicKey = 0x01
+    case kasKey = 0x02
+    case rewrap = 0x03
+    case rewrappedKey = 0x04
+    // Add other message types as needed
+}
+
+// Protocol for messages
+protocol ArkavoMessage {
+    var messageType: ArkavoMessageType { get }
+    func payload() -> Data
+}
+
+// Extension to handle common message formatting
+extension ArkavoMessage {
+    func toData() -> Data {
+        var data = Data()
+        data.append(messageType.rawValue)
+        data.append(payload())
+        return data
+    }
+}
+
+// Concrete message implementations
+struct PublicKeyMessage: ArkavoMessage {
+    let messageType: ArkavoMessageType = .publicKey
+    let publicKey: Data
+
+    func payload() -> Data {
+        publicKey
+    }
+}
+
+struct KASKeyMessage: ArkavoMessage {
+    let messageType: ArkavoMessageType = .kasKey
+
+    func payload() -> Data {
+        Data()
+    }
+}
+
+struct RewrapMessage: ArkavoMessage {
+    let messageType: ArkavoMessageType = .rewrap
+    let header: Header
+
+    func payload() -> Data {
+        header.toData()
+    }
+}
+
+struct RewrappedKeyMessage: ArkavoMessage {
+    let messageType: ArkavoMessageType = .rewrappedKey
+    let rewrappedKey: Data
+
+    func payload() -> Data {
+        rewrappedKey
+    }
+}
+
+/// Supported elliptic curves for key exchange
+public enum KeyExchangeCurve {
+    case p256
+    case p384
+    case p521
+
+    var keySize: Int {
+        switch self {
+        case .p256: 32
+        case .p384: 48
+        case .p521: 66
+        }
+    }
+
+    var compressedKeySize: Int {
+        // Compressed public key is 1 byte prefix + key size
+        keySize + 1
+    }
+}
+
+/// Protocol for curve-specific key operations
+private protocol CurveKeyPair {
+    var publicKeyData: Data { get }
+    func computeSharedSecret(withPublicKeyData: Data) throws -> SharedSecret
+}
+
+// Concrete implementations for each curve
+private struct P256KeyPair: CurveKeyPair {
+    let privateKey: P256.KeyAgreement.PrivateKey
+
+    var publicKeyData: Data {
+        privateKey.publicKey.compressedRepresentation
+    }
+
+    func computeSharedSecret(withPublicKeyData data: Data) throws -> SharedSecret {
+        let publicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: data)
+        return try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+    }
+}
+
+private struct P384KeyPair: CurveKeyPair {
+    let privateKey: P384.KeyAgreement.PrivateKey
+
+    var publicKeyData: Data {
+        privateKey.publicKey.compressedRepresentation
+    }
+
+    func computeSharedSecret(withPublicKeyData data: Data) throws -> SharedSecret {
+        let publicKey = try P384.KeyAgreement.PublicKey(compressedRepresentation: data)
+        return try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+    }
+}
+
+private struct P521KeyPair: CurveKeyPair {
+    let privateKey: P521.KeyAgreement.PrivateKey
+
+    var publicKeyData: Data {
+        privateKey.publicKey.compressedRepresentation
+    }
+
+    func computeSharedSecret(withPublicKeyData data: Data) throws -> SharedSecret {
+        let publicKey = try P521.KeyAgreement.PublicKey(compressedRepresentation: data)
+        return try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+    }
+}

@@ -349,6 +349,9 @@
         }
       }
     },
+    "Later" : {
+
+    },
     "Latest Update" : {
 
     },
@@ -542,6 +545,7 @@
       }
     },
     "Profile: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -692,6 +696,7 @@
 
     },
     "Sign In" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -702,6 +707,7 @@
       }
     },
     "Sign Up" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {

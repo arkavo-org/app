@@ -208,4 +208,24 @@ public class KeychainManager {
         try? delete(service: "com.arkavo.bluesky", account: "refresh_token")
         try? delete(service: "com.arkavo.bluesky", account: "handle")
     }
+
+    // Arkavo service
+    public static func saveAuthenticationToken(_ token: String) throws {
+        try save(token.data(using: .utf8)!,
+                 service: "com.arkavo.webauthn",
+                 account: "authentication_token")
+    }
+
+    public static func getAuthenticationToken() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.webauthn", account: "authentication_token")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    public static func deleteAuthenticationToken() {
+        try? delete(service: "com.arkavo.webauthn", account: "authentication_token")
+    }
 }
