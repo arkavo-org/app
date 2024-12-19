@@ -161,6 +161,7 @@ struct ArkavoApp: App {
                 do {
                     try await client.connect(accountName: profile.name)
                     selectedView = .main
+                    print("checkAccountStatus: Connected")
                     return
                 } catch {
                     print("Connection error: \(error.localizedDescription)")
