@@ -188,7 +188,7 @@ class RedditScanner {
 
         for post in listing.data.children.map(\.data) {
             // Combine title and content for processing
-            let content = [post.title, post.selftext].compactMap { $0 }.joined(separator: " ")
+            let content = [post.title, post.selftext].compactMap(\.self).joined(separator: " ")
 
             // Generate signature for the content
             let signature = try preprocessor.generateSignature(for: content)

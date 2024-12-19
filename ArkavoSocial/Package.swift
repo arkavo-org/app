@@ -18,11 +18,15 @@ let package = Package(
             targets: ["ArkavoSocial"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/arkavo-org/OpenTDFKit", exact: "3.0.0"),
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "ArkavoSocial"),
+            name: "ArkavoSocial",
+            dependencies: ["OpenTDFKit"]),
         .testTarget(
             name: "ArkavoSocialTests",
             dependencies: ["ArkavoSocial"]

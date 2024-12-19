@@ -76,7 +76,7 @@ public final class ArkavoClient: NSObject {
     weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
     public var currentToken: String? {
-        // TODO Check if the token has expired
+        // TODO: Check if the token has expired
         KeychainManager.getAuthenticationToken()
     }
 
@@ -158,7 +158,6 @@ public final class ArkavoClient: NSObject {
         case .error:
             // First disconnect if we're in error state
             await disconnect()
-            break
         case .connected:
             print("Already connected, no need to reconnect")
             return
@@ -259,7 +258,7 @@ public final class ArkavoClient: NSObject {
             print("Waiting for public key response...")
             let publicKeyData = try await waitForMessage(type: .publicKey)
             print("Received public key response, length: \(publicKeyData.count)")
-            
+
             print("Processing public key response...")
             try handlePublicKeyResponse(data: publicKeyData)
             print("Successfully processed public key response")
@@ -282,7 +281,7 @@ public final class ArkavoClient: NSObject {
             print("Waiting for KAS key response...")
             let kasKeyData = try await waitForMessage(type: .kasKey)
             print("Received KAS key response, length: \(kasKeyData.count)")
-            
+
             print("Processing KAS key response...")
             try handleKASKeyResponse(data: kasKeyData)
             print("Successfully processed KAS key response")
@@ -291,10 +290,9 @@ public final class ArkavoClient: NSObject {
             currentState = .error(error)
             throw error
         }
-        
+
         print("sendInitialMessages completed successfully")
     }
-
 
     // Helper method for sending messages and awaiting responses
     private func sendAndWait(_ message: some ArkavoMessage) async throws -> Data {
@@ -317,7 +315,7 @@ public final class ArkavoClient: NSObject {
 
     private func handlePublicKeyResponse(data: Data) throws {
         print("handlePublicKeyResponse - Received data length: \(data.count)")
-        
+
         guard data.first == 0x01 else {
             print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
             throw ArkavoError.invalidResponse
@@ -346,7 +344,7 @@ public final class ArkavoClient: NSObject {
 
     private func handleKASKeyResponse(data: Data) throws {
         print("handleKASKeyResponse - Received data length: \(data.count)")
-        
+
         guard data.first == 0x02 else {
             print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
             throw ArkavoError.invalidResponse
@@ -354,7 +352,7 @@ public final class ArkavoClient: NSObject {
 
         let kasPublicKeyData = data.dropFirst()
         print("KAS public key length: \(kasPublicKeyData.count), Expected length: \(curve.compressedKeySize)")
-        
+
         guard kasPublicKeyData.count == curve.compressedKeySize else {
             print("Error: KAS public key length mismatch")
             throw ArkavoError.messageError("Invalid KAS public key length")
@@ -377,7 +375,7 @@ public final class ArkavoClient: NSObject {
             throw error
         }
     }
-    
+
     private func deriveSymmetricKey(sharedSecret: SharedSecret, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
         sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
@@ -455,7 +453,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func receiveMessage() {
-        guard let webSocket = webSocket else {
+        guard let webSocket else {
             print("WebSocket is nil, cannot receive message")
             return
         }
@@ -474,10 +472,11 @@ public final class ArkavoClient: NSObject {
                             print("Message type: 0x\(String(format: "%02X", messageType))")
                         }
                         print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
-                        
+
                         // Handle continuations first
                         if let messageType = data.first,
-                           let continuation = self.messageHandlers.removeValue(forKey: messageType) {
+                           let continuation = self.messageHandlers.removeValue(forKey: messageType)
+                        {
                             print("Resuming continuation for message type: 0x\(String(format: "%02X", messageType))")
                             continuation.resume(returning: data)
                         } else if let messageType = data.first {
@@ -485,7 +484,7 @@ public final class ArkavoClient: NSObject {
                             // Only pass to delegate if no specific handler was waiting
                             self.delegate?.clientDidReceiveMessage(self, message: data)
                         }
-                        
+
                     case let .string(string):
                         print("Received string message:")
                         print("Length: \(string.count) characters")
@@ -493,7 +492,7 @@ public final class ArkavoClient: NSObject {
                         if let data = string.data(using: .utf8) {
                             self.delegate?.clientDidReceiveMessage(self, message: data)
                         }
-                        
+
                     @unknown default:
                         print("Received unknown message type")
                     }
@@ -509,7 +508,7 @@ public final class ArkavoClient: NSObject {
                         continuation.resume(throwing: error)
                     }
                     self.messageHandlers.removeAll()
-                    
+
                     self.currentState = .error(error)
                     self.delegate?.clientDidReceiveError(self, error: error)
                 }
