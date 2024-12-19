@@ -21,14 +21,14 @@ enum ArkavoError: Error {
 }
 
 /// Represents the current state of the ArkavoClient
-enum ArkavoClientState: Equatable, Sendable {
+public enum ArkavoClientState: Equatable, Sendable {
     case disconnected
     case connecting
     case authenticating
     case connected
     case error(Error)
 
-    static func == (lhs: ArkavoClientState, rhs: ArkavoClientState) -> Bool {
+    public static func == (lhs: ArkavoClientState, rhs: ArkavoClientState) -> Bool {
         switch (lhs, rhs) {
         case (.disconnected, .disconnected),
              (.connecting, .connecting),
@@ -67,7 +67,7 @@ public final class ArkavoClient: NSObject {
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
 
-    private var currentState: ArkavoClientState = .disconnected {
+    public var currentState: ArkavoClientState = .disconnected {
         didSet {
             delegate?.clientDidChangeState(self, state: currentState)
         }
@@ -76,6 +76,7 @@ public final class ArkavoClient: NSObject {
     weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
     public var currentToken: String? {
+        // TODO Check if the token has expired
         KeychainManager.getAuthenticationToken()
     }
 
@@ -149,15 +150,19 @@ public final class ArkavoClient: NSObject {
 
     @MainActor
     public func connect(accountName: String) async throws {
-        // Allow reconnection attempts from error or disconnected states
+        // Check current state more thoroughly
         switch currentState {
         case .disconnected:
             // OK to proceed
             break
         case .error:
-            // OK to proceed
+            // First disconnect if we're in error state
+            await disconnect()
             break
-        default:
+        case .connected:
+            print("Already connected, no need to reconnect")
+            return
+        case .connecting, .authenticating:
             throw ArkavoError.invalidState
         }
 
@@ -182,14 +187,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func waitForConnection() async throws {
-        // If already connected, return immediately
-        if currentState == .connected {
-            return
-        }
-
-        // Add timeout to prevent indefinite waiting
         try await withThrowingTaskGroup(of: Void.self) { group in
-            // Connection task
             group.addTask {
                 try await withCheckedThrowingContinuation { [weak self] continuation in
                     guard let self else {
@@ -202,15 +200,12 @@ public final class ArkavoClient: NSObject {
                 }
             }
 
-            // Timeout task
             group.addTask {
                 try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
                 throw ArkavoError.connectionFailed("Connection timeout")
             }
 
-            // Wait for first completion
             try await group.next()
-            // Cancel remaining tasks
             group.cancelAll()
         }
     }
@@ -242,30 +237,64 @@ public final class ArkavoClient: NSObject {
     }
 
     private func sendInitialMessages() async throws {
-        print("sendInitialMessages")
+        print("Beginning sendInitialMessages")
         guard let webSocket else {
+            print("Error: WebSocket is nil")
             throw ArkavoError.notConnected
         }
 
         // Create key pair for the selected curve
+        print("Creating key pair for curve: \(curve)")
         keyPair = try createKeyPair()
+        print("Successfully created key pair")
 
         // Send public key
         let publicKeyMessage = PublicKeyMessage(publicKey: keyPair!.publicKeyData)
+        print("Sending public key message, key length: \(publicKeyMessage.publicKey.count)")
         try await webSocket.send(.data(publicKeyMessage.toData()))
+        print("Successfully sent public key message")
 
         // Wait for public key response
-        let publicKeyData = try await waitForMessage(type: .publicKey)
-        try handlePublicKeyResponse(data: publicKeyData)
+        do {
+            print("Waiting for public key response...")
+            let publicKeyData = try await waitForMessage(type: .publicKey)
+            print("Received public key response, length: \(publicKeyData.count)")
+            
+            print("Processing public key response...")
+            try handlePublicKeyResponse(data: publicKeyData)
+            print("Successfully processed public key response")
+            print("Salt length: \(salt?.count ?? 0)")
+            print("Shared secret established: \(sharedSecret != nil)")
+        } catch {
+            print("Error handling public key response: \(error)")
+            currentState = .error(error)
+            throw error
+        }
 
         // Send KAS key message
+        print("Sending KAS key message")
         let kasKeyMessage = KASKeyMessage()
         try await webSocket.send(.data(kasKeyMessage.toData()))
+        print("Successfully sent KAS key message")
 
         // Wait for KAS key response
-        let kasKeyData = try await waitForMessage(type: .kasKey)
-        try handleKASKeyResponse(data: kasKeyData)
+        do {
+            print("Waiting for KAS key response...")
+            let kasKeyData = try await waitForMessage(type: .kasKey)
+            print("Received KAS key response, length: \(kasKeyData.count)")
+            
+            print("Processing KAS key response...")
+            try handleKASKeyResponse(data: kasKeyData)
+            print("Successfully processed KAS key response")
+        } catch {
+            print("Error handling KAS key response: \(error)")
+            currentState = .error(error)
+            throw error
+        }
+        
+        print("sendInitialMessages completed successfully")
     }
+
 
     // Helper method for sending messages and awaiting responses
     private func sendAndWait(_ message: some ArkavoMessage) async throws -> Data {
@@ -287,46 +316,68 @@ public final class ArkavoClient: NSObject {
     }
 
     private func handlePublicKeyResponse(data: Data) throws {
+        print("handlePublicKeyResponse - Received data length: \(data.count)")
+        
         guard data.first == 0x01 else {
+            print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
             throw ArkavoError.invalidResponse
         }
 
         let responseData = data.dropFirst()
         let expectedLength = curve.compressedKeySize + 32 // compressed public key + salt
+        print("Expected response length: \(expectedLength), Actual length: \(responseData.count)")
 
         guard responseData.count == expectedLength else {
+            print("Error: Response data length mismatch")
             throw ArkavoError.messageError("Invalid public key response length")
         }
 
         // Set session salt
         salt = responseData.suffix(32)
         let publicKeyData = responseData.prefix(curve.compressedKeySize)
+        print("Extracted salt length: \(salt?.count ?? 0)")
+        print("Extracted public key length: \(publicKeyData.count)")
 
         // Compute shared secret using the appropriate curve
+        print("Computing shared secret...")
         sharedSecret = try keyPair?.computeSharedSecret(withPublicKeyData: publicKeyData)
+        print("Shared secret computation: \(sharedSecret != nil ? "successful" : "failed")")
     }
 
     private func handleKASKeyResponse(data: Data) throws {
+        print("handleKASKeyResponse - Received data length: \(data.count)")
+        
         guard data.first == 0x02 else {
+            print("Error: Invalid message type byte: \(String(format: "0x%02X", data.first ?? 0))")
             throw ArkavoError.invalidResponse
         }
 
         let kasPublicKeyData = data.dropFirst()
+        print("KAS public key length: \(kasPublicKeyData.count), Expected length: \(curve.compressedKeySize)")
+        
         guard kasPublicKeyData.count == curve.compressedKeySize else {
+            print("Error: KAS public key length mismatch")
             throw ArkavoError.messageError("Invalid KAS public key length")
         }
 
-        // Validate KAS public key format - this will throw if invalid
-        switch curve {
-        case .p256:
-            _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
-        case .p384:
-            _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
-        case .p521:
-            _ = try P521.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+        // Validate KAS public key format
+        print("Validating KAS public key format...")
+        do {
+            switch curve {
+            case .p256:
+                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            case .p384:
+                _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            case .p521:
+                _ = try P521.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+            }
+            print("KAS public key validation successful")
+        } catch {
+            print("Error validating KAS public key: \(error)")
+            throw error
         }
     }
-
+    
     private func deriveSymmetricKey(sharedSecret: SharedSecret, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
         sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
@@ -404,26 +455,61 @@ public final class ArkavoClient: NSObject {
     }
 
     private func receiveMessage() {
-        webSocket?.receive { [weak self] result in
+        guard let webSocket = webSocket else {
+            print("WebSocket is nil, cannot receive message")
+            return
+        }
+        webSocket.receive { [weak self] result in
             guard let self else { return }
 
             Task { @MainActor in
                 switch result {
                 case let .success(message):
+                    print("\n=== Received WebSocket Message ===")
                     switch message {
                     case let .data(data):
-                        self.delegate?.clientDidReceiveMessage(self, message: data)
+                        print("Received data message:")
+                        print("Length: \(data.count) bytes")
+                        if let messageType = data.first {
+                            print("Message type: 0x\(String(format: "%02X", messageType))")
+                        }
+                        print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+                        
+                        // Handle continuations first
+                        if let messageType = data.first,
+                           let continuation = self.messageHandlers.removeValue(forKey: messageType) {
+                            print("Resuming continuation for message type: 0x\(String(format: "%02X", messageType))")
+                            continuation.resume(returning: data)
+                        } else if let messageType = data.first {
+                            print("No handler found for message type: 0x\(String(format: "%02X", messageType))")
+                            // Only pass to delegate if no specific handler was waiting
+                            self.delegate?.clientDidReceiveMessage(self, message: data)
+                        }
+                        
                     case let .string(string):
+                        print("Received string message:")
+                        print("Length: \(string.count) characters")
+                        print("Content: \(string)")
                         if let data = string.data(using: .utf8) {
                             self.delegate?.clientDidReceiveMessage(self, message: data)
                         }
+                        
                     @unknown default:
-                        break
+                        print("Received unknown message type")
                     }
+                    print("===========================\n")
                     self.receiveMessage()
 
                 case let .failure(error):
-                    print("WebSocket receive error: \(error)")
+                    print("\n=== WebSocket Receive Error ===")
+                    print("Error: \(error)")
+                    print("Detailed error: \(String(describing: error))")
+                    // Resume any waiting continuations with error
+                    for continuation in self.messageHandlers.values {
+                        continuation.resume(throwing: error)
+                    }
+                    self.messageHandlers.removeAll()
+                    
                     self.currentState = .error(error)
                     self.delegate?.clientDidReceiveError(self, error: error)
                 }

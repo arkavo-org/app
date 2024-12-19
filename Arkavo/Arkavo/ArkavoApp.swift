@@ -16,7 +16,8 @@ struct ArkavoApp: App {
         client = ArkavoClient(
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://kas.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net"
+            relyingPartyID: "webauthn.arkavo.net",
+            curve: .p256
         )
     }
 
@@ -156,22 +157,39 @@ struct ArkavoApp: App {
                 return
             }
 
+            // If we're already connected, nothing to do
+            if case .connected = client.currentState {
+                print("Client already connected, no action needed")
+                selectedView = .main
+                return
+            }
+
+            // If we're in the process of connecting, wait for that to complete
+            if case .connecting = client.currentState {
+                print("Connection already in progress, waiting...")
+                return
+            }
+
             // Try to connect with existing token if available
             if KeychainManager.getAuthenticationToken() != nil {
                 do {
+                    print("Attempting connection with existing token")
                     try await client.connect(accountName: profile.name)
                     selectedView = .main
-                    print("checkAccountStatus: Connected")
+                    print("checkAccountStatus: Connected with existing token")
                     return
                 } catch {
-                    print("Connection error: \(error.localizedDescription)")
+                    print("Connection with existing token failed: \(error.localizedDescription)")
                     KeychainManager.deleteAuthenticationToken()
+                    // Fall through to fresh connection attempt
                 }
             }
 
-            // Fresh connection attempt
+            // Only reach here if no token, token connection failed, or we're disconnected
+            print("Attempting fresh connection")
             try await client.connect(accountName: profile.name)
             selectedView = .main
+            print("checkAccountStatus: Connected with fresh connection")
 
         } catch let error as ArkavoError {
             switch error {
