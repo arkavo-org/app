@@ -1,30 +1,27 @@
 import SwiftUI
 
 struct PatreonView: View {
-    @State private var selectedTab = 0
+    @EnvironmentObject var sharedState: SharedState
     @State private var creators: [Creator] = Creator.sampleCreators
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
 
     var body: some View {
         NavigationStack {
-            if let creator = selectedCreator, !showCreateView {
+            if let creator = sharedState.selectedCreator, !sharedState.showCreateView {
                 CreatorDetailView(
-                    creator: creator,
-                    showCreateView: $showCreateView
+                    creator: creator
                 )
             } else {
                 CreatorListView(creators: creators) { creator in
-                    selectedCreator = creator
+                    sharedState.selectedCreator = creator
                 }
             }
         }
-        .sheet(isPresented: $showCreateView) {
-            if let creator = selectedCreator {
+        .sheet(isPresented: $sharedState.showCreateView) {
+            if let creator = sharedState.selectedCreator {
                 PatreonSupportView(creator: creator) {
-                    showCreateView = false
+                    sharedState.showCreateView = false
                 }
             }
         }
@@ -262,9 +259,9 @@ struct CreatorCard: View {
 }
 
 struct CreatorDetailView: View {
+    @EnvironmentObject var sharedState: SharedState
     let creator: Creator
     @State private var selectedSection: DetailSection = .about
-    @Binding var showCreateView: Bool
 
     enum DetailSection {
         case about, media, posts, schedule
@@ -290,7 +287,7 @@ struct CreatorDetailView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 CreatorHeaderView(creator: creator) {
-                    showCreateView = true
+                    sharedState.showCreateView = true
                 }
 
                 Picker("Section", selection: $selectedSection) {

@@ -1,15 +1,25 @@
+import ArkavoSocial
 import SwiftUI
 
 // MARK: - Models
 
 @MainActor
 class DiscordViewModel: ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
     @Published var servers = Server.sampleServers
     @Published var selectedVideo: Video?
     @Published var selectedChannel: Channel?
     private var chatViewModels: [String: ChatViewModel] = [:] // Cache of ChatViewModels
 
-    func shareVideo(_ video: Video, to server: Server) {
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
+    }
+
+    func shareVideo(_ video: Video, to server: Server) async {
         // Find the "shared" channel
         if let category = server.categories.first,
            let sharedChannel = category.channels.first(where: { $0.name == "shared" })
@@ -19,7 +29,11 @@ class DiscordViewModel: ObservableObject {
             selectedVideo = video
             if let channel = selectedChannel {
                 let chatViewModel = chatViewModel(for: channel)
-                chatViewModel.sendMessage(content: "Shared video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+                do {
+                    try await chatViewModel.sendMessage(content: "Shared video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
+                } catch {
+                    print("Error sending message: \(error)")
+                }
             }
         }
     }
@@ -28,7 +42,7 @@ class DiscordViewModel: ObservableObject {
         if let existing = chatViewModels[channel.id] {
             return existing
         }
-        let newViewModel = ChatViewModel(channel: channel)
+        let newViewModel = ViewModelFactory.shared.makeChatViewModel(channel: channel)
         chatViewModels[channel.id] = newViewModel
         return newViewModel
     }
@@ -172,21 +186,19 @@ extension Server {
 // MARK: - Main View
 
 struct DiscordView: View {
-    @ObservedObject var viewModel: DiscordViewModel
-    @Binding var showCreateView: Bool
-    @Binding var selectedServer: Server?
-    @State private var selectedChannel: Channel?
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 20) {
-                    if let selectedServer {
+                    if sharedState.selectedServer != nil {
                         // Show only the selected server
                         ServerDetailView(
-                            server: selectedServer,
-                            selectedChannel: $selectedChannel,
+                            server: sharedState.selectedServer!,
                             onChannelSelect: { channel in
                                 navigationPath.append(channel)
                             }
@@ -197,7 +209,6 @@ struct DiscordView: View {
                         ForEach(viewModel.servers) { server in
                             ServerDetailView(
                                 server: server,
-                                selectedChannel: $selectedChannel,
                                 onChannelSelect: { channel in
                                     navigationPath.append(channel)
                                 }
@@ -211,7 +222,7 @@ struct DiscordView: View {
             .background(Color(.systemGroupedBackground))
             .navigationDestination(for: Channel.self) { channel in
                 ChatView(
-                    viewModel: viewModel.chatViewModel(for: channel)
+                    viewModel: ViewModelFactory.shared.makeChatViewModel(channel: channel)
                 )
                 .navigationTitle("Friends\(channel.name)") // FIXME: server name
             }
@@ -220,8 +231,8 @@ struct DiscordView: View {
 }
 
 struct ServerDetailView: View {
+    @EnvironmentObject var sharedState: SharedState
     let server: Server
-    @Binding var selectedChannel: Channel?
     let onChannelSelect: (Channel) -> Void
     @State private var isExpanded = true
 
@@ -288,14 +299,14 @@ struct ServerDetailView: View {
                     ForEach(server.categories) { category in
                         ForEach(category.channels) { channel in
                             Button {
-                                selectedChannel = channel
+                                sharedState.selectedChannel = channel
                                 onChannelSelect(channel)
                             } label: {
                                 ChannelRow(channel: channel)
                                     .padding(.horizontal)
                                     .padding(.vertical, 8)
                                     .background(
-                                        channel.id == selectedChannel?.id ?
+                                        channel.id == sharedState.selectedChannel?.id ?
                                             Color.blue.opacity(0.1) : Color.clear
                                     )
                             }

@@ -320,13 +320,20 @@ struct InterestButton: View {
 
 struct LogoView: View {
     @State private var offsetY: CGFloat = 0
+    @State private var scale: CGFloat = 4.0
 
     var body: some View {
         Image("AppLogo")
             .resizable()
             .scaledToFit()
             .accessibilityLabel("logo")
+            .scaleEffect(scale)
             .offset(y: offsetY)
+            .onAppear {
+                withAnimation(.easeOut(duration: 2.0)) {
+                    scale = 1.0
+                }
+            }
     }
 }
 

@@ -178,6 +178,12 @@
     "Comments" : {
 
     },
+    "Connected" : {
+
+    },
+    "Connecting..." : {
+
+    },
     "Content Protection" : {
 
     },
@@ -199,9 +205,6 @@
           }
         }
       }
-    },
-    "Create Profile things" : {
-
     },
     "Create Stream" : {
       "localizations" : {
@@ -229,6 +232,9 @@
 
     },
     "DID" : {
+
+    },
+    "Disconnected" : {
 
     },
     "Done" : {
@@ -396,6 +402,9 @@
 
     },
     "Loading stream..." : {
+
+    },
+    "Loading..." : {
 
     },
     "Location" : {

@@ -1,3 +1,4 @@
+import ArkavoSocial
 import SwiftUI
 
 enum Tab {
@@ -5,7 +6,7 @@ enum Tab {
     case communities
     case social
     case creators
-    case protect
+//    case protect
     case profile
 
     var title: String {
@@ -14,7 +15,7 @@ enum Tab {
         case .communities: "Community"
         case .social: "Social"
         case .creators: "Creators"
-        case .protect: "Protect"
+//        case .protect: "Protect"
         case .profile: "Profile"
         }
     }
@@ -25,22 +26,19 @@ enum Tab {
         case .communities: "bubble.left.and.bubble.right.fill"
         case .social: "network"
         case .creators: "star.circle.fill"
-        case .protect: "shield.checkerboard"
+//        case .protect: "shield.checkerboard"
         case .profile: "person.circle.fill"
         }
     }
 }
 
 struct ContentView: View {
+    @EnvironmentObject var sharedState: SharedState
     @State private var selectedTab: Tab = .home
+    @State var showCreateView: Bool = false
     @State private var isCollapsed = false
     @State private var showMenuButton = true
-    @State private var showCreateView = false
-    @State private var selectedCreator: Creator?
-    @State private var selectedServer: Server?
-    @StateObject private var feedViewModel = TikTokFeedViewModel()
-    @StateObject private var groupViewModel = DiscordViewModel()
-    @StateObject private var protectorService = ProtectorService()
+//    @StateObject private var protectorService = ProtectorService()
 
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
@@ -51,66 +49,46 @@ struct ContentView: View {
                 switch selectedTab {
                 case .home:
                     if showCreateView {
-                        TikTokRecordingView { result in
-                            if let uploadResult = result {
-                                // Create contributors list with current user as director
-                                let currentUser = Creator.sampleCreators[0] // Replace with actual current user
-                                let contributors = [
-                                    Contributor(id: UUID().uuidString, creator: currentUser, role: "Director"),
-                                ]
-                                feedViewModel.addNewVideo(from: uploadResult, contributors: contributors)
-                            }
+                        TikTokRecordingView { _ in
+//                            if let uploadResult = result {
+//                                // Create contributors list with current user as director
+//                                let currentUser = Creator.sampleCreators[0] // Replace with actual current user
+//                                let contributors = [
+//                                    Contributor(id: UUID().uuidString, creator: currentUser, role: "Director"),
+//                                ]
+                            ////                                feedViewModel.addNewVideo(from: uploadResult, contributors: contributors)
+//                            }
                             showCreateView = false
                         }
                     } else {
-                        TikTokFeedView(
-                            viewModel: feedViewModel,
-                            groupViewModel: groupViewModel,
-                            showCreateView: $showCreateView,
-                            selectedCreator: $selectedCreator,
-                            selectedServer: $selectedServer,
-                            selectedTab: $selectedTab
-                        )
+                        TikTokFeedView()
                     }
                 case .communities:
                     if showCreateView {
-                        CreateServerView(viewModel: groupViewModel, showCreateView: $showCreateView)
+                        CreateServerView()
                     } else {
-                        DiscordView(
-                            viewModel: groupViewModel,
-                            showCreateView: $showCreateView,
-                            selectedServer: $selectedServer
-                        )
-                        .onDisappear {
-                            selectedServer = nil
-                        }
+                        DiscordView()
+                            .onDisappear {
+                                sharedState.selectedServer = nil
+                            }
                     }
                 case .social:
-                    BlueskyView(
-                        groupViewModel: groupViewModel,
-                        showCreateView: $showCreateView,
-                        selectedCreator: $selectedCreator,
-                        selectedServer: $selectedServer,
-                        selectedTab: $selectedTab
-                    )
+                    BlueskyView()
                 case .creators:
-                    if showCreateView, selectedCreator != nil {
-                        if let creator = selectedCreator {
+                    if sharedState.showCreateView, sharedState.selectedCreator != nil {
+                        if let creator = sharedState.selectedCreator {
                             PatreonSupportView(creator: creator) {
-                                showCreateView = false
-                                selectedCreator = nil
+                                sharedState.showCreateView = false
+                                sharedState.selectedCreator = nil
                             }
                         }
                     } else {
-                        PatreonView(
-                            showCreateView: $showCreateView,
-                            selectedCreator: $selectedCreator
-                        )
+                        PatreonView()
                     }
-                case .protect:
-                    ProtectorView(service: protectorService)
+//                case .protect:
+//                    ProtectorView(service: protectorService)
                 case .profile:
-                    ProfileView(showCreateView: $showCreateView)
+                    ProfileView()
                 }
 
                 // Create Button
@@ -135,7 +113,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 30) {
-                        ForEach([Tab.home, .communities, .social, .creators, .protect, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .communities, .social, .creators, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -206,7 +184,7 @@ struct ContentView: View {
 }
 
 struct ProfileView: View {
-    @State private var selectedTab: ProfileTab = .posts
+    @EnvironmentObject var sharedState: SharedState
     @State private var user = DIDUser(
         id: "1",
         handle: "user.bsky.social",
@@ -220,7 +198,6 @@ struct ProfileView: View {
         postsCount: 789,
         serviceEndpoint: "https://bsky.social"
     )
-    @Binding var showCreateView: Bool
 
     enum ProfileTab {
         case posts, replies, media, likes
@@ -317,13 +294,5 @@ struct ProfileView: View {
                 }
             }
         }
-        .sheet(isPresented: $showCreateView) {
-            Text("Create Profile things")
-        }
     }
-}
-
-// Preview
-#Preview {
-    ContentView()
 }

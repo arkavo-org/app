@@ -44,7 +44,7 @@ public enum ArkavoClientState: Equatable, Sendable {
 }
 
 /// Protocol for handling ArkavoClient events
-protocol ArkavoClientDelegate: AnyObject {
+public protocol ArkavoClientDelegate: AnyObject {
     func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState)
     func clientDidReceiveMessage(_ client: ArkavoClient, message: Data)
     func clientDidReceiveError(_ client: ArkavoClient, error: Error)
@@ -73,7 +73,7 @@ public final class ArkavoClient: NSObject {
         }
     }
 
-    weak var delegate: ArkavoClientDelegate?
+    public weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
     public var currentToken: String? {
         // TODO: Check if the token has expired

@@ -1,51 +1,138 @@
+import ArkavoSocial
+import CryptoKit
 import SwiftUI
 
-// MARK: - Message Models
+// MARK: - View Model
 
-struct ChatMessage: Identifiable {
-    let id: String
-    let userId: String
-    let username: String
-    let content: String
-    let timestamp: Date
-    let attachments: [MessageAttachment]
-    var reactions: [MessageReaction]
-    var isPinned: Bool
-    var channelId: String?
-    var creatorId: String?
+@MainActor
+class ChatViewModel: ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
+    @Published var messages: [ChatMessage] = []
+    @Published var connectionState: ArkavoClientState = .disconnected
+
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
+        connectionState = client.currentState
+    }
+
+    func sendMessage(content: String) async throws {
+        let messageData = content.data(using: .utf8) ?? Data()
+        let streamPublicID = Data() // Replace with actual stream ID
+
+        let message = ChatMessage(
+            id: UUID().uuidString,
+            userId: profile.id.uuidString,
+            username: profile.name,
+            content: content,
+            timestamp: Date(),
+            attachments: [],
+            reactions: [],
+            isPinned: false,
+            publicID: generatePublicID(content: messageData),
+            creatorPublicID: profile.publicID
+        )
+
+        // Create ThoughtServiceModel
+        let thoughtModel = ThoughtServiceModel(
+            creatorPublicID: profile.publicID,
+            streamPublicID: streamPublicID,
+            mediaType: .text,
+            content: messageData
+        )
+
+        let payload = try thoughtModel.serialize()
+        try await client.sendMessage(payload)
+
+        await MainActor.run {
+            messages.append(message)
+        }
+    }
+
+    private func generatePublicID(content: Data) -> Data {
+        let hashData = content
+        return SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
+    }
+
+    func handleIncomingMessage(_ data: Data) {
+        Task {
+            do {
+                let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+                let content = String(data: thoughtModel.content, encoding: .utf8) ?? ""
+
+                let message = ChatMessage(
+                    id: UUID().uuidString,
+                    userId: thoughtModel.creatorPublicID.base58EncodedString,
+                    username: "User-\(thoughtModel.creatorPublicID.prefix(6).base58EncodedString)",
+                    content: content,
+                    timestamp: Date(),
+                    attachments: [],
+                    reactions: [],
+                    isPinned: false,
+                    publicID: thoughtModel.publicID,
+                    creatorPublicID: thoughtModel.creatorPublicID
+                )
+
+                await MainActor.run {
+                    messages.append(message)
+                }
+            } catch {
+                print("Error handling incoming message: \(error)")
+            }
+        }
+    }
+
+    enum ChatError: Error {
+        case noProfile
+        case serializationError
+    }
 }
 
-struct MessageAttachment: Identifiable {
-    let id: String
-    let type: AttachmentType
-    let url: String
+// MARK: - ArkavoClient Delegate
+
+extension ChatViewModel: ArkavoClientDelegate {
+    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
+        Task { @MainActor in
+            self.connectionState = state
+        }
+    }
+
+    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
+        Task { @MainActor in
+            self.handleIncomingMessage(message)
+        }
+    }
+
+    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
+        Task { @MainActor in
+            print("Arkavo client error: \(error)")
+            // You might want to update UI state here
+            // self.errorMessage = error.localizedDescription
+            // self.showError = true
+        }
+    }
 }
 
-enum AttachmentType {
-    case image
-    case video
-    case file
-}
-
-struct MessageReaction: Identifiable {
-    let id: String
-    let emoji: String
-    var count: Int
-    var hasReacted: Bool
-}
-
-// MARK: - Chat View
+// MARK: - Enhanced ChatView
 
 struct ChatView: View {
     @StateObject var viewModel: ChatViewModel
     @State private var messageText = ""
     @State private var showingAttachmentPicker = false
+    @State private var isConnecting = false
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         VStack(spacing: 0) {
+            connectionStatusBar
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(viewModel.filteredMessages) { message in
+                    ForEach(viewModel.messages) { message in
                         MessageRow(message: message)
                     }
                 }
@@ -54,14 +141,52 @@ struct ChatView: View {
 
             MessageInputBar(
                 messageText: $messageText,
-                placeholder: "..",
+                placeholder: "Type a message...",
                 onAttachmentTap: { showingAttachmentPicker.toggle() },
                 onSend: {
-                    viewModel.sendMessage(content: messageText)
-                    messageText = ""
+                    Task {
+                        do {
+                            try await viewModel.sendMessage(content: messageText)
+                            messageText = ""
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
+                    }
                 }
             )
         }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    private var connectionStatusBar: some View {
+        HStack {
+            switch viewModel.connectionState {
+            case .connected:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Text("Connected")
+            case .connecting, .authenticating:
+                ProgressView()
+                Text("Connecting...")
+            case .disconnected:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundColor(.orange)
+                Text("Disconnected")
+            case let .error(error):
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                Text("Error: \(error.localizedDescription)")
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal)
+        .background(Color(.systemBackground))
+        .shadow(radius: 1)
     }
 }
 
@@ -165,89 +290,40 @@ struct ReactionButton: View {
     }
 }
 
-// MARK: - Sample Data
+// MARK: - Enhanced Message Models
 
-extension ChatMessage {
-    static let sampleMessages = [
-        ChatMessage(
-            id: "1",
-            userId: "user1",
-            username: "John Doe",
-            content: "Hello everyone! 👋",
-            timestamp: Date().addingTimeInterval(-3600),
-            attachments: [],
-            reactions: [
-                MessageReaction(id: "1", emoji: "👍", count: 3, hasReacted: true),
-                MessageReaction(id: "2", emoji: "❤️", count: 2, hasReacted: false),
-            ],
-            isPinned: true,
-            channelId: "channel1",
-            creatorId: nil
-        ),
-        ChatMessage(
-            id: "2",
-            userId: "user2",
-            username: "Jane Smith",
-            content: "Hi John! How's the project coming along?",
-            timestamp: Date().addingTimeInterval(-1800),
-            attachments: [],
-            reactions: [],
-            isPinned: false,
-            channelId: "channel1",
-            creatorId: nil
-        ),
-    ]
+struct ChatMessage: Identifiable, Equatable {
+    let id: String
+    let userId: String
+    let username: String
+    let content: String
+    let timestamp: Date
+    let attachments: [MessageAttachment]
+    var reactions: [MessageReaction]
+    var isPinned: Bool
+    let publicID: Data
+    let creatorPublicID: Data
+
+    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
-// MARK: - ChatViewModel
+struct MessageAttachment: Identifiable {
+    let id: String
+    let type: AttachmentType
+    let url: String
+}
 
-@MainActor
-class ChatViewModel: ObservableObject {
-    @Published var messages: [ChatMessage] = []
-    @Published var channel: Channel?
-    @Published var creator: Creator?
+enum AttachmentType {
+    case image
+    case video
+    case file
+}
 
-    init(channel: Channel? = nil, creator: Creator? = nil) {
-        self.channel = channel
-        self.creator = creator
-        loadInitialMessages()
-    }
-
-    private func loadInitialMessages() {
-        // In real app, fetch from backend
-        messages = ChatMessage.sampleMessages
-    }
-
-    func sendMessage(content: String) {
-        let newMessage = ChatMessage(
-            id: UUID().uuidString,
-            userId: "currentUser", // In real app, get from auth
-            username: "Current User", // In real app, get from auth
-            content: content,
-            timestamp: Date(),
-            attachments: [],
-            reactions: [],
-            isPinned: false,
-            channelId: channel?.id,
-            creatorId: creator?.id
-        )
-
-        withAnimation {
-            messages.append(newMessage)
-        }
-
-        // In real app, send to backend
-    }
-
-    var filteredMessages: [ChatMessage] {
-        messages.filter { message in
-            if let channel {
-                return message.channelId == channel.id
-            }
-            if let creator {
-                return message.creatorId == creator.id
-            }
-            return false
-        }
-    }
+struct MessageReaction: Identifiable {
+    let id: String
+    let emoji: String
+    var count: Int
+    var hasReacted: Bool
 }

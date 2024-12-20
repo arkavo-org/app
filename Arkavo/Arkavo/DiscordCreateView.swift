@@ -2,8 +2,9 @@ import SwiftUI
 
 struct CreateServerView: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject var viewModel: DiscordViewModel
-    @Binding var showCreateView: Bool
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+
     @State private var serverName = ""
     @State private var selectedIcon: String? = nil
 
@@ -74,6 +75,6 @@ struct CreateServerView: View {
             hasNotification: false
         )
         viewModel.servers.insert(newServer, at: 0)
-        showCreateView.toggle()
+        sharedState.showCreateView.toggle()
     }
 }
