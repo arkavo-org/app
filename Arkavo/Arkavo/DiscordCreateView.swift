@@ -54,27 +54,7 @@ struct CreateServerView: View {
     }
 
     private func createServer() {
-        let newServer = Server(
-            id: UUID().uuidString,
-            name: serverName,
-            imageURL: nil,
-            icon: selectedIcon ?? "message",
-            channels: [],
-            categories: [
-                ChannelCategory(
-                    id: UUID().uuidString,
-                    name: "TEXT CHANNELS",
-                    channels: [
-                        Channel(id: UUID().uuidString, name: "general", type: .text, unreadCount: 0, isActive: false),
-                        Channel(id: UUID().uuidString, name: "shared", type: .text, unreadCount: 0, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-            ],
-            unreadCount: 0,
-            hasNotification: false
-        )
-        viewModel.servers.insert(newServer, at: 0)
+//        viewModel.servers.insert(newServer, at: 0)
         sharedState.showCreateView.toggle()
     }
 }

@@ -39,9 +39,6 @@
     "%lld views" : {
 
     },
-    "%lld voice channels" : {
-
-    },
     "%lld%%" : {
 
     },
@@ -299,9 +296,6 @@
     "Following" : {
 
     },
-    "Friends%@" : {
-
-    },
     "Granularity" : {
 
     },
@@ -475,6 +469,9 @@
 
     },
     "No Active Streams" : {
+
+    },
+    "No thoughts yet" : {
 
     },
     "Not available on macOS" : {

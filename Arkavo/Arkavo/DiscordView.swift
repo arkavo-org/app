@@ -8,34 +8,40 @@ class DiscordViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    @Published var servers = Server.sampleServers
-    @Published var selectedVideo: Video?
-    @Published var selectedChannel: Channel?
+    @Published var streams: [Stream] = []
     private var chatViewModels: [String: ChatViewModel] = [:] // Cache of ChatViewModels
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
+        Task {
+            await loadStreams()
+        }
     }
 
-    func shareVideo(_ video: Video, to server: Server) async {
-        // Find the "shared" channel
-        if let category = server.categories.first,
-           let sharedChannel = category.channels.first(where: { $0.name == "shared" })
-        {
-            selectedChannel = sharedChannel
-            print("Sharing video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
-            selectedVideo = video
-            if let channel = selectedChannel {
-                let chatViewModel = chatViewModel(for: channel)
-                do {
-                    try await chatViewModel.sendMessage(content: "Shared video \(video.id) to server \(server.name) in channel \(sharedChannel.name)")
-                } catch {
-                    print("Error sending message: \(error)")
-                }
+    private func loadStreams() async {
+        streams = account.streams
+    }
+
+    func shareVideo(_ video: Video, to stream: Stream) async {
+        if let defaultChannel = defaultChannel(for: stream) {
+            print("Sharing video \(video.id) to stream \(stream.profile.name)")
+            let chatViewModel = chatViewModel(for: defaultChannel)
+            do {
+                try await chatViewModel.sendMessage(content: "Shared video \(video.id) to stream \(stream.profile.name)")
+            } catch {
+                print("Error sending message: \(error)")
             }
         }
+    }
+
+    private func defaultChannel(for stream: Stream) -> Channel? {
+        Channel(id: stream.id.uuidString,
+                name: "default",
+                type: .text,
+                unreadCount: stream.thoughts.count,
+                isActive: false)
     }
 
     func chatViewModel(for channel: Channel) -> ChatViewModel {
@@ -45,6 +51,43 @@ class DiscordViewModel: ObservableObject {
         let newViewModel = ViewModelFactory.shared.makeChatViewModel(channel: channel)
         chatViewModels[channel.id] = newViewModel
         return newViewModel
+    }
+
+    // Convert Stream to Server view model
+    func serverFromStream(_ stream: Stream) -> Server {
+        let defaultCategory = ChannelCategory(
+            id: "\(stream.id)_default",
+            name: "STREAM",
+            channels: [
+                defaultChannel(for: stream) ??
+                    Channel(id: stream.id.uuidString,
+                            name: "default",
+                            type: .text,
+                            unreadCount: stream.thoughts.count,
+                            isActive: false),
+            ],
+            isExpanded: true
+        )
+
+        return Server(
+            id: stream.id.uuidString,
+            name: stream.profile.name,
+            imageURL: nil,
+            icon: iconForStream(stream),
+            channels: [],
+            categories: [defaultCategory],
+            unreadCount: stream.thoughts.count,
+            hasNotification: !stream.thoughts.isEmpty
+        )
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.agePolicy {
+        case .onlyAdults: "person.fill"
+        case .onlyKids: "figure.child"
+        case .onlyTeens: "figure.wave"
+        case .forAll: "person.3.fill"
+        }
     }
 }
 
@@ -104,111 +147,33 @@ enum ChannelType {
     }
 }
 
-// MARK: - Sample Data
-
-extension Server {
-    static let sampleServers = [
-        Server(
-            id: "1",
-            name: "Gaming Hub",
-            imageURL: nil,
-            icon: "gamecontroller",
-            channels: [],
-            categories: [
-                ChannelCategory(
-                    id: "1",
-                    name: "INFORMATION",
-                    channels: [
-                        Channel(id: "1", name: "announcements", type: .announcement, unreadCount: 0, isActive: false),
-                        Channel(id: "2", name: "rules", type: .text, unreadCount: 0, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-                ChannelCategory(
-                    id: "2",
-                    name: "TEXT CHANNELS",
-                    channels: [
-                        Channel(id: "3", name: "general", type: .text, unreadCount: 5, isActive: true),
-                        Channel(id: "4", name: "shared", type: .text, unreadCount: 2, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-                ChannelCategory(
-                    id: "3",
-                    name: "VOICE CHANNELS",
-                    channels: [
-                        Channel(id: "5", name: "Voice", type: .voice, unreadCount: 0, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-            ],
-            unreadCount: 7,
-            hasNotification: true
-        ),
-        Server(
-            id: "2",
-            name: "Book Club",
-            imageURL: nil,
-            icon: "book",
-            channels: [],
-            categories: [
-                ChannelCategory(
-                    id: "1",
-                    name: "INFORMATION",
-                    channels: [
-                        Channel(id: "1", name: "announcements", type: .announcement, unreadCount: 0, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-                ChannelCategory(
-                    id: "2",
-                    name: "TEXT CHANNELS",
-                    channels: [
-                        Channel(id: "4", name: "shared", type: .text, unreadCount: 2, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-                ChannelCategory(
-                    id: "3",
-                    name: "VOICE CHANNELS",
-                    channels: [
-                        Channel(id: "5", name: "Voice", type: .voice, unreadCount: 0, isActive: false),
-                    ],
-                    isExpanded: true
-                ),
-            ],
-            unreadCount: 7,
-            hasNotification: true
-        ),
-    ]
-}
-
 // MARK: - Main View
 
 struct DiscordView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
-
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 20) {
-                    if sharedState.selectedServer != nil {
+                    if let selectedServer = sharedState.selectedServer {
                         // Show only the selected server
                         ServerDetailView(
-                            server: sharedState.selectedServer!,
+                            server: selectedServer,
                             onChannelSelect: { channel in
                                 navigationPath.append(channel)
                             }
                         )
                         .padding(.horizontal)
                     } else {
-                        // Show all servers when none is selected
-                        ForEach(viewModel.servers) { server in
+                        // Show all streams converted to server view models
+                        ForEach(viewModel.streams) { stream in
+                            let server = viewModel.serverFromStream(stream)
                             ServerDetailView(
                                 server: server,
+                                stream: stream, // Pass stream for thought display
                                 onChannelSelect: { channel in
                                     navigationPath.append(channel)
                                 }
@@ -222,9 +187,9 @@ struct DiscordView: View {
             .background(Color(.systemGroupedBackground))
             .navigationDestination(for: Channel.self) { channel in
                 ChatView(
-                    viewModel: ViewModelFactory.shared.makeChatViewModel(channel: channel)
+                    viewModel: viewModel.chatViewModel(for: channel)
                 )
-                .navigationTitle("Friends\(channel.name)") // FIXME: server name
+                .navigationTitle(channel.name)
             }
         }
     }
@@ -233,6 +198,7 @@ struct DiscordView: View {
 struct ServerDetailView: View {
     @EnvironmentObject var sharedState: SharedState
     let server: Server
+    var stream: Stream? // Optional since selected server might not have associated stream
     let onChannelSelect: (Channel) -> Void
     @State private var isExpanded = true
 
@@ -271,13 +237,16 @@ struct ServerDetailView: View {
                             }
                         }
 
-                        let totalMembers = server.categories
-                            .flatMap(\.channels)
-                            .filter { $0.type == .voice }
-                            .count
-                        Text("\(totalMembers) voice channels")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if let stream, let latestThought = stream.thoughts.last {
+                            Text(latestThought.nano.hexEncodedString())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Text("No thoughts yet")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer()
@@ -311,11 +280,6 @@ struct ServerDetailView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-
-                            if channel != category.channels.last {
-                                Divider()
-                                    .padding(.leading, 44)
-                            }
                         }
                     }
                 }
