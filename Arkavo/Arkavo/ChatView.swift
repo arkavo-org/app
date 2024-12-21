@@ -1,5 +1,6 @@
 import ArkavoSocial
 import CryptoKit
+import OpenTDFKit
 import SwiftUI
 
 // MARK: - View Model
@@ -82,6 +83,46 @@ class ChatViewModel: ObservableObject {
             } catch {
                 print("Error handling incoming message: \(error)")
             }
+        }
+    }
+
+    func processStreamThoughts(_ stream: Stream) async {
+        for thought in stream.thoughts {
+            do {
+                let parser = BinaryParser(data: thought.nano)
+                print("thought parsed successfully / \(thought.publicID)")
+                try await client.sendMessage(RewrapMessage(header: parser.parseHeader()).toData())
+            } catch {
+                print("Error processing thought: \(error)")
+            }
+        }
+    }
+
+    private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async {
+        do {
+            // Deserialize the thought model from the decrypted payload
+            let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
+
+            // Create chat message from the thought
+            let message = ChatMessage(
+                id: UUID().uuidString,
+                userId: thoughtModel.creatorPublicID.base58EncodedString,
+                username: "User-\(thoughtModel.creatorPublicID.prefix(6).base58EncodedString)",
+                content: String(data: thoughtModel.content, encoding: .utf8) ?? "",
+                timestamp: Date(),
+                attachments: [],
+                reactions: [],
+                isPinned: false,
+                publicID: thoughtModel.publicID,
+                creatorPublicID: thoughtModel.creatorPublicID
+            )
+
+            // Update UI on main thread
+            await MainActor.run {
+                messages.append(message)
+            }
+        } catch {
+            print("Error handling decrypted thought: \(error)")
         }
     }
 

@@ -186,12 +186,24 @@ struct DiscordView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationDestination(for: Channel.self) { channel in
-                ChatView(
-                    viewModel: viewModel.chatViewModel(for: channel)
-                )
-                .navigationTitle(channel.name)
+                createChatView(for: channel)
             }
         }
+    }
+
+    func createChatView(for channel: Channel) -> some View {
+        let chatViewModel = viewModel.chatViewModel(for: channel)
+
+        // Find associated stream for the channel
+        if let stream = viewModel.streams.first(where: { $0.id.uuidString == channel.id }) {
+            // Process thoughts when chat view appears
+            Task {
+                await chatViewModel.processStreamThoughts(stream)
+            }
+        }
+
+        return ChatView(viewModel: chatViewModel)
+            .navigationTitle(channel.name)
     }
 }
 
