@@ -1,5 +1,6 @@
 import ArkavoSocial
 import Foundation
+import SwiftData
 import SwiftUI
 
 // MARK: - Models
@@ -81,6 +82,26 @@ struct TikTokFeedView: View {
                 Text("Loading...")
                     .onAppear {
                         viewModel = ViewModelFactory.shared.makeTikTokFeedViewModel()
+                        guard let viewModel,
+                              let firstStream = viewModel.account.streams.first else { return }
+                        // Find the most recent video thought
+                        let videoThoughts = firstStream.thoughts
+                            .filter { $0.metadata.mediaType == .video }
+                            .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+                        // Convert thoughts to videos
+                        let videos = videoThoughts.map { thought in
+                            Video(
+                                id: thought.id.uuidString,
+                                url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
+                                contributors: [], // Could populate from stream metadata if needed
+                                description: "Video Thought",
+                                likes: 0,
+                                comments: 0,
+                                shares: 0
+                            )
+                        }
+                        // Update view model with the videos
+                        viewModel.videos = videos
                     }
             }
         }
@@ -513,56 +534,6 @@ class TikTokFeedViewModel: ObservableObject {
     }
 
     private func loadInitialVideos() {
-        // In a real app, this would fetch from an API
-        videos = [
-            Video(
-                id: "1",
-                url: URL(string: "https://example.com/video1.mp4")!,
-                contributors: [
-                    Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
-                    Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
-                ],
-                description: "Collaborative masterpiece 🎨",
-                likes: 1500,
-                comments: 120,
-                shares: 45
-            ),
-            Video(
-                id: "2",
-                url: URL(string: "https://example.com/video2.mp4")!,
-                contributors: [
-                    Contributor(id: "3", creator: Creator.sampleCreators[1], role: "Artist"),
-                ],
-                description: "Solo music session 🎵",
-                likes: 800,
-                comments: 65,
-                shares: 30
-            ),
-            Video(
-                id: "3",
-                url: URL(string: "https://example.com/video3.mp4")!,
-                contributors: [
-                    Contributor(id: "4", creator: Creator.sampleCreators[2], role: "Chef"),
-                    Contributor(id: "5", creator: Creator.sampleCreators[3], role: "Guest Chef"),
-                ],
-                description: "Cooking collab! 👩‍🍳",
-                likes: 2200,
-                comments: 180,
-                shares: 95
-            ),
-            Video(
-                id: "4",
-                url: URL(string: "https://example.com/video4.mp4")!,
-                contributors: [
-                    Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
-                ],
-                description: "Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻",
-                likes: 950,
-                comments: 85,
-                shares: 40
-            ),
-        ]
-
         // Preload the first video
         if let firstVideoUrl = videos.first?.url {
             preloadVideo(url: firstVideoUrl)

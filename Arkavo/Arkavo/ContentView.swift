@@ -49,17 +49,7 @@ struct ContentView: View {
                 switch selectedTab {
                 case .home:
                     if showCreateView {
-                        TikTokRecordingView { _ in
-//                            if let uploadResult = result {
-//                                // Create contributors list with current user as director
-//                                let currentUser = Creator.sampleCreators[0] // Replace with actual current user
-//                                let contributors = [
-//                                    Contributor(id: UUID().uuidString, creator: currentUser, role: "Director"),
-//                                ]
-                            ////                                feedViewModel.addNewVideo(from: uploadResult, contributors: contributors)
-//                            }
-                            showCreateView = false
-                        }
+                        TikTokRecordingView()
                     } else {
                         TikTokFeedView()
                     }

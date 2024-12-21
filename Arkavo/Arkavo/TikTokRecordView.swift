@@ -1,4 +1,6 @@
+import ArkavoSocial
 import AVFoundation
+import SwiftData
 import SwiftUI
 
 // MARK: - View States
@@ -33,27 +35,79 @@ enum RecordingState: Equatable {
 // MARK: - Main View
 
 struct TikTokRecordingView: View {
-    @StateObject private var viewModel = TikTokRecordingViewModel()
-    @State private var showErrorAlert = false
-    let onComplete: (UploadResult?) -> Void
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject private var viewModel: TikTokRecordingViewModel = ViewModelFactory.shared.makeTikTokRecordingViewModel()
+    @Environment(\.dismiss) private var dismiss
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         ModernRecordingInterface(
             viewModel: viewModel,
-            onComplete: onComplete
+            onComplete: { result in
+                await handleRecordingComplete(result)
+            }
         )
-        .alert("Error", isPresented: $showErrorAlert) {
-            Button("OK", role: .cancel) {}
+        .alert("Recording Error", isPresented: $showError) {
+            Button("OK") {
+                dismiss()
+            }
         } message: {
-            if case let .error(message) = viewModel.recordingState {
-                Text(message)
-            }
+            Text(errorMessage)
         }
-        .onChange(of: viewModel.recordingState) { _, state in
-            if case .error = state {
-                showErrorAlert = true
-            }
+    }
+
+    private func handleRecordingComplete(_ result: UploadResult?) async {
+        let account = viewModel.account
+
+        // Validate we have required data
+        guard let result else {
+            showError(message: "Failed to get recording result")
+            return
         }
+
+        guard let firstStream = account.streams.first else {
+            showError(message: "No stream available to save video")
+            return
+        }
+
+        do {
+            // Create a new Thought for the video
+            let videoThought = Thought(
+                id: UUID(),
+                nano: Data(result.playbackURL.utf8)
+            )
+            videoThought.metadata = ThoughtMetadata(
+                creator: UUID(uuidString: account.id.description) ?? UUID(),
+                mediaType: .video,
+                createdAt: Date()
+            )
+
+            // Add thought to the first stream
+            firstStream.thoughts.append(videoThought)
+
+            // Save changes
+            try PersistenceController.shared.saveStream(firstStream)
+            try await PersistenceController.shared.saveChanges()
+
+            // Only dismiss on successful save
+            dismiss()
+        } catch let error as NSError {
+            // Handle specific error cases
+            switch error.domain {
+            case NSCocoaErrorDomain:
+                showError(message: "Failed to save video: Storage error")
+            default:
+                showError(message: "Failed to save video: \(error.localizedDescription)")
+            }
+        } catch {
+            showError(message: "Unexpected error while saving video")
+        }
+    }
+
+    private func showError(message: String) {
+        errorMessage = message
+        showError = true
     }
 }
 
@@ -81,8 +135,7 @@ struct PreviewViewWrapper: UIViewRepresentable {
 
 struct ModernRecordingInterface: View {
     @ObservedObject var viewModel: TikTokRecordingViewModel
-    @Environment(\.colorScheme) var colorScheme
-    let onComplete: (UploadResult?) -> Void
+    let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
         ZStack {
@@ -90,7 +143,6 @@ struct ModernRecordingInterface: View {
             PreviewViewWrapper(viewModel: viewModel)
                 .ignoresSafeArea()
                 .overlay {
-                    // Subtle gradient overlay for better contrast
                     LinearGradient(
                         colors: [
                             .clear,
@@ -102,26 +154,20 @@ struct ModernRecordingInterface: View {
                     .ignoresSafeArea()
                 }
 
-            // Main Controls
             VStack {
                 Spacer()
 
-                // Bottom Controls
                 VStack(spacing: 32) {
-                    // Progress Bar
                     ProgressBar(progress: viewModel.recordingProgress)
                         .frame(height: 3)
                         .padding(.horizontal)
 
-                    // Recording Controls
                     ZStack {
-                        // Recording control in center
                         RecordingControl(
                             viewModel: viewModel,
                             onComplete: onComplete
                         )
 
-                        // Flip camera button positioned absolutely
                         HStack {
                             FlipCameraButton {
                                 viewModel.flipCamera()
@@ -156,7 +202,7 @@ struct FlipCameraButton: View {
 
 struct RecordingControl: View {
     @ObservedObject var viewModel: TikTokRecordingViewModel
-    let onComplete: (UploadResult?) -> Void
+    let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
         Group {
@@ -180,8 +226,10 @@ struct RecordingControl: View {
                 ProcessingView(state: viewModel.recordingState)
             case let .complete(result):
                 CompleteButton {
-                    viewModel.cleanup()
-                    onComplete(result)
+                    Task {
+                        viewModel.cleanup()
+                        await onComplete(result)
+                    }
                 }
             case .error:
                 EmptyView()
@@ -329,6 +377,9 @@ struct ProgressBar: View {
 
 @MainActor
 class TikTokRecordingViewModel: ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
@@ -337,6 +388,12 @@ class TikTokRecordingViewModel: ObservableObject {
     private let processingManager = HLSProcessingManager()
     private let uploadManager = VideoUploadManager()
     private var progressTimer: Timer?
+
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
+    }
 
     func setup(previewView: UIView) async {
         do {

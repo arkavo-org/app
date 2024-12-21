@@ -436,4 +436,14 @@ final class ViewModelFactory {
             profile: currentProfile!
         )
     }
+
+    @MainActor
+    func makeTikTokRecordingViewModel() -> TikTokRecordingViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return TikTokRecordingViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
 }

@@ -38,8 +38,8 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
     }
 
     private static func extractMetadata(from _: Data) -> ThoughtMetadata {
-        // TODO: Parse the data to extract metadata from the NanoTDF Policy
-        ThoughtMetadata(creator: UUID(), mediaType: .text)
+        // TODO: Parse the data to extract metadata from the NanoTDF Policy, and fix Date()
+        ThoughtMetadata(creator: UUID(), mediaType: .text, createdAt: Date())
     }
 
     private static func generatePublicID(from uuid: UUID) -> Data {
@@ -73,6 +73,8 @@ extension Thought {
 struct ThoughtMetadata: Codable {
     let creator: UUID
     let mediaType: MediaType
+    let createdAt: Date
+
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()
