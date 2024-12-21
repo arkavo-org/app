@@ -200,15 +200,11 @@ struct ContributorsView: View {
 
 struct VideoPlayerView: View {
     @EnvironmentObject var sharedState: SharedState
-    let video: Video
     @ObservedObject var viewModel: TikTokFeedViewModel
-    let size: CGSize
-
-    @State private var isLiked = false
-    @State private var showComments = false
-    @State private var likesCount: Int
+    @State private var showChat = false
     @State private var dragOffset = CGSize.zero
-
+    let video: Video
+    let size: CGSize
     private let swipeThreshold: CGFloat = 50
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
@@ -220,7 +216,6 @@ struct VideoPlayerView: View {
         self.video = video
         self.viewModel = viewModel
         self.size = size
-        _likesCount = State(initialValue: video.likes)
     }
 
     var body: some View {
@@ -284,7 +279,7 @@ struct VideoPlayerView: View {
 //                                }
 //                            }
                             Button {
-                                showComments = true
+                                showChat = true
                             } label: {
                                 VStack(spacing: systemMargin * 0.25) { // 4pt
                                     Image(systemName: "bubble.right")
@@ -337,8 +332,19 @@ struct VideoPlayerView: View {
         }
         .frame(width: size.width, height: size.height)
         .ignoresSafeArea()
-        .sheet(isPresented: $showComments) {
-            CommentsView(showComments: $showComments)
+        .sheet(isPresented: $showChat) {
+            if let stream = viewModel.account.streams.first {
+                let channel = Channel(id: stream.id.uuidString,
+                                      name: "default",
+                                      type: .text,
+                                      unreadCount: stream.thoughts.count,
+                                      isActive: false)
+                let viewModel = ViewModelFactory.shared.makeChatViewModel(channel: channel)
+                ChatView(
+                    viewModel: viewModel,
+                    stream: stream
+                )
+            }
         }
     }
 }
