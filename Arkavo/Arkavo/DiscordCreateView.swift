@@ -6,7 +6,9 @@ struct CreateServerView: View {
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
 
     @State private var serverName = ""
-    @State private var selectedIcon: String? = nil
+    @State private var selectedIcon: String? = "bubble.left.and.bubble.right.fill"
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     let icons = ["gamecontroller", "leaf", "book", "music.note", "star", "heart"]
 
@@ -45,16 +47,81 @@ struct CreateServerView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Create") {
-                    createServer()
-                    dismiss()
+                    Task {
+                        await createServer()
+                        sharedState.showCreateView = false
+                    }
                 }
                 .disabled(serverName.isEmpty)
             }
         }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
     }
 
-    private func createServer() {
-//        viewModel.servers.insert(newServer, at: 0)
-        sharedState.showCreateView.toggle()
+    private func createServer() async {
+        do {
+            // Create a new profile for the server
+            let serverProfile = Profile(name: serverName)
+
+            // Create a new stream
+            let newStream = Stream(
+                creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
+                profile: serverProfile,
+                admissionPolicy: .open,
+                interactionPolicy: .open,
+                agePolicy: .forAll
+            )
+
+            // Create server view model
+            let server = Server(
+                id: newStream.id.uuidString,
+                name: serverName,
+                imageURL: nil,
+                icon: selectedIcon ?? "bubble.left.and.bubble.right.fill",
+                channels: [],
+                categories: [
+                    ChannelCategory(
+                        id: "\(newStream.id)_default",
+                        name: "GENERAL",
+                        channels: [
+                            Channel(
+                                id: newStream.id.uuidString,
+                                name: "general",
+                                type: .text,
+                                unreadCount: 0,
+                                isActive: false
+                            ),
+                        ],
+                        isExpanded: true
+                    ),
+                ],
+                unreadCount: 0,
+                hasNotification: false
+            )
+
+            // Add stream to account
+            let account = ViewModelFactory.shared.getCurrentAccount()!
+            account.streams.append(newStream)
+
+            // Save changes
+            try await PersistenceController.shared.saveChanges()
+
+            // Update shared state
+            await MainActor.run {
+                sharedState.selectedServer = server
+                sharedState.servers.append(server)
+                sharedState.showCreateView = false
+            }
+            dismiss()
+        } catch {
+            await MainActor.run {
+                errorMessage = "Failed to create server: \(error.localizedDescription)"
+                showError = true
+            }
+        }
     }
 }

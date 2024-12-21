@@ -34,8 +34,6 @@ enum Tab {
 
 struct ContentView: View {
     @EnvironmentObject var sharedState: SharedState
-    @State private var selectedTab: Tab = .home
-    @State var showCreateView: Bool = false
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
@@ -46,15 +44,15 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             ZStack(alignment: .topLeading) {
                 // Main Content
-                switch selectedTab {
+                switch sharedState.selectedTab {
                 case .home:
-                    if showCreateView {
+                    if sharedState.showCreateView {
                         TikTokRecordingView()
                     } else {
                         TikTokFeedView()
                     }
                 case .communities:
-                    if showCreateView {
+                    if sharedState.showCreateView {
                         CreateServerView()
                     } else {
                         DiscordView()
@@ -82,9 +80,9 @@ struct ContentView: View {
                 }
 
                 // Create Button
-                if !showCreateView {
+                if !sharedState.showCreateView {
                     Button {
-                        showCreateView = true
+                        sharedState.showCreateView = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.title2)
@@ -109,7 +107,7 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: tab.icon)
                                     .font(.title3)
-                                    .foregroundColor(selectedTab == tab ? .primary : .secondary)
+                                    .foregroundColor(sharedState.selectedTab == tab ? .primary : .secondary)
                             }
                         }
                     }
@@ -165,8 +163,8 @@ struct ContentView: View {
     }
 
     private func handleTabSelection(_ tab: Tab) {
-        selectedTab = tab
-        showCreateView = false
+        sharedState.selectedTab = tab
+        sharedState.showCreateView = false
         withAnimation(.spring()) {
             isCollapsed = false
         }

@@ -196,6 +196,9 @@
     "Create New Stream" : {
 
     },
+    "Create or join a community to get started" : {
+
+    },
     "Create Profile" : {
       "localizations" : {
         "es-US" : {
@@ -475,6 +478,9 @@
 
     },
     "No Active Streams" : {
+
+    },
+    "No Communities Yet" : {
 
     },
     "No thoughts yet" : {

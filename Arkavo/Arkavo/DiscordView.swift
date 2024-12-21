@@ -156,44 +156,57 @@ struct DiscordView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 20) {
-                    if let selectedServer = sharedState.selectedServer {
-                        // Show only the selected server
-                        ServerDetailView(
-                            server: selectedServer,
-                            onChannelSelect: { channel in
-                                navigationPath.append(channel)
+            ZStack(alignment: .topLeading) { // Add ZStack with topLeading alignment
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        if viewModel.streams.isEmpty {
+                            // Empty state view
+                            VStack(spacing: 16) {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.secondary)
+                                Text("No Communities Yet")
+                                    .font(.headline)
+                                Text("Create or join a community to get started")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                        )
-                        .padding(.horizontal)
-                    } else {
-                        // Show all streams converted to server view models
-                        ForEach(viewModel.streams) { stream in
-                            let server = viewModel.serverFromStream(stream)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, 100)
+                        } else if let selectedServer = sharedState.selectedServer {
                             ServerDetailView(
-                                server: server,
-                                stream: stream, // Pass stream for thought display
+                                server: selectedServer,
                                 onChannelSelect: { channel in
                                     navigationPath.append(channel)
                                 }
                             )
                             .padding(.horizontal)
+                        } else {
+                            ForEach(viewModel.streams) { stream in
+                                let server = viewModel.serverFromStream(stream)
+                                ServerDetailView(
+                                    server: server,
+                                    stream: stream,
+                                    onChannelSelect: { channel in
+                                        navigationPath.append(channel)
+                                    }
+                                )
+                                .padding(.horizontal)
+                            }
                         }
                     }
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationDestination(for: Channel.self) { channel in
-                createChatView(for: channel)
+                .background(Color(.systemGroupedBackground))
+                .navigationDestination(for: Channel.self) { channel in
+                    createChatView(for: channel)
+                }
             }
         }
     }
 
     func createChatView(for channel: Channel) -> some View {
         let chatViewModel = viewModel.chatViewModel(for: channel)
-        // Find associated stream for the channel
         let stream = viewModel.streams.first(where: { $0.id.uuidString == channel.id })
 
         return ChatView(viewModel: chatViewModel, stream: stream)

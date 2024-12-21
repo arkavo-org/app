@@ -347,7 +347,7 @@ class SharedState: ObservableObject {
     @Published var servers: [Server] = []
     @Published var selectedServer: Server?
     @Published var selectedVideo: Video?
-    @Published var selectedTab: Tab?
+    @Published var selectedTab: Tab = .home
     @Published var showCreateView: Bool = false
     @Published var selectedChannel: Channel?
 }
