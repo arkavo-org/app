@@ -38,7 +38,7 @@ extension DIDUser {
             name: displayName,
             imageURL: avatarURL,
             latestUpdate: description ?? "",
-            tier: .premium,
+            tier: "Premium",
             socialLinks: [],
             notificationCount: 0,
             bio: description ?? ""

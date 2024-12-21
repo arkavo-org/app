@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PatreonView: View {
     @EnvironmentObject var sharedState: SharedState
-    @State private var creators: [Creator] = Creator.sampleCreators
+    @State private var creators: [Creator] = []
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
 
@@ -41,7 +41,7 @@ struct CreatorSearchView: View {
         name: "Featured Artist",
         imageURL: "https://example.com/featured",
         latestUpdate: "Special collaboration event this weekend! 🎨",
-        tier: .premium,
+        tier: "Premium",
         socialLinks: [
             SocialLink(id: "1", platform: .twitter, username: "@featuredartist", url: "https://twitter.com/featuredartist"),
             SocialLink(id: "2", platform: .instagram, username: "featuredartist", url: "https://instagram.com/featuredartist"),
@@ -191,7 +191,7 @@ struct CreatorCard: View {
                         }
                     }
 
-                    Text(creator.tier.rawValue)
+                    Text(creator.tier)
                         .font(.subheadline)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -665,40 +665,6 @@ struct CreatorChatButton: View {
 }
 
 // Models
-struct Creator: Identifiable, Hashable {
-    let id: String
-    let name: String
-    let imageURL: String
-    let latestUpdate: String
-    let tier: CreatorTier
-    let socialLinks: [SocialLink]
-    let notificationCount: Int
-    let bio: String
-}
-
-struct SocialLink: Identifiable, Hashable {
-    let id: String
-    let platform: SocialPlatform
-    let username: String
-    let url: String
-}
-
-enum SocialPlatform: String {
-    case twitter = "Twitter"
-    case instagram = "Instagram"
-    case youtube = "YouTube"
-    case tiktok = "TikTok"
-
-    var icon: String {
-        switch self {
-        case .twitter: "bubble.left.and.bubble.right"
-        case .instagram: "camera"
-        case .youtube: "play.rectangle"
-        case .tiktok: "music.note"
-        }
-    }
-}
-
 struct CreatorPost: Identifiable {
     let id: String
     let content: String
@@ -719,64 +685,6 @@ struct Message: Identifiable {
     let content: String
     let timestamp: Date
     var isPinned: Bool = false
-}
-
-// Sample Data
-extension Creator {
-    static let sampleCreators = [
-        Creator(
-            id: "1",
-            name: "Digital Art Master",
-            imageURL: "https://example.com/creator1",
-            latestUpdate: "Just posted a new digital painting tutorial!",
-            tier: .premium,
-            socialLinks: [
-                SocialLink(id: "1", platform: .twitter, username: "@digitalartist", url: "https://twitter.com/digitalartist"),
-                SocialLink(id: "2", platform: .instagram, username: "digitalartmaster", url: "https://instagram.com/digitalartmaster"),
-            ],
-            notificationCount: 3,
-            bio: "Professional digital artist with 10+ years of experience. Specializing in character design and concept art."
-        ),
-        Creator(
-            id: "2",
-            name: "Music Producer Pro",
-            imageURL: "https://example.com/creator2",
-            latestUpdate: "New beat pack dropping this weekend 🎵",
-            tier: .exclusive,
-            socialLinks: [
-                SocialLink(id: "1", platform: .twitter, username: "@digitalartist", url: "https://twitter.com/digitalartist"),
-                SocialLink(id: "2", platform: .instagram, username: "digitalartmaster", url: "https://instagram.com/digitalartmaster"),
-            ],
-            notificationCount: 3,
-            bio: "Professional digital artist with 10+ years of experience. Specializing in character design and concept art."
-        ),
-        Creator(
-            id: "3",
-            name: "Cooking with Chef Sarah",
-            imageURL: "https://example.com/creator3",
-            latestUpdate: "Exclusive recipe: Gourmet pasta carbonara",
-            tier: .basic,
-            socialLinks: [
-                SocialLink(id: "1", platform: .twitter, username: "@digitalartist", url: "https://twitter.com/digitalartist"),
-                SocialLink(id: "2", platform: .instagram, username: "digitalartmaster", url: "https://instagram.com/digitalartmaster"),
-            ],
-            notificationCount: 3,
-            bio: "Professional digital artist with 10+ years of experience. Specializing in character design and concept art."
-        ),
-        Creator(
-            id: "4",
-            name: "Tech Insights Daily",
-            imageURL: "https://example.com/creator4",
-            latestUpdate: "Early access to my latest iOS development course",
-            tier: .premium,
-            socialLinks: [
-                SocialLink(id: "1", platform: .twitter, username: "@digitalartist", url: "https://twitter.com/digitalartist"),
-                SocialLink(id: "2", platform: .instagram, username: "digitalartmaster", url: "https://instagram.com/digitalartmaster"),
-            ],
-            notificationCount: 3,
-            bio: "Professional digital artist with 10+ years of experience. Specializing in character design and concept art."
-        ),
-    ]
 }
 
 // Helper Extensions

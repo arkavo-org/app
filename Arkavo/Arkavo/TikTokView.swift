@@ -5,19 +5,6 @@ import SwiftUI
 
 // MARK: - Models
 
-struct Contributor: Identifiable {
-    let id: String
-    let creator: Creator
-    let role: String
-
-    static let sampleContributors = [
-        Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
-        Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
-        Contributor(id: "3", creator: Creator.sampleCreators[2], role: "Featured"),
-        Contributor(id: "4", creator: Creator.sampleCreators[3], role: "Editor"),
-    ]
-}
-
 struct Video: Identifiable {
     let id: String
     let url: URL
@@ -27,9 +14,29 @@ struct Video: Identifiable {
     var comments: Int
     var shares: Int
 
-    var mainCreator: Creator {
-        contributors.first?.creator ?? Creator.sampleCreators[0]
-    }
+    var mainCreator = Creator(
+        id: "prof_" + UUID().uuidString,
+        name: "Quantum Research Lab",
+        imageURL: "https://profiles.arkavo.com/default-avatar.jpg",
+        latestUpdate: "Exploring quantum entanglement patterns",
+        tier: "researcher",
+        socialLinks: [
+            SocialLink(
+                id: "tw_qrl",
+                platform: .twitter,
+                username: "QuantumResLab",
+                url: "https://twitter.com/QuantumResLab"
+            ),
+            SocialLink(
+                id: "yt_qrl",
+                platform: .youtube,
+                username: "QuantumResearchLab",
+                url: "https://youtube.com/@QuantumResearchLab"
+            ),
+        ],
+        notificationCount: 2,
+        bio: "High-assurance quantum computing research group. Interests: quantum encryption, entanglement studies, quantum error correction. Location: Cambridge, MA." // Combined Profile's interests and location
+    )
 
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
@@ -564,10 +571,7 @@ class TikTokFeedViewModel: ObservableObject {
                     Video(
                         id: UUID().uuidString,
                         url: URL(string: "https://example.com/video4.mp4")!,
-                        contributors: [
-                            Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
-                            Contributor(id: "7", creator: Creator.sampleCreators[0], role: "UI Designer"),
-                        ],
+                        contributors: [],
                         description: "Tech tutorial collab 💻",
                         likes: 950,
                         comments: 85,

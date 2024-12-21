@@ -80,7 +80,9 @@ struct TikTokRecordingView: View {
             videoThought.metadata = ThoughtMetadata(
                 creator: UUID(uuidString: account.id.description) ?? UUID(),
                 mediaType: .video,
-                createdAt: Date()
+                createdAt: Date(),
+                summary: "",
+                contributors: []
             )
 
             // Add thought to the first stream
