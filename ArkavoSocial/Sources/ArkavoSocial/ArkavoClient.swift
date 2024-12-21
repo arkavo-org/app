@@ -60,6 +60,7 @@ public final class ArkavoClient: NSObject {
     private var keyPair: CurveKeyPair?
     private var sharedSecret: SharedSecret?
     private var salt: Data?
+    private var kasPublicKey: P256.KeyAgreement.PublicKey?
     private var sessionSymmetricKey: SymmetricKey?
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
@@ -409,7 +410,7 @@ public final class ArkavoClient: NSObject {
         do {
             switch curve {
             case .p256:
-                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+                self.kasPublicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p384:
                 _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p521:
@@ -679,6 +680,38 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.authenticationFailed("Invalid token format")
         }
         return token
+    }
+    
+    public func encryptAndSendPayload(
+        payload: Data,
+        policyData: Data
+    ) async throws -> Data {
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = try KasMetadata(
+            resourceLocator: kasRL,
+            publicKey: kasPublicKey,
+            curve: .secp256r1
+        )
+        
+        var policy = Policy(
+            type: .embeddedPlaintext,
+            body: EmbeddedPolicyBody(body: policyData),
+            remote: nil,
+            binding: nil
+        )
+        
+        // Create NanoTDF
+        let nanoTDF = try await createNanoTDF(
+            kas: kasMetadata,
+            policy: &policy,
+            plaintext: payload
+        )
+        
+        // Send via NATS message
+        let natsMessage = NATSMessage(message: nanoTDF.toData())
+        try await sendMessage(natsMessage.toData())
+        
+        return nanoTDF.toData()
     }
 }
 

@@ -72,23 +72,6 @@ struct CreateServerView: View {
                 name: serverName,
                 imageURL: nil,
                 icon: "bubble.left.and.bubble.right",
-                channels: [],
-                categories: [
-                    ChannelCategory(
-                        id: "\(newStream.id)_default",
-                        name: "GENERAL",
-                        channels: [
-                            Channel(
-                                id: newStream.id.uuidString,
-                                name: "general",
-                                type: .text,
-                                unreadCount: 0,
-                                isActive: false
-                            ),
-                        ],
-                        isExpanded: true
-                    ),
-                ],
                 unreadCount: 0,
                 hasNotification: false
             )

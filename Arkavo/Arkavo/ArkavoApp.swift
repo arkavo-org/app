@@ -417,12 +417,13 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeChatViewModel(channel _: Channel) -> ChatViewModel {
+    func makeChatViewModel(stream: Stream) -> ChatViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
         return ChatViewModel(
             client: client,
             account: currentAccount!,
-            profile: currentProfile!
+            profile: currentProfile!,
+            stream: stream
         )
     }
 

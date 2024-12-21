@@ -334,15 +334,9 @@ struct VideoPlayerView: View {
         .ignoresSafeArea()
         .sheet(isPresented: $showChat) {
             if let stream = viewModel.account.streams.first {
-                let channel = Channel(id: stream.id.uuidString,
-                                      name: "default",
-                                      type: .text,
-                                      unreadCount: stream.thoughts.count,
-                                      isActive: false)
-                let viewModel = ViewModelFactory.shared.makeChatViewModel(channel: channel)
+                let viewModel = ViewModelFactory.shared.makeChatViewModel(stream: stream)
                 ChatView(
-                    viewModel: viewModel,
-                    stream: stream
+                    viewModel: viewModel
                 )
             }
         }
@@ -500,26 +494,11 @@ class TikTokFeedViewModel: ObservableObject {
 
     func servers() -> [Server] {
         account.streams.map { stream in
-            let defaultCategory = ChannelCategory(
-                id: "\(stream.id)_default",
-                name: "STREAM",
-                channels: [
-                    Channel(id: stream.id.uuidString,
-                            name: "default",
-                            type: .text,
-                            unreadCount: stream.thoughts.count,
-                            isActive: false),
-                ],
-                isExpanded: true
-            )
-
             return Server(
                 id: stream.id.uuidString,
                 name: stream.profile.name,
                 imageURL: nil,
                 icon: iconForStream(stream),
-                channels: [],
-                categories: [defaultCategory],
                 unreadCount: stream.thoughts.count,
                 hasNotification: !stream.thoughts.isEmpty
             )

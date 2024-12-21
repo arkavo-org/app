@@ -1,4 +1,5 @@
 import ArkavoSocial
+import FlatBuffers
 import CryptoKit
 import OpenTDFKit
 import SwiftUI
@@ -10,6 +11,7 @@ class ChatViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
+    let stream: Stream
     @Published var messages: [ChatMessage] = []
     @Published var connectionState: ArkavoClientState = .disconnected
     // Track pending thoughts by their ephemeral public key
@@ -17,20 +19,171 @@ class ChatViewModel: ObservableObject {
     // Add set to track processed message IDs
     private var processedMessageIds = Set<Data>()
 
-    init(client: ArkavoClient, account: Account, profile: Profile) {
+    init(client: ArkavoClient, account: Account, profile: Profile, stream: Stream) {
         self.client = client
         self.account = account
         self.profile = profile
+        self.stream = stream
         connectionState = client.currentState
         // Set self as delegate
         client.delegate = self
-        print("ChatViewModel initialized and delegate set")
     }
 
     func sendMessage(content: String) async throws {
         let messageData = content.data(using: .utf8) ?? Data()
-        let streamPublicID = Data() // Replace with actual stream ID
-
+        let streamPublicID = stream.publicID
+        
+        // Create thought service model
+        let thoughtModel = ThoughtServiceModel(
+            creatorPublicID: profile.publicID,
+            streamPublicID: streamPublicID,
+            mediaType: .text,
+            content: messageData
+        )
+        
+        // Create FlatBuffers policy
+        var builder = FlatBufferBuilder()
+        
+        // Create format info
+        let formatVersionString = builder.create(string: "1.0")
+        let formatProfileString = builder.create(string: "standard")
+        let formatInfo = Arkavo_FormatInfo.createFormatInfo(
+            &builder,
+            type: .plain,
+            versionOffset: formatVersionString,
+            profileOffset: formatProfileString
+        )
+        
+        // Create content format
+        let contentFormat = Arkavo_ContentFormat.createContentFormat(
+            &builder,
+            mediaType: .text,
+            dataEncoding: .utf8,
+            formatOffset: formatInfo
+        )
+        
+        // Create rating based on stream age policy
+        let rating: Offset = switch stream.agePolicy {
+            case .onlyAdults:
+                Arkavo_Rating.createRating(
+                    &builder,
+                    violent: .severe,
+                    sexual: .severe,
+                    profane: .severe,
+                    substance: .severe,
+                    hate: .severe,
+                    harm: .severe,
+                    mature: .severe,
+                    bully: .severe
+                )
+            case .onlyKids:
+                Arkavo_Rating.createRating(
+                    &builder,
+                    violent: .mild,
+                    sexual: .none_,
+                    profane: .none_,
+                    substance: .none_,
+                    hate: .none_,
+                    harm: .none_,
+                    mature: .none_,
+                    bully: .none_
+                )
+            case .forAll:
+                Arkavo_Rating.createRating(
+                    &builder,
+                    violent: .mild,
+                    sexual: .mild,
+                    profane: .mild,
+                    substance: .none_,
+                    hate: .none_,
+                    harm: .none_,
+                    mature: .mild,
+                    bully: .none_
+                )
+            case .onlyTeens:
+                Arkavo_Rating.createRating(
+                    &builder,
+                    violent: .mild,
+                    sexual: .none_,
+                    profane: .none_,
+                    substance: .none_,
+                    hate: .none_,
+                    harm: .none_,
+                    mature: .none_,
+                    bully: .none_
+                )
+        }
+        
+        // Create purpose
+        let purpose = Arkavo_Purpose.createPurpose(
+            &builder,
+            educational: 0.8,
+            entertainment: 0.2,
+            news: 0.0,
+            promotional: 0.0,
+            personal: 0.0,
+            opinion: 0.1,
+            transactional: 0.0,
+            harmful: 0.0,
+            confidence: 0.9
+        )
+        
+        // Create ID and related vectors
+        let idVector = builder.createVector(bytes: thoughtModel.publicID)
+        let relatedVector = builder.createVector(bytes: streamPublicID)
+        
+        // Create topics vector
+        let topics: [UInt32] = [1, 2, 3]
+        let topicsVector = builder.createVector(topics)
+        
+        // Create metadata root
+        let metadata = Arkavo_Metadata.createMetadata(
+            &builder,
+            created: Int64(Date().timeIntervalSince1970),
+            idVectorOffset: idVector,
+            relatedVectorOffset: relatedVector,
+            ratingOffset: rating,
+            purposeOffset: purpose,
+            topicsVectorOffset: topicsVector,
+            contentOffset: contentFormat
+        )
+        
+        builder.finish(offset: metadata)
+        
+        // Verify FlatBuffer
+        var buffer = builder.sizedBuffer
+        do {
+            let rootOffset = buffer.read(def: Int32.self, position: 0)
+            var verifier = try Verifier(buffer: &buffer)
+            try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
+        } catch {
+            throw error
+        }
+        
+        // Get policy data
+        let policyData = Data(
+            bytes: buffer.memory.advanced(by: buffer.reader),
+            count: Int(buffer.size)
+        )
+        
+        // Serialize payload
+        let payload = try thoughtModel.serialize()
+        
+        // Encrypt and send via client
+        let nanoData = try await client.encryptAndSendPayload(
+            payload: payload,
+            policyData: policyData
+        )
+       
+        let thought: Thought = Thought(
+            id: UUID(),
+            nano: nanoData
+        )
+        
+        // Save thought to stream
+        stream.thoughts.append(thought)
+        
+        // Create and add local message
         let message = ChatMessage(
             id: UUID().uuidString,
             userId: profile.id.uuidString,
@@ -40,23 +193,12 @@ class ChatViewModel: ObservableObject {
             attachments: [],
             reactions: [],
             isPinned: false,
-            publicID: generatePublicID(content: messageData),
+            publicID: thought.publicID,
             creatorPublicID: profile.publicID,
             mediaType: .text,
-            rawContent: content.data(using: .utf8) ?? Data()
+            rawContent: messageData
         )
-
-        // Create ThoughtServiceModel
-        let thoughtModel = ThoughtServiceModel(
-            creatorPublicID: profile.publicID,
-            streamPublicID: streamPublicID,
-            mediaType: .text,
-            content: messageData
-        )
-
-        let payload = try thoughtModel.serialize()
-        try await client.sendMessage(payload)
-
+        
         await MainActor.run {
             messages.append(message)
         }
@@ -180,7 +322,7 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    func processStreamThoughts(_ stream: Stream) async {
+    func processStreamThoughts() async {
         print("\nProcessing stream thoughts:")
         for thought in stream.thoughts {
             do {
@@ -322,9 +464,8 @@ struct ChatView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var hasProcessedThoughts = false // Add this line
-    let stream: Stream? // Add this line
-
+    @State private var hasProcessedThoughts = false
+    
     var body: some View {
         VStack(spacing: 0) {
             connectionStatusBar
@@ -356,8 +497,8 @@ struct ChatView: View {
             )
         }
         .task {
-            if !hasProcessedThoughts, let stream {
-                await viewModel.processStreamThoughts(stream)
+            if !hasProcessedThoughts {
+                await viewModel.processStreamThoughts()
                 hasProcessedThoughts = true
             }
         }
