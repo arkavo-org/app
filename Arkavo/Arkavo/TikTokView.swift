@@ -494,13 +494,19 @@ class TikTokFeedViewModel: ObservableObject {
 
     func servers() -> [Server] {
         account.streams.map { stream in
-            return Server(
+            Server(
                 id: stream.id.uuidString,
                 name: stream.profile.name,
                 imageURL: nil,
                 icon: iconForStream(stream),
                 unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .forAll,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
             )
         }
     }

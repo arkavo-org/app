@@ -1,6 +1,6 @@
 import ArkavoSocial
-import FlatBuffers
 import CryptoKit
+import FlatBuffers
 import OpenTDFKit
 import SwiftUI
 
@@ -32,7 +32,7 @@ class ChatViewModel: ObservableObject {
     func sendMessage(content: String) async throws {
         let messageData = content.data(using: .utf8) ?? Data()
         let streamPublicID = stream.publicID
-        
+
         // Create thought service model
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
@@ -40,10 +40,10 @@ class ChatViewModel: ObservableObject {
             mediaType: .text,
             content: messageData
         )
-        
+
         // Create FlatBuffers policy
         var builder = FlatBufferBuilder()
-        
+
         // Create format info
         let formatVersionString = builder.create(string: "1.0")
         let formatProfileString = builder.create(string: "standard")
@@ -53,7 +53,7 @@ class ChatViewModel: ObservableObject {
             versionOffset: formatVersionString,
             profileOffset: formatProfileString
         )
-        
+
         // Create content format
         let contentFormat = Arkavo_ContentFormat.createContentFormat(
             &builder,
@@ -61,59 +61,59 @@ class ChatViewModel: ObservableObject {
             dataEncoding: .utf8,
             formatOffset: formatInfo
         )
-        
+
         // Create rating based on stream age policy
         let rating: Offset = switch stream.agePolicy {
-            case .onlyAdults:
-                Arkavo_Rating.createRating(
-                    &builder,
-                    violent: .severe,
-                    sexual: .severe,
-                    profane: .severe,
-                    substance: .severe,
-                    hate: .severe,
-                    harm: .severe,
-                    mature: .severe,
-                    bully: .severe
-                )
-            case .onlyKids:
-                Arkavo_Rating.createRating(
-                    &builder,
-                    violent: .mild,
-                    sexual: .none_,
-                    profane: .none_,
-                    substance: .none_,
-                    hate: .none_,
-                    harm: .none_,
-                    mature: .none_,
-                    bully: .none_
-                )
-            case .forAll:
-                Arkavo_Rating.createRating(
-                    &builder,
-                    violent: .mild,
-                    sexual: .mild,
-                    profane: .mild,
-                    substance: .none_,
-                    hate: .none_,
-                    harm: .none_,
-                    mature: .mild,
-                    bully: .none_
-                )
-            case .onlyTeens:
-                Arkavo_Rating.createRating(
-                    &builder,
-                    violent: .mild,
-                    sexual: .none_,
-                    profane: .none_,
-                    substance: .none_,
-                    hate: .none_,
-                    harm: .none_,
-                    mature: .none_,
-                    bully: .none_
-                )
+        case .onlyAdults:
+            Arkavo_Rating.createRating(
+                &builder,
+                violent: .severe,
+                sexual: .severe,
+                profane: .severe,
+                substance: .severe,
+                hate: .severe,
+                harm: .severe,
+                mature: .severe,
+                bully: .severe
+            )
+        case .onlyKids:
+            Arkavo_Rating.createRating(
+                &builder,
+                violent: .mild,
+                sexual: .none_,
+                profane: .none_,
+                substance: .none_,
+                hate: .none_,
+                harm: .none_,
+                mature: .none_,
+                bully: .none_
+            )
+        case .forAll:
+            Arkavo_Rating.createRating(
+                &builder,
+                violent: .mild,
+                sexual: .mild,
+                profane: .mild,
+                substance: .none_,
+                hate: .none_,
+                harm: .none_,
+                mature: .mild,
+                bully: .none_
+            )
+        case .onlyTeens:
+            Arkavo_Rating.createRating(
+                &builder,
+                violent: .mild,
+                sexual: .none_,
+                profane: .none_,
+                substance: .none_,
+                hate: .none_,
+                harm: .none_,
+                mature: .none_,
+                bully: .none_
+            )
         }
-        
+
         // Create purpose
         let purpose = Arkavo_Purpose.createPurpose(
             &builder,
@@ -127,15 +127,15 @@ class ChatViewModel: ObservableObject {
             harmful: 0.0,
             confidence: 0.9
         )
-        
+
         // Create ID and related vectors
         let idVector = builder.createVector(bytes: thoughtModel.publicID)
         let relatedVector = builder.createVector(bytes: streamPublicID)
-        
+
         // Create topics vector
         let topics: [UInt32] = [1, 2, 3]
         let topicsVector = builder.createVector(topics)
-        
+
         // Create metadata root
         let metadata = Arkavo_Metadata.createMetadata(
             &builder,
@@ -147,9 +147,9 @@ class ChatViewModel: ObservableObject {
             topicsVectorOffset: topicsVector,
             contentOffset: contentFormat
         )
-        
+
         builder.finish(offset: metadata)
-        
+
         // Verify FlatBuffer
         var buffer = builder.sizedBuffer
         do {
@@ -159,30 +159,30 @@ class ChatViewModel: ObservableObject {
         } catch {
             throw error
         }
-        
+
         // Get policy data
         let policyData = Data(
             bytes: buffer.memory.advanced(by: buffer.reader),
             count: Int(buffer.size)
         )
-        
+
         // Serialize payload
         let payload = try thoughtModel.serialize()
-        
+
         // Encrypt and send via client
         let nanoData = try await client.encryptAndSendPayload(
             payload: payload,
             policyData: policyData
         )
-       
-        let thought: Thought = Thought(
+
+        let thought = Thought(
             id: UUID(),
             nano: nanoData
         )
-        
+
         // Save thought to stream
         stream.thoughts.append(thought)
-        
+
         // Create and add local message
         let message = ChatMessage(
             id: UUID().uuidString,
@@ -198,7 +198,7 @@ class ChatViewModel: ObservableObject {
             mediaType: .text,
             rawContent: messageData
         )
-        
+
         await MainActor.run {
             messages.append(message)
         }
@@ -243,7 +243,12 @@ class ChatViewModel: ObservableObject {
             if data.count == 33 {
                 let identifier = data
                 print("Received DENY for EPK: \(identifier.hexEncodedString())")
-                pendingThoughts.removeValue(forKey: identifier)
+                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
+                    print("Removed denied thought from pending queue")
+                    print("Remaining pending thoughts: \(pendingThoughts.count)")
+                } else {
+                    print("No matching thought found for denied EPK")
+                }
                 return
             }
             print("Invalid rewrapped key length: \(data.count)")
@@ -297,8 +302,13 @@ class ChatViewModel: ObservableObject {
 
     private func handleNATSMessage(_ data: Data) async {
         do {
-            let parser = BinaryParser(data: data)
+            // Create a deep copy of the data
+            let copiedData = Data(data)
+            let parser = BinaryParser(data: copiedData)
             let header = try parser.parseHeader()
+            print("\n=== Processing NATS Message ===")
+            print("Checking content rating...")
+            print("Message content rating: \(header.policy)")
             let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
             let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
@@ -311,11 +321,15 @@ class ChatViewModel: ObservableObject {
                 payload: payload,
                 nano: nano
             )
-            print("Stored thought in pendingThoughts. Current count: \(pendingThoughts.count)")
-
+            print("Current pending thoughts count: \(pendingThoughts.count)")
+            print("Pending thoughts EPKs: \(pendingThoughts.keys.map { $0.hexEncodedString() })")
             // Send rewrap message
+            print("Sending rewrap message:")
+            print("EPK: \(header.ephemeralPublicKey.hexEncodedString())")
             let rewrapMessage = RewrapMessage(header: header)
-            try await client.sendMessage(rewrapMessage.toData())
+            let messageData = rewrapMessage.toData()
+            print("Rewrap message first byte: 0x\(String(format: "%02X", messageData.first ?? 0))")
+            print("Rewrap message length: \(messageData.count)")
             print("Sent rewrap message for EPK: \(epk.hexEncodedString())")
         } catch {
             print("Error processing NATS message: \(error)")
@@ -465,7 +479,7 @@ struct ChatView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var hasProcessedThoughts = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             connectionStatusBar

@@ -232,6 +232,10 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.notConnected
         }
 
+        print("Sending WebSocket message:")
+        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
+        print("Message length: \(data.count)")
+
         try await webSocket.send(.data(data))
     }
 
@@ -410,7 +414,7 @@ public final class ArkavoClient: NSObject {
         do {
             switch curve {
             case .p256:
-                self.kasPublicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+                kasPublicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p384:
                 _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p521:
@@ -509,6 +513,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func receiveMessage() {
+        print("receiveMessage")
         guard let webSocket else {
             print("WebSocket is nil, cannot receive message")
             return
@@ -521,6 +526,7 @@ public final class ArkavoClient: NSObject {
                 switch result {
                 case let .success(message):
                     print("\n=== Received WebSocket Message ===")
+                    print("Message type: \(message)")
                     switch message {
                     case let .data(data):
                         await self.handleIncomingMessage(data)
@@ -681,7 +687,7 @@ public final class ArkavoClient: NSObject {
         }
         return token
     }
-    
+
     public func encryptAndSendPayload(
         payload: Data,
         policyData: Data
@@ -692,25 +698,25 @@ public final class ArkavoClient: NSObject {
             publicKey: kasPublicKey,
             curve: .secp256r1
         )
-        
+
         var policy = Policy(
             type: .embeddedPlaintext,
             body: EmbeddedPolicyBody(body: policyData),
             remote: nil,
             binding: nil
         )
-        
+
         // Create NanoTDF
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
             plaintext: payload
         )
-        
+
         // Send via NATS message
         let natsMessage = NATSMessage(message: nanoTDF.toData())
         try await sendMessage(natsMessage.toData())
-        
+
         return nanoTDF.toData()
     }
 }

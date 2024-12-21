@@ -64,7 +64,7 @@ struct CreateServerView: View {
                 profile: serverProfile,
                 admissionPolicy: .open,
                 interactionPolicy: .open,
-                agePolicy: .forAll
+                agePolicy: .onlyKids
             )
 
             let server = Server(
@@ -73,7 +73,13 @@ struct CreateServerView: View {
                 imageURL: nil,
                 icon: "bubble.left.and.bubble.right",
                 unreadCount: 0,
-                hasNotification: false
+                hasNotification: false,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .onlyKids,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
             )
 
             let account = ViewModelFactory.shared.getCurrentAccount()!

@@ -9,7 +9,7 @@ class DiscordViewModel: ObservableObject {
     let account: Account
     let profile: Profile
     @Published var streams: [Stream] = []
-    private var chatViewModels: [String: ChatViewModel] = [:] // Cache of ChatViewModels
+    @Published var selectedStream: Stream?
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -25,59 +25,29 @@ class DiscordViewModel: ObservableObject {
     }
 
     func shareVideo(_ video: Video, to stream: Stream) async {
-        if let defaultChannel = defaultChannel(for: stream) {
-            print("Sharing video \(video.id) to stream \(stream.profile.name)")
-            let chatViewModel = chatViewModel(for: defaultChannel)
-            do {
-                try await chatViewModel.sendMessage(content: "Shared video \(video.id) to stream \(stream.profile.name)")
-            } catch {
-                print("Error sending message: \(error)")
-            }
-        }
-    }
-
-    private func defaultChannel(for stream: Stream) -> Channel? {
-        Channel(id: stream.id.uuidString,
-                name: "default",
-                type: .text,
-                unreadCount: stream.thoughts.count,
-                isActive: false)
-    }
-
-    func chatViewModel(for channel: Channel) -> ChatViewModel {
-        if let existing = chatViewModels[channel.id] {
-            return existing
-        }
-        let newViewModel = ViewModelFactory.shared.makeChatViewModel(channel: channel)
-        chatViewModels[channel.id] = newViewModel
-        return newViewModel
+        print("Sharing video \(video.id) to stream \(stream.profile.name)")
+//        do {
+//            try await client.shareVideo(video, to: stream)
+//        } catch {
+//            print("Error sharing video: \(error)")
+//        }
     }
 
     // Convert Stream to Server view model
     func serverFromStream(_ stream: Stream) -> Server {
-        let defaultCategory = ChannelCategory(
-            id: "\(stream.id)_default",
-            name: "STREAM",
-            channels: [
-                defaultChannel(for: stream) ??
-                    Channel(id: stream.id.uuidString,
-                            name: "default",
-                            type: .text,
-                            unreadCount: stream.thoughts.count,
-                            isActive: false),
-            ],
-            isExpanded: true
-        )
-
-        return Server(
+        Server(
             id: stream.id.uuidString,
             name: stream.profile.name,
             imageURL: nil,
             icon: iconForStream(stream),
-            channels: [],
-            categories: [defaultCategory],
             unreadCount: stream.thoughts.count,
-            hasNotification: !stream.thoughts.isEmpty
+            hasNotification: !stream.thoughts.isEmpty,
+            description: stream.profile.blurb ?? "No description available",
+            policies: StreamPolicies(
+                agePolicy: stream.agePolicy,
+                admissionPolicy: stream.admissionPolicy,
+                interactionPolicy: stream.interactionPolicy
+            )
         )
     }
 
@@ -91,59 +61,43 @@ class DiscordViewModel: ObservableObject {
     }
 }
 
-struct Server: Identifiable, Hashable {
+struct StreamPolicies: Hashable, Equatable {
+    let agePolicy: AgePolicy
+    let admissionPolicy: AdmissionPolicy
+    let interactionPolicy: InteractionPolicy
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(agePolicy)
+        hasher.combine(admissionPolicy)
+        hasher.combine(interactionPolicy)
+    }
+
+    static func == (lhs: StreamPolicies, rhs: StreamPolicies) -> Bool {
+        lhs.agePolicy == rhs.agePolicy &&
+            lhs.admissionPolicy == rhs.admissionPolicy &&
+            lhs.interactionPolicy == rhs.interactionPolicy
+    }
+}
+
+struct Server: Identifiable, Hashable, Equatable {
     let id: String
     let name: String
     let imageURL: String?
     let icon: String
-    let channels: [Channel]
-    let categories: [ChannelCategory]
     var unreadCount: Int
     var hasNotification: Bool
-}
+    let description: String
+    let policies: StreamPolicies
 
-struct ChannelCategory: Identifiable, Hashable {
-    let id: String
-    let name: String
-    var channels: [Channel]
-    var isExpanded: Bool
-}
-
-struct Channel: Identifiable, Hashable {
-    let id: String
-    let name: String
-    let type: ChannelType
-    var unreadCount: Int
-    var isActive: Bool
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    static func == (lhs: Channel, rhs: Channel) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-enum ChannelType {
-    case text
-    case voice
-    case announcement
-
-    var icon: String {
-        switch self {
-        case .text: "text.bubble.fill"
-        case .voice: "waveform.circle.fill"
-        case .announcement: "megaphone.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .text: .blue
-        case .voice: .green
-        case .announcement: .orange
-        }
+    static func == (lhs: Server, rhs: Server) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.name == rhs.name &&
+            lhs.imageURL == rhs.imageURL &&
+            lhs.icon == rhs.icon &&
+            lhs.unreadCount == rhs.unreadCount &&
+            lhs.hasNotification == rhs.hasNotification &&
+            lhs.description == rhs.description &&
+            lhs.policies == rhs.policies
     }
 }
 
@@ -153,84 +107,96 @@ struct DiscordView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
     @State private var navigationPath = NavigationPath()
+    @State private var showCreateServer = false
+    @State private var showMembersList = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    // MARK: - Stream List
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 20) {
-                        if viewModel.streams.isEmpty {
-                            VStack(spacing: 16) {
-                                Image(systemName: "bubble.left.and.bubble.right")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(.secondary)
-                                Text("No Communities Yet")
-                                    .font(.headline)
-                                Text("Create or join a community to get started")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 100)
-                        } else if let selectedServer = sharedState.selectedServer {
-                            ServerDetailView(
-                                server: selectedServer,
-                                onChannelSelect: { channel in
-                                    navigationPath.append(channel)
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            if viewModel.streams.isEmpty {
+                                EmptyStateView()
+                            } else {
+                                ForEach(viewModel.streams) { stream in
+                                    ServerCardView(
+                                        server: viewModel.serverFromStream(stream),
+                                        stream: stream,
+                                        onSelect: {
+                                            viewModel.selectedStream = stream
+                                            navigationPath.append(stream)
+                                        }
+                                    )
                                 }
-                            )
-                            .padding(.horizontal)
-                        } else {
-                            ForEach(viewModel.streams) { stream in
-                                let server = viewModel.serverFromStream(stream)
-                                ServerDetailView(
-                                    server: server,
-                                    stream: stream,
-                                    onChannelSelect: { channel in
-                                        navigationPath.append(channel)
-                                    }
-                                )
-                                .padding(.horizontal)
                             }
                         }
+                        .padding(.horizontal)
+                        .padding(.vertical, 16)
                     }
-                    .padding(.vertical)
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
+
+                    // MARK: - Chat View (iPad/Mac)
+
+                    if horizontalSizeClass == .regular,
+                       let selectedStream = viewModel.selectedStream
+                    {
+                        ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: selectedStream))
+                    }
                 }
             }
-            .navigationDestination(for: Channel.self) { channel in
-                createChatView(for: channel)
+            .navigationDestination(for: Stream.self) { stream in
+                if horizontalSizeClass == .compact {
+                    ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: stream))
+                        .navigationTitle(stream.profile.name)
+                }
+            }
+            .sheet(isPresented: $showCreateServer) {
+                NavigationStack {
+                    CreateServerView()
+                }
             }
         }
     }
+}
 
-    func createChatView(for channel: Channel) -> some View {
-        let chatViewModel = viewModel.chatViewModel(for: channel)
-        let stream = viewModel.streams.first(where: { $0.id.uuidString == channel.id })
+// MARK: - Supporting Views
 
-        return ChatView(viewModel: chatViewModel, stream: stream)
-            .navigationTitle(channel.name)
+struct EmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("No Communities Yet")
+                .font(.headline)
+            Text("Create or join a community to get started")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 100)
     }
 }
 
-struct ServerDetailView: View {
-    @EnvironmentObject var sharedState: SharedState
+// MARK: - Server Card
+
+struct ServerCardView: View {
     let server: Server
-    var stream: Stream? // Optional since selected server might not have associated stream
-    let onChannelSelect: (Channel) -> Void
-    @State private var isExpanded = true
+    let stream: Stream
+    let onSelect: () -> Void
+    @State private var isExpanded = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Server Header
-            Button {
-                withAnimation(.spring(response: 0.3)) {
-                    isExpanded.toggle()
-                }
-            } label: {
+            Button(action: onSelect) {
                 HStack(spacing: 12) {
+                    // Server Icon
                     ZStack {
                         Circle()
                             .fill(Color.blue.opacity(0.1))
@@ -241,96 +207,122 @@ struct ServerDetailView: View {
                             .foregroundStyle(.blue)
                     }
 
+                    // Server Info
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(server.name)
                                 .font(.headline)
+                                .foregroundColor(.primary)
 
                             if server.hasNotification {
-                                Text("\(server.unreadCount)")
-                                    .font(.caption2)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.red)
-                                    .foregroundColor(.white)
-                                    .clipShape(Capsule())
+                                NotificationBadge(count: server.unreadCount)
                             }
                         }
 
-                        if let stream, let latestThought = stream.thoughts.last {
-                            Text(latestThought.nano.hexEncodedString())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        } else {
-                            Text("No thoughts yet")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text(server.description)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-
-            if isExpanded {
-                VStack(spacing: 0) {
-                    ForEach(server.categories) { category in
-                        ForEach(category.channels) { channel in
-                            Button {
-                                sharedState.selectedChannel = channel
-                                onChannelSelect(channel)
-                            } label: {
-                                ChannelRow(channel: channel)
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        channel.id == sharedState.selectedChannel?.id ?
-                                            Color.blue.opacity(0.1) : Color.clear
-                                    )
-                            }
-                            .buttonStyle(.plain)
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            isExpanded.toggle()
                         }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     }
                 }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(.plain)
+            .padding()
+            .background(Color(.secondarySystemGroupedBackground))
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 12) {
+                    PolicyRow(icon: "person.3.fill",
+                              title: "Age Policy",
+                              value: server.policies.agePolicy.rawValue)
+                    PolicyRow(icon: "door.left.hand.open",
+                              title: "Admission",
+                              value: server.policies.admissionPolicy.rawValue)
+                    PolicyRow(icon: "bubble.left.and.bubble.right",
+                              title: "Interaction",
+                              value: server.policies.interactionPolicy.rawValue)
+
+                    Divider()
+                        .padding(.vertical, 8)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 16)
+                .background(Color(.secondarySystemGroupedBackground))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct NotificationBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.red)
+            .foregroundColor(.white)
+            .clipShape(Capsule())
+    }
+}
+
+struct PolicyRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .foregroundStyle(.primary)
         }
     }
 }
 
-struct ChannelRow: View {
-    let channel: Channel
+struct ThoughtRow: View {
+    let thought: Thought
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: channel.type.icon)
-                .foregroundStyle(channel.type.color)
-                .frame(width: 24)
-
-            Text(channel.name)
-                .font(.body)
-
-            Spacer()
-
-            if channel.unreadCount > 0 {
-                Text("\(channel.unreadCount)")
-                    .font(.caption2)
-                    .padding(4)
-                    .background(.red)
-                    .foregroundColor(.white)
-                    .clipShape(Circle())
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(thought.nano.hexEncodedString())
+                    .font(.headline)
+                Spacer()
+                Text(thought.metadata.createdAt, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+
+            Text(thought.metadata.createdAt.formatted())
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
