@@ -156,11 +156,13 @@ struct DiscordView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack(alignment: .topLeading) { // Add ZStack with topLeading alignment
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 20) {
+                    LazyVStack(spacing: 20) {
                         if viewModel.streams.isEmpty {
-                            // Empty state view
                             VStack(spacing: 16) {
                                 Image(systemName: "bubble.left.and.bubble.right")
                                     .font(.system(size: 48))
@@ -171,7 +173,7 @@ struct DiscordView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(maxWidth: .infinity)
                             .padding(.top, 100)
                         } else if let selectedServer = sharedState.selectedServer {
                             ServerDetailView(
@@ -197,10 +199,9 @@ struct DiscordView: View {
                     }
                     .padding(.vertical)
                 }
-                .background(Color(.systemGroupedBackground))
-                .navigationDestination(for: Channel.self) { channel in
-                    createChatView(for: channel)
-                }
+            }
+            .navigationDestination(for: Channel.self) { channel in
+                createChatView(for: channel)
             }
         }
     }
@@ -229,7 +230,7 @@ struct ServerDetailView: View {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack {
+                HStack(spacing: 12) {
                     ZStack {
                         Circle()
                             .fill(Color.blue.opacity(0.1))
@@ -282,7 +283,6 @@ struct ServerDetailView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                // Channels List
                 VStack(spacing: 0) {
                     ForEach(server.categories) { category in
                         ForEach(category.channels) { channel in
@@ -304,7 +304,6 @@ struct ServerDetailView: View {
                 }
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }

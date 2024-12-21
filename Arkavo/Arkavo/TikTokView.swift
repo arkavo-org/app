@@ -250,14 +250,17 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
-                            TikTokServersList(currentVideo: video)
-                                .padding(.trailing, systemMargin)
-                                .padding(.vertical, systemMargin * 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(.ultraThinMaterial.opacity(0.4))
-                                        .padding(.trailing, systemMargin / 2)
-                                )
+                            TikTokServersList(
+                                currentVideo: video,
+                                servers: viewModel.servers()
+                            )
+                            .padding(.trailing, systemMargin)
+                            .padding(.vertical, systemMargin * 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(.ultraThinMaterial.opacity(0.4))
+                                    .padding(.trailing, systemMargin / 2)
+                            )
 //                            Button {
 //                                withAnimation(.spring()) {
 //                                    isLiked.toggle()
@@ -336,10 +339,11 @@ struct VideoPlayerView: View {
 struct TikTokServersList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
+    let servers: [Server]
 
     var body: some View {
         VStack(spacing: 16) {
-            ForEach(sharedState.servers) { server in
+            ForEach(servers) { server in
                 Button {
                     sharedState.selectedVideo = currentVideo
                     sharedState.selectedServer = server
@@ -423,65 +427,6 @@ struct PlayerContainerView: UIViewRepresentable {
 
 // MARK: - Action Buttons
 
-struct LikeButton: View {
-    @Binding var isLiked: Bool
-    @Binding var count: Int
-
-    var body: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                isLiked.toggle()
-                count += isLiked ? 1 : -1
-            }
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: isLiked ? "heart.fill" : "heart")
-                    .font(.title)
-                    .foregroundColor(isLiked ? .red : .white)
-                Text("\(count)")
-                    .font(.caption)
-                    .foregroundColor(.white)
-            }
-        }
-    }
-}
-
-struct CommentButton: View {
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: "message")
-                    .font(.title)
-                Text("\(count)")
-                    .font(.caption)
-                    .foregroundColor(.white)
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
-
-struct ActionButton: View {
-    let icon: String
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.title)
-                Text("\(count)")
-                    .font(.caption)
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
-
 struct CommentsView: View {
     @Binding var showComments: Bool
 
@@ -537,6 +482,43 @@ class TikTokFeedViewModel: ObservableObject {
         // Preload the first video
         if let firstVideoUrl = videos.first?.url {
             preloadVideo(url: firstVideoUrl)
+        }
+    }
+
+    func servers() -> [Server] {
+        account.streams.map { stream in
+            let defaultCategory = ChannelCategory(
+                id: "\(stream.id)_default",
+                name: "STREAM",
+                channels: [
+                    Channel(id: stream.id.uuidString,
+                            name: "default",
+                            type: .text,
+                            unreadCount: stream.thoughts.count,
+                            isActive: false),
+                ],
+                isExpanded: true
+            )
+
+            return Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                channels: [],
+                categories: [defaultCategory],
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty
+            )
+        }
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.agePolicy {
+        case .onlyAdults: "person.fill"
+        case .onlyKids: "figure.child"
+        case .onlyTeens: "figure.wave"
+        case .forAll: "person.3.fill"
         }
     }
 
@@ -610,27 +592,5 @@ class TikTokFeedViewModel: ObservableObject {
                 }
             }
         }
-    }
-
-    // MARK: - Video Interactions
-
-    func handleLike(for _: String) {
-        // Handle like interaction
-        // In a real app, this would call an API
-    }
-
-    func handleComment(for _: String, comment _: String) {
-        // Handle comment interaction
-        // In a real app, this would call an API
-    }
-
-    func handleShare(for _: String) {
-        // Handle share interaction
-        // In a real app, this would call an API
-    }
-
-    func handleVideoView(for _: String) {
-        // Track video view
-        // In a real app, this would call analytics service
     }
 }

@@ -6,50 +6,38 @@ struct CreateServerView: View {
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
 
     @State private var serverName = ""
-    @State private var selectedIcon: String? = "bubble.left.and.bubble.right.fill"
     @State private var showError = false
     @State private var errorMessage = ""
-
-    let icons = ["gamecontroller", "leaf", "book", "music.note", "star", "heart"]
+    @FocusState private var isNameFieldFocused: Bool
 
     var body: some View {
         Form {
-            Section("Server Details") {
+            Section {
                 TextField("Server Name", text: $serverName)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(icons, id: \.self) { icon in
-                            Button {
-                                selectedIcon = icon
-                            } label: {
-                                Image(systemName: icon)
-                                    .font(.title)
-                                    .foregroundColor(.primary)
-                                    .frame(width: 60, height: 60)
-                                    .background(
-                                        Circle()
-                                            .fill(selectedIcon == icon ? Color.blue.opacity(0.2) : Color.clear)
-                                    )
-                                    .overlay(
-                                        Circle()
-                                            .stroke(selectedIcon == icon ? Color.blue : Color.gray, lineWidth: 2)
-                                    )
-                                    .contentShape(Circle())
-                            }
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-                .listRowInsets(EdgeInsets())
+                    .focused($isNameFieldFocused)
+                    .autocapitalization(.words)
+                    .textContentType(.organizationName)
+            } header: {
+                Text("Server Details")
+            } footer: {
+                Text("This will be the name of your new community")
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    sharedState.showCreateView = false
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Create") {
                     Task {
                         await createServer()
                         sharedState.showCreateView = false
+                        dismiss()
                     }
                 }
                 .disabled(serverName.isEmpty)
@@ -60,14 +48,17 @@ struct CreateServerView: View {
         } message: {
             Text(errorMessage)
         }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isNameFieldFocused = true
+            }
+        }
     }
 
     private func createServer() async {
         do {
-            // Create a new profile for the server
             let serverProfile = Profile(name: serverName)
 
-            // Create a new stream
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: serverProfile,
@@ -76,12 +67,11 @@ struct CreateServerView: View {
                 agePolicy: .forAll
             )
 
-            // Create server view model
             let server = Server(
                 id: newStream.id.uuidString,
                 name: serverName,
                 imageURL: nil,
-                icon: selectedIcon ?? "bubble.left.and.bubble.right.fill",
+                icon: "bubble.left.and.bubble.right",
                 channels: [],
                 categories: [
                     ChannelCategory(
@@ -103,20 +93,14 @@ struct CreateServerView: View {
                 hasNotification: false
             )
 
-            // Add stream to account
             let account = ViewModelFactory.shared.getCurrentAccount()!
             account.streams.append(newStream)
 
-            // Save changes
             try await PersistenceController.shared.saveChanges()
 
-            // Update shared state
             await MainActor.run {
                 sharedState.selectedServer = server
-                sharedState.servers.append(server)
-                sharedState.showCreateView = false
             }
-            dismiss()
         } catch {
             await MainActor.run {
                 errorMessage = "Failed to create server: \(error.localizedDescription)"
