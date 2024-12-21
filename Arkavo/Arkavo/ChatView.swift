@@ -184,10 +184,10 @@ class ChatViewModel: ObservableObject {
         print("\nProcessing stream thoughts:")
         for thought in stream.thoughts {
             do {
-                print("\nProcessing thought: \(thought.publicID)")
+                print("\nProcessing thought: \(thought.publicID.hexEncodedString())")
                 // Check if already processed
                 if processedMessageIds.contains(thought.publicID) {
-                    print("⚠️ Skipping duplicate thought: \(thought.publicID)")
+                    print("⚠️ Skipping duplicate thought: \(thought.publicID.hexEncodedString())")
                     continue
                 }
                 let parser = BinaryParser(data: thought.nano)
@@ -242,6 +242,8 @@ class ChatViewModel: ObservableObject {
 
             await MainActor.run {
                 messages.append(message)
+                // Add this line to prevent reprocessing:
+                processedMessageIds.insert(thoughtModel.publicID)
                 print("✅ Added message to chat view - Type: \(thoughtModel.mediaType)")
 
                 // Debug current messages
@@ -320,6 +322,8 @@ struct ChatView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var hasProcessedThoughts = false // Add this line
+    let stream: Stream? // Add this line
 
     var body: some View {
         VStack(spacing: 0) {
@@ -350,6 +354,12 @@ struct ChatView: View {
                     }
                 }
             )
+        }
+        .task {
+            if !hasProcessedThoughts, let stream {
+                await viewModel.processStreamThoughts(stream)
+                hasProcessedThoughts = true
+            }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}

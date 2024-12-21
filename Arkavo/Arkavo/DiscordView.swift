@@ -193,16 +193,10 @@ struct DiscordView: View {
 
     func createChatView(for channel: Channel) -> some View {
         let chatViewModel = viewModel.chatViewModel(for: channel)
-
         // Find associated stream for the channel
-        if let stream = viewModel.streams.first(where: { $0.id.uuidString == channel.id }) {
-            // Process thoughts when chat view appears
-            Task {
-                await chatViewModel.processStreamThoughts(stream)
-            }
-        }
+        let stream = viewModel.streams.first(where: { $0.id.uuidString == channel.id })
 
-        return ChatView(viewModel: chatViewModel)
+        return ChatView(viewModel: chatViewModel, stream: stream)
             .navigationTitle(channel.name)
     }
 }
