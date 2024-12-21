@@ -12,10 +12,10 @@ class ChatViewModel: ObservableObject {
     let profile: Profile
     @Published var messages: [ChatMessage] = []
     @Published var connectionState: ArkavoClientState = .disconnected
-    private var nanoTDFManager = NanoTDFManager()
-    private var decryptedThoughtHandlers: [Data: CheckedContinuation<Data?, Error>] = [:]
     // Track pending thoughts by their ephemeral public key
     private var pendingThoughts: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
+    // Add set to track processed message IDs
+    private var processedMessageIds = Set<Data>()
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -65,12 +65,6 @@ class ChatViewModel: ObservableObject {
     private func generatePublicID(content: Data) -> Data {
         let hashData = content
         return SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
-    }
-
-    private func waitForDecryptedThought(identifier: Data) async throws -> Data? {
-        try await withCheckedThrowingContinuation { continuation in
-            decryptedThoughtHandlers[identifier] = continuation
-        }
     }
 
     func handleIncomingMessage(_ data: Data) async {
@@ -186,20 +180,16 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func decryptThought(identifier: Data, symmetricKey: SymmetricKey) async throws -> Data? {
-        // Get NanoTDF associated with this identifier
-        guard let nanoTDF = nanoTDFManager.getNanoTDF(withIdentifier: identifier) else {
-            return nil
-        }
-
-        return try await nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
-    }
-
     func processStreamThoughts(_ stream: Stream) async {
         print("\nProcessing stream thoughts:")
         for thought in stream.thoughts {
             do {
                 print("\nProcessing thought: \(thought.publicID)")
+                // Check if already processed
+                if processedMessageIds.contains(thought.publicID) {
+                    print("⚠️ Skipping duplicate thought: \(thought.publicID)")
+                    continue
+                }
                 let parser = BinaryParser(data: thought.nano)
                 let header = try parser.parseHeader()
                 let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
@@ -226,7 +216,11 @@ class ChatViewModel: ObservableObject {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
             print("Deserialized thought model")
             print("Media type: \(thoughtModel.mediaType)")
-
+            // Check if we've already processed this message
+            if processedMessageIds.contains(thoughtModel.publicID) {
+                print("⚠️ Skipping duplicate message with ID: \(thoughtModel.publicID.hexEncodedString())")
+                return
+            }
             // Process content based on media type
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
             print("Processed content: \(displayContent)")
@@ -264,16 +258,19 @@ class ChatViewModel: ObservableObject {
     private func processContent(_ content: Data, mediaType: MediaType) -> String {
         switch mediaType {
         case .text:
-            String(data: content, encoding: .utf8) ?? "[Invalid text content]"
-
-        case .video:
-            "[Video content]"
-
-        case .audio:
-            "[Audio content]"
+            return String(data: content, encoding: .utf8) ?? "[Invalid text content]"
 
         case .image:
-            "[Image content]"
+            if UIImage(data: content) != nil {
+                return "[Image]"
+            }
+            return "[Invalid image data]"
+
+        case .video:
+            return "[Video content]"
+
+        case .audio:
+            return "[Audio content]"
         }
     }
 
@@ -462,28 +459,16 @@ struct MessageRow: View {
                     case .text:
                         Text(message.content)
                             .font(.body)
+                            .textSelection(.enabled)
 
                     case .image:
-                        VStack(alignment: .leading) {
-                            Text(message.content)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            // Placeholder for image preview
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 200)
-                                .overlay(
-                                    Image(systemName: "photo.fill")
-                                        .foregroundColor(.gray)
-                                )
-                        }
+                        ImageMessageView(imageData: message.rawContent)
 
                     case .video:
                         VStack(alignment: .leading) {
                             Text(message.content)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            // Placeholder for video preview
                             Rectangle()
                                 .fill(Color.gray.opacity(0.2))
                                 .frame(height: 200)
@@ -498,7 +483,6 @@ struct MessageRow: View {
                             Text(message.content)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            // Placeholder for audio waveform
                             Rectangle()
                                 .fill(Color.gray.opacity(0.2))
                                 .frame(height: 50)
@@ -520,6 +504,97 @@ struct MessageRow: View {
                 }
             }
         }
+    }
+}
+
+struct ImageMessageView: View {
+    let imageData: Data
+    @State private var image: UIImage?
+    @State private var isLoading = true
+    @State private var isExpanded = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onTapGesture {
+                        isExpanded = true
+                    }
+                    .fullScreenCover(isPresented: $isExpanded) {
+                        FullScreenImageView(image: image)
+                    }
+            } else if isLoading {
+                ProgressView()
+                    .frame(height: 200)
+            } else {
+                errorView
+            }
+        }
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    private var errorView: some View {
+        VStack {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundColor(.red)
+            Text("Failed to load image")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(height: 200)
+    }
+
+    private func loadImage() {
+        isLoading = true
+        if let uiImage = UIImage(data: imageData) {
+            image = uiImage
+        }
+        isLoading = false
+    }
+}
+
+struct FullScreenImageView: View {
+    @Environment(\.dismiss) private var dismiss
+    let image: UIImage
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @GestureState private var magnifyBy = CGFloat(1.0)
+
+    var body: some View {
+        NavigationView {
+            GeometryReader { proxy in
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .scaleEffect(scale * magnifyBy)
+                    .gesture(magnification)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private var magnification: some Gesture {
+        MagnificationGesture()
+            .updating($magnifyBy) { currentState, gestureState, _ in
+                gestureState = currentState
+            }
+            .onEnded { value in
+                scale *= value
+            }
     }
 }
 
