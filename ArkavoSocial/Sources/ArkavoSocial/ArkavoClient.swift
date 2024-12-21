@@ -60,6 +60,7 @@ public final class ArkavoClient: NSObject {
     private var keyPair: CurveKeyPair?
     private var sharedSecret: SharedSecret?
     private var salt: Data?
+    private var sessionSymmetricKey: SymmetricKey?
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
     private let delegateQueue = OperationQueue()
@@ -73,6 +74,10 @@ public final class ArkavoClient: NSObject {
         didSet {
             delegate?.clientDidChangeState(self, state: currentState)
         }
+    }
+
+    public func getSessionSymmetricKey() -> SymmetricKey? {
+        sessionSymmetricKey
     }
 
     public weak var delegate: ArkavoClientDelegate?
@@ -341,7 +346,46 @@ public final class ArkavoClient: NSObject {
         // Compute shared secret using the appropriate curve
         print("Computing shared secret...")
         sharedSecret = try keyPair?.computeSharedSecret(withPublicKeyData: publicKeyData)
+
+        // Derive session symmetric key
+        if let sharedSecret, let salt {
+            sessionSymmetricKey = deriveSessionSymmetricKey(sharedSecret: sharedSecret, salt: salt)
+        }
+
         print("Shared secret computation: \(sharedSecret != nil ? "successful" : "failed")")
+    }
+
+    // Helper method to derive the session symmetric key
+    private func deriveSessionSymmetricKey(sharedSecret: SharedSecret, salt: Data) -> SymmetricKey {
+        sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: salt,
+            sharedInfo: Data("rewrappedKey".utf8),
+            outputByteCount: 32
+        )
+    }
+
+    // Helper method to decrypt rewrapped keys
+    public func decryptRewrappedKey(nonce: Data, rewrappedKey: Data, authTag: Data) throws -> SymmetricKey {
+        guard let sessionKey = sessionSymmetricKey else {
+            throw ArkavoError.invalidState
+        }
+
+        let sealedBox = try AES.GCM.SealedBox(
+            nonce: AES.GCM.Nonce(data: nonce),
+            ciphertext: rewrappedKey,
+            tag: authTag
+        )
+
+        let decryptedDataSharedSecret = try AES.GCM.open(sealedBox, using: sessionKey)
+        let sharedSecretKey = SymmetricKey(data: decryptedDataSharedSecret)
+
+        return deriveSymmetricKey(
+            sharedSecretKey: sharedSecretKey,
+            salt: Data("L1L".utf8),
+            info: Data("encryption".utf8),
+            outputByteCount: 32
+        )
     }
 
     private func handleKASKeyResponse(data: Data) throws {
@@ -378,11 +422,12 @@ public final class ArkavoClient: NSObject {
         }
     }
 
-    private func deriveSymmetricKey(sharedSecret: SharedSecret, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
-        sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
+    // Helper method to derive a symmetric key
+    public func deriveSymmetricKey(sharedSecretKey: SymmetricKey, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: sharedSecretKey,
             salt: salt,
-            sharedInfo: info,
+            info: info,
             outputByteCount: outputByteCount
         )
     }
@@ -527,21 +572,12 @@ public final class ArkavoClient: NSObject {
             return
         }
 
-        // Handle other message types
-        switch messageType {
-        case ArkavoMessageType.rewrappedKey.rawValue:
-            handleRewrappedKeyMessage(messageData)
-        case ArkavoMessageType.natsMessage.rawValue:
-            natsMessageHandler?(messageData)
-        case ArkavoMessageType.natsEvent.rawValue:
-            natsEventHandler?(messageData)
-        default:
-            delegate?.clientDidReceiveMessage(self, message: data)
-        }
+        // Then handle via delegate
+        delegate?.clientDidReceiveMessage(self, message: data)
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
-        // Implementation from KASWebSocket
+        print("ArkavoClient Handling rewrapped key message of length: \(data.count)")
         guard data.count == 93 else {
             if data.count == 33 {
                 // DENY -- Notify the app with the identifier

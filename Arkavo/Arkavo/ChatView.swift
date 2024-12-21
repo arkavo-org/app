@@ -12,12 +12,19 @@ class ChatViewModel: ObservableObject {
     let profile: Profile
     @Published var messages: [ChatMessage] = []
     @Published var connectionState: ArkavoClientState = .disconnected
+    private var nanoTDFManager = NanoTDFManager()
+    private var decryptedThoughtHandlers: [Data: CheckedContinuation<Data?, Error>] = [:]
+    // Track pending thoughts by their ephemeral public key
+    private var pendingThoughts: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
         connectionState = client.currentState
+        // Set self as delegate
+        client.delegate = self
+        print("ChatViewModel initialized and delegate set")
     }
 
     func sendMessage(content: String) async throws {
@@ -34,7 +41,9 @@ class ChatViewModel: ObservableObject {
             reactions: [],
             isPinned: false,
             publicID: generatePublicID(content: messageData),
-            creatorPublicID: profile.publicID
+            creatorPublicID: profile.publicID,
+            mediaType: .text,
+            rawContent: content.data(using: .utf8) ?? Data()
         )
 
         // Create ThoughtServiceModel
@@ -58,40 +67,153 @@ class ChatViewModel: ObservableObject {
         return SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
 
-    func handleIncomingMessage(_ data: Data) {
-        Task {
-            do {
-                let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
-                let content = String(data: thoughtModel.content, encoding: .utf8) ?? ""
-
-                let message = ChatMessage(
-                    id: UUID().uuidString,
-                    userId: thoughtModel.creatorPublicID.base58EncodedString,
-                    username: "User-\(thoughtModel.creatorPublicID.prefix(6).base58EncodedString)",
-                    content: content,
-                    timestamp: Date(),
-                    attachments: [],
-                    reactions: [],
-                    isPinned: false,
-                    publicID: thoughtModel.publicID,
-                    creatorPublicID: thoughtModel.creatorPublicID
-                )
-
-                await MainActor.run {
-                    messages.append(message)
-                }
-            } catch {
-                print("Error handling incoming message: \(error)")
-            }
+    private func waitForDecryptedThought(identifier: Data) async throws -> Data? {
+        try await withCheckedThrowingContinuation { continuation in
+            decryptedThoughtHandlers[identifier] = continuation
         }
     }
 
+    func handleIncomingMessage(_ data: Data) async {
+        print("\n=== handleIncomingMessage ===")
+        guard let messageType = data.first else {
+            print("No message type byte found")
+            return
+        }
+        print("Message type: 0x\(String(format: "%02X", messageType))")
+
+        let messageData = data.dropFirst()
+
+        switch messageType {
+        case 0x04: // Rewrapped key
+            print("Routing to handleRewrappedKeyMessage")
+            await handleRewrappedKeyMessage(messageData)
+
+        case 0x05, 0x06: // NATS message/event
+            print("Routing to NATS message handler")
+            Task {
+                await handleNATSMessage(messageData)
+            }
+
+        default:
+            print("Unknown message type: 0x\(String(format: "%02X", messageType))")
+        }
+    }
+
+    private func handleRewrappedKeyMessage(_ data: Data) async {
+        print("\n=== handleRewrappedKeyMessage ===")
+        print("Message length: \(data.count)")
+
+        guard data.count == 93 else {
+            if data.count == 33 {
+                let identifier = data
+                print("Received DENY for EPK: \(identifier.hexEncodedString())")
+                pendingThoughts.removeValue(forKey: identifier)
+                return
+            }
+            print("Invalid rewrapped key length: \(data.count)")
+            return
+        }
+
+        let identifier = data.prefix(33)
+        print("Looking for thought with EPK: \(identifier.hexEncodedString())")
+        print("Current pending thoughts: \(pendingThoughts.keys.map { $0.hexEncodedString() })")
+
+        // Find corresponding thought
+        guard let (header, _, nano) = pendingThoughts.removeValue(forKey: identifier) else {
+            print("❌ No pending thought found for EPK: \(identifier.hexEncodedString())")
+            return
+        }
+
+        print("✅ Found matching thought!")
+        let keyData = data.suffix(60)
+        let nonce = keyData.prefix(12)
+        let encryptedKeyLength = keyData.count - 12 - 16
+        let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
+        let authTag = keyData.suffix(16)
+
+        do {
+            print("Attempting to decrypt rewrapped key...")
+            let symmetricKey = try client.decryptRewrappedKey(
+                nonce: nonce,
+                rewrappedKey: rewrappedKey,
+                authTag: authTag
+            )
+            print("Successfully decrypted rewrapped key")
+
+            // Decrypt the thought payload
+            print("Attempting to decrypt thought payload...")
+            let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+            print("Successfully decrypted thought payload")
+
+            // Process decrypted thought
+            Task {
+                print("Processing decrypted thought...")
+                await handleDecryptedThought(
+                    payload: decryptedData,
+                    policy: ArkavoPolicy(header.policy),
+                    nano: nano
+                )
+            }
+        } catch {
+            print("❌ Error processing rewrapped key: \(error)")
+        }
+    }
+
+    private func handleNATSMessage(_ data: Data) async {
+        do {
+            let parser = BinaryParser(data: data)
+            let header = try parser.parseHeader()
+            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+            let nano = NanoTDF(header: header, payload: payload, signature: nil)
+
+            let epk = header.ephemeralPublicKey
+            print("Parsed NATS message - EPK: \(epk.hexEncodedString())")
+
+            // Store with correct types
+            pendingThoughts[epk] = (
+                header: header,
+                payload: payload,
+                nano: nano
+            )
+            print("Stored thought in pendingThoughts. Current count: \(pendingThoughts.count)")
+
+            // Send rewrap message
+            let rewrapMessage = RewrapMessage(header: header)
+            try await client.sendMessage(rewrapMessage.toData())
+            print("Sent rewrap message for EPK: \(epk.hexEncodedString())")
+        } catch {
+            print("Error processing NATS message: \(error)")
+        }
+    }
+
+    private func decryptThought(identifier: Data, symmetricKey: SymmetricKey) async throws -> Data? {
+        // Get NanoTDF associated with this identifier
+        guard let nanoTDF = nanoTDFManager.getNanoTDF(withIdentifier: identifier) else {
+            return nil
+        }
+
+        return try await nanoTDF.getPayloadPlaintext(symmetricKey: symmetricKey)
+    }
+
     func processStreamThoughts(_ stream: Stream) async {
+        print("\nProcessing stream thoughts:")
         for thought in stream.thoughts {
             do {
+                print("\nProcessing thought: \(thought.publicID)")
                 let parser = BinaryParser(data: thought.nano)
-                print("thought parsed successfully / \(thought.publicID)")
-                try await client.sendMessage(RewrapMessage(header: parser.parseHeader()).toData())
+                let header = try parser.parseHeader()
+                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+                let nano = NanoTDF(header: header, payload: payload, signature: nil)
+
+                print("Parsed thought - EPK: \(header.ephemeralPublicKey.hexEncodedString())")
+
+                // Store in pending thoughts
+                pendingThoughts[header.ephemeralPublicKey] = (header, payload, nano)
+
+                // Send rewrap message
+                let rewrapMessage = RewrapMessage(header: header)
+                try await client.sendMessage(rewrapMessage.toData())
+                print("Sent rewrap message for EPK: \(header.ephemeralPublicKey.hexEncodedString())")
             } catch {
                 print("Error processing thought: \(error)")
             }
@@ -99,31 +221,65 @@ class ChatViewModel: ObservableObject {
     }
 
     private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async {
+        print("\nHandling decrypted thought:")
         do {
-            // Deserialize the thought model from the decrypted payload
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
+            print("Deserialized thought model")
+            print("Media type: \(thoughtModel.mediaType)")
 
-            // Create chat message from the thought
+            // Process content based on media type
+            let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
+            print("Processed content: \(displayContent)")
+
             let message = ChatMessage(
                 id: UUID().uuidString,
                 userId: thoughtModel.creatorPublicID.base58EncodedString,
-                username: "User-\(thoughtModel.creatorPublicID.prefix(6).base58EncodedString)",
-                content: String(data: thoughtModel.content, encoding: .utf8) ?? "",
+                username: formatUsername(publicID: thoughtModel.creatorPublicID),
+                content: displayContent,
                 timestamp: Date(),
                 attachments: [],
                 reactions: [],
                 isPinned: false,
                 publicID: thoughtModel.publicID,
-                creatorPublicID: thoughtModel.creatorPublicID
+                creatorPublicID: thoughtModel.creatorPublicID,
+                mediaType: thoughtModel.mediaType,
+                rawContent: thoughtModel.content // Store original content
             )
 
-            // Update UI on main thread
             await MainActor.run {
                 messages.append(message)
+                print("✅ Added message to chat view - Type: \(thoughtModel.mediaType)")
+
+                // Debug current messages
+                print("Current messages:")
+                for (index, msg) in messages.enumerated() {
+                    print("[\(index)] \(msg.username) [\(msg.mediaType)]: \(msg.content)")
+                }
             }
         } catch {
-            print("Error handling decrypted thought: \(error)")
+            print("❌ Error handling decrypted thought: \(error)")
         }
+    }
+
+    private func processContent(_ content: Data, mediaType: MediaType) -> String {
+        switch mediaType {
+        case .text:
+            String(data: content, encoding: .utf8) ?? "[Invalid text content]"
+
+        case .video:
+            "[Video content]"
+
+        case .audio:
+            "[Audio content]"
+
+        case .image:
+            "[Image content]"
+        }
+    }
+
+    private func formatUsername(publicID: Data) -> String {
+        let shortID = publicID.prefix(6).base58EncodedString
+        return "User-\(shortID)"
     }
 
     enum ChatError: Error {
@@ -143,7 +299,8 @@ extension ChatViewModel: ArkavoClientDelegate {
 
     nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
         Task { @MainActor in
-            self.handleIncomingMessage(message)
+            print("\n=== clientDidReceiveMessage ===")
+            await self.handleIncomingMessage(message)
         }
     }
 
@@ -291,14 +448,67 @@ struct MessageRow: View {
                     Text(message.username)
                         .font(.headline)
 
+                    Image(systemName: message.mediaType.icon)
+                        .foregroundColor(.blue)
+
                     Text(message.timestamp, style: .relative)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
                 // Content
-                Text(message.content)
-                    .font(.body)
+                Group {
+                    switch message.mediaType {
+                    case .text:
+                        Text(message.content)
+                            .font(.body)
+
+                    case .image:
+                        VStack(alignment: .leading) {
+                            Text(message.content)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            // Placeholder for image preview
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 200)
+                                .overlay(
+                                    Image(systemName: "photo.fill")
+                                        .foregroundColor(.gray)
+                                )
+                        }
+
+                    case .video:
+                        VStack(alignment: .leading) {
+                            Text(message.content)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            // Placeholder for video preview
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 200)
+                                .overlay(
+                                    Image(systemName: "play.rectangle.fill")
+                                        .foregroundColor(.gray)
+                                )
+                        }
+
+                    case .audio:
+                        VStack(alignment: .leading) {
+                            Text(message.content)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            // Placeholder for audio waveform
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 50)
+                                .overlay(
+                                    Image(systemName: "waveform")
+                                        .foregroundColor(.gray)
+                                )
+                        }
+                    }
+                }
 
                 // Reactions
                 if !message.reactions.isEmpty {
@@ -344,6 +554,8 @@ struct ChatMessage: Identifiable, Equatable {
     var isPinned: Bool
     let publicID: Data
     let creatorPublicID: Data
+    let mediaType: MediaType
+    let rawContent: Data // Store original content for media handling
 
     static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
         lhs.id == rhs.id
