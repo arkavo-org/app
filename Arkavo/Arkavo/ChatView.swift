@@ -175,10 +175,10 @@ class ChatViewModel: ObservableObject {
             id: UUID(),
             nano: nanoData
         )
-
+        _ = try PersistenceController.shared.saveThought(thought)
         // Save thought to stream
         stream.thoughts.append(thought)
-
+        try await PersistenceController.shared.saveChanges()
         // Create and add local message
         let message = ChatMessage(
             id: UUID().uuidString,

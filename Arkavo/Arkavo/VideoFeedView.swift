@@ -432,37 +432,6 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 }
 
-// MARK: - Action Buttons
-
-struct CommentsView: View {
-    @Binding var showComments: Bool
-
-    var body: some View {
-        NavigationView {
-            List {
-                ForEach(0 ..< 10) { _ in
-                    VStack(alignment: .leading) {
-                        Text("User")
-                            .font(.headline)
-                        Text("Comment text goes here")
-                            .font(.body)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            .navigationTitle("Comments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        showComments = false
-                    }
-                }
-            }
-        }
-    }
-}
-
 @MainActor
 class TikTokFeedViewModel: ObservableObject {
     let client: ArkavoClient

@@ -272,7 +272,7 @@ class StreamService {
         // Access the Stream through EntityRoot
         if let arkStream = entityRoot.entity(type: Arkavo_Stream.self) {
             // Extract PublicId
-            guard let publicId = arkStream.publicId?.id else {
+            guard (arkStream.publicId?.id) != nil else {
                 throw StreamError.missingPublicId
             }
             // Extract CreatorPublicId

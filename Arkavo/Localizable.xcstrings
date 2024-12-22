@@ -172,12 +172,6 @@
     "Close" : {
 
     },
-    "Comment text goes here" : {
-
-    },
-    "Comments" : {
-
-    },
     "Connected" : {
 
     },
@@ -879,9 +873,6 @@
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
 
     },
-    "User" : {
-
-    },
     "Video" : {
       "localizations" : {
         "es-US" : {
@@ -950,7 +941,7 @@
     "Your Privacy Matters" : {
 
     },
-    "Your profile name will be revealed only to those fortunate enough to earn your approval." : {
+    "Your profile name must be unique with arkavo.social" : {
 
     },
     "Your Protection Stats" : {

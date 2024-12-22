@@ -46,6 +46,8 @@ struct VideoCreateView: View {
             viewModel: viewModel,
             onComplete: { result in
                 await handleRecordingComplete(result)
+                sharedState.showCreateView = false
+                dismiss()
             }
         )
         .alert("Recording Error", isPresented: $showError) {
@@ -75,6 +77,7 @@ struct VideoCreateView: View {
             // Create a new Thought for the video
             let videoThought = Thought(
                 id: UUID(),
+                // FIXME: create nano
                 nano: Data(result.playbackURL.utf8)
             )
             videoThought.metadata = ThoughtMetadata(
