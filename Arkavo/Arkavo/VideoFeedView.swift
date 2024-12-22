@@ -53,7 +53,7 @@ struct Video: Identifiable {
 
 // MARK: - Main View
 
-struct TikTokFeedView: View {
+struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @State private var viewModel: TikTokFeedViewModel?
 
@@ -432,37 +432,6 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 }
 
-// MARK: - Action Buttons
-
-struct CommentsView: View {
-    @Binding var showComments: Bool
-
-    var body: some View {
-        NavigationView {
-            List {
-                ForEach(0 ..< 10) { _ in
-                    VStack(alignment: .leading) {
-                        Text("User")
-                            .font(.headline)
-                        Text("Comment text goes here")
-                            .font(.body)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            .navigationTitle("Comments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        showComments = false
-                    }
-                }
-            }
-        }
-    }
-}
-
 @MainActor
 class TikTokFeedViewModel: ObservableObject {
     let client: ArkavoClient
@@ -508,11 +477,15 @@ class TikTokFeedViewModel: ObservableObject {
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        switch stream.agePolicy {
-        case .onlyAdults: "person.fill"
-        case .onlyKids: "figure.child"
-        case .onlyTeens: "figure.wave"
-        case .forAll: "person.3.fill"
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
         }
     }
 

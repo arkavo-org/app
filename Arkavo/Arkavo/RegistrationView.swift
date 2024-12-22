@@ -4,7 +4,7 @@ import SwiftUI
 
 enum RegistrationStep: Int, CaseIterable {
     case welcome
-    case selectInterests
+//    case selectInterests
     case generateScreenName
     case enablePasskeys
 
@@ -12,8 +12,8 @@ enum RegistrationStep: Int, CaseIterable {
         switch self {
         case .welcome:
             "Welcome"
-        case .selectInterests:
-            "Select Interests" // What topics are you interested in?
+//        case .selectInterests:
+//            "Select Interests" // What topics are you interested in?
         case .generateScreenName:
             "Create Profile"
         case .enablePasskeys:
@@ -25,8 +25,8 @@ enum RegistrationStep: Int, CaseIterable {
         switch self {
         case .welcome:
             "Get Started"
-        case .selectInterests:
-            "Continue"
+//        case .selectInterests:
+//            "Continue"
         case .generateScreenName:
             "Continue"
         case .enablePasskeys:
@@ -63,8 +63,8 @@ struct RegistrationView: View {
                                 switch step {
                                 case .welcome:
                                     welcomeView
-                                case .selectInterests:
-                                    chooseInterestsView
+//                                case .selectInterests:
+//                                    chooseInterestsView
                                 case .generateScreenName:
                                     generateScreenNameView
                                 case .enablePasskeys:
@@ -199,10 +199,11 @@ struct RegistrationView: View {
             slideDirection = .left
             switch currentStep {
             case .welcome:
-                currentStep = .selectInterests
-            case .selectInterests:
                 currentStep = .generateScreenName
                 generatedScreenNames = []
+//            case .selectInterests:
+//                currentStep = .generateScreenName
+//                generatedScreenNames = []
             case .generateScreenName:
                 currentStep = .enablePasskeys
             case .enablePasskeys:
@@ -221,7 +222,7 @@ struct RegistrationView: View {
 
     private var generateScreenNameView: some View {
         VStack(spacing: 20) {
-            Text("Your profile name will be revealed only to those fortunate enough to earn your approval.")
+            Text("Your profile name must be unique with arkavo.social")
                 .padding()
             HStack {
                 #if os(iOS)
@@ -236,13 +237,13 @@ struct RegistrationView: View {
                         .disableAutocorrection(true)
                         .border(.secondary)
                 #endif
-                Button(action: generateScreenNames) {
-                    Image(systemName: "wand.and.stars")
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color.blue)
-                        .cornerRadius(8)
-                }
+//                Button(action: generateScreenNames) {
+//                    Image(systemName: "wand.and.stars")
+//                        .foregroundColor(.white)
+//                        .padding(10)
+//                        .background(Color.blue)
+//                        .cornerRadius(8)
+//                }
             }
             .padding()
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {

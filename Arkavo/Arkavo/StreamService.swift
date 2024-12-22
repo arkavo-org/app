@@ -272,7 +272,7 @@ class StreamService {
         // Access the Stream through EntityRoot
         if let arkStream = entityRoot.entity(type: Arkavo_Stream.self) {
             // Extract PublicId
-            guard let publicId = arkStream.publicId?.id else {
+            guard (arkStream.publicId?.id) != nil else {
                 throw StreamError.missingPublicId
             }
             // Extract CreatorPublicId
@@ -290,10 +290,7 @@ class StreamService {
                 id: UUID(),
                 creatorPublicID: Data(creatorPublicId),
                 profile: Profile(name: name),
-                admissionPolicy: .open,
-                interactionPolicy: .open,
-                agePolicy: .forAll,
-                publicID: Data(publicId)
+                policies: Policies(admission: .open, interaction: .open, age: .forAll)
             )
             try PersistenceController.shared.saveStream(stream)
         } else {

@@ -113,12 +113,16 @@ struct StreamView: View {
         }
     }
 
-    private func saveNewStream(with streamProfile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy) async throws {
+    private func saveNewStream(with streamProfile: Profile, admissionPolicy _: AdmissionPolicy, interactionPolicy _: InteractionPolicy) async throws {
         let account = try await PersistenceController.shared.getOrCreateAccount()
         guard let creatorPublicID = account.profile?.publicID else {
             fatalError("Account profile must have a public ID to create a stream")
         }
-        let stream = Stream(creatorPublicID: creatorPublicID, profile: streamProfile, admissionPolicy: admissionPolicy, interactionPolicy: interactionPolicy, agePolicy: .forAll)
+        let stream = Stream(
+            creatorPublicID: creatorPublicID,
+            profile: streamProfile,
+            policies: Policies(admission: .open, interaction: .open, age: .forAll)
+        )
         account.streams.append(stream)
         try await PersistenceController.shared.saveChanges()
     }
@@ -159,7 +163,11 @@ struct StreamManagementView_Previews: PreviewProvider {
                 Profile(name: "Stream 3", blurb: "This is the third stream"),
             ]
             for profile in profiles {
-                let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .moderated, agePolicy: .forAll)
+                let stream = Stream(
+                    creatorPublicID: Data(),
+                    profile: profile,
+                    policies: Policies(admission: .open, interaction: .open, age: .forAll)
+                )
                 account.streams.append(stream)
                 try context.save()
             }

@@ -63,7 +63,7 @@ class ChatViewModel: ObservableObject {
         )
 
         // Create rating based on stream age policy
-        let rating: Offset = switch stream.agePolicy {
+        let rating: Offset = switch stream.policies.age {
         case .onlyAdults:
             Arkavo_Rating.createRating(
                 &builder,
@@ -152,13 +152,9 @@ class ChatViewModel: ObservableObject {
 
         // Verify FlatBuffer
         var buffer = builder.sizedBuffer
-        do {
-            let rootOffset = buffer.read(def: Int32.self, position: 0)
-            var verifier = try Verifier(buffer: &buffer)
-            try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-        } catch {
-            throw error
-        }
+        let rootOffset = buffer.read(def: Int32.self, position: 0)
+        var verifier = try Verifier(buffer: &buffer)
+        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
 
         // Get policy data
         let policyData = Data(
@@ -175,14 +171,22 @@ class ChatViewModel: ObservableObject {
             policyData: policyData
         )
 
-        let thought = Thought(
-            id: UUID(),
-            nano: nanoData
+        let thoughtMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .text,
+            createdAt: Date(),
+            summary: content,
+            contributors: []
         )
 
+        let thought = Thought(
+            nano: nanoData,
+            metadata: thoughtMetadata
+        )
+        _ = try PersistenceController.shared.saveThought(thought)
         // Save thought to stream
         stream.thoughts.append(thought)
-
+        try await PersistenceController.shared.saveChanges()
         // Create and add local message
         let message = ChatMessage(
             id: UUID().uuidString,
@@ -202,11 +206,6 @@ class ChatViewModel: ObservableObject {
         await MainActor.run {
             messages.append(message)
         }
-    }
-
-    private func generatePublicID(content: Data) -> Data {
-        let hashData = content
-        return SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
 
     func handleIncomingMessage(_ data: Data) async {
@@ -243,12 +242,12 @@ class ChatViewModel: ObservableObject {
             if data.count == 33 {
                 let identifier = data
                 print("Received DENY for EPK: \(identifier.hexEncodedString())")
-                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
-                    print("Removed denied thought from pending queue")
-                    print("Remaining pending thoughts: \(pendingThoughts.count)")
-                } else {
-                    print("No matching thought found for denied EPK")
-                }
+//                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
+//                    print("Removed denied thought from pending queue")
+//                    print("Remaining pending thoughts: \(pendingThoughts.count)")
+//                } else {
+//                    print("No matching thought found for denied EPK")
+//                }
                 return
             }
             print("Invalid rewrapped key length: \(data.count)")
@@ -517,7 +516,9 @@ struct ChatView: View {
             }
         }
         .alert("Error", isPresented: $showError) {
-            Button("OK") {}
+            Button("OK") {
+                // acknowledge to close
+            }
         } message: {
             Text(errorMessage)
         }

@@ -38,9 +38,9 @@ struct DetailedStreamProfileView: View {
                         }
                     }
                     Section(header: Text("Policies")) {
-                        Text("Admission: \(viewModel.stream!.admissionPolicy.rawValue)")
-                        Text("Interaction: \(viewModel.stream!.interactionPolicy.rawValue)")
-                        Text("Age Policy: \(viewModel.stream!.agePolicy.rawValue)")
+                        Text("Admission: \(viewModel.stream!.policies.admission.rawValue)")
+                        Text("Interaction: \(viewModel.stream!.policies.interaction.rawValue)")
+                        Text("Age Policy: \(viewModel.stream!.policies.age.rawValue)")
                     }
                     Section(header: Text("Public ID")) {
                         Text(viewModel.stream!.publicID.base58EncodedString)
@@ -59,7 +59,7 @@ struct DetailedStreamProfileView: View {
                             Image(systemName: "x.circle")
                         }
                     }
-                    if viewModel.stream!.admissionPolicy != .closed {
+                    if viewModel.stream!.policies.admission != .closed {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
                                 isShareSheetPresented = true
@@ -233,54 +233,5 @@ class CreateStreamViewModel: ObservableObject {
             return (profile, participantCount, admissionPolicy, interactionPolicy)
         }
         return nil
-    }
-}
-
-extension StreamProfileView_Previews {
-    static var previewStream: Stream {
-        let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-        return Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .closed, interactionPolicy: .closed, agePolicy: .forAll)
-    }
-}
-
-struct StreamProfileView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            CompactStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
-                .previewLayout(.sizeThatFits)
-                .previewDisplayName("Compact Stream Profile")
-
-            DetailedStreamProfileView(viewModel: StreamViewModel(stream: previewStream))
-                .previewDisplayName("Detailed Stream Profile")
-
-            CreateStreamProfileView { _, _, _, _ in
-                // This closure is just for preview, so we'll leave it empty
-            }
-            .previewDisplayName("Create Stream Profile")
-        }
-        .modelContainer(previewContainer)
-    }
-
-    static var previewContainer: ModelContainer {
-        let schema = Schema([Account.self, Profile.self, Stream.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-
-        do {
-            let container = try ModelContainer(for: schema, configurations: [configuration])
-            let context = container.mainContext
-
-            // Create and save sample data
-            let account = Account()
-            try context.save()
-
-            let profile = Profile(name: "Example Stream", blurb: "This is a sample stream for preview purposes.")
-            let stream = Stream(creatorPublicID: Data(), profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
-            account.streams.append(stream)
-            try context.save()
-
-            return container
-        } catch {
-            fatalError("Failed to create preview container: \(error.localizedDescription)")
-        }
     }
 }

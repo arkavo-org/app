@@ -366,7 +366,14 @@ class ThoughtStreamViewModel: StreamViewModel {
             return
         }
         // persist
-        let thought = Thought(nano: nano.toData())
+        let thoughtMetadata = ThoughtMetadata(
+            creator: accountProfile.id,
+            mediaType: .text,
+            createdAt: Date(),
+            summary: "",
+            contributors: []
+        )
+        let thought = Thought(nano: nano.toData(), metadata: thoughtMetadata)
         thought.publicID = thoughtServiceModel.publicID
         thought.nano = nano.toData()
         thought.stream = stream
@@ -438,89 +445,3 @@ class ThoughtStreamViewModel: StreamViewModel {
         }
     }
 #endif
-
-struct ThoughtStreamView_Previews: PreviewProvider {
-    static var previews: some View {
-        ThoughtStreamView(
-            service: previewThoughtService,
-            streamService: previewStreamService,
-            viewModel: previewViewModel,
-            streamBadgeViewModel: previewStreamBadgeViewModel,
-            accountProfile: previewProfile
-        )
-        .modelContainer(previewContainer)
-    }
-
-    static var creatorUUID = UUID()
-    static var creatorPublicID: Data {
-        withUnsafeBytes(of: creatorUUID) { buffer in
-            Data(SHA256.hash(data: buffer))
-        }
-    }
-
-    static var previewThoughtService: ThoughtService {
-        ThoughtService(ArkavoService())
-    }
-
-    static var previewStreamService: StreamService {
-        StreamService(ArkavoService())
-    }
-
-    static var previewViewModel: ThoughtStreamViewModel {
-        let arkavo = ArkavoService()
-        let service = ThoughtService(arkavo)
-        let viewModel = ThoughtStreamViewModel(service: service, stream: previewStream)
-        // Add some sample thoughts
-        viewModel.thoughts = [
-            ThoughtViewModel.createText(creatorProfile: Profile(id: creatorUUID, name: "Alice"), streamPublicIDString: creatorPublicID.base58EncodedString, text: "Hello, this is a test message!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Bob"), streamPublicIDString: "abc123", text: "Hi Alice, great to see you here!"),
-            ThoughtViewModel.createText(creatorProfile: Profile(name: "Eve"), streamPublicIDString: "abc123", text: "Welcome everyone to this stream!"),
-        ]
-        return viewModel
-    }
-
-    static var previewStreamBadgeViewModel: StreamBadgeViewModel {
-        StreamBadgeViewModel(
-            stream: previewStream,
-            topicTags: ["Swift", "iOS", "Programming"],
-            membersProfile: [
-                AccountProfileViewModel(profile: Profile(name: "Bob"), activityService: ActivityServiceModel()),
-                AccountProfileViewModel(profile: Profile(name: "Eve"), activityService: ActivityServiceModel()),
-            ],
-            ownerProfile: AccountProfileViewModel(profile: Profile(id: creatorUUID, name: "Alice"), activityService: ActivityServiceModel()),
-            activityLevel: .medium
-        )
-    }
-
-    static var previewProfile: Profile {
-        Profile(name: "Preview User")
-    }
-
-    static var previewStream: Stream {
-        let profile = Profile(name: "Preview Stream")
-        return Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
-    }
-
-    static var previewContainer: ModelContainer {
-        let schema = Schema([Account.self, Profile.self, Stream.self, Thought.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-
-        do {
-            let container = try ModelContainer(for: schema, configurations: [configuration])
-            let context = container.mainContext
-
-            // Create and save sample data
-            let account = Account()
-            try context.save()
-
-            let profile = Profile(name: "Preview Stream")
-            let stream = Stream(creatorPublicID: creatorPublicID, profile: profile, admissionPolicy: .open, interactionPolicy: .open, agePolicy: .forAll)
-            account.streams.append(stream)
-            try context.save()
-
-            return container
-        } catch {
-            fatalError("Failed to create preview container: \(error.localizedDescription)")
-        }
-    }
-}

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct CreateServerView: View {
+struct GroupCreateView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
@@ -62,9 +62,7 @@ struct CreateServerView: View {
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: serverProfile,
-                admissionPolicy: .open,
-                interactionPolicy: .open,
-                agePolicy: .onlyKids
+                policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
             )
 
             let server = Server(
