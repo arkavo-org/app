@@ -44,7 +44,7 @@ public enum ArkavoClientState: Equatable, Sendable {
 }
 
 /// Protocol for handling ArkavoClient events
-protocol ArkavoClientDelegate: AnyObject {
+public protocol ArkavoClientDelegate: AnyObject {
     func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState)
     func clientDidReceiveMessage(_ client: ArkavoClient, message: Data)
     func clientDidReceiveError(_ client: ArkavoClient, error: Error)
@@ -60,12 +60,16 @@ public final class ArkavoClient: NSObject {
     private var keyPair: CurveKeyPair?
     private var sharedSecret: SharedSecret?
     private var salt: Data?
+    private var kasPublicKey: P256.KeyAgreement.PublicKey?
+    private var sessionSymmetricKey: SymmetricKey?
     private var webSocket: URLSessionWebSocketTask?
     private var session: URLSession?
     private let delegateQueue = OperationQueue()
     private let socketDelegate: WebSocketDelegate
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
+    private var natsMessageHandler: ((Data) -> Void)?
+    private var natsEventHandler: ((Data) -> Void)?
 
     public var currentState: ArkavoClientState = .disconnected {
         didSet {
@@ -73,7 +77,11 @@ public final class ArkavoClient: NSObject {
         }
     }
 
-    weak var delegate: ArkavoClientDelegate?
+    public func getSessionSymmetricKey() -> SymmetricKey? {
+        sessionSymmetricKey
+    }
+
+    public weak var delegate: ArkavoClientDelegate?
     private let presentationProvider: ASAuthorizationControllerPresentationContextProviding
     public var currentToken: String? {
         // TODO: Check if the token has expired
@@ -224,6 +232,10 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.notConnected
         }
 
+        print("Sending WebSocket message:")
+        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
+        print("Message length: \(data.count)")
+
         try await webSocket.send(.data(data))
     }
 
@@ -339,7 +351,46 @@ public final class ArkavoClient: NSObject {
         // Compute shared secret using the appropriate curve
         print("Computing shared secret...")
         sharedSecret = try keyPair?.computeSharedSecret(withPublicKeyData: publicKeyData)
+
+        // Derive session symmetric key
+        if let sharedSecret, let salt {
+            sessionSymmetricKey = deriveSessionSymmetricKey(sharedSecret: sharedSecret, salt: salt)
+        }
+
         print("Shared secret computation: \(sharedSecret != nil ? "successful" : "failed")")
+    }
+
+    // Helper method to derive the session symmetric key
+    private func deriveSessionSymmetricKey(sharedSecret: SharedSecret, salt: Data) -> SymmetricKey {
+        sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: salt,
+            sharedInfo: Data("rewrappedKey".utf8),
+            outputByteCount: 32
+        )
+    }
+
+    // Helper method to decrypt rewrapped keys
+    public func decryptRewrappedKey(nonce: Data, rewrappedKey: Data, authTag: Data) throws -> SymmetricKey {
+        guard let sessionKey = sessionSymmetricKey else {
+            throw ArkavoError.invalidState
+        }
+
+        let sealedBox = try AES.GCM.SealedBox(
+            nonce: AES.GCM.Nonce(data: nonce),
+            ciphertext: rewrappedKey,
+            tag: authTag
+        )
+
+        let decryptedDataSharedSecret = try AES.GCM.open(sealedBox, using: sessionKey)
+        let sharedSecretKey = SymmetricKey(data: decryptedDataSharedSecret)
+
+        return deriveSymmetricKey(
+            sharedSecretKey: sharedSecretKey,
+            salt: Data("L1L".utf8),
+            info: Data("encryption".utf8),
+            outputByteCount: 32
+        )
     }
 
     private func handleKASKeyResponse(data: Data) throws {
@@ -363,7 +414,7 @@ public final class ArkavoClient: NSObject {
         do {
             switch curve {
             case .p256:
-                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
+                kasPublicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p384:
                 _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: kasPublicKeyData)
             case .p521:
@@ -376,11 +427,12 @@ public final class ArkavoClient: NSObject {
         }
     }
 
-    private func deriveSymmetricKey(sharedSecret: SharedSecret, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
-        sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
+    // Helper method to derive a symmetric key
+    public func deriveSymmetricKey(sharedSecretKey: SymmetricKey, salt: Data, info: Data, outputByteCount: Int = 32) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: sharedSecretKey,
             salt: salt,
-            sharedInfo: info,
+            info: info,
             outputByteCount: outputByteCount
         )
     }
@@ -452,11 +504,21 @@ public final class ArkavoClient: NSObject {
         receiveMessage()
     }
 
+    public func setNATSMessageHandler(_ handler: @escaping (Data) -> Void) {
+        natsMessageHandler = handler
+    }
+
+    public func setNATSEventHandler(_ handler: @escaping (Data) -> Void) {
+        natsEventHandler = handler
+    }
+
     private func receiveMessage() {
+        print("receiveMessage")
         guard let webSocket else {
             print("WebSocket is nil, cannot receive message")
             return
         }
+
         webSocket.receive { [weak self] result in
             guard let self else { return }
 
@@ -464,56 +526,103 @@ public final class ArkavoClient: NSObject {
                 switch result {
                 case let .success(message):
                     print("\n=== Received WebSocket Message ===")
+                    print("Message type: \(message)")
                     switch message {
                     case let .data(data):
-                        print("Received data message:")
-                        print("Length: \(data.count) bytes")
-                        if let messageType = data.first {
-                            print("Message type: 0x\(String(format: "%02X", messageType))")
-                        }
-                        print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
-
-                        // Handle continuations first
-                        if let messageType = data.first,
-                           let continuation = self.messageHandlers.removeValue(forKey: messageType)
-                        {
-                            print("Resuming continuation for message type: 0x\(String(format: "%02X", messageType))")
-                            continuation.resume(returning: data)
-                        } else if let messageType = data.first {
-                            print("No handler found for message type: 0x\(String(format: "%02X", messageType))")
-                            // Only pass to delegate if no specific handler was waiting
-                            self.delegate?.clientDidReceiveMessage(self, message: data)
-                        }
-
+                        await self.handleIncomingMessage(data)
                     case let .string(string):
-                        print("Received string message:")
-                        print("Length: \(string.count) characters")
-                        print("Content: \(string)")
+                        print("Received string message: \(string)")
                         if let data = string.data(using: .utf8) {
                             self.delegate?.clientDidReceiveMessage(self, message: data)
                         }
-
                     @unknown default:
                         print("Received unknown message type")
                     }
-                    print("===========================\n")
-                    self.receiveMessage()
 
                 case let .failure(error):
-                    print("\n=== WebSocket Receive Error ===")
-                    print("Error: \(error)")
-                    print("Detailed error: \(String(describing: error))")
+                    print("WebSocket receive error: \(error)")
+                    self.currentState = .error(error)
+                    self.delegate?.clientDidReceiveError(self, error: error)
+
                     // Resume any waiting continuations with error
                     for continuation in self.messageHandlers.values {
                         continuation.resume(throwing: error)
                     }
                     self.messageHandlers.removeAll()
+                }
 
-                    self.currentState = .error(error)
-                    self.delegate?.clientDidReceiveError(self, error: error)
+                // Continue receiving messages if still connected
+                if self.currentState == .connected {
+                    self.receiveMessage()
                 }
             }
         }
+    }
+
+    // New message handling function
+    private func handleIncomingMessage(_ data: Data) async {
+        guard let messageType = data.first else {
+            print("Invalid message: empty data")
+            return
+        }
+
+        print("Received data message:")
+        print("Length: \(data.count) bytes")
+        print("Message type: 0x\(String(format: "%02X", messageType))")
+        print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+
+        let messageData = data.dropFirst() // Remove message type byte
+
+        // Handle continuation-based messages first
+        if let continuation = messageHandlers.removeValue(forKey: messageType) {
+            continuation.resume(returning: data)
+            return
+        }
+
+        // Then handle via delegate
+        delegate?.clientDidReceiveMessage(self, message: data)
+    }
+
+    private func handleRewrappedKeyMessage(_ data: Data) {
+        print("ArkavoClient Handling rewrapped key message of length: \(data.count)")
+        guard data.count == 93 else {
+            if data.count == 33 {
+                // DENY -- Notify the app with the identifier
+                delegate?.clientDidReceiveMessage(self, message: data)
+                return
+            }
+            print("RewrappedKeyMessage not the expected 93 bytes: \(data.count)")
+            return
+        }
+
+        let identifier = data.prefix(33)
+        let keyData = data.suffix(60)
+        // Parse key data components
+        let nonce = keyData.prefix(12)
+        let encryptedKeyLength = keyData.count - 12 - 16 // Total - nonce - tag
+
+        guard encryptedKeyLength >= 0 else {
+            print("Invalid encrypted key length: \(encryptedKeyLength)")
+            return
+        }
+
+        let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
+        let authTag = keyData.suffix(16)
+
+        // Process the rewrapped key...
+        // (Implementation specific to your needs)
+        delegate?.clientDidReceiveMessage(self, message: data)
+    }
+
+    // Add methods to send NATS messages
+    public func sendNATSMessage(_ payload: Data) async throws {
+        let message = NATSMessage(message: payload)
+        try await sendMessage(message.toData())
+    }
+
+    public func sendNATSEvent(_ payload: Data) async throws {
+        let message = NATSEvent(message: payload)
+        try await sendMessage(message.toData())
     }
 
     private func fetchRegistrationOptions(accountName: String) async throws -> (challenge: String, userID: String) {
@@ -577,6 +686,38 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.authenticationFailed("Invalid token format")
         }
         return token
+    }
+
+    public func encryptAndSendPayload(
+        payload: Data,
+        policyData: Data
+    ) async throws -> Data {
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = try KasMetadata(
+            resourceLocator: kasRL,
+            publicKey: kasPublicKey,
+            curve: .secp256r1
+        )
+
+        var policy = Policy(
+            type: .embeddedPlaintext,
+            body: EmbeddedPolicyBody(body: policyData),
+            remote: nil,
+            binding: nil
+        )
+
+        // Create NanoTDF
+        let nanoTDF = try await createNanoTDF(
+            kas: kasMetadata,
+            policy: &policy,
+            plaintext: payload
+        )
+
+        // Send via NATS message
+        let natsMessage = NATSMessage(message: nanoTDF.toData())
+        try await sendMessage(natsMessage.toData())
+
+        return nanoTDF.toData()
     }
 }
 
@@ -753,7 +894,8 @@ public enum ArkavoMessageType: UInt8 {
     case kasKey = 0x02
     case rewrap = 0x03
     case rewrappedKey = 0x04
-    // Add other message types as needed
+    case natsMessage = 0x05
+    case natsEvent = 0x06
 }
 
 // Protocol for messages
@@ -805,6 +947,24 @@ struct RewrappedKeyMessage: ArkavoMessage {
 
     func payload() -> Data {
         rewrappedKey
+    }
+}
+
+struct NATSMessage: ArkavoMessage {
+    let messageType: ArkavoMessageType = .natsMessage
+    let message: Data
+
+    func payload() -> Data {
+        message
+    }
+}
+
+struct NATSEvent: ArkavoMessage {
+    let messageType: ArkavoMessageType = .natsEvent
+    let message: Data
+
+    func payload() -> Data {
+        message
     }
 }
 

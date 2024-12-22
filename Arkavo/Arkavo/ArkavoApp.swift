@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-    @State private var selectedView: AppView = .main
+    @State private var selectedView: AppView = .registration
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
@@ -19,6 +19,7 @@ struct ArkavoApp: App {
             relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
         )
+        ViewModelFactory.shared.serviceLocator.register(client)
     }
 
     var body: some Scene {
@@ -41,6 +42,7 @@ struct ArkavoApp: App {
             .task {
                 await checkAccountStatus()
             }
+            .environmentObject(SharedState())
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -105,7 +107,7 @@ struct ArkavoApp: App {
         do {
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-
+            ViewModelFactory.shared.setAccount(account)
             // Connect with WebAuthn
             do {
                 try await client.connect(accountName: profile.name)
@@ -141,6 +143,7 @@ struct ArkavoApp: App {
 
         do {
             let account = try await persistenceController.getOrCreateAccount()
+            ViewModelFactory.shared.setAccount(account)
             if account.profile == nil {
                 selectedView = .registration
                 return
@@ -337,4 +340,110 @@ enum ArkavoError: Error {
     case messageError(String)
     case notConnected
     case invalidState
+}
+
+class SharedState: ObservableObject {
+    @Published var selectedCreator: Creator?
+    @Published var selectedServer: Server?
+    @Published var selectedVideo: Video?
+    @Published var selectedTab: Tab = .home
+    @Published var showCreateView: Bool = false
+    @Published var selectedChannel: Channel?
+}
+
+final class ServiceLocator {
+    private var services: [String: Any] = [:]
+
+    func register<T>(_ service: T) {
+        let key = String(describing: T.self)
+        services[key] = service
+    }
+
+    func resolve<T>() -> T {
+        let key = String(describing: T.self)
+        guard let service = services[key] as? T else {
+            fatalError("No registered service for type \(T.self)")
+        }
+        return service
+    }
+}
+
+final class ViewModelFactory {
+    public static var shared = ViewModelFactory(serviceLocator: ServiceLocator())
+
+    public let serviceLocator: ServiceLocator
+
+    // Store current account and profile
+    private var currentAccount: Account?
+    private var currentProfile: Profile?
+
+    private init(serviceLocator: ServiceLocator) {
+        self.serviceLocator = serviceLocator
+    }
+
+    // Set current account and profile
+    @MainActor
+    func setAccount(_ account: Account) {
+        currentAccount = account
+        currentProfile = account.profile
+    }
+
+    // Clear current account and profile
+    @MainActor
+    func clearAccount() {
+        currentAccount = nil
+        currentProfile = nil
+    }
+
+    // Accessor methods for current account and profile
+    @MainActor
+    func getCurrentAccount() -> Account? {
+        currentAccount
+    }
+
+    @MainActor
+    func getCurrentProfile() -> Profile? {
+        currentProfile
+    }
+
+    @MainActor
+    func makeDiscordViewModel() -> DiscordViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return DiscordViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
+
+    @MainActor
+    func makeChatViewModel(stream: Stream) -> ChatViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return ChatViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!,
+            stream: stream
+        )
+    }
+
+    @MainActor
+    func makeTikTokFeedViewModel() -> TikTokFeedViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return TikTokFeedViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
+
+    @MainActor
+    func makeTikTokRecordingViewModel() -> TikTokRecordingViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return TikTokRecordingViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
 }

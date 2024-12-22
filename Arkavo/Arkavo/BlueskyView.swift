@@ -38,7 +38,7 @@ extension DIDUser {
             name: displayName,
             imageURL: avatarURL,
             latestUpdate: description ?? "",
-            tier: .premium,
+            tier: "Premium",
             socialLinks: [],
             notificationCount: 0,
             bio: description ?? ""
@@ -232,31 +232,21 @@ class BlueskyFeedViewModel: ObservableObject {
 
 struct BlueskyView: View {
     @StateObject private var viewModel = BlueskyFeedViewModel()
-    @ObservedObject var groupViewModel: DiscordViewModel
     @State private var currentIndex = 0
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
-    @Binding var selectedServer: Server?
-    @Binding var selectedTab: Tab
 
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(viewModel.posts) { post in
-                                ImmersivePostCard(
-                                    post: post,
-                                    groupViewModel: groupViewModel,
-                                    size: geometry.size,
-                                    showCreateView: $showCreateView,
-                                    selectedCreator: $selectedCreator,
-                                    selectedServer: $selectedServer,
-                                    selectedTab: $selectedTab,
-                                    isCurrentPost: post.id == viewModel.posts[viewModel.currentPostIndex].id
-                                )
-                                .frame(width: geometry.size.width, height: geometry.size.height)
+                            ForEach(viewModel.posts) { _ in
+//                                ImmersivePostCard(
+//                                    post: post,
+//                                    size: geometry.size,
+//                                    isCurrentPost: post.id == viewModel.posts[viewModel.currentPostIndex].id
+//                                )
+//                                .frame(width: geometry.size.width, height: geometry.size.height)
                             }
                         }
                     }
@@ -375,13 +365,9 @@ struct NewPostView: View {
 }
 
 struct ImmersivePostCard: View {
-    let post: Post
     @ObservedObject var groupViewModel: DiscordViewModel
+    let post: Post
     let size: CGSize
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
-    @Binding var selectedServer: Server?
-    @Binding var selectedTab: Tab
     let isCurrentPost: Bool
 
     // Standard system margin from HIG, matching TikTokView
@@ -430,33 +416,30 @@ struct ImmersivePostCard: View {
                         Spacer()
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
-                            TikTokServersList(
-                                groupViewModel: groupViewModel,
-                                selectedServer: $selectedServer,
-                                selectedTab: $selectedTab,
-                                currentVideo: Video(
-                                    id: post.id,
-                                    url: URL(string: "placeholder")!,
-                                    contributors: [
-                                        Contributor(
-                                            id: post.author.id,
-                                            creator: post.author.asCreator(),
-                                            role: "Author"
-                                        ),
-                                    ],
-                                    description: post.content,
-                                    likes: post.likes,
-                                    comments: post.replyCount,
-                                    shares: post.reposts
-                                )
-                            ) { _, _ in }
-                                .padding(.trailing, systemMargin)
-                                .padding(.vertical, systemMargin * 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(.ultraThinMaterial.opacity(0.4))
-                                        .padding(.trailing, systemMargin / 2)
-                                )
+//                            TikTokServersList(
+//                                currentVideo: Video(
+//                                    id: post.id,
+//                                    url: URL(string: "placeholder")!,
+//                                    contributors: [
+//                                        Contributor(
+//                                            id: post.author.id,
+//                                            creator: post.author.asCreator(),
+//                                            role: "Author"
+//                                        ),
+//                                    ],
+//                                    description: post.content,
+//                                    likes: post.likes,
+//                                    comments: post.replyCount,
+//                                    shares: post.reposts
+//                                )
+//                            )
+//                            .padding(.trailing, systemMargin)
+//                            .padding(.vertical, systemMargin * 2)
+//                            .background(
+//                                RoundedRectangle(cornerRadius: 24)
+//                                    .fill(.ultraThinMaterial.opacity(0.4))
+//                                    .padding(.trailing, systemMargin / 2)
+//                            )
 
                             Button {
                                 // Handle comments
@@ -479,73 +462,18 @@ struct ImmersivePostCard: View {
                 VStack {
                     Spacer()
                     HStack {
-                        ContributorsView(
-                            contributors: [
-                                Contributor(
-                                    id: post.author.id,
-                                    creator: post.author.asCreator(),
-                                    role: "Author"
-                                ),
-                            ],
-                            showCreateView: $showCreateView,
-                            selectedCreator: $selectedCreator,
-                            selectedTab: $selectedTab
-                        )
-                        .padding(.horizontal, systemMargin)
-                        .padding(.bottom, systemMargin * 8)
+//                        ContributorsView(
+//                            contributors: [
+//                                Contributor(
+//                                    id: post.author.id,
+//                                    creator: post.author.asCreator(),
+//                                    role: "Author"
+//                                ),
+//                            ]
+//                        )
+//                        .padding(.horizontal, systemMargin)
+//                        .padding(.bottom, systemMargin * 8)
                         Spacer()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Helper View for Creators List (similar to ContributorsView in TikTokView)
-struct CreatorsList: View {
-    let creators: [Creator]
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: DIDUser?
-    @State private var showAllCreators = false
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            if let mainCreator = creators.first {
-                Button {
-                    selectedCreator = DIDUser(
-                        id: mainCreator.id,
-                        handle: mainCreator.name,
-                        displayName: mainCreator.name,
-                        avatarURL: mainCreator.imageURL,
-                        isVerified: true,
-                        did: "did:plc:\(mainCreator.id)",
-                        description: nil,
-                        followers: 0,
-                        following: 0,
-                        postsCount: 0,
-                        serviceEndpoint: "https://bsky.social/xrpc"
-                    )
-                } label: {
-                    HStack(spacing: 8) {
-                        AsyncImage(url: URL(string: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e")) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Color.gray.opacity(0.3)
-                        }
-                        .frame(width: 32, height: 32)
-                        .clipShape(Circle())
-
-                        VStack(alignment: .leading) {
-                            Text(mainCreator.name)
-                                .font(.headline)
-                                .foregroundColor(.white)
-
-                            Text("@\(mainCreator.name)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
                     }
                 }
             }

@@ -39,9 +39,6 @@
     "%lld views" : {
 
     },
-    "%lld voice channels" : {
-
-    },
     "%lld%%" : {
 
     },
@@ -172,10 +169,19 @@
     "Classification settings go here" : {
 
     },
+    "Close" : {
+
+    },
     "Comment text goes here" : {
 
     },
     "Comments" : {
+
+    },
+    "Connected" : {
+
+    },
+    "Connecting..." : {
 
     },
     "Content Protection" : {
@@ -190,6 +196,9 @@
     "Create New Stream" : {
 
     },
+    "Create or join a community to get started" : {
+
+    },
     "Create Profile" : {
       "localizations" : {
         "es-US" : {
@@ -199,9 +208,6 @@
           }
         }
       }
-    },
-    "Create Profile things" : {
-
     },
     "Create Stream" : {
       "localizations" : {
@@ -229,6 +235,9 @@
 
     },
     "DID" : {
+
+    },
+    "Disconnected" : {
 
     },
     "Done" : {
@@ -281,6 +290,9 @@
     "Face ID Terms & Conditions" : {
 
     },
+    "Failed to load image" : {
+
+    },
     "Featured Creator" : {
 
     },
@@ -291,9 +303,6 @@
 
     },
     "Following" : {
-
-    },
-    "Friends%@" : {
 
     },
     "Granularity" : {
@@ -398,6 +407,9 @@
     "Loading stream..." : {
 
     },
+    "Loading..." : {
+
+    },
     "Location" : {
 
     },
@@ -466,6 +478,9 @@
 
     },
     "No Active Streams" : {
+
+    },
+    "No Communities Yet" : {
 
     },
     "Not available on macOS" : {
@@ -591,6 +606,9 @@
 
     },
     "Recently Active" : {
+
+    },
+    "Recording Error" : {
 
     },
     "Reddit • 2 issues found" : {
@@ -812,6 +830,9 @@
 
     },
     "Thank You for Making a Difference!" : {
+
+    },
+    "This will be the name of your new community" : {
 
     },
     "Thought service is unavailable" : {

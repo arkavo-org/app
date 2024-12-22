@@ -1,20 +1,9 @@
+import ArkavoSocial
 import Foundation
+import SwiftData
 import SwiftUI
 
 // MARK: - Models
-
-struct Contributor: Identifiable {
-    let id: String
-    let creator: Creator
-    let role: String
-
-    static let sampleContributors = [
-        Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
-        Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
-        Contributor(id: "3", creator: Creator.sampleCreators[2], role: "Featured"),
-        Contributor(id: "4", creator: Creator.sampleCreators[3], role: "Editor"),
-    ]
-}
 
 struct Video: Identifiable {
     let id: String
@@ -25,9 +14,29 @@ struct Video: Identifiable {
     var comments: Int
     var shares: Int
 
-    var mainCreator: Creator {
-        contributors.first?.creator ?? Creator.sampleCreators[0]
-    }
+    var mainCreator = Creator(
+        id: "prof_" + UUID().uuidString,
+        name: "Quantum Research Lab",
+        imageURL: "https://profiles.arkavo.com/default-avatar.jpg",
+        latestUpdate: "Exploring quantum entanglement patterns",
+        tier: "researcher",
+        socialLinks: [
+            SocialLink(
+                id: "tw_qrl",
+                platform: .twitter,
+                username: "QuantumResLab",
+                url: "https://twitter.com/QuantumResLab"
+            ),
+            SocialLink(
+                id: "yt_qrl",
+                platform: .youtube,
+                username: "QuantumResearchLab",
+                url: "https://youtube.com/@QuantumResearchLab"
+            ),
+        ],
+        notificationCount: 2,
+        bio: "High-assurance quantum computing research group. Interests: quantum encryption, entanglement studies, quantum error correction. Location: Cambridge, MA." // Combined Profile's interests and location
+    )
 
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
@@ -45,53 +54,70 @@ struct Video: Identifiable {
 // MARK: - Main View
 
 struct TikTokFeedView: View {
-    @ObservedObject var viewModel: TikTokFeedViewModel
-    @ObservedObject var groupViewModel = DiscordViewModel()
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
-    @Binding var selectedServer: Server?
-//    @Binding var selectedVideo: Video?
-    @Binding var selectedTab: Tab
+    @EnvironmentObject var sharedState: SharedState
+    @State private var viewModel: TikTokFeedViewModel?
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(viewModel.videos) { video in
-                                VideoPlayerView(
-                                    video: video,
-                                    viewModel: viewModel,
-                                    groupViewModel: groupViewModel,
-                                    size: geometry.size,
-                                    showCreateView: $showCreateView,
-                                    selectedCreator: $selectedCreator,
-                                    selectedServer: $selectedServer,
-                                    selectedTab: $selectedTab
-                                )
-                                .id(video.id)
+        Group {
+            if let viewModel {
+                GeometryReader { geometry in
+                    ZStack {
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                LazyVStack(spacing: 0) {
+                                    ForEach(viewModel.videos) { video in
+                                        VideoPlayerView(
+                                            video: video,
+                                            viewModel: viewModel,
+                                            size: geometry.size
+                                        )
+                                        .id(video.id)
+                                    }
+                                }
+                            }
+                            .scrollDisabled(true)
+                            .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
+                                withAnimation {
+                                    proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
+                                }
                             }
                         }
                     }
-                    .scrollDisabled(true)
-                    .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
-                        withAnimation {
-                            proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
-                        }
-                    }
                 }
+                .ignoresSafeArea()
+            } else {
+                Text("Loading...")
+                    .onAppear {
+                        viewModel = ViewModelFactory.shared.makeTikTokFeedViewModel()
+                        guard let viewModel,
+                              let firstStream = viewModel.account.streams.first else { return }
+                        // Find the most recent video thought
+                        let videoThoughts = firstStream.thoughts
+                            .filter { $0.metadata.mediaType == .video }
+                            .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+                        // Convert thoughts to videos
+                        let videos = videoThoughts.map { thought in
+                            Video(
+                                id: thought.id.uuidString,
+                                url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
+                                contributors: [], // Could populate from stream metadata if needed
+                                description: "Video Thought",
+                                likes: 0,
+                                comments: 0,
+                                shares: 0
+                            )
+                        }
+                        // Update view model with the videos
+                        viewModel.videos = videos
+                    }
             }
         }
-        .ignoresSafeArea()
     }
 }
 
 struct ContributorsView: View {
+    @EnvironmentObject var sharedState: SharedState
     let contributors: [Contributor]
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
-    @Binding var selectedTab: Tab
     @State private var showAllContributors = false
 
     var body: some View {
@@ -99,9 +125,9 @@ struct ContributorsView: View {
             // Main creator
             if let mainContributor = contributors.first {
                 Button {
-                    selectedCreator = mainContributor.creator
-                    selectedTab = .creators
-                    showCreateView = false
+                    sharedState.selectedCreator = mainContributor.creator
+                    sharedState.selectedTab = .creators
+                    sharedState.showCreateView = false
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "person.circle.fill")
@@ -127,9 +153,9 @@ struct ContributorsView: View {
                 if showAllContributors {
                     ForEach(contributors.dropFirst()) { contributor in
                         Button {
-                            selectedCreator = contributor.creator
-                            selectedTab = .creators
-                            showCreateView = false
+                            sharedState.selectedCreator = contributor.creator
+                            sharedState.selectedTab = .creators
+                            sharedState.showCreateView = false
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "person.circle.fill")
@@ -173,42 +199,23 @@ struct ContributorsView: View {
 }
 
 struct VideoPlayerView: View {
-    let video: Video
+    @EnvironmentObject var sharedState: SharedState
     @ObservedObject var viewModel: TikTokFeedViewModel
-    @ObservedObject var groupViewModel: DiscordViewModel
-    @Binding var showCreateView: Bool
-    @Binding var selectedCreator: Creator?
-    @Binding var selectedServer: Server?
-    @Binding var selectedTab: Tab
-    let size: CGSize
-
-    @State private var isLiked = false
-    @State private var showComments = false
-    @State private var likesCount: Int
+    @State private var showChat = false
     @State private var dragOffset = CGSize.zero
-
+    let video: Video
+    let size: CGSize
     private let swipeThreshold: CGFloat = 50
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
     init(video: Video,
          viewModel: TikTokFeedViewModel,
-         groupViewModel: DiscordViewModel,
-         size: CGSize,
-         showCreateView: Binding<Bool>,
-         selectedCreator: Binding<Creator?>,
-         selectedServer: Binding<Server?>,
-         selectedTab: Binding<Tab>)
+         size: CGSize)
     {
         self.video = video
         self.viewModel = viewModel
-        self.groupViewModel = groupViewModel
         self.size = size
-        _showCreateView = showCreateView
-        _selectedCreator = selectedCreator
-        _selectedServer = selectedServer
-        _selectedTab = selectedTab
-        _likesCount = State(initialValue: video.likes)
     }
 
     var body: some View {
@@ -246,13 +253,9 @@ struct VideoPlayerView: View {
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
                             TikTokServersList(
-                                groupViewModel: groupViewModel,
-                                selectedServer: $selectedServer,
-                                selectedTab: $selectedTab,
-                                currentVideo: video
-                            ) { video, server in
-                                groupViewModel.shareVideo(video, to: server)
-                            }
+                                currentVideo: video,
+                                servers: viewModel.servers()
+                            )
                             .padding(.trailing, systemMargin)
                             .padding(.vertical, systemMargin * 2)
                             .background(
@@ -276,7 +279,7 @@ struct VideoPlayerView: View {
 //                                }
 //                            }
                             Button {
-                                showComments = true
+                                showChat = true
                             } label: {
                                 VStack(spacing: systemMargin * 0.25) { // 4pt
                                     Image(systemName: "bubble.right")
@@ -297,10 +300,7 @@ struct VideoPlayerView: View {
                     Spacer()
                     HStack {
                         ContributorsView(
-                            contributors: video.contributors,
-                            showCreateView: $showCreateView,
-                            selectedCreator: $selectedCreator,
-                            selectedTab: $selectedTab
+                            contributors: video.contributors
                         )
                         .padding(.horizontal, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -332,26 +332,29 @@ struct VideoPlayerView: View {
         }
         .frame(width: size.width, height: size.height)
         .ignoresSafeArea()
-        .sheet(isPresented: $showComments) {
-            CommentsView(showComments: $showComments)
+        .sheet(isPresented: $showChat) {
+            if let stream = viewModel.account.streams.first {
+                let viewModel = ViewModelFactory.shared.makeChatViewModel(stream: stream)
+                ChatView(
+                    viewModel: viewModel
+                )
+            }
         }
     }
 }
 
 struct TikTokServersList: View {
-    @ObservedObject var groupViewModel: DiscordViewModel
-    @Binding var selectedServer: Server?
-    @Binding var selectedTab: Tab
+    @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
-    let onShare: (Video, Server) -> Void
+    let servers: [Server]
 
     var body: some View {
         VStack(spacing: 16) {
-            ForEach(groupViewModel.servers) { server in
+            ForEach(servers) { server in
                 Button {
-                    selectedServer = server
-                    onShare(currentVideo, server)
-                    selectedTab = .communities
+                    sharedState.selectedVideo = currentVideo
+                    sharedState.selectedServer = server
+                    sharedState.selectedTab = .communities
                 } label: {
                     ServerButton(server: server, isSelected: false) // selectedServer?.id == server.id
                 }
@@ -431,65 +434,6 @@ struct PlayerContainerView: UIViewRepresentable {
 
 // MARK: - Action Buttons
 
-struct LikeButton: View {
-    @Binding var isLiked: Bool
-    @Binding var count: Int
-
-    var body: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                isLiked.toggle()
-                count += isLiked ? 1 : -1
-            }
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: isLiked ? "heart.fill" : "heart")
-                    .font(.title)
-                    .foregroundColor(isLiked ? .red : .white)
-                Text("\(count)")
-                    .font(.caption)
-                    .foregroundColor(.white)
-            }
-        }
-    }
-}
-
-struct CommentButton: View {
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: "message")
-                    .font(.title)
-                Text("\(count)")
-                    .font(.caption)
-                    .foregroundColor(.white)
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
-
-struct ActionButton: View {
-    let icon: String
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.title)
-                Text("\(count)")
-                    .font(.caption)
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
-
 struct CommentsView: View {
     @Binding var showComments: Bool
 
@@ -521,75 +465,54 @@ struct CommentsView: View {
 
 @MainActor
 class TikTokFeedViewModel: ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
     @Published var videos: [Video] = []
     @Published var currentVideoIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
-
     let playerManager = VideoPlayerManager()
 
-    // Dependencies could be injected here
-    // let videoService: VideoServiceProtocol
-    // let analyticsService: AnalyticsServiceProtocol
-
-    init() {
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
         loadInitialVideos()
     }
 
     private func loadInitialVideos() {
-        // In a real app, this would fetch from an API
-        videos = [
-            Video(
-                id: "1",
-                url: URL(string: "https://example.com/video1.mp4")!,
-                contributors: [
-                    Contributor(id: "1", creator: Creator.sampleCreators[0], role: "Director"),
-                    Contributor(id: "2", creator: Creator.sampleCreators[1], role: "Music"),
-                ],
-                description: "Collaborative masterpiece 🎨",
-                likes: 1500,
-                comments: 120,
-                shares: 45
-            ),
-            Video(
-                id: "2",
-                url: URL(string: "https://example.com/video2.mp4")!,
-                contributors: [
-                    Contributor(id: "3", creator: Creator.sampleCreators[1], role: "Artist"),
-                ],
-                description: "Solo music session 🎵",
-                likes: 800,
-                comments: 65,
-                shares: 30
-            ),
-            Video(
-                id: "3",
-                url: URL(string: "https://example.com/video3.mp4")!,
-                contributors: [
-                    Contributor(id: "4", creator: Creator.sampleCreators[2], role: "Chef"),
-                    Contributor(id: "5", creator: Creator.sampleCreators[3], role: "Guest Chef"),
-                ],
-                description: "Cooking collab! 👩‍🍳",
-                likes: 2200,
-                comments: 180,
-                shares: 95
-            ),
-            Video(
-                id: "4",
-                url: URL(string: "https://example.com/video4.mp4")!,
-                contributors: [
-                    Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
-                ],
-                description: "Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻 Rotated Text Mode 💻",
-                likes: 950,
-                comments: 85,
-                shares: 40
-            ),
-        ]
-
         // Preload the first video
         if let firstVideoUrl = videos.first?.url {
             preloadVideo(url: firstVideoUrl)
+        }
+    }
+
+    func servers() -> [Server] {
+        account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .forAll,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.agePolicy {
+        case .onlyAdults: "person.fill"
+        case .onlyKids: "figure.child"
+        case .onlyTeens: "figure.wave"
+        case .forAll: "person.3.fill"
         }
     }
 
@@ -635,10 +558,7 @@ class TikTokFeedViewModel: ObservableObject {
                     Video(
                         id: UUID().uuidString,
                         url: URL(string: "https://example.com/video4.mp4")!,
-                        contributors: [
-                            Contributor(id: "6", creator: Creator.sampleCreators[3], role: "Developer"),
-                            Contributor(id: "7", creator: Creator.sampleCreators[0], role: "UI Designer"),
-                        ],
+                        contributors: [],
                         description: "Tech tutorial collab 💻",
                         likes: 950,
                         comments: 85,
@@ -663,37 +583,5 @@ class TikTokFeedViewModel: ObservableObject {
                 }
             }
         }
-    }
-
-    // MARK: - Video Interactions
-
-    func handleLike(for _: String) {
-        // Handle like interaction
-        // In a real app, this would call an API
-    }
-
-    func handleComment(for _: String, comment _: String) {
-        // Handle comment interaction
-        // In a real app, this would call an API
-    }
-
-    func handleShare(for _: String) {
-        // Handle share interaction
-        // In a real app, this would call an API
-    }
-
-    func handleVideoView(for _: String) {
-        // Track video view
-        // In a real app, this would call analytics service
-    }
-}
-
-// MARK: - Preview Helper
-
-extension TikTokFeedViewModel {
-    static func preview() -> TikTokFeedViewModel {
-        let viewModel = TikTokFeedViewModel()
-        // Preview data is already loaded in init()
-        return viewModel
     }
 }
