@@ -221,32 +221,31 @@ struct UserPreferences {
 }
 
 @MainActor
-class BlueskyFeedViewModel: ObservableObject {
+class PostFeedViewModel: ObservableObject {
     @Published var posts: [Post] = SampleData.recentPosts
     @Published var currentPostIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
 }
 
-// MARK: - BlueskyView
+// MARK: - PostFeevView
 
-struct BlueskyView: View {
-    @StateObject private var viewModel = BlueskyFeedViewModel()
+struct PostFeedView: View {
+    @StateObject private var viewModel = PostFeedViewModel()
     @State private var currentIndex = 0
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ZStack {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(viewModel.posts) { _ in
-//                                ImmersivePostCard(
-//                                    post: post,
-//                                    size: geometry.size,
-//                                    isCurrentPost: post.id == viewModel.posts[viewModel.currentPostIndex].id
-//                                )
-//                                .frame(width: geometry.size.width, height: geometry.size.height)
+                            ForEach(viewModel.posts) { post in
+                                ImmersivePostCard(
+                                    post: post,
+                                    size: geometry.size
+                                )
+                                .frame(width: geometry.size.width, height: geometry.size.height)
                             }
                         }
                     }
@@ -286,11 +285,10 @@ struct BlueskyView: View {
 
 // MARK: - NewPostView Update
 
-struct NewPostView: View {
+struct PostCreateView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var postText = ""
     @State private var selectedImages: [UIImage] = []
-    @Binding var selectedUser: Creator?
 
     // Function to detect mentions in text
     private func detectMentions(_ text: String) -> [(String, Range<String.Index>)] {
@@ -337,7 +335,6 @@ struct NewPostView: View {
 
                 Spacer()
             }
-            .navigationTitle("New Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -347,7 +344,10 @@ struct NewPostView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Post") {
-                        dismiss()
+                        Task {
+                            await createPost()
+                            dismiss()
+                        }
                     }
                     .disabled(postText.isEmpty)
                 }
@@ -362,14 +362,30 @@ struct NewPostView: View {
             }
         }
     }
+    
+    func createPost() async {
+        do {
+            let streamProfile = Profile(name: "New Post")
+            let newStream = Stream(
+                creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
+                profile: streamProfile,
+                admissionPolicy: .open,
+                interactionPolicy: .open,
+                agePolicy: .onlyKids
+            )
+            let account = ViewModelFactory.shared.getCurrentAccount()!
+            account.streams.append(newStream)
+
+            try await PersistenceController.shared.saveChanges()
+        } catch {
+            print("error creating post: \(error.localizedDescription)")
+        }
+    }
 }
 
 struct ImmersivePostCard: View {
-    @ObservedObject var groupViewModel: DiscordViewModel
     let post: Post
     let size: CGSize
-    let isCurrentPost: Bool
-
     // Standard system margin from HIG, matching TikTokView
     private let systemMargin: CGFloat = 16
 
@@ -412,26 +428,26 @@ struct ImmersivePostCard: View {
                     Spacer()
 
                     // Right side - Action buttons
-                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) { // 20pt
+                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
                         Spacer()
 
-                        VStack(spacing: systemMargin * 1.25) { // 20pt
+//                        VStack(spacing: systemMargin * 1.25) {
 //                            TikTokServersList(
 //                                currentVideo: Video(
 //                                    id: post.id,
-//                                    url: URL(string: "placeholder")!,
+//                                    url: URL(string: "https://placeholder.com")!,
 //                                    contributors: [
 //                                        Contributor(
 //                                            id: post.author.id,
 //                                            creator: post.author.asCreator(),
 //                                            role: "Author"
-//                                        ),
+//                                        )
 //                                    ],
 //                                    description: post.content,
 //                                    likes: post.likes,
 //                                    comments: post.replyCount,
 //                                    shares: post.reposts
-//                                )
+//                                ), servers: viewModel.servers
 //                            )
 //                            .padding(.trailing, systemMargin)
 //                            .padding(.vertical, systemMargin * 2)
@@ -440,21 +456,21 @@ struct ImmersivePostCard: View {
 //                                    .fill(.ultraThinMaterial.opacity(0.4))
 //                                    .padding(.trailing, systemMargin / 2)
 //                            )
-
-                            Button {
-                                // Handle comments
-                            } label: {
-                                VStack(spacing: systemMargin * 0.25) { // 4pt
-                                    Image(systemName: "bubble.right")
-                                        .font(.system(size: systemMargin * 1.625)) // 26pt
-                                    Text("\(post.replyCount)")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.white)
-                            }
-                        }
-                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
-                        .padding(.bottom, systemMargin * 6.25) // 100pt
+//
+//                            Button {
+//                                // Handle comments
+//                            } label: {
+//                                VStack(spacing: systemMargin * 0.25) {
+//                                    Image(systemName: "bubble.right")
+//                                        .font(.system(size: systemMargin * 1.625))
+//                                    Text("\(post.replyCount)")
+//                                        .font(.caption)
+//                                }
+//                                .foregroundColor(.white)
+//                            }
+//                        }
+//                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
+//                        .padding(.bottom, systemMargin * 6.25)
                     }
                 }
 
@@ -462,17 +478,17 @@ struct ImmersivePostCard: View {
                 VStack {
                     Spacer()
                     HStack {
-//                        ContributorsView(
-//                            contributors: [
-//                                Contributor(
-//                                    id: post.author.id,
-//                                    creator: post.author.asCreator(),
-//                                    role: "Author"
-//                                ),
-//                            ]
-//                        )
-//                        .padding(.horizontal, systemMargin)
-//                        .padding(.bottom, systemMargin * 8)
+                        ContributorsView(
+                            contributors: [
+                                Contributor(
+                                    id: post.author.id,
+                                    creator: post.author.asCreator(),
+                                    role: "Author"
+                                )
+                            ]
+                        )
+                        .padding(.horizontal, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
                         Spacer()
                     }
                 }

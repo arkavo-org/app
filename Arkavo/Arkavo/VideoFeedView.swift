@@ -53,7 +53,7 @@ struct Video: Identifiable {
 
 // MARK: - Main View
 
-struct TikTokFeedView: View {
+struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @State private var viewModel: TikTokFeedViewModel?
 

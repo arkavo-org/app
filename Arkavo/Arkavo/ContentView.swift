@@ -47,21 +47,25 @@ struct ContentView: View {
                 switch sharedState.selectedTab {
                 case .home:
                     if sharedState.showCreateView {
-                        TikTokRecordingView()
+                        VideoCreateView()
                     } else {
-                        TikTokFeedView()
+                        VideoFeedView()
                     }
                 case .communities:
                     if sharedState.showCreateView {
-                        CreateServerView()
+                        GroupCreateView()
                     } else {
-                        DiscordView()
+                        GroupChatView()
                             .onDisappear {
                                 sharedState.selectedServer = nil
                             }
                     }
                 case .social:
-                    BlueskyView()
+                    if sharedState.showCreateView {
+                        PostCreateView()
+                    } else {
+                        PostFeedView()
+                    }
                 case .creators:
                     if sharedState.showCreateView, sharedState.selectedCreator != nil {
                         if let creator = sharedState.selectedCreator {

@@ -152,13 +152,9 @@ class ChatViewModel: ObservableObject {
 
         // Verify FlatBuffer
         var buffer = builder.sizedBuffer
-        do {
-            let rootOffset = buffer.read(def: Int32.self, position: 0)
-            var verifier = try Verifier(buffer: &buffer)
-            try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-        } catch {
-            throw error
-        }
+        let rootOffset = buffer.read(def: Int32.self, position: 0)
+        var verifier = try Verifier(buffer: &buffer)
+        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
 
         // Get policy data
         let policyData = Data(
@@ -204,11 +200,6 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func generatePublicID(content: Data) -> Data {
-        let hashData = content
-        return SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
-    }
-
     func handleIncomingMessage(_ data: Data) async {
         print("\n=== handleIncomingMessage ===")
         guard let messageType = data.first else {
@@ -243,12 +234,12 @@ class ChatViewModel: ObservableObject {
             if data.count == 33 {
                 let identifier = data
                 print("Received DENY for EPK: \(identifier.hexEncodedString())")
-                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
-                    print("Removed denied thought from pending queue")
-                    print("Remaining pending thoughts: \(pendingThoughts.count)")
-                } else {
-                    print("No matching thought found for denied EPK")
-                }
+//                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
+//                    print("Removed denied thought from pending queue")
+//                    print("Remaining pending thoughts: \(pendingThoughts.count)")
+//                } else {
+//                    print("No matching thought found for denied EPK")
+//                }
                 return
             }
             print("Invalid rewrapped key length: \(data.count)")
@@ -517,7 +508,9 @@ struct ChatView: View {
             }
         }
         .alert("Error", isPresented: $showError) {
-            Button("OK") {}
+            Button("OK") {
+                // acknowledge to close
+            }
         } message: {
             Text(errorMessage)
         }

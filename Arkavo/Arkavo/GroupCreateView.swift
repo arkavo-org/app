@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct CreateServerView: View {
+struct GroupCreateView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()

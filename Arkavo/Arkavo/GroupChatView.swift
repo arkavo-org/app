@@ -103,7 +103,7 @@ struct Server: Identifiable, Hashable, Equatable {
 
 // MARK: - Main View
 
-struct DiscordView: View {
+struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
     @State private var navigationPath = NavigationPath()
@@ -157,7 +157,7 @@ struct DiscordView: View {
             }
             .sheet(isPresented: $showCreateServer) {
                 NavigationStack {
-                    CreateServerView()
+                    GroupCreateView()
                 }
             }
         }

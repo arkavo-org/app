@@ -34,7 +34,7 @@ enum RecordingState: Equatable {
 
 // MARK: - Main View
 
-struct TikTokRecordingView: View {
+struct VideoCreateView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: TikTokRecordingViewModel = ViewModelFactory.shared.makeTikTokRecordingViewModel()
     @Environment(\.dismiss) private var dismiss
