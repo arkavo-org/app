@@ -688,6 +688,39 @@ public final class ArkavoClient: NSObject {
         return token
     }
 
+    public func encryptRemotePolicy(
+        payload: Data,
+        remotePolicyBody: String
+    ) async throws -> Data {
+        // Create Nano
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = try KasMetadata(
+            resourceLocator: kasRL,
+            publicKey: kasPublicKey,
+            curve: .secp256r1
+        )
+        
+        let remotePolicy = ResourceLocator(
+            protocolEnum: .sharedResourceDirectory,
+            body: remotePolicyBody
+        )!
+        
+        var policy = Policy(
+            type: .remote,
+            body: nil,
+            remote: remotePolicy,
+            binding: nil
+        )
+        
+        let nanoTDF = try await createNanoTDF(
+            kas: kasMetadata,
+            policy: &policy,
+            plaintext: payload
+        )
+        
+        return nanoTDF.toData()
+    }
+    
     public func encryptAndSendPayload(
         payload: Data,
         policyData: Data

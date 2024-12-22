@@ -1,6 +1,7 @@
 import ArkavoSocial
 import FlatBuffers
 import SwiftUI
+import OpenTDFKit
 
 // MARK: - Models
 
@@ -134,6 +135,95 @@ class DiscordViewModel: ObservableObject {
         print("Stream saved successfully: \(stream.profile.name)")
     }
 
+    func sendStreamCacheEvent() async throws {
+        // Create Stream using FlatBuffers
+        var builder = FlatBufferBuilder(initialSize: 1024)
+        
+        // Create nested structures first
+        let nameOffset = builder.create(string: profile.name)
+        let blurbOffset = builder.create(string: profile.blurb ?? "")
+        let interestsOffset = builder.create(string: profile.interests)
+        let locationOffset = builder.create(string: profile.location)
+        
+        // Create Profile
+        let profileOffset = Arkavo_Profile.createProfile(
+            &builder,
+            nameOffset: nameOffset,
+            blurbOffset: blurbOffset,
+            interestsOffset: interestsOffset,
+            locationOffset: locationOffset,
+            locationLevel: .approximate,
+            identityAssuranceLevel: profile.hasHighIdentityAssurance ? .ial2 : .ial1,
+            encryptionLevel: profile.hasHighEncryption ? .el2 : .el1
+        )
+        
+        // Create Activity
+        let activityOffset = Arkavo_Activity.createActivity(
+            &builder,
+            dateCreated: Int64(Date().timeIntervalSince1970),
+            expertLevel: .novice,
+            activityLevel: .low,
+            trustLevel: .low
+        )
+        
+        // Create PublicIds
+        let publicIdVector = builder.createVector(bytes: streams[0].publicID)
+        let publicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: publicIdVector)
+        let creatorPublicIdVector = builder.createVector(bytes: streams[0].creatorPublicID)
+        let creatorPublicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: creatorPublicIdVector)
+        
+        // Create Stream
+        let streamOffset = Arkavo_Stream.createStream(
+            &builder,
+            publicIdOffset: publicIdOffset,
+            profileOffset: profileOffset,
+            activityOffset: activityOffset,
+            creatorPublicIdOffset: creatorPublicIdOffset,
+            membersPublicIdVectorOffset: Offset(),
+            streamLevel: .sl1
+        )
+        
+        // Create EntityRoot with Stream as the entity
+        let entityRootOffset = Arkavo_EntityRoot.createEntityRoot(
+            &builder,
+            entityType: .stream,
+            entityOffset: streamOffset
+        )
+        
+        builder.finish(offset: entityRootOffset)
+        let nanoPayload = builder.data
+
+        let targetPayload = try await client.encryptRemotePolicy(payload: nanoPayload, remotePolicyBody: ArkavoPolicy.PolicyType.streamProfile.rawValue)
+        
+        // Create CacheEvent
+        builder = FlatBufferBuilder(initialSize: 1024)
+        let targetIdVector = builder.createVector(bytes: streams[0].publicID)
+        let targetPayloadVector = builder.createVector(bytes: targetPayload)
+        
+        let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
+            &builder,
+            targetIdVectorOffset: targetIdVector,
+            targetPayloadVectorOffset: targetPayloadVector,
+            ttl: 3600, // 1 hour TTL
+            oneTimeAccess: false
+        )
+        
+        // Create Event
+        let eventOffset = Arkavo_Event.createEvent(
+            &builder,
+            action: .cache,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing,
+            dataType: .cacheevent,
+            dataOffset: cacheEventOffset
+        )
+        
+        builder.finish(offset: eventOffset)
+        let data = builder.data
+        
+        try await client.sendNATSEvent(data)
+    }
+    
     func shareVideo(_ video: Video, to stream: Stream) async {
         print("Sharing video \(video.id) to stream \(stream.profile.name)")
         //        do {
@@ -275,8 +365,15 @@ struct GroupChatView: View {
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
                                 Button {
-                                    viewModel.selectedStream = stream
-                                    isShareSheetPresented = true
+                                    Task {
+                                        do {
+                                            try await viewModel.sendStreamCacheEvent()
+                                            viewModel.selectedStream = stream
+                                            isShareSheetPresented = true
+                                        } catch {
+                                            print("Error caching stream: \(error)")
+                                        }
+                                    }
                                 } label: {
                                     Image(systemName: "square.and.arrow.up")
                                 }
