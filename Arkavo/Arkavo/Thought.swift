@@ -11,10 +11,10 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
     var metadata: ThoughtMetadata
     var nano: Data
 
-    init(id: UUID = UUID(), nano: Data) {
+    init(id: UUID = UUID(), nano: Data, metadata: ThoughtMetadata) {
         self.id = id
         publicID = Thought.generatePublicID(from: id)
-        metadata = Thought.extractMetadata(from: nano)
+        self.metadata = metadata
         self.nano = nano
     }
 
@@ -77,9 +77,11 @@ extension Thought {
 }
 
 struct ThoughtMetadata: Codable {
+    // FIXME: publicID
     let creator: UUID
     let mediaType: MediaType
     let createdAt: Date
+    // FIXME: remove summary
     let summary: String
     let contributors: [Contributor]
 

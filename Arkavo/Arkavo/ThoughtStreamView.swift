@@ -366,7 +366,14 @@ class ThoughtStreamViewModel: StreamViewModel {
             return
         }
         // persist
-        let thought = Thought(nano: nano.toData())
+        let thoughtMetadata = ThoughtMetadata(
+            creator: accountProfile.id,
+            mediaType: .text,
+            createdAt: Date(),
+            summary: "",
+            contributors: []
+        )
+        let thought = Thought(nano: nano.toData(), metadata: thoughtMetadata)
         thought.publicID = thoughtServiceModel.publicID
         thought.nano = nano.toData()
         thought.stream = stream

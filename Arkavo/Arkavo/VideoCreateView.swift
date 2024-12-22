@@ -75,10 +75,18 @@ struct VideoCreateView: View {
 
         do {
             // Create a new Thought for the video
+            let thoughtMetadata = ThoughtMetadata(
+                creator: viewModel.profile.id,
+                mediaType: .video,
+                createdAt: Date(),
+                summary: "video",
+                contributors: []
+            )
+
             let videoThought = Thought(
-                id: UUID(),
                 // FIXME: create nano
-                nano: Data(result.playbackURL.utf8)
+                nano: Data(result.playbackURL.utf8),
+                metadata: thoughtMetadata
             )
             videoThought.metadata = ThoughtMetadata(
                 creator: UUID(uuidString: account.id.description) ?? UUID(),

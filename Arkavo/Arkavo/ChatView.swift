@@ -171,9 +171,17 @@ class ChatViewModel: ObservableObject {
             policyData: policyData
         )
 
+        let thoughtMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .text,
+            createdAt: Date(),
+            summary: content,
+            contributors: []
+        )
+
         let thought = Thought(
-            id: UUID(),
-            nano: nanoData
+            nano: nanoData,
+            metadata: thoughtMetadata
         )
         _ = try PersistenceController.shared.saveThought(thought)
         // Save thought to stream
