@@ -66,181 +66,6 @@ class PostFeedViewModel: ObservableObject {
         )
     }
 
-    func createAndSendThought(content: String) async throws {
-        // Create message data
-        let messageData = content.data(using: .utf8) ?? Data()
-
-        // Create thought service model
-        let thoughtModel = ThoughtServiceModel(
-            creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for feed posts
-            mediaType: .text,
-            content: messageData
-        )
-
-        // Create FlatBuffers policy
-        var builder = FlatBufferBuilder()
-
-        // Create format info
-        let formatVersionString = builder.create(string: "1.0")
-        let formatProfileString = builder.create(string: "standard")
-        let formatInfo = Arkavo_FormatInfo.createFormatInfo(
-            &builder,
-            type: .plain,
-            versionOffset: formatVersionString,
-            profileOffset: formatProfileString
-        )
-
-        // Create content format
-        let contentFormat = Arkavo_ContentFormat.createContentFormat(
-            &builder,
-            mediaType: .text,
-            dataEncoding: .utf8,
-            formatOffset: formatInfo
-        )
-
-        // Create rating
-        let rating = Arkavo_Rating.createRating(
-            &builder,
-            violent: .mild,
-            sexual: .mild,
-            profane: .mild,
-            substance: .none_,
-            hate: .none_,
-            harm: .none_,
-            mature: .mild,
-            bully: .none_
-        )
-
-        // Create purpose
-        let purpose = Arkavo_Purpose.createPurpose(
-            &builder,
-            educational: 0.2,
-            entertainment: 0.8,
-            news: 0.0,
-            promotional: 0.0,
-            personal: 0.8,
-            opinion: 0.2,
-            transactional: 0.0,
-            harmful: 0.0,
-            confidence: 0.9
-        )
-
-        // Create ID and related vectors
-        let idVector = builder.createVector(bytes: thoughtModel.publicID)
-        let relatedVector = builder.createVector(bytes: Data())
-
-        // Create topics vector
-        let topics: [UInt32] = [1, 2, 3]
-        let topicsVector = builder.createVector(topics)
-
-        // Create metadata root
-        let metadata = Arkavo_Metadata.createMetadata(
-            &builder,
-            created: Int64(Date().timeIntervalSince1970),
-            idVectorOffset: idVector,
-            relatedVectorOffset: relatedVector,
-            ratingOffset: rating,
-            purposeOffset: purpose,
-            topicsVectorOffset: topicsVector,
-            contentOffset: contentFormat
-        )
-
-        builder.finish(offset: metadata)
-
-        // Verify FlatBuffer
-        var buffer = builder.sizedBuffer
-        let rootOffset = buffer.read(def: Int32.self, position: 0)
-        var verifier = try Verifier(buffer: &buffer)
-        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-
-        // Get policy data
-        let policyData = Data(
-            bytes: buffer.memory.advanced(by: buffer.reader),
-            count: Int(buffer.size)
-        )
-
-        // Serialize payload
-        let payload = try thoughtModel.serialize()
-
-        // Encrypt and send via client
-        let nanoData = try await client.encryptAndSendPayload(
-            payload: payload,
-            policyData: policyData
-        )
-
-        let thoughtMetadata = ThoughtMetadata(
-            creator: profile.id,
-            mediaType: .text,
-            createdAt: Date(),
-            summary: content,
-            contributors: []
-        )
-
-        let thought = Thought(
-            id: UUID(),
-            nano: nanoData,
-            metadata: thoughtMetadata
-        )
-
-        // Save thought
-        _ = try PersistenceController.shared.saveThought(thought)
-        try await PersistenceController.shared.saveChanges()
-
-        // Update UI
-        await MainActor.run {
-            thoughts.insert(thought, at: 0)
-        }
-    }
-
-    func handleSelectedImage(_ image: UIImage) async throws {
-        // Convert image to HEIF format with compression
-        guard let imageData = image.heifData() else {
-            throw ArkavoError.messageError("Failed to convert image to HEIF data")
-        }
-
-        // Create thought service model for image
-        let thoughtModel = ThoughtServiceModel(
-            creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for now
-            mediaType: .image,
-            content: imageData
-        )
-
-        // Create and encrypt image thought similar to text thought
-        let policyData = try createFlatBuffersPolicy(for: thoughtModel)
-        let payload = try thoughtModel.serialize()
-
-        // Encrypt and send via client
-        let nanoData = try await client.encryptAndSendPayload(
-            payload: payload,
-            policyData: policyData
-        )
-
-        let thoughtMetadata = ThoughtMetadata(
-            creator: profile.id,
-            mediaType: .image,
-            createdAt: Date(),
-            summary: "image",
-            contributors: []
-        )
-
-        // Create thought with encrypted data
-        let thought = Thought(
-            nano: nanoData,
-            metadata: thoughtMetadata
-        )
-
-        // Save thought
-        _ = try PersistenceController.shared.saveThought(thought)
-        try await PersistenceController.shared.saveChanges()
-
-        // Update UI
-        await MainActor.run {
-            thoughts.insert(thought, at: 0)
-        }
-    }
-
     private func createFlatBuffersPolicy(for thoughtModel: ThoughtServiceModel) throws -> Data {
         var builder = FlatBufferBuilder()
 
@@ -322,6 +147,100 @@ class PostFeedViewModel: ObservableObject {
             bytes: buffer.memory.advanced(by: buffer.reader),
             count: Int(buffer.size)
         )
+    }
+
+    func createAndSendThought(content: String) async throws {
+        // Create message data
+        let messageData = content.data(using: .utf8) ?? Data()
+
+        // Create thought service model
+        let thoughtModel = ThoughtServiceModel(
+            creatorPublicID: profile.publicID,
+            streamPublicID: Data(), // No specific stream for feed posts
+            mediaType: .text,
+            content: messageData
+        )
+
+        // Create and encrypt policy data
+        let policyData = try createFlatBuffersPolicy(for: thoughtModel)
+        let payload = try thoughtModel.serialize()
+
+        // Encrypt and send via client
+        let nanoData = try await client.encryptAndSendPayload(
+            payload: payload,
+            policyData: policyData
+        )
+
+        let thoughtMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .text,
+            createdAt: Date(),
+            summary: content,
+            contributors: []
+        )
+
+        let thought = Thought(
+            id: UUID(),
+            nano: nanoData,
+            metadata: thoughtMetadata
+        )
+
+        // Save thought
+        _ = try PersistenceController.shared.saveThought(thought)
+        try await PersistenceController.shared.saveChanges()
+
+        // Update UI
+        await MainActor.run {
+            thoughts.insert(thought, at: 0)
+        }
+    }
+
+    func handleSelectedImage(_ image: UIImage) async throws {
+        // Convert image to HEIF format with compression
+        guard let imageData = image.heifData() else {
+            throw ArkavoError.messageError("Failed to convert image to HEIF data")
+        }
+
+        // Create thought service model for image
+        let thoughtModel = ThoughtServiceModel(
+            creatorPublicID: profile.publicID,
+            streamPublicID: Data(), // No specific stream for now
+            mediaType: .image,
+            content: imageData
+        )
+
+        // Create and encrypt policy data
+        let policyData = try createFlatBuffersPolicy(for: thoughtModel)
+        let payload = try thoughtModel.serialize()
+
+        // Encrypt and send via client
+        let nanoData = try await client.encryptAndSendPayload(
+            payload: payload,
+            policyData: policyData
+        )
+
+        let thoughtMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .image,
+            createdAt: Date(),
+            summary: "image",
+            contributors: []
+        )
+
+        // Create thought with encrypted data
+        let thought = Thought(
+            nano: nanoData,
+            metadata: thoughtMetadata
+        )
+
+        // Save thought
+        _ = try PersistenceController.shared.saveThought(thought)
+        try await PersistenceController.shared.saveChanges()
+
+        // Update UI
+        await MainActor.run {
+            thoughts.insert(thought, at: 0)
+        }
     }
 }
 
