@@ -478,10 +478,6 @@ class TikTokFeedViewModel: ObservableObject {
         self.client = client
         self.account = account
         self.profile = profile
-        videos = videos
-        currentVideoIndex = currentVideoIndex
-        isLoading = isLoading
-        error = error
         loadInitialVideos()
     }
 
