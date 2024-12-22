@@ -257,6 +257,9 @@
         }
       }
     },
+    "Error loading stream" : {
+
+    },
     "Error loading stream: %@" : {
 
     },
@@ -319,9 +322,6 @@
 
     },
     "Invite Friends" : {
-
-    },
-    "Join stream" : {
 
     },
     "Join the Movement to Protect Creators" : {
@@ -613,6 +613,9 @@
     "Resume Scanning" : {
 
     },
+    "Retry" : {
+
+    },
     "Save" : {
       "localizations" : {
         "es-US" : {
@@ -648,9 +651,6 @@
 
     },
     "Server Name" : {
-
-    },
-    "Service misconfigured" : {
 
     },
     "Settings" : {
@@ -809,6 +809,9 @@
 
     },
     "Thank You for Making a Difference!" : {
+
+    },
+    "The stream you're looking for couldn't be found" : {
 
     },
     "This will be the name of your new community" : {

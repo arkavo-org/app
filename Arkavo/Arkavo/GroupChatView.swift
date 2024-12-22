@@ -1,4 +1,5 @@
 import ArkavoSocial
+import FlatBuffers
 import SwiftUI
 
 // MARK: - Models
@@ -22,6 +23,115 @@ class DiscordViewModel: ObservableObject {
 
     private func loadStreams() async {
         streams = account.streams
+    }
+
+    func requestStream(withPublicID publicID: Data) async throws -> Stream? {
+        print("Requesting stream with publicID: \(publicID.base58EncodedString)")
+
+        // First check if we already have the stream locally
+        if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+            print("Found existing stream: \(stream.profile.name)")
+            return stream
+        }
+
+        let accountProfilePublicID = profile.publicID
+
+        // Create FlatBuffer request
+        var builder = FlatBufferBuilder(initialSize: 384)
+
+        // Create UserEvent
+        let userEventOffset = Arkavo_UserEvent.createUserEvent(
+            &builder,
+            sourceType: .accountProfile,
+            targetType: .streamProfile,
+            sourceIdVectorOffset: builder.createVector(bytes: accountProfilePublicID),
+            targetIdVectorOffset: builder.createVector(bytes: publicID)
+        )
+
+        // Create Event
+        let eventOffset = Arkavo_Event.createEvent(
+            &builder,
+            action: .invite,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            status: .preparing,
+            dataType: .userevent,
+            dataOffset: userEventOffset
+        )
+
+        builder.finish(offset: eventOffset)
+        let eventData = builder.data
+
+        // Send event and wait for response
+        print("Sending stream request event")
+        try await client.sendNATSEvent(eventData)
+
+        // Wait for potential response (with timeout)
+        let timeoutSeconds: UInt64 = 5
+        let startTime = Date()
+
+        while Date().timeIntervalSince(startTime) < TimeInterval(timeoutSeconds) {
+            // Check if stream has been created
+            if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+                print("Stream received and saved: \(stream.profile.name)")
+                return stream
+            }
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        }
+
+        print("No stream found after timeout")
+        return nil
+    }
+
+    func handleStreamData(_ data: Data) async throws {
+        print("Handling stream data")
+        var buffer = ByteBuffer(data: data)
+
+        // Verify and parse EntityRoot
+        let rootOffset = buffer.read(def: Int32.self, position: 0)
+        var verifier = try Verifier(buffer: &buffer)
+        try Arkavo_EntityRoot.verify(&verifier, at: Int(rootOffset), of: Arkavo_EntityRoot.self)
+
+        let entityRoot = Arkavo_EntityRoot(buffer, o: Int32(rootOffset))
+        guard let arkStream = entityRoot.entity(type: Arkavo_Stream.self) else {
+            throw ArkavoError.invalidResponse
+        }
+
+        // Extract required fields
+        guard let creatorPublicId = arkStream.creatorPublicId?.id,
+              let profile = arkStream.profile,
+              let name = profile.name
+        else {
+            throw ArkavoError.invalidResponse
+        }
+
+        // Create and save stream
+        let stream = Stream(
+            creatorPublicID: Data(creatorPublicId),
+            profile: Profile(
+                name: name,
+                blurb: profile.blurb,
+                interests: profile.interests ?? "",
+                location: profile.location ?? "",
+                hasHighEncryption: profile.encryptionLevel == .el2,
+                hasHighIdentityAssurance: profile.identityAssuranceLevel == .ial2
+            ),
+            policies: Policies(
+                admission: .open,
+                interaction: .open,
+                age: .forAll
+            )
+        )
+
+        try PersistenceController.shared.saveStream(stream)
+        account.streams.append(stream)
+        try await PersistenceController.shared.saveChanges()
+
+        // Update local streams array
+        if !streams.contains(where: { $0.publicID == stream.publicID }) {
+            streams.append(stream)
+        }
+
+        print("Stream saved successfully: \(stream.profile.name)")
     }
 
     func shareVideo(_ video: Video, to stream: Stream) async {
@@ -113,6 +223,7 @@ struct GroupChatView: View {
     @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
+    @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
@@ -133,6 +244,10 @@ struct GroupChatView: View {
                                         onSelect: {
                                             viewModel.selectedStream = stream
                                             navigationPath.append(stream)
+                                        },
+                                        onShare: {
+                                            viewModel.selectedStream = stream
+                                            isShareSheetPresented = true
                                         }
                                     )
                                 }
@@ -157,12 +272,38 @@ struct GroupChatView: View {
                 if horizontalSizeClass == .compact {
                     ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: stream))
                         .navigationTitle(stream.profile.name)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button {
+                                    viewModel.selectedStream = stream
+                                    isShareSheetPresented = true
+                                } label: {
+                                    Image(systemName: "square.and.arrow.up")
+                                }
+                            }
+                        }
+                }
+            }
+            .navigationDestination(for: DeepLinkDestination.self) { destination in
+                switch destination {
+                case let .stream(publicID):
+                    StreamLoadingView(publicID: publicID)
+                case .profile:
+                    EmptyView()
                 }
             }
             .sheet(isPresented: $showCreateServer) {
                 NavigationStack {
                     GroupCreateView()
                 }
+            }
+        }
+        .sheet(isPresented: $isShareSheetPresented) {
+            if let stream = viewModel.selectedStream {
+                ShareSheet(
+                    activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
+                    isPresented: $isShareSheetPresented
+                )
             }
         }
     }
@@ -194,6 +335,7 @@ struct ServerCardView: View {
     let server: Server
     let stream: Stream
     let onSelect: () -> Void
+    let onShare: () -> Void
     @State private var isExpanded = false
 
     var body: some View {
@@ -230,6 +372,16 @@ struct ServerCardView: View {
                     }
 
                     Spacer()
+
+                    // Add share button
+                    if stream.policies.admission != .closed {
+                        Button(action: onShare) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.trailing, 8)
+                    }
 
                     Button {
                         withAnimation(.spring(response: 0.3)) {
