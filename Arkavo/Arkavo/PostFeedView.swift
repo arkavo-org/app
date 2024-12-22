@@ -1,248 +1,100 @@
+import ArkavoSocial
+import CryptoKit
+import Foundation
 import SwiftUI
 
-// MARK: - Models
-
-struct Post: Identifiable {
-    let id: String
-    let author: DIDUser
-    let content: String
-    let timestamp: Date
-    var likes: Int
-    var reposts: Int
-    var isLiked: Bool = false
-    var isReposted: Bool = false
-    var images: [String]?
-    var replyCount: Int
-}
-
-struct DIDUser: Identifiable {
-    let id: String // DID identifier (did:plc:...)
-    let handle: String // user.bsky.social
-    let displayName: String
-    let avatarURL: String
-    let isVerified: Bool
-    var isFollowing: Bool = false
-    let did: String // Decentralized identifier
-    var description: String?
-    var followers: Int
-    var following: Int
-    var postsCount: Int
-    var serviceEndpoint: String // AT Protocol service endpoint
-}
-
-// Helper extensions for model conversion
-extension DIDUser {
-    func asCreator() -> Creator {
-        Creator(
-            id: id,
-            name: displayName,
-            imageURL: avatarURL,
-            latestUpdate: description ?? "",
-            tier: "Premium",
-            socialLinks: [],
-            notificationCount: 0,
-            bio: description ?? ""
-        )
-    }
-}
-
-extension Creator {
-    func asDIDUser() -> DIDUser {
-        DIDUser(
-            id: id,
-            handle: "",
-            displayName: name,
-            avatarURL: imageURL,
-            isVerified: false,
-            did: "did:plc:\(id)",
-            description: bio,
-            followers: 0,
-            following: 0,
-            postsCount: 0,
-            serviceEndpoint: "https://bsky.social/xrpc"
-        )
-    }
-}
-
-// MARK: - Models and Sample Data
-
-enum SampleData {
-    static let user = DIDUser(
-        id: "1",
-        handle: "alice.bsky.social",
-        displayName: "Alice Johnson 🌟",
-        avatarURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-        isVerified: true,
-        did: "did:plc:7iza6de2dwqk7ep3kg3h3toy",
-        description: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉",
-        followers: 12849,
-        following: 1423,
-        postsCount: 3267,
-        serviceEndpoint: "https://bsky.social/xrpc"
-    )
-
-    static let recentPosts = [
-        Post(
-            id: "1",
-            author: user,
-            content: "Just finished a deep dive into ActivityPub and AT Protocol integration. The future of social media is decentralized! 🚀 What are your thoughts on federated networks?",
-            timestamp: Date().addingTimeInterval(-3600),
-            likes: 142,
-            reposts: 23,
-            replyCount: 18
-        ),
-        Post(
-            id: "2",
-            author: user,
-            content: "Speaking at @DecentralizedWeb Summit next month about design patterns in federated social networks. Who else is going to be there? Let's connect! 🎯",
-            timestamp: Date().addingTimeInterval(-7200),
-            likes: 89,
-            reposts: 12,
-            replyCount: 8
-        ),
-        Post(
-            id: "3",
-            author: user,
-            content: "New blog post: 'Designing for Decentralization - A UX Perspective' 📝\n\nExploring how we can make decentralized social networks more intuitive and user-friendly while maintaining privacy and data sovereignty.",
-            timestamp: Date().addingTimeInterval(-86400),
-            likes: 256,
-            reposts: 45,
-            images: ["https://images.unsplash.com/photo-1558655146-9f40138edfeb"], replyCount: 32
-        ),
-        Post(
-            id: "4",
-            author: user,
-            content: "Old blog post: 'Designing for Decentralization - A UI Perspective' \n\nExploring how we can make centralized social networks more intuitive.",
-            timestamp: Date().addingTimeInterval(-86400),
-            likes: 256,
-            reposts: 45,
-            images: ["https://images.unsplash.com/photo-1558655146-9f40138edfeb"], replyCount: 32
-        ),
-    ]
-
-    static let feedFilters = ["Posts", "Replies", "Media", "Likes"]
-
-    static let connections = [
-        DIDUser(
-            id: "2",
-            handle: "bob.bsky.social",
-            displayName: "Bob Smith",
-            avatarURL: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
-            isVerified: true,
-            did: "did:plc:4563gth789iop",
-            description: "Blockchain Developer | Web3 Explorer",
-            followers: 8923,
-            following: 745,
-            postsCount: 1532,
-            serviceEndpoint: "https://bsky.social/xrpc"
-        ),
-        DIDUser(
-            id: "3",
-            handle: "carol.bsky.social",
-            displayName: "Carol Williams",
-            avatarURL: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2",
-            isVerified: false,
-            did: "did:plc:789klm456nop",
-            description: "Open Source Advocate | Privacy First",
-            followers: 5621,
-            following: 892,
-            postsCount: 2341,
-            serviceEndpoint: "https://bsky.social/xrpc"
-        ),
-        DIDUser(
-            id: "4",
-            handle: "david.bsky.social",
-            displayName: "David Chen",
-            avatarURL: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e",
-            isVerified: true,
-            did: "did:plc:123qwe456rty",
-            description: "Tech Lead @Decentralized Systems",
-            followers: 15234,
-            following: 943,
-            postsCount: 4521,
-            serviceEndpoint: "https://bsky.social/xrpc"
-        ),
-    ]
-
-    static let activityHighlights = [
-        ActivityItem(
-            id: "1",
-            type: .mention,
-            content: "@alice.bsky.social Great talk at the Web3 conference!",
-            timestamp: Date().addingTimeInterval(-1800),
-            user: connections[0]
-        ),
-        ActivityItem(
-            id: "2",
-            type: .like,
-            content: "Liked your post about decentralized systems",
-            timestamp: Date().addingTimeInterval(-3600),
-            user: connections[1]
-        ),
-        ActivityItem(
-            id: "3",
-            type: .repost,
-            content: "Reposted your blog announcement",
-            timestamp: Date().addingTimeInterval(-7200),
-            user: connections[2]
-        ),
-    ]
-
-    static let preferences = UserPreferences(
-        notificationsEnabled: true,
-        privateAccount: false,
-        autoplayVideos: true,
-        contentLanguages: ["en", "es"],
-        contentWarnings: true,
-        threadMuting: true
-    )
-}
-
-// Additional Models
-struct ActivityItem: Identifiable {
-    let id: String
-    let type: ActivityType
-    let content: String
-    let timestamp: Date
-    let user: DIDUser
-
-    enum ActivityType {
-        case mention, like, repost, reply
-    }
-}
-
-struct UserPreferences {
-    var notificationsEnabled: Bool
-    var privateAccount: Bool
-    var autoplayVideos: Bool
-    var contentLanguages: [String]
-    var contentWarnings: Bool
-    var threadMuting: Bool
-}
+// MARK: - View Models
 
 @MainActor
 class PostFeedViewModel: ObservableObject {
-    @Published var posts: [Post] = SampleData.recentPosts
-    @Published var currentPostIndex = 0
+    private let client: ArkavoClient
+    private let account: Account
+    private let profile: Profile
+
+    @Published var thoughts: [Thought] = []
+    @Published var currentThoughtIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
+
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
+
+        // Load initial thoughts
+        Task {
+            await loadThoughts()
+        }
+    }
+
+    private func loadThoughts() async {
+        isLoading = true
+        // TODO: Load thoughts from backend
+        // For now using sample data
+        thoughts = SampleData.recentThoughts
+        isLoading = false
+    }
+
+    func getCurrentCreator() -> Creator {
+        // Determine tier based on identity assurance level and encryption
+        let tier = if account.identityAssuranceLevel == .ial1 || profile.hasHighIdentityAssurance {
+            "Verified"
+        } else if profile.hasHighEncryption {
+            "Premium"
+        } else {
+            "Basic"
+        }
+
+        // Combine profile information for the bio
+        let bio = [
+            profile.blurb,
+            !profile.interests.isEmpty ? "Interests: \(profile.interests)" : nil,
+            !profile.location.isEmpty ? "📍 \(profile.location)" : nil,
+        ]
+        .compactMap(\.self)
+        .joined(separator: "\n")
+
+        return Creator(
+            id: profile.publicID.base58EncodedString,
+            name: profile.name,
+            imageURL: "", // Profile doesn't have an avatar URL
+            latestUpdate: profile.blurb ?? "",
+            tier: tier,
+            socialLinks: [], // Profile doesn't have social links yet
+            notificationCount: 0,
+            bio: bio
+        )
+    }
 }
 
-// MARK: - PostFeevView
+// MARK: - PostFeedView
 
 struct PostFeedView: View {
-    @StateObject private var viewModel = PostFeedViewModel()
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
     @State private var currentIndex = 0
 
     var body: some View {
+        ZStack {
+            if sharedState.showCreateView {
+                PostCreateView(viewModel: viewModel)
+                    .transition(.move(edge: .bottom))
+            } else {
+                mainFeedView
+            }
+        }
+        .animation(.spring(), value: sharedState.showCreateView)
+    }
+
+    private var mainFeedView: some View {
         GeometryReader { geometry in
             ZStack {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(viewModel.posts) { post in
-                                ImmersivePostCard(
-                                    post: post,
+                            ForEach(viewModel.thoughts) { thought in
+                                ImmersiveThoughtCard(
+                                    thought: thought,
                                     size: geometry.size
                                 )
                                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -250,10 +102,9 @@ struct PostFeedView: View {
                         }
                     }
                     .scrollDisabled(true)
-                    .onChange(of: viewModel.currentPostIndex) { _, newIndex in
-//                        print("📱 Index changed to: \(newIndex)")
+                    .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
                         withAnimation {
-                            proxy.scrollTo(viewModel.posts[newIndex].id, anchor: .center)
+                            proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
                         }
                     }
                     .gesture(
@@ -261,16 +112,13 @@ struct PostFeedView: View {
                             .onEnded { gesture in
                                 let verticalMovement = gesture.translation.height
                                 let swipeThreshold: CGFloat = 50
-//                                print("📊 Swipe ended: \(verticalMovement)")
 
                                 if abs(verticalMovement) > swipeThreshold {
                                     withAnimation {
-                                        if verticalMovement > 0, viewModel.currentPostIndex > 0 {
-//                                            print("📊 Moving to previous post")
-                                            viewModel.currentPostIndex -= 1
-                                        } else if verticalMovement < 0, viewModel.currentPostIndex < viewModel.posts.count - 1 {
-//                                            print("📊 Moving to next post")
-                                            viewModel.currentPostIndex += 1
+                                        if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
+                                            viewModel.currentThoughtIndex -= 1
+                                        } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
+                                            viewModel.currentThoughtIndex += 1
                                         }
                                     }
                                 }
@@ -283,12 +131,59 @@ struct PostFeedView: View {
     }
 }
 
-// MARK: - NewPostView Update
+// MARK: - ImmersiveThoughtCard
+
+struct ImmersiveThoughtCard: View {
+    let thought: Thought
+    let size: CGSize
+    private let systemMargin: CGFloat = 16
+
+    var body: some View {
+        GeometryReader { _ in
+            ZStack {
+                // Background
+                Color.black
+                    .frame(width: size.width, height: size.height)
+
+                // Content overlay
+                HStack(spacing: systemMargin * 1.25) {
+                    ZStack(alignment: .center) {
+                        Text(thought.metadata.summary)
+                            .font(.system(size: 24, weight: .heavy))
+                            .foregroundColor(.white)
+                    }
+                    .padding(systemMargin * 2)
+                    Spacer()
+
+                    // Right side - Action buttons
+                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
+                        Spacer()
+                    }
+                }
+
+                // Contributors section
+                VStack {
+                    Spacer()
+                    HStack {
+                        ContributorsView(contributors: thought.metadata.contributors)
+                            .padding(.horizontal, systemMargin)
+                            .padding(.bottom, systemMargin * 8)
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - PostCreateView
 
 struct PostCreateView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var postText = ""
+    @EnvironmentObject var sharedState: SharedState
+    @ObservedObject var viewModel: PostFeedViewModel
+    @State private var thoughtText = ""
     @State private var selectedImages: [UIImage] = []
+    private let systemMargin: CGFloat = 16
 
     // Function to detect mentions in text
     private func detectMentions(_ text: String) -> [(String, Range<String.Index>)] {
@@ -308,196 +203,163 @@ struct PostCreateView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack {
-                TextEditor(text: $postText)
-                    .frame(height: 100)
-                    .padding()
-                    .onChange(of: postText) { _, newValue in
-                        // Process mentions as user types
-                        let _ = detectMentions(newValue)
-                    }
-
-                if !selectedImages.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(selectedImages, id: \.self) { image in
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                        }
-                        .padding()
-                    }
-                }
-
-                Spacer()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Post") {
-                        Task {
-                            await createPost()
-                            dismiss()
-                        }
-                    }
-                    .disabled(postText.isEmpty)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    HStack {
-                        Button(action: {}) {
-                            Image(systemName: "photo.on.rectangle")
-                        }
-                        Spacer()
-                    }
-                }
-            }
-        }
-    }
-
-    func createPost() async {
-        do {
-            let streamProfile = Profile(name: "New Post")
-            let newStream = Stream(
-                creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
-                profile: streamProfile,
-                policies: Policies(admission: .open, interaction: .open, age: .forAll)
-            )
-            let account = ViewModelFactory.shared.getCurrentAccount()!
-            account.streams.append(newStream)
-
-            try await PersistenceController.shared.saveChanges()
-        } catch {
-            print("error creating post: \(error.localizedDescription)")
-        }
-    }
-}
-
-struct ImmersivePostCard: View {
-    let post: Post
-    let size: CGSize
-    // Standard system margin from HIG, matching TikTokView
-    private let systemMargin: CGFloat = 16
-
-    var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ZStack {
-                // Background with fixed frame
-                if let firstImage = post.images?.first {
-                    AsyncImage(url: URL(string: firstImage)) { phase in
-                        switch phase {
-                        case .empty:
-                            Color.black
-                                .frame(width: size.width, height: size.height)
-                        case let .success(image):
-                            image
-                                .resizable()
-                                .aspectFill()
-                                .frame(width: size.width, height: size.height)
-                        case .failure:
-                            Color.black
-                                .frame(width: size.width, height: size.height)
-                        @unknown default:
-                            Color.black
-                                .frame(width: size.width, height: size.height)
-                        }
-                    }
-                } else {
-                    Color.black
-                        .frame(width: size.width, height: size.height)
-                }
+                // Background
+                Color.black
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .ignoresSafeArea()
 
-                // Content overlay
+                // Content overlay with TextEditor
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
-                        Text(post.content)
+                        if thoughtText.isEmpty {
+                            Text("Share your thought...")
+                                .font(.system(size: 24, weight: .heavy))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+
+                        TextEditor(text: $thoughtText)
                             .font(.system(size: 24, weight: .heavy))
                             .foregroundColor(.white)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.clear)
+                            .onChange(of: thoughtText) { _, newValue in
+                                let _ = detectMentions(newValue)
+                            }
                     }
                     .padding(systemMargin * 2)
+
                     Spacer()
 
                     // Right side - Action buttons
                     VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
+                        Button("Cancel") {
+                            sharedState.showCreateView = false
+                        }
+                        .foregroundColor(.white)
+                        .padding()
+
                         Spacer()
 
-//                        VStack(spacing: systemMargin * 1.25) {
-//                            TikTokServersList(
-//                                currentVideo: Video(
-//                                    id: post.id,
-//                                    url: URL(string: "https://placeholder.com")!,
-//                                    contributors: [
-//                                        Contributor(
-//                                            id: post.author.id,
-//                                            creator: post.author.asCreator(),
-//                                            role: "Author"
-//                                        )
-//                                    ],
-//                                    description: post.content,
-//                                    likes: post.likes,
-//                                    comments: post.replyCount,
-//                                    shares: post.reposts
-//                                ), servers: viewModel.servers
-//                            )
-//                            .padding(.trailing, systemMargin)
-//                            .padding(.vertical, systemMargin * 2)
-//                            .background(
-//                                RoundedRectangle(cornerRadius: 24)
-//                                    .fill(.ultraThinMaterial.opacity(0.4))
-//                                    .padding(.trailing, systemMargin / 2)
-//                            )
-//
-//                            Button {
-//                                // Handle comments
-//                            } label: {
-//                                VStack(spacing: systemMargin * 0.25) {
-//                                    Image(systemName: "bubble.right")
-//                                        .font(.system(size: systemMargin * 1.625))
-//                                    Text("\(post.replyCount)")
-//                                        .font(.caption)
-//                                }
-//                                .foregroundColor(.white)
-//                            }
-//                        }
-//                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
-//                        .padding(.bottom, systemMargin * 6.25)
+                        // Media upload button
+                        Button(action: {
+                            // Add image selection logic
+                        }) {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                        }
+                        .padding()
+
+                        // Post button
+                        Button {
+                            Task {
+                                await createThought()
+                                sharedState.showCreateView = false
+                            }
+                        } label: {
+                            Text("Post")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(thoughtText.isEmpty ? Color.gray : Color.blue)
+                                .cornerRadius(20)
+                        }
+                        .disabled(thoughtText.isEmpty)
+                        .padding()
                     }
+                    .padding(.trailing, systemMargin)
                 }
 
-                // Contributors section - Positioned at bottom
-                VStack {
-                    Spacer()
-                    HStack {
-                        ContributorsView(
-                            contributors: [
-                                Contributor(
-                                    id: post.author.id,
-                                    creator: post.author.asCreator(),
-                                    role: "Author"
-                                ),
-                            ]
-                        )
-                        .padding(.horizontal, systemMargin)
-                        .padding(.bottom, systemMargin * 8)
+                // Selected images preview
+                if !selectedImages.isEmpty {
+                    VStack {
                         Spacer()
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(selectedImages, id: \.self) { image in
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                            .padding()
+                        }
+                        .background(Color.black.opacity(0.5))
                     }
                 }
             }
         }
     }
+
+    func createThought() async {
+        do {
+            // Create a new Thought with the current text
+            let thought = Thought(id: UUID(), nano: Data())
+            thought.metadata = ThoughtMetadata(
+                creator: UUID(),
+                mediaType: .text,
+                createdAt: Date(),
+                summary: thoughtText,
+                contributors: [
+                    Contributor(
+                        id: "current_user_id",
+                        creator: viewModel.getCurrentCreator(),
+                        role: "Author"
+                    ),
+                ]
+            )
+
+            // Add the thought to the feed
+            await MainActor.run {
+                viewModel.thoughts.insert(thought, at: 0)
+            }
+
+            // Save the thought
+            try await PersistenceController.shared.saveChanges()
+        } catch {
+            print("Error creating thought: \(error.localizedDescription)")
+        }
+    }
 }
 
-extension View {
-    func aspectFill() -> some View {
-        scaledToFill()
-            .clipped()
-    }
+// MARK: - Sample Data
+
+enum SampleData {
+    static let creator = Creator(
+        id: "1",
+        name: "Alice Johnson 🌟",
+        imageURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+        latestUpdate: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮",
+        tier: "Premium",
+        socialLinks: [],
+        notificationCount: 0,
+        bio: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉"
+    )
+
+    static let recentThoughts: [Thought] = {
+        let thought1 = Thought(id: UUID(), nano: Data())
+        thought1.metadata = ThoughtMetadata(
+            creator: UUID(),
+            mediaType: .text,
+            createdAt: Date().addingTimeInterval(-3600),
+            summary: "Just finished a deep dive into ActivityPub and AT Protocol integration. The future of social media is decentralized! 🚀",
+            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
+        )
+
+        let thought2 = Thought(id: UUID(), nano: Data())
+        thought2.metadata = ThoughtMetadata(
+            creator: UUID(),
+            mediaType: .text,
+            createdAt: Date().addingTimeInterval(-7200),
+            summary: "Speaking at @DecentralizedWeb Summit next month about design patterns in federated social networks. Who else is going to be there?",
+            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
+        )
+
+        return [thought1, thought2]
+    }()
 }

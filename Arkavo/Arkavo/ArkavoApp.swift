@@ -446,4 +446,14 @@ final class ViewModelFactory {
             profile: currentProfile!
         )
     }
+
+    @MainActor
+    func makePostFeedViewModel() -> PostFeedViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return PostFeedViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
 }

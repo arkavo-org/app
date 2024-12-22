@@ -4,9 +4,6 @@
     "" : {
 
     },
-    "@%@" : {
-
-    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -225,12 +222,6 @@
     "Data mode" : {
 
     },
-    "Decentralized Identity" : {
-
-    },
-    "DID" : {
-
-    },
     "Disconnected" : {
 
     },
@@ -294,9 +285,6 @@
 
     },
     "Followers" : {
-
-    },
-    "Following" : {
 
     },
     "Granularity" : {
@@ -464,9 +452,6 @@
           }
         }
       }
-    },
-    "New Post" : {
-
     },
     "Next" : {
 
@@ -665,9 +650,6 @@
     "Server Name" : {
 
     },
-    "Service Endpoint" : {
-
-    },
     "Service misconfigured" : {
 
     },
@@ -705,6 +687,9 @@
       }
     },
     "Share Your Impact" : {
+
+    },
+    "Share your thought..." : {
 
     },
     "Sign In" : {
