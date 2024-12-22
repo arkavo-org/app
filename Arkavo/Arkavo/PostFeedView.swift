@@ -1,5 +1,6 @@
 import ArkavoSocial
 import CryptoKit
+import FlatBuffers
 import Foundation
 import SwiftUI
 
@@ -29,14 +30,11 @@ class PostFeedViewModel: ObservableObject {
 
     private func loadThoughts() async {
         isLoading = true
-        // TODO: Load thoughts from backend
-        // For now using sample data
         thoughts = SampleData.recentThoughts
         isLoading = false
     }
 
     func getCurrentCreator() -> Creator {
-        // Determine tier based on identity assurance level and encryption
         let tier = if account.identityAssuranceLevel == .ial1 || profile.hasHighIdentityAssurance {
             "Verified"
         } else if profile.hasHighEncryption {
@@ -45,7 +43,6 @@ class PostFeedViewModel: ObservableObject {
             "Basic"
         }
 
-        // Combine profile information for the bio
         let bio = [
             profile.blurb,
             !profile.interests.isEmpty ? "Interests: \(profile.interests)" : nil,
@@ -57,13 +54,131 @@ class PostFeedViewModel: ObservableObject {
         return Creator(
             id: profile.publicID.base58EncodedString,
             name: profile.name,
-            imageURL: "", // Profile doesn't have an avatar URL
+            imageURL: "",
             latestUpdate: profile.blurb ?? "",
             tier: tier,
-            socialLinks: [], // Profile doesn't have social links yet
+            socialLinks: [],
             notificationCount: 0,
             bio: bio
         )
+    }
+
+    func createAndSendThought(content: String) async throws {
+        // Create message data
+        let messageData = content.data(using: .utf8) ?? Data()
+
+        // Create thought service model
+        let thoughtModel = ThoughtServiceModel(
+            creatorPublicID: profile.publicID,
+            streamPublicID: Data(), // No specific stream for feed posts
+            mediaType: .text,
+            content: messageData
+        )
+
+        // Create FlatBuffers policy
+        var builder = FlatBufferBuilder()
+
+        // Create format info
+        let formatVersionString = builder.create(string: "1.0")
+        let formatProfileString = builder.create(string: "standard")
+        let formatInfo = Arkavo_FormatInfo.createFormatInfo(
+            &builder,
+            type: .plain,
+            versionOffset: formatVersionString,
+            profileOffset: formatProfileString
+        )
+
+        // Create content format
+        let contentFormat = Arkavo_ContentFormat.createContentFormat(
+            &builder,
+            mediaType: .text,
+            dataEncoding: .utf8,
+            formatOffset: formatInfo
+        )
+
+        // Create rating
+        let rating = Arkavo_Rating.createRating(
+            &builder,
+            violent: .mild,
+            sexual: .mild,
+            profane: .mild,
+            substance: .none_,
+            hate: .none_,
+            harm: .none_,
+            mature: .mild,
+            bully: .none_
+        )
+
+        // Create purpose
+        let purpose = Arkavo_Purpose.createPurpose(
+            &builder,
+            educational: 0.2,
+            entertainment: 0.8,
+            news: 0.0,
+            promotional: 0.0,
+            personal: 0.8,
+            opinion: 0.2,
+            transactional: 0.0,
+            harmful: 0.0,
+            confidence: 0.9
+        )
+
+        // Create ID and related vectors
+        let idVector = builder.createVector(bytes: thoughtModel.publicID)
+        let relatedVector = builder.createVector(bytes: Data())
+
+        // Create topics vector
+        let topics: [UInt32] = [1, 2, 3]
+        let topicsVector = builder.createVector(topics)
+
+        // Create metadata root
+        let metadata = Arkavo_Metadata.createMetadata(
+            &builder,
+            created: Int64(Date().timeIntervalSince1970),
+            idVectorOffset: idVector,
+            relatedVectorOffset: relatedVector,
+            ratingOffset: rating,
+            purposeOffset: purpose,
+            topicsVectorOffset: topicsVector,
+            contentOffset: contentFormat
+        )
+
+        builder.finish(offset: metadata)
+
+        // Verify FlatBuffer
+        var buffer = builder.sizedBuffer
+        let rootOffset = buffer.read(def: Int32.self, position: 0)
+        var verifier = try Verifier(buffer: &buffer)
+        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
+
+        // Get policy data
+        let policyData = Data(
+            bytes: buffer.memory.advanced(by: buffer.reader),
+            count: Int(buffer.size)
+        )
+
+        // Serialize payload
+        let payload = try thoughtModel.serialize()
+
+        // Encrypt and send via client
+        let nanoData = try await client.encryptAndSendPayload(
+            payload: payload,
+            policyData: policyData
+        )
+
+        let thought = Thought(
+            id: UUID(),
+            nano: nanoData
+        )
+
+        // Save thought
+        _ = try PersistenceController.shared.saveThought(thought)
+        try await PersistenceController.shared.saveChanges()
+
+        // Update UI
+        await MainActor.run {
+            thoughts.insert(thought, at: 0)
+        }
     }
 }
 
@@ -141,11 +256,9 @@ struct ImmersiveThoughtCard: View {
     var body: some View {
         GeometryReader { _ in
             ZStack {
-                // Background
                 Color.black
                     .frame(width: size.width, height: size.height)
 
-                // Content overlay
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
                         Text(thought.metadata.summary)
@@ -154,14 +267,8 @@ struct ImmersiveThoughtCard: View {
                     }
                     .padding(systemMargin * 2)
                     Spacer()
-
-                    // Right side - Action buttons
-                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
-                        Spacer()
-                    }
                 }
 
-                // Contributors section
                 VStack {
                     Spacer()
                     HStack {
@@ -183,34 +290,17 @@ struct PostCreateView: View {
     @ObservedObject var viewModel: PostFeedViewModel
     @State private var thoughtText = ""
     @State private var selectedImages: [UIImage] = []
+    @State private var error: Error?
+    @State private var showError = false
     private let systemMargin: CGFloat = 16
-
-    // Function to detect mentions in text
-    private func detectMentions(_ text: String) -> [(String, Range<String.Index>)] {
-        var mentions: [(String, Range<String.Index>)] = []
-        let pattern = "@[\\w\\.]+"
-
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let nsRange = NSRange(text.startIndex..., in: text)
-
-        regex.enumerateMatches(in: text, range: nsRange) { match, _, _ in
-            guard let match,
-                  let range = Range(match.range, in: text) else { return }
-            mentions.append((String(text[range]), range))
-        }
-
-        return mentions
-    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background
                 Color.black
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .ignoresSafeArea()
 
-                // Content overlay with TextEditor
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
                         if thoughtText.isEmpty {
@@ -224,15 +314,11 @@ struct PostCreateView: View {
                             .foregroundColor(.white)
                             .scrollContentBackground(.hidden)
                             .background(Color.clear)
-                            .onChange(of: thoughtText) { _, newValue in
-                                let _ = detectMentions(newValue)
-                            }
                     }
                     .padding(systemMargin * 2)
 
                     Spacer()
 
-                    // Right side - Action buttons
                     VStack(alignment: .trailing, spacing: systemMargin * 1.25) {
                         Button("Cancel") {
                             sharedState.showCreateView = false
@@ -242,7 +328,6 @@ struct PostCreateView: View {
 
                         Spacer()
 
-                        // Media upload button
                         Button(action: {
                             // Add image selection logic
                         }) {
@@ -252,11 +337,15 @@ struct PostCreateView: View {
                         }
                         .padding()
 
-                        // Post button
                         Button {
                             Task {
-                                await createThought()
-                                sharedState.showCreateView = false
+                                do {
+                                    try await viewModel.createAndSendThought(content: thoughtText)
+                                    sharedState.showCreateView = false
+                                } catch {
+                                    self.error = error
+                                    showError = true
+                                }
                             }
                         } label: {
                             Text("Post")
@@ -273,7 +362,6 @@ struct PostCreateView: View {
                     .padding(.trailing, systemMargin)
                 }
 
-                // Selected images preview
                 if !selectedImages.isEmpty {
                     VStack {
                         Spacer()
@@ -294,35 +382,10 @@ struct PostCreateView: View {
                 }
             }
         }
-    }
-
-    func createThought() async {
-        do {
-            // Create a new Thought with the current text
-            let thought = Thought(id: UUID(), nano: Data())
-            thought.metadata = ThoughtMetadata(
-                creator: UUID(),
-                mediaType: .text,
-                createdAt: Date(),
-                summary: thoughtText,
-                contributors: [
-                    Contributor(
-                        id: "current_user_id",
-                        creator: viewModel.getCurrentCreator(),
-                        role: "Author"
-                    ),
-                ]
-            )
-
-            // Add the thought to the feed
-            await MainActor.run {
-                viewModel.thoughts.insert(thought, at: 0)
-            }
-
-            // Save the thought
-            try await PersistenceController.shared.saveChanges()
-        } catch {
-            print("Error creating thought: \(error.localizedDescription)")
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error?.localizedDescription ?? "An unknown error occurred")
         }
     }
 }
