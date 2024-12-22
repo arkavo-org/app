@@ -10,24 +10,22 @@ final class Stream: @unchecked Sendable {
     @Attribute(.unique) var publicID: Data
     var creatorPublicID: Data
     var profile: Profile
-    var admissionPolicy: AdmissionPolicy
-    var interactionPolicy: InteractionPolicy
-    var agePolicy: AgePolicy
+    var policies: Policies
+    // sources[0] determines the type of Stream
+    var sources: [Thought] = []
     var thoughts: [Thought] = []
 
-    init(id: UUID = UUID(), creatorPublicID: Data, profile: Profile, admissionPolicy: AdmissionPolicy, interactionPolicy: InteractionPolicy, agePolicy: AgePolicy, thoughts: [Thought] = [], publicID: Data? = nil) {
+    init(
+        id: UUID = UUID(),
+        creatorPublicID: Data,
+        profile: Profile,
+        policies: Policies
+    ) {
         self.id = id
+        publicID = Stream.generatePublicID(from: id)
         self.creatorPublicID = creatorPublicID
         self.profile = profile
-        self.admissionPolicy = admissionPolicy
-        self.interactionPolicy = interactionPolicy
-        self.agePolicy = agePolicy
-        self.thoughts = thoughts
-        if let publicID {
-            self.publicID = publicID
-        } else {
-            self.publicID = Stream.generatePublicID(from: id)
-        }
+        self.policies = policies
     }
 
     private static func generatePublicID(from uuid: UUID) -> Data {
@@ -35,6 +33,12 @@ final class Stream: @unchecked Sendable {
             Data(SHA256.hash(data: buffer))
         }
     }
+}
+
+struct Policies: Codable {
+    var admission: AdmissionPolicy
+    var interaction: InteractionPolicy
+    var age: AgePolicy
 }
 
 enum AdmissionPolicy: String, Codable, CaseIterable {

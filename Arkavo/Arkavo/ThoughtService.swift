@@ -77,7 +77,7 @@ class ThoughtService {
             formatOffset: formatInfo
         )
         // Create rating
-        let rating: Offset = switch stream.agePolicy {
+        let rating: Offset = switch stream.policies.age {
         case .onlyAdults:
             Arkavo_Rating.createRating(
                 &builder,

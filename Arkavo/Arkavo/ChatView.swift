@@ -63,7 +63,7 @@ class ChatViewModel: ObservableObject {
         )
 
         // Create rating based on stream age policy
-        let rating: Offset = switch stream.agePolicy {
+        let rating: Offset = switch stream.policies.age {
         case .onlyAdults:
             Arkavo_Rating.createRating(
                 &builder,

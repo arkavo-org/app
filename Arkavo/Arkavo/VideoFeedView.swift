@@ -508,11 +508,15 @@ class TikTokFeedViewModel: ObservableObject {
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        switch stream.agePolicy {
-        case .onlyAdults: "person.fill"
-        case .onlyKids: "figure.child"
-        case .onlyTeens: "figure.wave"
-        case .forAll: "person.3.fill"
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
         }
     }
 

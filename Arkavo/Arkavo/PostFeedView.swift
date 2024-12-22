@@ -362,16 +362,14 @@ struct PostCreateView: View {
             }
         }
     }
-    
+
     func createPost() async {
         do {
             let streamProfile = Profile(name: "New Post")
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: streamProfile,
-                admissionPolicy: .open,
-                interactionPolicy: .open,
-                agePolicy: .onlyKids
+                policies: Policies(admission: .open, interaction: .open, age: .forAll)
             )
             let account = ViewModelFactory.shared.getCurrentAccount()!
             account.streams.append(newStream)
@@ -390,7 +388,7 @@ struct ImmersivePostCard: View {
     private let systemMargin: CGFloat = 16
 
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack {
                 // Background with fixed frame
                 if let firstImage = post.images?.first {
@@ -484,7 +482,7 @@ struct ImmersivePostCard: View {
                                     id: post.author.id,
                                     creator: post.author.asCreator(),
                                     role: "Author"
-                                )
+                                ),
                             ]
                         )
                         .padding(.horizontal, systemMargin)

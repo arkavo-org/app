@@ -26,11 +26,11 @@ class DiscordViewModel: ObservableObject {
 
     func shareVideo(_ video: Video, to stream: Stream) async {
         print("Sharing video \(video.id) to stream \(stream.profile.name)")
-//        do {
-//            try await client.shareVideo(video, to: stream)
-//        } catch {
-//            print("Error sharing video: \(error)")
-//        }
+        //        do {
+        //            try await client.shareVideo(video, to: stream)
+        //        } catch {
+        //            print("Error sharing video: \(error)")
+        //        }
     }
 
     // Convert Stream to Server view model
@@ -44,19 +44,23 @@ class DiscordViewModel: ObservableObject {
             hasNotification: !stream.thoughts.isEmpty,
             description: stream.profile.blurb ?? "No description available",
             policies: StreamPolicies(
-                agePolicy: stream.agePolicy,
-                admissionPolicy: stream.admissionPolicy,
-                interactionPolicy: stream.interactionPolicy
+                agePolicy: stream.policies.age,
+                admissionPolicy: stream.policies.admission,
+                interactionPolicy: stream.policies.interaction
             )
         )
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        switch stream.agePolicy {
-        case .onlyAdults: "person.fill"
-        case .onlyKids: "figure.child"
-        case .onlyTeens: "figure.wave"
-        case .forAll: "person.3.fill"
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
         }
     }
 }

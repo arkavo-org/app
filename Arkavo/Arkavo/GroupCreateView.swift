@@ -62,9 +62,7 @@ struct GroupCreateView: View {
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: serverProfile,
-                admissionPolicy: .open,
-                interactionPolicy: .open,
-                agePolicy: .onlyKids
+                policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
             )
 
             let server = Server(
