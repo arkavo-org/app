@@ -53,6 +53,19 @@ struct StreamLoadingView: View {
         let maxRetries = 3
         let retryDelay: TimeInterval = 0.5
 
+        do {
+            // First check if the stream exists in the database
+            if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+                print("Found existing stream in database: \(existingStream.profile.name)")
+                stream = existingStream
+                state = .loaded
+                return
+            }
+        } catch {
+            print("Error checking database: \(error.localizedDescription)")
+            // Continue to retry logic even if database check fails
+        }
+
         for attempt in 1 ... maxRetries {
             do {
                 if let stream = try await viewModel.requestStream(withPublicID: publicID) {

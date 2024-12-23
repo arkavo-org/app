@@ -33,10 +33,10 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
     func requestStream(withPublicID publicID: Data) async throws -> Stream? {
         print("Requesting stream with publicID: \(publicID.base58EncodedString)")
 
-        // First check if we already have the stream locally
-        if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
-            print("Found existing stream: \(stream.profile.name)")
-            return stream
+        // Check if we already have the stream locally
+        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+            print("Found existing stream: \(existingStream.profile.name)")
+            return existingStream
         }
 
         let accountProfilePublicID = profile.publicID
@@ -102,23 +102,39 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         }
 
         // Extract required fields
-        guard let creatorPublicId = arkStream.creatorPublicId?.id,
-              let profile = arkStream.profile,
-              let name = profile.name
+        guard let streamPublicId = arkStream.publicId?.id,
+              let creatorPublicId = arkStream.creatorPublicId?.id,
+              let streamProfile = arkStream.profile,
+              let streamName = streamProfile.name
         else {
             throw ArkavoError.invalidResponse
         }
-
+        print("Stream data details:")
+        print("Stream name from FlatBuffer:", streamName)
+        print("streamPublicId \(streamPublicId)")
+        let newStreamPublicID = Data(streamPublicId)
+        print("newStreamPublicID \(newStreamPublicID.base58EncodedString)")
+        // Check if stream already exists before creating
+        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID)?.first {
+            print("Stream already exists, skipping creation: \(existingStream.profile.name)")
+            return
+        } else {
+            print("Account streams public IDs (Base58):")
+            for stream in account.streams {
+                print(stream.publicID.base58EncodedString)
+            }
+        }
         // Create and save stream
         let stream = Stream(
+            publicID: Data(streamPublicId),
             creatorPublicID: Data(creatorPublicId),
             profile: Profile(
-                name: name,
+                name: streamName,
                 blurb: profile.blurb,
-                interests: profile.interests ?? "",
-                location: profile.location ?? "",
-                hasHighEncryption: profile.encryptionLevel == .el2,
-                hasHighIdentityAssurance: profile.identityAssuranceLevel == .ial2
+                interests: streamProfile.interests ?? "",
+                location: streamProfile.location ?? "",
+                hasHighEncryption: streamProfile.encryptionLevel == .el2,
+                hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2
             ),
             policies: Policies(
                 admission: .open,
@@ -128,25 +144,29 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         )
 
         try PersistenceController.shared.saveStream(stream)
-        account.streams.append(stream)
-        try await PersistenceController.shared.saveChanges()
 
-        // Update local streams array
+        // Only append to account.streams if not already present
+        if !account.streams.contains(where: { $0.publicID == stream.publicID }) {
+            account.streams.append(stream)
+            try await PersistenceController.shared.saveChanges()
+        }
+
+        // Update local streams array if not already present
         if !streams.contains(where: { $0.publicID == stream.publicID }) {
             streams.append(stream)
         }
         print("Stream saved successfully: \(stream.publicID)")
     }
 
-    func sendStreamCacheEvent() async throws {
+    func sendStreamCacheEvent(stream: Stream) async throws {
         // Create Stream using FlatBuffers
         var builder = FlatBufferBuilder(initialSize: 1024)
 
         // Create nested structures first
-        let nameOffset = builder.create(string: profile.name)
-        let blurbOffset = builder.create(string: profile.blurb ?? "")
-        let interestsOffset = builder.create(string: profile.interests)
-        let locationOffset = builder.create(string: profile.location)
+        let nameOffset = builder.create(string: stream.profile.name)
+        let blurbOffset = builder.create(string: stream.profile.blurb ?? "")
+        let interestsOffset = builder.create(string: stream.profile.interests)
+        let locationOffset = builder.create(string: stream.profile.location)
 
         // Create Profile
         let profileOffset = Arkavo_Profile.createProfile(
@@ -156,8 +176,8 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
             interestsOffset: interestsOffset,
             locationOffset: locationOffset,
             locationLevel: .approximate,
-            identityAssuranceLevel: profile.hasHighIdentityAssurance ? .ial2 : .ial1,
-            encryptionLevel: profile.hasHighEncryption ? .el2 : .el1
+            identityAssuranceLevel: stream.profile.hasHighIdentityAssurance ? .ial2 : .ial1,
+            encryptionLevel: stream.profile.hasHighEncryption ? .el2 : .el1
         )
 
         // Create Activity
@@ -170,9 +190,9 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         )
 
         // Create PublicIds
-        let publicIdVector = builder.createVector(bytes: streams[0].publicID)
+        let publicIdVector = builder.createVector(bytes: stream.publicID)
         let publicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: publicIdVector)
-        let creatorPublicIdVector = builder.createVector(bytes: streams[0].creatorPublicID)
+        let creatorPublicIdVector = builder.createVector(bytes: stream.creatorPublicID)
         let creatorPublicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: creatorPublicIdVector)
 
         // Create Stream
@@ -200,7 +220,7 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
 
         // Create CacheEvent
         builder = FlatBufferBuilder(initialSize: 1024)
-        let targetIdVector = builder.createVector(bytes: streams[0].publicID)
+        let targetIdVector = builder.createVector(bytes: stream.publicID)
         let targetPayloadVector = builder.createVector(bytes: targetPayload)
 
         let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
@@ -460,10 +480,6 @@ struct GroupChatView: View {
                                         onSelect: {
                                             viewModel.selectedStream = stream
                                             navigationPath.append(stream)
-                                        },
-                                        onShare: {
-                                            viewModel.selectedStream = stream
-                                            isShareSheetPresented = true
                                         }
                                     )
                                 }
@@ -493,8 +509,8 @@ struct GroupChatView: View {
                                 Button {
                                     Task {
                                         do {
-                                            try await viewModel.sendStreamCacheEvent()
                                             viewModel.selectedStream = stream
+                                            try await viewModel.sendStreamCacheEvent(stream: stream)
                                             isShareSheetPresented = true
                                         } catch {
                                             print("Error caching stream: \(error)")
@@ -558,7 +574,6 @@ struct ServerCardView: View {
     let server: Server
     let stream: Stream
     let onSelect: () -> Void
-    let onShare: () -> Void
     @State private var isExpanded = false
 
     var body: some View {
@@ -595,16 +610,6 @@ struct ServerCardView: View {
                     }
 
                     Spacer()
-
-                    // Add share button
-                    if stream.policies.admission != .closed {
-                        Button(action: onShare) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.trailing, 8)
-                    }
 
                     Button {
                         withAnimation(.spring(response: 0.3)) {
