@@ -28,6 +28,7 @@ struct ArkavoApp: App {
             persistenceController: PersistenceController.shared
         )
         _streamRouter = StateObject(wrappedValue: router)
+        ViewModelFactory.shared.serviceLocator.register(router)
     }
 
     var body: some Scene {
@@ -116,6 +117,8 @@ struct ArkavoApp: App {
         do {
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
+            let videoStream = try await createVideoStream(account: account, profile: profile)
+            print("videoStream: \(videoStream)")
             ViewModelFactory.shared.setAccount(account)
             // Connect with WebAuthn
             do {
@@ -132,6 +135,55 @@ struct ArkavoApp: App {
         } catch {
             print("Failed to save profile: \(error)")
         }
+    }
+
+    func createVideoStream(account: Account, profile: Profile) async throws -> Stream {
+        print("Creating video stream for profile: \(profile.name)")
+
+        // Create initial thought that marks this as a video stream
+        let initialMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .video,
+            createdAt: Date(),
+            summary: "Video Stream",
+            contributors: []
+        )
+
+        let initialThought = Thought(
+            nano: Data(), // Empty initial data
+            metadata: initialMetadata
+        )
+
+        print("Created initial video stream thought with ID: \(initialThought.id)")
+
+        // Save the initial thought
+        try PersistenceController.shared.saveThought(initialThought)
+        print("Saved initial thought")
+
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: profile,
+            policies: Policies(
+                admission: .open,
+                interaction: .moderated,
+                age: .forAll
+            )
+        )
+
+        // Set the source thought to mark this as a video stream
+        stream.sources = [initialThought]
+        print("Set video stream source thought. Stream ID: \(stream.id)")
+
+        // Add to account
+        try account.addStream(stream)
+        print("Added stream to account. Total streams: \(account.streams.count)")
+
+        // Save changes
+        try await persistenceController.saveChanges()
+        print("Video stream creation completed")
+
+        return stream
     }
 
     @MainActor
@@ -461,10 +513,12 @@ final class ViewModelFactory {
     @MainActor
     func makeVideoFeedViewModel() -> VideoFeedViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
+        let streamRouter = serviceLocator.resolve() as StreamMessageRouter
         return VideoFeedViewModel(
             client: client,
             account: currentAccount!,
-            profile: currentProfile!
+            profile: currentProfile!,
+            streamRouter: streamRouter
         )
     }
 

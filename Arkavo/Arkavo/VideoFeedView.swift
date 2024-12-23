@@ -115,34 +115,73 @@ struct VideoFeedView: View {
         }
         .ignoresSafeArea()
         .task {
-            // Load initial videos if not already loaded
+            // Load initial videos if empty
             if viewModel.videos.isEmpty {
-                guard let firstStream = viewModel.account.streams.first else { return }
+                // Find stream dedicated to videos
+                guard let videoStream = viewModel.account.streams.first(where: { stream in
+                    print("Checking stream: \(stream.id)")
+                    print("Stream thought count: \(stream.thoughts.count)")
+                    let isVideoStream = stream.sources.first?.metadata.mediaType == .video
+                    print("Is video stream? \(isVideoStream)")
+                    return isVideoStream
+                }) else {
+                    print("No video stream found")
+                    return
+                }
 
-                // Find the most recent video thoughts
-                let videoThoughts = firstStream.thoughts
-                    .filter { $0.metadata.mediaType == .video }
+                print("Found video stream. Total thoughts: \(videoStream.thoughts.count)")
+
+                // Find video thoughts and sort by date
+                let videoThoughts = videoStream.thoughts
+                    .filter { thought in
+                        print("Processing thought: \(thought.id)")
+                        let isVideo = thought.metadata.mediaType == .video
+                        print("Is video thought? \(isVideo)")
+                        if isVideo {
+                            if let urlString = String(data: thought.nano, encoding: .utf8) {
+                                print("Video URL: \(urlString)")
+                            } else {
+                                print("Could not decode URL from thought nano data")
+                            }
+                        }
+                        return isVideo
+                    }
                     .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
 
+                print("Found \(videoThoughts.count) video thoughts")
+
                 // Convert thoughts to videos
-                let videos = videoThoughts.map { thought in
-                    Video(
+                let thoughtVideos = videoThoughts.compactMap { thought -> Video? in
+                    guard let urlString = String(data: thought.nano, encoding: .utf8),
+                          let url = URL(string: urlString)
+                    else {
+                        print("Failed to create URL from thought: \(thought.id)")
+                        return nil
+                    }
+
+                    print("Created Video object with:")
+                    print("- ID: \(thought.id)")
+                    print("- URL: \(url)")
+                    print("- Summary: \(thought.metadata.summary)")
+
+                    return Video(
                         id: thought.id.uuidString,
-                        url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
-                        contributors: [], // Could populate from stream metadata if needed
-                        description: "Video Thought",
+                        url: url,
+                        contributors: thought.metadata.contributors,
+                        description: thought.metadata.summary,
                         likes: 0,
                         comments: 0,
                         shares: 0
                     )
                 }
 
-                // Update view model with the videos
-                viewModel.videos = videos
+                print("Converted \(thoughtVideos.count) thoughts to videos")
+                viewModel.videos = thoughtVideos
 
-                // Preload the first video if available
-                if let firstVideoUrl = videos.first?.url {
-                    viewModel.preloadVideo(url: firstVideoUrl)
+                // Preload first video if available
+                if let firstVideo = viewModel.videos.first {
+                    print("Preloading first video: \(firstVideo.url)")
+                    viewModel.preloadVideo(url: firstVideo.url)
                 }
             }
         }
@@ -466,31 +505,85 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 }
 
+enum VideoStreamError: Error {
+    case noVideoStream
+    case invalidStream
+}
+
 @MainActor
 final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
+    let streamRouter: StreamMessageRouter
     @Published var videos: [Video] = []
     @Published var currentVideoIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
     let playerManager = VideoPlayerManager()
 
-    init(client: ArkavoClient, account: Account, profile: Profile) {
+    init(client: ArkavoClient, account: Account, profile: Profile, streamRouter: StreamMessageRouter) {
         self.client = client
         self.account = account
         self.profile = profile
+        self.streamRouter = streamRouter
     }
 
     func addNewVideo(from uploadResult: UploadResult, contributors: [Contributor]) {
-        let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
-        videos.insert(newVideo, at: 0)
-        currentVideoIndex = 0
-
         Task {
-            try? await playerManager.preloadVideo(url: newVideo.url)
+            do {
+                // Get or create video stream
+                let videoStream = try await getOrCreateVideoStream()
+
+                // Create new video
+                let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
+
+                // Create thought for the video
+                let metadata = ThoughtMetadata(
+                    creator: profile.id,
+                    mediaType: .video,
+                    createdAt: Date(),
+                    summary: newVideo.description,
+                    contributors: contributors
+                )
+
+                // Convert video URL to data for storage
+                let videoData = newVideo.url.absoluteString.data(using: .utf8) ?? Data()
+                let thought = Thought(nano: videoData, metadata: metadata)
+
+                // Add thought to stream
+                videoStream.thoughts.append(thought)
+
+                // Save changes to persistence
+                try await PersistenceController.shared.saveChanges()
+
+                // Update UI
+                await MainActor.run {
+                    videos.insert(newVideo, at: 0)
+                    currentVideoIndex = 0
+                }
+
+                // Preload video
+                try? await playerManager.preloadVideo(url: newVideo.url)
+
+            } catch VideoStreamError.noVideoStream {
+                print("No video stream exists and couldn't create one")
+                self.error = VideoStreamError.noVideoStream
+            } catch {
+                print("Error adding video: \(error)")
+                self.error = error
+            }
         }
+    }
+
+    func getOrCreateVideoStream() async throws -> Stream {
+        // First check for existing video stream
+        if let existingStream = account.streams.first(where: { stream in
+            stream.sources.first?.metadata.mediaType == .video
+        }) {
+            return existingStream
+        }
+        throw VideoStreamError.noVideoStream
     }
 
     func preloadVideo(url: URL) {

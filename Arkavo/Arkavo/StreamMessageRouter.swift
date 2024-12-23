@@ -6,10 +6,12 @@ class StreamMessageRouter: ObservableObject {
     private var streamHandlers: [Data: (Data) -> Void] = [:]
     private let client: ArkavoClient
     private let persistenceController: PersistenceController
+    private let videoCache: VideoStreamCache
 
     init(client: ArkavoClient, persistenceController: PersistenceController) {
         self.client = client
         self.persistenceController = persistenceController
+        videoCache = VideoStreamCache()
 
         // Set up NATS message handler
         client.setNATSMessageHandler { [weak self] messageData in
@@ -17,6 +19,10 @@ class StreamMessageRouter: ObservableObject {
                 self?.routeMessage(messageData)
             }
         }
+    }
+
+    func getVideoCache() -> VideoStreamCache {
+        videoCache
     }
 
     func subscribe(stream: Stream) {
@@ -54,11 +60,26 @@ class StreamMessageRouter: ObservableObject {
         streamHandlers[stream.publicID] = { [weak self] data in
             guard let self else { return }
             Task { @MainActor in
-                // Create a new Thought and add to stream
-                let metadata = Thought.extractMetadata(from: data)
-                let thought = Thought(nano: data, metadata: metadata)
-                stream.thoughts.append(thought)
-                try? await self.persistenceController.saveChanges()
+                do {
+                    // Add to video cache
+                    try self.videoCache.addVideo(data)
+
+                    // Create thought for the video
+                    let metadata = ThoughtMetadata(
+                        creator: UUID(),
+                        mediaType: .video,
+                        createdAt: Date(),
+                        summary: "Video content",
+                        contributors: []
+                    )
+
+                    let thought = Thought(nano: data, metadata: metadata)
+                    stream.thoughts.append(thought)
+
+                    try await self.persistenceController.saveChanges()
+                } catch {
+                    print("Error handling video data: \(error)")
+                }
             }
         }
     }

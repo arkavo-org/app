@@ -44,73 +44,83 @@ struct VideoCreateView: View {
             return
         }
 
-        guard let firstStream = account.streams.first else {
-            showError(message: "No stream available to save video")
-            return
-        }
-
         do {
-            // Create a new Thought for the video
+            print("Starting video thought save process...")
+
+            // Find the designated video stream
+            guard let videoStream = account.streams.first(where: { stream in
+                stream.sources.first?.metadata.mediaType == .video
+            }) else {
+                print("No video stream found")
+                showError(message: "No video stream available")
+                return
+            }
+
+            print("Found video stream with ID: \(videoStream.id)")
+
+            // Create metadata
             let thoughtMetadata = ThoughtMetadata(
                 creator: viewModel.profile.id,
                 mediaType: .video,
                 createdAt: Date(),
-                summary: "video",
+                summary: "New video recording",
                 contributors: []
             )
 
+            print("Created thought metadata")
+
+            // Create video thought with URL data
+            let videoData = Data(result.playbackURL.utf8)
             let videoThought = Thought(
-                // FIXME: create nano
-                nano: Data(result.playbackURL.utf8),
+                nano: videoData,
                 metadata: thoughtMetadata
             )
-            videoThought.metadata = ThoughtMetadata(
-                creator: UUID(uuidString: account.id.description) ?? UUID(),
-                mediaType: .video,
-                createdAt: Date(),
-                summary: "",
-                contributors: []
-            )
 
-            // Add thought to the first stream
-            firstStream.thoughts.append(videoThought)
+            print("Created video thought with URL: \(result.playbackURL)")
 
-            // Save changes
-            try PersistenceController.shared.saveStream(firstStream)
-            try await PersistenceController.shared.saveChanges()
+            // Save thought to persistence
+            if try PersistenceController.shared.saveThought(videoThought) {
+                print("Successfully saved video thought")
 
-            // FIXME: convert account.profile to Creator
-            let creator = Creator(
-                id: "1",
-                name: "Alice Johnson 🌟",
-                imageURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-                latestUpdate: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮",
-                tier: "Premium",
-                socialLinks: [],
-                notificationCount: 0,
-                bio: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉"
-            )
+                // Now add to video stream's thoughts
+                videoStream.thoughts.append(videoThought)
+                print("Added thought to video stream. Stream thought count: \(videoStream.thoughts.count)")
 
-            // Create contributor from the current profile
-            let contributor = Contributor(
-                id: creator.id,
-                creator: creator,
-                role: "Creator"
-            )
+                // Save stream
+                try PersistenceController.shared.saveStream(videoStream)
+                print("Saved stream with updated thoughts")
 
-            // Notify feed updater of new video
-            viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
+                // Save all changes
+                try await PersistenceController.shared.saveChanges()
+                print("Saved all changes")
 
-        } catch let error as NSError {
-            // Handle specific error cases
-            switch error.domain {
-            case NSCocoaErrorDomain:
-                showError(message: "Failed to save video: Storage error")
-            default:
-                showError(message: "Failed to save video: \(error.localizedDescription)")
+                // Create contributor
+                let contributor = Contributor(
+                    id: viewModel.profile.id.uuidString,
+                    creator: Creator(
+                        id: viewModel.profile.id.uuidString,
+                        name: viewModel.profile.name,
+                        imageURL: "",
+                        latestUpdate: "",
+                        tier: "creator",
+                        socialLinks: [],
+                        notificationCount: 0,
+                        bio: ""
+                    ),
+                    role: "Creator"
+                )
+
+                // Update feed
+                viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
+                print("Updated video feed")
+            } else {
+                print("Failed to save video thought")
+                showError(message: "Failed to save video")
             }
+
         } catch {
-            showError(message: "Unexpected error while saving video")
+            print("Failed to save video: \(error)")
+            showError(message: "Failed to save video: \(error.localizedDescription)")
         }
     }
 
