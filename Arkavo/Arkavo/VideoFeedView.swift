@@ -53,63 +53,97 @@ struct Video: Identifiable {
 
 // MARK: - Main View
 
-struct VideoFeedView: View {
+struct VideoContentView: View {
     @EnvironmentObject var sharedState: SharedState
-    @State private var viewModel: TikTokFeedViewModel?
+    @StateObject private var feedViewModel: TikTokFeedViewModel
+
+    init() {
+        // Initialize with an empty view model, it will be properly configured in onAppear
+        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeTikTokFeedViewModel())
+    }
 
     var body: some View {
-        Group {
-            if let viewModel {
-                GeometryReader { geometry in
-                    ZStack {
-                        ScrollViewReader { proxy in
-                            ScrollView(.vertical, showsIndicators: false) {
-                                LazyVStack(spacing: 0) {
-                                    ForEach(viewModel.videos) { video in
-                                        VideoPlayerView(
-                                            video: video,
-                                            viewModel: viewModel,
-                                            size: geometry.size
-                                        )
-                                        .id(video.id)
-                                    }
-                                }
+        ZStack {
+            if sharedState.showCreateView {
+                VideoCreateView(feedViewModel: feedViewModel)
+            } else {
+                VideoFeedView(viewModel: feedViewModel)
+            }
+        }
+        .animation(.spring, value: sharedState.showCreateView)
+    }
+}
+
+struct VideoFeedView: View {
+    @EnvironmentObject var sharedState: SharedState
+    @ObservedObject var viewModel: TikTokFeedViewModel
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.videos) { video in
+                                VideoPlayerView(
+                                    video: video,
+                                    viewModel: viewModel,
+                                    size: geometry.size
+                                )
+                                .id(video.id)
                             }
-                            .scrollDisabled(true)
-                            .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
-                                withAnimation {
-                                    proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
-                                }
-                            }
+                        }
+                    }
+                    .scrollDisabled(true)
+                    .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
+                        withAnimation {
+                            proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
                         }
                     }
                 }
-                .ignoresSafeArea()
-            } else {
-                Text("Loading...")
-                    .onAppear {
-                        viewModel = ViewModelFactory.shared.makeTikTokFeedViewModel()
-                        guard let viewModel,
-                              let firstStream = viewModel.account.streams.first else { return }
-                        // Find the most recent video thought
-                        let videoThoughts = firstStream.thoughts
-                            .filter { $0.metadata.mediaType == .video }
-                            .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
-                        // Convert thoughts to videos
-                        let videos = videoThoughts.map { thought in
-                            Video(
-                                id: thought.id.uuidString,
-                                url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
-                                contributors: [], // Could populate from stream metadata if needed
-                                description: "Video Thought",
-                                likes: 0,
-                                comments: 0,
-                                shares: 0
-                            )
-                        }
-                        // Update view model with the videos
-                        viewModel.videos = videos
+
+                if viewModel.videos.isEmpty {
+                    VStack {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Loading videos...")
+                            .foregroundColor(.white)
+                            .padding(.top)
                     }
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .task {
+            // Load initial videos if not already loaded
+            if viewModel.videos.isEmpty {
+                guard let firstStream = viewModel.account.streams.first else { return }
+
+                // Find the most recent video thoughts
+                let videoThoughts = firstStream.thoughts
+                    .filter { $0.metadata.mediaType == .video }
+                    .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+
+                // Convert thoughts to videos
+                let videos = videoThoughts.map { thought in
+                    Video(
+                        id: thought.id.uuidString,
+                        url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
+                        contributors: [], // Could populate from stream metadata if needed
+                        description: "Video Thought",
+                        likes: 0,
+                        comments: 0,
+                        shares: 0
+                    )
+                }
+
+                // Update view model with the videos
+                viewModel.videos = videos
+
+                // Preload the first video if available
+                if let firstVideoUrl = videos.first?.url {
+                    viewModel.preloadVideo(url: firstVideoUrl)
+                }
             }
         }
     }
@@ -433,7 +467,7 @@ struct PlayerContainerView: UIViewRepresentable {
 }
 
 @MainActor
-class TikTokFeedViewModel: ObservableObject {
+final class TikTokFeedViewModel: ObservableObject, VideoFeedUpdating {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -447,46 +481,6 @@ class TikTokFeedViewModel: ObservableObject {
         self.client = client
         self.account = account
         self.profile = profile
-        loadInitialVideos()
-    }
-
-    private func loadInitialVideos() {
-        // Preload the first video
-        if let firstVideoUrl = videos.first?.url {
-            preloadVideo(url: firstVideoUrl)
-        }
-    }
-
-    func servers() -> [Server] {
-        account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .forAll,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
-    }
-
-    private func iconForStream(_ stream: Stream) -> String {
-        switch stream.policies.age {
-        case .onlyAdults:
-            "person.fill"
-        case .onlyKids:
-            "figure.child"
-        case .forAll:
-            "figure.wave"
-        case .onlyTeens:
-            "person.3.fill"
-        }
     }
 
     func addNewVideo(from uploadResult: UploadResult, contributors: [Contributor]) {
@@ -518,10 +512,8 @@ class TikTokFeedViewModel: ObservableObject {
 
     private func loadMoreVideos() {
         guard !isLoading else { return }
-
         isLoading = true
 
-        // Simulate API call with delay
         Task {
             do {
                 try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
@@ -548,7 +540,6 @@ class TikTokFeedViewModel: ObservableObject {
                 for video in newVideos {
                     preloadVideo(url: video.url)
                 }
-
             } catch {
                 await MainActor.run {
                     self.error = error
@@ -556,5 +547,52 @@ class TikTokFeedViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func servers() -> [Server] {
+        let servers = account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .forAll,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+        return servers
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
+        }
+    }
+}
+
+@MainActor
+protocol VideoFeedUpdating: AnyObject {
+    func addNewVideo(from result: UploadResult, contributors: [Contributor])
+    func preloadVideo(url: URL)
+}
+
+// Extension to provide default implementation
+@MainActor
+extension VideoFeedUpdating {
+    func preloadVideo(url _: URL) {
+        // Optional default implementation
     }
 }

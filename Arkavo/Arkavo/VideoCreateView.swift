@@ -3,43 +3,20 @@ import AVFoundation
 import SwiftData
 import SwiftUI
 
-// MARK: - View States
-
-enum RecordingState: Equatable {
-    case initial
-    case setupComplete
-    case recording
-    case processing
-    case uploading
-    case complete(UploadResult)
-    case error(String)
-
-    static func == (lhs: RecordingState, rhs: RecordingState) -> Bool {
-        switch (lhs, rhs) {
-        case (.initial, .initial),
-             (.setupComplete, .setupComplete),
-             (.recording, .recording),
-             (.processing, .processing),
-             (.uploading, .uploading):
-            true
-        case let (.complete(lhsResult), .complete(rhsResult)):
-            lhsResult.id == rhsResult.id
-        case let (.error(lhsError), .error(rhsError)):
-            lhsError == rhsError
-        default:
-            false
-        }
-    }
-}
-
 // MARK: - Main View
 
 struct VideoCreateView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: TikTokRecordingViewModel = ViewModelFactory.shared.makeTikTokRecordingViewModel()
+    @StateObject private var viewModel: TikTokRecordingViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showError = false
     @State private var errorMessage = ""
+
+    init(feedViewModel: TikTokFeedViewModel) {
+        let recordingVM = ViewModelFactory.shared.makeTikTokRecordingViewModel()
+        recordingVM.feedUpdater = feedViewModel
+        _viewModel = StateObject(wrappedValue: recordingVM)
+    }
 
     var body: some View {
         ModernRecordingInterface(
@@ -47,12 +24,11 @@ struct VideoCreateView: View {
             onComplete: { result in
                 await handleRecordingComplete(result)
                 sharedState.showCreateView = false
-                dismiss()
             }
         )
         .alert("Recording Error", isPresented: $showError) {
             Button("OK") {
-                dismiss()
+                sharedState.showCreateView = false
             }
         } message: {
             Text(errorMessage)
@@ -103,8 +79,28 @@ struct VideoCreateView: View {
             try PersistenceController.shared.saveStream(firstStream)
             try await PersistenceController.shared.saveChanges()
 
-            // Only dismiss on successful save
-            dismiss()
+            // FIXME: convert account.profile to Creator
+            let creator = Creator(
+                id: "1",
+                name: "Alice Johnson 🌟",
+                imageURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+                latestUpdate: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮",
+                tier: "Premium",
+                socialLinks: [],
+                notificationCount: 0,
+                bio: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉"
+            )
+
+            // Create contributor from the current profile
+            let contributor = Contributor(
+                id: creator.id,
+                creator: creator,
+                role: "Creator"
+            )
+
+            // Notify feed updater of new video
+            viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
+
         } catch let error as NSError {
             // Handle specific error cases
             switch error.domain {
@@ -124,6 +120,8 @@ struct VideoCreateView: View {
     }
 }
 
+// MARK: - Preview View Wrapper
+
 struct PreviewViewWrapper: UIViewRepresentable {
     @ObservedObject var viewModel: TikTokRecordingViewModel
 
@@ -131,7 +129,6 @@ struct PreviewViewWrapper: UIViewRepresentable {
         let previewView = UIView()
         previewView.backgroundColor = .black
 
-        // Call the viewModel setup function
         Task {
             await viewModel.setup(previewView: previewView)
         }
@@ -240,7 +237,6 @@ struct RecordingControl: View {
             case let .complete(result):
                 CompleteButton {
                     Task {
-                        viewModel.cleanup()
                         await onComplete(result)
                     }
                 }
@@ -386,13 +382,46 @@ struct ProgressBar: View {
     }
 }
 
-// MARK: - ViewModel
+// MARK: - Recording States
+
+enum RecordingState: Equatable {
+    case initial
+    case setupComplete
+    case recording
+    case processing
+    case uploading
+    case complete(UploadResult)
+    case error(String)
+
+    static func == (lhs: RecordingState, rhs: RecordingState) -> Bool {
+        switch (lhs, rhs) {
+        case (.initial, .initial),
+             (.setupComplete, .setupComplete),
+             (.recording, .recording),
+             (.processing, .processing),
+             (.uploading, .uploading):
+            true
+        case let (.complete(lhsResult), .complete(rhsResult)):
+            lhsResult.id == rhsResult.id
+        case let (.error(lhsError), .error(rhsError)):
+            lhsError == rhsError
+        default:
+            false
+        }
+    }
+}
+
+// MARK: - View Model
 
 @MainActor
-class TikTokRecordingViewModel: ObservableObject {
+final class TikTokRecordingViewModel: ObservableObject {
+    // MARK: - Properties
+
     let client: ArkavoClient
     let account: Account
     let profile: Profile
+    weak var feedUpdater: VideoFeedUpdating?
+
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
@@ -402,11 +431,15 @@ class TikTokRecordingViewModel: ObservableObject {
     private let uploadManager = VideoUploadManager()
     private var progressTimer: Timer?
 
+    // MARK: - Initialization
+
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
     }
+
+    // MARK: - Setup
 
     func setup(previewView: UIView) async {
         do {
@@ -419,6 +452,8 @@ class TikTokRecordingViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Recording Controls
+
     func startRecording() async {
         guard let recordingManager else { return }
 
@@ -427,8 +462,7 @@ class TikTokRecordingViewModel: ObservableObject {
             startProgressTimer()
 
             let videoURL = try await recordingManager.startRecording()
-            print("videoURL: \(videoURL)")
-            // Recording continues until stopRecording is called
+            print("📹 Started recording to: \(videoURL)")
         } catch {
             print("❌ Recording start failed with error: \(error.localizedDescription)")
             recordingState = .error(error.localizedDescription)
@@ -472,16 +506,11 @@ class TikTokRecordingViewModel: ObservableObject {
     }
 
     func flipCamera() {
-        // Implement camera flip functionality
+        // Implementation for camera flip functionality
+        // This would interact with the AVCaptureDevice to switch between front and back cameras
     }
 
-    func cleanup() {
-        progressTimer?.invalidate()
-        recordingProgress = 0
-        recordingState = .initial
-        recordingManager = nil
-        previewLayer = nil
-    }
+    // MARK: - Private Helpers
 
     private func startProgressTimer() {
         recordingProgress = 0
@@ -498,8 +527,4 @@ class TikTokRecordingViewModel: ObservableObject {
             }
         }
     }
-
-//    deinit {
-//        cleanup()
-//    }
 }
