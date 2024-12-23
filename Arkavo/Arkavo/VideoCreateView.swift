@@ -36,9 +36,6 @@ struct VideoCreateView: View {
     }
 
     private func handleRecordingComplete(_ result: UploadResult?) async {
-        let account = viewModel.account
-
-        // Validate we have required data
         guard let result else {
             showError(message: "Failed to get recording result")
             return
@@ -46,9 +43,11 @@ struct VideoCreateView: View {
 
         do {
             print("Starting video thought save process...")
+            let persistenceController = PersistenceController.shared
+            let context = persistenceController.container.mainContext
 
-            // Find the designated video stream
-            guard let videoStream = account.streams.first(where: { stream in
+            // Find video stream (the one with a video source thought)
+            guard let videoStream = viewModel.account.streams.first(where: { stream in
                 stream.sources.first?.metadata.mediaType == .video
             }) else {
                 print("No video stream found")
@@ -58,68 +57,54 @@ struct VideoCreateView: View {
 
             print("Found video stream with ID: \(videoStream.id)")
 
-            // Create metadata
-            let thoughtMetadata = ThoughtMetadata(
-                creator: viewModel.profile.id,
-                mediaType: .video,
-                createdAt: Date(),
-                summary: "New video recording",
-                contributors: []
-            )
-
-            print("Created thought metadata")
-
-            // Create video thought with URL data
-            let videoData = Data(result.playbackURL.utf8)
+            // Create thought
             let videoThought = Thought(
-                nano: videoData,
-                metadata: thoughtMetadata
+                nano: Data(result.playbackURL.utf8),
+                metadata: ThoughtMetadata(
+                    creator: viewModel.profile.id,
+                    mediaType: .video,
+                    createdAt: Date(),
+                    summary: "New video recording",
+                    contributors: []
+                )
             )
 
-            print("Created video thought with URL: \(result.playbackURL)")
+            print("Created video thought with ID: \(videoThought.id)")
 
-            // Save thought to persistence
-            if try PersistenceController.shared.saveThought(videoThought) {
-                print("Successfully saved video thought")
+            // Insert thought into context
+            context.insert(videoThought)
+            try context.save()
+            print("Initial thought save complete")
 
-                // Now add to video stream's thoughts
-                videoStream.thoughts.append(videoThought)
-                print("Added thought to video stream. Stream thought count: \(videoStream.thoughts.count)")
+            // Add to stream's thoughts array
+            videoStream.addThought(videoThought)
+            print("Added to stream thoughts. Current count: \(videoStream.thoughts.count)")
 
-                // Save stream
-                try PersistenceController.shared.saveStream(videoStream)
-                print("Saved stream with updated thoughts")
+            try context.save()
+            print("Final save complete")
 
-                // Save all changes
-                try await PersistenceController.shared.saveChanges()
-                print("Saved all changes")
-
-                // Create contributor
-                let contributor = Contributor(
+            // Create contributor for feed
+            let contributor = Contributor(
+                id: viewModel.profile.id.uuidString,
+                creator: Creator(
                     id: viewModel.profile.id.uuidString,
-                    creator: Creator(
-                        id: viewModel.profile.id.uuidString,
-                        name: viewModel.profile.name,
-                        imageURL: "",
-                        latestUpdate: "",
-                        tier: "creator",
-                        socialLinks: [],
-                        notificationCount: 0,
-                        bio: ""
-                    ),
-                    role: "Creator"
-                )
+                    name: viewModel.profile.name,
+                    imageURL: "",
+                    latestUpdate: "",
+                    tier: "creator",
+                    socialLinks: [],
+                    notificationCount: 0,
+                    bio: ""
+                ),
+                role: "Creator"
+            )
 
-                // Update feed
-                viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
-                print("Updated video feed")
-            } else {
-                print("Failed to save video thought")
-                showError(message: "Failed to save video")
-            }
+            // Update feed
+            viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
+            print("Updated video feed")
 
         } catch {
-            print("Failed to save video: \(error)")
+            print("Failed to save video - Error:", error)
             showError(message: "Failed to save video: \(error.localizedDescription)")
         }
     }

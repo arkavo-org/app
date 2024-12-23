@@ -131,38 +131,45 @@ struct VideoFeedView: View {
 
                 print("Found video stream. Total thoughts: \(videoStream.thoughts.count)")
 
-                // Find video thoughts and sort by date
-                let videoThoughts = videoStream.thoughts
+                // Get all video thoughts from both sources and thoughts arrays
+                var allThoughts = videoStream.thoughts
+                print("Thoughts from main array: \(allThoughts.count)")
+
+                // Add source thoughts if they're not already included
+                let sourceThoughts = videoStream.sources.filter { !allThoughts.contains($0) }
+                print("Additional thoughts from sources: \(sourceThoughts.count)")
+                allThoughts.append(contentsOf: sourceThoughts)
+
+                // Filter and sort all video thoughts
+                let videoThoughts = allThoughts
                     .filter { thought in
-                        print("Processing thought: \(thought.id)")
+                        print("Checking thought ID: \(thought.id)")
                         let isVideo = thought.metadata.mediaType == .video
-                        print("Is video thought? \(isVideo)")
+                        print("Is video? \(isVideo)")
                         if isVideo {
                             if let urlString = String(data: thought.nano, encoding: .utf8) {
                                 print("Video URL: \(urlString)")
-                            } else {
-                                print("Could not decode URL from thought nano data")
                             }
                         }
                         return isVideo
                     }
                     .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
 
-                print("Found \(videoThoughts.count) video thoughts")
+                print("Found \(videoThoughts.count) total video thoughts")
 
-                // Convert thoughts to videos
+                // Convert to Video objects
                 let thoughtVideos = videoThoughts.compactMap { thought -> Video? in
                     guard let urlString = String(data: thought.nano, encoding: .utf8),
                           let url = URL(string: urlString)
                     else {
-                        print("Failed to create URL from thought: \(thought.id)")
+                        print("Failed to create URL for thought: \(thought.id)")
                         return nil
                     }
 
-                    print("Created Video object with:")
+                    print("Creating Video object:")
                     print("- ID: \(thought.id)")
                     print("- URL: \(url)")
-                    print("- Summary: \(thought.metadata.summary)")
+                    print("- Created: \(thought.metadata.createdAt)")
 
                     return Video(
                         id: thought.id.uuidString,
@@ -175,7 +182,7 @@ struct VideoFeedView: View {
                     )
                 }
 
-                print("Converted \(thoughtVideos.count) thoughts to videos")
+                print("Created \(thoughtVideos.count) video objects")
                 viewModel.videos = thoughtVideos
 
                 // Preload first video if available

@@ -56,6 +56,16 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
 }
 
 extension Thought {
+    func assignToStream(_ stream: Stream?) {
+        if stream !== self.stream {
+            self.stream?.thoughts.removeAll { $0.id == self.id }
+            self.stream = stream
+            stream?.thoughts.append(self)
+        }
+    }
+}
+
+extension Thought {
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()

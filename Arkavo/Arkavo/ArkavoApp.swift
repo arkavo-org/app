@@ -157,8 +157,8 @@ struct ArkavoApp: App {
         print("Created initial video stream thought with ID: \(initialThought.id)")
 
         // Save the initial thought
-        try PersistenceController.shared.saveThought(initialThought)
-        print("Saved initial thought")
+        let saved = try PersistenceController.shared.saveThought(initialThought)
+        print("Saved initial thought \(saved)")
 
         // Create the stream with appropriate policies
         let stream = Stream(

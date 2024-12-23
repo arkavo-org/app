@@ -12,7 +12,9 @@ final class Stream: @unchecked Sendable, Identifiable, Hashable {
     var profile: Profile
     var policies: Policies
     // sources[0] determines the type of Stream
+    @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
     var sources: [Thought] = []
+    @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
     var thoughts: [Thought] = []
 
     init(
@@ -42,6 +44,22 @@ final class Stream: @unchecked Sendable, Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(publicID)
+    }
+}
+
+extension Stream {
+    func addThought(_ thought: Thought) {
+        if !thoughts.contains(where: { $0.id == thought.id }) {
+            thoughts.append(thought)
+            thought.stream = self
+        }
+    }
+
+    func removeThought(_ thought: Thought) {
+        thoughts.removeAll { $0.id == thought.id }
+        if thought.stream === self {
+            thought.stream = nil
+        }
     }
 }
 
