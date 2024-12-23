@@ -581,6 +581,7 @@ public final class ArkavoClient: NSObject {
 
         // Then handle via delegate
         delegate?.clientDidReceiveMessage(self, message: data)
+        receiveMessage()
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
@@ -686,6 +687,39 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.authenticationFailed("Invalid token format")
         }
         return token
+    }
+
+    public func encryptRemotePolicy(
+        payload: Data,
+        remotePolicyBody: String
+    ) async throws -> Data {
+        // Create Nano
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasMetadata = try KasMetadata(
+            resourceLocator: kasRL,
+            publicKey: kasPublicKey,
+            curve: .secp256r1
+        )
+
+        let remotePolicy = ResourceLocator(
+            protocolEnum: .sharedResourceDirectory,
+            body: remotePolicyBody
+        )!
+
+        var policy = Policy(
+            type: .remote,
+            body: nil,
+            remote: remotePolicy,
+            binding: nil
+        )
+
+        let nanoTDF = try await createNanoTDF(
+            kas: kasMetadata,
+            policy: &policy,
+            plaintext: payload
+        )
+
+        return nanoTDF.toData()
     }
 
     public func encryptAndSendPayload(

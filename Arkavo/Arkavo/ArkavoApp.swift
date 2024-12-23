@@ -9,6 +9,7 @@ struct ArkavoApp: App {
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
+    @StateObject private var sharedState = SharedState()
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -42,7 +43,7 @@ struct ArkavoApp: App {
             .task {
                 await checkAccountStatus()
             }
-            .environmentObject(SharedState())
+            .environmentObject(sharedState)
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -275,7 +276,9 @@ struct ArkavoApp: App {
     }
 
     // applinks
-    private func handleIncomingURL(_ url: URL) {
+    func handleIncomingURL(_ url: URL) {
+        print("Handling URL: \(url.absoluteString)") // Debug logging
+
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
               components.host == "app.arkavo.com"
         else {
@@ -284,6 +287,7 @@ struct ArkavoApp: App {
         }
 
         let pathComponents = components.path.split(separator: "/").map(String.init)
+        print("Path components: \(pathComponents)") // Debug logging
 
         guard pathComponents.count == 2 else {
             print("Invalid path format")
@@ -292,18 +296,37 @@ struct ArkavoApp: App {
 
         let type = pathComponents[0]
         let publicIDString = pathComponents[1]
+
+        print("Type: \(type), PublicID: \(publicIDString)") // Debug logging
+
         // convert publicIDString using base58 decode to publicID
         guard let publicID = publicIDString.base58Decoded else {
-            print("Invalid publicID format")
+            print("Failed to decode publicID: \(publicIDString)") // Debug logging
             return
         }
+
+        print("Successfully decoded publicID") // Debug logging
+
         switch type {
         case "stream":
-            navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
+            print("Processing stream deep link") // Debug logging
+            // First switch the tab
+            sharedState.selectedTab = .communities
+            // Then append to navigation path
+            DispatchQueue.main.async {
+                navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
+                if selectedView != .main {
+                    selectedView = .main
+                }
+            }
+            print("Navigation updated for stream") // Debug logging
+
         case "profile":
-            navigationPath.append(DeepLinkDestination.profile(publicID: publicID))
+            // Similar handling for profile...
+            break
+
         default:
-            print("Unknown URL type")
+            print("Unknown URL type: \(type)")
         }
     }
 }

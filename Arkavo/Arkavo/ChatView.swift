@@ -7,7 +7,7 @@ import SwiftUI
 // MARK: - View Model
 
 @MainActor
-class ChatViewModel: ObservableObject {
+class ChatViewModel: ObservableObject, ArkavoClientDelegate {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -365,6 +365,30 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    func handleStreamData(_ data: Data) async throws {
+        print("Handling stream data of length: \(data.count)")
+
+        var buffer = ByteBuffer(data: data)
+        print("Created ByteBuffer")
+
+        // Add try-catch for better error handling
+        do {
+            let rootOffset = buffer.read(def: Int32.self, position: 0)
+            print("Root offset: \(rootOffset)")
+
+            var verifier = try Verifier(buffer: &buffer)
+            try Arkavo_EntityRoot.verify(&verifier, at: Int(rootOffset), of: Arkavo_EntityRoot.self)
+            print("Verification passed")
+
+            // ... rest of the processing ...
+
+            print("Stream processing complete")
+        } catch {
+            print("Error processing stream data: \(error)")
+            throw error
+        }
+    }
+
     private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async {
         print("\nHandling decrypted thought:")
         do {
@@ -440,11 +464,7 @@ class ChatViewModel: ObservableObject {
         case noProfile
         case serializationError
     }
-}
 
-// MARK: - ArkavoClient Delegate
-
-extension ChatViewModel: ArkavoClientDelegate {
     nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
         Task { @MainActor in
             self.connectionState = state

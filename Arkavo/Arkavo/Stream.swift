@@ -4,7 +4,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class Stream: @unchecked Sendable {
+final class Stream: @unchecked Sendable, Identifiable, Hashable {
     @Attribute(.unique) private(set) var id: UUID
     // Using SHA256 hash as a public identifier, stored as 32 bytes
     @Attribute(.unique) var publicID: Data
@@ -17,12 +17,14 @@ final class Stream: @unchecked Sendable {
 
     init(
         id: UUID = UUID(),
+        publicID: Data? = nil,
         creatorPublicID: Data,
         profile: Profile,
         policies: Policies
     ) {
         self.id = id
-        publicID = Stream.generatePublicID(from: id)
+        // Use provided publicID or generate new one
+        self.publicID = publicID ?? Stream.generatePublicID(from: id)
         self.creatorPublicID = creatorPublicID
         self.profile = profile
         self.policies = policies
@@ -32,6 +34,14 @@ final class Stream: @unchecked Sendable {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
         }
+    }
+
+    static func == (lhs: Stream, rhs: Stream) -> Bool {
+        lhs.publicID == rhs.publicID
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(publicID)
     }
 }
 

@@ -64,7 +64,7 @@ struct GroupCreateView: View {
                 profile: serverProfile,
                 policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
             )
-
+            print("newStream newStream \(newStream.publicID.base58EncodedString)")
             let server = Server(
                 id: newStream.id.uuidString,
                 name: serverName,
