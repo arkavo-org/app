@@ -581,6 +581,7 @@ public final class ArkavoClient: NSObject {
 
         // Then handle via delegate
         delegate?.clientDidReceiveMessage(self, message: data)
+        receiveMessage()
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
@@ -699,28 +700,28 @@ public final class ArkavoClient: NSObject {
             publicKey: kasPublicKey,
             curve: .secp256r1
         )
-        
+
         let remotePolicy = ResourceLocator(
             protocolEnum: .sharedResourceDirectory,
             body: remotePolicyBody
         )!
-        
+
         var policy = Policy(
             type: .remote,
             body: nil,
             remote: remotePolicy,
             binding: nil
         )
-        
+
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
             plaintext: payload
         )
-        
+
         return nanoTDF.toData()
     }
-    
+
     public func encryptAndSendPayload(
         payload: Data,
         policyData: Data

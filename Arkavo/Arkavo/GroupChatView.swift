@@ -1,22 +1,26 @@
 import ArkavoSocial
 import FlatBuffers
-import SwiftUI
 import OpenTDFKit
+import SwiftUI
 
 // MARK: - Models
 
 @MainActor
-class DiscordViewModel: ObservableObject {
+class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
     @Published var streams: [Stream] = []
     @Published var selectedStream: Stream?
+    @Published var connectionState: ArkavoClientState = .disconnected
+    // Track pending streams by their ephemeral public key
+    private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
+        client.delegate = self
         Task {
             await loadStreams()
         }
@@ -131,20 +135,19 @@ class DiscordViewModel: ObservableObject {
         if !streams.contains(where: { $0.publicID == stream.publicID }) {
             streams.append(stream)
         }
-
-        print("Stream saved successfully: \(stream.profile.name)")
+        print("Stream saved successfully: \(stream.publicID)")
     }
 
     func sendStreamCacheEvent() async throws {
         // Create Stream using FlatBuffers
         var builder = FlatBufferBuilder(initialSize: 1024)
-        
+
         // Create nested structures first
         let nameOffset = builder.create(string: profile.name)
         let blurbOffset = builder.create(string: profile.blurb ?? "")
         let interestsOffset = builder.create(string: profile.interests)
         let locationOffset = builder.create(string: profile.location)
-        
+
         // Create Profile
         let profileOffset = Arkavo_Profile.createProfile(
             &builder,
@@ -156,7 +159,7 @@ class DiscordViewModel: ObservableObject {
             identityAssuranceLevel: profile.hasHighIdentityAssurance ? .ial2 : .ial1,
             encryptionLevel: profile.hasHighEncryption ? .el2 : .el1
         )
-        
+
         // Create Activity
         let activityOffset = Arkavo_Activity.createActivity(
             &builder,
@@ -165,13 +168,13 @@ class DiscordViewModel: ObservableObject {
             activityLevel: .low,
             trustLevel: .low
         )
-        
+
         // Create PublicIds
         let publicIdVector = builder.createVector(bytes: streams[0].publicID)
         let publicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: publicIdVector)
         let creatorPublicIdVector = builder.createVector(bytes: streams[0].creatorPublicID)
         let creatorPublicIdOffset = Arkavo_PublicId.createPublicId(&builder, idVectorOffset: creatorPublicIdVector)
-        
+
         // Create Stream
         let streamOffset = Arkavo_Stream.createStream(
             &builder,
@@ -182,24 +185,24 @@ class DiscordViewModel: ObservableObject {
             membersPublicIdVectorOffset: Offset(),
             streamLevel: .sl1
         )
-        
+
         // Create EntityRoot with Stream as the entity
         let entityRootOffset = Arkavo_EntityRoot.createEntityRoot(
             &builder,
             entityType: .stream,
             entityOffset: streamOffset
         )
-        
+
         builder.finish(offset: entityRootOffset)
         let nanoPayload = builder.data
 
         let targetPayload = try await client.encryptRemotePolicy(payload: nanoPayload, remotePolicyBody: ArkavoPolicy.PolicyType.streamProfile.rawValue)
-        
+
         // Create CacheEvent
         builder = FlatBufferBuilder(initialSize: 1024)
         let targetIdVector = builder.createVector(bytes: streams[0].publicID)
         let targetPayloadVector = builder.createVector(bytes: targetPayload)
-        
+
         let cacheEventOffset = Arkavo_CacheEvent.createCacheEvent(
             &builder,
             targetIdVectorOffset: targetIdVector,
@@ -207,7 +210,7 @@ class DiscordViewModel: ObservableObject {
             ttl: 3600, // 1 hour TTL
             oneTimeAccess: false
         )
-        
+
         // Create Event
         let eventOffset = Arkavo_Event.createEvent(
             &builder,
@@ -217,13 +220,13 @@ class DiscordViewModel: ObservableObject {
             dataType: .cacheevent,
             dataOffset: cacheEventOffset
         )
-        
+
         builder.finish(offset: eventOffset)
         let data = builder.data
-        
+
         try await client.sendNATSEvent(data)
     }
-    
+
     func shareVideo(_ video: Video, to stream: Stream) async {
         print("Sharing video \(video.id) to stream \(stream.profile.name)")
         //        do {
@@ -261,6 +264,129 @@ class DiscordViewModel: ObservableObject {
             "figure.wave"
         case .onlyTeens:
             "person.3.fill"
+        }
+    }
+
+    nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
+        Task { @MainActor in
+            self.connectionState = state
+        }
+    }
+
+    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
+        print("\n=== clientDidReceiveMessage ===")
+        guard let messageType = message.first else {
+            print("No message type byte found")
+            return
+        }
+        print("Message type: 0x\(String(format: "%02X", messageType))")
+
+        let messageData = message.dropFirst()
+
+        Task {
+            switch messageType {
+            case 0x04: // Rewrapped key
+                await handleRewrappedKeyMessage(messageData)
+
+            case 0x05, 0x06: // NATS message/event
+                await handleNATSMessage(messageData)
+
+            default:
+                print("Unknown message type: 0x\(String(format: "%02X", messageType))")
+            }
+        }
+    }
+
+    nonisolated func clientDidReceiveError(_: ArkavoSocial.ArkavoClient, error: any Error) {
+        Task { @MainActor in
+            print("Arkavo client error: \(error)")
+            // You might want to update UI state here
+            // self.errorMessage = error.localizedDescription
+            // self.showError = true
+        }
+    }
+
+    private func handleNATSMessage(_ data: Data) async {
+        do {
+            // Create a deep copy of the data
+            let copiedData = Data(data)
+            let parser = BinaryParser(data: copiedData)
+            let header = try parser.parseHeader()
+            print("\n=== Processing NATS Message ===")
+            print("Checking content rating...")
+            print("Message content rating: \(header.policy)")
+            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+            let nano = NanoTDF(header: header, payload: payload, signature: nil)
+
+            let epk = header.ephemeralPublicKey
+            print("Parsed NATS message - EPK: \(epk.hexEncodedString())")
+
+            // Store with correct types
+            pendingStreams[epk] = (
+                header: header,
+                payload: payload,
+                nano: nano
+            )
+
+            // Send rewrap message to get the key
+            print("Sending rewrap message for EPK: \(epk.hexEncodedString())")
+            let rewrapMessage = RewrapMessage(header: header)
+            try await client.sendMessage(rewrapMessage.toData())
+
+        } catch {
+            print("Error processing NATS message: \(error)")
+        }
+    }
+
+    private func handleRewrappedKeyMessage(_ data: Data) async {
+        print("\n=== handleRewrappedKeyMessage ===")
+        print("Message length: \(data.count)")
+
+        guard data.count == 93 else {
+            if data.count == 33 {
+                let identifier = data
+                print("Received DENY for EPK: \(identifier.hexEncodedString())")
+                return
+            }
+            print("Invalid rewrapped key length: \(data.count)")
+            return
+        }
+
+        let identifier = data.prefix(33)
+        print("Looking for stream with EPK: \(identifier.hexEncodedString())")
+
+        // Find corresponding stream data
+        guard let (_, _, nano) = pendingStreams.removeValue(forKey: identifier) else {
+            print("❌ No pending stream found for EPK: \(identifier.hexEncodedString())")
+            return
+        }
+
+        print("✅ Found matching stream data!")
+        let keyData = data.suffix(60)
+        let nonce = keyData.prefix(12)
+        let encryptedKeyLength = keyData.count - 12 - 16
+        let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
+        let authTag = keyData.suffix(16)
+
+        do {
+            print("Decrypting rewrapped key...")
+            let symmetricKey = try client.decryptRewrappedKey(
+                nonce: nonce,
+                rewrappedKey: rewrappedKey,
+                authTag: authTag
+            )
+            print("Successfully decrypted rewrapped key")
+
+            // Decrypt the stream data
+            print("Decrypting stream data...")
+            let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+            print("Successfully decrypted stream data")
+
+            // Now process the decrypted FlatBuffer data
+            try await handleStreamData(decryptedData)
+
+        } catch {
+            print("❌ Error processing rewrapped key: \(error)")
         }
     }
 }
