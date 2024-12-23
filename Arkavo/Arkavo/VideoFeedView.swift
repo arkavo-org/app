@@ -55,11 +55,11 @@ struct Video: Identifiable {
 
 struct VideoContentView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var feedViewModel: TikTokFeedViewModel
+    @StateObject private var feedViewModel: VideoFeedViewModel
 
     init() {
         // Initialize with an empty view model, it will be properly configured in onAppear
-        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeTikTokFeedViewModel())
+        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
     }
 
     var body: some View {
@@ -76,7 +76,7 @@ struct VideoContentView: View {
 
 struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @ObservedObject var viewModel: TikTokFeedViewModel
+    @ObservedObject var viewModel: VideoFeedViewModel
 
     var body: some View {
         GeometryReader { geometry in
@@ -234,7 +234,7 @@ struct ContributorsView: View {
 
 struct VideoPlayerView: View {
     @EnvironmentObject var sharedState: SharedState
-    @ObservedObject var viewModel: TikTokFeedViewModel
+    @ObservedObject var viewModel: VideoFeedViewModel
     @State private var showChat = false
     @State private var dragOffset = CGSize.zero
     let video: Video
@@ -244,7 +244,7 @@ struct VideoPlayerView: View {
     private let systemMargin: CGFloat = 16
 
     init(video: Video,
-         viewModel: TikTokFeedViewModel,
+         viewModel: VideoFeedViewModel,
          size: CGSize)
     {
         self.video = video
@@ -286,7 +286,7 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
-                            TikTokServersList(
+                            GroupChatIconList(
                                 currentVideo: video,
                                 servers: viewModel.servers()
                             )
@@ -377,7 +377,7 @@ struct VideoPlayerView: View {
     }
 }
 
-struct TikTokServersList: View {
+struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
     let servers: [Server]
@@ -467,7 +467,7 @@ struct PlayerContainerView: UIViewRepresentable {
 }
 
 @MainActor
-final class TikTokFeedViewModel: ObservableObject, VideoFeedUpdating {
+final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     let client: ArkavoClient
     let account: Account
     let profile: Profile

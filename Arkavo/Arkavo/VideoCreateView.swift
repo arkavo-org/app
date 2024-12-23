@@ -7,13 +7,13 @@ import SwiftUI
 
 struct VideoCreateView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: TikTokRecordingViewModel
+    @StateObject private var viewModel: VideoRecordingViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showError = false
     @State private var errorMessage = ""
 
-    init(feedViewModel: TikTokFeedViewModel) {
-        let recordingVM = ViewModelFactory.shared.makeTikTokRecordingViewModel()
+    init(feedViewModel: VideoFeedViewModel) {
+        let recordingVM = ViewModelFactory.shared.makeVideoRecordingViewModel()
         recordingVM.feedUpdater = feedViewModel
         _viewModel = StateObject(wrappedValue: recordingVM)
     }
@@ -123,7 +123,7 @@ struct VideoCreateView: View {
 // MARK: - Preview View Wrapper
 
 struct PreviewViewWrapper: UIViewRepresentable {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
 
     func makeUIView(context _: Context) -> UIView {
         let previewView = UIView()
@@ -144,7 +144,7 @@ struct PreviewViewWrapper: UIViewRepresentable {
 // MARK: - Modern Recording Interface
 
 struct ModernRecordingInterface: View {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -211,7 +211,7 @@ struct FlipCameraButton: View {
 }
 
 struct RecordingControl: View {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -414,7 +414,7 @@ enum RecordingState: Equatable {
 // MARK: - View Model
 
 @MainActor
-final class TikTokRecordingViewModel: ObservableObject {
+final class VideoRecordingViewModel: ObservableObject {
     // MARK: - Properties
 
     let client: ArkavoClient

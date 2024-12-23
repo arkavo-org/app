@@ -37,7 +37,7 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
         try container.encode(metadata, forKey: .metadata)
     }
 
-    private static func extractMetadata(from _: Data) -> ThoughtMetadata {
+    static func extractMetadata(from _: Data) -> ThoughtMetadata {
         // TODO: Parse the data to extract metadata from the NanoTDF Policy, and fix Date()
         ThoughtMetadata(
             creator: UUID(),

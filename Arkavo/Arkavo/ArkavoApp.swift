@@ -10,6 +10,7 @@ struct ArkavoApp: App {
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
     @StateObject private var sharedState = SharedState()
+    @StateObject private var streamRouter: StreamMessageRouter
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -21,6 +22,12 @@ struct ArkavoApp: App {
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
+        // Initialize router
+        let router = StreamMessageRouter(
+            client: client,
+            persistenceController: PersistenceController.shared
+        )
+        _streamRouter = StateObject(wrappedValue: router)
     }
 
     var body: some Scene {
@@ -44,6 +51,7 @@ struct ArkavoApp: App {
                 await checkAccountStatus()
             }
             .environmentObject(sharedState)
+            .environmentObject(streamRouter)
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -59,7 +67,7 @@ struct ArkavoApp: App {
                     primaryButton: .default(Text(error.action)) {
                         if error.action == "Update App" {
                             // Open App Store
-                            if let url = URL(string: "itms-apps://apple.com/app/id<your-app-id>") { // FIXME:
+                            if let url = URL(string: "itms-apps://apple.com/app/id6670504172") {
                                 UIApplication.shared.open(url)
                             }
                         } else {
@@ -451,9 +459,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeTikTokFeedViewModel() -> TikTokFeedViewModel {
+    func makeVideoFeedViewModel() -> VideoFeedViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return TikTokFeedViewModel(
+        return VideoFeedViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!
@@ -461,9 +469,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeTikTokRecordingViewModel() -> TikTokRecordingViewModel {
+    func makeVideoRecordingViewModel() -> VideoRecordingViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return TikTokRecordingViewModel(
+        return VideoRecordingViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!
