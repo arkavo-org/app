@@ -70,7 +70,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 
     // MARK: - Message Handling
 
-    private func handleNATSMessage(_ data: Data, type: NATSMessageType) async throws {
+    private func handleNATSMessage(_ data: Data, type _: NATSMessageType) async throws {
+        print("Handling NATS message of size: \(data.count)")
+
         // Create a deep copy of the data
         let copiedData = Data(data)
         let parser = BinaryParser(data: copiedData)
@@ -79,21 +81,14 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
         let epk = header.ephemeralPublicKey
-        print("Parsed NATS \(type) - EPK: \(epk.hexEncodedString())")
+        print("Message components:")
+        print("- Header size: \(header.toData().count)")
+        print("- Payload size: \(payload.toData().count)")
+        print("- Nano size: \(nano.toData().count)")
 
-        // Store message data
+        // Store message data with detailed logging
         pendingMessages[epk] = (header, payload, nano)
-
-        // Broadcast receipt of message
-        NotificationCenter.default.post(
-            name: type == .message ? .natsMessageReceived : .natsEventReceived,
-            object: nil,
-            userInfo: [
-                "data": data,
-                "header": header,
-                "payload": payload,
-            ]
-        )
+        print("Stored pending message with EPK: \(epk.hexEncodedString())")
 
         // Send rewrap message
         let rewrapMessage = RewrapMessage(header: header)
@@ -101,34 +96,29 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     private func handleRewrappedKey(_ data: Data) async throws {
-        print("\nHandling rewrapped key message of length: \(data.count)")
+        print("\nDecrypting rewrapped key:")
 
-        // Handle DENY response
-        guard data.count == 93 else {
-            if data.count == 33 {
-                let identifier = data
-                NotificationCenter.default.post(
-                    name: .rewrapDenied,
-                    object: nil,
-                    userInfo: ["identifier": identifier]
-                )
-                return
-            }
-            throw ArkavoError.messageError("Invalid rewrapped key length: \(data.count)")
-        }
-
-        // Extract components
         let identifier = data.prefix(33)
+        print("- EPK: \(identifier.hexEncodedString())")
+
+        // Find corresponding message
+        guard let (header, payload, nano) = pendingMessages.removeValue(forKey: identifier) else {
+            print("❌ No pending message found for EPK")
+            throw ArkavoError.messageError("No pending message found")
+        }
+        print("✅ Found pending message")
+
+        // Extract key components
         let keyData = data.suffix(60)
         let nonce = keyData.prefix(12)
         let encryptedKeyLength = keyData.count - 12 - 16
         let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
         let authTag = keyData.suffix(16)
 
-        // Find corresponding message
-        guard let (header, payload, nano) = pendingMessages.removeValue(forKey: identifier) else {
-            throw ArkavoError.messageError("No pending message found for EPK: \(identifier.hexEncodedString())")
-        }
+        print("Key components:")
+        print("- Nonce: \(nonce.hexEncodedString())")
+        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
+        print("- Auth tag: \(authTag.hexEncodedString())")
 
         // Decrypt the key
         let symmetricKey = try client.decryptRewrappedKey(
@@ -136,9 +126,16 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             rewrappedKey: rewrappedKey,
             authTag: authTag
         )
+        print("✅ Decrypted symmetric key")
 
         // Decrypt the message content
         let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+        print("✅ Decrypted payload of size: \(decryptedData.count)")
+
+        // Check if decrypted data is a valid URL string
+        if let urlString = String(data: decryptedData, encoding: .utf8) {
+            print("Decrypted URL: \(urlString)")
+        }
 
         // Broadcast the decrypted message
         NotificationCenter.default.post(

@@ -115,6 +115,7 @@ struct VideoFeedView: View {
         }
         .ignoresSafeArea()
         .task {
+            viewModel.cleanupOldCacheFiles()
             // Load initial videos if empty
             if viewModel.videos.isEmpty {
                 // Find stream dedicated to videos
@@ -591,20 +592,30 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 
     private func handleDecryptedMessage(data: Data, policy: ArkavoPolicy) async {
         do {
-            // Verify this is a video message based on policy
-            guard policy.type == .videoFrame else { return }
+            print("\nHandling decrypted video message:")
+            print("- Data size: \(data.count)")
+            print("- Policy type: \(policy.type)")
 
-            // Process the decrypted video data
-            guard let urlString = String(data: data, encoding: .utf8),
-                  let url = URL(string: urlString)
-            else {
-                throw VideoError.processingFailed("Invalid video URL")
+            // Verify this is a video message based on policy
+            guard policy.type == .videoFrame else {
+                print("❌ Incorrect policy type")
+                return
             }
 
-            // Create new video object
+            // Create a temporary file URL in the cache directory for the video data
+            let fileManager = FileManager.default
+            let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            let videoFileName = UUID().uuidString + ".mp4" // Or appropriate extension
+            let videoFileURL = cacheDir.appendingPathComponent(videoFileName)
+
+            // Write the video data to the cache file
+            try data.write(to: videoFileURL)
+            print("✅ Wrote video data to cache: \(videoFileURL)")
+
+            // Create new video object using the cached file URL
             let video = Video(
                 id: UUID().uuidString,
-                url: url,
+                url: videoFileURL,
                 contributors: [], // Add contributors if available in policy
                 description: "New video",
                 likes: 0,
@@ -614,16 +625,48 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 
             // Update UI
             await MainActor.run {
+                print("Adding video to feed")
                 videos.insert(video, at: 0)
                 if videos.count == 1 {
+                    print("Preloading first video")
                     preloadVideo(url: video.url)
                 }
             }
 
         } catch {
+            print("❌ Error processing video: \(error)")
             await MainActor.run {
                 self.error = error
             }
+        }
+    }
+
+    func cleanupOldCacheFiles() {
+        let fileManager = FileManager.default
+        guard let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+
+        do {
+            let cacheContents = try fileManager.contentsOfDirectory(
+                at: cacheDir,
+                includingPropertiesForKeys: [.creationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            // Keep only the 20 most recent videos
+            let oldFiles = cacheContents
+                .filter { $0.pathExtension == "mp4" }
+                .sorted { url1, url2 -> Bool in
+                    let date1 = try? url1.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    let date2 = try? url2.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    return date1! > date2!
+                }
+                .dropFirst(20)
+
+            for fileURL in oldFiles {
+                try? fileManager.removeItem(at: fileURL)
+            }
+        } catch {
+            print("Error cleaning cache: \(error)")
         }
     }
 
