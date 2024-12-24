@@ -522,18 +522,109 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    let streamRouter: StreamMessageRouter
     @Published var videos: [Video] = []
     @Published var currentVideoIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
+    @Published var connectionState: ArkavoClientState = .disconnected
     let playerManager = VideoPlayerManager()
+    private var notificationObservers: [NSObjectProtocol] = []
 
-    init(client: ArkavoClient, account: Account, profile: Profile, streamRouter: StreamMessageRouter) {
+    init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
-        self.streamRouter = streamRouter
+        setupNotifications()
+    }
+
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Connection state changes
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            Task { @MainActor [weak self] in
+                self?.connectionState = state
+            }
+        }
+        notificationObservers.append(stateObserver)
+
+        // Decrypted message handling
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+
+            Task { @MainActor [weak self] in
+                await self?.handleDecryptedMessage(data: data, policy: policy)
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Error handling
+        let errorObserver = NotificationCenter.default.addObserver(
+            forName: .messageHandlingError,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let error = notification.userInfo?["error"] as? Error else { return }
+            Task { @MainActor [weak self] in
+                self?.error = error
+            }
+        }
+        notificationObservers.append(errorObserver)
+    }
+
+    deinit {
+        // Clean up observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    private func handleDecryptedMessage(data: Data, policy: ArkavoPolicy) async {
+        do {
+            // Verify this is a video message based on policy
+            guard policy.type == .videoFrame else { return }
+
+            // Process the decrypted video data
+            guard let urlString = String(data: data, encoding: .utf8),
+                  let url = URL(string: urlString)
+            else {
+                throw VideoError.processingFailed("Invalid video URL")
+            }
+
+            // Create new video object
+            let video = Video(
+                id: UUID().uuidString,
+                url: url,
+                contributors: [], // Add contributors if available in policy
+                description: "New video",
+                likes: 0,
+                comments: 0,
+                shares: 0
+            )
+
+            // Update UI
+            await MainActor.run {
+                videos.insert(video, at: 0)
+                if videos.count == 1 {
+                    preloadVideo(url: video.url)
+                }
+            }
+
+        } catch {
+            await MainActor.run {
+                self.error = error
+            }
+        }
     }
 
     func addNewVideo(from uploadResult: UploadResult, contributors: [Contributor]) {

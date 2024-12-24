@@ -18,6 +18,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
     private var pendingThoughts: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     // Add set to track processed message IDs
     private var processedMessageIds = Set<Data>()
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(client: ArkavoClient, account: Account, profile: Profile, stream: Stream) {
         self.client = client
@@ -25,8 +26,52 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         self.profile = profile
         self.stream = stream
         connectionState = client.currentState
-        // Set self as delegate
-        client.delegate = self
+        setupNotifications()
+    }
+
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Add observers
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            self?.connectionState = state
+        }
+        notificationObservers.append(stateObserver)
+
+        let natsObserver = NotificationCenter.default.addObserver(
+            forName: .natsMessageReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data else { return }
+            Task {
+                await self?.handleNATSMessage(data)
+            }
+        }
+        notificationObservers.append(natsObserver)
+
+        let keyObserver = NotificationCenter.default.addObserver(
+            forName: .rewrappedKeyReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data else { return }
+            Task {
+                await self?.handleRewrappedKeyMessage(data)
+            }
+        }
+        notificationObservers.append(keyObserver)
+    }
+
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func sendMessage(content: String) async throws {

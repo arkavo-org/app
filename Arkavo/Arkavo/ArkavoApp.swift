@@ -10,7 +10,7 @@ struct ArkavoApp: App {
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
     @StateObject private var sharedState = SharedState()
-    @StateObject private var streamRouter: StreamMessageRouter
+    @StateObject private var messageRouter: ArkavoMessageRouter
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -23,11 +23,11 @@ struct ArkavoApp: App {
         )
         ViewModelFactory.shared.serviceLocator.register(client)
         // Initialize router
-        let router = StreamMessageRouter(
+        let router = ArkavoMessageRouter(
             client: client,
             persistenceController: PersistenceController.shared
         )
-        _streamRouter = StateObject(wrappedValue: router)
+        _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
     }
 
@@ -52,7 +52,7 @@ struct ArkavoApp: App {
                 await checkAccountStatus()
             }
             .environmentObject(sharedState)
-            .environmentObject(streamRouter)
+            .environmentObject(messageRouter)
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -513,12 +513,10 @@ final class ViewModelFactory {
     @MainActor
     func makeVideoFeedViewModel() -> VideoFeedViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        let streamRouter = serviceLocator.resolve() as StreamMessageRouter
         return VideoFeedViewModel(
             client: client,
             account: currentAccount!,
-            profile: currentProfile!,
-            streamRouter: streamRouter
+            profile: currentProfile!
         )
     }
 
