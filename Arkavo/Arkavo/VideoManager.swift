@@ -239,118 +239,29 @@ final class VideoPlayerManager: NSObject {
     private weak var playerLayer: AVPlayerLayer?
     private var currentItem: AVPlayerItem?
     private var preloadedItems: [String: AVPlayerItem] = [:]
-    private var currentVideoSize: CGSize?
-    private var boundsObservation: NSKeyValueObservation?
 
     override init() {
         player = AVPlayer()
         super.init()
-
-        // Add periodic time observer for smooth playback
-        player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-                                       queue: .main)
-        { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.updatePlayerLayerIfNeeded()
-            }
-        }
     }
 
     func setupPlayer(in view: UIView) {
         let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.videoGravity = .resizeAspectFill
-        view.layer.masksToBounds = true
-
-        // Initialize with full view bounds
+        playerLayer.videoGravity = .resizeAspect
+//        playerLayer.videoGravity = .resizeAspectFill
+//        view.layer.masksToBounds = true
         playerLayer.frame = view.bounds
         view.layer.addSublayer(playerLayer)
         self.playerLayer = playerLayer
-
-        // Add bounds change observer
-        boundsObservation = view.layer.observe(\.bounds) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                await self?.updatePlayerLayerIfNeeded()
-            }
-        }
-
-        // Register for orientation changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleOrientationChange),
-            name: UIDevice.orientationDidChangeNotification,
-            object: nil
-        )
     }
 
-    private func updatePlayerLayerFrame(with naturalSize: CGSize, transform: CGAffineTransform) {
-        guard let view = playerLayer?.superlayer?.superlayer,
-              let playerLayer else { return }
-
-        print("\n🔍 Debug Video Rotation:")
-        print("- Natural size: \(naturalSize)")
-        print("- Transform: \(transform)")
-
-        let viewBounds = view.bounds
-        let viewSize = viewBounds.size
-
-        // Reset any existing transforms
-        playerLayer.transform = CATransform3DIdentity
-
-        // Calculate the rotation angle from the transform
-        let angle = atan2(transform.b, transform.a)
-        let isPortrait = abs(angle - .pi / 2) < 0.1 || abs(angle + .pi / 2) < 0.1
-
-        // Use the appropriate ratio based on orientation
-        let videoRatio = isPortrait ? naturalSize.width / naturalSize.height :
-            naturalSize.height / naturalSize.width
-
-        var newFrame = viewBounds
-        if viewSize.width * videoRatio <= viewSize.height {
-            newFrame.size.height = viewSize.width * videoRatio
-            newFrame.origin.y = (viewSize.height - newFrame.size.height) / 2
-        } else {
-            newFrame.size.width = viewSize.height / videoRatio
-            newFrame.origin.x = (viewSize.width - newFrame.size.width) / 2
-        }
-
-        CATransaction.begin()
-        CATransaction.setAnimationDuration(0.2)
-        playerLayer.frame = newFrame
-
-        // Apply the video's transform to the layer
-        playerLayer.transform = CATransform3DMakeAffineTransform(transform)
-
-        CATransaction.commit()
-
-        print("- Is portrait: \(isPortrait)")
-        print("- Video ratio: \(videoRatio)")
-        print("- Final frame: \(newFrame)")
-    }
-
-    private func updatePlayerLayerIfNeeded() async {
-        guard let playerLayer,
-              let currentItem = player.currentItem else { return }
-
-        do {
-            let videoTracks = try await currentItem.asset.loadTracks(withMediaType: .video)
-            guard let videoTrack = videoTracks.first,
-                  let currentVideoSize else { return }
-
-            let transform = try await videoTrack.load(.preferredTransform)
-            updatePlayerLayerFrame(with: currentVideoSize, transform: transform)
-        } catch {
-            print("Error updating player layer: \(error)")
-        }
-    }
-
-    @objc private func handleOrientationChange() {
-        Task { @MainActor in
-            await updatePlayerLayerIfNeeded()
-        }
+    @objc private func handleLayoutChange() {
+        guard let view = playerLayer?.superlayer else { return }
+        playerLayer?.frame = view.bounds
     }
 
     func playVideo(url: URL) {
-        print("\n📹 Playing video: \(url)")
+        print("📹 Playing video: \(url)")
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
 
@@ -365,13 +276,52 @@ final class VideoPlayerManager: NSObject {
                     print("\n📼 Video Track Info:")
                     print("- Natural size: \(naturalSize)")
                     print("- Transform matrix: \(transform)")
-                    print("- Transform angle (degrees): \(atan2(transform.b, transform.a) * 180 / .pi)")
+
+                    // Create a video composition
+                    let videoComposition = AVMutableVideoComposition()
+                    videoComposition.renderSize = naturalSize
+                    videoComposition.frameDuration = CMTimeMake(value: 1, timescale: 30)
+
+                    print("🔍 Video Composition Render Size: \(videoComposition.renderSize)")
+                    print("🔍 Video Composition Frame Duration: \(videoComposition.frameDuration)")
+
+                    // Create a composition instruction
+                    let instruction = AVMutableVideoCompositionInstruction()
+                    instruction.timeRange = CMTimeRangeMake(start: .zero, duration: asset.duration)
+
+                    print("🔍 Composition Instruction Time Range: \(instruction.timeRange)")
+
+                    // Create a layer instruction for the video track
+                    let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+
+                    print("🔍 Layer Instruction Track ID: \(videoTrack.trackID)")
+
+                    // Apply the transform to the layer instruction
+                    layerInstruction.setTransform(transform, at: .zero)
+
+                    print("🔍 Layer Instruction Transform Applied: \(transform)")
+
+                    // Add the layer instruction to the composition instruction
+                    instruction.layerInstructions = [layerInstruction]
+
+                    print("🔍 Composition Instruction Layer Instructions: \(instruction.layerInstructions)")
+
+                    // Add the instruction to the video composition
+                    videoComposition.instructions = [instruction]
+
+                    print("🔍 Video Composition Instructions: \(videoComposition.instructions)")
+
+                    // Set the video composition on the player item
+                    item.videoComposition = videoComposition
+
+                    print("🔍 Player Item Video Composition: \(String(describing: item.videoComposition))")
                 }
             } catch {
                 print("❌ Error loading video track info: \(error)")
             }
         }
 
+        currentItem = item
         player.replaceCurrentItem(with: item)
         player.seek(to: .zero)
         player.play()
@@ -387,11 +337,7 @@ final class VideoPlayerManager: NSObject {
     }
 
     deinit {
-        // Remove observers
-        boundsObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
-
-        // Cleanup playback
         player.pause()
         player.replaceCurrentItem(with: nil)
     }

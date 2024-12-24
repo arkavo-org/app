@@ -231,7 +231,7 @@ struct VideoCreateView: View {
     private func exportVideo(
         asset: AVURLAsset,
         toURL: URL,
-        settings: [String: Any],
+        settings _: [String: Any],
         originalTransform: CGAffineTransform
     ) async throws -> Data {
         let composition = AVMutableComposition()
@@ -259,18 +259,43 @@ struct VideoCreateView: View {
             at: .zero
         )
 
-        // Set up video composition to preserve orientation
+        // Modify the video track to preserve the rotation metadata
+        let videoTrack = composition.tracks(withMediaType: .video).first!
+        videoTrack.preferredTransform = originalTransform
+
+        // Create a video composition for the export session
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = naturalSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = CMTimeMake(value: 1, timescale: 30)
 
+        print("🔍 Video Composition Render Size: \(videoComposition.renderSize)")
+        print("🔍 Video Composition Frame Duration: \(videoComposition.frameDuration)")
+
+        // Create a composition instruction
         let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = try await CMTimeRange(start: .zero, duration: asset.load(.duration))
+        instruction.timeRange = CMTimeRangeMake(start: .zero, duration: composition.duration)
 
-        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionTrack)
+        print("🔍 Composition Instruction Time Range: \(instruction.timeRange)")
+
+        // Create a layer instruction for the video track
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+
+        print("🔍 Layer Instruction Track ID: \(compositionTrack.trackID)")
+
+        // Apply the transform to the layer instruction
         layerInstruction.setTransform(originalTransform, at: .zero)
+
+        print("🔍 Layer Instruction Transform Applied: \(originalTransform)")
+
+        // Add the layer instruction to the composition instruction
         instruction.layerInstructions = [layerInstruction]
+
+        print("🔍 Composition Instruction Layer Instructions: \(instruction.layerInstructions)")
+
+        // Add the instruction to the video composition
         videoComposition.instructions = [instruction]
+
+        print("🔍 Video Composition Instructions: \(videoComposition.instructions)")
 
         // Create export session
         guard let exporter = AVAssetExportSession(
@@ -283,17 +308,18 @@ struct VideoCreateView: View {
         // Configure the export
         exporter.outputURL = toURL
         exporter.outputFileType = .mp4
-        exporter.videoComposition = videoComposition
+        exporter.videoComposition = videoComposition // Ensure the transform is preserved
         exporter.shouldOptimizeForNetworkUse = true
 
-        // Apply bitrate limit if specified
-        if let bitrate = (settings[AVVideoCompressionPropertiesKey] as? [String: Any])?[AVVideoAverageBitRateKey] as? Int {
-            exporter.fileLengthLimit = Int64(bitrate)
-        }
+        print("🔍 Export Session Video Composition: \(String(describing: exporter.videoComposition))")
 
-        await exporter.export()
-        guard exporter.status == AVAssetExportSession.Status.completed else {
-            throw VideoError.exportSessionFailed(exporter.error?.localizedDescription ?? "Unknown error")
+        // Use the new async export method
+        do {
+            try await exporter.export(to: toURL, as: .mp4)
+            print("✅ Export completed successfully")
+        } catch {
+            print("❌ Export failed with error: \(error.localizedDescription)")
+            throw VideoError.exportFailed("Export failed: \(error.localizedDescription)")
         }
 
         print("Export complete - checking file size...")
