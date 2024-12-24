@@ -53,63 +53,144 @@ struct Video: Identifiable {
 
 // MARK: - Main View
 
-struct VideoFeedView: View {
+struct VideoContentView: View {
     @EnvironmentObject var sharedState: SharedState
-    @State private var viewModel: TikTokFeedViewModel?
+    @StateObject private var feedViewModel: VideoFeedViewModel
+
+    init() {
+        // Initialize with an empty view model, it will be properly configured in onAppear
+        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
+    }
 
     var body: some View {
-        Group {
-            if let viewModel {
-                GeometryReader { geometry in
-                    ZStack {
-                        ScrollViewReader { proxy in
-                            ScrollView(.vertical, showsIndicators: false) {
-                                LazyVStack(spacing: 0) {
-                                    ForEach(viewModel.videos) { video in
-                                        VideoPlayerView(
-                                            video: video,
-                                            viewModel: viewModel,
-                                            size: geometry.size
-                                        )
-                                        .id(video.id)
-                                    }
-                                }
+        ZStack {
+            if sharedState.showCreateView {
+                VideoCreateView(feedViewModel: feedViewModel)
+            } else {
+                VideoFeedView(viewModel: feedViewModel)
+            }
+        }
+        .animation(.spring, value: sharedState.showCreateView)
+    }
+}
+
+struct VideoFeedView: View {
+    @EnvironmentObject var sharedState: SharedState
+    @ObservedObject var viewModel: VideoFeedViewModel
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.videos) { video in
+                                VideoPlayerView(
+                                    video: video,
+                                    viewModel: viewModel,
+                                    size: geometry.size
+                                )
+                                .id(video.id)
                             }
-                            .scrollDisabled(true)
-                            .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
-                                withAnimation {
-                                    proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
-                                }
-                            }
+                        }
+                    }
+                    .scrollDisabled(true)
+                    .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
+                        withAnimation {
+                            proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
                         }
                     }
                 }
-                .ignoresSafeArea()
-            } else {
-                Text("Loading...")
-                    .onAppear {
-                        viewModel = ViewModelFactory.shared.makeTikTokFeedViewModel()
-                        guard let viewModel,
-                              let firstStream = viewModel.account.streams.first else { return }
-                        // Find the most recent video thought
-                        let videoThoughts = firstStream.thoughts
-                            .filter { $0.metadata.mediaType == .video }
-                            .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
-                        // Convert thoughts to videos
-                        let videos = videoThoughts.map { thought in
-                            Video(
-                                id: thought.id.uuidString,
-                                url: URL(string: String(data: thought.nano, encoding: .utf8) ?? "") ?? URL(string: "about:blank")!,
-                                contributors: [], // Could populate from stream metadata if needed
-                                description: "Video Thought",
-                                likes: 0,
-                                comments: 0,
-                                shares: 0
-                            )
-                        }
-                        // Update view model with the videos
-                        viewModel.videos = videos
+
+                if viewModel.videos.isEmpty {
+                    VStack {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Loading videos...")
+                            .foregroundColor(.white)
+                            .padding(.top)
                     }
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .task {
+            viewModel.cleanupOldCacheFiles()
+            // Load initial videos if empty
+            if viewModel.videos.isEmpty {
+                // Find stream dedicated to videos
+                guard let videoStream = viewModel.account.streams.first(where: { stream in
+                    print("Checking stream: \(stream.id)")
+                    print("Stream thought count: \(stream.thoughts.count)")
+                    let isVideoStream = stream.sources.first?.metadata.mediaType == .video
+                    print("Is video stream? \(isVideoStream)")
+                    return isVideoStream
+                }) else {
+                    print("No video stream found")
+                    return
+                }
+
+                print("Found video stream. Total thoughts: \(videoStream.thoughts.count)")
+
+                // Get all video thoughts from both sources and thoughts arrays
+                var allThoughts = videoStream.thoughts
+                print("Thoughts from main array: \(allThoughts.count)")
+
+                // Add source thoughts if they're not already included
+                let sourceThoughts = videoStream.sources.filter { !allThoughts.contains($0) }
+                print("Additional thoughts from sources: \(sourceThoughts.count)")
+                allThoughts.append(contentsOf: sourceThoughts)
+
+                // Filter and sort all video thoughts
+                let videoThoughts = allThoughts
+                    .filter { thought in
+                        print("Checking thought ID: \(thought.id)")
+                        let isVideo = thought.metadata.mediaType == .video
+                        print("Is video? \(isVideo)")
+                        if isVideo {
+                            if let urlString = String(data: thought.nano, encoding: .utf8) {
+                                print("Video URL: \(urlString)")
+                            }
+                        }
+                        return isVideo
+                    }
+                    .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+
+                print("Found \(videoThoughts.count) total video thoughts")
+
+                // Convert to Video objects
+                let thoughtVideos = videoThoughts.compactMap { thought -> Video? in
+                    guard let urlString = String(data: thought.nano, encoding: .utf8),
+                          let url = URL(string: urlString)
+                    else {
+                        print("Failed to create URL for thought: \(thought.id)")
+                        return nil
+                    }
+
+                    print("Creating Video object:")
+                    print("- ID: \(thought.id)")
+                    print("- URL: \(url)")
+                    print("- Created: \(thought.metadata.createdAt)")
+
+                    return Video(
+                        id: thought.id.uuidString,
+                        url: url,
+                        contributors: thought.metadata.contributors,
+                        description: thought.metadata.summary,
+                        likes: 0,
+                        comments: 0,
+                        shares: 0
+                    )
+                }
+
+                print("Created \(thoughtVideos.count) video objects")
+                viewModel.videos = thoughtVideos
+
+                // Preload first video if available
+                if let firstVideo = viewModel.videos.first {
+                    print("Preloading first video: \(firstVideo.url)")
+                    viewModel.preloadVideo(url: firstVideo.url)
+                }
             }
         }
     }
@@ -200,7 +281,7 @@ struct ContributorsView: View {
 
 struct VideoPlayerView: View {
     @EnvironmentObject var sharedState: SharedState
-    @ObservedObject var viewModel: TikTokFeedViewModel
+    @ObservedObject var viewModel: VideoFeedViewModel
     @State private var showChat = false
     @State private var dragOffset = CGSize.zero
     let video: Video
@@ -210,7 +291,7 @@ struct VideoPlayerView: View {
     private let systemMargin: CGFloat = 16
 
     init(video: Video,
-         viewModel: TikTokFeedViewModel,
+         viewModel: VideoFeedViewModel,
          size: CGSize)
     {
         self.video = video
@@ -252,7 +333,7 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         VStack(spacing: systemMargin * 1.25) { // 20pt
-                            TikTokServersList(
+                            GroupChatIconList(
                                 currentVideo: video,
                                 servers: viewModel.servers()
                             )
@@ -343,7 +424,7 @@ struct VideoPlayerView: View {
     }
 }
 
-struct TikTokServersList: View {
+struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
     let servers: [Server]
@@ -432,8 +513,13 @@ struct PlayerContainerView: UIViewRepresentable {
     }
 }
 
+enum VideoStreamError: Error {
+    case noVideoStream
+    case invalidStream
+}
+
 @MainActor
-class TikTokFeedViewModel: ObservableObject {
+final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -441,62 +527,204 @@ class TikTokFeedViewModel: ObservableObject {
     @Published var currentVideoIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
+    @Published var connectionState: ArkavoClientState = .disconnected
     let playerManager = VideoPlayerManager()
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
-        loadInitialVideos()
+        setupNotifications()
     }
 
-    private func loadInitialVideos() {
-        // Preload the first video
-        if let firstVideoUrl = videos.first?.url {
-            preloadVideo(url: firstVideoUrl)
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Connection state changes
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            Task { @MainActor [weak self] in
+                self?.connectionState = state
+            }
         }
+        notificationObservers.append(stateObserver)
+
+        // Decrypted message handling
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+
+            Task { @MainActor [weak self] in
+                await self?.handleDecryptedMessage(data: data, policy: policy)
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Error handling
+        let errorObserver = NotificationCenter.default.addObserver(
+            forName: .messageHandlingError,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let error = notification.userInfo?["error"] as? Error else { return }
+            Task { @MainActor [weak self] in
+                self?.error = error
+            }
+        }
+        notificationObservers.append(errorObserver)
     }
 
-    func servers() -> [Server] {
-        account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .forAll,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
+    deinit {
+        // Clean up observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    private func handleDecryptedMessage(data: Data, policy: ArkavoPolicy) async {
+        do {
+            print("\nHandling decrypted video message:")
+            print("- Data size: \(data.count)")
+            print("- Policy type: \(policy.type)")
+
+            // Verify this is a video message based on policy
+            guard policy.type == .videoFrame else {
+                print("❌ Incorrect policy type")
+                return
+            }
+
+            // Create a temporary file URL in the cache directory for the video data
+            let fileManager = FileManager.default
+            let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            let videoFileName = UUID().uuidString + ".mp4" // Or appropriate extension
+            let videoFileURL = cacheDir.appendingPathComponent(videoFileName)
+
+            // Write the video data to the cache file
+            try data.write(to: videoFileURL)
+            print("✅ Wrote video data to cache: \(videoFileURL)")
+
+            // Create new video object using the cached file URL
+            let video = Video(
+                id: UUID().uuidString,
+                url: videoFileURL,
+                contributors: [], // Add contributors if available in policy
+                description: "New video",
+                likes: 0,
+                comments: 0,
+                shares: 0
             )
+
+            // Update UI
+            await MainActor.run {
+                print("Adding video to feed")
+                videos.insert(video, at: 0)
+                if videos.count == 1 {
+                    print("Preloading first video")
+                    preloadVideo(url: video.url)
+                }
+            }
+
+        } catch {
+            print("❌ Error processing video: \(error)")
+            await MainActor.run {
+                self.error = error
+            }
         }
     }
 
-    private func iconForStream(_ stream: Stream) -> String {
-        switch stream.policies.age {
-        case .onlyAdults:
-            "person.fill"
-        case .onlyKids:
-            "figure.child"
-        case .forAll:
-            "figure.wave"
-        case .onlyTeens:
-            "person.3.fill"
+    func cleanupOldCacheFiles() {
+        let fileManager = FileManager.default
+        guard let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+
+        do {
+            let cacheContents = try fileManager.contentsOfDirectory(
+                at: cacheDir,
+                includingPropertiesForKeys: [.creationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            // Keep only the 20 most recent videos
+            let oldFiles = cacheContents
+                .filter { $0.pathExtension == "mp4" }
+                .sorted { url1, url2 -> Bool in
+                    let date1 = try? url1.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    let date2 = try? url2.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    return date1! > date2!
+                }
+                .dropFirst(20)
+
+            for fileURL in oldFiles {
+                try? fileManager.removeItem(at: fileURL)
+            }
+        } catch {
+            print("Error cleaning cache: \(error)")
         }
     }
 
     func addNewVideo(from uploadResult: UploadResult, contributors: [Contributor]) {
-        let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
-        videos.insert(newVideo, at: 0)
-        currentVideoIndex = 0
-
         Task {
-            try? await playerManager.preloadVideo(url: newVideo.url)
+            do {
+                // Get or create video stream
+                let videoStream = try await getOrCreateVideoStream()
+
+                // Create new video
+                let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
+
+                // Create thought for the video
+                let metadata = ThoughtMetadata(
+                    creator: profile.id,
+                    mediaType: .video,
+                    createdAt: Date(),
+                    summary: newVideo.description,
+                    contributors: contributors
+                )
+
+                // Convert video URL to data for storage
+                let videoData = newVideo.url.absoluteString.data(using: .utf8) ?? Data()
+                let thought = Thought(nano: videoData, metadata: metadata)
+
+                // Add thought to stream
+                videoStream.thoughts.append(thought)
+
+                // Save changes to persistence
+                try await PersistenceController.shared.saveChanges()
+
+                // Update UI
+                await MainActor.run {
+                    videos.insert(newVideo, at: 0)
+                    currentVideoIndex = 0
+                }
+
+                // Preload video
+                try? await playerManager.preloadVideo(url: newVideo.url)
+
+            } catch VideoStreamError.noVideoStream {
+                print("No video stream exists and couldn't create one")
+                self.error = VideoStreamError.noVideoStream
+            } catch {
+                print("Error adding video: \(error)")
+                self.error = error
+            }
         }
+    }
+
+    func getOrCreateVideoStream() async throws -> Stream {
+        // First check for existing video stream
+        if let existingStream = account.streams.first(where: { stream in
+            stream.sources.first?.metadata.mediaType == .video
+        }) {
+            return existingStream
+        }
+        throw VideoStreamError.noVideoStream
     }
 
     func preloadVideo(url: URL) {
@@ -518,10 +746,8 @@ class TikTokFeedViewModel: ObservableObject {
 
     private func loadMoreVideos() {
         guard !isLoading else { return }
-
         isLoading = true
 
-        // Simulate API call with delay
         Task {
             do {
                 try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
@@ -548,7 +774,6 @@ class TikTokFeedViewModel: ObservableObject {
                 for video in newVideos {
                     preloadVideo(url: video.url)
                 }
-
             } catch {
                 await MainActor.run {
                     self.error = error
@@ -556,5 +781,52 @@ class TikTokFeedViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func servers() -> [Server] {
+        let servers = account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .forAll,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+        return servers
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
+        }
+    }
+}
+
+@MainActor
+protocol VideoFeedUpdating: AnyObject {
+    func addNewVideo(from result: UploadResult, contributors: [Contributor])
+    func preloadVideo(url: URL)
+}
+
+// Extension to provide default implementation
+@MainActor
+extension VideoFeedUpdating {
+    func preloadVideo(url _: URL) {
+        // Optional default implementation
     }
 }

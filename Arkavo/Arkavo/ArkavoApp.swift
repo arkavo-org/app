@@ -10,6 +10,7 @@ struct ArkavoApp: App {
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
     @StateObject private var sharedState = SharedState()
+    @StateObject private var messageRouter: ArkavoMessageRouter
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -21,6 +22,13 @@ struct ArkavoApp: App {
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
+        // Initialize router
+        let router = ArkavoMessageRouter(
+            client: client,
+            persistenceController: PersistenceController.shared
+        )
+        _messageRouter = StateObject(wrappedValue: router)
+        ViewModelFactory.shared.serviceLocator.register(router)
     }
 
     var body: some Scene {
@@ -44,6 +52,7 @@ struct ArkavoApp: App {
                 await checkAccountStatus()
             }
             .environmentObject(sharedState)
+            .environmentObject(messageRouter)
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -59,7 +68,7 @@ struct ArkavoApp: App {
                     primaryButton: .default(Text(error.action)) {
                         if error.action == "Update App" {
                             // Open App Store
-                            if let url = URL(string: "itms-apps://apple.com/app/id<your-app-id>") { // FIXME:
+                            if let url = URL(string: "itms-apps://apple.com/app/id6670504172") {
                                 UIApplication.shared.open(url)
                             }
                         } else {
@@ -108,6 +117,8 @@ struct ArkavoApp: App {
         do {
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
+            let videoStream = try await createVideoStream(account: account, profile: profile)
+            print("videoStream: \(videoStream)")
             ViewModelFactory.shared.setAccount(account)
             // Connect with WebAuthn
             do {
@@ -124,6 +135,55 @@ struct ArkavoApp: App {
         } catch {
             print("Failed to save profile: \(error)")
         }
+    }
+
+    func createVideoStream(account: Account, profile: Profile) async throws -> Stream {
+        print("Creating video stream for profile: \(profile.name)")
+
+        // Create initial thought that marks this as a video stream
+        let initialMetadata = ThoughtMetadata(
+            creator: profile.id,
+            mediaType: .video,
+            createdAt: Date(),
+            summary: "Video Stream",
+            contributors: []
+        )
+
+        let initialThought = Thought(
+            nano: Data(), // Empty initial data
+            metadata: initialMetadata
+        )
+
+        print("Created initial video stream thought with ID: \(initialThought.id)")
+
+        // Save the initial thought
+        let saved = try PersistenceController.shared.saveThought(initialThought)
+        print("Saved initial thought \(saved)")
+
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: profile,
+            policies: Policies(
+                admission: .open,
+                interaction: .moderated,
+                age: .forAll
+            )
+        )
+
+        // Set the source thought to mark this as a video stream
+        stream.sources = [initialThought]
+        print("Set video stream source thought. Stream ID: \(stream.id)")
+
+        // Add to account
+        try account.addStream(stream)
+        print("Added stream to account. Total streams: \(account.streams.count)")
+
+        // Save changes
+        try await persistenceController.saveChanges()
+        print("Video stream creation completed")
+
+        return stream
     }
 
     @MainActor
@@ -451,9 +511,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeTikTokFeedViewModel() -> TikTokFeedViewModel {
+    func makeVideoFeedViewModel() -> VideoFeedViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return TikTokFeedViewModel(
+        return VideoFeedViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!
@@ -461,9 +521,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeTikTokRecordingViewModel() -> TikTokRecordingViewModel {
+    func makeVideoRecordingViewModel() -> VideoRecordingViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return TikTokRecordingViewModel(
+        return VideoRecordingViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!

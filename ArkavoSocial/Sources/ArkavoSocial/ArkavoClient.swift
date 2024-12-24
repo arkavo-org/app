@@ -44,6 +44,7 @@ public enum ArkavoClientState: Equatable, Sendable {
 }
 
 /// Protocol for handling ArkavoClient events
+@MainActor
 public protocol ArkavoClientDelegate: AnyObject {
     func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState)
     func clientDidReceiveMessage(_ client: ArkavoClient, message: Data)
@@ -569,7 +570,8 @@ public final class ArkavoClient: NSObject {
         print("Received data message:")
         print("Length: \(data.count) bytes")
         print("Message type: 0x\(String(format: "%02X", messageType))")
-        print("Raw data (hex): \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+        let first200Bytes = data.prefix(200) // Limit to the first 200 bytes
+        print("Raw data (hex): \(first200Bytes.map { String(format: "%02X", $0) }.joined(separator: " "))")
 
         let messageData = data.dropFirst() // Remove message type byte
 

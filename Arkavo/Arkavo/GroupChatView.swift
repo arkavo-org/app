@@ -15,12 +15,13 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
     @Published var connectionState: ArkavoClientState = .disconnected
     // Track pending streams by their ephemeral public key
     private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
-        client.delegate = self
+        setupNotifications()
         Task {
             await loadStreams()
         }
@@ -28,6 +29,53 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
 
     private func loadStreams() async {
         streams = account.streams
+    }
+
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Add observers
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: nil // Use nil to get on the posting queue
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            Task { @MainActor [weak self] in
+                self?.connectionState = state
+            }
+        }
+        notificationObservers.append(stateObserver)
+
+        let natsObserver = NotificationCenter.default.addObserver(
+            forName: .natsMessageReceived,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data else { return }
+            Task { @MainActor [weak self] in
+                await self?.handleNATSMessage(data)
+            }
+        }
+        notificationObservers.append(natsObserver)
+
+        let keyObserver = NotificationCenter.default.addObserver(
+            forName: .rewrappedKeyReceived,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data else { return }
+            Task { @MainActor [weak self] in
+                await self?.handleRewrappedKeyMessage(data)
+            }
+        }
+        notificationObservers.append(keyObserver)
+    }
+
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func requestStream(withPublicID publicID: Data) async throws -> Stream? {

@@ -3,43 +3,20 @@ import AVFoundation
 import SwiftData
 import SwiftUI
 
-// MARK: - View States
-
-enum RecordingState: Equatable {
-    case initial
-    case setupComplete
-    case recording
-    case processing
-    case uploading
-    case complete(UploadResult)
-    case error(String)
-
-    static func == (lhs: RecordingState, rhs: RecordingState) -> Bool {
-        switch (lhs, rhs) {
-        case (.initial, .initial),
-             (.setupComplete, .setupComplete),
-             (.recording, .recording),
-             (.processing, .processing),
-             (.uploading, .uploading):
-            true
-        case let (.complete(lhsResult), .complete(rhsResult)):
-            lhsResult.id == rhsResult.id
-        case let (.error(lhsError), .error(rhsError)):
-            lhsError == rhsError
-        default:
-            false
-        }
-    }
-}
-
 // MARK: - Main View
 
 struct VideoCreateView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: TikTokRecordingViewModel = ViewModelFactory.shared.makeTikTokRecordingViewModel()
+    @StateObject private var viewModel: VideoRecordingViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showError = false
     @State private var errorMessage = ""
+
+    init(feedViewModel: VideoFeedViewModel) {
+        let recordingVM = ViewModelFactory.shared.makeVideoRecordingViewModel()
+        recordingVM.feedUpdater = feedViewModel
+        _viewModel = StateObject(wrappedValue: recordingVM)
+    }
 
     var body: some View {
         ModernRecordingInterface(
@@ -47,12 +24,11 @@ struct VideoCreateView: View {
             onComplete: { result in
                 await handleRecordingComplete(result)
                 sharedState.showCreateView = false
-                dismiss()
             }
         )
         .alert("Recording Error", isPresented: $showError) {
             Button("OK") {
-                dismiss()
+                sharedState.showCreateView = false
             }
         } message: {
             Text(errorMessage)
@@ -60,62 +36,211 @@ struct VideoCreateView: View {
     }
 
     private func handleRecordingComplete(_ result: UploadResult?) async {
-        let account = viewModel.account
-
-        // Validate we have required data
         guard let result else {
             showError(message: "Failed to get recording result")
             return
         }
-
-        guard let firstStream = account.streams.first else {
-            showError(message: "No stream available to save video")
-            return
-        }
-
+        // Account for NanoTDF overhead - target ~950KB for the video
+        let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
         do {
-            // Create a new Thought for the video
-            let thoughtMetadata = ThoughtMetadata(
-                creator: viewModel.profile.id,
-                mediaType: .video,
-                createdAt: Date(),
-                summary: "video",
-                contributors: []
+            let videoURL = URL(string: result.playbackURL)!
+            let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
+            let fileSize = resourceValues.fileSize ?? 0
+
+            print("Original video size: \(fileSize) bytes")
+
+            // Compress video with optimized settings
+            let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
+            print("Compressed video size: \(compressedData.count) bytes")
+
+            // Create NanoTDF
+            let nanoTDFData = try await viewModel.client.encryptRemotePolicy(
+                payload: compressedData,
+                remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
             )
 
-            let videoThought = Thought(
-                // FIXME: create nano
-                nano: Data(result.playbackURL.utf8),
-                metadata: thoughtMetadata
-            )
-            videoThought.metadata = ThoughtMetadata(
-                creator: UUID(uuidString: account.id.description) ?? UUID(),
-                mediaType: .video,
-                createdAt: Date(),
-                summary: "",
-                contributors: []
-            )
-
-            // Add thought to the first stream
-            firstStream.thoughts.append(videoThought)
-
-            // Save changes
-            try PersistenceController.shared.saveStream(firstStream)
-            try await PersistenceController.shared.saveChanges()
-
-            // Only dismiss on successful save
-            dismiss()
-        } catch let error as NSError {
-            // Handle specific error cases
-            switch error.domain {
-            case NSCocoaErrorDomain:
-                showError(message: "Failed to save video: Storage error")
-            default:
-                showError(message: "Failed to save video: \(error.localizedDescription)")
+            guard nanoTDFData.count <= 1_000_000 else {
+                throw NSError(domain: "VideoCompression", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
             }
+
+            // Send over websocket
+            try await viewModel.client.sendNATSMessage(nanoTDFData)
+
+            // Process video metadata and save
+            let persistenceController = PersistenceController.shared
+            let context = persistenceController.container.mainContext
+
+            // Find video stream
+            guard let videoStream = viewModel.account.streams.first(where: { stream in
+                stream.sources.first?.metadata.mediaType == .video
+            }) else {
+                showError(message: "No video stream available")
+                return
+            }
+
+            // Create and save thought
+            let videoThought = Thought(
+                nano: Data(result.playbackURL.utf8),
+                metadata: ThoughtMetadata(
+                    creator: viewModel.profile.id,
+                    mediaType: .video,
+                    createdAt: Date(),
+                    summary: "New video recording",
+                    contributors: []
+                )
+            )
+
+            videoStream.addThought(videoThought)
+            try context.save()
+
+            // Create contributor and update feed
+            let contributor = Contributor(
+                id: viewModel.profile.id.uuidString,
+                creator: Creator(
+                    id: viewModel.profile.id.uuidString,
+                    name: viewModel.profile.name,
+                    imageURL: "",
+                    latestUpdate: "",
+                    tier: "creator",
+                    socialLinks: [],
+                    notificationCount: 0,
+                    bio: ""
+                ),
+                role: "Creator"
+            )
+
+            viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
+
         } catch {
-            showError(message: "Unexpected error while saving video")
+            print("Failed to process video - Error:", error)
+            showError(message: "Failed to process video: \(error.localizedDescription)")
         }
+    }
+
+    private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
+        let asset = AVURLAsset(url: url)
+        let track = try await asset.loadTracks(withMediaType: .video).first
+        let size = try await track?.load(.naturalSize) ?? CGSize(width: 1080, height: 1920)
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+        let outputURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+
+        // Initial compression settings
+        let compressionSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.hevc,
+            AVVideoWidthKey: Int(size.width),
+            AVVideoHeightKey: Int(size.height),
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: 800_000, // 800Kbps starting point
+                AVVideoProfileLevelKey: "HEVC_Main_AutoLevel",
+                AVVideoMaxKeyFrameIntervalKey: 1,
+                AVVideoExpectedSourceFrameRateKey: 30,
+                AVVideoQualityKey: 0.6,
+            ],
+        ]
+
+        // First compression attempt
+        print("Starting initial compression with 800Kbps bitrate...")
+        let compressedData = try await exportVideo(asset: asset, toURL: outputURL, settings: compressionSettings)
+        print("Initial compression result: \(compressedData.count) bytes (target: \(targetSize) bytes)")
+
+        // Progressive bitrate reduction if needed
+        let bitrates = [600_000, 450_000, 350_000, 250_000]
+        var resultData = compressedData
+        var index = 0
+
+        while resultData.count > targetSize, index < bitrates.count {
+            let currentBitrate = bitrates[index]
+            print("\nAttempting compression with \(currentBitrate / 1000)Kbps bitrate...")
+
+            var newSettings = compressionSettings
+            var properties = newSettings[AVVideoCompressionPropertiesKey] as! [String: Any]
+            properties[AVVideoAverageBitRateKey] = currentBitrate
+            newSettings[AVVideoCompressionPropertiesKey] = properties
+
+            let retryAsset = AVURLAsset(url: url)
+            let retryURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+
+            let previousSize = resultData.count
+            resultData = try await exportVideo(asset: retryAsset, toURL: retryURL, settings: newSettings)
+            let reduction = 100.0 - (Double(resultData.count) / Double(previousSize) * 100.0)
+
+            print("Compression result: \(resultData.count) bytes")
+            print("Size reduction: \(String(format: "%.1f%%", reduction)) from previous attempt")
+            print("Current size vs target: \(resultData.count) vs \(targetSize) bytes")
+
+            try? FileManager.default.removeItem(at: retryURL)
+            index += 1
+        }
+
+        // Clean up
+        try? FileManager.default.removeItem(at: outputURL)
+
+        print("\nFinal compression result: \(resultData.count) bytes")
+        if resultData.count > targetSize {
+            print("⚠️ Warning: Could not achieve target size of \(targetSize) bytes after all compression attempts")
+        }
+
+        return resultData
+    }
+
+    @MainActor
+    private func exportVideo(asset: AVURLAsset, toURL: URL, settings: [String: Any]) async throws -> Data {
+        let composition = AVMutableComposition()
+        let size = try await asset.loadTracks(withMediaType: .video).first?.load(.naturalSize) ?? .zero
+        composition.naturalSize = size
+
+        // Create and add video track
+        guard let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let assetTrack = try await asset.loadTracks(withMediaType: .video).first
+        else {
+            throw VideoError.compressionFailed("Failed to create tracks")
+        }
+
+        // Insert the video
+        try await compositionTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: asset.load(.duration)),
+            of: assetTrack,
+            at: .zero
+        )
+
+        // Set up video composition
+        let videoComposition = try await AVMutableVideoComposition.videoComposition(withPropertiesOf: composition)
+        videoComposition.renderSize = size
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+
+        // Create HEVC export session with target bitrate
+        guard let exporter = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHEVC1920x1080 // Using low quality preset for better compression
+        ) else {
+            throw VideoError.exportSessionCreationFailed("Failed to create HEVC export session")
+        }
+
+        // Configure the export
+        exporter.outputURL = toURL
+        exporter.outputFileType = .mp4
+        exporter.videoComposition = videoComposition
+        exporter.shouldOptimizeForNetworkUse = true
+
+        // Apply bitrate limit through AVAssetExportSession properties
+        if let bitrate = (settings[AVVideoCompressionPropertiesKey] as? [String: Any])?[AVVideoAverageBitRateKey] as? Int {
+            exporter.fileLengthLimit = Int64(bitrate) // This effectively limits the bitrate
+        }
+
+        // Modern Swift concurrency export
+        try await exporter.export()
+
+        guard exporter.status == AVAssetExportSession.Status.completed else {
+            throw VideoError.exportSessionFailed(exporter.error?.localizedDescription ?? "Unknown error")
+        }
+
+        print("Export complete - checking file size...")
+        let fileSize = try await toURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        print("Exported file size: \(fileSize) bytes")
+
+        return try Data(contentsOf: toURL)
     }
 
     private func showError(message: String) {
@@ -124,14 +249,15 @@ struct VideoCreateView: View {
     }
 }
 
+// MARK: - Preview View Wrapper
+
 struct PreviewViewWrapper: UIViewRepresentable {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
 
     func makeUIView(context _: Context) -> UIView {
         let previewView = UIView()
         previewView.backgroundColor = .black
 
-        // Call the viewModel setup function
         Task {
             await viewModel.setup(previewView: previewView)
         }
@@ -147,7 +273,7 @@ struct PreviewViewWrapper: UIViewRepresentable {
 // MARK: - Modern Recording Interface
 
 struct ModernRecordingInterface: View {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -214,7 +340,7 @@ struct FlipCameraButton: View {
 }
 
 struct RecordingControl: View {
-    @ObservedObject var viewModel: TikTokRecordingViewModel
+    @ObservedObject var viewModel: VideoRecordingViewModel
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -240,7 +366,6 @@ struct RecordingControl: View {
             case let .complete(result):
                 CompleteButton {
                     Task {
-                        viewModel.cleanup()
                         await onComplete(result)
                     }
                 }
@@ -386,13 +511,46 @@ struct ProgressBar: View {
     }
 }
 
-// MARK: - ViewModel
+// MARK: - Recording States
+
+enum RecordingState: Equatable {
+    case initial
+    case setupComplete
+    case recording
+    case processing
+    case uploading
+    case complete(UploadResult)
+    case error(String)
+
+    static func == (lhs: RecordingState, rhs: RecordingState) -> Bool {
+        switch (lhs, rhs) {
+        case (.initial, .initial),
+             (.setupComplete, .setupComplete),
+             (.recording, .recording),
+             (.processing, .processing),
+             (.uploading, .uploading):
+            true
+        case let (.complete(lhsResult), .complete(rhsResult)):
+            lhsResult.id == rhsResult.id
+        case let (.error(lhsError), .error(rhsError)):
+            lhsError == rhsError
+        default:
+            false
+        }
+    }
+}
+
+// MARK: - View Model
 
 @MainActor
-class TikTokRecordingViewModel: ObservableObject {
+final class VideoRecordingViewModel: ObservableObject {
+    // MARK: - Properties
+
     let client: ArkavoClient
     let account: Account
     let profile: Profile
+    weak var feedUpdater: VideoFeedUpdating?
+
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
@@ -402,11 +560,15 @@ class TikTokRecordingViewModel: ObservableObject {
     private let uploadManager = VideoUploadManager()
     private var progressTimer: Timer?
 
+    // MARK: - Initialization
+
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
     }
+
+    // MARK: - Setup
 
     func setup(previewView: UIView) async {
         do {
@@ -419,6 +581,8 @@ class TikTokRecordingViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Recording Controls
+
     func startRecording() async {
         guard let recordingManager else { return }
 
@@ -427,8 +591,7 @@ class TikTokRecordingViewModel: ObservableObject {
             startProgressTimer()
 
             let videoURL = try await recordingManager.startRecording()
-            print("videoURL: \(videoURL)")
-            // Recording continues until stopRecording is called
+            print("📹 Started recording to: \(videoURL)")
         } catch {
             print("❌ Recording start failed with error: \(error.localizedDescription)")
             recordingState = .error(error.localizedDescription)
@@ -472,16 +635,11 @@ class TikTokRecordingViewModel: ObservableObject {
     }
 
     func flipCamera() {
-        // Implement camera flip functionality
+        // Implementation for camera flip functionality
+        // This would interact with the AVCaptureDevice to switch between front and back cameras
     }
 
-    func cleanup() {
-        progressTimer?.invalidate()
-        recordingProgress = 0
-        recordingState = .initial
-        recordingManager = nil
-        previewLayer = nil
-    }
+    // MARK: - Private Helpers
 
     private func startProgressTimer() {
         recordingProgress = 0
@@ -489,7 +647,7 @@ class TikTokRecordingViewModel: ObservableObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if self.recordingProgress < 1.0 {
-                    self.recordingProgress += 0.1 / 60.0 // 60 seconds max
+                    self.recordingProgress += 0.1 / 5.5 // 5.5 seconds max based on compression ratio
                 } else {
                     Task {
                         await self.stopRecording()
@@ -498,8 +656,4 @@ class TikTokRecordingViewModel: ObservableObject {
             }
         }
     }
-
-//    deinit {
-//        cleanup()
-//    }
 }

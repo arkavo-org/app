@@ -13,6 +13,10 @@ enum VideoError: Error {
     case uploadFailed(String)
     case exportFailed(String)
     case setupFailed(String)
+    case assetLoadingFailed(String)
+    case compressionFailed(String)
+    case exportSessionCreationFailed(String)
+    case exportSessionFailed(String)
 }
 
 class VideoRecordingManager {

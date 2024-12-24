@@ -46,11 +46,7 @@ struct ContentView: View {
                 // Main Content
                 switch sharedState.selectedTab {
                 case .home:
-                    if sharedState.showCreateView {
-                        VideoCreateView()
-                    } else {
-                        VideoFeedView()
-                    }
+                    VideoContentView()
                 case .communities:
                     if sharedState.showCreateView {
                         GroupCreateView()
