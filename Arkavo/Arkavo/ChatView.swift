@@ -390,24 +390,24 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
                 print("\n=== Processing thought ===")
                 print("Public ID: \(thought.publicID.hexEncodedString())")
                 print("Nano data size: \(thought.nano.count) bytes")
-                
+
                 // Debug the first few bytes
                 let previewSize = min(thought.nano.count, 8)
                 let previewBytes = thought.nano.prefix(previewSize)
                 print("First \(previewSize) bytes: \(previewBytes.map { String(format: "%02X", $0) }.joined(separator: " "))")
-                
+
                 // Check expected magic number
                 print("Expected magic number: \(Header.magicNumber.map { String(format: "%02X", $0) }.joined(separator: " "))")
-                
+
                 print("Creating binary parser...")
                 let parser = BinaryParser(data: thought.nano)
-                
+
                 print("Attempting to parse header...")
                 let header = try parser.parseHeader()
                 print("✅ Successfully parsed header")
                 print(" - EPK length: \(header.ephemeralPublicKey.count)")
                 print(" - EPK: \(header.ephemeralPublicKey.hexEncodedString())")
-                
+
                 print("Attempting to parse payload...")
                 let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
                 print("✅ Successfully parsed payload:")
@@ -415,18 +415,18 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
                 print(" - IV length: \(payload.iv.count)")
                 print(" - Ciphertext length: \(payload.ciphertext.count)")
                 print(" - MAC length: \(payload.mac.count)")
-                
+
                 let nano = NanoTDF(header: header, payload: payload, signature: nil)
-                
+
                 // Store in pending thoughts
                 pendingThoughts[header.ephemeralPublicKey] = (header, payload, nano)
                 print("Added to pending thoughts with EPK: \(header.ephemeralPublicKey.hexEncodedString())")
-                
+
                 // Send rewrap message
                 let rewrapMessage = RewrapMessage(header: header)
                 try await client.sendMessage(rewrapMessage.toData())
                 print("✅ Sent rewrap message")
-                
+
             } catch {
                 print("❌ Error processing thought: \(error)")
                 if let parsingError = error as? ParsingError {

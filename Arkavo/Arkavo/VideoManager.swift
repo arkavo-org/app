@@ -38,7 +38,7 @@ class VideoRecordingManager {
     }
 
     private func setupCaptureSession() async throws {
-        // Use 1080x1920 for portrait HD
+        // Force HD 1080x1920 for portrait
         captureSession.sessionPreset = .hd1920x1080
 
         guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera,
@@ -60,13 +60,14 @@ class VideoRecordingManager {
             }
             captureSession.addOutput(videoOutput)
 
-            // Lock to portrait orientation using new rotation angle API
+            // Force portrait orientation using rotation angle (90 degrees)
             if let connection = videoOutput.connection(with: .video) {
-                let angle = CGFloat.pi/2 // 90 degrees
-                if connection.isVideoRotationAngleSupported(angle) {
-                    connection.videoRotationAngle = angle
+                let portraitAngle = CGFloat.pi / 2 // 90 degrees
+                if connection.isVideoRotationAngleSupported(portraitAngle) {
+                    connection.videoRotationAngle = portraitAngle
                 }
-                
+
+                // Enable video stabilization if available
                 if connection.isVideoStabilizationSupported {
                     connection.preferredVideoStabilizationMode = .auto
                 }
@@ -80,12 +81,19 @@ class VideoRecordingManager {
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
         previewLayer.videoGravity = .resizeAspectFill
         previewLayer.frame = view.bounds
+
+        // Force portrait orientation using rotation angle (90 degrees)
+        if let connection = previewLayer.connection,
+           connection.isVideoRotationAngleSupported(CGFloat.pi / 2)
+        {
+            connection.videoRotationAngle = CGFloat.pi / 2
+        }
+
         view.layer.insertSublayer(previewLayer, at: 0)
         self.previewLayer = previewLayer
-        
+
         DispatchQueue.global(qos: .userInitiated).async {
             self.captureSession.startRunning()
-            print("✅ Camera preview started")
         }
         return previewLayer
     }
@@ -187,60 +195,26 @@ actor HLSProcessingManager {
         do {
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
-            // First, export to an intermediate MP4
-            let intermediateURL = outputDirectory.appendingPathComponent("\(videoID).mp4")
-            try await exportToMP4(asset: asset, outputURL: intermediateURL)
-
-            // Then create HLS segments
-            let hlsOutputURL = outputDirectory.appendingPathComponent("index.mp4")
-            try await generateMP4Segments(from: intermediateURL, to: hlsOutputURL)
-
-            // Clean up intermediate file
-            try? FileManager.default.removeItem(at: intermediateURL)
-
+            // Generate thumbnail
             guard let thumbnail = try await generateThumbnail(for: asset) else {
-                print("❌ Thumbnail generation failed")
                 throw VideoError.processingFailed("Failed to generate thumbnail")
             }
 
             let duration = try await asset.load(.duration).seconds
-            print("✅ Video processing completed successfully")
+
+            // Simply copy the original video file to the output directory
+            let finalVideoURL = outputDirectory.appendingPathComponent("\(videoID).mp4")
+            try FileManager.default.copyItem(at: url, to: finalVideoURL)
+
             return ProcessingResult(
                 directory: outputDirectory,
                 thumbnail: thumbnail,
                 duration: duration
             )
         } catch {
-            print("❌ Video processing failed: \(error.localizedDescription)\n")
+            print("❌ Video processing failed: \(error.localizedDescription)")
             throw VideoError.processingFailed(error.localizedDescription)
         }
-    }
-
-    private func exportToMP4(asset: AVAsset, outputURL: URL) async throws {
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
-            print("❌ Failed to create MP4 export session")
-            throw VideoError.exportFailed("Failed to create export session")
-        }
-
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-
-        // Use the new export(to:as:) method
-        try await exportSession.export(to: outputURL, as: .mp4)
-    }
-
-    private func generateMP4Segments(from sourceURL: URL, to outputURL: URL) async throws {
-        print("🎯 Starting MP4 segment generation...")
-        guard let exportSession = AVAssetExportSession(asset: AVURLAsset(url: sourceURL), presetName: AVAssetExportPresetHighestQuality) else {
-            print("❌ Failed to create MP4 export session")
-            throw VideoError.exportFailed("Failed to create MP4 export session")
-        }
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-        print("📊 MP4 Export status: \(exportSession.description)")
-        try await exportSession.export(to: outputURL, as: .mp4)
     }
 
     private func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
@@ -251,7 +225,7 @@ actor HLSProcessingManager {
             let cgImage = try await imageGenerator.image(at: .zero).image
             return UIImage(cgImage: cgImage)
         } catch {
-            print("❌ HLS generateThumbnail failed: \(error.localizedDescription)")
+            print("❌ Thumbnail generation failed: \(error.localizedDescription)")
             throw VideoError.processingFailed("Thumbnail generation failed: \(error.localizedDescription)")
         }
     }
@@ -267,37 +241,38 @@ final class VideoPlayerManager: NSObject {
     private var preloadedItems: [String: AVPlayerItem] = [:]
     private var currentVideoSize: CGSize?
     private var boundsObservation: NSKeyValueObservation?
-    
+
     override init() {
         player = AVPlayer()
         super.init()
-        
+
         // Add periodic time observer for smooth playback
         player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-                                     queue: .main) { [weak self] _ in
+                                       queue: .main)
+        { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.updatePlayerLayerIfNeeded()
             }
         }
     }
-    
+
     func setupPlayer(in view: UIView) {
         let playerLayer = AVPlayerLayer(player: player)
         playerLayer.videoGravity = .resizeAspectFill
         view.layer.masksToBounds = true
-        
+
         // Initialize with full view bounds
         playerLayer.frame = view.bounds
         view.layer.addSublayer(playerLayer)
         self.playerLayer = playerLayer
-        
+
         // Add bounds change observer
         boundsObservation = view.layer.observe(\.bounds) { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 await self?.updatePlayerLayerIfNeeded()
             }
         }
-        
+
         // Register for orientation changes
         NotificationCenter.default.addObserver(
             self,
@@ -306,99 +281,102 @@ final class VideoPlayerManager: NSObject {
             object: nil
         )
     }
-    
+
     private func updatePlayerLayerFrame(with naturalSize: CGSize, transform: CGAffineTransform) {
         guard let view = playerLayer?.superlayer?.superlayer,
-              let playerLayer = playerLayer else { return }
-        
+              let playerLayer else { return }
+
+        print("\n🔍 Debug Video Rotation:")
+        print("- Natural size: \(naturalSize)")
+        print("- Transform: \(transform)")
+
         let viewBounds = view.bounds
         let viewSize = viewBounds.size
-        
-        // Apply 90 degree rotation transform
-        playerLayer.transform = CATransform3DMakeRotation(.pi/2, 0, 0, 1)
-        
-        // For 1080x1920 video, use height/width ratio
-        let videoRatio = naturalSize.height / naturalSize.width  // 1920/1080 ≈ 1.77
+
+        // Reset any existing transforms
+        playerLayer.transform = CATransform3DIdentity
+
+        // Calculate the rotation angle from the transform
+        let angle = atan2(transform.b, transform.a)
+        let isPortrait = abs(angle - .pi / 2) < 0.1 || abs(angle + .pi / 2) < 0.1
+
+        // Use the appropriate ratio based on orientation
+        let videoRatio = isPortrait ? naturalSize.width / naturalSize.height :
+            naturalSize.height / naturalSize.width
+
         var newFrame = viewBounds
-        
-        // Use full view height
-        newFrame.size.height = viewSize.height
-        // Width should be height * aspect ratio to maintain proportions
-        newFrame.size.width = viewSize.height * videoRatio
-        
-        // Position at top-left corner with rotation offset
-        newFrame.origin.x = -newFrame.size.height
-        newFrame.origin.y = 0
-        
+        if viewSize.width * videoRatio <= viewSize.height {
+            newFrame.size.height = viewSize.width * videoRatio
+            newFrame.origin.y = (viewSize.height - newFrame.size.height) / 2
+        } else {
+            newFrame.size.width = viewSize.height / videoRatio
+            newFrame.origin.x = (viewSize.width - newFrame.size.width) / 2
+        }
+
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.2)
         playerLayer.frame = newFrame
+
+        // Apply the video's transform to the layer
+        playerLayer.transform = CATransform3DMakeAffineTransform(transform)
+
         CATransaction.commit()
-        
-        print("\n📐 Frame Calculation:")
-        print("- View size: \(viewSize)")
-        print("- Video natural size: \(naturalSize)")
+
+        print("- Is portrait: \(isPortrait)")
         print("- Video ratio: \(videoRatio)")
-        print("- Calculated frame: \(newFrame)")
+        print("- Final frame: \(newFrame)")
     }
-    
+
     private func updatePlayerLayerIfNeeded() async {
-        guard let playerLayer = playerLayer,
+        guard let playerLayer,
               let currentItem = player.currentItem else { return }
-        
+
         do {
             let videoTracks = try await currentItem.asset.loadTracks(withMediaType: .video)
             guard let videoTrack = videoTracks.first,
-                  let currentVideoSize = currentVideoSize else { return }
-            
+                  let currentVideoSize else { return }
+
             let transform = try await videoTrack.load(.preferredTransform)
             updatePlayerLayerFrame(with: currentVideoSize, transform: transform)
         } catch {
             print("Error updating player layer: \(error)")
         }
     }
-    
+
     @objc private func handleOrientationChange() {
         Task { @MainActor in
             await updatePlayerLayerIfNeeded()
         }
     }
-    
+
     func playVideo(url: URL) {
-        print("📊 Playing video: \(url)")
-        let item: AVPlayerItem
-        
-        if let preloadedItem = preloadedItems[url.absoluteString] {
-            item = preloadedItem
-        } else {
-            let asset = AVURLAsset(url: url)
-            item = AVPlayerItem(asset: asset)
-        }
-        
-        currentItem = item
-        player.replaceCurrentItem(with: item)
-        
-        // Configure video track
+        print("\n📹 Playing video: \(url)")
+        let asset = AVURLAsset(url: url)
+        let item = AVPlayerItem(asset: asset)
+
+        // Debug video track info
         Task {
             do {
-                if let videoTrack = try await item.asset.loadTracks(withMediaType: .video).first {
+                let tracks = try await asset.loadTracks(withMediaType: .video)
+                if let videoTrack = tracks.first {
                     let naturalSize = try await videoTrack.load(.naturalSize)
                     let transform = try await videoTrack.load(.preferredTransform)
-                    
-                    await MainActor.run { [weak self] in
-                        self?.currentVideoSize = naturalSize
-                        self?.updatePlayerLayerFrame(with: naturalSize, transform: transform)
-                    }
+
+                    print("\n📼 Video Track Info:")
+                    print("- Natural size: \(naturalSize)")
+                    print("- Transform matrix: \(transform)")
+                    print("- Transform angle (degrees): \(atan2(transform.b, transform.a) * 180 / .pi)")
                 }
             } catch {
-                print("Error configuring video track: \(error)")
+                print("❌ Error loading video track info: \(error)")
             }
         }
-        
+
+        player.replaceCurrentItem(with: item)
         player.seek(to: .zero)
         player.play()
     }
-    
+
     func preloadVideo(url: URL) async throws {
         let asset = AVURLAsset(url: url)
         _ = try await asset.load(.isPlayable)
@@ -407,12 +385,12 @@ final class VideoPlayerManager: NSObject {
         preloadedItems[url.absoluteString] = item
         item.preferredForwardBufferDuration = 4.0
     }
-    
+
     deinit {
         // Remove observers
         boundsObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
-        
+
         // Cleanup playback
         player.pause()
         player.replaceCurrentItem(with: nil)

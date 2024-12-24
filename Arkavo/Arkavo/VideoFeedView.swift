@@ -517,14 +517,14 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             // Write the video data to the cache file
             try data.write(to: videoFileURL)
             print("✅ Wrote video data to cache: \(videoFileURL)")
-            
+
             // Analyze the video file after writing
             let asset = AVURLAsset(url: videoFileURL)
             if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
                 let naturalSize = try await videoTrack.load(.naturalSize)
                 let transform = try await videoTrack.load(.preferredTransform)
                 let videoAngle = atan2(transform.b, transform.a)
-                
+
                 print("\n📼 Decrypted Video Analysis:")
                 print("- File size: \(data.count) bytes")
                 print("- Natural size: \(naturalSize)")

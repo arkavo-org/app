@@ -150,7 +150,7 @@ struct ArkavoApp: App {
                 age: .forAll
             )
         )
-        
+
         // Create initial thought that marks this as a video stream
         let initialMetadata = ThoughtMetadata(
             creator: profile.id,
@@ -171,8 +171,6 @@ struct ArkavoApp: App {
         // Save the initial thought
         let saved = try PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
-
-
 
         // Set the source thought to mark this as a video stream
         stream.sources = [initialThought]

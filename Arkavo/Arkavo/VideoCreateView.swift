@@ -1,6 +1,6 @@
 import ArkavoSocial
-import FlatBuffers
 import AVFoundation
+import FlatBuffers
 import SwiftData
 import SwiftUI
 
@@ -13,7 +13,7 @@ struct VideoCreateView: View {
     @State private var showError = false
     @State private var errorMessage = ""
 
-    init(feedViewModel: VideoFeedViewModel) {
+    init(feedViewModel _: VideoFeedViewModel) {
         let recordingVM = ViewModelFactory.shared.makeVideoRecordingViewModel()
         _viewModel = StateObject(wrappedValue: recordingVM)
     }
@@ -55,7 +55,7 @@ struct VideoCreateView: View {
                 let naturalSize = try await videoTrack.load(.naturalSize)
                 let transform = try await videoTrack.load(.preferredTransform)
                 let videoAngle = atan2(transform.b, transform.a)
-                
+
                 print("\n📹 Original Video Analysis:")
                 print("- File size: \(fileSize) bytes")
                 print("- Natural size: \(naturalSize)")
@@ -63,7 +63,7 @@ struct VideoCreateView: View {
                 print("- Transform angle: \(videoAngle * 180 / .pi)°")
                 print("- Transform matrix: \(transform)")
             }
-            
+
             // Compress video with optimized settings
             let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
             print("Compressed video size: \(compressedData.count) bytes")
@@ -95,9 +95,9 @@ struct VideoCreateView: View {
             }
 
             let title = "New video recording"
-            
+
             let streamProfile = Profile(name: title)
-            
+
             // Create new Thought Stream fo Video
             let stream = Stream(
                 creatorPublicID: viewModel.profile.publicID,
@@ -108,7 +108,7 @@ struct VideoCreateView: View {
                     age: .forAll
                 )
             )
-            
+
             // Create metadata
             let metadata = ThoughtMetadata(
                 creator: viewModel.profile.id,
@@ -124,7 +124,7 @@ struct VideoCreateView: View {
                 videoData: compressedData,
                 metadata: metadata
             )
-            
+
             videoStream.addThought(videoThought)
             try context.save()
 
@@ -152,18 +152,19 @@ struct VideoCreateView: View {
     private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
         let asset = AVURLAsset(url: url)
         let track = try await asset.loadTracks(withMediaType: .video).first
-        let size = try await track?.load(.naturalSize) ?? CGSize(width: 1080, height: 1920)
+        let naturalSize = try await track?.load(.naturalSize) ?? CGSize(width: 1080, height: 1920)
 
         let temporaryDirectory = FileManager.default.temporaryDirectory
         let outputURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
-
+        // Get original transform to preserve orientation
+        let originalTransform = try await track?.load(.preferredTransform) ?? .identity
         // Initial compression settings
         let compressionSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: Int(size.width),
-            AVVideoHeightKey: Int(size.height),
+            AVVideoWidthKey: Int(naturalSize.width),
+            AVVideoHeightKey: Int(naturalSize.height),
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 800_000, // 800Kbps starting point
+                AVVideoAverageBitRateKey: 800_000,
                 AVVideoProfileLevelKey: "HEVC_Main_AutoLevel",
                 AVVideoMaxKeyFrameIntervalKey: 1,
                 AVVideoExpectedSourceFrameRateKey: 30,
@@ -173,7 +174,12 @@ struct VideoCreateView: View {
 
         // First compression attempt
         print("Starting initial compression with 800Kbps bitrate...")
-        let compressedData = try await exportVideo(asset: asset, toURL: outputURL, settings: compressionSettings)
+        let compressedData = try await exportVideo(
+            asset: asset,
+            toURL: outputURL,
+            settings: compressionSettings,
+            originalTransform: originalTransform
+        )
         print("Initial compression result: \(compressedData.count) bytes (target: \(targetSize) bytes)")
 
         // Progressive bitrate reduction if needed
@@ -194,7 +200,12 @@ struct VideoCreateView: View {
             let retryURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
 
             let previousSize = resultData.count
-            resultData = try await exportVideo(asset: retryAsset, toURL: retryURL, settings: newSettings)
+            resultData = try await exportVideo(
+                asset: retryAsset,
+                toURL: retryURL,
+                settings: newSettings,
+                originalTransform: originalTransform
+            )
             let reduction = 100.0 - (Double(resultData.count) / Double(previousSize) * 100.0)
 
             print("Compression result: \(resultData.count) bytes")
@@ -217,22 +228,27 @@ struct VideoCreateView: View {
     }
 
     @MainActor
-    private func exportVideo(asset: AVURLAsset, toURL: URL, settings: [String: Any]) async throws -> Data {
+    private func exportVideo(
+        asset: AVURLAsset,
+        toURL: URL,
+        settings: [String: Any],
+        originalTransform: CGAffineTransform
+    ) async throws -> Data {
         let composition = AVMutableComposition()
-        
-        // Get the natural size of the video track
+
         guard let assetTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw VideoError.compressionFailed("Failed to get video track")
         }
-        
-        // Use 9:16 aspect ratio for vertical video (e.g. 1080x1920)
-        let naturalSize = CGSize(width: 1080, height: 1920)
+
+        // Use original size for composition
+        let naturalSize = try await assetTrack.load(.naturalSize)
         composition.naturalSize = naturalSize
 
         // Create and add video track
         guard let compositionTrack = composition.addMutableTrack(
             withMediaType: .video,
-            preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
             throw VideoError.compressionFailed("Failed to create composition track")
         }
 
@@ -243,23 +259,23 @@ struct VideoCreateView: View {
             at: .zero
         )
 
-        // Set up video composition
+        // Set up video composition to preserve orientation
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.renderSize = naturalSize  // Force 9:16 aspect ratio
+        videoComposition.renderSize = naturalSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
 
-        // Set up transform instruction
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = try await CMTimeRange(start: .zero, duration: asset.load(.duration))
-        
+
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionTrack)
+        layerInstruction.setTransform(originalTransform, at: .zero)
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
-        // Create HEVC export session
+        // Create export session
         guard let exporter = AVAssetExportSession(
             asset: composition,
-            presetName: AVAssetExportPresetHEVC1920x1080 // Using low quality preset for better compression
+            presetName: AVAssetExportPresetHEVC1920x1080
         ) else {
             throw VideoError.exportSessionCreationFailed("Failed to create HEVC export session")
         }
@@ -589,10 +605,11 @@ enum RecordingState: Equatable {
 @MainActor
 final class VideoRecordingViewModel: ObservableObject {
     // MARK: - Properties
+
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    
+
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
@@ -602,6 +619,7 @@ final class VideoRecordingViewModel: ObservableObject {
     private var progressTimer: Timer?
 
     // MARK: - Initialization
+
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
@@ -660,7 +678,7 @@ final class VideoRecordingViewModel: ObservableObject {
                 id: processedVideo.directory.lastPathComponent,
                 playbackURL: videoURL.absoluteString
             )
-            
+
             recordingState = .complete(result)
         } catch {
             print("❌ Recording stop failed with error: \(error.localizedDescription)")
@@ -675,7 +693,7 @@ final class VideoRecordingViewModel: ObservableObject {
 
     func createThoughtWithPolicy(videoData: Data, metadata: ThoughtMetadata) async throws -> Thought {
         var builder = FlatBufferBuilder()
-        
+
         // Create rating based on video content
         let rating = Arkavo_Rating.createRating(
             &builder,
@@ -688,12 +706,12 @@ final class VideoRecordingViewModel: ObservableObject {
             mature: .mild,
             bully: .none_
         )
-        
+
         // Create purpose probabilities
         let purpose = Arkavo_Purpose.createPurpose(
             &builder,
             educational: 0.2,
-            entertainment: 0.8,  // Video content is primarily entertainment
+            entertainment: 0.8, // Video content is primarily entertainment
             news: 0.0,
             promotional: 0.0,
             personal: 0.0,
@@ -702,17 +720,17 @@ final class VideoRecordingViewModel: ObservableObject {
             harmful: 0.0,
             confidence: 0.9
         )
-        
+
         // Create format info for video
         let formatVersionString = builder.create(string: "H.265")
         let formatProfileString = builder.create(string: "HEVC")
         let formatInfo = Arkavo_FormatInfo.createFormatInfo(
             &builder,
-            type: .plain,  // Update with appropriate video format type
+            type: .plain, // Update with appropriate video format type
             versionOffset: formatVersionString,
             profileOffset: formatProfileString
         )
-        
+
         // Create content format
         let contentFormat = Arkavo_ContentFormat.createContentFormat(
             &builder,
@@ -720,15 +738,15 @@ final class VideoRecordingViewModel: ObservableObject {
             dataEncoding: .binary,
             formatOffset: formatInfo
         )
-        
+
         // Create vectors for IDs
         let idVector = builder.createVector(bytes: metadata.creator.uuidString.data(using: .utf8) ?? Data())
         let relatedVector = builder.createVector(bytes: metadata.streamPublicID)
-        
+
         // Create topics vector (if needed)
-        let topics: [UInt32] = []  // Add relevant topic IDs
+        let topics: [UInt32] = [] // Add relevant topic IDs
         let topicsVector = builder.createVector(topics)
-        
+
         // Create metadata root
         let arkMetadata = Arkavo_Metadata.createMetadata(
             &builder,
@@ -740,27 +758,27 @@ final class VideoRecordingViewModel: ObservableObject {
             topicsVectorOffset: topicsVector,
             contentOffset: contentFormat
         )
-        
+
         builder.finish(offset: arkMetadata)
-        
+
         // Get policy data
         let policyData = Data(
             bytes: builder.sizedBuffer.memory.advanced(by: builder.sizedBuffer.reader),
             count: Int(builder.sizedBuffer.size)
         )
-        
+
         // Create NanoTDF with metadata in policy
         let nanoTDFData = try await client.encryptAndSendPayload(
             payload: videoData,
             policyData: policyData
         )
-        
+
         return Thought(
             nano: nanoTDFData,
-            metadata: metadata  // This is now redundant since it's in the policy
+            metadata: metadata // This is now redundant since it's in the policy
         )
     }
-    
+
     // MARK: - Private Helpers
 
     private func startProgressTimer() {
