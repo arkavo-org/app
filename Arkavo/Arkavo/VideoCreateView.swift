@@ -15,7 +15,6 @@ struct VideoCreateView: View {
 
     init(feedViewModel: VideoFeedViewModel) {
         let recordingVM = ViewModelFactory.shared.makeVideoRecordingViewModel()
-        recordingVM.feedUpdater = feedViewModel
         _viewModel = StateObject(wrappedValue: recordingVM)
     }
 
@@ -50,6 +49,21 @@ struct VideoCreateView: View {
 
             print("Original video size: \(fileSize) bytes")
 
+            // Analyze the original video
+            let asset = AVURLAsset(url: videoURL)
+            if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let transform = try await videoTrack.load(.preferredTransform)
+                let videoAngle = atan2(transform.b, transform.a)
+                
+                print("\n📹 Original Video Analysis:")
+                print("- File size: \(fileSize) bytes")
+                print("- Natural size: \(naturalSize)")
+                print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
+                print("- Transform angle: \(videoAngle * 180 / .pi)°")
+                print("- Transform matrix: \(transform)")
+            }
+            
             // Compress video with optimized settings
             let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
             print("Compressed video size: \(compressedData.count) bytes")
@@ -129,9 +143,6 @@ struct VideoCreateView: View {
                 ),
                 role: "Creator"
             )
-
-            viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
-
         } catch {
             print("Failed to process video - Error:", error)
             showError(message: "Failed to process video: \(error.localizedDescription)")
@@ -208,14 +219,21 @@ struct VideoCreateView: View {
     @MainActor
     private func exportVideo(asset: AVURLAsset, toURL: URL, settings: [String: Any]) async throws -> Data {
         let composition = AVMutableComposition()
-        let size = try await asset.loadTracks(withMediaType: .video).first?.load(.naturalSize) ?? .zero
-        composition.naturalSize = size
+        
+        // Get the natural size of the video track
+        guard let assetTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            throw VideoError.compressionFailed("Failed to get video track")
+        }
+        
+        // Use 9:16 aspect ratio for vertical video (e.g. 1080x1920)
+        let naturalSize = CGSize(width: 1080, height: 1920)
+        composition.naturalSize = naturalSize
 
         // Create and add video track
-        guard let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
-              let assetTrack = try await asset.loadTracks(withMediaType: .video).first
-        else {
-            throw VideoError.compressionFailed("Failed to create tracks")
+        guard let compositionTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw VideoError.compressionFailed("Failed to create composition track")
         }
 
         // Insert the video
@@ -226,11 +244,19 @@ struct VideoCreateView: View {
         )
 
         // Set up video composition
-        let videoComposition = try await AVMutableVideoComposition.videoComposition(withPropertiesOf: composition)
-        videoComposition.renderSize = size
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.renderSize = naturalSize  // Force 9:16 aspect ratio
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
 
-        // Create HEVC export session with target bitrate
+        // Set up transform instruction
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = try await CMTimeRange(start: .zero, duration: asset.load(.duration))
+        
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionTrack)
+        instruction.layerInstructions = [layerInstruction]
+        videoComposition.instructions = [instruction]
+
+        // Create HEVC export session
         guard let exporter = AVAssetExportSession(
             asset: composition,
             presetName: AVAssetExportPresetHEVC1920x1080 // Using low quality preset for better compression
@@ -244,9 +270,9 @@ struct VideoCreateView: View {
         exporter.videoComposition = videoComposition
         exporter.shouldOptimizeForNetworkUse = true
 
-        // Apply bitrate limit through AVAssetExportSession properties
+        // Apply bitrate limit if specified
         if let bitrate = (settings[AVVideoCompressionPropertiesKey] as? [String: Any])?[AVVideoAverageBitRateKey] as? Int {
-            exporter.fileLengthLimit = Int64(bitrate) // This effectively limits the bitrate
+            exporter.fileLengthLimit = Int64(bitrate)
         }
 
         await exporter.export()
@@ -563,12 +589,10 @@ enum RecordingState: Equatable {
 @MainActor
 final class VideoRecordingViewModel: ObservableObject {
     // MARK: - Properties
-
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    weak var feedUpdater: VideoFeedUpdating?
-
+    
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
@@ -578,7 +602,6 @@ final class VideoRecordingViewModel: ObservableObject {
     private var progressTimer: Timer?
 
     // MARK: - Initialization
-
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account

@@ -1,4 +1,5 @@
 import ArkavoSocial
+import AVFoundation
 import Foundation
 import SwiftData
 import SwiftUI
@@ -401,12 +402,17 @@ struct PlayerContainerView: UIViewRepresentable {
 //        print("📊 Making video view: \(url)")
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = .black
+        // Configure for full screen video
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
         playerManager.setupPlayer(in: view)
         return view
     }
 
-    func updateUIView(_: UIView, context _: Context) {
+    func updateUIView(_ uiView: UIView, context _: Context) {
 //        print("📊 Updating video view: \(url)")
+        // Ensure view fills its parent
+        uiView.frame = CGRect(origin: .zero, size: size)
         if isCurrentVideo {
             playerManager.playVideo(url: url)
         }
@@ -511,6 +517,21 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             // Write the video data to the cache file
             try data.write(to: videoFileURL)
             print("✅ Wrote video data to cache: \(videoFileURL)")
+            
+            // Analyze the video file after writing
+            let asset = AVURLAsset(url: videoFileURL)
+            if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let transform = try await videoTrack.load(.preferredTransform)
+                let videoAngle = atan2(transform.b, transform.a)
+                
+                print("\n📼 Decrypted Video Analysis:")
+                print("- File size: \(data.count) bytes")
+                print("- Natural size: \(naturalSize)")
+                print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
+                print("- Transform angle: \(videoAngle * 180 / .pi)°")
+                print("- Transform matrix: \(transform)")
+            }
 
             // Create new video object using the cached file URL
             let video = Video(

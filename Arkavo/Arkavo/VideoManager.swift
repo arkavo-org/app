@@ -38,6 +38,7 @@ class VideoRecordingManager {
     }
 
     private func setupCaptureSession() async throws {
+        // Use 1080x1920 for portrait HD
         captureSession.sessionPreset = .hd1920x1080
 
         guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera,
@@ -59,12 +60,17 @@ class VideoRecordingManager {
             }
             captureSession.addOutput(videoOutput)
 
-            if let connection = videoOutput.connection(with: .video),
-               connection.isVideoRotationAngleSupported(90)
-            {
-                connection.videoRotationAngle = 90
+            // Lock to portrait orientation using new rotation angle API
+            if let connection = videoOutput.connection(with: .video) {
+                let angle = CGFloat.pi/2 // 90 degrees
+                if connection.isVideoRotationAngleSupported(angle) {
+                    connection.videoRotationAngle = angle
+                }
+                
+                if connection.isVideoStabilizationSupported {
+                    connection.preferredVideoStabilizationMode = .auto
+                }
             }
-
         } catch {
             throw VideoError.captureSessionSetupFailed
         }
@@ -76,6 +82,7 @@ class VideoRecordingManager {
         previewLayer.frame = view.bounds
         view.layer.insertSublayer(previewLayer, at: 0)
         self.previewLayer = previewLayer
+        
         DispatchQueue.global(qos: .userInitiated).async {
             self.captureSession.startRunning()
             print("✅ Camera preview started")
@@ -113,6 +120,7 @@ class VideoRecordingManager {
             videoOutput.startRecording(to: videoPath, recordingDelegate: delegate)
             isRecording = true
             currentVideoURL = videoPath
+            print("📹 Started recording to: \(videoPath)")
         }
     }
 
@@ -142,8 +150,7 @@ class VideoRecordingManager {
     }
 }
 
-// MARK: - Recording Delegate
-
+// Recording Delegate
 private class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
     private let completion: (Error?) -> Void
     var onStop: (() -> Void)?
@@ -253,24 +260,145 @@ actor HLSProcessingManager {
 // MARK: - Video Player Manager
 
 @MainActor
-class VideoPlayerManager {
+final class VideoPlayerManager: NSObject {
     private let player: AVPlayer
     private weak var playerLayer: AVPlayerLayer?
     private var currentItem: AVPlayerItem?
     private var preloadedItems: [String: AVPlayerItem] = [:]
-
-    init() {
+    private var currentVideoSize: CGSize?
+    private var boundsObservation: NSKeyValueObservation?
+    
+    override init() {
         player = AVPlayer()
+        super.init()
+        
+        // Add periodic time observer for smooth playback
+        player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+                                     queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.updatePlayerLayerIfNeeded()
+            }
+        }
     }
-
+    
     func setupPlayer(in view: UIView) {
         let playerLayer = AVPlayerLayer(player: player)
         playerLayer.videoGravity = .resizeAspectFill
+        view.layer.masksToBounds = true
+        
+        // Initialize with full view bounds
         playerLayer.frame = view.bounds
         view.layer.addSublayer(playerLayer)
         self.playerLayer = playerLayer
+        
+        // Add bounds change observer
+        boundsObservation = view.layer.observe(\.bounds) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                await self?.updatePlayerLayerIfNeeded()
+            }
+        }
+        
+        // Register for orientation changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOrientationChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
     }
-
+    
+    private func updatePlayerLayerFrame(with naturalSize: CGSize, transform: CGAffineTransform) {
+        guard let view = playerLayer?.superlayer?.superlayer,
+              let playerLayer = playerLayer else { return }
+        
+        let viewBounds = view.bounds
+        let viewSize = viewBounds.size
+        
+        // Apply 90 degree rotation transform
+        playerLayer.transform = CATransform3DMakeRotation(.pi/2, 0, 0, 1)
+        
+        // For 1080x1920 video, use height/width ratio
+        let videoRatio = naturalSize.height / naturalSize.width  // 1920/1080 ≈ 1.77
+        var newFrame = viewBounds
+        
+        // Use full view height
+        newFrame.size.height = viewSize.height
+        // Width should be height * aspect ratio to maintain proportions
+        newFrame.size.width = viewSize.height * videoRatio
+        
+        // Position at top-left corner with rotation offset
+        newFrame.origin.x = -newFrame.size.height
+        newFrame.origin.y = 0
+        
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.2)
+        playerLayer.frame = newFrame
+        CATransaction.commit()
+        
+        print("\n📐 Frame Calculation:")
+        print("- View size: \(viewSize)")
+        print("- Video natural size: \(naturalSize)")
+        print("- Video ratio: \(videoRatio)")
+        print("- Calculated frame: \(newFrame)")
+    }
+    
+    private func updatePlayerLayerIfNeeded() async {
+        guard let playerLayer = playerLayer,
+              let currentItem = player.currentItem else { return }
+        
+        do {
+            let videoTracks = try await currentItem.asset.loadTracks(withMediaType: .video)
+            guard let videoTrack = videoTracks.first,
+                  let currentVideoSize = currentVideoSize else { return }
+            
+            let transform = try await videoTrack.load(.preferredTransform)
+            updatePlayerLayerFrame(with: currentVideoSize, transform: transform)
+        } catch {
+            print("Error updating player layer: \(error)")
+        }
+    }
+    
+    @objc private func handleOrientationChange() {
+        Task { @MainActor in
+            await updatePlayerLayerIfNeeded()
+        }
+    }
+    
+    func playVideo(url: URL) {
+        print("📊 Playing video: \(url)")
+        let item: AVPlayerItem
+        
+        if let preloadedItem = preloadedItems[url.absoluteString] {
+            item = preloadedItem
+        } else {
+            let asset = AVURLAsset(url: url)
+            item = AVPlayerItem(asset: asset)
+        }
+        
+        currentItem = item
+        player.replaceCurrentItem(with: item)
+        
+        // Configure video track
+        Task {
+            do {
+                if let videoTrack = try await item.asset.loadTracks(withMediaType: .video).first {
+                    let naturalSize = try await videoTrack.load(.naturalSize)
+                    let transform = try await videoTrack.load(.preferredTransform)
+                    
+                    await MainActor.run { [weak self] in
+                        self?.currentVideoSize = naturalSize
+                        self?.updatePlayerLayerFrame(with: naturalSize, transform: transform)
+                    }
+                }
+            } catch {
+                print("Error configuring video track: \(error)")
+            }
+        }
+        
+        player.seek(to: .zero)
+        player.play()
+    }
+    
     func preloadVideo(url: URL) async throws {
         let asset = AVURLAsset(url: url)
         _ = try await asset.load(.isPlayable)
@@ -279,28 +407,13 @@ class VideoPlayerManager {
         preloadedItems[url.absoluteString] = item
         item.preferredForwardBufferDuration = 4.0
     }
-
-    func playVideo(url: URL) {
-//        print("📊 Playing video: \(url)")
-        if let preloadedItem = preloadedItems[url.absoluteString] {
-            currentItem = preloadedItem
-            player.replaceCurrentItem(with: preloadedItem)
-        } else {
-            let asset = AVURLAsset(url: url)
-            let item = AVPlayerItem(asset: asset)
-            currentItem = item
-            player.replaceCurrentItem(with: item)
-        }
-        player.seek(to: .zero)
-        player.play()
-    }
-
-    func cleanupPreloadedItems(keeping urls: [URL]) {
-        let urlStrings = urls.map(\.absoluteString)
-        preloadedItems = preloadedItems.filter { urlStrings.contains($0.key) }
-    }
-
+    
     deinit {
+        // Remove observers
+        boundsObservation?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+        
+        // Cleanup playback
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
