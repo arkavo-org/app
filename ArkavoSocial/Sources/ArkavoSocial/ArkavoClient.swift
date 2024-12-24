@@ -44,6 +44,7 @@ public enum ArkavoClientState: Equatable, Sendable {
 }
 
 /// Protocol for handling ArkavoClient events
+@MainActor
 public protocol ArkavoClientDelegate: AnyObject {
     func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState)
     func clientDidReceiveMessage(_ client: ArkavoClient, message: Data)
