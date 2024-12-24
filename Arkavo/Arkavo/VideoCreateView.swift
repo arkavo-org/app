@@ -43,17 +43,15 @@ struct VideoCreateView: View {
         // Account for NanoTDF overhead - target ~950KB for the video
         let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
         do {
-            // Log video file size for reference
             let videoURL = URL(string: result.playbackURL)!
             let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
             let fileSize = resourceValues.fileSize ?? 0
-            let fileSizeMB = Double(fileSize) / 1_000_000.0
 
-            print("Original video file size: \(fileSize) bytes (\(String(format: "%.2f", fileSizeMB)) MB)")
+            print("Original video size: \(fileSize) bytes")
 
-            // Compress video and create NanoTDF
-            let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize) // Target under 1MB
-            print("Compressed video size: \(compressedData.count) bytes (\(String(format: "%.2f", Double(compressedData.count) / 1_000_000.0)) MB)")
+            // Compress video with optimized settings
+            let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
+            print("Compressed video size: \(compressedData.count) bytes")
 
             // Create NanoTDF
             let nanoTDFData = try await viewModel.client.encryptRemotePolicy(
@@ -61,34 +59,27 @@ struct VideoCreateView: View {
                 remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
             )
 
-            let totalSize = nanoTDFData.count
-            guard totalSize <= 1_000_000 else {
+            guard nanoTDFData.count <= 1_000_000 else {
                 throw NSError(domain: "VideoCompression", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket (\(totalSize) bytes)"])
+                              userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
             }
-
-            print("NanoTDF size: \(nanoTDFData.count) bytes (should be under 1MB/1,048,576 bytes)")
 
             // Send over websocket
             try await viewModel.client.sendNATSMessage(nanoTDFData)
 
             // Process video metadata and save
-            print("Starting video thought save process...")
             let persistenceController = PersistenceController.shared
             let context = persistenceController.container.mainContext
 
-            // Find video stream (the one with a video source thought)
+            // Find video stream
             guard let videoStream = viewModel.account.streams.first(where: { stream in
                 stream.sources.first?.metadata.mediaType == .video
             }) else {
-                print("No video stream found")
                 showError(message: "No video stream available")
                 return
             }
 
-            print("Found video stream with ID: \(videoStream.id)")
-
-            // Create thought
+            // Create and save thought
             let videoThought = Thought(
                 nano: Data(result.playbackURL.utf8),
                 metadata: ThoughtMetadata(
@@ -100,17 +91,10 @@ struct VideoCreateView: View {
                 )
             )
 
-            print("Created video thought with ID: \(videoThought.id)")
-
-            // Add to stream's thoughts array - this will handle the context insertion
             videoStream.addThought(videoThought)
-            print("Added to stream thoughts. Current count: \(videoStream.thoughts.count)")
-
-            // Single save after all operations
             try context.save()
-            print("Changes saved successfully")
 
-            // Create contributor for feed
+            // Create contributor and update feed
             let contributor = Contributor(
                 id: viewModel.profile.id.uuidString,
                 creator: Creator(
@@ -126,9 +110,7 @@ struct VideoCreateView: View {
                 role: "Creator"
             )
 
-            // Update feed
             viewModel.feedUpdater?.addNewVideo(from: result, contributors: [contributor])
-            print("Updated video feed")
 
         } catch {
             print("Failed to process video - Error:", error)
@@ -141,111 +123,124 @@ struct VideoCreateView: View {
         let track = try await asset.loadTracks(withMediaType: .video).first
         let size = try await track?.load(.naturalSize) ?? CGSize(width: 1080, height: 1920)
 
-        // Create a temporary file for the compressed output
         let temporaryDirectory = FileManager.default.temporaryDirectory
         let outputURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
 
-        // HEVC compression settings
+        // Initial compression settings
         let compressionSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
             AVVideoWidthKey: Int(size.width),
             AVVideoHeightKey: Int(size.height),
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 2_000_000, // 2Mbps starting point
+                AVVideoAverageBitRateKey: 800_000, // 800Kbps starting point
                 AVVideoProfileLevelKey: "HEVC_Main_AutoLevel",
-                AVVideoMaxKeyFrameIntervalKey: 1, // Force keyframe for single-frame decode
-                AVVideoAverageNonDroppableFrameRateKey: 30,
+                AVVideoMaxKeyFrameIntervalKey: 1,
                 AVVideoExpectedSourceFrameRateKey: 30,
+                AVVideoQualityKey: 0.6,
             ],
         ]
 
-        @MainActor
-        func exportVideo(asset: AVURLAsset, toURL: URL, settings _: [String: Any]) async throws -> Data {
-            let composition = AVMutableComposition()
-            composition.naturalSize = size
-
-            // Create and add video track
-            guard let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
-                  let assetTrack = try await asset.loadTracks(withMediaType: .video).first
-            else {
-                throw NSError(domain: "VideoCompression", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create tracks"])
-            }
-
-            // Insert the video
-            try await compositionTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: asset.load(.duration)),
-                of: assetTrack,
-                at: .zero
-            )
-
-            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionTrack)
-            let instruction = AVMutableVideoCompositionInstruction()
-            instruction.timeRange = try await CMTimeRange(start: .zero, duration: asset.load(.duration))
-            instruction.layerInstructions = [layerInstruction]
-
-            let videoComposition = AVMutableVideoComposition()
-            videoComposition.renderSize = size
-            videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
-            videoComposition.instructions = [instruction]
-
-            // HEVC export session
-            guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHEVCHighestQuality) else {
-                throw NSError(domain: "VideoCompression", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
-            }
-
-            // Configure the export
-            exporter.outputURL = toURL
-            exporter.outputFileType = AVFileType.mp4
-            exporter.videoComposition = videoComposition
-
-            // Modern export using withCheckedThrowingContinuation
-            try await withCheckedThrowingContinuation { continuation in
-                exporter.exportAsynchronously {
-                    switch exporter.status {
-                    case .completed:
-                        continuation.resume()
-                    case .failed:
-                        continuation.resume(throwing: exporter.error ?? NSError())
-                    case .cancelled:
-                        continuation.resume(throwing: CancellationError())
-                    default:
-                        continuation.resume(throwing: NSError(domain: "VideoCompression", code: -1))
-                    }
-                }
-            }
-
-            return try Data(contentsOf: toURL)
-        }
-
         // First compression attempt
+        print("Starting initial compression with 800Kbps bitrate...")
         let compressedData = try await exportVideo(asset: asset, toURL: outputURL, settings: compressionSettings)
+        print("Initial compression result: \(compressedData.count) bytes (target: \(targetSize) bytes)")
 
-        // If still too large, try progressively more aggressive bitrates
-        let bitrates = [1_500_000, 1_000_000, 750_000, 500_000] // Progressive bitrate reduction
+        // Progressive bitrate reduction if needed
+        let bitrates = [600_000, 450_000, 350_000, 250_000]
         var resultData = compressedData
         var index = 0
 
         while resultData.count > targetSize, index < bitrates.count {
-            // Update bitrate in compression settings
+            let currentBitrate = bitrates[index]
+            print("\nAttempting compression with \(currentBitrate / 1000)Kbps bitrate...")
+
             var newSettings = compressionSettings
             var properties = newSettings[AVVideoCompressionPropertiesKey] as! [String: Any]
-            properties[AVVideoAverageBitRateKey] = bitrates[index]
+            properties[AVVideoAverageBitRateKey] = currentBitrate
             newSettings[AVVideoCompressionPropertiesKey] = properties
 
-            // Create new asset and export with updated settings
             let retryAsset = AVURLAsset(url: url)
             let retryURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
 
+            let previousSize = resultData.count
             resultData = try await exportVideo(asset: retryAsset, toURL: retryURL, settings: newSettings)
-            try? FileManager.default.removeItem(at: retryURL)
+            let reduction = 100.0 - (Double(resultData.count) / Double(previousSize) * 100.0)
 
+            print("Compression result: \(resultData.count) bytes")
+            print("Size reduction: \(String(format: "%.1f%%", reduction)) from previous attempt")
+            print("Current size vs target: \(resultData.count) vs \(targetSize) bytes")
+
+            try? FileManager.default.removeItem(at: retryURL)
             index += 1
         }
 
         // Clean up
         try? FileManager.default.removeItem(at: outputURL)
 
+        print("\nFinal compression result: \(resultData.count) bytes")
+        if resultData.count > targetSize {
+            print("⚠️ Warning: Could not achieve target size of \(targetSize) bytes after all compression attempts")
+        }
+
         return resultData
+    }
+
+    @MainActor
+    private func exportVideo(asset: AVURLAsset, toURL: URL, settings: [String: Any]) async throws -> Data {
+        let composition = AVMutableComposition()
+        let size = try await asset.loadTracks(withMediaType: .video).first?.load(.naturalSize) ?? .zero
+        composition.naturalSize = size
+
+        // Create and add video track
+        guard let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let assetTrack = try await asset.loadTracks(withMediaType: .video).first
+        else {
+            throw VideoError.compressionFailed("Failed to create tracks")
+        }
+
+        // Insert the video
+        try await compositionTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: asset.load(.duration)),
+            of: assetTrack,
+            at: .zero
+        )
+
+        // Set up video composition
+        let videoComposition = try await AVMutableVideoComposition.videoComposition(withPropertiesOf: composition)
+        videoComposition.renderSize = size
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+
+        // Create HEVC export session with target bitrate
+        guard let exporter = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHEVC1920x1080 // Using low quality preset for better compression
+        ) else {
+            throw VideoError.exportSessionCreationFailed("Failed to create HEVC export session")
+        }
+
+        // Configure the export
+        exporter.outputURL = toURL
+        exporter.outputFileType = .mp4
+        exporter.videoComposition = videoComposition
+        exporter.shouldOptimizeForNetworkUse = true
+
+        // Apply bitrate limit through AVAssetExportSession properties
+        if let bitrate = (settings[AVVideoCompressionPropertiesKey] as? [String: Any])?[AVVideoAverageBitRateKey] as? Int {
+            exporter.fileLengthLimit = Int64(bitrate) // This effectively limits the bitrate
+        }
+
+        // Modern Swift concurrency export
+        try await exporter.export()
+
+        guard exporter.status == AVAssetExportSession.Status.completed else {
+            throw VideoError.exportSessionFailed(exporter.error?.localizedDescription ?? "Unknown error")
+        }
+
+        print("Export complete - checking file size...")
+        let fileSize = try await toURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        print("Exported file size: \(fileSize) bytes")
+
+        return try Data(contentsOf: toURL)
     }
 
     private func showError(message: String) {
@@ -652,7 +647,7 @@ final class VideoRecordingViewModel: ObservableObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if self.recordingProgress < 1.0 {
-                    self.recordingProgress += 0.1 / 60.0 // 60 seconds max
+                    self.recordingProgress += 0.1 / 5.5 // 5.5 seconds max based on compression ratio
                 } else {
                     Task {
                         await self.stopRecording()
