@@ -1,4 +1,5 @@
 import ArkavoSocial
+import FlatBuffers
 import AVFoundation
 import SwiftData
 import SwiftUI
@@ -79,18 +80,37 @@ struct VideoCreateView: View {
                 return
             }
 
-            // Create and save thought
-            let videoThought = Thought(
-                nano: Data(result.playbackURL.utf8),
-                metadata: ThoughtMetadata(
-                    creator: viewModel.profile.id,
-                    mediaType: .video,
-                    createdAt: Date(),
-                    summary: "New video recording",
-                    contributors: []
+            let title = "New video recording"
+            
+            let streamProfile = Profile(name: title)
+            
+            // Create new Thought Stream fo Video
+            let stream = Stream(
+                creatorPublicID: viewModel.profile.publicID,
+                profile: streamProfile,
+                policies: Policies(
+                    admission: .closed,
+                    interaction: .closed,
+                    age: .forAll
                 )
             )
+            
+            // Create metadata
+            let metadata = ThoughtMetadata(
+                creator: viewModel.profile.id,
+                streamPublicID: videoStream.publicID,
+                mediaType: .video,
+                createdAt: Date(),
+                summary: title,
+                contributors: []
+            )
 
+            // Create thought with policy and encrypted data
+            let videoThought = try await viewModel.createThoughtWithPolicy(
+                videoData: compressedData,
+                metadata: metadata
+            )
+            
             videoStream.addThought(videoThought)
             try context.save()
 
@@ -229,15 +249,13 @@ struct VideoCreateView: View {
             exporter.fileLengthLimit = Int64(bitrate) // This effectively limits the bitrate
         }
 
-        // Modern Swift concurrency export
-        try await exporter.export()
-
+        await exporter.export()
         guard exporter.status == AVAssetExportSession.Status.completed else {
             throw VideoError.exportSessionFailed(exporter.error?.localizedDescription ?? "Unknown error")
         }
 
         print("Export complete - checking file size...")
-        let fileSize = try await toURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        let fileSize = try toURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         print("Exported file size: \(fileSize) bytes")
 
         return try Data(contentsOf: toURL)
@@ -557,7 +575,6 @@ final class VideoRecordingViewModel: ObservableObject {
 
     private var recordingManager: VideoRecordingManager?
     private let processingManager = HLSProcessingManager()
-    private let uploadManager = VideoUploadManager()
     private var progressTimer: Timer?
 
     // MARK: - Initialization
@@ -615,18 +632,12 @@ final class VideoRecordingViewModel: ObservableObject {
 
             // Upload the video
             recordingState = .uploading
-            let metadata = VideoMetadata(
-                title: "New Video",
-                thumbnailURL: "",
-                videoURL: "",
-                duration: processedVideo.duration
-            )
 
-            let result = try await uploadManager.uploadVideo(
-                directory: processedVideo.directory,
-                metadata: metadata
+            let result = UploadResult(
+                id: processedVideo.directory.lastPathComponent,
+                playbackURL: videoURL.absoluteString
             )
-
+            
             recordingState = .complete(result)
         } catch {
             print("❌ Recording stop failed with error: \(error.localizedDescription)")
@@ -639,6 +650,94 @@ final class VideoRecordingViewModel: ObservableObject {
         // This would interact with the AVCaptureDevice to switch between front and back cameras
     }
 
+    func createThoughtWithPolicy(videoData: Data, metadata: ThoughtMetadata) async throws -> Thought {
+        var builder = FlatBufferBuilder()
+        
+        // Create rating based on video content
+        let rating = Arkavo_Rating.createRating(
+            &builder,
+            violent: .mild,
+            sexual: .none_,
+            profane: .none_,
+            substance: .none_,
+            hate: .none_,
+            harm: .none_,
+            mature: .mild,
+            bully: .none_
+        )
+        
+        // Create purpose probabilities
+        let purpose = Arkavo_Purpose.createPurpose(
+            &builder,
+            educational: 0.2,
+            entertainment: 0.8,  // Video content is primarily entertainment
+            news: 0.0,
+            promotional: 0.0,
+            personal: 0.0,
+            opinion: 0.0,
+            transactional: 0.0,
+            harmful: 0.0,
+            confidence: 0.9
+        )
+        
+        // Create format info for video
+        let formatVersionString = builder.create(string: "H.265")
+        let formatProfileString = builder.create(string: "HEVC")
+        let formatInfo = Arkavo_FormatInfo.createFormatInfo(
+            &builder,
+            type: .plain,  // Update with appropriate video format type
+            versionOffset: formatVersionString,
+            profileOffset: formatProfileString
+        )
+        
+        // Create content format
+        let contentFormat = Arkavo_ContentFormat.createContentFormat(
+            &builder,
+            mediaType: .video,
+            dataEncoding: .binary,
+            formatOffset: formatInfo
+        )
+        
+        // Create vectors for IDs
+        let idVector = builder.createVector(bytes: metadata.creator.uuidString.data(using: .utf8) ?? Data())
+        let relatedVector = builder.createVector(bytes: metadata.streamPublicID)
+        
+        // Create topics vector (if needed)
+        let topics: [UInt32] = []  // Add relevant topic IDs
+        let topicsVector = builder.createVector(topics)
+        
+        // Create metadata root
+        let arkMetadata = Arkavo_Metadata.createMetadata(
+            &builder,
+            created: Int64(Date().timeIntervalSince1970),
+            idVectorOffset: idVector,
+            relatedVectorOffset: relatedVector,
+            ratingOffset: rating,
+            purposeOffset: purpose,
+            topicsVectorOffset: topicsVector,
+            contentOffset: contentFormat
+        )
+        
+        builder.finish(offset: arkMetadata)
+        
+        // Get policy data
+        let policyData = Data(
+            bytes: builder.sizedBuffer.memory.advanced(by: builder.sizedBuffer.reader),
+            count: Int(builder.sizedBuffer.size)
+        )
+        
+        // Create NanoTDF with metadata in policy
+        let nanoTDFData = try await client.encryptAndSendPayload(
+            payload: videoData,
+            policyData: policyData
+        )
+        
+        return Thought(
+            nano: nanoTDFData,
+            metadata: metadata  // This is now redundant since it's in the policy
+        )
+    }
+    
     // MARK: - Private Helpers
 
     private func startProgressTimer() {

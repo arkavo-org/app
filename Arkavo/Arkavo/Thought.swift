@@ -37,17 +37,6 @@ final class Thought: Identifiable, Codable, @unchecked Sendable {
         try container.encode(metadata, forKey: .metadata)
     }
 
-    static func extractMetadata(from _: Data) -> ThoughtMetadata {
-        // TODO: Parse the data to extract metadata from the NanoTDF Policy, and fix Date()
-        ThoughtMetadata(
-            creator: UUID(),
-            mediaType: .text,
-            createdAt: Date(),
-            summary: "New thought",
-            contributors: []
-        )
-    }
-
     private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
             Data(SHA256.hash(data: buffer))
@@ -87,11 +76,10 @@ extension Thought {
 }
 
 struct ThoughtMetadata: Codable {
-    // FIXME: publicID
     let creator: UUID
+    let streamPublicID: Data
     let mediaType: MediaType
     let createdAt: Date
-    // FIXME: remove summary
     let summary: String
     let contributors: [Contributor]
 

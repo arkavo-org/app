@@ -14,30 +14,6 @@ struct Video: Identifiable {
     var comments: Int
     var shares: Int
 
-    var mainCreator = Creator(
-        id: "prof_" + UUID().uuidString,
-        name: "Quantum Research Lab",
-        imageURL: "https://profiles.arkavo.com/default-avatar.jpg",
-        latestUpdate: "Exploring quantum entanglement patterns",
-        tier: "researcher",
-        socialLinks: [
-            SocialLink(
-                id: "tw_qrl",
-                platform: .twitter,
-                username: "QuantumResLab",
-                url: "https://twitter.com/QuantumResLab"
-            ),
-            SocialLink(
-                id: "yt_qrl",
-                platform: .youtube,
-                username: "QuantumResearchLab",
-                url: "https://youtube.com/@QuantumResearchLab"
-            ),
-        ],
-        notificationCount: 2,
-        bio: "High-assurance quantum computing research group. Interests: quantum encryption, entanglement studies, quantum error correction. Location: Cambridge, MA." // Combined Profile's interests and location
-    )
-
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
             id: uploadResult.id,
@@ -116,82 +92,6 @@ struct VideoFeedView: View {
         .ignoresSafeArea()
         .task {
             viewModel.cleanupOldCacheFiles()
-            // Load initial videos if empty
-            if viewModel.videos.isEmpty {
-                // Find stream dedicated to videos
-                guard let videoStream = viewModel.account.streams.first(where: { stream in
-                    print("Checking stream: \(stream.id)")
-                    print("Stream thought count: \(stream.thoughts.count)")
-                    let isVideoStream = stream.sources.first?.metadata.mediaType == .video
-                    print("Is video stream? \(isVideoStream)")
-                    return isVideoStream
-                }) else {
-                    print("No video stream found")
-                    return
-                }
-
-                print("Found video stream. Total thoughts: \(videoStream.thoughts.count)")
-
-                // Get all video thoughts from both sources and thoughts arrays
-                var allThoughts = videoStream.thoughts
-                print("Thoughts from main array: \(allThoughts.count)")
-
-                // Add source thoughts if they're not already included
-                let sourceThoughts = videoStream.sources.filter { !allThoughts.contains($0) }
-                print("Additional thoughts from sources: \(sourceThoughts.count)")
-                allThoughts.append(contentsOf: sourceThoughts)
-
-                // Filter and sort all video thoughts
-                let videoThoughts = allThoughts
-                    .filter { thought in
-                        print("Checking thought ID: \(thought.id)")
-                        let isVideo = thought.metadata.mediaType == .video
-                        print("Is video? \(isVideo)")
-                        if isVideo {
-                            if let urlString = String(data: thought.nano, encoding: .utf8) {
-                                print("Video URL: \(urlString)")
-                            }
-                        }
-                        return isVideo
-                    }
-                    .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
-
-                print("Found \(videoThoughts.count) total video thoughts")
-
-                // Convert to Video objects
-                let thoughtVideos = videoThoughts.compactMap { thought -> Video? in
-                    guard let urlString = String(data: thought.nano, encoding: .utf8),
-                          let url = URL(string: urlString)
-                    else {
-                        print("Failed to create URL for thought: \(thought.id)")
-                        return nil
-                    }
-
-                    print("Creating Video object:")
-                    print("- ID: \(thought.id)")
-                    print("- URL: \(url)")
-                    print("- Created: \(thought.metadata.createdAt)")
-
-                    return Video(
-                        id: thought.id.uuidString,
-                        url: url,
-                        contributors: thought.metadata.contributors,
-                        description: thought.metadata.summary,
-                        likes: 0,
-                        comments: 0,
-                        shares: 0
-                    )
-                }
-
-                print("Created \(thoughtVideos.count) video objects")
-                viewModel.videos = thoughtVideos
-
-                // Preload first video if available
-                if let firstVideo = viewModel.videos.first {
-                    print("Preloading first video: \(firstVideo.url)")
-                    viewModel.preloadVideo(url: firstVideo.url)
-                }
-            }
         }
     }
 }
@@ -682,6 +582,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 // Create thought for the video
                 let metadata = ThoughtMetadata(
                     creator: profile.id,
+                    streamPublicID: videoStream.publicID,
                     mediaType: .video,
                     createdAt: Date(),
                     summary: newVideo.description,
@@ -794,7 +695,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 hasNotification: !stream.thoughts.isEmpty,
                 description: "description",
                 policies: StreamPolicies(
-                    agePolicy: .forAll,
+                    agePolicy: .onlyKids,
                     admissionPolicy: .open,
                     interactionPolicy: .open
                 )

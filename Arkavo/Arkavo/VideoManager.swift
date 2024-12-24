@@ -306,30 +306,6 @@ class VideoPlayerManager {
     }
 }
 
-// MARK: - Video Upload Manager
-
-actor VideoUploadManager {
-    func uploadVideo(directory: URL, metadata _: VideoMetadata) async throws -> UploadResult {
-        // Since we're using local files, we'll simulate a brief processing delay
-        try await Task.sleep(for: .seconds(0.5))
-
-        // Find the MP4 file in the directory
-        let mp4File = try FileManager.default
-            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .first { $0.pathExtension == "mp4" }
-
-        guard let videoURL = mp4File else {
-            throw VideoError.uploadFailed("No MP4 file found in directory")
-        }
-
-        // Return the local file URL as the playback URL
-        return UploadResult(
-            id: directory.lastPathComponent,
-            playbackURL: videoURL.absoluteString
-        )
-    }
-}
-
 // MARK: - Supporting Types
 
 struct VideoMetadata: Codable, Sendable {
