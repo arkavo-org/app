@@ -101,17 +101,6 @@ struct VideoCreateView: View {
 
             let streamProfile = Profile(name: title)
 
-            // Create new Thought Stream fo Video
-            let stream = Stream(
-                creatorPublicID: viewModel.profile.publicID,
-                profile: streamProfile,
-                policies: Policies(
-                    admission: .closed,
-                    interaction: .closed,
-                    age: .forAll
-                )
-            )
-
             // Create metadata
             let metadata = ThoughtMetadata(
                 creator: viewModel.profile.id,
@@ -130,22 +119,6 @@ struct VideoCreateView: View {
 
             videoStream.addThought(videoThought)
             try context.save()
-
-            // Create contributor and update feed
-            let contributor = Contributor(
-                id: viewModel.profile.id.uuidString,
-                creator: Creator(
-                    id: viewModel.profile.id.uuidString,
-                    name: viewModel.profile.name,
-                    imageURL: "",
-                    latestUpdate: "",
-                    tier: "creator",
-                    socialLinks: [],
-                    notificationCount: 0,
-                    bio: ""
-                ),
-                role: "Creator"
-            )
         } catch {
             print("Failed to process video - Error:", error)
             showError(message: "Failed to process video: \(error.localizedDescription)")

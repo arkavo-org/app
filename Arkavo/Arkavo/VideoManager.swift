@@ -232,6 +232,7 @@ actor HLSProcessingManager {
 final class VideoPlayerManager: NSObject {
     private let player: AVPlayer
     private weak var playerLayer: AVPlayerLayer?
+    private var loopObserver: NSObjectProtocol?
     private var currentItem: AVPlayerItem?
     private var preloadedItems: [String: AVPlayerItem] = [:]
 
@@ -246,6 +247,24 @@ final class VideoPlayerManager: NSObject {
         playerLayer.frame = view.bounds
         view.layer.addSublayer(playerLayer)
         self.playerLayer = playerLayer
+        setupLooping()
+    }
+
+    private func setupLooping() {
+        // Remove any existing observer
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        // Add new looping observer
+        loopObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak self] _ in
+            self?.player.seek(to: .zero)
+            self?.player.play()
+        }
     }
 
     @objc private func handleLayoutChange() {
@@ -270,6 +289,7 @@ final class VideoPlayerManager: NSObject {
         }
         player.seek(to: .zero)
         player.play()
+        setupLooping()
     }
 
     func preloadVideo(url: URL) async throws {
