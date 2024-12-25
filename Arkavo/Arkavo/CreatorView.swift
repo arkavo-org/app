@@ -22,6 +22,9 @@ struct CreatorView: View {
                 }
             }
         }
+        .onDisappear {
+            sharedState.selectedCreator = nil
+        }
         // TODO: after Patreon Support added
 //        .sheet(isPresented: $sharedState.showCreateView) {
 //            if let creator = sharedState.selectedCreator {
