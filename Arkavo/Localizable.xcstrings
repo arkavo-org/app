@@ -681,9 +681,6 @@
         }
       }
     },
-    "Social Media" : {
-
-    },
     "Start" : {
       "localizations" : {
         "es-US" : {
@@ -769,6 +766,9 @@
     "Support %@" : {
 
     },
+    "Support and Protect features will be available in an upcoming update." : {
+
+    },
     "Support Tiers" : {
 
     },
@@ -820,6 +820,9 @@
 
     },
     "Unable to load image" : {
+
+    },
+    "Update" : {
 
     },
     "Uploading..." : {

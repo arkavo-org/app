@@ -14,7 +14,7 @@ struct CreatorView: View {
 
     var body: some View {
         NavigationStack {
-            if let creator = sharedState.selectedCreator, !sharedState.showCreateView {
+            if let creator = sharedState.selectedCreator {
                 CreatorDetailView(viewModel: viewModel, creator: creator)
             } else {
                 CreatorListView(creators: creators) { creator in
@@ -22,13 +22,14 @@ struct CreatorView: View {
                 }
             }
         }
-        .sheet(isPresented: $sharedState.showCreateView) {
-            if let creator = sharedState.selectedCreator {
-                CreatorSupportView(creator: creator) {
-                    sharedState.showCreateView = false
-                }
-            }
-        }
+        // TODO: after Patreon Support added
+//        .sheet(isPresented: $sharedState.showCreateView) {
+//            if let creator = sharedState.selectedCreator {
+//                CreatorSupportView(creator: creator) {
+//                    sharedState.showCreateView = false
+//                }
+//            }
+//        }
     }
 }
 
@@ -121,22 +122,22 @@ struct CreatorCard: View {
                     }
                     .padding(.horizontal)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Social Media")
-                            .font(.headline)
-
-                        ForEach(creator.socialLinks) { link in
-                            HStack {
-                                Image(systemName: link.platform.icon)
-                                Text(link.username)
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.blue)
-                        }
-                    }
-                    .padding(.horizontal)
+//                    VStack(alignment: .leading, spacing: 8) {
+//                        Text("Social Media")
+//                            .font(.headline)
+//
+//                        ForEach(creator.socialLinks) { link in
+//                            HStack {
+//                                Image(systemName: link.platform.icon)
+//                                Text(link.username)
+//                                Spacer()
+//                                Image(systemName: "arrow.up.right")
+//                                    .font(.caption)
+//                            }
+//                            .foregroundColor(.blue)
+//                        }
+//                    }
+//                    .padding(.horizontal)
                 }
                 .padding(.vertical)
             }
@@ -169,7 +170,7 @@ struct CreatorDetailView: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 CreatorHeaderView(viewModel: viewModel, creator: creator) {
-                    sharedState.showCreateView = true
+                    // onSupport callback
                 }
 
                 Picker("Section", selection: $selectedSection) {
@@ -183,7 +184,7 @@ struct CreatorDetailView: View {
 
                 switch selectedSection {
                 case .about:
-                    CreatorAboutSection(creator: creator)
+                    CreatorAboutSection(viewModel: viewModel, creator: creator)
                 case .videos:
                     CreatorVideosSection(viewModel: viewModel, creator: creator)
                 case .posts:
@@ -217,8 +218,8 @@ struct CreatorHeaderView: View {
 
                 HStack(spacing: statsSpacing) {
                     StatView(title: "Posts", value: "324")
-                    StatView(title: "Supporters", value: "15.2K")
                     StatView(title: "Videos", value: "\(viewModel.videoThoughts.count)")
+                    StatView(title: "Supporters", value: "--")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -249,6 +250,14 @@ struct CreatorHeaderView: View {
                 .opacity(0.5)
             }
             .padding(.horizontal)
+            // Coming Soon Notice
+            Label("Support and Protect features will be available in an upcoming update.", systemImage: "info.circle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .padding()
         .background(Color(uiColor: .systemBackground))
@@ -272,39 +281,77 @@ struct StatView: View {
 }
 
 struct CreatorAboutSection: View {
+    @StateObject var viewModel: PatreonViewModel
     let creator: Creator
+    @EnvironmentObject var sharedState: SharedState
+    @State private var editedBio: String = ""
+    @State private var isSubmitting = false
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Bio")
                     .font(.headline)
-                Text(creator.bio)
-                    .font(.body)
+
+                if sharedState.showCreateView {
+                    TextEditor(text: $editedBio)
+                        .frame(minHeight: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+
+                    Button(action: {
+                        Task {
+                            await submitBlurb()
+                        }
+                    }) {
+                        Text("Update")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .disabled(isSubmitting)
+                } else {
+                    Text(viewModel.bio)
+                        .font(.body)
+                }
             }
             .padding()
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Social Media")
-                    .font(.headline)
-                    .padding(.horizontal)
-
-                ForEach(creator.socialLinks) { link in
-                    HStack {
-                        Image(systemName: link.platform.icon)
-                        Text(link.username)
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(8)
-                }
-            }
-            .padding(.horizontal)
+//            VStack(alignment: .leading, spacing: 8) {
+//                Text("Social Media")
+//                    .font(.headline)
+//                    .padding(.horizontal)
+//
+//                ForEach(creator.socialLinks) { link in
+//                    HStack {
+//                        Image(systemName: link.platform.icon)
+//                        Text(link.username)
+//                        Spacer()
+//                        Image(systemName: "arrow.up.right")
+//                            .font(.caption)
+//                    }
+//                    .padding(.horizontal)
+//                    .padding(.vertical, 8)
+//                    .background(Color(.systemBackground))
+//                    .cornerRadius(8)
+//                }
+//            }
+//            .padding(.horizontal)
         }
+        .onAppear {
+            editedBio = viewModel.bio // Initialize editableBio with the current bio
+        }
+    }
+
+    private func submitBlurb() async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+        await viewModel.saveBio(editedBio)
+        sharedState.showCreateView = false
     }
 }
 
@@ -342,7 +389,7 @@ struct VideoThoughtView: View {
                         .cornerRadius(8)
                         .clipped()
 
-                    Image(systemName: "play.rectangle.fill")
+                    Image(systemName: "paperplane.fill")
                         .font(.largeTitle)
                         .foregroundColor(.white)
                 }
@@ -490,12 +537,30 @@ final class PatreonViewModel: ObservableObject {
         }
     }
 
+    var bio: String {
+        profile.blurb ?? "No bio available"
+    }
+
+    func saveBio(_ newBio: String) async {
+        isLoading = true
+        defer { isLoading = false }
+
+        profile.blurb = newBio
+        do {
+            try await PersistenceController.shared.saveChanges()
+        } catch {
+            handleError(error)
+        }
+    }
+
     func loadVideoThoughts() {
         let videoStream = account.streams.first(where: { stream in
             stream.sources.first?.metadata.mediaType == .video
         })
         if videoStream != nil {
-            videoThoughts = videoStream!.thoughts
+            videoThoughts = videoStream!.thoughts.sorted { thought1, thought2 in
+                thought1.metadata.createdAt > thought2.metadata.createdAt
+            }
         }
     }
 
