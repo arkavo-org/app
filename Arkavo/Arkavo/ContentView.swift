@@ -61,19 +61,19 @@ struct ContentView: View {
                 case .creators:
                     if sharedState.showCreateView, sharedState.selectedCreator != nil {
                         if let creator = sharedState.selectedCreator {
-                            PatreonSupportView(creator: creator) {
+                            CreatorSupportView(creator: creator) {
                                 sharedState.showCreateView = false
                                 sharedState.selectedCreator = nil
                             }
                         }
                     } else {
-                        PatreonView()
+                        CreatorView()
                     }
 //                case .protect:
 //                    ProtectorView(service: protectorService)
                 case .profile:
                     // Set selected creator to self when showing profile
-                    PatreonView()
+                    CreatorView()
                         .onAppear {
                             if let profile = ViewModelFactory.shared.getCurrentProfile() {
                                 // Create a Creator object from current profile

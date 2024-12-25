@@ -94,7 +94,10 @@ struct VideoCreateView: View {
                 return
             }
 
-            let title = "New video recording"
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            let title = formatter.string(from: Date())
 
             let streamProfile = Profile(name: title)
 

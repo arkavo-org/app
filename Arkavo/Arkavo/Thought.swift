@@ -205,3 +205,16 @@ enum SocialPlatform: String, Codable {
         }
     }
 }
+
+enum MediaType: String, Codable {
+    case text, video, audio, image
+
+    var icon: String {
+        switch self {
+        case .video: "play.rectangle.fill"
+        case .audio: "waveform"
+        case .image: "photo.fill"
+        case .text: "doc.fill"
+        }
+    }
+}
