@@ -14,7 +14,7 @@ class PostFeedViewModel: ObservableObject {
     private let client: ArkavoClient
     private let account: Account
     private let profile: Profile
-
+    private var notificationObservers: [Any] = []
     @Published var thoughts: [Thought] = []
     @Published var currentThoughtIndex = 0
     @Published var isLoading = false
@@ -29,10 +29,109 @@ class PostFeedViewModel: ObservableObject {
         Task {
             await loadThoughts()
         }
+        setupNotifications()
+    }
+
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Connection state changes
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            Task { @MainActor [weak self] in
+                self?.handleConnectionStateChange(state)
+            }
+        }
+        notificationObservers.append(stateObserver)
+
+        // Decrypted message handling
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+
+            Task { @MainActor [weak self] in
+                await self?.handleDecryptedMessage(data: data, policy: policy)
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Error handling
+        let errorObserver = NotificationCenter.default.addObserver(
+            forName: .messageHandlingError,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let error = notification.userInfo?["error"] as? Error else { return }
+            Task { @MainActor [weak self] in
+                self?.error = error
+            }
+        }
+        notificationObservers.append(errorObserver)
+    }
+
+    private func handleConnectionStateChange(_: ArkavoClientState) {
+        // Handle connection state changes if needed
+    }
+
+    private func handleDecryptedMessage(data: Data, policy _: ArkavoPolicy) async {
+        do {
+            let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+
+            // Create thought metadata
+            let thoughtMetadata = ThoughtMetadata(
+                creator: UUID(), // This should be derived from creator public ID
+                streamPublicID: thoughtModel.streamPublicID,
+                mediaType: thoughtModel.mediaType,
+                createdAt: Date(),
+                summary: String(data: thoughtModel.content, encoding: .utf8) ?? "",
+                contributors: []
+            )
+
+            // Create and save thought
+            let thought = Thought(
+                nano: data, // Store the encrypted data
+                metadata: thoughtMetadata
+            )
+
+            // Save thought
+            _ = try PersistenceController.shared.saveThought(thought)
+            try await PersistenceController.shared.saveChanges()
+
+            // Update UI
+            thoughts.insert(thought, at: 0)
+        } catch {
+            self.error = error
+        }
+    }
+
+    private func handleReceivedThought(_ thought: Thought) {
+        thoughts.insert(thought, at: 0)
+    }
+
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    func getPostStream() -> Stream? {
+        // Find the stream that's marked as a post stream (has a text source thought)
+        account.streams.first { stream in
+            stream.sources.first?.metadata.mediaType == .text
+        }
     }
 
     private func loadThoughts() async {
         isLoading = true
+        // FIXME: request thoughts, or show loading spinner
         thoughts = SampleData.recentThoughts
         isLoading = false
     }
@@ -90,13 +189,13 @@ class PostFeedViewModel: ObservableObject {
         // Create rating
         let rating = Arkavo_Rating.createRating(
             &builder,
-            violent: .mild,
-            sexual: .mild,
-            profane: .mild,
+            violent: .none_,
+            sexual: .none_,
+            profane: .none_,
             substance: .none_,
             hate: .none_,
             harm: .none_,
-            mature: .mild,
+            mature: .none_,
             bully: .none_
         )
 
@@ -252,6 +351,7 @@ struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
     @State private var currentIndex = 0
+    @State private var showChat = false
 
     var body: some View {
         ZStack {
@@ -273,8 +373,10 @@ struct PostFeedView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(viewModel.thoughts) { thought in
                                 ImmersiveThoughtCard(
+                                    viewModel: viewModel,
                                     thought: thought,
-                                    size: geometry.size
+                                    size: geometry.size,
+                                    showChat: $showChat
                                 )
                                 .frame(width: geometry.size.width, height: geometry.size.height)
                             }
@@ -430,8 +532,11 @@ struct PostCreateView: View {
 // MARK: - ImmersiveThoughtCard
 
 struct ImmersiveThoughtCard: View {
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject var viewModel: PostFeedViewModel
     let thought: Thought
     let size: CGSize
+    @Binding var showChat: Bool
     private let systemMargin: CGFloat = 16
 
     var body: some View {
@@ -449,7 +554,7 @@ struct ImmersiveThoughtCard: View {
                     .padding(systemMargin * 2)
                     Spacer()
                 }
-
+                // TODO: add GroupChatIconList
                 VStack {
                     Spacer()
                     HStack {
@@ -459,6 +564,12 @@ struct ImmersiveThoughtCard: View {
                         Spacer()
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showChat) {
+            if let postStream = viewModel.getPostStream() {
+                let chatViewModel = ViewModelFactory.shared.makeChatViewModel(stream: postStream)
+                ChatView(viewModel: chatViewModel)
             }
         }
     }

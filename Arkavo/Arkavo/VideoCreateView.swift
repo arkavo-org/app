@@ -99,8 +99,6 @@ struct VideoCreateView: View {
             formatter.timeStyle = .short
             let title = formatter.string(from: Date())
 
-            let streamProfile = Profile(name: title)
-
             // Create metadata
             let metadata = ThoughtMetadata(
                 creator: viewModel.profile.id,
