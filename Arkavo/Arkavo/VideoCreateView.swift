@@ -202,8 +202,6 @@ struct VideoCreateView: View {
             throw VideoError.compressionFailed("Failed to get video track")
         }
 
-        let originalNaturalSize = try await assetTrack.load(.naturalSize)
-
         // Create composition with portrait dimensions
         let composition = AVMutableComposition()
         composition.naturalSize = CGSize(width: 1080, height: 1920)
@@ -263,11 +261,6 @@ struct VideoCreateView: View {
 
         // Perform export
         try await exporter.export(to: toURL, as: .mp4)
-
-        // Verify export
-        if exporter.status == .failed {
-            throw VideoError.exportSessionCreationFailed(exporter.error?.localizedDescription ?? "Export failed")
-        }
 
         // Load and return data
         return try Data(contentsOf: toURL)
@@ -437,7 +430,10 @@ struct RecordingControl: View {
             case .processing, .uploading:
                 ProcessingView(state: viewModel.recordingState)
             case let .complete(result):
-                CompleteButton {
+                SendButton(
+                    state: viewModel.recordingState == .processing ? .processing :
+                        viewModel.recordingState == .uploading ? .sending : .ready
+                ) {
                     Task {
                         await onComplete(result)
                     }
@@ -491,17 +487,69 @@ struct ProcessingView: View {
     }
 }
 
-struct CompleteButton: View {
+struct SendButton: View {
+    enum SendState {
+        case ready
+        case processing
+        case sending
+        case complete
+    }
+
+    let state: SendState
     let action: () -> Void
 
+    @State private var isPressed = false
+    @State private var showText = true
+    @State private var iconOffset: CGFloat = 0
+
     var body: some View {
-        Button(action: action) {
-            Text("Done")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
+        Button(action: {
+            withAnimation(.spring(response: 0.3)) {
+                isPressed = true
+                showText = false
+            }
+
+            // Small delay before triggering the action
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                action()
+            }
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "paperplane.fill")
+                    .font(.body)
+                    .offset(x: iconOffset)
+                    .opacity(state == .processing ? 0 : 1)
+
+                if showText, state == .ready {
+                    Text("Send")
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } else if state == .processing {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.8)
+                        .transition(.opacity)
+                }
+            }
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(.white.opacity(0.2))
+                    }
+            )
+        }
+        .disabled(state != .ready)
+        .onChange(of: state) { oldValue, newValue in
+            if oldValue == .sending, newValue == .complete {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    iconOffset = 30
+                }
+            }
         }
     }
 }
