@@ -1,4 +1,5 @@
 import ArkavoSocial
+import AVFoundation
 import Foundation
 import SwiftData
 import SwiftUI
@@ -13,30 +14,6 @@ struct Video: Identifiable {
     var likes: Int
     var comments: Int
     var shares: Int
-
-    var mainCreator = Creator(
-        id: "prof_" + UUID().uuidString,
-        name: "Quantum Research Lab",
-        imageURL: "https://profiles.arkavo.com/default-avatar.jpg",
-        latestUpdate: "Exploring quantum entanglement patterns",
-        tier: "researcher",
-        socialLinks: [
-            SocialLink(
-                id: "tw_qrl",
-                platform: .twitter,
-                username: "QuantumResLab",
-                url: "https://twitter.com/QuantumResLab"
-            ),
-            SocialLink(
-                id: "yt_qrl",
-                platform: .youtube,
-                username: "QuantumResearchLab",
-                url: "https://youtube.com/@QuantumResearchLab"
-            ),
-        ],
-        notificationCount: 2,
-        bio: "High-assurance quantum computing research group. Interests: quantum encryption, entanglement studies, quantum error correction. Location: Cambridge, MA." // Combined Profile's interests and location
-    )
 
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
@@ -116,82 +93,6 @@ struct VideoFeedView: View {
         .ignoresSafeArea()
         .task {
             viewModel.cleanupOldCacheFiles()
-            // Load initial videos if empty
-            if viewModel.videos.isEmpty {
-                // Find stream dedicated to videos
-                guard let videoStream = viewModel.account.streams.first(where: { stream in
-                    print("Checking stream: \(stream.id)")
-                    print("Stream thought count: \(stream.thoughts.count)")
-                    let isVideoStream = stream.sources.first?.metadata.mediaType == .video
-                    print("Is video stream? \(isVideoStream)")
-                    return isVideoStream
-                }) else {
-                    print("No video stream found")
-                    return
-                }
-
-                print("Found video stream. Total thoughts: \(videoStream.thoughts.count)")
-
-                // Get all video thoughts from both sources and thoughts arrays
-                var allThoughts = videoStream.thoughts
-                print("Thoughts from main array: \(allThoughts.count)")
-
-                // Add source thoughts if they're not already included
-                let sourceThoughts = videoStream.sources.filter { !allThoughts.contains($0) }
-                print("Additional thoughts from sources: \(sourceThoughts.count)")
-                allThoughts.append(contentsOf: sourceThoughts)
-
-                // Filter and sort all video thoughts
-                let videoThoughts = allThoughts
-                    .filter { thought in
-                        print("Checking thought ID: \(thought.id)")
-                        let isVideo = thought.metadata.mediaType == .video
-                        print("Is video? \(isVideo)")
-                        if isVideo {
-                            if let urlString = String(data: thought.nano, encoding: .utf8) {
-                                print("Video URL: \(urlString)")
-                            }
-                        }
-                        return isVideo
-                    }
-                    .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
-
-                print("Found \(videoThoughts.count) total video thoughts")
-
-                // Convert to Video objects
-                let thoughtVideos = videoThoughts.compactMap { thought -> Video? in
-                    guard let urlString = String(data: thought.nano, encoding: .utf8),
-                          let url = URL(string: urlString)
-                    else {
-                        print("Failed to create URL for thought: \(thought.id)")
-                        return nil
-                    }
-
-                    print("Creating Video object:")
-                    print("- ID: \(thought.id)")
-                    print("- URL: \(url)")
-                    print("- Created: \(thought.metadata.createdAt)")
-
-                    return Video(
-                        id: thought.id.uuidString,
-                        url: url,
-                        contributors: thought.metadata.contributors,
-                        description: thought.metadata.summary,
-                        likes: 0,
-                        comments: 0,
-                        shares: 0
-                    )
-                }
-
-                print("Created \(thoughtVideos.count) video objects")
-                viewModel.videos = thoughtVideos
-
-                // Preload first video if available
-                if let firstVideo = viewModel.videos.first {
-                    print("Preloading first video: \(firstVideo.url)")
-                    viewModel.preloadVideo(url: firstVideo.url)
-                }
-            }
         }
     }
 }
@@ -329,50 +230,17 @@ struct VideoPlayerView: View {
                     Spacer()
 
                     // Right side - Action buttons
-                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) { // 20pt
+                    VStack(alignment: .trailing) {
                         Spacer()
 
-                        VStack(spacing: systemMargin * 1.25) { // 20pt
-                            GroupChatIconList(
-                                currentVideo: video,
-                                servers: viewModel.servers()
-                            )
-                            .padding(.trailing, systemMargin)
-                            .padding(.vertical, systemMargin * 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(.ultraThinMaterial.opacity(0.4))
-                                    .padding(.trailing, systemMargin / 2)
-                            )
-//                            Button {
-//                                withAnimation(.spring()) {
-//                                    isLiked.toggle()
-//                                    likesCount += isLiked ? 1 : -1
-//                                }
-//                            } label: {
-//                                VStack(spacing: systemMargin * 0.25) { // 4pt
-//                                    Image(systemName: isLiked ? "heart.fill" : "heart")
-//                                        .font(.system(size: systemMargin * 1.75)) // 28pt
-//                                        .foregroundColor(isLiked ? .red : .white)
-//                                    Text("\(likesCount)")
-//                                        .font(.caption)
-//                                        .foregroundColor(.white)
-//                                }
-//                            }
-                            Button {
-                                showChat = true
-                            } label: {
-                                VStack(spacing: systemMargin * 0.25) { // 4pt
-                                    Image(systemName: "bubble.right")
-                                        .font(.system(size: systemMargin * 1.625)) // 26pt
-                                    Text("\(video.comments)")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.white)
-                            }
-                        }
+                        GroupChatIconList(
+                            currentVideo: video,
+                            servers: viewModel.servers(),
+                            comments: video.comments,
+                            showChat: $showChat
+                        )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
-                        .padding(.bottom, systemMargin * 6.25) // 100pt
+                        .padding(.bottom, systemMargin * 6.25)
                     }
                 }
 
@@ -428,18 +296,95 @@ struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
     let servers: [Server]
+    let comments: Int
+    @State private var isCollapsed = true
+    @State private var showMenuButton = true
+    @Binding var showChat: Bool
+
+    // Timer to auto-collapse after 4 seconds
+    let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 16) {
-            ForEach(servers) { server in
+        ZStack(alignment: .trailing) {
+            if !isCollapsed {
+                // Expanded view with all buttons
+                VStack(spacing: 20) { // Even spacing between all items
+                    ForEach(servers) { server in
+                        Button {
+                            sharedState.selectedVideo = currentVideo
+                            sharedState.selectedServer = server
+                            sharedState.selectedTab = .communities
+                        } label: {
+                            Image(systemName: server.icon)
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+
+                    // Comment button integrated into the list
+                    Button {
+                        showChat = true
+                        withAnimation(.spring()) {
+                            isCollapsed = true
+                            showMenuButton = true
+                        }
+                    } label: {
+                        Image(systemName: "bubble.right")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                }
+                .padding(.vertical, 16)
+                .frame(width: 60) // Fixed width container
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 30))
+                .transition(AnyTransition.asymmetric(
+                    insertion: .scale(scale: 0.1, anchor: .trailing)
+                        .combined(with: .opacity),
+                    removal: .scale(scale: 0.1, anchor: .trailing)
+                        .combined(with: .opacity)
+                ))
+            }
+
+            // Collapsed state
+            if showMenuButton, isCollapsed {
                 Button {
-                    sharedState.selectedVideo = currentVideo
-                    sharedState.selectedServer = server
-                    sharedState.selectedTab = .communities
+                    expandMenu()
                 } label: {
-                    ServerButton(server: server, isSelected: false) // selectedServer?.id == server.id
+                    VStack(spacing: 4) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.title3)
+                    }
+                    .foregroundColor(.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+                }
+                .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .onReceive(collapseTimer) { _ in
+            if !isCollapsed {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.spring()) {
+                        isCollapsed = true
+                        showMenuButton = true
+                    }
                 }
             }
+        }
+    }
+
+    private func expandMenu() {
+        withAnimation(.easeOut(duration: 0.1)) {
+            showMenuButton = false
+        }
+
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
+            isCollapsed = false
         }
     }
 }
@@ -451,27 +396,10 @@ struct ServerButton: View {
     let isSelected: Bool
 
     var body: some View {
-        ZStack {
-            // Background and selection indicator
-            Circle()
-                .fill(isSelected ? Color.blue.opacity(0.2) : Color.black.opacity(0.3))
-                .frame(width: 48, height: 48)
-
-            // Server icon
-            Image(systemName: server.icon)
-                .font(.title3)
-                .foregroundStyle(isSelected ? .blue : .white)
-                .symbolEffect(.bounce, value: isSelected)
-
-            // Selection ring
-            if isSelected {
-                Circle()
-                    .strokeBorder(Color.blue, lineWidth: 2)
-                    .frame(width: 48, height: 48)
-            }
-        }
-        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-        .contentShape(Circle())
+        Image(systemName: server.icon)
+            .font(.title3)
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .frame(width: 44, alignment: .trailing)
     }
 }
 
@@ -501,12 +429,17 @@ struct PlayerContainerView: UIViewRepresentable {
 //        print("📊 Making video view: \(url)")
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = .black
+        // Configure for full screen video
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
         playerManager.setupPlayer(in: view)
         return view
     }
 
-    func updateUIView(_: UIView, context _: Context) {
+    func updateUIView(_ uiView: UIView, context _: Context) {
 //        print("📊 Updating video view: \(url)")
+        // Ensure view fills its parent
+        uiView.frame = CGRect(origin: .zero, size: size)
         if isCurrentVideo {
             playerManager.playVideo(url: url)
         }
@@ -612,6 +545,21 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             try data.write(to: videoFileURL)
             print("✅ Wrote video data to cache: \(videoFileURL)")
 
+            // Analyze the video file after writing
+            let asset = AVURLAsset(url: videoFileURL)
+            if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
+                let naturalSize = try await videoTrack.load(.naturalSize)
+                let transform = try await videoTrack.load(.preferredTransform)
+                let videoAngle = atan2(transform.b, transform.a)
+
+                print("\n📼 Decrypted Video Analysis:")
+                print("- File size: \(data.count) bytes")
+                print("- Natural size: \(naturalSize)")
+                print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
+                print("- Transform angle: \(videoAngle * 180 / .pi)°")
+                print("- Transform matrix: \(transform)")
+            }
+
             // Create new video object using the cached file URL
             let video = Video(
                 id: UUID().uuidString,
@@ -682,6 +630,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 // Create thought for the video
                 let metadata = ThoughtMetadata(
                     creator: profile.id,
+                    streamPublicID: videoStream.publicID,
                     mediaType: .video,
                     createdAt: Date(),
                     summary: newVideo.description,
@@ -794,7 +743,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 hasNotification: !stream.thoughts.isEmpty,
                 description: "description",
                 policies: StreamPolicies(
-                    agePolicy: .forAll,
+                    agePolicy: .onlyKids,
                     admissionPolicy: .open,
                     interactionPolicy: .open
                 )

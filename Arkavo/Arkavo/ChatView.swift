@@ -41,7 +41,9 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
             queue: .main
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
-            self?.connectionState = state
+            Task { @MainActor in
+                self?.connectionState = state
+            }
         }
         notificationObservers.append(stateObserver)
 
@@ -218,6 +220,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
 
         let thoughtMetadata = ThoughtMetadata(
             creator: profile.id,
+            streamPublicID: streamPublicID,
             mediaType: .text,
             createdAt: Date(),
             summary: content,
@@ -384,28 +387,66 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         print("\nProcessing stream thoughts:")
         for thought in stream.thoughts {
             do {
-                print("\nProcessing thought: \(thought.publicID.hexEncodedString())")
-                // Check if already processed
-                if processedMessageIds.contains(thought.publicID) {
-                    print("⚠️ Skipping duplicate thought: \(thought.publicID.hexEncodedString())")
-                    continue
-                }
-                let parser = BinaryParser(data: thought.nano)
-                let header = try parser.parseHeader()
-                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
-                let nano = NanoTDF(header: header, payload: payload, signature: nil)
+                print("\n=== Processing thought ===")
+                print("Public ID: \(thought.publicID.hexEncodedString())")
+                print("Nano data size: \(thought.nano.count) bytes")
 
-                print("Parsed thought - EPK: \(header.ephemeralPublicKey.hexEncodedString())")
+                // Debug the first few bytes
+                let previewSize = min(thought.nano.count, 8)
+                let previewBytes = thought.nano.prefix(previewSize)
+                print("First \(previewSize) bytes: \(previewBytes.map { String(format: "%02X", $0) }.joined(separator: " "))")
+
+                // Check expected magic number
+                print("Expected magic number: \(Header.magicNumber.map { String(format: "%02X", $0) }.joined(separator: " "))")
+
+                print("Creating binary parser...")
+                let parser = BinaryParser(data: thought.nano)
+
+                print("Attempting to parse header...")
+                let header = try parser.parseHeader()
+                print("✅ Successfully parsed header")
+                print(" - EPK length: \(header.ephemeralPublicKey.count)")
+                print(" - EPK: \(header.ephemeralPublicKey.hexEncodedString())")
+
+                print("Attempting to parse payload...")
+                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+                print("✅ Successfully parsed payload:")
+                print(" - Payload length: \(payload.length)")
+                print(" - IV length: \(payload.iv.count)")
+                print(" - Ciphertext length: \(payload.ciphertext.count)")
+                print(" - MAC length: \(payload.mac.count)")
+
+                let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
                 // Store in pending thoughts
                 pendingThoughts[header.ephemeralPublicKey] = (header, payload, nano)
+                print("Added to pending thoughts with EPK: \(header.ephemeralPublicKey.hexEncodedString())")
 
                 // Send rewrap message
                 let rewrapMessage = RewrapMessage(header: header)
                 try await client.sendMessage(rewrapMessage.toData())
-                print("Sent rewrap message for EPK: \(header.ephemeralPublicKey.hexEncodedString())")
+                print("✅ Sent rewrap message")
+
             } catch {
-                print("Error processing thought: \(error)")
+                print("❌ Error processing thought: \(error)")
+                if let parsingError = error as? ParsingError {
+                    switch parsingError {
+                    case .invalidMagicNumber:
+                        print("Magic number check failed - first bytes don't match 4C 31")
+                        print("Expected: 4C 31")
+                        if thought.nano.count >= 2 {
+                            print("Found: \(thought.nano.prefix(2).map { String(format: "%02X", $0) }.joined(separator: " "))")
+                        }
+                    case .invalidFormat:
+                        print("Invalid format - data structure doesn't match expected TDF format")
+                        print("This could be due to:")
+                        print("- Incorrect field lengths")
+                        print("- Missing required fields")
+                        print("- Malformed data")
+                    default:
+                        print("Other parsing error: \(parsingError)")
+                    }
+                }
             }
         }
     }

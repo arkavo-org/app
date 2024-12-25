@@ -173,6 +173,7 @@ class PostFeedViewModel: ObservableObject {
 
         let thoughtMetadata = ThoughtMetadata(
             creator: profile.id,
+            streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
             createdAt: Date(),
             summary: content,
@@ -221,6 +222,7 @@ class PostFeedViewModel: ObservableObject {
 
         let thoughtMetadata = ThoughtMetadata(
             creator: profile.id,
+            streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .image,
             createdAt: Date(),
             summary: "image",
@@ -479,6 +481,7 @@ enum SampleData {
     static let recentThoughts: [Thought] = {
         let metadata1 = ThoughtMetadata(
             creator: UUID(),
+            streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
             createdAt: Date().addingTimeInterval(-3600),
             summary: "Just finished a deep dive into ActivityPub and AT Protocol integration. The future of social media is decentralized! 🚀",
@@ -488,6 +491,7 @@ enum SampleData {
 
         let metadata2 = ThoughtMetadata(
             creator: UUID(),
+            streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
             createdAt: Date().addingTimeInterval(-7200),
             summary: "Speaking at @DecentralizedWeb Summit next month about design patterns in federated social networks. Who else is going to be there?",

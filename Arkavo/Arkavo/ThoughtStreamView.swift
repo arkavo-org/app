@@ -368,6 +368,7 @@ class ThoughtStreamViewModel: StreamViewModel {
         // persist
         let thoughtMetadata = ThoughtMetadata(
             creator: accountProfile.id,
+            streamPublicID: stream.publicID,
             mediaType: .text,
             createdAt: Date(),
             summary: "",

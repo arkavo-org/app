@@ -27,15 +27,6 @@
         }
       }
     },
-    "%lld likes" : {
-
-    },
-    "%lld plays" : {
-
-    },
-    "%lld views" : {
-
-    },
     "%lld%%" : {
 
     },
@@ -43,9 +34,6 @@
 
     },
     "2m ago" : {
-
-    },
-    "4.9" : {
 
     },
     "512" : {
@@ -281,13 +269,7 @@
     "Failed to load image" : {
 
     },
-    "Featured Creator" : {
-
-    },
     "Features" : {
-
-    },
-    "Followers" : {
 
     },
     "Granularity" : {
@@ -552,16 +534,10 @@
     "Protect" : {
 
     },
-    "Protecting" : {
-
-    },
     "Protecting Creators in Progress" : {
 
     },
     "Public ID" : {
-
-    },
-    "Rating" : {
 
     },
     "Read Our Full Privacy Policy" : {
@@ -582,9 +558,6 @@
 
     },
     "Recent Activity" : {
-
-    },
-    "Recently Active" : {
 
     },
     "Recording Error" : {
@@ -635,16 +608,10 @@
     "Scan Completed" : {
 
     },
-    "Schedule" : {
-
-    },
-    "Search creators..." : {
-
-    },
-    "Search Results" : {
-
-    },
     "Section" : {
+
+    },
+    "Send" : {
 
     },
     "Server Details" : {
@@ -713,9 +680,6 @@
           }
         }
       }
-    },
-    "Social Media" : {
-
     },
     "Start" : {
       "localizations" : {
@@ -802,6 +766,9 @@
     "Support %@" : {
 
     },
+    "Support and Protect features will be available in an upcoming update." : {
+
+    },
     "Support Tiers" : {
 
     },
@@ -853,6 +820,9 @@
 
     },
     "Unable to load image" : {
+
+    },
+    "Update" : {
 
     },
     "Uploading..." : {

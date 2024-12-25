@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PatreonSupportView: View {
+struct CreatorSupportView: View {
     let creator: Creator
     let onDismiss: () -> Void
     @Environment(\.dismiss) private var dismiss

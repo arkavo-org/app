@@ -198,7 +198,7 @@ class CreateStreamViewModel: ObservableObject {
     @Published var participantCount: Int = 2
     @Published var admissionPolicy: AdmissionPolicy = .open
     @Published var interactionPolicy: InteractionPolicy = .open
-    @Published var agePolicy: AgePolicy = .forAll
+    @Published var agePolicy: AgePolicy = .onlyKids
     @Published var nameError: String = ""
     @Published var blurbError: String = ""
     @Published var isValid: Bool = false

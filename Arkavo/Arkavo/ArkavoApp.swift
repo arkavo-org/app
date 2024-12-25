@@ -140,9 +140,21 @@ struct ArkavoApp: App {
     func createVideoStream(account: Account, profile: Profile) async throws -> Stream {
         print("Creating video stream for profile: \(profile.name)")
 
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: profile,
+            policies: Policies(
+                admission: .closed,
+                interaction: .closed,
+                age: .forAll
+            )
+        )
+
         // Create initial thought that marks this as a video stream
         let initialMetadata = ThoughtMetadata(
             creator: profile.id,
+            streamPublicID: stream.publicID,
             mediaType: .video,
             createdAt: Date(),
             summary: "Video Stream",
@@ -150,7 +162,7 @@ struct ArkavoApp: App {
         )
 
         let initialThought = Thought(
-            nano: Data(), // Empty initial data
+            nano: Data(), // FIXME: not empty initial data
             metadata: initialMetadata
         )
 
@@ -159,17 +171,6 @@ struct ArkavoApp: App {
         // Save the initial thought
         let saved = try PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
-
-        // Create the stream with appropriate policies
-        let stream = Stream(
-            creatorPublicID: profile.publicID,
-            profile: profile,
-            policies: Policies(
-                admission: .open,
-                interaction: .moderated,
-                age: .forAll
-            )
-        )
 
         // Set the source thought to mark this as a video stream
         stream.sources = [initialThought]
@@ -534,6 +535,16 @@ final class ViewModelFactory {
     func makePostFeedViewModel() -> PostFeedViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
         return PostFeedViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
+
+    @MainActor
+    func makePatreonViewModel() -> PatreonViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return PatreonViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!

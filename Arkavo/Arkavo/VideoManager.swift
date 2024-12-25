@@ -59,12 +59,13 @@ class VideoRecordingManager {
             }
             captureSession.addOutput(videoOutput)
 
-            if let connection = videoOutput.connection(with: .video),
-               connection.isVideoRotationAngleSupported(90)
-            {
-                connection.videoRotationAngle = 90
+            // Configure video connection
+            if let connection = videoOutput.connection(with: .video) {
+                // Enable video stabilization if available
+                if connection.isVideoStabilizationSupported {
+                    connection.preferredVideoStabilizationMode = .auto
+                }
             }
-
         } catch {
             throw VideoError.captureSessionSetupFailed
         }
@@ -74,11 +75,19 @@ class VideoRecordingManager {
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
         previewLayer.videoGravity = .resizeAspectFill
         previewLayer.frame = view.bounds
+
+        // Force portrait orientation using rotation angle (90 degrees)
+        if let connection = previewLayer.connection,
+           connection.isVideoRotationAngleSupported(CGFloat.pi / 2)
+        {
+            connection.videoRotationAngle = CGFloat.pi / 2
+        }
+
         view.layer.insertSublayer(previewLayer, at: 0)
         self.previewLayer = previewLayer
+
         DispatchQueue.global(qos: .userInitiated).async {
             self.captureSession.startRunning()
-            print("✅ Camera preview started")
         }
         return previewLayer
     }
@@ -113,6 +122,7 @@ class VideoRecordingManager {
             videoOutput.startRecording(to: videoPath, recordingDelegate: delegate)
             isRecording = true
             currentVideoURL = videoPath
+            print("📹 Started recording to: \(videoPath)")
         }
     }
 
@@ -142,8 +152,7 @@ class VideoRecordingManager {
     }
 }
 
-// MARK: - Recording Delegate
-
+// Recording Delegate
 private class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
     private let completion: (Error?) -> Void
     var onStop: (() -> Void)?
@@ -180,63 +189,30 @@ actor HLSProcessingManager {
         do {
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
-            // First, export to an intermediate MP4
-            let intermediateURL = outputDirectory.appendingPathComponent("\(videoID).mp4")
-            try await exportToMP4(asset: asset, outputURL: intermediateURL)
-
-            // Then create HLS segments
-            let hlsOutputURL = outputDirectory.appendingPathComponent("index.mp4")
-            try await generateMP4Segments(from: intermediateURL, to: hlsOutputURL)
-
-            // Clean up intermediate file
-            try? FileManager.default.removeItem(at: intermediateURL)
-
+            // Generate thumbnail
             guard let thumbnail = try await generateThumbnail(for: asset) else {
-                print("❌ Thumbnail generation failed")
                 throw VideoError.processingFailed("Failed to generate thumbnail")
             }
 
             let duration = try await asset.load(.duration).seconds
-            print("✅ Video processing completed successfully")
+
+            // Simply copy the original video file to the output directory
+            let finalVideoURL = outputDirectory.appendingPathComponent("\(videoID).mp4")
+            try FileManager.default.copyItem(at: url, to: finalVideoURL)
+
             return ProcessingResult(
                 directory: outputDirectory,
                 thumbnail: thumbnail,
                 duration: duration
             )
         } catch {
-            print("❌ Video processing failed: \(error.localizedDescription)\n")
+            print("❌ Video processing failed: \(error.localizedDescription)")
             throw VideoError.processingFailed(error.localizedDescription)
         }
     }
 
-    private func exportToMP4(asset: AVAsset, outputURL: URL) async throws {
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
-            print("❌ Failed to create MP4 export session")
-            throw VideoError.exportFailed("Failed to create export session")
-        }
-
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-
-        // Use the new export(to:as:) method
-        try await exportSession.export(to: outputURL, as: .mp4)
-    }
-
-    private func generateMP4Segments(from sourceURL: URL, to outputURL: URL) async throws {
-        print("🎯 Starting MP4 segment generation...")
-        guard let exportSession = AVAssetExportSession(asset: AVURLAsset(url: sourceURL), presetName: AVAssetExportPresetHighestQuality) else {
-            print("❌ Failed to create MP4 export session")
-            throw VideoError.exportFailed("Failed to create MP4 export session")
-        }
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-        print("📊 MP4 Export status: \(exportSession.description)")
-        try await exportSession.export(to: outputURL, as: .mp4)
-    }
-
     private func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
+        print("generateThumbnail")
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
 
@@ -244,7 +220,7 @@ actor HLSProcessingManager {
             let cgImage = try await imageGenerator.image(at: .zero).image
             return UIImage(cgImage: cgImage)
         } catch {
-            print("❌ HLS generateThumbnail failed: \(error.localizedDescription)")
+            print("❌ Thumbnail generation failed: \(error.localizedDescription)")
             throw VideoError.processingFailed("Thumbnail generation failed: \(error.localizedDescription)")
         }
     }
@@ -253,14 +229,15 @@ actor HLSProcessingManager {
 // MARK: - Video Player Manager
 
 @MainActor
-class VideoPlayerManager {
+final class VideoPlayerManager: NSObject {
     private let player: AVPlayer
     private weak var playerLayer: AVPlayerLayer?
     private var currentItem: AVPlayerItem?
     private var preloadedItems: [String: AVPlayerItem] = [:]
 
-    init() {
+    override init() {
         player = AVPlayer()
+        super.init()
     }
 
     func setupPlayer(in view: UIView) {
@@ -271,17 +248,17 @@ class VideoPlayerManager {
         self.playerLayer = playerLayer
     }
 
-    func preloadVideo(url: URL) async throws {
-        let asset = AVURLAsset(url: url)
-        _ = try await asset.load(.isPlayable)
+    @objc private func handleLayoutChange() {
+        guard let view = playerLayer?.superlayer else { return }
+        playerLayer?.frame = view.bounds
+    }
 
-        let item = AVPlayerItem(asset: asset)
-        preloadedItems[url.absoluteString] = item
-        item.preferredForwardBufferDuration = 4.0
+    @objc private func playerItemDidReachEnd(notification _: Notification) {
+        print("📼 Video playback completed")
     }
 
     func playVideo(url: URL) {
-//        print("📊 Playing video: \(url)")
+        print("📊 Playing video: \(url)")
         if let preloadedItem = preloadedItems[url.absoluteString] {
             currentItem = preloadedItem
             player.replaceCurrentItem(with: preloadedItem)
@@ -295,38 +272,19 @@ class VideoPlayerManager {
         player.play()
     }
 
-    func cleanupPreloadedItems(keeping urls: [URL]) {
-        let urlStrings = urls.map(\.absoluteString)
-        preloadedItems = preloadedItems.filter { urlStrings.contains($0.key) }
+    func preloadVideo(url: URL) async throws {
+        let asset = AVURLAsset(url: url)
+        _ = try await asset.load(.isPlayable)
+
+        let item = AVPlayerItem(asset: asset)
+        preloadedItems[url.absoluteString] = item
+        item.preferredForwardBufferDuration = 4.0
     }
 
     deinit {
+        NotificationCenter.default.removeObserver(self)
         player.pause()
         player.replaceCurrentItem(with: nil)
-    }
-}
-
-// MARK: - Video Upload Manager
-
-actor VideoUploadManager {
-    func uploadVideo(directory: URL, metadata _: VideoMetadata) async throws -> UploadResult {
-        // Since we're using local files, we'll simulate a brief processing delay
-        try await Task.sleep(for: .seconds(0.5))
-
-        // Find the MP4 file in the directory
-        let mp4File = try FileManager.default
-            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .first { $0.pathExtension == "mp4" }
-
-        guard let videoURL = mp4File else {
-            throw VideoError.uploadFailed("No MP4 file found in directory")
-        }
-
-        // Return the local file URL as the playback URL
-        return UploadResult(
-            id: directory.lastPathComponent,
-            playbackURL: videoURL.absoluteString
-        )
     }
 }
 

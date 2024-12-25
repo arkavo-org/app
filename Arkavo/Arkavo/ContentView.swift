@@ -61,18 +61,35 @@ struct ContentView: View {
                 case .creators:
                     if sharedState.showCreateView, sharedState.selectedCreator != nil {
                         if let creator = sharedState.selectedCreator {
-                            PatreonSupportView(creator: creator) {
+                            CreatorSupportView(creator: creator) {
                                 sharedState.showCreateView = false
                                 sharedState.selectedCreator = nil
                             }
                         }
                     } else {
-                        PatreonView()
+                        CreatorView()
                     }
 //                case .protect:
 //                    ProtectorView(service: protectorService)
                 case .profile:
-                    PatreonView()
+                    // Set selected creator to self when showing profile
+                    CreatorView()
+                        .onAppear {
+                            if let profile = ViewModelFactory.shared.getCurrentProfile() {
+                                // Create a Creator object from current profile
+                                let selfCreator = Creator(
+                                    id: profile.id.uuidString,
+                                    name: profile.name,
+                                    imageURL: "",
+                                    latestUpdate: "My Profile",
+                                    tier: "Creator",
+                                    socialLinks: [], // Add any social links if available
+                                    notificationCount: 0,
+                                    bio: profile.blurb ?? ""
+                                )
+                                sharedState.selectedCreator = selfCreator
+                            }
+                        }
                 }
 
                 // Create Button
