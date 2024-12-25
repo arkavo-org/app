@@ -1,3 +1,4 @@
+import ArkavoSocial
 import SwiftUI
 
 struct PatreonView: View {
@@ -303,7 +304,7 @@ struct CreatorDetailView: View {
                 case .about:
                     CreatorAboutSection(creator: creator)
                 case .media:
-                    CreatorMediaSection(mediaItems: mediaItems)
+                    CreatorMediaSection(creator: creator)
                 case .posts:
                     CreatorPostsSection(posts: CreatorPost.samplePosts)
                 case .schedule:
@@ -432,24 +433,58 @@ struct CreatorAboutSection: View {
 }
 
 struct CreatorMediaSection: View {
-    let mediaItems: [MediaItem]
-    @State private var selectedMedia: MediaItem?
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-    ]
+    let viewModel = ViewModelFactory.shared.makePatreonViewModel()
+    let creator: Creator
+    @Environment(\.managedObjectContext) private var viewContext
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(mediaItems) { item in
-                MediaItemView(item: item)
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16),
+        ], spacing: 16) {
+            ForEach(viewModel.videoThoughts, id: \.id) { thought in
+                VideoThoughtView(thought: thought)
                     .onTapGesture {
-                        selectedMedia = item
+                        // FIXME: Handle video selection
+                        print("send thought")
                     }
             }
         }
         .padding()
+    }
+}
+
+struct VideoThoughtView: View {
+    let thought: Thought
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geometry in
+                ZStack {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .aspectRatio(16 / 9, contentMode: .fill)
+                        .frame(width: geometry.size.width)
+                        .cornerRadius(8)
+                        .clipped()
+
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.largeTitle)
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(height: 120)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(thought.metadata.summary)
+                    .font(.subheadline)
+                    .lineLimit(2)
+
+                Text(thought.metadata.createdAt, style: .relative)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 }
 
@@ -760,4 +795,64 @@ extension Message {
             isPinned: true
         ),
     ]
+}
+
+@MainActor
+final class PatreonViewModel: ObservableObject {
+    private let client: ArkavoClient
+    private let account: Account
+    private let profile: Profile
+
+    // Published properties
+    @Published private(set) var isLoading = false
+    @Published private(set) var error: Error?
+    @Published private(set) var creators: [Creator] = []
+    @Published private(set) var videoThoughts: [Thought] = []
+    @Published private(set) var supportedCreators: [Creator] = []
+    @Published private(set) var messages: [Message] = []
+
+    init(client: ArkavoClient, account: Account, profile: Profile) {
+        self.client = client
+        self.account = account
+        self.profile = profile
+        loadVideoThoughts()
+    }
+
+    // MARK: - Public Methods
+
+    func loadCreators() async {}
+
+    func loadVideoThoughts() {
+        let videoStream = account.streams.first(where: { stream in
+            stream.sources.first?.metadata.mediaType == .video
+        })
+        if videoStream != nil {
+            videoThoughts = videoStream!.thoughts
+        }
+    }
+
+    func loadSupportedCreators() async {}
+
+    func loadMessages(for _: Creator) async {}
+
+    func supportCreator(_: Creator, tier _: CreatorTier) async {}
+
+    func cancelSupport(for _: Creator) async {}
+
+    // MARK: - Creator Status Methods
+
+    func isSupporting(_ creator: Creator) -> Bool {
+        supportedCreators.contains { $0.id == creator.id }
+    }
+
+    func currentTier(for _: Creator) -> CreatorTier? {
+        CreatorTier.premium
+    }
+
+    // MARK: - Helper Methods
+
+    private func handleError(_ error: Error) {
+        self.error = error
+        isLoading = false
+    }
 }

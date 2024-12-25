@@ -540,4 +540,14 @@ final class ViewModelFactory {
             profile: currentProfile!
         )
     }
+
+    @MainActor
+    func makePatreonViewModel() -> PatreonViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return PatreonViewModel(
+            client: client,
+            account: currentAccount!,
+            profile: currentProfile!
+        )
+    }
 }
