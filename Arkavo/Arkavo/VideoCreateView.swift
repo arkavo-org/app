@@ -151,80 +151,44 @@ struct VideoCreateView: View {
 
     private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
         let asset = AVURLAsset(url: url)
-        let track = try await asset.loadTracks(withMediaType: .video).first
-        let naturalSize = try await track?.load(.naturalSize) ?? CGSize(width: 1080, height: 1920)
 
-        let temporaryDirectory = FileManager.default.temporaryDirectory
-        let outputURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
-        // Get original transform to preserve orientation
-        let originalTransform = try await track?.load(.preferredTransform) ?? .identity
-        // Initial compression settings
-        let compressionSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: Int(naturalSize.width),
-            AVVideoHeightKey: Int(naturalSize.height),
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 800_000,
-                AVVideoProfileLevelKey: "HEVC_Main_AutoLevel",
-                AVVideoMaxKeyFrameIntervalKey: 1,
-                AVVideoExpectedSourceFrameRateKey: 30,
-                AVVideoQualityKey: 0.6,
-            ],
+        // Try different export presets in order of decreasing quality
+        let presets = [
+            AVAssetExportPresetHighestQuality,
+            AVAssetExportPreset1920x1080,
+            AVAssetExportPreset1280x720,
+            AVAssetExportPresetMediumQuality,
+            AVAssetExportPreset960x540,
+            AVAssetExportPresetLowQuality,
+            AVAssetExportPreset640x480,
         ]
 
-        // First compression attempt
-        print("Starting initial compression with 800Kbps bitrate...")
-        let compressedData = try await exportVideo(
-            asset: asset,
-            toURL: outputURL,
-            settings: compressionSettings,
-            originalTransform: originalTransform
-        )
-        print("Initial compression result: \(compressedData.count) bytes (target: \(targetSize) bytes)")
+        for preset in presets {
+            let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
 
-        // Progressive bitrate reduction strategy
-        let bitrates = [800_000, 600_000, 450_000, 350_000, 250_000, 150_000]
-        var resultData = compressedData
-        var index = 0
+            print("\nTrying compression with preset: \(preset)")
 
-        while resultData.count > targetSize, index < bitrates.count {
-            let currentBitrate = bitrates[index]
-            print("\nAttempting compression with \(currentBitrate / 1000)Kbps bitrate...")
+            guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
+                continue
+            }
 
-            var newSettings = compressionSettings
-            var properties = newSettings[AVVideoCompressionPropertiesKey] as! [String: Any]
-            properties[AVVideoAverageBitRateKey] = currentBitrate
-            newSettings[AVVideoCompressionPropertiesKey] = properties
+            exporter.outputURL = outputURL
+            exporter.outputFileType = .mp4
+            exporter.shouldOptimizeForNetworkUse = true
 
-            let retryAsset = AVURLAsset(url: url)
-            let retryURL = temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+            try await exporter.export(to: outputURL, as: .mp4)
 
-            let previousSize = resultData.count
-            resultData = try await exportVideo(
-                asset: retryAsset,
-                toURL: retryURL,
-                settings: newSettings,
-                originalTransform: originalTransform
-            )
-            let reduction = 100.0 - (Double(resultData.count) / Double(previousSize) * 100.0)
+            let compressedData = try Data(contentsOf: outputURL)
+            print("Compressed size: \(compressedData.count) bytes")
 
-            print("Compression result: \(resultData.count) bytes")
-            print("Size reduction: \(String(format: "%.1f%%", reduction)) from previous attempt")
-            print("Current size vs target: \(resultData.count) vs \(targetSize) bytes")
+            try? FileManager.default.removeItem(at: outputURL)
 
-            try? FileManager.default.removeItem(at: retryURL)
-            index += 1
+            if compressedData.count <= targetSize {
+                return compressedData
+            }
         }
 
-        // Clean up
-        try? FileManager.default.removeItem(at: outputURL)
-
-        print("\nFinal compression result: \(resultData.count) bytes")
-        if resultData.count > targetSize {
-            print("⚠️ Warning: Could not achieve target size of \(targetSize) bytes after all compression attempts")
-        }
-
-        return resultData
+        throw VideoError.compressionFailed("Could not compress video to target size with any preset")
     }
 
     @MainActor
