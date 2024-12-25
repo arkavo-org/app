@@ -230,50 +230,17 @@ struct VideoPlayerView: View {
                     Spacer()
 
                     // Right side - Action buttons
-                    VStack(alignment: .trailing, spacing: systemMargin * 1.25) { // 20pt
+                    VStack(alignment: .trailing) {
                         Spacer()
 
-                        VStack(spacing: systemMargin * 1.25) { // 20pt
-                            GroupChatIconList(
-                                currentVideo: video,
-                                servers: viewModel.servers()
-                            )
-                            .padding(.trailing, systemMargin)
-                            .padding(.vertical, systemMargin * 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(.ultraThinMaterial.opacity(0.4))
-                                    .padding(.trailing, systemMargin / 2)
-                            )
-//                            Button {
-//                                withAnimation(.spring()) {
-//                                    isLiked.toggle()
-//                                    likesCount += isLiked ? 1 : -1
-//                                }
-//                            } label: {
-//                                VStack(spacing: systemMargin * 0.25) { // 4pt
-//                                    Image(systemName: isLiked ? "heart.fill" : "heart")
-//                                        .font(.system(size: systemMargin * 1.75)) // 28pt
-//                                        .foregroundColor(isLiked ? .red : .white)
-//                                    Text("\(likesCount)")
-//                                        .font(.caption)
-//                                        .foregroundColor(.white)
-//                                }
-//                            }
-                            Button {
-                                showChat = true
-                            } label: {
-                                VStack(spacing: systemMargin * 0.25) { // 4pt
-                                    Image(systemName: "bubble.right")
-                                        .font(.system(size: systemMargin * 1.625)) // 26pt
-                                    Text("\(video.comments)")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.white)
-                            }
-                        }
+                        GroupChatIconList(
+                            currentVideo: video,
+                            servers: viewModel.servers(),
+                            comments: video.comments,
+                            showChat: $showChat
+                        )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
-                        .padding(.bottom, systemMargin * 6.25) // 100pt
+                        .padding(.bottom, systemMargin * 6.25)
                     }
                 }
 
@@ -329,18 +296,95 @@ struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video
     let servers: [Server]
+    let comments: Int
+    @State private var isCollapsed = true
+    @State private var showMenuButton = true
+    @Binding var showChat: Bool
+
+    // Timer to auto-collapse after 4 seconds
+    let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 16) {
-            ForEach(servers) { server in
+        ZStack(alignment: .trailing) {
+            if !isCollapsed {
+                // Expanded view with all buttons
+                VStack(spacing: 20) { // Even spacing between all items
+                    ForEach(servers) { server in
+                        Button {
+                            sharedState.selectedVideo = currentVideo
+                            sharedState.selectedServer = server
+                            sharedState.selectedTab = .communities
+                        } label: {
+                            Image(systemName: server.icon)
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+
+                    // Comment button integrated into the list
+                    Button {
+                        showChat = true
+                        withAnimation(.spring()) {
+                            isCollapsed = true
+                            showMenuButton = true
+                        }
+                    } label: {
+                        Image(systemName: "bubble.right")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                }
+                .padding(.vertical, 16)
+                .frame(width: 60) // Fixed width container
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 30))
+                .transition(AnyTransition.asymmetric(
+                    insertion: .scale(scale: 0.1, anchor: .trailing)
+                        .combined(with: .opacity),
+                    removal: .scale(scale: 0.1, anchor: .trailing)
+                        .combined(with: .opacity)
+                ))
+            }
+
+            // Collapsed state
+            if showMenuButton, isCollapsed {
                 Button {
-                    sharedState.selectedVideo = currentVideo
-                    sharedState.selectedServer = server
-                    sharedState.selectedTab = .communities
+                    expandMenu()
                 } label: {
-                    ServerButton(server: server, isSelected: false) // selectedServer?.id == server.id
+                    VStack(spacing: 4) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.title3)
+                    }
+                    .foregroundColor(.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+                }
+                .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .onReceive(collapseTimer) { _ in
+            if !isCollapsed {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.spring()) {
+                        isCollapsed = true
+                        showMenuButton = true
+                    }
                 }
             }
+        }
+    }
+
+    private func expandMenu() {
+        withAnimation(.easeOut(duration: 0.1)) {
+            showMenuButton = false
+        }
+
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
+            isCollapsed = false
         }
     }
 }
@@ -352,27 +396,10 @@ struct ServerButton: View {
     let isSelected: Bool
 
     var body: some View {
-        ZStack {
-            // Background and selection indicator
-            Circle()
-                .fill(isSelected ? Color.blue.opacity(0.2) : Color.black.opacity(0.3))
-                .frame(width: 48, height: 48)
-
-            // Server icon
-            Image(systemName: server.icon)
-                .font(.title3)
-                .foregroundStyle(isSelected ? .blue : .white)
-                .symbolEffect(.bounce, value: isSelected)
-
-            // Selection ring
-            if isSelected {
-                Circle()
-                    .strokeBorder(Color.blue, lineWidth: 2)
-                    .frame(width: 48, height: 48)
-            }
-        }
-        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-        .contentShape(Circle())
+        Image(systemName: server.icon)
+            .font(.title3)
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .frame(width: 44, alignment: .trailing)
     }
 }
 
