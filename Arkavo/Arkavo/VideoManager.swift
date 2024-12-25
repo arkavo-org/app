@@ -38,7 +38,6 @@ class VideoRecordingManager {
     }
 
     private func setupCaptureSession() async throws {
-        // Force HD 1080x1920 for portrait
         captureSession.sessionPreset = .hd1920x1080
 
         guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera,
@@ -60,13 +59,8 @@ class VideoRecordingManager {
             }
             captureSession.addOutput(videoOutput)
 
-            // Force portrait orientation using rotation angle (90 degrees)
+            // Configure video connection
             if let connection = videoOutput.connection(with: .video) {
-                let portraitAngle = CGFloat.pi / 2 // 90 degrees
-                if connection.isVideoRotationAngleSupported(portraitAngle) {
-                    connection.videoRotationAngle = portraitAngle
-                }
-
                 // Enable video stabilization if available
                 if connection.isVideoStabilizationSupported {
                     connection.preferredVideoStabilizationMode = .auto
@@ -218,6 +212,7 @@ actor HLSProcessingManager {
     }
 
     private func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
+        print("generateThumbnail")
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
 
@@ -247,9 +242,7 @@ final class VideoPlayerManager: NSObject {
 
     func setupPlayer(in view: UIView) {
         let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.videoGravity = .resizeAspect
-//        playerLayer.videoGravity = .resizeAspectFill
-//        view.layer.masksToBounds = true
+        playerLayer.videoGravity = .resizeAspectFill
         playerLayer.frame = view.bounds
         view.layer.addSublayer(playerLayer)
         self.playerLayer = playerLayer
@@ -260,69 +253,21 @@ final class VideoPlayerManager: NSObject {
         playerLayer?.frame = view.bounds
     }
 
+    @objc private func playerItemDidReachEnd(notification _: Notification) {
+        print("📼 Video playback completed")
+    }
+
     func playVideo(url: URL) {
-        print("📹 Playing video: \(url)")
-        let asset = AVURLAsset(url: url)
-        let item = AVPlayerItem(asset: asset)
-
-        // Debug video track info
-        Task {
-            do {
-                let tracks = try await asset.loadTracks(withMediaType: .video)
-                if let videoTrack = tracks.first {
-                    let naturalSize = try await videoTrack.load(.naturalSize)
-                    let transform = try await videoTrack.load(.preferredTransform)
-
-                    print("\n📼 Video Track Info:")
-                    print("- Natural size: \(naturalSize)")
-                    print("- Transform matrix: \(transform)")
-
-                    // Create a video composition
-                    let videoComposition = AVMutableVideoComposition()
-                    videoComposition.renderSize = naturalSize
-                    videoComposition.frameDuration = CMTimeMake(value: 1, timescale: 30)
-
-                    print("🔍 Video Composition Render Size: \(videoComposition.renderSize)")
-                    print("🔍 Video Composition Frame Duration: \(videoComposition.frameDuration)")
-
-                    // Create a composition instruction
-                    let instruction = AVMutableVideoCompositionInstruction()
-                    instruction.timeRange = CMTimeRangeMake(start: .zero, duration: asset.duration)
-
-                    print("🔍 Composition Instruction Time Range: \(instruction.timeRange)")
-
-                    // Create a layer instruction for the video track
-                    let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-
-                    print("🔍 Layer Instruction Track ID: \(videoTrack.trackID)")
-
-                    // Apply the transform to the layer instruction
-                    layerInstruction.setTransform(transform, at: .zero)
-
-                    print("🔍 Layer Instruction Transform Applied: \(transform)")
-
-                    // Add the layer instruction to the composition instruction
-                    instruction.layerInstructions = [layerInstruction]
-
-                    print("🔍 Composition Instruction Layer Instructions: \(instruction.layerInstructions)")
-
-                    // Add the instruction to the video composition
-                    videoComposition.instructions = [instruction]
-
-                    print("🔍 Video Composition Instructions: \(videoComposition.instructions)")
-
-                    // Set the video composition on the player item
-                    item.videoComposition = videoComposition
-
-                    print("🔍 Player Item Video Composition: \(String(describing: item.videoComposition))")
-                }
-            } catch {
-                print("❌ Error loading video track info: \(error)")
-            }
+        print("📊 Playing video: \(url)")
+        if let preloadedItem = preloadedItems[url.absoluteString] {
+            currentItem = preloadedItem
+            player.replaceCurrentItem(with: preloadedItem)
+        } else {
+            let asset = AVURLAsset(url: url)
+            let item = AVPlayerItem(asset: asset)
+            currentItem = item
+            player.replaceCurrentItem(with: item)
         }
-
-        currentItem = item
-        player.replaceCurrentItem(with: item)
         player.seek(to: .zero)
         player.play()
     }

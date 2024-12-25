@@ -182,8 +182,8 @@ struct VideoCreateView: View {
         )
         print("Initial compression result: \(compressedData.count) bytes (target: \(targetSize) bytes)")
 
-        // Progressive bitrate reduction if needed
-        let bitrates = [600_000, 450_000, 350_000, 250_000]
+        // Progressive bitrate reduction strategy
+        let bitrates = [800_000, 600_000, 450_000, 350_000, 250_000, 150_000]
         var resultData = compressedData
         var index = 0
 
@@ -232,19 +232,18 @@ struct VideoCreateView: View {
         asset: AVURLAsset,
         toURL: URL,
         settings _: [String: Any],
-        originalTransform: CGAffineTransform
+        originalTransform _: CGAffineTransform
     ) async throws -> Data {
-        let composition = AVMutableComposition()
-
         guard let assetTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw VideoError.compressionFailed("Failed to get video track")
         }
 
-        // Use original size for composition
-        let naturalSize = try await assetTrack.load(.naturalSize)
-        composition.naturalSize = naturalSize
+        let originalNaturalSize = try await assetTrack.load(.naturalSize)
 
-        // Create and add video track
+        // Create composition with portrait dimensions
+        let composition = AVMutableComposition()
+        composition.naturalSize = CGSize(width: 1080, height: 1920)
+
         guard let compositionTrack = composition.addMutableTrack(
             withMediaType: .video,
             preferredTrackID: kCMPersistentTrackID_Invalid
@@ -252,83 +251,107 @@ struct VideoCreateView: View {
             throw VideoError.compressionFailed("Failed to create composition track")
         }
 
-        // Insert the video
+        // Insert the video track
         try await compositionTrack.insertTimeRange(
             CMTimeRange(start: .zero, duration: asset.load(.duration)),
             of: assetTrack,
             at: .zero
         )
 
-        // Modify the video track to preserve the rotation metadata
-        let videoTrack = composition.tracks(withMediaType: .video).first!
-        videoTrack.preferredTransform = originalTransform
-
-        // Create a video composition for the export session
+        // Create video composition
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.renderSize = naturalSize
         videoComposition.frameDuration = CMTimeMake(value: 1, timescale: 30)
+        videoComposition.renderSize = CGSize(width: 1080, height: 1920)
+        videoComposition.renderScale = 1.0
 
-        print("🔍 Video Composition Render Size: \(videoComposition.renderSize)")
-        print("🔍 Video Composition Frame Duration: \(videoComposition.frameDuration)")
-
-        // Create a composition instruction
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = CMTimeRangeMake(start: .zero, duration: composition.duration)
 
-        print("🔍 Composition Instruction Time Range: \(instruction.timeRange)")
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionTrack)
 
-        // Create a layer instruction for the video track
-        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+        // Calculate correct transform
+        var transform = CGAffineTransform.identity
 
-        print("🔍 Layer Instruction Track ID: \(compositionTrack.trackID)")
+        // First translate to center the video
+        transform = transform.translatedBy(x: 1080, y: 0)
 
-        // Apply the transform to the layer instruction
-        layerInstruction.setTransform(originalTransform, at: .zero)
+        // Then rotate 90 degrees clockwise
+        transform = transform.rotated(by: .pi / 2)
 
-        print("🔍 Layer Instruction Transform Applied: \(originalTransform)")
+        // Set the transform for the entire duration
+        layerInstruction.setTransform(transform, at: .zero)
 
-        // Add the layer instruction to the composition instruction
         instruction.layerInstructions = [layerInstruction]
-
-        print("🔍 Composition Instruction Layer Instructions: \(instruction.layerInstructions)")
-
-        // Add the instruction to the video composition
         videoComposition.instructions = [instruction]
 
-        print("🔍 Video Composition Instructions: \(videoComposition.instructions)")
-
-        // Create export session
+        // Configure export session
         guard let exporter = AVAssetExportSession(
             asset: composition,
-            presetName: AVAssetExportPresetHEVC1920x1080
+            presetName: AVAssetExportPresetHighestQuality // Changed to highest quality
         ) else {
-            throw VideoError.exportSessionCreationFailed("Failed to create HEVC export session")
+            throw VideoError.exportSessionCreationFailed("Failed to create export session")
         }
 
-        // Configure the export
         exporter.outputURL = toURL
         exporter.outputFileType = .mp4
-        exporter.videoComposition = videoComposition // Ensure the transform is preserved
+        exporter.videoComposition = videoComposition
         exporter.shouldOptimizeForNetworkUse = true
 
-        print("🔍 Export Session Video Composition: \(String(describing: exporter.videoComposition))")
+        // Perform export
+        try await exporter.export(to: toURL, as: .mp4)
 
-        // Use the new async export method
-        do {
-            try await exporter.export(to: toURL, as: .mp4)
-            print("✅ Export completed successfully")
-        } catch {
-            print("❌ Export failed with error: \(error.localizedDescription)")
-            throw VideoError.exportFailed("Export failed: \(error.localizedDescription)")
+        // Verify export
+        if exporter.status == .failed {
+            throw VideoError.exportSessionCreationFailed(exporter.error?.localizedDescription ?? "Export failed")
         }
 
-        print("Export complete - checking file size...")
-        let fileSize = try toURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        print("Exported file size: \(fileSize) bytes")
-
+        // Load and return data
         return try Data(contentsOf: toURL)
     }
 
+    // Helper function to determine the correct render size
+    private func determineRenderSize(
+        naturalSize: CGSize,
+        transform: CGAffineTransform
+    ) -> CGSize {
+        // If the transform suggests a 90 or 270-degree rotation, swap width and height
+        if abs(transform.a) < 0.1 {
+            return CGSize(width: naturalSize.height, height: naturalSize.width)
+        }
+        return naturalSize
+    }
+
+    // Helper function to determine the correct transform
+    private func determineCorrectedTransform(
+        originalTransform: CGAffineTransform,
+        renderSize: CGSize
+    ) -> CGAffineTransform {
+        var correctedTransform = originalTransform
+
+        // Check if the original transform suggests a 90 or 270-degree rotation
+        if abs(correctedTransform.a) < 0.1 {
+            // Adjust the translation to center the video
+            correctedTransform.tx = renderSize.height
+            correctedTransform.ty = 0
+        }
+
+        // Ensure no unintended scaling
+        correctedTransform.a = 1.0 // Scale X
+        correctedTransform.d = 1.0 // Scale Y
+
+        // Apply the rotation based on the original transform
+        if originalTransform.b == 1.0, originalTransform.c == -1.0 {
+            // 90-degree rotation (portrait)
+            correctedTransform = correctedTransform.rotated(by: .pi / 2)
+        } else if originalTransform.b == -1.0, originalTransform.c == 1.0 {
+            // 270-degree rotation (portrait upside down)
+            correctedTransform = correctedTransform.rotated(by: -.pi / 2)
+        }
+
+        return correctedTransform
+    }
+
+    //         correctedTransform.tx += renderSize.width * 0.2 // Adjust the multiplier to control the shift amount
     private func showError(message: String) {
         errorMessage = message
         showError = true
@@ -699,7 +722,7 @@ final class VideoRecordingViewModel: ObservableObject {
 
             // Upload the video
             recordingState = .uploading
-
+            // FIXME: create nano and send here
             let result = UploadResult(
                 id: processedVideo.directory.lastPathComponent,
                 playbackURL: videoURL.absoluteString
