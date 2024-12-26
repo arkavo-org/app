@@ -3,7 +3,7 @@ import SwiftUI
 
 struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
     @State private var creators: [Creator] = []
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
@@ -153,7 +153,7 @@ struct CreatorCard: View {
 
 struct CreatorDetailView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
     let creator: Creator
     @State private var selectedSection: DetailSection = .about
 
@@ -201,7 +201,7 @@ struct CreatorDetailView: View {
 }
 
 struct CreatorHeaderView: View {
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
     let creator: Creator
     let onSupport: () -> Void
 
@@ -284,7 +284,7 @@ struct StatView: View {
 }
 
 struct CreatorAboutSection: View {
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
     @EnvironmentObject var sharedState: SharedState
     @State private var editedBio: String = ""
     @State private var isSubmitting = false
@@ -358,7 +358,7 @@ struct CreatorAboutSection: View {
 }
 
 struct CreatorVideosSection: View {
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
         LazyVGrid(columns: [
@@ -415,7 +415,7 @@ struct VideoThoughtView: View {
 }
 
 struct CreatorPostsSection: View {
-    @StateObject var viewModel: PatreonViewModel
+    @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
         LazyVStack(spacing: 16) {
@@ -514,7 +514,7 @@ extension Message {
 // Models
 
 @MainActor
-final class PatreonViewModel: ObservableObject {
+final class CreatorViewModel: ObservableObject {
     private let client: ArkavoClient
     private let account: Account
     private let profile: Profile

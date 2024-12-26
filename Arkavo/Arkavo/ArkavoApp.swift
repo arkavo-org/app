@@ -593,9 +593,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makePatreonViewModel() -> PatreonViewModel {
+    func makePatreonViewModel() -> CreatorViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return PatreonViewModel(
+        return CreatorViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!
