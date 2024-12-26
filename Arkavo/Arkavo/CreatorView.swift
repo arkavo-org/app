@@ -187,11 +187,11 @@ struct CreatorDetailView: View {
 
                 switch selectedSection {
                 case .about:
-                    CreatorAboutSection(viewModel: viewModel, creator: creator)
+                    CreatorAboutSection(viewModel: viewModel)
                 case .videos:
-                    CreatorVideosSection(viewModel: viewModel, creator: creator)
+                    CreatorVideosSection(viewModel: viewModel)
                 case .posts:
-                    CreatorPostsSection(posts: CreatorPost.samplePosts)
+                    CreatorPostsSection(viewModel: viewModel)
                 }
             }
         }
@@ -220,7 +220,7 @@ struct CreatorHeaderView: View {
                     .clipShape(Circle())
 
                 HStack(spacing: statsSpacing) {
-                    StatView(title: "Posts", value: "324")
+                    StatView(title: "Posts", value: "\(viewModel.postThoughts.count)")
                     StatView(title: "Videos", value: "\(viewModel.videoThoughts.count)")
                     StatView(title: "Supporters", value: "--")
                 }
@@ -285,7 +285,6 @@ struct StatView: View {
 
 struct CreatorAboutSection: View {
     @StateObject var viewModel: PatreonViewModel
-    let creator: Creator
     @EnvironmentObject var sharedState: SharedState
     @State private var editedBio: String = ""
     @State private var isSubmitting = false
@@ -360,7 +359,6 @@ struct CreatorAboutSection: View {
 
 struct CreatorVideosSection: View {
     @StateObject var viewModel: PatreonViewModel
-    let creator: Creator
 
     var body: some View {
         LazyVGrid(columns: [
@@ -417,11 +415,19 @@ struct VideoThoughtView: View {
 }
 
 struct CreatorPostsSection: View {
-    let posts: [CreatorPost]
+    @StateObject var viewModel: PatreonViewModel
 
     var body: some View {
         LazyVStack(spacing: 16) {
-            ForEach(posts) { post in
+            ForEach(viewModel.postThoughts.map { thought in
+                CreatorPost(
+                    id: thought.id.uuidString,
+                    content: thought.metadata.summary,
+                    mediaURL: nil,
+                    timestamp: thought.metadata.createdAt,
+                    tierAccess: .basic
+                )
+            }) { post in
                 CreatorPostCard(post: post)
             }
         }
@@ -518,6 +524,7 @@ final class PatreonViewModel: ObservableObject {
     @Published private(set) var error: Error?
     @Published private(set) var creators: [Creator] = []
     @Published private(set) var videoThoughts: [Thought] = []
+    @Published private(set) var postThoughts: [Thought] = []
     @Published private(set) var supportedCreators: [Creator] = []
     @Published private(set) var messages: [Message] = []
 
@@ -526,18 +533,19 @@ final class PatreonViewModel: ObservableObject {
         self.account = account
         self.profile = profile
         loadVideoThoughts()
+        loadPostThoughts()
     }
 
     // MARK: - Public Methods
 
     func loadCreators() async {
-        isLoading = true
-        do {
-            // Implementation pending
-            isLoading = false
-        } catch {
-            handleError(error)
-        }
+//        isLoading = true
+//        do {
+//            // Implementation pending
+//            isLoading = false
+//        } catch {
+//            handleError(error)
+//        }
     }
 
     var bio: String {
@@ -568,43 +576,44 @@ final class PatreonViewModel: ObservableObject {
     }
 
     func loadSupportedCreators() async {
-        isLoading = true
-        do {
-            // Implementation pending
-            isLoading = false
-        } catch {
-            handleError(error)
-        }
+//        isLoading = true
+//        do {
+//            // Implementation pending
+//            isLoading = false
+//        } catch {
+//            handleError(error)
+//        }
     }
 
-    func loadMessages(for _: Creator) async {
-        isLoading = true
-        do {
-            // Implementation pending
-            isLoading = false
-        } catch {
-            handleError(error)
+    func loadPostThoughts() {
+        let postStream = account.streams.first(where: { stream in
+            stream.sources.first?.metadata.mediaType == .text
+        })
+        if postStream != nil {
+            postThoughts = postStream!.thoughts.sorted { thought1, thought2 in
+                thought1.metadata.createdAt > thought2.metadata.createdAt
+            }
         }
     }
 
     func supportCreator(_: Creator, tier _: CreatorTier) async {
-        isLoading = true
-        do {
-            // Implementation pending
-            isLoading = false
-        } catch {
-            handleError(error)
-        }
+//        isLoading = true
+//        do {
+//            // Implementation pending
+//            isLoading = false
+//        } catch {
+//            handleError(error)
+//        }
     }
 
     func cancelSupport(for _: Creator) async {
-        isLoading = true
-        do {
-            // Implementation pending
-            isLoading = false
-        } catch {
-            handleError(error)
-        }
+//        isLoading = true
+//        do {
+//            // Implementation pending
+//            isLoading = false
+//        } catch {
+//            handleError(error)
+//        }
     }
 
     // MARK: - Creator Status Methods

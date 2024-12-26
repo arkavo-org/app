@@ -164,8 +164,11 @@ class PostFeedViewModel: ObservableObject {
 
     private func loadThoughts() async {
         isLoading = true
-        // FIXME: request thoughts, or show loading spinner
-        thoughts = SampleData.recentThoughts
+        // Wait until thoughts have a count greater than 0
+        while thoughts.isEmpty {
+            // Sleep for a short duration to avoid busy-waiting
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        }
         isLoading = false
     }
 
@@ -322,9 +325,9 @@ class PostFeedViewModel: ObservableObject {
         _ = try PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
 
-        // Update UI
-        await MainActor.run {
-            thoughts.insert(thought, at: 0)
+        if let postStream = getPostStream() {
+            postStream.addThought(thought)
+            try await PersistenceController.shared.saveChanges()
         }
     }
 
@@ -621,43 +624,4 @@ struct ImmersiveThoughtCard: View {
             }
         }
     }
-}
-
-// MARK: - Sample Data
-
-enum SampleData {
-    static let creator = Creator(
-        id: "1",
-        name: "Alice Johnson 🌟",
-        imageURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-        latestUpdate: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮",
-        tier: "Premium",
-        socialLinks: [],
-        notificationCount: 0,
-        bio: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉"
-    )
-
-    static let recentThoughts: [Thought] = {
-        let metadata1 = Thought.Metadata(
-            creator: UUID(),
-            streamPublicID: Data(), // No specific stream for feed posts
-            mediaType: .text,
-            createdAt: Date().addingTimeInterval(-3600),
-            summary: "Just finished a deep dive into ActivityPub and AT Protocol integration. The future of social media is decentralized! 🚀",
-            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
-        )
-        let thought1 = Thought(nano: Data(), metadata: metadata1)
-
-        let metadata2 = Thought.Metadata(
-            creator: UUID(),
-            streamPublicID: Data(), // No specific stream for feed posts
-            mediaType: .text,
-            createdAt: Date().addingTimeInterval(-7200),
-            summary: "Speaking at @DecentralizedWeb Summit next month about design patterns in federated social networks. Who else is going to be there?",
-            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
-        )
-        let thought2 = Thought(nano: Data(), metadata: metadata2)
-
-        return [thought1, thought2]
-    }()
 }
