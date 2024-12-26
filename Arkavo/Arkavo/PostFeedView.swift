@@ -143,22 +143,32 @@ class PostFeedViewModel: ObservableObject {
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        switch stream.policies.age {
-        case .onlyAdults:
-            "person.fill"
-        case .onlyKids:
-            "figure.child"
-        case .forAll:
-            "figure.wave"
-        case .onlyTeens:
-            "person.3.fill"
-        }
+        // Convert the publicID to a hash value
+        let hashValue = stream.publicID.hashValue
+        
+        // Use the hash value modulo 32 to determine the icon
+        let iconIndex = abs(hashValue) % 32
+        
+        // Define an array of 32 SF Symbols
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill"
+        ]
+        
+        // Ensure the iconIndex is within bounds
+        return iconNames[iconIndex]
     }
 
     func getPostStream() -> Stream? {
         // Find the stream that's marked as a post stream (has a text source thought)
         account.streams.first { stream in
-            stream.sources.first?.metadata.mediaType == .text
+            stream.source?.metadata.mediaType == .text
         }
     }
 

@@ -37,6 +37,8 @@
 		DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D8842CF6E16F0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
+		DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */; };
+		DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
 		DA73E7F52CF961180078D943 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA73E7F42CF961180078D943 /* ArkavoSocial */; };
 		DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7598BE2C95EE540021A8FC /* ThoughtService.swift */; };
@@ -124,6 +126,8 @@
 		DA44D8842CF6E16F0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotGenerator.swift; sourceTree = "<group>"; };
+		DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
 		DA7598BE2C95EE540021A8FC /* ThoughtService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtService.swift; sourceTree = "<group>"; };
 		DA7598C02C96108C0021A8FC /* ArkavoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoService.swift; sourceTree = "<group>"; };
@@ -228,6 +232,7 @@
 				DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */,
 				DAAFCBF72D091A4A003FC56F /* PostFeedView.swift */,
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
+				DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */,
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
@@ -274,6 +279,7 @@
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
 				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
 				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
+				DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */,
 				DA44D8842CF6E16F0007C89B /* Secrets.swift */,
 				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
@@ -492,6 +498,7 @@
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
+				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
@@ -515,6 +522,7 @@
 				DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */,
 				DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */,
 				DA78EF892C85FE4F00B89422 /* PersistenceController.swift in Sources */,
+				DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,

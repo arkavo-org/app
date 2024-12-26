@@ -111,7 +111,8 @@ struct ContributorsView: View {
             if let mainContributor = contributors.first {
                 Button {
                     sharedState.selectedCreator = mainContributor.creator
-                    sharedState.selectedTab = .creators
+                    // FIXME creators
+                    sharedState.selectedTab = .profile
                     sharedState.showCreateView = false
                 } label: {
                     HStack(spacing: 8) {
@@ -139,7 +140,8 @@ struct ContributorsView: View {
                     ForEach(contributors.dropFirst()) { contributor in
                         Button {
                             sharedState.selectedCreator = contributor.creator
-                            sharedState.selectedTab = .creators
+                            // FIXME creators
+                            sharedState.selectedTab = .profile
                             sharedState.showCreateView = false
                         } label: {
                             HStack(spacing: 8) {
@@ -396,18 +398,6 @@ struct GroupChatIconList: View {
 }
 
 // MARK: - Server Button Component
-
-struct ServerButton: View {
-    let server: Server
-    let isSelected: Bool
-
-    var body: some View {
-        Image(systemName: server.icon)
-            .font(.title3)
-            .foregroundColor(isSelected ? .primary : .secondary)
-            .frame(width: 44, alignment: .trailing)
-    }
-}
 
 struct VerticalText: View {
     let text: String
@@ -675,7 +665,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     func getOrCreateVideoStream() async throws -> Stream {
         // First check for existing video stream
         if let existingStream = account.streams.first(where: { stream in
-            stream.sources.first?.metadata.mediaType == .video
+            stream.source?.metadata.mediaType == .video
         }) {
             return existingStream
         }
@@ -739,7 +729,11 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     }
 
     func servers() -> [Server] {
-        let servers = account.streams.map { stream in
+        let allStreams = account.streams
+        let streams = allStreams.filter { stream in
+            return stream.isGroupChatStream
+        }
+        let servers = streams.map { stream in
             Server(
                 id: stream.id.uuidString,
                 name: stream.profile.name,

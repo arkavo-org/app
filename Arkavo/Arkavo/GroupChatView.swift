@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - Models
 
 @MainActor
-class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
+class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -28,7 +28,14 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
     }
 
     private func loadStreams() async {
-        streams = account.streams
+        // Get all account streams
+        let allStreams = account.streams
+        
+        // Filter to only include streams with no initial thoughts (group chat streams)
+        streams = allStreams.filter { stream in
+            // If there are no sources (initial thoughts), it's a group chat stream
+            return stream.isGroupChatStream
+        }
     }
 
     private func setupNotifications() {
@@ -313,7 +320,7 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
             icon: iconForStream(stream),
             unreadCount: stream.thoughts.count,
             hasNotification: !stream.thoughts.isEmpty,
-            description: stream.profile.blurb ?? "No description available",
+            description: stream.profile.blurb ?? "",
             policies: StreamPolicies(
                 agePolicy: stream.policies.age,
                 admissionPolicy: stream.policies.admission,
@@ -503,7 +510,7 @@ struct Server: Identifiable, Hashable, Equatable {
 
 struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeDiscordViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
@@ -515,12 +522,21 @@ struct GroupChatView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     // MARK: - Stream List
-
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            if viewModel.streams.isEmpty {
-                                EmptyStateView()
-                            } else {
+                    if viewModel.streams.isEmpty {
+                        VStack {
+                            Spacer()
+                            WaveLoadingView(message: "Awaiting")
+                                .frame(maxWidth: .infinity)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.systemBackground))
+                        .onAppear { sharedState.isAwaiting = true }
+                        .onDisappear { sharedState.isAwaiting = false }
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                
                                 ForEach(viewModel.streams) { stream in
                                     ServerCardView(
                                         server: viewModel.serverFromStream(stream),
@@ -532,13 +548,12 @@ struct GroupChatView: View {
                                     )
                                 }
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 16)
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 16)
+                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
                     }
-                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
-
                     // MARK: - Chat View (iPad/Mac)
 
                     if horizontalSizeClass == .regular,
@@ -584,6 +599,15 @@ struct GroupChatView: View {
                     GroupCreateView()
                 }
             }
+            .onChange(of: sharedState.selectedServer) { _, newServer in
+                if let newServer = newServer {
+                    // Find the corresponding stream in the viewModel.streams
+                    if let stream = viewModel.streams.first(where: { $0.id.uuidString == newServer.id }) {
+                        viewModel.selectedStream = stream
+                        navigationPath.append(stream)
+                    }
+                }
+            }
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if let stream = viewModel.selectedStream {
@@ -593,26 +617,6 @@ struct GroupChatView: View {
                 )
             }
         }
-    }
-}
-
-// MARK: - Supporting Views
-
-struct EmptyStateView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No Communities Yet")
-                .font(.headline)
-            Text("Create or join a community to get started")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 100)
     }
 }
 

@@ -566,7 +566,7 @@ final class CreatorViewModel: ObservableObject {
 
     func loadVideoThoughts() {
         let videoStream = account.streams.first(where: { stream in
-            stream.sources.first?.metadata.mediaType == .video
+            stream.source?.metadata.mediaType == .video
         })
         if videoStream != nil {
             videoThoughts = videoStream!.thoughts.sorted { thought1, thought2 in
@@ -587,7 +587,7 @@ final class CreatorViewModel: ObservableObject {
 
     func loadPostThoughts() {
         let postStream = account.streams.first(where: { stream in
-            stream.sources.first?.metadata.mediaType == .text
+            stream.source?.metadata.mediaType == .text
         })
         if postStream != nil {
             postThoughts = postStream!.thoughts.sorted { thought1, thought2 in

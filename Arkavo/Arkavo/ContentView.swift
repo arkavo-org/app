@@ -5,7 +5,7 @@ enum Tab {
     case home
     case communities
     case social
-    case creators
+//    case creators
 //    case protect
     case profile
 
@@ -14,7 +14,7 @@ enum Tab {
         case .home: "Home"
         case .communities: "Community"
         case .social: "Social"
-        case .creators: "Creators"
+//        case .creators: "Creators"
 //        case .protect: "Protect"
         case .profile: "Profile"
         }
@@ -25,7 +25,7 @@ enum Tab {
         case .home: "play.circle.fill"
         case .communities: "bubble.left.and.bubble.right.fill"
         case .social: "network"
-        case .creators: "star.circle.fill"
+//        case .creators: "star.circle.fill"
 //        case .protect: "shield.checkerboard"
         case .profile: "person.circle.fill"
         }
@@ -58,17 +58,17 @@ struct ContentView: View {
                     }
                 case .social:
                     PostFeedView()
-                case .creators:
-                    if sharedState.showCreateView, sharedState.selectedCreator != nil {
-                        if let creator = sharedState.selectedCreator {
-                            CreatorSupportView(creator: creator) {
-                                sharedState.showCreateView = false
-                                sharedState.selectedCreator = nil
-                            }
-                        }
-                    } else {
-                        CreatorView()
-                    }
+//                case .creators:
+//                    if sharedState.showCreateView, sharedState.selectedCreator != nil {
+//                        if let creator = sharedState.selectedCreator {
+//                            CreatorSupportView(creator: creator) {
+//                                sharedState.showCreateView = false
+//                                sharedState.selectedCreator = nil
+//                            }
+//                        }
+//                    } else {
+//                        CreatorView()
+//                    }
 //                case .protect:
 //                    ProtectorView(service: protectorService)
                 case .profile:
@@ -115,7 +115,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 30) {
-                        ForEach([Tab.home, .communities, .social, .creators, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .communities, .social, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {

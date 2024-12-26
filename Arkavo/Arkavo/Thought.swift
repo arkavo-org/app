@@ -34,6 +34,7 @@ final class Thought: Identifiable, Codable {
     // Using SHA256 hash as a public identifier, stored as 32 bytes
     @Attribute(.unique) var publicID: Data
     var stream: Stream?
+    var sourceStream: Stream?
     var metadata: Metadata
     var nano: Data
 

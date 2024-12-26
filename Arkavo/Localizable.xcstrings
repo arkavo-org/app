@@ -175,9 +175,6 @@
     "Create New Stream" : {
 
     },
-    "Create or join a community to get started" : {
-
-    },
     "Create Profile" : {
       "localizations" : {
         "es-US" : {
@@ -258,6 +255,9 @@
 
     },
     "Expert Level: %@" : {
+
+    },
+    "Export Screenshots" : {
 
     },
     "Face" : {
@@ -436,9 +436,6 @@
 
     },
     "No Active Streams" : {
-
-    },
-    "No Communities Yet" : {
 
     },
     "Not available on macOS" : {

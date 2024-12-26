@@ -88,7 +88,7 @@ struct VideoCreateView: View {
 
             // Find video stream
             guard let videoStream = viewModel.account.streams.first(where: { stream in
-                stream.sources.first?.metadata.mediaType == .video
+                stream.source?.metadata.mediaType == .video
             }) else {
                 showError(message: "No video stream available")
                 return
@@ -738,7 +738,7 @@ final class VideoRecordingViewModel: ObservableObject {
             substance: .none_,
             hate: .none_,
             harm: .none_,
-            mature: .mild,
+            mature: .none_,
             bully: .none_
         )
 

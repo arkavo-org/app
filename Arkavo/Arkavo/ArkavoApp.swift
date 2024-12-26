@@ -11,6 +11,11 @@ struct ArkavoApp: App {
     @State private var connectionError: ConnectionError?
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
+    // BEGIN screenshots
+//    @StateObject private var windowAccessor = WindowAccessor.shared
+//    @State private var screenshotGenerator: AppStoreScreenshotGenerator?
+    // END screenshots
+    
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -53,6 +58,20 @@ struct ArkavoApp: App {
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
+            // BEGIN screenshots
+//            .onAppear {
+//                // Set up window accessor for screenshots
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+//                    if let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+//                        windowAccessor.window = window
+//                        screenshotGenerator = AppStoreScreenshotGenerator(window: window)
+//                        #if DEBUG
+//                        screenshotGenerator?.startCapturing()  // No orientation parameter needed
+//                        #endif
+//                    }
+//                }
+//            }
+            // END screenshots
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
@@ -67,29 +86,22 @@ struct ArkavoApp: App {
                     message: Text(error.message),
                     primaryButton: .default(Text(error.action)) {
                         if error.action == "Update App" {
-                            // Open App Store
                             if let url = URL(string: "itms-apps://apple.com/app/id6670504172") {
                                 UIApplication.shared.open(url)
                             }
                         } else {
-                            // Retry connection
                             Task {
                                 await checkAccountStatus()
                             }
                         }
                     },
                     secondaryButton: .cancel(Text("Later")) {
-                        // Only allow dismissal if error is not blocking
                         if error.isBlocking {
                             selectedView = .main
                         }
                     }
                 )
             }
-            #if targetEnvironment(macCatalyst)
-            .frame(minWidth: 800, idealWidth: 1200, maxWidth: .infinity,
-                   minHeight: 600, idealHeight: 800, maxHeight: .infinity)
-            #endif
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -104,6 +116,10 @@ struct ArkavoApp: App {
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
+                // BEGIN screenshots
+                // Stop screenshot capture when going to background
+//                screenshotGenerator?.stopCapturing()
+                // END screenshots
             case .inactive:
                 break
             @unknown default:
@@ -148,7 +164,7 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .forAll
+                age: .onlyKids
             )
         )
 
@@ -163,18 +179,16 @@ struct ArkavoApp: App {
         )
 
         let initialThought = Thought(
-            nano: Data(), // FIXME: not empty initial data
+            nano: Data(),
             metadata: initialMetadata
         )
-
-        print("Created initial video stream thought with ID: \(initialThought.id)")
 
         // Save the initial thought
         let saved = try PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a video stream
-        stream.sources = [initialThought]
+        stream.source = initialThought
         print("Set video stream source thought. Stream ID: \(stream.id)")
 
         // Add to account
@@ -196,8 +210,8 @@ struct ArkavoApp: App {
             creatorPublicID: profile.publicID,
             profile: profile,
             policies: Policies(
-                admission: .open, // Posts can be viewed by anyone
-                interaction: .open, // Anyone can comment
+                admission: .closed,
+                interaction: .closed,
                 age: .onlyKids
             )
         )
@@ -224,7 +238,7 @@ struct ArkavoApp: App {
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a post stream
-        stream.sources = [initialThought]
+        stream.source = initialThought
         print("Set post stream source thought. Stream ID: \(stream.id)")
 
         // Add to account
@@ -543,9 +557,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeDiscordViewModel() -> DiscordViewModel {
+    func makeDiscordViewModel() -> GroupChatViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return DiscordViewModel(
+        return GroupChatViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!

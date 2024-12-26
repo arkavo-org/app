@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct StreamLoadingView: View {
-    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeDiscordViewModel()
     let publicID: Data
     @State private var state: LoadingState = .loading
     @State private var stream: Stream?

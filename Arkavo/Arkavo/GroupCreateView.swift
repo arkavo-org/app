@@ -3,7 +3,7 @@ import SwiftUI
 struct GroupCreateView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeDiscordViewModel()
 
     @State private var serverName = ""
     @State private var showError = false
@@ -62,7 +62,7 @@ struct GroupCreateView: View {
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: serverProfile,
-                policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
+                policies: Policies(admission: .openInvitation, interaction: .open, age: .onlyKids)
             )
             print("newStream newStream \(newStream.publicID.base58EncodedString)")
             let server = Server(
