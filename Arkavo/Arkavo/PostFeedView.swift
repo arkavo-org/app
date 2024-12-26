@@ -14,7 +14,7 @@ class PostFeedViewModel: ObservableObject {
     private let client: ArkavoClient
     private let account: Account
     private let profile: Profile
-
+    private var notificationObservers: [Any] = []
     @Published var thoughts: [Thought] = []
     @Published var currentThoughtIndex = 0
     @Published var isLoading = false
@@ -29,11 +29,146 @@ class PostFeedViewModel: ObservableObject {
         Task {
             await loadThoughts()
         }
+        setupNotifications()
+    }
+
+    private func setupNotifications() {
+        // Clean up any existing observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+
+        // Connection state changes
+        let stateObserver = NotificationCenter.default.addObserver(
+            forName: .arkavoClientStateChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
+            Task { @MainActor [weak self] in
+                self?.handleConnectionStateChange(state)
+            }
+        }
+        notificationObservers.append(stateObserver)
+
+        // Decrypted message handling
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+
+            Task { @MainActor [weak self] in
+                await self?.handleDecryptedMessage(data: data, policy: policy)
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Error handling
+        let errorObserver = NotificationCenter.default.addObserver(
+            forName: .messageHandlingError,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let error = notification.userInfo?["error"] as? Error else { return }
+            Task { @MainActor [weak self] in
+                self?.error = error
+            }
+        }
+        notificationObservers.append(errorObserver)
+    }
+
+    private func handleConnectionStateChange(_: ArkavoClientState) {
+        // Handle connection state changes if needed
+    }
+
+    private func handleDecryptedMessage(data: Data, policy _: ArkavoPolicy) async {
+        do {
+            let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+
+            // Create thought metadata
+            let thoughtMetadata = Thought.Metadata(
+                creator: UUID(), // This should be derived from creator public ID
+                streamPublicID: thoughtModel.streamPublicID,
+                mediaType: thoughtModel.mediaType,
+                createdAt: Date(),
+                summary: String(data: thoughtModel.content, encoding: .utf8) ?? "",
+                contributors: []
+            )
+
+            // Create and save thought
+            let thought = Thought(
+                nano: data, // Store the encrypted data
+                metadata: thoughtMetadata
+            )
+
+            // Save thought
+            _ = try PersistenceController.shared.saveThought(thought)
+            try await PersistenceController.shared.saveChanges()
+
+            // Update UI
+            thoughts.insert(thought, at: 0)
+        } catch {
+            self.error = error
+        }
+    }
+
+    private func handleReceivedThought(_ thought: Thought) {
+        thoughts.insert(thought, at: 0)
+    }
+
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    func servers() -> [Server] {
+        let servers = account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .onlyKids,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+        return servers
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
+        }
+    }
+
+    func getPostStream() -> Stream? {
+        // Find the stream that's marked as a post stream (has a text source thought)
+        account.streams.first { stream in
+            stream.sources.first?.metadata.mediaType == .text
+        }
     }
 
     private func loadThoughts() async {
         isLoading = true
-        thoughts = SampleData.recentThoughts
+        // Wait until thoughts have a count greater than 0
+        while thoughts.isEmpty {
+            // Sleep for a short duration to avoid busy-waiting
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        }
         isLoading = false
     }
 
@@ -90,13 +225,13 @@ class PostFeedViewModel: ObservableObject {
         // Create rating
         let rating = Arkavo_Rating.createRating(
             &builder,
-            violent: .mild,
-            sexual: .mild,
-            profane: .mild,
+            violent: .none_,
+            sexual: .none_,
+            profane: .none_,
             substance: .none_,
             hate: .none_,
             harm: .none_,
-            mature: .mild,
+            mature: .none_,
             bully: .none_
         )
 
@@ -171,7 +306,7 @@ class PostFeedViewModel: ObservableObject {
             policyData: policyData
         )
 
-        let thoughtMetadata = ThoughtMetadata(
+        let thoughtMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
@@ -190,9 +325,9 @@ class PostFeedViewModel: ObservableObject {
         _ = try PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
 
-        // Update UI
-        await MainActor.run {
-            thoughts.insert(thought, at: 0)
+        if let postStream = getPostStream() {
+            postStream.addThought(thought)
+            try await PersistenceController.shared.saveChanges()
         }
     }
 
@@ -220,7 +355,7 @@ class PostFeedViewModel: ObservableObject {
             policyData: policyData
         )
 
-        let thoughtMetadata = ThoughtMetadata(
+        let thoughtMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .image,
@@ -252,6 +387,7 @@ struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
     @State private var currentIndex = 0
+    @State private var showChat = false
 
     var body: some View {
         ZStack {
@@ -268,41 +404,56 @@ struct PostFeedView: View {
     private var mainFeedView: some View {
         GeometryReader { geometry in
             ZStack {
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(viewModel.thoughts) { thought in
-                                ImmersiveThoughtCard(
-                                    thought: thought,
-                                    size: geometry.size
-                                )
-                                .frame(width: geometry.size.width, height: geometry.size.height)
+                if viewModel.thoughts.isEmpty {
+                    VStack {
+                        Spacer()
+                        WaveLoadingView(message: "Awaiting")
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .onAppear { sharedState.isAwaiting = true }
+                    .onDisappear { sharedState.isAwaiting = false }
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 0) {
+                                ForEach(viewModel.thoughts) { thought in
+                                    ImmersiveThoughtCard(
+                                        viewModel: viewModel,
+                                        thought: thought,
+                                        size: geometry.size,
+                                        showChat: $showChat
+                                    )
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                }
                             }
                         }
-                    }
-                    .scrollDisabled(true)
-                    .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
-                        withAnimation {
-                            proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
+                        .scrollDisabled(true)
+                        .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
+                            withAnimation {
+                                proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
+                            }
                         }
-                    }
-                    .gesture(
-                        DragGesture()
-                            .onEnded { gesture in
-                                let verticalMovement = gesture.translation.height
-                                let swipeThreshold: CGFloat = 50
+                        .gesture(
+                            DragGesture()
+                                .onEnded { gesture in
+                                    let verticalMovement = gesture.translation.height
+                                    let swipeThreshold: CGFloat = 50
 
-                                if abs(verticalMovement) > swipeThreshold {
-                                    withAnimation {
-                                        if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
-                                            viewModel.currentThoughtIndex -= 1
-                                        } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
-                                            viewModel.currentThoughtIndex += 1
+                                    if abs(verticalMovement) > swipeThreshold {
+                                        withAnimation {
+                                            if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
+                                                viewModel.currentThoughtIndex -= 1
+                                            } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
+                                                viewModel.currentThoughtIndex += 1
+                                            }
                                         }
                                     }
                                 }
-                            }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -430,8 +581,11 @@ struct PostCreateView: View {
 // MARK: - ImmersiveThoughtCard
 
 struct ImmersiveThoughtCard: View {
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject var viewModel: PostFeedViewModel
     let thought: Thought
     let size: CGSize
+    @Binding var showChat: Bool
     private let systemMargin: CGFloat = 16
 
     var body: some View {
@@ -449,7 +603,22 @@ struct ImmersiveThoughtCard: View {
                     .padding(systemMargin * 2)
                     Spacer()
                 }
-
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        GroupChatIconList(
+                            currentVideo: nil,
+                            currentThought: thought,
+                            servers: viewModel.servers(),
+                            comments: 0,
+                            showChat: $showChat
+                        )
+                        .padding(.trailing, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
+                    }
+                }
+                // Contributors section - Positioned at bottom-left
                 VStack {
                     Spacer()
                     HStack {
@@ -461,44 +630,11 @@ struct ImmersiveThoughtCard: View {
                 }
             }
         }
+        .sheet(isPresented: $showChat) {
+            if let postStream = viewModel.getPostStream() {
+                let chatViewModel = ViewModelFactory.shared.makeChatViewModel(stream: postStream)
+                ChatView(viewModel: chatViewModel)
+            }
+        }
     }
-}
-
-// MARK: - Sample Data
-
-enum SampleData {
-    static let creator = Creator(
-        id: "1",
-        name: "Alice Johnson 🌟",
-        imageURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-        latestUpdate: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮",
-        tier: "Premium",
-        socialLinks: [],
-        notificationCount: 0,
-        bio: "Product Designer @Mozilla | Web3 & decentralization enthusiast 🔮 | Building the future of social media | she/her | bay area 🌉"
-    )
-
-    static let recentThoughts: [Thought] = {
-        let metadata1 = ThoughtMetadata(
-            creator: UUID(),
-            streamPublicID: Data(), // No specific stream for feed posts
-            mediaType: .text,
-            createdAt: Date().addingTimeInterval(-3600),
-            summary: "Just finished a deep dive into ActivityPub and AT Protocol integration. The future of social media is decentralized! 🚀",
-            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
-        )
-        let thought1 = Thought(nano: Data(), metadata: metadata1)
-
-        let metadata2 = ThoughtMetadata(
-            creator: UUID(),
-            streamPublicID: Data(), // No specific stream for feed posts
-            mediaType: .text,
-            createdAt: Date().addingTimeInterval(-7200),
-            summary: "Speaking at @DecentralizedWeb Summit next month about design patterns in federated social networks. Who else is going to be there?",
-            contributors: [Contributor(id: "1", creator: creator, role: "Author")]
-        )
-        let thought2 = Thought(nano: Data(), metadata: metadata2)
-
-        return [thought1, thought2]
-    }()
 }

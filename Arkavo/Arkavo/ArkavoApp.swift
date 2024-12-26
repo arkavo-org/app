@@ -118,7 +118,8 @@ struct ArkavoApp: App {
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
             let videoStream = try await createVideoStream(account: account, profile: profile)
-            print("videoStream: \(videoStream)")
+            let postStream = try await createPostStream(account: account, profile: profile)
+            print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
             ViewModelFactory.shared.setAccount(account)
             // Connect with WebAuthn
             do {
@@ -152,7 +153,7 @@ struct ArkavoApp: App {
         )
 
         // Create initial thought that marks this as a video stream
-        let initialMetadata = ThoughtMetadata(
+        let initialMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: stream.publicID,
             mediaType: .video,
@@ -183,6 +184,56 @@ struct ArkavoApp: App {
         // Save changes
         try await persistenceController.saveChanges()
         print("Video stream creation completed")
+
+        return stream
+    }
+
+    func createPostStream(account: Account, profile: Profile) async throws -> Stream {
+        print("Creating post stream for profile: \(profile.name)")
+
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: profile,
+            policies: Policies(
+                admission: .open, // Posts can be viewed by anyone
+                interaction: .open, // Anyone can comment
+                age: .onlyKids
+            )
+        )
+
+        // Create initial thought that marks this as a post stream
+        let initialMetadata = Thought.Metadata(
+            creator: profile.id,
+            streamPublicID: stream.publicID,
+            mediaType: .text, // Posts are primarily text-based
+            createdAt: Date(),
+            summary: "Post Stream",
+            contributors: []
+        )
+
+        let initialThought = Thought(
+            nano: Data(), // Empty initial data
+            metadata: initialMetadata
+        )
+
+        print("Created initial post stream thought with ID: \(initialThought.id)")
+
+        // Save the initial thought
+        let saved = try PersistenceController.shared.saveThought(initialThought)
+        print("Saved initial thought \(saved)")
+
+        // Set the source thought to mark this as a post stream
+        stream.sources = [initialThought]
+        print("Set post stream source thought. Stream ID: \(stream.id)")
+
+        // Add to account
+        try account.addStream(stream)
+        print("Added stream to account. Total streams: \(account.streams.count)")
+
+        // Save changes
+        try await persistenceController.saveChanges()
+        print("Post stream creation completed")
 
         return stream
     }
@@ -221,7 +272,6 @@ struct ArkavoApp: App {
                 selectedView = .registration
                 return
             }
-
             // If we're already connected, nothing to do
             if case .connected = client.currentState {
                 print("Client already connected, no action needed")
@@ -430,9 +480,11 @@ class SharedState: ObservableObject {
     @Published var selectedCreator: Creator?
     @Published var selectedServer: Server?
     @Published var selectedVideo: Video?
+    @Published var selectedThought: Thought?
     @Published var selectedTab: Tab = .home
     @Published var showCreateView: Bool = false
     @Published var selectedChannel: Channel?
+    @Published var isAwaiting: Bool = false
 }
 
 final class ServiceLocator {
@@ -542,9 +594,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makePatreonViewModel() -> PatreonViewModel {
+    func makePatreonViewModel() -> CreatorViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return PatreonViewModel(
+        return CreatorViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!

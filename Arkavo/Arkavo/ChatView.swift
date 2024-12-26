@@ -218,7 +218,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
             policyData: policyData
         )
 
-        let thoughtMetadata = ThoughtMetadata(
+        let thoughtMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: streamPublicID,
             mediaType: .text,

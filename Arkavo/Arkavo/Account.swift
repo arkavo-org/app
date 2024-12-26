@@ -20,7 +20,7 @@ final class Account {
         _ageVerificationStatus = ageVerificationStatus.rawValue
     }
 
-    // Computed properties for type-safe enum access
+    @Transient
     var identityAssuranceLevel: IdentityAssuranceLevel {
         get {
             IdentityAssuranceLevel(rawValue: _identityAssuranceLevel) ?? .ial0
@@ -30,6 +30,7 @@ final class Account {
         }
     }
 
+    @Transient
     var ageVerificationStatus: AgeVerificationStatus {
         get {
             AgeVerificationStatus(rawValue: _ageVerificationStatus) ?? .unverified
@@ -39,6 +40,7 @@ final class Account {
         }
     }
 
+    @Transient
     var streamLimit: Int {
         // TODO: handle feature payment for more
         100
@@ -65,5 +67,3 @@ final class Account {
         case exceededLimit
     }
 }
-
-// TODO: add Identity fields and authentication levels

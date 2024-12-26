@@ -4,9 +4,8 @@ import Foundation
 import SwiftData
 
 @Model
-final class Stream: @unchecked Sendable, Identifiable, Hashable {
-    @Attribute(.unique) private(set) var id: UUID
-    // Using SHA256 hash as a public identifier, stored as 32 bytes
+final class Stream: Identifiable, Hashable, @unchecked Sendable {
+    @Attribute(.unique) var id: UUID
     @Attribute(.unique) var publicID: Data
     var creatorPublicID: Data
     var profile: Profile
@@ -25,7 +24,6 @@ final class Stream: @unchecked Sendable, Identifiable, Hashable {
         policies: Policies
     ) {
         self.id = id
-        // Use provided publicID or generate new one
         self.publicID = publicID ?? Stream.generatePublicID(from: id)
         self.creatorPublicID = creatorPublicID
         self.profile = profile
@@ -89,16 +87,14 @@ enum AgePolicy: String, Codable, CaseIterable {
     case onlyTeens = "Only Teens"
 }
 
+// MARK: - AppEntity Conformance
+
 extension Stream: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Stream"
     static var defaultQuery = StreamQuery()
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(profile.name)")
-    }
-
-    static var typeDisplayName: String {
-        "Stream"
     }
 }
 
@@ -113,27 +109,5 @@ struct StreamQuery: EntityQuery {
     func suggestedEntities() async throws -> [Stream] {
         // Implement this method to fetch suggested streams from your SwiftData store
         []
-    }
-}
-
-struct StreamAppIntent: AppIntent {
-    static var title: LocalizedStringResource = "View Secure Stream"
-
-    @Parameter(title: "Stream ID")
-    var streamIDString: String
-
-    init() {}
-
-    init(streamID: UUID) {
-        streamIDString = streamID.uuidString
-    }
-
-    func perform() async throws -> some IntentResult {
-        // Implement the actual functionality here
-        .result()
-    }
-
-    static var parameterSummary: some ParameterSummary {
-        Summary("View the secure stream with ID \(\.$streamIDString)")
     }
 }
