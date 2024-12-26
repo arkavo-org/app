@@ -106,6 +106,7 @@ struct ContentView: View {
                     }
                     .padding(.top, 0)
                     .padding(.leading, 8)
+                    .modifier(BounceAnimationModifier(isAwaiting: sharedState.isAwaiting))
                 }
             }
 
@@ -184,104 +185,161 @@ struct ContentView: View {
     }
 }
 
-// struct ProfileView: View {
-//    @EnvironmentObject var sharedState: SharedState
-//
-//
-//    enum ProfileTab {
-//        case posts, replies, media, likes
-//    }
-//
-//    var body: some View {
-//        NavigationStack {
-//            List {
-//                // Profile Header Section
-//                Section {
-//                    VStack(alignment: .leading, spacing: 12) {
-//                        HStack {
-//                            AsyncImage(url: URL(string: user.avatarURL)) { image in
-//                                image
-//                                    .resizable()
-//                                    .scaledToFill()
-//                            } placeholder: {
-//                                Image(systemName: "person.circle.fill")
-//                                    .font(.system(size: 60))
-//                            }
-//                            .frame(width: 60, height: 60)
-//                            .clipShape(Circle())
-//
-//                            VStack(alignment: .leading) {
-//                                HStack {
-//                                    Text(user.displayName)
-//                                        .font(.headline)
-//                                    if user.isVerified {
-//                                        Image(systemName: "checkmark.seal.fill")
-//                                            .foregroundColor(.blue)
-//                                    }
-//                                }
-//                                Text("@\(user.handle)")
-//                                    .font(.subheadline)
-//                                    .foregroundColor(.secondary)
-//                                Text(user.did)
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//                        }
-//
-//                        if let description = user.description {
-//                            Text(description)
-//                                .font(.subheadline)
-//                        }
-//
-//                        HStack(spacing: 24) {
-//                            VStack {
-//                                Text("\(user.following)")
-//                                    .font(.headline)
-//                                Text("Following")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//
-//                            VStack {
-//                                Text("\(user.followers)")
-//                                    .font(.headline)
-//                                Text("Followers")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//
-//                            VStack {
-//                                Text("\(user.postsCount)")
-//                                    .font(.headline)
-//                                Text("Posts")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//                        }
-//                        .padding(.top, 4)
-//                    }
-//                    .padding(.vertical, 8)
-//                }
-//
-//                // DID Information Section
-//                Section("Decentralized Identity") {
-//                    VStack(alignment: .leading) {
-//                        Text("Service Endpoint")
-//                            .font(.caption)
-//                            .foregroundColor(.secondary)
-//                        Text(user.serviceEndpoint)
-//                            .font(.callout)
-//                    }
-//
-//                    VStack(alignment: .leading) {
-//                        Text("DID")
-//                            .font(.caption)
-//                            .foregroundColor(.secondary)
-//                        Text(user.did)
-//                            .font(.callout)
-//                    }
-//                }
-//            }
-//        }
-//    }
-// }
+struct WaveLoadingView: View {
+    let message: String
+    @State private var waveOffset = 0.0
+    @State private var boatOffset = 0.0
+
+    var body: some View {
+        VStack(spacing: 40) {
+            // Wave and logo container
+            GeometryReader { _ in
+                ZStack {
+                    // Waves spanning full width
+                    WaveShape(offset: waveOffset, waveHeight: 20)
+                        .fill(Color(red: 0, green: 0.32, blue: 0.66))
+                        .opacity(0.8)
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity) // Full width
+
+                    WaveShape(offset: waveOffset + 0.5, waveHeight: 15)
+                        .fill(Color(red: 0, green: 0.32, blue: 0.66))
+                        .opacity(0.4)
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity) // Full width
+
+                    // Animated Logo
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 120, height: 120) // Kept large size
+                        .foregroundColor(.orange)
+                        .offset(y: CGFloat(sin(boatOffset) * 10))
+                        .rotationEffect(.degrees(sin(boatOffset) * 3))
+                }
+            }
+            .frame(height: 200) // Fixed height container
+
+            // Message with dots
+            HStack(spacing: 4) {
+                Text(message + " ")
+                    .foregroundColor(.gray)
+                    .font(.title3)
+                LoadingDots()
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                waveOffset = -.pi * 2
+            }
+            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                boatOffset = .pi * 2
+            }
+        }
+    }
+}
+
+struct LoadingDots: View {
+    @State private var dotOpacity = 0.2
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0 ..< 3) { index in
+                Circle()
+                    .frame(width: 6, height: 6)
+                    .foregroundColor(.gray)
+                    .opacity(dotOpacity)
+                    .animation(
+                        .easeInOut(duration: 1.2) // Slowed down animation
+                            .repeatForever()
+                            .delay(Double(index) * 0.4), // Increased delay between dots
+                        value: dotOpacity
+                    )
+            }
+        }
+        .onAppear {
+            dotOpacity = 1
+        }
+    }
+}
+
+struct WaveShape: Shape {
+    var offset: Double
+    var waveHeight: Double
+
+    var animatableData: Double {
+        get { offset }
+        set { offset = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        let midHeight = height / 2
+
+        // More points for smoother wave
+        path.move(to: CGPoint(x: 0, y: midHeight))
+
+        // Create smoother wave with more points
+        for x in stride(from: 0, to: width, by: 1) {
+            let relativeX = x / width
+            let sine = sin(relativeX * .pi * 2 + offset)
+            let y = midHeight + sine * waveHeight
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        // Ensure wave fills to bottom
+        path.addLine(to: CGPoint(x: width, y: height))
+        path.addLine(to: CGPoint(x: 0, y: height))
+        path.closeSubpath()
+
+        return path
+    }
+}
+
+struct BounceAnimationModifier: ViewModifier {
+    let isAwaiting: Bool
+    @State private var bounceOffset: CGFloat = 0
+    @State private var scaleEffect: CGFloat = 1.0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: bounceOffset)
+            .scaleEffect(scaleEffect)
+            .onChange(of: isAwaiting) { _, isNowLoading in
+                if isNowLoading {
+                    startAnimation()
+                } else {
+                    stopAnimation()
+                }
+            }
+            .onAppear {
+                if isAwaiting {
+                    startAnimation()
+                }
+            }
+    }
+
+    private func startAnimation() {
+        withAnimation(
+            .easeInOut(duration: 0.6)
+                .repeatForever(autoreverses: true)
+        ) {
+            bounceOffset = -10 // More pronounced bounce
+        }
+        withAnimation(
+            .easeInOut(duration: 0.8)
+                .repeatForever(autoreverses: true)
+        ) {
+            scaleEffect = 1.2 // Slight scaling for emphasis
+        }
+    }
+
+    private func stopAnimation() {
+        withAnimation(.easeOut) {
+            bounceOffset = 0
+            scaleEffect = 1.0
+        }
+    }
+}

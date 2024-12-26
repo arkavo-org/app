@@ -484,6 +484,7 @@ class SharedState: ObservableObject {
     @Published var selectedTab: Tab = .home
     @Published var showCreateView: Bool = false
     @Published var selectedChannel: Channel?
+    @Published var isAwaiting: Bool = false
 }
 
 final class ServiceLocator {

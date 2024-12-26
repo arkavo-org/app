@@ -81,12 +81,15 @@ struct VideoFeedView: View {
 
                 if viewModel.videos.isEmpty {
                     VStack {
-                        ProgressView()
-                            .tint(.white)
-                        Text("Loading videos...")
-                            .foregroundColor(.white)
-                            .padding(.top)
+                        Spacer()
+                        WaveLoadingView(message: "Awaiting")
+                            .frame(maxWidth: .infinity)
+                        Spacer()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .onAppear { sharedState.isAwaiting = true }
+                    .onDisappear { sharedState.isAwaiting = false }
                 }
             }
         }

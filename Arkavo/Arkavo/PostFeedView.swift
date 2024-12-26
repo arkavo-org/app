@@ -404,43 +404,56 @@ struct PostFeedView: View {
     private var mainFeedView: some View {
         GeometryReader { geometry in
             ZStack {
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(viewModel.thoughts) { thought in
-                                ImmersiveThoughtCard(
-                                    viewModel: viewModel,
-                                    thought: thought,
-                                    size: geometry.size,
-                                    showChat: $showChat
-                                )
-                                .frame(width: geometry.size.width, height: geometry.size.height)
+                if viewModel.thoughts.isEmpty {
+                    VStack {
+                        Spacer()
+                        WaveLoadingView(message: "Awaiting")
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .onAppear { sharedState.isAwaiting = true }
+                    .onDisappear { sharedState.isAwaiting = false }
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 0) {
+                                ForEach(viewModel.thoughts) { thought in
+                                    ImmersiveThoughtCard(
+                                        viewModel: viewModel,
+                                        thought: thought,
+                                        size: geometry.size,
+                                        showChat: $showChat
+                                    )
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                }
                             }
                         }
-                    }
-                    .scrollDisabled(true)
-                    .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
-                        withAnimation {
-                            proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
+                        .scrollDisabled(true)
+                        .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
+                            withAnimation {
+                                proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
+                            }
                         }
-                    }
-                    .gesture(
-                        DragGesture()
-                            .onEnded { gesture in
-                                let verticalMovement = gesture.translation.height
-                                let swipeThreshold: CGFloat = 50
+                        .gesture(
+                            DragGesture()
+                                .onEnded { gesture in
+                                    let verticalMovement = gesture.translation.height
+                                    let swipeThreshold: CGFloat = 50
 
-                                if abs(verticalMovement) > swipeThreshold {
-                                    withAnimation {
-                                        if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
-                                            viewModel.currentThoughtIndex -= 1
-                                        } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
-                                            viewModel.currentThoughtIndex += 1
+                                    if abs(verticalMovement) > swipeThreshold {
+                                        withAnimation {
+                                            if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
+                                                viewModel.currentThoughtIndex -= 1
+                                            } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
+                                                viewModel.currentThoughtIndex += 1
+                                            }
                                         }
                                     }
                                 }
-                            }
-                    )
+                        )
+                    }
                 }
             }
         }
