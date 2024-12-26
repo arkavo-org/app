@@ -735,6 +735,7 @@
 
     },
     "Stream ID" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -851,6 +852,7 @@
 
     },
     "View Secure Stream" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -861,6 +863,7 @@
       }
     },
     "View the secure stream with ID ${streamIDString}" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {

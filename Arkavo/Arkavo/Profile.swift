@@ -15,7 +15,15 @@ final class Profile: Identifiable {
     var hasHighEncryption: Bool
     var hasHighIdentityAssurance: Bool
 
-    init(id: UUID = UUID(), name: String, blurb: String? = nil, interests: String = "", location: String = "", hasHighEncryption: Bool = false, hasHighIdentityAssurance: Bool = false) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        blurb: String? = nil,
+        interests: String = "",
+        location: String = "",
+        hasHighEncryption: Bool = false,
+        hasHighIdentityAssurance: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.blurb = blurb

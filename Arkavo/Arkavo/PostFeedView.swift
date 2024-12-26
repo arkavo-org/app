@@ -122,6 +122,39 @@ class PostFeedViewModel: ObservableObject {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
+    func servers() -> [Server] {
+        let servers = account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .onlyKids,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+        return servers
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        switch stream.policies.age {
+        case .onlyAdults:
+            "person.fill"
+        case .onlyKids:
+            "figure.child"
+        case .forAll:
+            "figure.wave"
+        case .onlyTeens:
+            "person.3.fill"
+        }
+    }
+
     func getPostStream() -> Stream? {
         // Find the stream that's marked as a post stream (has a text source thought)
         account.streams.first { stream in
@@ -554,7 +587,22 @@ struct ImmersiveThoughtCard: View {
                     .padding(systemMargin * 2)
                     Spacer()
                 }
-                // TODO: add GroupChatIconList
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        GroupChatIconList(
+                            currentVideo: nil,
+                            currentThought: thought,
+                            servers: viewModel.servers(),
+                            comments: 0,
+                            showChat: $showChat
+                        )
+                        .padding(.trailing, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
+                    }
+                }
+                // Contributors section - Positioned at bottom-left
                 VStack {
                     Spacer()
                     HStack {

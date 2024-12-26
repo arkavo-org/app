@@ -235,6 +235,7 @@ struct VideoPlayerView: View {
 
                         GroupChatIconList(
                             currentVideo: video,
+                            currentThought: nil,
                             servers: viewModel.servers(),
                             comments: video.comments,
                             showChat: $showChat
@@ -294,7 +295,8 @@ struct VideoPlayerView: View {
 
 struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
-    let currentVideo: Video
+    let currentVideo: Video?
+    let currentThought: Thought?
     let servers: [Server]
     let comments: Int
     @State private var isCollapsed = true
@@ -312,6 +314,7 @@ struct GroupChatIconList: View {
                     ForEach(servers) { server in
                         Button {
                             sharedState.selectedVideo = currentVideo
+                            sharedState.selectedThought = currentThought
                             sharedState.selectedServer = server
                             sharedState.selectedTab = .communities
                         } label: {
