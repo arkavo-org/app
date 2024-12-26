@@ -631,7 +631,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
 
                 // Create thought for the video
-                let metadata = ThoughtMetadata(
+                let metadata = Thought.Metadata(
                     creator: profile.id,
                     streamPublicID: videoStream.publicID,
                     mediaType: .video,

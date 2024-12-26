@@ -4,14 +4,40 @@ import SwiftData
 
 @Model
 final class Thought: Identifiable, Codable {
+    // MARK: - Nested Types
+
+    struct Metadata: Codable {
+        let creator: UUID
+        let streamPublicID: Data
+        let mediaType: MediaType
+        let createdAt: Date
+        let summary: String
+        let contributors: [Contributor]
+
+        private static let decoder = PropertyListDecoder()
+        private static let encoder: PropertyListEncoder = {
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            return encoder
+        }()
+
+        func serialize() throws -> Data {
+            try Metadata.encoder.encode(self)
+        }
+
+        static func deserialize(from data: Data) throws -> Metadata {
+            try decoder.decode(Metadata.self, from: data)
+        }
+    }
+
     @Attribute(.unique) var id: UUID
     // Using SHA256 hash as a public identifier, stored as 32 bytes
     @Attribute(.unique) var publicID: Data
     var stream: Stream?
-    var metadata: ThoughtMetadata
+    var metadata: Metadata
     var nano: Data
 
-    init(id: UUID = UUID(), nano: Data, metadata: ThoughtMetadata) {
+    init(id: UUID = UUID(), nano: Data, metadata: Metadata) {
         self.id = id
         publicID = Thought.generatePublicID(from: id)
         self.metadata = metadata
@@ -28,7 +54,7 @@ final class Thought: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         publicID = try container.decode(Data.self, forKey: .publicID)
-        metadata = try container.decode(ThoughtMetadata.self, forKey: .metadata)
+        metadata = try container.decode(Metadata.self, forKey: .metadata)
         nano = try container.decode(Data.self, forKey: .nano)
     }
 
@@ -77,32 +103,6 @@ extension Thought {
 
     static func deserialize(from data: Data) throws -> Thought {
         try decoder.decode(Thought.self, from: data)
-    }
-}
-
-// MARK: - ThoughtMetadata
-
-struct ThoughtMetadata: Codable {
-    let creator: UUID
-    let streamPublicID: Data
-    let mediaType: MediaType
-    let createdAt: Date
-    let summary: String
-    let contributors: [Contributor]
-
-    private static let decoder = PropertyListDecoder()
-    private static let encoder: PropertyListEncoder = {
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        return encoder
-    }()
-
-    func serialize() throws -> Data {
-        try ThoughtMetadata.encoder.encode(self)
-    }
-
-    static func deserialize(from data: Data) throws -> ThoughtMetadata {
-        try decoder.decode(ThoughtMetadata.self, from: data)
     }
 }
 

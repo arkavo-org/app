@@ -88,7 +88,7 @@ class PostFeedViewModel: ObservableObject {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
 
             // Create thought metadata
-            let thoughtMetadata = ThoughtMetadata(
+            let thoughtMetadata = Thought.Metadata(
                 creator: UUID(), // This should be derived from creator public ID
                 streamPublicID: thoughtModel.streamPublicID,
                 mediaType: thoughtModel.mediaType,
@@ -303,7 +303,7 @@ class PostFeedViewModel: ObservableObject {
             policyData: policyData
         )
 
-        let thoughtMetadata = ThoughtMetadata(
+        let thoughtMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
@@ -352,7 +352,7 @@ class PostFeedViewModel: ObservableObject {
             policyData: policyData
         )
 
-        let thoughtMetadata = ThoughtMetadata(
+        let thoughtMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .image,
@@ -638,7 +638,7 @@ enum SampleData {
     )
 
     static let recentThoughts: [Thought] = {
-        let metadata1 = ThoughtMetadata(
+        let metadata1 = Thought.Metadata(
             creator: UUID(),
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,
@@ -648,7 +648,7 @@ enum SampleData {
         )
         let thought1 = Thought(nano: Data(), metadata: metadata1)
 
-        let metadata2 = ThoughtMetadata(
+        let metadata2 = Thought.Metadata(
             creator: UUID(),
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .text,

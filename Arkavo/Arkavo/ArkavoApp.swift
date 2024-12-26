@@ -153,7 +153,7 @@ struct ArkavoApp: App {
         )
 
         // Create initial thought that marks this as a video stream
-        let initialMetadata = ThoughtMetadata(
+        let initialMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: stream.publicID,
             mediaType: .video,
@@ -203,7 +203,7 @@ struct ArkavoApp: App {
         )
 
         // Create initial thought that marks this as a post stream
-        let initialMetadata = ThoughtMetadata(
+        let initialMetadata = Thought.Metadata(
             creator: profile.id,
             streamPublicID: stream.publicID,
             mediaType: .text, // Posts are primarily text-based

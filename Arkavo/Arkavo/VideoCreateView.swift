@@ -100,7 +100,7 @@ struct VideoCreateView: View {
             let title = formatter.string(from: Date())
 
             // Create metadata
-            let metadata = ThoughtMetadata(
+            let metadata = Thought.Metadata(
                 creator: viewModel.profile.id,
                 streamPublicID: videoStream.publicID,
                 mediaType: .video,
@@ -726,7 +726,7 @@ final class VideoRecordingViewModel: ObservableObject {
         // This would interact with the AVCaptureDevice to switch between front and back cameras
     }
 
-    func createThoughtWithPolicy(videoData: Data, metadata: ThoughtMetadata) async throws -> Thought {
+    func createThoughtWithPolicy(videoData: Data, metadata: Thought.Metadata) async throws -> Thought {
         var builder = FlatBufferBuilder()
 
         // Create rating based on video content
