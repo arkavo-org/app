@@ -111,7 +111,7 @@ struct ContributorsView: View {
             if let mainContributor = contributors.first {
                 Button {
                     sharedState.selectedCreator = mainContributor.creator
-                    // FIXME creators
+                    // FIXME: creators
                     sharedState.selectedTab = .profile
                     sharedState.showCreateView = false
                 } label: {
@@ -140,7 +140,7 @@ struct ContributorsView: View {
                     ForEach(contributors.dropFirst()) { contributor in
                         Button {
                             sharedState.selectedCreator = contributor.creator
-                            // FIXME creators
+                            // FIXME: creators
                             sharedState.selectedTab = .profile
                             sharedState.showCreateView = false
                         } label: {
@@ -731,7 +731,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     func servers() -> [Server] {
         let allStreams = account.streams
         let streams = allStreams.filter { stream in
-            return stream.isGroupChatStream
+            stream.isGroupChatStream
         }
         let servers = streams.map { stream in
             Server(

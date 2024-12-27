@@ -11,7 +11,6 @@ struct ChatView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var hasProcessedThoughts = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,12 +41,6 @@ struct ChatView: View {
                     }
                 }
             )
-        }
-        .task {
-            if !hasProcessedThoughts {
-                await viewModel.processStreamThoughts()
-                hasProcessedThoughts = true
-            }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {
@@ -97,11 +90,11 @@ struct MessageInputBar: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 12) {
-                Button(action: onAttachmentTap) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
+//                Button(action: onAttachmentTap) {
+//                    Image(systemName: "plus.circle.fill")
+//                        .font(.title2)
+//                        .foregroundColor(.blue)
+//                }
 
                 TextField(placeholder, text: $messageText)
                     .textFieldStyle(.roundedBorder)

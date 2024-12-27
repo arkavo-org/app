@@ -30,11 +30,11 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
     private func loadStreams() async {
         // Get all account streams
         let allStreams = account.streams
-        
+
         // Filter to only include streams with no initial thoughts (group chat streams)
         streams = allStreams.filter { stream in
             // If there are no sources (initial thoughts), it's a group chat stream
-            return stream.isGroupChatStream
+            stream.isGroupChatStream
         }
     }
 
@@ -510,7 +510,7 @@ struct Server: Identifiable, Hashable, Equatable {
 
 struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
@@ -522,6 +522,7 @@ struct GroupChatView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     // MARK: - Stream List
+
                     if viewModel.streams.isEmpty {
                         VStack {
                             Spacer()
@@ -536,7 +537,6 @@ struct GroupChatView: View {
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 16) {
-                                
                                 ForEach(viewModel.streams) { stream in
                                     ServerCardView(
                                         server: viewModel.serverFromStream(stream),
@@ -554,6 +554,7 @@ struct GroupChatView: View {
                         .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
                         .background(Color(.systemGroupedBackground).ignoresSafeArea())
                     }
+
                     // MARK: - Chat View (iPad/Mac)
 
                     if horizontalSizeClass == .regular,
@@ -600,7 +601,7 @@ struct GroupChatView: View {
                 }
             }
             .onChange(of: sharedState.selectedServer) { _, newServer in
-                if let newServer = newServer {
+                if let newServer {
                     // Find the corresponding stream in the viewModel.streams
                     if let stream = viewModel.streams.first(where: { $0.id.uuidString == newServer.id }) {
                         viewModel.selectedStream = stream

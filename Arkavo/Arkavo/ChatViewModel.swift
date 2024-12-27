@@ -5,15 +5,13 @@ import OpenTDFKit
 import SwiftUI
 
 @MainActor
-class ChatViewModel: ObservableObject, ArkavoClientDelegate {
+class ChatViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
     let stream: Stream
     @Published var messages: [ChatMessage] = []
     @Published var connectionState: ArkavoClientState = .disconnected
-    // Track pending thoughts by their ephemeral public key
-    private var pendingThoughts: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     // Add set to track processed message IDs
     private var processedMessageIds = Set<Data>()
     private var notificationObservers: [NSObjectProtocol] = []
@@ -25,6 +23,19 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         self.stream = stream
         connectionState = client.currentState
         setupNotifications()
+        loadThoughts()
+    }
+
+    private func loadThoughts() {
+        Task {
+            for thought in stream.thoughts {
+                do {
+                    try await client.sendNanoForRewrap(thought.nano)
+                } catch {
+                    print("Error rewrapping NanoTDF for thought with ID: \(thought.publicID): \(error)")
+                }
+            }
+        }
     }
 
     private func setupNotifications() {
@@ -45,29 +56,18 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         }
         notificationObservers.append(stateObserver)
 
-        let natsObserver = NotificationCenter.default.addObserver(
-            forName: .natsMessageReceived,
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let data = notification.userInfo?["data"] as? Data else { return }
-            Task {
-                await self?.handleNATSMessage(data)
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+            Task { @MainActor [weak self] in
+                await self?.handleDecryptedThought(payload: data, policy: policy)
             }
         }
-        notificationObservers.append(natsObserver)
-
-        let keyObserver = NotificationCenter.default.addObserver(
-            forName: .rewrappedKeyReceived,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let data = notification.userInfo?["data"] as? Data else { return }
-            Task {
-                await self?.handleRewrappedKeyMessage(data)
-            }
-        }
-        notificationObservers.append(keyObserver)
+        notificationObservers.append(messageObserver)
     }
 
     deinit {
@@ -233,220 +233,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         // Save thought to stream
         stream.thoughts.append(thought)
         try await PersistenceController.shared.saveChanges()
-        // Create and add local message
-        let message = ChatMessage(
-            id: UUID().uuidString,
-            userId: profile.id.uuidString,
-            username: profile.name,
-            content: content,
-            timestamp: Date(),
-            attachments: [],
-            reactions: [],
-            isPinned: false,
-            publicID: thought.publicID,
-            creatorPublicID: profile.publicID,
-            mediaType: .text,
-            rawContent: messageData
-        )
-
-        await MainActor.run {
-            messages.append(message)
-        }
-    }
-
-    func handleIncomingMessage(_ data: Data) async {
-        print("\n=== handleIncomingMessage ===")
-        guard let messageType = data.first else {
-            print("No message type byte found")
-            return
-        }
-        print("Message type: 0x\(String(format: "%02X", messageType))")
-
-        let messageData = data.dropFirst()
-
-        switch messageType {
-        case 0x04: // Rewrapped key
-            print("Routing to handleRewrappedKeyMessage")
-            await handleRewrappedKeyMessage(messageData)
-
-        case 0x05, 0x06: // NATS message/event
-            print("Routing to NATS message handler")
-            Task {
-                await handleNATSMessage(messageData)
-            }
-
-        default:
-            print("Unknown message type: 0x\(String(format: "%02X", messageType))")
-        }
-    }
-
-    private func handleRewrappedKeyMessage(_ data: Data) async {
-        print("\n=== handleRewrappedKeyMessage ===")
-        print("Message length: \(data.count)")
-
-        guard data.count == 93 else {
-            if data.count == 33 {
-                let identifier = data
-                print("Received DENY for EPK: \(identifier.hexEncodedString())")
-//                if let removedThought = pendingThoughts.removeValue(forKey: identifier) {
-//                    print("Removed denied thought from pending queue")
-//                    print("Remaining pending thoughts: \(pendingThoughts.count)")
-//                } else {
-//                    print("No matching thought found for denied EPK")
-//                }
-                return
-            }
-            print("Invalid rewrapped key length: \(data.count)")
-            return
-        }
-
-        let identifier = data.prefix(33)
-        print("Looking for thought with EPK: \(identifier.hexEncodedString())")
-        print("Current pending thoughts: \(pendingThoughts.keys.map { $0.hexEncodedString() })")
-
-        // Find corresponding thought
-        guard let (header, _, nano) = pendingThoughts.removeValue(forKey: identifier) else {
-            print("❌ No pending thought found for EPK: \(identifier.hexEncodedString())")
-            return
-        }
-
-        print("✅ Found matching thought!")
-        let keyData = data.suffix(60)
-        let nonce = keyData.prefix(12)
-        let encryptedKeyLength = keyData.count - 12 - 16
-        let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
-        let authTag = keyData.suffix(16)
-
-        do {
-            print("Attempting to decrypt rewrapped key...")
-            let symmetricKey = try client.decryptRewrappedKey(
-                nonce: nonce,
-                rewrappedKey: rewrappedKey,
-                authTag: authTag
-            )
-            print("Successfully decrypted rewrapped key")
-
-            // Decrypt the thought payload
-            print("Attempting to decrypt thought payload...")
-            let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-            print("Successfully decrypted thought payload")
-
-            // Process decrypted thought
-            Task {
-                print("Processing decrypted thought...")
-                await handleDecryptedThought(
-                    payload: decryptedData,
-                    policy: ArkavoPolicy(header.policy),
-                    nano: nano
-                )
-            }
-        } catch {
-            print("❌ Error processing rewrapped key: \(error)")
-        }
-    }
-
-    private func handleNATSMessage(_ data: Data) async {
-        do {
-            // Create a deep copy of the data
-            let copiedData = Data(data)
-            let parser = BinaryParser(data: copiedData)
-            let header = try parser.parseHeader()
-            print("\n=== Processing NATS Message ===")
-            print("Checking content rating...")
-            print("Message content rating: \(header.policy)")
-            let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
-            let nano = NanoTDF(header: header, payload: payload, signature: nil)
-
-            let epk = header.ephemeralPublicKey
-            print("Parsed NATS message - EPK: \(epk.hexEncodedString())")
-
-            // Store with correct types
-            pendingThoughts[epk] = (
-                header: header,
-                payload: payload,
-                nano: nano
-            )
-            print("Current pending thoughts count: \(pendingThoughts.count)")
-            print("Pending thoughts EPKs: \(pendingThoughts.keys.map { $0.hexEncodedString() })")
-            // Send rewrap message
-            print("Sending rewrap message:")
-            print("EPK: \(header.ephemeralPublicKey.hexEncodedString())")
-            let rewrapMessage = RewrapMessage(header: header)
-            let messageData = rewrapMessage.toData()
-            print("Rewrap message first byte: 0x\(String(format: "%02X", messageData.first ?? 0))")
-            print("Rewrap message length: \(messageData.count)")
-            print("Sent rewrap message for EPK: \(epk.hexEncodedString())")
-        } catch {
-            print("Error processing NATS message: \(error)")
-        }
-    }
-
-    func processStreamThoughts() async {
-        print("\nProcessing stream thoughts:")
-        for thought in stream.thoughts {
-            do {
-                print("\n=== Processing thought ===")
-                print("Public ID: \(thought.publicID.hexEncodedString())")
-                print("Nano data size: \(thought.nano.count) bytes")
-
-                // Debug the first few bytes
-                let previewSize = min(thought.nano.count, 8)
-                let previewBytes = thought.nano.prefix(previewSize)
-                print("First \(previewSize) bytes: \(previewBytes.map { String(format: "%02X", $0) }.joined(separator: " "))")
-
-                // Check expected magic number
-                print("Expected magic number: \(Header.magicNumber.map { String(format: "%02X", $0) }.joined(separator: " "))")
-
-                print("Creating binary parser...")
-                let parser = BinaryParser(data: thought.nano)
-
-                print("Attempting to parse header...")
-                let header = try parser.parseHeader()
-                print("✅ Successfully parsed header")
-                print(" - EPK length: \(header.ephemeralPublicKey.count)")
-                print(" - EPK: \(header.ephemeralPublicKey.hexEncodedString())")
-
-                print("Attempting to parse payload...")
-                let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
-                print("✅ Successfully parsed payload:")
-                print(" - Payload length: \(payload.length)")
-                print(" - IV length: \(payload.iv.count)")
-                print(" - Ciphertext length: \(payload.ciphertext.count)")
-                print(" - MAC length: \(payload.mac.count)")
-
-                let nano = NanoTDF(header: header, payload: payload, signature: nil)
-
-                // Store in pending thoughts
-                pendingThoughts[header.ephemeralPublicKey] = (header, payload, nano)
-                print("Added to pending thoughts with EPK: \(header.ephemeralPublicKey.hexEncodedString())")
-
-                // Send rewrap message
-                let rewrapMessage = RewrapMessage(header: header)
-                try await client.sendMessage(rewrapMessage.toData())
-                print("✅ Sent rewrap message")
-
-            } catch {
-                print("❌ Error processing thought: \(error)")
-                if let parsingError = error as? ParsingError {
-                    switch parsingError {
-                    case .invalidMagicNumber:
-                        print("Magic number check failed - first bytes don't match 4C 31")
-                        print("Expected: 4C 31")
-                        if thought.nano.count >= 2 {
-                            print("Found: \(thought.nano.prefix(2).map { String(format: "%02X", $0) }.joined(separator: " "))")
-                        }
-                    case .invalidFormat:
-                        print("Invalid format - data structure doesn't match expected TDF format")
-                        print("This could be due to:")
-                        print("- Incorrect field lengths")
-                        print("- Missing required fields")
-                        print("- Malformed data")
-                    default:
-                        print("Other parsing error: \(parsingError)")
-                    }
-                }
-            }
-        }
     }
 
     func handleStreamData(_ data: Data) async throws {
@@ -473,7 +259,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy, nano _: NanoTDF) async {
+    private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy) async {
         print("\nHandling decrypted thought:")
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
@@ -547,27 +333,5 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate {
     enum ChatError: Error {
         case noProfile
         case serializationError
-    }
-
-    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
-        Task { @MainActor in
-            self.connectionState = state
-        }
-    }
-
-    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        Task { @MainActor in
-            print("\n=== clientDidReceiveMessage ===")
-            await self.handleIncomingMessage(message)
-        }
-    }
-
-    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
-        Task { @MainActor in
-            print("Arkavo client error: \(error)")
-            // You might want to update UI state here
-            // self.errorMessage = error.localizedDescription
-            // self.showError = true
-        }
     }
 }

@@ -145,10 +145,10 @@ class PostFeedViewModel: ObservableObject {
     private func iconForStream(_ stream: Stream) -> String {
         // Convert the publicID to a hash value
         let hashValue = stream.publicID.hashValue
-        
+
         // Use the hash value modulo 32 to determine the icon
         let iconIndex = abs(hashValue) % 32
-        
+
         // Define an array of 32 SF Symbols
         let iconNames = [
             "person.fill", "figure.child", "figure.wave", "person.3.fill",
@@ -158,9 +158,9 @@ class PostFeedViewModel: ObservableObject {
             "leaf.fill", "flame.fill", "drop.fill", "snowflake",
             "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
             "camera.fill", "phone.fill", "envelope.fill", "message.fill",
-            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill"
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
         ]
-        
+
         // Ensure the iconIndex is within bounds
         return iconNames[iconIndex]
     }

@@ -15,7 +15,7 @@ struct ArkavoApp: App {
 //    @StateObject private var windowAccessor = WindowAccessor.shared
 //    @State private var screenshotGenerator: AppStoreScreenshotGenerator?
     // END screenshots
-    
+
     let persistenceController = PersistenceController.shared
     let client: ArkavoClient
 
@@ -116,10 +116,10 @@ struct ArkavoApp: App {
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
-                // BEGIN screenshots
-                // Stop screenshot capture when going to background
+            // BEGIN screenshots
+            // Stop screenshot capture when going to background
 //                screenshotGenerator?.stopCapturing()
-                // END screenshots
+            // END screenshots
             case .inactive:
                 break
             @unknown default:
@@ -557,7 +557,7 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeDiscordViewModel() -> GroupChatViewModel {
+    func makeGroupChatViewModel() -> GroupChatViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
         return GroupChatViewModel(
             client: client,

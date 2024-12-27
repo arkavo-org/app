@@ -116,6 +116,6 @@ struct StreamQuery: EntityQuery {
 extension Stream {
     var isGroupChatStream: Bool {
         // A group chat stream has no initial thought/sources
-        return source == nil
+        source == nil
     }
 }
