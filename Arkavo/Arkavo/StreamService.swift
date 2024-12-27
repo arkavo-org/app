@@ -290,7 +290,7 @@ class StreamService {
                 id: UUID(),
                 creatorPublicID: Data(creatorPublicId),
                 profile: Profile(name: name),
-                policies: Policies(admission: .open, interaction: .open, age: .forAll)
+                policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
             )
             try PersistenceController.shared.saveStream(stream)
         } else {

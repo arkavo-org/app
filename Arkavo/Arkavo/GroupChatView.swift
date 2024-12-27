@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - Models
 
 @MainActor
-class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
+class GroupChatViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -25,10 +25,22 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         Task {
             await loadStreams()
         }
+        // Add logging to track initialization
+        print("GroupChatViewModel initialized:")
+        print("- Client delegate set: \(client.delegate != nil)")
+        print("- Account streams count: \(account.streams.count)")
+        print("- Profile name: \(profile.name)")
     }
 
     private func loadStreams() async {
-        streams = account.streams
+        // Get all account streams
+        let allStreams = account.streams
+
+        // Filter to only include streams with no initial thoughts (group chat streams)
+        streams = allStreams.filter { stream in
+            // If there are no sources (initial thoughts), it's a group chat stream
+            stream.isGroupChatStream
+        }
     }
 
     private func setupNotifications() {
@@ -40,7 +52,7 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
-            queue: nil // Use nil to get on the posting queue
+            queue: nil
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
@@ -49,6 +61,36 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         }
         notificationObservers.append(stateObserver)
 
+        // Observer for decrypted messages
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy
+            else {
+                print("❌ No data in decrypted message notification")
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                do {
+                    print("\n=== Processing Decrypted Stream Data ===")
+                    print("Data size: \(data.count)")
+                    print("Policy type: \(policy.type)")
+                    if policy.type == .streamProfile {
+                        try await self?.handleStreamData(data)
+                    }
+                } catch {
+                    print("❌ Error processing stream data: \(error)")
+                    print("Error details: \(String(describing: error))")
+                }
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Observer for NATS messages
         let natsObserver = NotificationCenter.default.addObserver(
             forName: .natsMessageReceived,
             object: nil,
@@ -56,22 +98,11 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data else { return }
             Task { @MainActor [weak self] in
+                print("\n=== Handling NATS Message ===")
                 await self?.handleNATSMessage(data)
             }
         }
         notificationObservers.append(natsObserver)
-
-        let keyObserver = NotificationCenter.default.addObserver(
-            forName: .rewrappedKeyReceived,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            guard let data = notification.userInfo?["data"] as? Data else { return }
-            Task { @MainActor [weak self] in
-                await self?.handleRewrappedKeyMessage(data)
-            }
-        }
-        notificationObservers.append(keyObserver)
     }
 
     deinit {
@@ -136,7 +167,8 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
     }
 
     func handleStreamData(_ data: Data) async throws {
-        print("Handling stream data")
+        print("\n=== handleStreamData ===")
+        print("Received data size: \(data.count)")
         var buffer = ByteBuffer(data: data)
 
         // Verify and parse EntityRoot
@@ -157,22 +189,17 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
         else {
             throw ArkavoError.invalidResponse
         }
-        print("Stream data details:")
-        print("Stream name from FlatBuffer:", streamName)
-        print("streamPublicId \(streamPublicId)")
+
         let newStreamPublicID = Data(streamPublicId)
-        print("newStreamPublicID \(newStreamPublicID.base58EncodedString)")
-        // Check if stream already exists before creating
+        print("Processing stream: \(streamName) with ID: \(newStreamPublicID.base58EncodedString)")
+
+        // Check if stream already exists
         if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID)?.first {
-            print("Stream already exists, skipping creation: \(existingStream.profile.name)")
+            print("Stream already exists: \(existingStream.profile.name)")
             return
-        } else {
-            print("Account streams public IDs (Base58):")
-            for stream in account.streams {
-                print(stream.publicID.base58EncodedString)
-            }
         }
-        // Create and save stream
+
+        // Create new stream
         let stream = Stream(
             publicID: Data(streamPublicId),
             creatorPublicID: Data(creatorPublicId),
@@ -191,19 +218,24 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
             )
         )
 
+        // First save the stream
         try PersistenceController.shared.saveStream(stream)
+        print("Stream saved: \(stream.publicID.base58EncodedString)")
 
-        // Only append to account.streams if not already present
+        // Then update account and save changes
         if !account.streams.contains(where: { $0.publicID == stream.publicID }) {
             account.streams.append(stream)
             try await PersistenceController.shared.saveChanges()
+            print("Account updated with new stream")
         }
 
         // Update local streams array if not already present
         if !streams.contains(where: { $0.publicID == stream.publicID }) {
             streams.append(stream)
+            print("Local streams array updated")
         }
-        print("Stream saved successfully: \(stream.publicID)")
+
+        print("Stream handling completed successfully: \(stream.publicID.base58EncodedString)")
     }
 
     func sendStreamCacheEvent(stream: Stream) async throws {
@@ -313,7 +345,7 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
             icon: iconForStream(stream),
             unreadCount: stream.thoughts.count,
             hasNotification: !stream.thoughts.isEmpty,
-            description: stream.profile.blurb ?? "No description available",
+            description: stream.profile.blurb ?? "",
             policies: StreamPolicies(
                 agePolicy: stream.policies.age,
                 admissionPolicy: stream.policies.admission,
@@ -408,18 +440,6 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
 
     private func handleRewrappedKeyMessage(_ data: Data) async {
         print("\n=== handleRewrappedKeyMessage ===")
-        print("Message length: \(data.count)")
-
-        guard data.count == 93 else {
-            if data.count == 33 {
-                let identifier = data
-                print("Received DENY for EPK: \(identifier.hexEncodedString())")
-                return
-            }
-            print("Invalid rewrapped key length: \(data.count)")
-            return
-        }
-
         let identifier = data.prefix(33)
         print("Looking for stream with EPK: \(identifier.hexEncodedString())")
 
@@ -448,9 +468,10 @@ class DiscordViewModel: ObservableObject, ArkavoClientDelegate {
             // Decrypt the stream data
             print("Decrypting stream data...")
             let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-            print("Successfully decrypted stream data")
+            print("Successfully decrypted stream data of size: \(decryptedData.count)")
 
             // Now process the decrypted FlatBuffer data
+            print("Processing decrypted stream data...")
             try await handleStreamData(decryptedData)
 
         } catch {
@@ -503,7 +524,7 @@ struct Server: Identifiable, Hashable, Equatable {
 
 struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: DiscordViewModel = ViewModelFactory.shared.makeDiscordViewModel()
+    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
@@ -516,11 +537,20 @@ struct GroupChatView: View {
                 HStack(spacing: 0) {
                     // MARK: - Stream List
 
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            if viewModel.streams.isEmpty {
-                                EmptyStateView()
-                            } else {
+                    if viewModel.streams.isEmpty {
+                        VStack {
+                            Spacer()
+                            WaveLoadingView(message: "Awaiting")
+                                .frame(maxWidth: .infinity)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.systemBackground))
+                        .onAppear { sharedState.isAwaiting = true }
+                        .onDisappear { sharedState.isAwaiting = false }
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
                                 ForEach(viewModel.streams) { stream in
                                     ServerCardView(
                                         server: viewModel.serverFromStream(stream),
@@ -532,12 +562,12 @@ struct GroupChatView: View {
                                     )
                                 }
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 16)
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 16)
+                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
                     }
-                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
 
                     // MARK: - Chat View (iPad/Mac)
 
@@ -584,6 +614,15 @@ struct GroupChatView: View {
                     GroupCreateView()
                 }
             }
+            .onChange(of: sharedState.selectedServer) { _, newServer in
+                if let newServer {
+                    // Find the corresponding stream in the viewModel.streams
+                    if let stream = viewModel.streams.first(where: { $0.id.uuidString == newServer.id }) {
+                        viewModel.selectedStream = stream
+                        navigationPath.append(stream)
+                    }
+                }
+            }
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if let stream = viewModel.selectedStream {
@@ -593,26 +632,6 @@ struct GroupChatView: View {
                 )
             }
         }
-    }
-}
-
-// MARK: - Supporting Views
-
-struct EmptyStateView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No Communities Yet")
-                .font(.headline)
-            Text("Create or join a community to get started")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 100)
     }
 }
 

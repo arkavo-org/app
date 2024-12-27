@@ -10,9 +10,8 @@ final class Stream: Identifiable, Hashable, @unchecked Sendable {
     var creatorPublicID: Data
     var profile: Profile
     var policies: Policies
-    // sources[0] determines the type of Stream
-    @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
-    var sources: [Thought] = []
+    // Initial thought that determines stream type
+    var source: Thought?
     @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
     var thoughts: [Thought] = []
 
@@ -46,7 +45,9 @@ final class Stream: Identifiable, Hashable, @unchecked Sendable {
 }
 
 extension Stream {
+    // Adding a thought should add to thoughts array, not sources
     func addThought(_ thought: Thought) {
+        // Never add to sources array when adding a thought
         if !thoughts.contains(where: { $0.id == thought.id }) {
             thoughts.append(thought)
             thought.stream = self
@@ -109,5 +110,12 @@ struct StreamQuery: EntityQuery {
     func suggestedEntities() async throws -> [Stream] {
         // Implement this method to fetch suggested streams from your SwiftData store
         []
+    }
+}
+
+extension Stream {
+    var isGroupChatStream: Bool {
+        // A group chat stream has no initial thought/sources
+        source == nil
     }
 }

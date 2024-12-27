@@ -37,6 +37,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         Task {
             do {
                 switch messageType {
+                case 0x03: // Rewrap
+                    try await handleRewrapMessage(messageData)
+
                 case 0x04: // Rewrapped key
                     try await handleRewrappedKey(messageData)
 
@@ -69,6 +72,36 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     // MARK: - Message Handling
+
+    private func handleRewrapMessage(_ data: Data) async throws {
+        print("Handling Rewrap message of size: \(data.count)")
+
+        // Create a deep copy of the data
+        let copiedData = Data(data)
+        let parser = BinaryParser(data: copiedData)
+        let header = try parser.parseHeader()
+        let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
+        let nano = NanoTDF(header: header, payload: payload, signature: nil)
+
+        let epk = header.ephemeralPublicKey
+        print("Message components:")
+        print("- Header size: \(header.toData().count)")
+        print("- EPK: \(epk.hexEncodedString())")
+        // Store message data with detailed logging
+        pendingMessages[epk] = (header, payload, nano)
+        print("Stored pending message with EPK: \(epk.hexEncodedString())")
+
+        // Create and send rewrap message containing only the header
+        let rewrapMessage = RewrapMessage(header: header)
+        try await client.sendMessage(rewrapMessage.toData())
+
+        // Post notification about the rewrap request
+        NotificationCenter.default.post(
+            name: .rewrapRequestReceived,
+            object: nil,
+            userInfo: ["header": header]
+        )
+    }
 
     private func handleNATSMessage(_ data: Data, type _: NATSMessageType) async throws {
         print("Handling NATS message of size: \(data.count)")
@@ -169,4 +202,5 @@ extension Notification.Name {
     static let messageDecrypted = Notification.Name("messageDecrypted")
     static let rewrapDenied = Notification.Name("rewrapDenied")
     static let rewrappedKeyReceived = Notification.Name("rewrappedKeyReceived")
+    static let rewrapRequestReceived = Notification.Name("rewrapRequestReceived")
 }

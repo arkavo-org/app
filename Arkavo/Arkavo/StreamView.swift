@@ -121,7 +121,7 @@ struct StreamView: View {
         let stream = Stream(
             creatorPublicID: creatorPublicID,
             profile: streamProfile,
-            policies: Policies(admission: .open, interaction: .open, age: .forAll)
+            policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
         )
         account.streams.append(stream)
         try await PersistenceController.shared.saveChanges()
@@ -166,7 +166,7 @@ struct StreamManagementView_Previews: PreviewProvider {
                 let stream = Stream(
                     creatorPublicID: Data(),
                     profile: profile,
-                    policies: Policies(admission: .open, interaction: .open, age: .forAll)
+                    policies: Policies(admission: .open, interaction: .open, age: .onlyKids)
                 )
                 account.streams.append(stream)
                 try context.save()

@@ -583,7 +583,6 @@ public final class ArkavoClient: NSObject {
 
         // Then handle via delegate
         delegate?.clientDidReceiveMessage(self, message: data)
-        receiveMessage()
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
@@ -617,6 +616,18 @@ public final class ArkavoClient: NSObject {
         delegate?.clientDidReceiveMessage(self, message: data)
     }
 
+    public func sendNanoForRewrap(_ nanoData: Data) async throws {
+        // Parse the nano TDF
+        let copiedData = Data(nanoData)
+        let parser = BinaryParser(data: copiedData)
+        let header = try parser.parseHeader()
+        // Store in router's pending messages
+        delegate?.clientDidReceiveMessage(self, message: Data([0x03] + nanoData))
+        // Send rewrap request
+        let rewrapMessage = RewrapMessage(header: header)
+        try await sendMessage(rewrapMessage.toData())
+    }
+    
     // Add methods to send NATS messages
     public func sendNATSMessage(_ payload: Data) async throws {
         let message = NATSMessage(message: payload)
