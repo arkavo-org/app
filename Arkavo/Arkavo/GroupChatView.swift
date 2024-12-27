@@ -67,7 +67,9 @@ class GroupChatViewModel: ObservableObject {
             object: nil,
             queue: nil
         ) { [weak self] notification in
-            guard let data = notification.userInfo?["data"] as? Data else {
+            guard let data = notification.userInfo?["data"] as? Data,
+                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy
+            else {
                 print("❌ No data in decrypted message notification")
                 return
             }
@@ -76,7 +78,10 @@ class GroupChatViewModel: ObservableObject {
                 do {
                     print("\n=== Processing Decrypted Stream Data ===")
                     print("Data size: \(data.count)")
-                    try await self?.handleStreamData(data)
+                    print("Policy type: \(policy.type)")
+                    if policy.type == .streamProfile {
+                        try await self?.handleStreamData(data)
+                    }
                 } catch {
                     print("❌ Error processing stream data: \(error)")
                     print("Error details: \(String(describing: error))")

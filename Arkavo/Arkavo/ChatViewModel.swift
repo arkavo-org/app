@@ -235,30 +235,6 @@ class ChatViewModel: ObservableObject {
         try await PersistenceController.shared.saveChanges()
     }
 
-    func handleStreamData(_ data: Data) async throws {
-        print("Handling stream data of length: \(data.count)")
-
-        var buffer = ByteBuffer(data: data)
-        print("Created ByteBuffer")
-
-        // Add try-catch for better error handling
-        do {
-            let rootOffset = buffer.read(def: Int32.self, position: 0)
-            print("Root offset: \(rootOffset)")
-
-            var verifier = try Verifier(buffer: &buffer)
-            try Arkavo_EntityRoot.verify(&verifier, at: Int(rootOffset), of: Arkavo_EntityRoot.self)
-            print("Verification passed")
-
-            // ... rest of the processing ...
-
-            print("Stream processing complete")
-        } catch {
-            print("Error processing stream data: \(error)")
-            throw error
-        }
-    }
-
     private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy) async {
         print("\nHandling decrypted thought:")
         do {
