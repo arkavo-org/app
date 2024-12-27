@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - Models
 
 @MainActor
-class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
+class GroupChatViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -25,6 +25,11 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
         Task {
             await loadStreams()
         }
+        // Add logging to track initialization
+        print("GroupChatViewModel initialized:")
+        print("- Client delegate set: \(client.delegate != nil)")
+        print("- Account streams count: \(account.streams.count)")
+        print("- Profile name: \(profile.name)")
     }
 
     private func loadStreams() async {
@@ -47,7 +52,7 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
-            queue: nil // Use nil to get on the posting queue
+            queue: nil
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
@@ -56,6 +61,31 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
         }
         notificationObservers.append(stateObserver)
 
+        // Observer for decrypted messages
+        let messageObserver = NotificationCenter.default.addObserver(
+            forName: .messageDecrypted,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let data = notification.userInfo?["data"] as? Data else {
+                print("❌ No data in decrypted message notification")
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                do {
+                    print("\n=== Processing Decrypted Stream Data ===")
+                    print("Data size: \(data.count)")
+                    try await self?.handleStreamData(data)
+                } catch {
+                    print("❌ Error processing stream data: \(error)")
+                    print("Error details: \(String(describing: error))")
+                }
+            }
+        }
+        notificationObservers.append(messageObserver)
+
+        // Observer for NATS messages
         let natsObserver = NotificationCenter.default.addObserver(
             forName: .natsMessageReceived,
             object: nil,
@@ -63,22 +93,11 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data else { return }
             Task { @MainActor [weak self] in
+                print("\n=== Handling NATS Message ===")
                 await self?.handleNATSMessage(data)
             }
         }
         notificationObservers.append(natsObserver)
-
-        let keyObserver = NotificationCenter.default.addObserver(
-            forName: .rewrappedKeyReceived,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            guard let data = notification.userInfo?["data"] as? Data else { return }
-            Task { @MainActor [weak self] in
-                await self?.handleRewrappedKeyMessage(data)
-            }
-        }
-        notificationObservers.append(keyObserver)
     }
 
     deinit {
@@ -143,7 +162,8 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
     }
 
     func handleStreamData(_ data: Data) async throws {
-        print("Handling stream data")
+        print("\n=== handleStreamData ===")
+        print("Received data size: \(data.count)")
         var buffer = ByteBuffer(data: data)
 
         // Verify and parse EntityRoot
@@ -164,22 +184,17 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
         else {
             throw ArkavoError.invalidResponse
         }
-        print("Stream data details:")
-        print("Stream name from FlatBuffer:", streamName)
-        print("streamPublicId \(streamPublicId)")
+
         let newStreamPublicID = Data(streamPublicId)
-        print("newStreamPublicID \(newStreamPublicID.base58EncodedString)")
-        // Check if stream already exists before creating
+        print("Processing stream: \(streamName) with ID: \(newStreamPublicID.base58EncodedString)")
+
+        // Check if stream already exists
         if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID)?.first {
-            print("Stream already exists, skipping creation: \(existingStream.profile.name)")
+            print("Stream already exists: \(existingStream.profile.name)")
             return
-        } else {
-            print("Account streams public IDs (Base58):")
-            for stream in account.streams {
-                print(stream.publicID.base58EncodedString)
-            }
         }
-        // Create and save stream
+
+        // Create new stream
         let stream = Stream(
             publicID: Data(streamPublicId),
             creatorPublicID: Data(creatorPublicId),
@@ -198,19 +213,24 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
             )
         )
 
+        // First save the stream
         try PersistenceController.shared.saveStream(stream)
+        print("Stream saved: \(stream.publicID.base58EncodedString)")
 
-        // Only append to account.streams if not already present
+        // Then update account and save changes
         if !account.streams.contains(where: { $0.publicID == stream.publicID }) {
             account.streams.append(stream)
             try await PersistenceController.shared.saveChanges()
+            print("Account updated with new stream")
         }
 
         // Update local streams array if not already present
         if !streams.contains(where: { $0.publicID == stream.publicID }) {
             streams.append(stream)
+            print("Local streams array updated")
         }
-        print("Stream saved successfully: \(stream.publicID)")
+
+        print("Stream handling completed successfully: \(stream.publicID.base58EncodedString)")
     }
 
     func sendStreamCacheEvent(stream: Stream) async throws {
@@ -415,18 +435,6 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
 
     private func handleRewrappedKeyMessage(_ data: Data) async {
         print("\n=== handleRewrappedKeyMessage ===")
-        print("Message length: \(data.count)")
-
-        guard data.count == 93 else {
-            if data.count == 33 {
-                let identifier = data
-                print("Received DENY for EPK: \(identifier.hexEncodedString())")
-                return
-            }
-            print("Invalid rewrapped key length: \(data.count)")
-            return
-        }
-
         let identifier = data.prefix(33)
         print("Looking for stream with EPK: \(identifier.hexEncodedString())")
 
@@ -455,9 +463,10 @@ class GroupChatViewModel: ObservableObject, ArkavoClientDelegate {
             // Decrypt the stream data
             print("Decrypting stream data...")
             let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-            print("Successfully decrypted stream data")
+            print("Successfully decrypted stream data of size: \(decryptedData.count)")
 
             // Now process the decrypted FlatBuffer data
+            print("Processing decrypted stream data...")
             try await handleStreamData(decryptedData)
 
         } catch {
