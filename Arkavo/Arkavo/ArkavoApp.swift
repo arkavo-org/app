@@ -131,6 +131,14 @@ struct ArkavoApp: App {
     @MainActor
     private func saveProfile(profile: Profile) async {
         do {
+            // Generate default handle from name
+             let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "")
+            // Generate DID key and get the DID string
+            let did = try client.generateDID()
+            print("Generated DID: \(did)")
+             // Finalize the profile with DID and handle
+             profile.finalizeRegistration(did: did, handle: handle)
+            
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
             let videoStream = try await createVideoStream(account: account, profile: profile)

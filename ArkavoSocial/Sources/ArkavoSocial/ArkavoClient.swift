@@ -793,6 +793,17 @@ extension ArkavoClient: ASAuthorizationControllerPresentationContextProviding {
     }
 }
 
+// MARK: - DID Key Management Extension
+extension ArkavoClient {
+   
+    public func generateDID() throws -> String {
+        try KeychainManager.generateAndSaveDIDKey()
+    }
+
+    // TODO: Function to sign NanoTDF with DID
+    // TODO: Function to verify NanoTDF with DID
+}
+
 // MARK: - Helper Classes
 
 private class AuthenticationDelegate: NSObject, ASAuthorizationControllerDelegate {

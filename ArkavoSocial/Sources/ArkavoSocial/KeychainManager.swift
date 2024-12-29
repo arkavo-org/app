@@ -236,13 +236,18 @@ extension KeychainManager {
 
     enum DIDKeyError: Error {
         case accessControlCreationFailed
-        case keyGenerationFailed
+        case keyGenerationFailed(OSStatus)
         case invalidPublicKey
         case signatureCreationFailed
         case keyNotFound
     }
 
     static func generateAndSaveDIDKey() throws -> String {
+        // First check if key already exists
+        if let (_, _, did) = try? getDIDKey() {
+            return did
+        }
+        
         // Create access control
         guard let accessControl = SecAccessControlCreateWithFlags(
             nil,
@@ -252,32 +257,40 @@ extension KeychainManager {
         ) else {
             throw DIDKeyError.accessControlCreationFailed
         }
-
+        
+        // Define private key attributes separately
+        let privateKeyAttributes: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: didKeyTag.data(using: .utf8)!,
+            kSecAttrAccessControl as String: accessControl
+        ]
+        
+        // Define key generation attributes
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
-            kSecAttrApplicationTag as String: didKeyTag,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrCanSign as String: true,
-                kSecAttrAccessControl as String: accessControl,
-            ],
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecPrivateKeyAttrs as String: privateKeyAttributes
         ]
-
+        
         var error: Unmanaged<CFError>?
         guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
-            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+            if let err = error?.takeRetainedValue() {
+                // Convert CFError code to OSStatus
+                let code = OSStatus(err._code)
+                throw DIDKeyError.keyGenerationFailed(code)
+            }
+            throw DIDKeyError.keyGenerationFailed(errSecParam)
         }
-
+        
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw DIDKeyError.invalidPublicKey
         }
-
+        
         guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
-            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed(0)
         }
-
+        
         // Generate DID using base58 encoding of the public key
         return "did:key:z" + publicKeyData.base58String
     }
@@ -285,31 +298,32 @@ extension KeychainManager {
     static func getDIDKey() throws -> (privateKey: SecKey, publicKey: SecKey, did: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: didKeyTag,
-            kSecReturnRef as String: true,
+            kSecAttrApplicationTag as String: didKeyTag.data(using: .utf8)!,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecReturnRef as String: true,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave
         ]
-
+        
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
+        
         guard status == errSecSuccess else {
             throw DIDKeyError.keyNotFound
         }
-
+        
         let privateKey = result as! SecKey
-
+        
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw DIDKeyError.invalidPublicKey
         }
-
+        
         var error: Unmanaged<CFError>?
         guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
-            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed(0)
         }
-
+        
         let did = "did:key:z" + publicKeyData.base58String
-
+        
         return (privateKey, publicKey, did)
     }
 
