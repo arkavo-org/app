@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Keychain Manager
 
 public class KeychainManager {
+    private static let didKeyTag = "com.arkavo.did"
     enum KeychainError: Error {
         case duplicateItem
         case unknown(OSStatus)
@@ -93,7 +94,7 @@ public class KeychainManager {
             let data = try load(service: "com.arkavo.patreon", account: "access_token")
             return String(data: data, encoding: .utf8)
         } catch {
-//            print("Error retrieving access token:", error)
+            //            print("Error retrieving access token:", error)
             return nil
         }
     }
@@ -103,7 +104,7 @@ public class KeychainManager {
             let data = try load(service: "com.arkavo.patreon", account: "refresh_token")
             return String(data: data, encoding: .utf8)
         } catch {
-//            print("Error retrieving refresh token:", error)
+            //            print("Error retrieving refresh token:", error)
             return nil
         }
     }
@@ -159,7 +160,7 @@ public class KeychainManager {
             let data = try load(service: "com.arkavo.bluesky", account: "access_token")
             return String(data: data, encoding: .utf8)
         } catch {
-//            print("Error retrieving access token:", error)
+            //            print("Error retrieving access token:", error)
             return nil
         }
     }
@@ -227,5 +228,204 @@ public class KeychainManager {
 
     public static func deleteAuthenticationToken() {
         try? delete(service: "com.arkavo.webauthn", account: "authentication_token")
+    }
+}
+
+extension KeychainManager {
+    // MARK: - DID Key Management
+
+    enum DIDKeyError: Error {
+        case accessControlCreationFailed
+        case keyGenerationFailed
+        case invalidPublicKey
+        case signatureCreationFailed
+        case keyNotFound
+    }
+
+    static func generateAndSaveDIDKey() throws -> String {
+        // Create access control
+        guard let accessControl = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            [.privateKeyUsage],
+            nil
+        ) else {
+            throw DIDKeyError.accessControlCreationFailed
+        }
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrApplicationTag as String: didKeyTag,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrCanSign as String: true,
+                kSecAttrAccessControl as String: accessControl,
+            ],
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+        }
+
+        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            throw DIDKeyError.invalidPublicKey
+        }
+
+        guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+        }
+
+        // Generate DID using base58 encoding of the public key
+        return "did:key:z" + publicKeyData.base58String
+    }
+
+    static func getDIDKey() throws -> (privateKey: SecKey, publicKey: SecKey, did: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: didKeyTag,
+            kSecReturnRef as String: true,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess else {
+            throw DIDKeyError.keyNotFound
+        }
+
+        let privateKey = result as! SecKey
+
+        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            throw DIDKeyError.invalidPublicKey
+        }
+
+        var error: Unmanaged<CFError>?
+        guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed
+        }
+
+        let did = "did:key:z" + publicKeyData.base58String
+
+        return (privateKey, publicKey, did)
+    }
+
+    static func signWithDIDKey(message: Data) throws -> Data {
+        let (privateKey, _, _) = try getDIDKey()
+
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(
+            privateKey,
+            .ecdsaSignatureMessageX962SHA256,
+            message as CFData,
+            &error
+        ) as Data? else {
+            throw error?.takeRetainedValue() ?? DIDKeyError.signatureCreationFailed
+        }
+
+        return signature
+    }
+
+    static func verifyDIDSignature(message: Data, signature: Data) throws -> Bool {
+        let (_, publicKey, _) = try getDIDKey()
+
+        var error: Unmanaged<CFError>?
+        let result = SecKeyVerifySignature(
+            publicKey,
+            .ecdsaSignatureMessageX962SHA256,
+            message as CFData,
+            signature as CFData,
+            &error
+        )
+
+        if let error = error?.takeRetainedValue() {
+            throw error
+        }
+
+        return result
+    }
+
+    static func deleteDIDKey() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: didKeyTag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unknown(status)
+        }
+    }
+}
+
+extension Data {
+    var base58String: String {
+        Base58.encode(Array(self))
+    }
+}
+
+enum Base58 {
+    private static let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    private static let base = alphabet.count
+
+    static func encode(_ bytes: [UInt8]) -> String {
+        var bytes = bytes
+        var zerosCount = 0
+
+        for b in bytes {
+            if b != 0 { break }
+            zerosCount += 1
+        }
+
+        bytes.removeFirst(zerosCount)
+
+        var result = [UInt8]()
+        for b in bytes {
+            var carry = Int(b)
+            for j in 0 ..< result.count {
+                carry += Int(result[j]) << 8
+                result[j] = UInt8(carry % base)
+                carry /= base
+            }
+            while carry > 0 {
+                result.append(UInt8(carry % base))
+                carry /= base
+            }
+        }
+
+        let prefix = String(repeating: alphabet.first!, count: zerosCount)
+        let encoded = result.reversed().map { alphabet[alphabet.index(alphabet.startIndex, offsetBy: Int($0))] }
+        return prefix + String(encoded)
+    }
+
+    static func decode(_ string: String) -> [UInt8]? {
+        var result = [UInt8]()
+        for char in string {
+            guard let charIndex = alphabet.firstIndex(of: char) else { return nil }
+            let index = alphabet.distance(from: alphabet.startIndex, to: charIndex)
+
+            var carry = index
+            for j in 0 ..< result.count {
+                carry += Int(result[j]) * base
+                result[j] = UInt8(carry & 0xFF)
+                carry >>= 8
+            }
+
+            while carry > 0 {
+                result.append(UInt8(carry & 0xFF))
+                carry >>= 8
+            }
+        }
+
+        for char in string {
+            if char != alphabet.first! { break }
+            result.append(0)
+        }
+
+        return result.reversed()
     }
 }

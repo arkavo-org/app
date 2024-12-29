@@ -21,9 +21,9 @@ struct ArkavoApp: App {
 
     init() {
         client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
+            authURL: URL(string: "https://arkavo.net")!,
             websocketURL: URL(string: "wss://kas.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
+            relyingPartyID: "arkavo.net",
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
