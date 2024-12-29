@@ -439,13 +439,14 @@ public final class ArkavoClient: NSObject {
     }
 
     private func authenticateUser(accountName: String) async throws -> String {
+        print("authenticateUser \(accountName) \(relyingPartyID)")
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
 
         let registrationOptions = try await fetchRegistrationOptions(accountName: accountName)
 
         let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
         let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64())!
-
+        print("userIDData: \(userIDData) challengeData: \(challengeData)")
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
             name: accountName,
@@ -647,6 +648,7 @@ public final class ArkavoClient: NSObject {
         guard let httpResponse = response as? HTTPURLResponse,
               (200 ... 299).contains(httpResponse.statusCode)
         else {
+            print("fetchRegistrationOptions.invalidResponse \(String(decoding: data, as: UTF8.self))")
             throw ArkavoError.invalidResponse
         }
 
@@ -658,6 +660,7 @@ public final class ArkavoClient: NSObject {
 
     private func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialRegistration {
         try await withCheckedThrowingContinuation { continuation in
+            print("performAuthentication")
             let controller = ASAuthorizationController(authorizationRequests: [request])
             let delegate = AuthenticationDelegate(continuation: continuation)
             controller.delegate = delegate
