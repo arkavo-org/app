@@ -489,21 +489,33 @@ public final class ArkavoClient: NSObject {
         
         completeRequest.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
+        print("\n=== Authentication Completion Request ===")
+        print("URL: \(completeRequest.url?.absoluteString ?? "none")")
+        print("Headers: \(completeRequest.allHTTPHeaderFields ?? [:])")
+        print("Parameters: \(parameters)")
+        
         let (responseData, completionResponse) = try await URLSession.shared.data(for: completeRequest)
         
+        print("\nServer Response:")
+        print("Status Code: \((completionResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+        print("Response Headers: \((completionResponse as? HTTPURLResponse)?.allHeaderFields ?? [:])")
+        print("Response Body: \(String(data: responseData, encoding: .utf8) ?? "none")")
+        print("=== End Authentication Completion ===\n")
+        
         guard let completionHttpResponse = completionResponse as? HTTPURLResponse,
-              let token = completionHttpResponse.allHeaderFields["x-auth-token"] as? String else {
+              (200...299).contains(completionHttpResponse.statusCode) else {
             // If we got an error response, try to parse it
             if let errorJson = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
                let errorMessage = errorJson["error"] as? String {
                 throw ArkavoError.authenticationFailed(errorMessage)
             }
-            throw ArkavoError.authenticationFailed("No authentication token received")
+            throw ArkavoError.authenticationFailed("Invalid response from server")
         }
         
-        // Verify token format
-        if !token.starts(with: "eyJ") {
-            throw ArkavoError.authenticationFailed("Invalid token format")
+        // Parse token from response body
+        guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let token = json["jwt_token"] as? String else {
+            throw ArkavoError.authenticationFailed("No authentication token received")
         }
         
         return token
@@ -767,20 +779,36 @@ public final class ArkavoClient: NSObject {
         }
     }
     
-    private func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialAssertion {
-        try await withCheckedThrowingContinuation { continuation in
-            print("performAuthentication")
-            let controller = ASAuthorizationController(authorizationRequests: [request])
-            let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
-            controller.delegate = delegate
-            controller.presentationContextProvider = self
-            
-            // Retain delegate until authentication completes
-            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-            
-            controller.performRequests()
+    func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialAssertion {
+            try await withCheckedThrowingContinuation { continuation in
+                print("\n=== WebAuthn Authentication ===")
+                print("Starting performAuthentication")
+                
+                if let platformProvider = request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest {
+                    print("Challenge: \(platformProvider.challenge.base64EncodedString())")
+                    print("RelyingPartyIdentifier: \(platformProvider.relyingPartyIdentifier)")
+                    let allowedCredentials = platformProvider.allowedCredentials
+                    print("Allowed credentials count: \(allowedCredentials.count)")
+                    for (index, credential) in allowedCredentials.enumerated() {
+                        print("Credential [\(index)]: \(credential.credentialID.base64EncodedString())")
+                    }
+                } else {
+                    print("Warning: Request is not a platform credential assertion request")
+                }
+                
+                let controller = ASAuthorizationController(authorizationRequests: [request])
+                let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
+                controller.delegate = delegate
+                controller.presentationContextProvider = self
+                
+                // Retain delegate until authentication completes
+                objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+                
+                print("Performing authorization requests...")
+                controller.performRequests()
+                print("=== End WebAuthn Authentication Setup ===\n")
+            }
         }
-    }
 
     private func completeRegistration(
         credential: ASAuthorizationPlatformPublicKeyCredentialRegistration,
@@ -1279,14 +1307,60 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("\n=== WebAuthn Authentication Completion ===")
+        
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
+            print("Error: Received invalid credential type")
+            print("Actual type: \(type(of: authorization.credential))")
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
         }
+        
+        print("Successfully received credential:")
+        print("Credential ID: \(credential.credentialID.base64EncodedString())")
+        print("Raw AuthenticatorData length: \(credential.rawAuthenticatorData.count) bytes")
+        print("Raw ClientDataJSON: \(String(data: credential.rawClientDataJSON, encoding: .utf8) ?? "unable to decode")")
+        print("Signature length: \(credential.signature.count) bytes")
+        if let userID = credential.userID {
+            print("UserID: \(userID.base64EncodedString())")
+        } else {
+            print("No UserID present")
+        }
+        print("=== End WebAuthn Authentication Completion ===\n")
+        
         continuation.resume(returning: credential)
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("\n=== WebAuthn Authentication Error ===")
+        print("Error: \(error)")
+        if let authError = error as? ASAuthorizationError {
+            print("ASAuthorization Error Code: \(authError.code.rawValue)")
+            print("Error Domain: \(authError.errorCode)")
+            switch authError.code {
+                case .canceled:
+                    print("User cancelled the authorization")
+                case .invalidResponse:
+                    print("The authorization request received an invalid response")
+                case .notHandled:
+                    print("The authorization request wasn't handled")
+                case .failed:
+                    print("The authorization request failed")
+                case .notInteractive:
+                    print("The authorization request requires an interactive session")
+                case .unknown:
+                    print("An unknown error occurred")
+            case .matchedExcludedCredential:
+                print("matched excluded credential")
+            case .credentialImport:
+                print("credential import")
+            case .credentialExport:
+                print("credemtial export")
+            @unknown default:
+                    print("An unexpected error occurred")
+            }
+        }
+        print("=== End WebAuthn Authentication Error ===\n")
         continuation.resume(throwing: error)
     }
 }
