@@ -21,9 +21,9 @@ struct ArkavoApp: App {
 
     init() {
         client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
+            authURL: URL(string: "https://arkavo.net")!,
             websocketURL: URL(string: "wss://kas.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
+            relyingPartyID: "arkavo.net",
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
@@ -43,8 +43,10 @@ struct ArkavoApp: App {
                 case .registration:
                     RegistrationView(onComplete: { profile in
                         Task {
-                            await saveProfile(profile: profile)
-                            selectedView = .main
+                            let success = await saveProfile(profile: profile)
+                            if success {
+                                selectedView = .main
+                            }
                         }
                     })
                 case .main:
@@ -129,29 +131,130 @@ struct ArkavoApp: App {
     }
 
     @MainActor
-    private func saveProfile(profile: Profile) async {
+    private func saveProfile(profile: Profile) async -> Bool {
         do {
+            // Generate default handle from name
+            let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "")
+            
+            // Generate DID key and get the DID string
+            let did: String
+            do {
+                did = try client.generateDID()
+                print("Generated DID: \(did)")
+            } catch {
+                print("Failed to generate DID: \(error)")
+                connectionError = ConnectionError(
+                    title: "Registration Error",
+                    message: "Failed to generate security credentials. Please try again.",
+                    action: "Retry",
+                    isBlocking: true
+                )
+                return false
+            }
+            
+            // Finalize the profile with DID and handle
+            profile.finalizeRegistration(did: did, handle: handle)
+            
+            // Complete WebAuthn registration
+            do {
+                let token = try await client.registerUser(accountName: profile.name, handle: handle, did: did)
+                try KeychainManager.saveAuthenticationToken(token)
+            } catch let error as ArkavoError {
+                switch error {
+                case .authenticationFailed(let message):
+                    connectionError = ConnectionError(
+                        title: "Registration Failed",
+                        message: message,
+                        action: "Try Again",
+                        isBlocking: true
+                    )
+                case .connectionFailed:
+                    connectionError = ConnectionError(
+                        title: "Connection Failed",
+                        message: "We're having trouble reaching our servers. Please check your internet connection and try again.",
+                        action: "Retry",
+                        isBlocking: true
+                    )
+                case .invalidResponse:
+                    connectionError = ConnectionError(
+                        title: "Server Error",
+                        message: "Received an invalid response from the server. Please try again.",
+                        action: "Retry",
+                        isBlocking: true
+                    )
+                default:
+                    connectionError = ConnectionError(
+                        title: "Registration Error",
+                        message: "An unexpected error occurred during registration. Please try again.",
+                        action: "Retry",
+                        isBlocking: true
+                    )
+                }
+                return false
+            } catch {
+                print("Failed to register user: \(error)")
+                connectionError = ConnectionError(
+                    title: "Registration Error",
+                    message: "Failed to complete registration. Please try again.",
+                    action: "Retry",
+                    isBlocking: true
+                )
+                return false
+            }
+            
+            // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            let videoStream = try await createVideoStream(account: account, profile: profile)
-            let postStream = try await createPostStream(account: account, profile: profile)
-            print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
+            
+            // Create streams
+            do {
+                let videoStream = try await createVideoStream(account: account, profile: profile)
+                let postStream = try await createPostStream(account: account, profile: profile)
+                print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
+            } catch {
+                print("Failed to create streams: \(error)")
+                connectionError = ConnectionError(
+                    title: "Setup Error",
+                    message: "Failed to set up your account streams. Please try again.",
+                    action: "Retry",
+                    isBlocking: true
+                )
+                return false
+            }
+            
             ViewModelFactory.shared.setAccount(account)
+            
             // Connect with WebAuthn
             do {
                 try await client.connect(accountName: profile.name)
-                // If connection is successful, we should have a token from the server
-                // Store it in the keychain
+                // If connection is successful, save token and changes
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
+                    selectedView = .main  // Only change view on complete success
                 }
             } catch {
                 print("Failed to connect: \(error)")
+                connectionError = ConnectionError(
+                    title: "Connection Error",
+                    message: "Failed to establish connection. Please try again.",
+                    action: "Retry",
+                    isBlocking: true
+                )
+                return false
             }
+            
         } catch {
             print("Failed to save profile: \(error)")
+            connectionError = ConnectionError(
+                title: "Profile Error",
+                message: "Failed to save your profile. Please try again.",
+                action: "Retry",
+                isBlocking: true
+            )
+            return false
         }
+        return true
     }
 
     func createVideoStream(account: Account, profile: Profile) async throws -> Stream {
