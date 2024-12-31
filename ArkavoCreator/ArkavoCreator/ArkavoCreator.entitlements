@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>webcredentials:example.com</string>
+		<string>webcredentials:arkavo.net</string>
 		<string>webcredentials:webauthn.arkavo.net</string>
 	</array>
 	<key>com.apple.security.app-sandbox</key>

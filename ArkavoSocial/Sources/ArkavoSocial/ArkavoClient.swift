@@ -2,6 +2,7 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 import OpenTDFKit
+import LocalAuthentication
 
 #if canImport(UIKit)
     import UIKit
@@ -462,10 +463,18 @@ public final class ArkavoClient: NSObject {
         let challengeData = Data(base64Encoded: authOptions.publicKey.challenge.base64URLToBase64())!
         print("Challenge data: \(challengeData)")
         
-        // Create assertion request
+        // Create assertion request with modified user verification
         let assertionRequest = provider.createCredentialAssertionRequest(
             challenge: challengeData
         )
+        // Set user verification preference based on biometric availability
+        assertionRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference.preferred
+        
+        let biometricContext = LAContext()
+        if !biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) {
+            print("Biometric authentication not available, configuring for security key")
+            assertionRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference.discouraged
+        }
         
         // Perform the authentication
         let assertion = try await performAuthentication(request: assertionRequest)

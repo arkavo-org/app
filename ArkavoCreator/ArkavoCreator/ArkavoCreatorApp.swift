@@ -1,4 +1,6 @@
 import ArkavoSocial
+import AuthenticationServices
+import LocalAuthentication
 import SwiftData
 import SwiftUI
 
@@ -198,5 +200,102 @@ final class ViewModelFactory {
     func makeWorkflowViewModel() -> WorkflowViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
         return WorkflowViewModel(client: client)
+    }
+}
+
+class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegate {
+    private let continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>
+
+    init(continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>) {
+        self.continuation = continuation
+        super.init()
+    }
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("\n=== WebAuthn Authorization Completed ===")
+        guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
+            print("Error: Invalid credential type received")
+            continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
+            return
+        }
+        continuation.resume(returning: credential)
+    }
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("\n=== WebAuthn Authorization Error ===")
+        print("Error occurred: \(error.localizedDescription)")
+        if let authError = error as? ASAuthorizationError {
+            print("Authorization Error Code: \(authError.code.rawValue)")
+        }
+        continuation.resume(throwing: error)
+    }
+}
+
+extension ArkavoClient {
+    private func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialAssertion {
+        // First check if biometric auth is available
+        let biometricContext = LAContext()
+        var error: NSError?
+        let canUseBiometric = biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+
+        print("Biometric availability check:")
+        print("Can use biometric: \(canUseBiometric)")
+        if let error {
+            print("Biometric error: \(error)")
+        }
+
+        // If no Touch ID, set up security key based authentication
+        if let platformProvider = request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest {
+            platformProvider.userVerificationPreference = .preferred
+            // Allow security keys when biometric is not available
+            if !canUseBiometric {
+                print("Configuring for security key authentication")
+                platformProvider.userVerificationPreference = .discouraged
+            }
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            print("\n=== Starting WebAuthn Authentication ===")
+            print("User verification preference: \(String(describing: (request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest)?.userVerificationPreference))")
+
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
+
+            controller.delegate = delegate
+            controller.presentationContextProvider = self
+
+            // Retain delegate
+            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+
+            DispatchQueue.main.async {
+                print("Performing authorization request...")
+                controller.performRequests()
+            }
+        }
+    }
+}
+
+// Helper classes to maintain strong references
+private class DelegateBox {
+    let delegate: AnyObject
+    init(delegate: AnyObject) {
+        self.delegate = delegate
+    }
+}
+
+private enum AssociatedKeys {
+    @MainActor static var delegateKey = "delegateKey"
+    @MainActor static var providerKey = "providerKey"
+}
+
+class DefaultMacPresentationProvider: NSObject, ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
+        print("Providing presentation anchor...")
+        guard let window = NSApplication.shared.windows.first else {
+            print("Warning: No window found, creating new window")
+            return NSWindow()
+        }
+        print("Using window: \(window)")
+        return window
     }
 }

@@ -9,7 +9,7 @@ struct ArkavoWorkflowView: View {
     @State private var isFileDialogPresented = false
 
     init() {
-        // Initialize ViewModel through factory
+        print("ArkavoWorkflowView: Initializing")
         _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeWorkflowViewModel())
     }
 
@@ -510,6 +510,20 @@ struct ContentRow: View {
     }
 }
 
+// MARK: - Error Types
+
+enum ArkavoError: Error {
+    case invalidURL
+    case authenticationFailed(String)
+    case connectionFailed(String)
+    case invalidResponse
+    case messageError(String)
+    case notConnected
+    case invalidState
+}
+
+// MARK: - ViewModel
+
 @MainActor
 class WorkflowViewModel: ObservableObject {
     private let client: ArkavoClient
@@ -520,6 +534,7 @@ class WorkflowViewModel: ObservableObject {
     @Published var accountName = ""
 
     init(client: ArkavoClient) {
+        print("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
     }
 
@@ -528,20 +543,36 @@ class WorkflowViewModel: ObservableObject {
     }
 
     func login() async {
-        guard !accountName.isEmpty else { return }
+        guard !accountName.isEmpty else {
+            print("WorkflowViewModel: Login attempted with empty account name")
+            return
+        }
 
+        print("WorkflowViewModel: Starting login for account: \(accountName)")
         isLoading = true
         errorMessage = nil
 
         do {
+            print("WorkflowViewModel: Attempting to connect client...")
             try await client.connect(accountName: accountName)
+            print("WorkflowViewModel: Client connected successfully")
 
             // Save account name for future sessions
             UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
+            print("WorkflowViewModel: Saved account name to UserDefaults")
+
+            if let token = client.currentToken {
+                print("WorkflowViewModel: Got token from client, saving to keychain...")
+                try KeychainManager.saveAuthenticationToken(token)
+                print("WorkflowViewModel: Token saved successfully")
+            } else {
+                print("WorkflowViewModel: No token received from client after connection")
+            }
 
             showingLoginSheet = false
             accountName = ""
         } catch {
+            print("WorkflowViewModel: Login failed with error: \(error)")
             errorMessage = error.localizedDescription
         }
 
@@ -549,22 +580,60 @@ class WorkflowViewModel: ObservableObject {
     }
 
     func logout() async {
+        print("WorkflowViewModel: Starting logout process")
         await client.disconnect()
+
+        print("WorkflowViewModel: Clearing stored credentials")
         KeychainManager.deleteAuthenticationToken()
+        UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
+        print("WorkflowViewModel: Logout complete")
     }
 
     func checkStoredCredentials() async {
-        // FIXME: get account name from keystore or iCloud
-        let profileName = UserDefaults.standard.string(forKey: "com.arkavo.account.profile.name") ?? ""
-        guard let token = KeychainManager.getAuthenticationToken()
-        else { return }
-        print("token \(token) profile \(profileName)")
+        print("WorkflowViewModel: Checking stored credentials")
+
+        // First check the keychain for token
+        if let token = KeychainManager.getAuthenticationToken() {
+            print("WorkflowViewModel: Found stored token starting with: \(String(token.prefix(10)))...")
+        } else {
+            print("WorkflowViewModel: No stored token found in keychain")
+            return
+        }
+
+        // Then check UserDefaults for account name
+        guard let storedName = UserDefaults.standard.string(forKey: "arkavo_account_name") else {
+            print("WorkflowViewModel: No stored account name found in UserDefaults")
+            return
+        }
+
+        print("WorkflowViewModel: Found stored account name: \(storedName)")
+
+        print("WorkflowViewModel: Attempting to connect with stored credentials")
         isLoading = true
         errorMessage = nil
+
         do {
-            try await client.connect(accountName: profileName)
+            print("WorkflowViewModel: Connecting with stored account: \(storedName)")
+            try await client.connect(accountName: storedName)
+            print("WorkflowViewModel: Successfully connected with stored credentials")
+        } catch let error as ArkavoError {
+            print("WorkflowViewModel: Connection failed with ArkavoError: \(error)")
+            switch error {
+            case let .authenticationFailed(message):
+                print("WorkflowViewModel: Authentication failed: \(message)")
+            case let .connectionFailed(message):
+                print("WorkflowViewModel: Connection failed: \(message)")
+            default:
+                print("WorkflowViewModel: Other error: \(error)")
+            }
+
+            print("WorkflowViewModel: Clearing stored credentials after failure")
+            KeychainManager.deleteAuthenticationToken()
+            UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
+            errorMessage = error.localizedDescription
         } catch {
-            // If connection fails, clear stored credentials
+            print("WorkflowViewModel: Unexpected error during connection: \(error)")
+            print("WorkflowViewModel: Clearing stored credentials")
             KeychainManager.deleteAuthenticationToken()
             UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
             errorMessage = error.localizedDescription
@@ -573,7 +642,78 @@ class WorkflowViewModel: ObservableObject {
         isLoading = false
     }
 
-    func processContent(_: URL) async throws {
-        // Existing content processing logic...
+    func processContent(_ url: URL) async throws {
+        print("WorkflowViewModel: Starting content processing for \(url)")
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Initialize the processor with GPU acceleration if available
+            let configuration = MLModelConfiguration()
+            configuration.computeUnits = .all
+            let processor = try VideoSegmentationProcessor(configuration: configuration)
+
+            // Create a proper file URL
+            let fileManager = FileManager.default
+
+            // Verify file exists and is accessible
+            let inputPath = url.absoluteString
+            let path: String = if inputPath.starts(with: "file://") {
+                String(inputPath.dropFirst(7))
+            } else {
+                inputPath
+            }
+            print("Current working directory: \(fileManager.currentDirectoryPath)")
+            print("Checking file: \(path)")
+
+            let videoURL = URL(fileURLWithPath: path)
+
+            // Verify file access
+            guard fileManager.fileExists(atPath: videoURL.path),
+                  fileManager.isReadableFile(atPath: videoURL.path)
+            else {
+                print("Video file doesn't exist or isn't readable")
+                throw ArkavoError.invalidURL
+            }
+
+            // Process the video with scene detection
+            let detector = try VideoSceneDetector()
+            let referenceMetadata = try await detector.generateMetadata(for: videoURL)
+
+            // Create scene match detector with reference metadata
+            let matchDetector = VideoSceneDetector.SceneMatchDetector(
+                referenceMetadata: [referenceMetadata]
+            )
+
+            // Process the video with progress updates
+            let segmentations = try await processor.processVideo(url: videoURL) { progress in
+                print("Processing progress: \(Int(progress * 100))%")
+            }
+
+            print("Processed \(segmentations.count) frames")
+
+            // Analyze segmentations for significant changes
+            let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
+            print("Found \(changes.count) significant scene changes")
+
+            // Process scene matches
+            for segmentation in segmentations {
+                let sceneData = try await detector.processSegmentation(segmentation)
+                let matches = await matchDetector.findMatches(for: sceneData)
+
+                if !matches.isEmpty {
+                    print("Found matches at \(sceneData.timestamp):")
+                    for match in matches {
+                        print("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
+                    }
+                }
+            }
+
+            print("Content processing completed successfully")
+
+        } catch {
+            print("Content processing failed: \(error)")
+            throw error
+        }
     }
 }
