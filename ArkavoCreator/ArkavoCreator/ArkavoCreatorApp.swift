@@ -23,6 +23,24 @@ struct ArkavoCreatorApp: App {
         clientSecret: Secrets.youtubeClientSecret,
         redirectUri: "urn:ietf:wg:oauth:2.0:oob"
     )
+    let arkavoClient: ArkavoClient
+
+    init() {
+        arkavoClient = ArkavoClient(
+            authURL: URL(string: "https://arkavo.net")!,
+            websocketURL: URL(string: "wss://kas.arkavo.net")!,
+            relyingPartyID: "arkavo.net",
+            curve: .p256
+        )
+        ViewModelFactory.shared.serviceLocator.register(arkavoClient)
+        // TODO: Initialize router
+//        let router = ArkavoMessageRouter(
+//            client: client,
+//            persistenceController: PersistenceController.shared
+//        )
+//        _messageRouter = StateObject(wrappedValue: router)
+//        ViewModelFactory.shared.serviceLocator.register(router)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -148,5 +166,37 @@ class AppState: ObservableObject {
     init() {
         // Default to enabled if no value is set
         isFeedbackEnabled = UserDefaults.standard.object(forKey: "isFeedbackEnabled") as? Bool ?? true
+    }
+}
+
+final class ServiceLocator {
+    private var services: [String: Any] = [:]
+
+    func register<T>(_ service: T) {
+        let key = String(describing: T.self)
+        services[key] = service
+    }
+
+    func resolve<T>() -> T {
+        let key = String(describing: T.self)
+        guard let service = services[key] as? T else {
+            fatalError("No registered service for type \(T.self)")
+        }
+        return service
+    }
+}
+
+final class ViewModelFactory {
+    @MainActor public static let shared = ViewModelFactory(serviceLocator: ServiceLocator())
+    public let serviceLocator: ServiceLocator
+
+    private init(serviceLocator: ServiceLocator) {
+        self.serviceLocator = serviceLocator
+    }
+
+    @MainActor
+    func makeWorkflowViewModel() -> WorkflowViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        return WorkflowViewModel(client: client)
     }
 }

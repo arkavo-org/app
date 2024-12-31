@@ -3,7 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>com.apple.developer.associated-domains</key>
-	<array/>
+	<array>
+		<string>webcredentials:example.com</string>
+		<string>webcredentials:webauthn.arkavo.net</string>
+	</array>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>

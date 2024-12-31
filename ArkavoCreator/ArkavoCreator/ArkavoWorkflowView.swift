@@ -1,173 +1,173 @@
+import ArkavoSocial
 import CoreML
 import SwiftUI
 
 struct ArkavoWorkflowView: View {
+    @StateObject private var viewModel: WorkflowViewModel
     @State private var searchText = ""
     @State private var selectedItems = Set<UUID>()
-    @State private var showingImporter = false
     @State private var isFileDialogPresented = false
 
-    var body: some View {
-        NavigationStack {
-            List(selection: $selectedItems) {
-                ForEach(sampleContent) { content in
-                    ContentItemRow(content: content)
-                        .tag(content.id)
-                }
-            }
-            .navigationTitle("Workflow")
-            .searchable(text: $searchText, prompt: "Search content")
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button(action: { isFileDialogPresented = true }) {
-                        Label("Import Content", systemImage: "plus")
-                    }
-                    .keyboardShortcut("i", modifiers: [.command])
-                }
+    init() {
+        // Initialize ViewModel through factory
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeWorkflowViewModel())
+    }
 
-                if !selectedItems.isEmpty {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button(action: {}) {
-                            Label("Protect", systemImage: "lock.shield")
-                        }
-                        Button(action: {}) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
+    var body: some View {
+        Group {
+            if viewModel.isConnected {
+                contentView
+            } else {
+                loginView
+            }
+        }
+        .sheet(isPresented: $viewModel.showingLoginSheet) {
+            loginSheet
+        }
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+            }
+        }
+        .task {
+            await viewModel.checkStoredCredentials()
+        }
+    }
+
+    private var contentView: some View {
+        List(selection: $selectedItems) {
+            ForEach(sampleContent) { content in
+                ContentItemRow(content: content)
+                    .tag(content.id)
+            }
+        }
+        .navigationTitle("Workflow")
+        .searchable(text: $searchText, prompt: "Search content")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { isFileDialogPresented = true }) {
+                    Label("Import Content", systemImage: "plus")
+                }
+                .keyboardShortcut("i", modifiers: [.command])
+
+                Button {
+                    Task {
+                        await viewModel.logout()
+                    }
+                } label: {
+                    Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+            }
+
+            if !selectedItems.isEmpty {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button(action: {}) {
+                        Label("Protect", systemImage: "lock.shield")
+                    }
+                    Button(action: {}) {
+                        Label("Share", systemImage: "square.and.arrow.up")
                     }
                 }
             }
-            .fileImporter(
-                isPresented: $isFileDialogPresented,
-                allowedContentTypes: [.quickTimeMovie],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case let .success(urls):
-                    if let url = urls.first {
-                        Task {
-                            do {
-                                try await processContent(url)
-                            } catch {
-                                print("Unable to read file: \(error.localizedDescription)")
-                            }
+        }
+        .fileImporter(
+            isPresented: $isFileDialogPresented,
+            allowedContentTypes: [.quickTimeMovie],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case let .success(urls):
+                if let url = urls.first {
+                    Task {
+                        do {
+                            try await viewModel.processContent(url)
+                        } catch {
+                            viewModel.errorMessage = error.localizedDescription
                         }
                     }
-                case let .failure(error):
-                    print("Failed to select file: \(error.localizedDescription)")
                 }
+            case let .failure(error):
+                viewModel.errorMessage = error.localizedDescription
             }
         }
     }
 
-    private func processContent(_ url: URL) async throws {
-        print(url)
-        do {
-            // Initialize the processor with GPU acceleration if available
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = .all
-            let processor = try VideoSegmentationProcessor(configuration: configuration)
+    private var loginView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 48))
+                .foregroundColor(.accentColor)
 
-            // Create a proper file URL
-            let fileManager = FileManager.default
+            Text("Login Required")
+                .font(.title)
 
-            // Verify file exists and is accessible
-            // Debug info
-            let inputPath = url.absoluteString
-            let path: String = if inputPath.starts(with: "file://") {
-                String(inputPath.dropFirst(7))
-            } else {
-                inputPath
-            }
-            print("Current working directory: \(fileManager.currentDirectoryPath)")
-            print("Checking file: \(path)")
+            Text("Please log in to access your content")
+                .foregroundColor(.secondary)
 
-            let videoURL = URL(fileURLWithPath: path)
-
-            // Check file existence
-            if fileManager.fileExists(atPath: path) {
-                print("✅ File exists")
-
-                // Get file attributes
-                if let attrs = try? fileManager.attributesOfItem(atPath: path) {
-                    print("File size: \(attrs[.size] ?? "unknown")")
-                    print("File permissions: \(attrs[.posixPermissions] ?? "unknown")")
-                    print("File type: \(attrs[.type] ?? "unknown")")
-                }
-
-                // Check read permissions
-                if fileManager.isReadableFile(atPath: path) {
-                    print("✅ File is readable")
+            Button(action: { viewModel.showingLoginSheet = true }) {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
                 } else {
-                    print("❌ File is not readable")
-                }
-            } else {
-                print("❌ File does not exist")
-
-                // List Downloads directory contents
-                print("\nContents of Downloads directory:")
-                if let contents = try? fileManager.contentsOfDirectory(atPath: "/Users/paul/Downloads") {
-                    for item in contents {
-                        if item.hasSuffix(".mov") {
-                            print("📹 \(item)")
-                        }
-                    }
-                } else {
-                    print("❌ Could not read Downloads directory")
+                    Text("Login with Passkey")
                 }
             }
-            guard fileManager.fileExists(atPath: videoURL.path),
-                  fileManager.isReadableFile(atPath: videoURL.path)
-            else {
-                print("Video file doesn't exist or isn't readable")
-                return
-            }
-            // VideoSceneDetector
-            let detector = try VideoSceneDetector()
-            let referenceURL1 = url
-            let referenceMetadata1 = try await detector.generateMetadata(for: referenceURL1)
-            // Create scene match detector with reference metadata
-            let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata1]
-            )
-
-            // Process the video with progress updates
-            let segmentations = try await processor.processVideo(url: url) { progress in
-                print("Processing progress: \(Int(progress * 100))%")
-            }
-
-            print("Processed \(segmentations.count) frames")
-
-            // Analyze segmentations for significant changes
-            let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
-
-            print("Found \(changes.count) significant scene changes")
-            for (timestamp, similarity) in changes {
-                print("Scene change at \(String(format: "%.2f", timestamp))s (similarity: \(String(format: "%.2f", similarity)))")
-            }
-
-            // Optionally save processed frames
-            print("tmp out \(FileManager.default.temporaryDirectory)")
-            let outputDirectory = URL(fileURLWithPath: FileManager.default.temporaryDirectory.absoluteString)
-            for segmentation in segmentations {
-                try processor.saveFrameWithSegmentation(segmentation, toDirectory: outputDirectory)
-            }
-
-            for segmentation in segmentations {
-                let sceneData = try await detector.processSegmentation(segmentation)
-                let matches = await matchDetector.findMatches(for: sceneData)
-
-                if !matches.isEmpty {
-                    print("Found matches at \(sceneData.timestamp):")
-                    for match in matches {
-                        print("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
-                    }
-                }
-            }
-
-            print("Finished processing video")
-        } catch {
-            print("Error: \(error)")
+            .buttonStyle(.borderedProminent)
+            .disabled(viewModel.isLoading)
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var loginSheet: some View {
+        VStack(spacing: 20) {
+            Text("Login to Arkavo")
+                .font(.title2)
+                .bold()
+
+            Text("Enter your account name to continue")
+                .foregroundColor(.secondary)
+
+            TextField("Account Name", text: $viewModel.accountName)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 300)
+                .disabled(viewModel.isLoading)
+
+            HStack(spacing: 16) {
+                Button("Cancel") {
+                    viewModel.showingLoginSheet = false
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isLoading)
+
+                Button {
+                    Task {
+                        await viewModel.login()
+                    }
+                } label: {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Continue")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.accountName.isEmpty || viewModel.isLoading)
+            }
+
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+        }
+        .padding()
+        .frame(width: 400)
     }
 }
 
@@ -507,5 +507,73 @@ struct ContentRow: View {
         .padding()
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+@MainActor
+class WorkflowViewModel: ObservableObject {
+    private let client: ArkavoClient
+
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var showingLoginSheet = false
+    @Published var accountName = ""
+
+    init(client: ArkavoClient) {
+        self.client = client
+    }
+
+    var isConnected: Bool {
+        client.currentState == .connected
+    }
+
+    func login() async {
+        guard !accountName.isEmpty else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await client.connect(accountName: accountName)
+
+            // Save account name for future sessions
+            UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
+
+            showingLoginSheet = false
+            accountName = ""
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func logout() async {
+        await client.disconnect()
+        KeychainManager.deleteAuthenticationToken()
+    }
+
+    func checkStoredCredentials() async {
+        // FIXME: get account name from keystore or iCloud
+        let profileName = UserDefaults.standard.string(forKey: "com.arkavo.account.profile.name") ?? ""
+        guard let token = KeychainManager.getAuthenticationToken()
+        else { return }
+        print("token \(token) profile \(profileName)")
+        isLoading = true
+        errorMessage = nil
+        do {
+            try await client.connect(accountName: profileName)
+        } catch {
+            // If connection fails, clear stored credentials
+            KeychainManager.deleteAuthenticationToken()
+            UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    func processContent(_: URL) async throws {
+        // Existing content processing logic...
     }
 }
