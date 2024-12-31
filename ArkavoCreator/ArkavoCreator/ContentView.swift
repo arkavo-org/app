@@ -86,10 +86,10 @@ struct ContentView: View {
 
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
-    case content = "Workflow"
+    case workflow = "Workflow"
     case patrons = "Patron Management"
     case protection = "Content Protection"
-    case social = "Social Distribution"
+    case social = "Marketing"
     case settings = "Settings"
 
     static func availableSections(isCreator: Bool) -> [NavigationSection] {
@@ -103,7 +103,7 @@ enum NavigationSection: String, CaseIterable {
     var systemImage: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .content: "doc.badge.plus"
+        case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
         case .social: "square.and.arrow.up.circle"
@@ -114,7 +114,7 @@ enum NavigationSection: String, CaseIterable {
     var subtitle: String {
         switch self {
         case .dashboard: "Overview"
-        case .content: "Manage Your Content"
+        case .workflow: "Manage Your Content"
         case .patrons: "Manage Your Community"
         case .protection: "Content Security"
         case .social: "Share Your Content"
@@ -323,8 +323,8 @@ struct SectionContainer: View {
                 PatronManagementView(patreonClient: patreonClient)
                     .transition(.moveAndFade())
                     .id("patrons")
-            case .content:
-                ContentManagerView()
+            case .workflow:
+                ArkavoWorkflowView()
                     .transition(.moveAndFade())
                     .id("content")
             case .settings:

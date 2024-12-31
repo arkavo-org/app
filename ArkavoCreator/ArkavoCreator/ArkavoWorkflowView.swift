@@ -1,7 +1,7 @@
 import CoreML
 import SwiftUI
 
-struct ContentManagerView: View {
+struct ArkavoWorkflowView: View {
     @State private var searchText = ""
     @State private var selectedItems = Set<UUID>()
     @State private var showingImporter = false
