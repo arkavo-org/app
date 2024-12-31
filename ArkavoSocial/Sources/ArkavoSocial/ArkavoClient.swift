@@ -2,7 +2,6 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 import OpenTDFKit
-import LocalAuthentication
 
 #if canImport(UIKit)
     import UIKit
@@ -463,18 +462,10 @@ public final class ArkavoClient: NSObject {
         let challengeData = Data(base64Encoded: authOptions.publicKey.challenge.base64URLToBase64())!
         print("Challenge data: \(challengeData)")
         
-        // Create assertion request with modified user verification
+        // Create assertion request
         let assertionRequest = provider.createCredentialAssertionRequest(
             challenge: challengeData
         )
-        // Set user verification preference based on biometric availability
-        assertionRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference.preferred
-        
-        let biometricContext = LAContext()
-        if !biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) {
-            print("Biometric authentication not available, configuring for security key")
-            assertionRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference.discouraged
-        }
         
         // Perform the authentication
         let assertion = try await performAuthentication(request: assertionRequest)
@@ -714,12 +705,11 @@ public final class ArkavoClient: NSObject {
     }
 
     /// Register a new user with WebAuthn
-    public func registerUser(accountName: String, handle: String, did: String) async throws -> String {
-        print("registerUser \(accountName) \(relyingPartyID)")
+    public func registerUser(handle: String, did: String) async throws -> String {
+        print("registerUser \(handle) \(relyingPartyID) \(did)")
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
 
         let registrationOptions = try await fetchRegistrationOptions(
-            accountName: accountName,
             handle: handle,
             did: did
         )
@@ -730,7 +720,7 @@ public final class ArkavoClient: NSObject {
         
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
-            name: accountName,
+            name: handle,
             userID: userIDData
         )
 
@@ -743,12 +733,11 @@ public final class ArkavoClient: NSObject {
     }
     
     private func fetchRegistrationOptions(
-        accountName: String,
         handle: String,
         did: String
     ) async throws -> (challenge: String, userID: String) {
         // Build URL with query parameters
-        var components = URLComponents(url: authURL.appendingPathComponent("register/\(accountName)"), resolvingAgainstBaseURL: true)
+        var components = URLComponents(url: authURL.appendingPathComponent("register/\(handle)"), resolvingAgainstBaseURL: true)
         components?.queryItems = [
             URLQueryItem(name: "handle", value: handle),
             URLQueryItem(name: "did", value: did)

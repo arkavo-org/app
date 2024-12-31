@@ -6,12 +6,10 @@
 	<array>
 		<string>webcredentials:webauthn.arkavo.net</string>
 		<string>applinks:app.arkavo.com</string>
-		<string>applinks:arkavo.net</string>
-		<string>webcredentials:arkavo.net</string>
 	</array>
-	<key>com.apple.security.device.camera</key>
-	<true/>
 	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>

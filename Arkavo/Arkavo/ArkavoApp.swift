@@ -21,9 +21,9 @@ struct ArkavoApp: App {
 
     init() {
         client = ArkavoClient(
-            authURL: URL(string: "https://arkavo.net")!,
+            authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://kas.arkavo.net")!,
-            relyingPartyID: "arkavo.net",
+            relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
@@ -134,7 +134,7 @@ struct ArkavoApp: App {
     private func saveProfile(profile: Profile) async -> Bool {
         do {
             // Generate default handle from name
-            let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "")
+            let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "-")
             
             // Generate DID key and get the DID string
             let did: String
@@ -157,7 +157,7 @@ struct ArkavoApp: App {
             
             // Complete WebAuthn registration
             do {
-                let token = try await client.registerUser(accountName: profile.name, handle: handle, did: did)
+                let token = try await client.registerUser(handle: handle, did: did)
                 try KeychainManager.saveAuthenticationToken(token)
             } catch let error as ArkavoError {
                 switch error {
