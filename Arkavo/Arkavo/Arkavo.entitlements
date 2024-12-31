@@ -16,6 +16,10 @@
 		<string>$(AppIdentifierPrefix)com.arkavo.Arkavo</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.patreon</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.reddit</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.bluesky</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.webauthn</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.did</string>
+        <string>$(AppIdentifierPrefix)com.arkavo.handle</string>
 	</array>
 </dict>
 </plist>
