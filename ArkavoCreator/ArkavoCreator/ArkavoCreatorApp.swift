@@ -231,50 +231,6 @@ class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegat
     }
 }
 
-extension ArkavoClient {
-    private func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialAssertion {
-        // First check if biometric auth is available
-        let biometricContext = LAContext()
-        var error: NSError?
-        let canUseBiometric = biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-
-        print("Biometric availability check:")
-        print("Can use biometric: \(canUseBiometric)")
-        if let error {
-            print("Biometric error: \(error)")
-        }
-
-        // If no Touch ID, set up security key based authentication
-        if let platformProvider = request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest {
-            platformProvider.userVerificationPreference = .preferred
-            // Allow security keys when biometric is not available
-            if !canUseBiometric {
-                print("Configuring for security key authentication")
-                platformProvider.userVerificationPreference = .discouraged
-            }
-        }
-
-        return try await withCheckedThrowingContinuation { continuation in
-            print("\n=== Starting WebAuthn Authentication ===")
-            print("User verification preference: \(String(describing: (request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest)?.userVerificationPreference))")
-
-            let controller = ASAuthorizationController(authorizationRequests: [request])
-            let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
-
-            controller.delegate = delegate
-            controller.presentationContextProvider = self
-
-            // Retain delegate
-            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-
-            DispatchQueue.main.async {
-                print("Performing authorization request...")
-                controller.performRequests()
-            }
-        }
-    }
-}
-
 // Helper classes to maintain strong references
 private class DelegateBox {
     let delegate: AnyObject

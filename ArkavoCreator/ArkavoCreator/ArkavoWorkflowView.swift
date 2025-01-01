@@ -1,4 +1,6 @@
 import ArkavoSocial
+import AuthenticationServices
+import CryptoKit
 import CoreML
 import SwiftUI
 
@@ -525,9 +527,8 @@ enum ArkavoError: Error {
 // MARK: - ViewModel
 
 @MainActor
-class WorkflowViewModel: ObservableObject {
+class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     private let client: ArkavoClient
-
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showingLoginSheet = false
@@ -539,11 +540,57 @@ class WorkflowViewModel: ObservableObject {
         if let handle = KeychainManager.getHandle() {
             accountName = handle
         }
+        // Register self as delegate
+        client.delegate = self
     }
 
-    var isConnected: Bool {
-        client.currentState == .connected
+    // MARK: - ArkavoClientDelegate Methods
+    
+    func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+        print("WorkflowViewModel: Client state changed to: \(state)")
+        Task { @MainActor in
+            switch state {
+            case .error(let error):
+                self.errorMessage = error.localizedDescription
+            case .disconnected:
+                print("WorkflowViewModel: Client disconnected")
+            case .connecting:
+                print("WorkflowViewModel: Client connecting")
+            case .authenticating:
+                print("WorkflowViewModel: Client authenticating")
+            case .connected:
+                print("WorkflowViewModel: Client connected")
+            }
+        }
     }
+    
+    func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+        print("WorkflowViewModel: Received message of size: \(message.count)")
+        if let messageType = message.first {
+            switch messageType {
+            case 0x06:
+                print("WorkflowViewModel: Received type 6 message")
+                handleType6Message(message.dropFirst())
+            default:
+                print("WorkflowViewModel: Received message with type: \(messageType)")
+            }
+        }
+    }
+    
+    func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+        print("WorkflowViewModel: Received error: \(error)")
+        Task { @MainActor in
+            self.errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Private Message Handlers
+    
+    private func handleType6Message(_ messageData: Data) {
+        print("WorkflowViewModel: Processing type 6 message of size: \(messageData.count)")
+    }
+
+    // MARK: - Authentication Methods
 
     func login() async {
         guard !accountName.isEmpty else {
@@ -555,33 +602,52 @@ class WorkflowViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        do {
-            print("WorkflowViewModel: Attempting to connect client...")
-            try await client.connect(accountName: accountName)
-            print("WorkflowViewModel: Client connected successfully")
+        let maxRetries = 3
+        var currentRetry = 0
 
-            // Save account name for future sessions
-            UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
-            print("WorkflowViewModel: Saved account name to UserDefaults")
+        while currentRetry < maxRetries {
+            do {
+                if currentRetry > 0 {
+                    print("WorkflowViewModel: Retry attempt \(currentRetry) of \(maxRetries)")
+                    // Fixed 3 second delay between retries
+                    try await Task.sleep(nanoseconds: UInt64(3_000_000_000))
+                }
 
-            if let token = client.currentToken {
-                print("WorkflowViewModel: Got token from client, saving to keychain...")
-                try KeychainManager.saveAuthenticationToken(token)
-                print("WorkflowViewModel: Token saved successfully")
-            } else {
-                print("WorkflowViewModel: No token received from client after connection")
+                print("WorkflowViewModel: Attempting to connect client...")
+                try await client.connect(accountName: accountName)
+                print("WorkflowViewModel: Client connected successfully")
+                handleSuccessfulLogin()
+                return
+                
+            } catch let error as ASAuthorizationError where error.code == .failed &&
+                                                          error.localizedDescription.contains("Request already in progress") {
+                currentRetry += 1
+                print("WorkflowViewModel: Request in progress - will retry after delay")
+                continue
+                
+            } catch {
+                print("WorkflowViewModel: Login failed with error: \(error)")
+                errorMessage = "Login failed. Please try again."
+                break
             }
-
-            showingLoginSheet = false
-            accountName = ""
-        } catch {
-            print("WorkflowViewModel: Login failed with error: \(error)")
-            errorMessage = error.localizedDescription
         }
 
+        if currentRetry >= maxRetries {
+            errorMessage = "Unable to complete login. Please wait a moment and try again."
+        }
+        
         isLoading = false
     }
 
+    private func handleSuccessfulLogin() {
+        // Save account name for future sessions
+        UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
+        print("WorkflowViewModel: Saved account name to UserDefaults")
+        
+        showingLoginSheet = false
+        accountName = ""
+    }
+    
     func logout() async {
         print("WorkflowViewModel: Starting logout process")
         await client.disconnect()
@@ -610,7 +676,6 @@ class WorkflowViewModel: ObservableObject {
         }
 
         print("WorkflowViewModel: Found stored account name: \(storedName)")
-
         print("WorkflowViewModel: Attempting to connect with stored credentials")
         isLoading = true
         errorMessage = nil
@@ -644,6 +709,8 @@ class WorkflowViewModel: ObservableObject {
 
         isLoading = false
     }
+
+    // MARK: - Content Processing
 
     func processContent(_ url: URL) async throws {
         print("WorkflowViewModel: Starting content processing for \(url)")
@@ -718,5 +785,11 @@ class WorkflowViewModel: ObservableObject {
             print("Content processing failed: \(error)")
             throw error
         }
+    }
+
+    // MARK: - Computed Properties
+
+    var isConnected: Bool {
+        client.currentState == .connected
     }
 }
