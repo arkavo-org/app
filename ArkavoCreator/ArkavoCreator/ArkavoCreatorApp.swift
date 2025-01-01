@@ -191,6 +191,7 @@ final class ServiceLocator {
 final class ViewModelFactory {
     @MainActor public static let shared = ViewModelFactory(serviceLocator: ServiceLocator())
     public let serviceLocator: ServiceLocator
+    private var messageDelegate: ArkavoMessageChainDelegate?
 
     private init(serviceLocator: ServiceLocator) {
         self.serviceLocator = serviceLocator
@@ -199,7 +200,11 @@ final class ViewModelFactory {
     @MainActor
     func makeWorkflowViewModel() -> WorkflowViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return WorkflowViewModel(client: client)
+        // Create message delegate if it doesn't exist
+        if messageDelegate == nil {
+            messageDelegate = ArkavoMessageChainDelegate(client: client, existingDelegate: nil)
+        }
+        return WorkflowViewModel(client: client, messageDelegate: messageDelegate!)
     }
 }
 

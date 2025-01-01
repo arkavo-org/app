@@ -41,60 +41,121 @@ struct ArkavoWorkflowView: View {
     }
 
     private var contentView: some View {
-        List(selection: $selectedItems) {
-            ForEach(sampleContent) { content in
-                ContentItemRow(content: content)
-                    .tag(content.id)
-            }
-        }
-        .navigationTitle("Workflow")
-        .searchable(text: $searchText, prompt: "Search content")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: { isFileDialogPresented = true }) {
-                    Label("Import Content", systemImage: "plus")
+        NavigationView {
+            List(selection: $selectedItems) {
+                ForEach(viewModel.messageDelegate.getMessageManager().messages) { message in
+                    MessageRow(message: message)
+                        .tag(message.id)
+                        .contextMenu {
+                            if message.status == .failed {
+                                Button {
+                                    Task {
+                                        // Retry logic
+                                    }
+                                } label: {
+                                    Label("Retry", systemImage: "arrow.clockwise")
+                                }
+                            }
+                            
+                            Button(role: .destructive) {
+                                // Delete logic
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                 }
-                .keyboardShortcut("i", modifiers: [.command])
-
-                Button {
-                    Task {
-                        await viewModel.logout()
-                    }
-                } label: {
-                    Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
-                }
             }
-
-            if !selectedItems.isEmpty {
+            .navigationTitle("Messages")
+            .searchable(text: $searchText, prompt: "Search messages")
+            .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    Button(action: {}) {
-                        Label("Protect", systemImage: "lock.shield")
+                    Button(action: { isFileDialogPresented = true }) {
+                        Label("Import Content", systemImage: "plus")
                     }
-                    Button(action: {}) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                    .keyboardShortcut("i", modifiers: [.command])
+
+                    Button {
+                        Task {
+                            await viewModel.logout()
+                        }
+                    } label: {
+                        Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                 }
-            }
-        }
-        .fileImporter(
-            isPresented: $isFileDialogPresented,
-            allowedContentTypes: [.quickTimeMovie],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case let .success(urls):
-                if let url = urls.first {
-                    Task {
-                        do {
-                            try await viewModel.processContent(url)
-                        } catch {
-                            viewModel.errorMessage = error.localizedDescription
+
+                if !selectedItems.isEmpty {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Button(action: {
+                            Task {
+                                // Retry selected failed messages
+                            }
+                        }) {
+                            Label("Retry Selected", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(!hasFailedMessages)
+                        
+                        Button(action: {
+                            // Clear selected messages
+                        }) {
+                            Label("Clear Selected", systemImage: "trash")
                         }
                     }
                 }
-            case let .failure(error):
-                viewModel.errorMessage = error.localizedDescription
             }
+            .fileImporter(
+                isPresented: $isFileDialogPresented,
+                allowedContentTypes: [.quickTimeMovie],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case let .success(urls):
+                    if let url = urls.first {
+                        Task {
+                            do {
+                                try await viewModel.processContent(url)
+                            } catch {
+                                viewModel.errorMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                case let .failure(error):
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+
+            // Empty state view
+            if viewModel.messageDelegate.getMessageManager().messages.isEmpty {
+                ContentPlaceholderView()
+            }
+        }
+    }
+
+    private var hasFailedMessages: Bool {
+        guard !selectedItems.isEmpty else { return false }
+        return viewModel.messageDelegate.getMessageManager().messages
+            .filter { selectedItems.contains($0.id) }
+            .contains { $0.status == .failed }
+    }
+
+    private struct ContentPlaceholderView: View {
+        var body: some View {
+            VStack(spacing: 20) {
+                Image(systemName: "message")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                
+                Text("No Messages")
+                    .font(.title2)
+                    .foregroundColor(.primary)
+                
+                Text("Messages will appear here when content is processed")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.windowBackgroundColor))
         }
     }
 
@@ -529,19 +590,24 @@ enum ArkavoError: Error {
 @MainActor
 class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     private let client: ArkavoClient
+    let messageDelegate: ArkavoMessageChainDelegate
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showingLoginSheet = false
     @Published var accountName = ""
 
-    init(client: ArkavoClient) {
+    init(client: ArkavoClient, messageDelegate: ArkavoMessageChainDelegate) {
         print("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
+        self.messageDelegate = messageDelegate
+        
         if let handle = KeychainManager.getHandle() {
             accountName = handle
         }
-        // Register self as delegate
-        client.delegate = self
+        
+        // Set up delegate chain
+        messageDelegate.updateNextDelegate(self)
+        client.delegate = messageDelegate
     }
 
     // MARK: - ArkavoClientDelegate Methods
@@ -609,7 +675,6 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             do {
                 if currentRetry > 0 {
                     print("WorkflowViewModel: Retry attempt \(currentRetry) of \(maxRetries)")
-                    // Fixed 3 second delay between retries
                     try await Task.sleep(nanoseconds: UInt64(3_000_000_000))
                 }
 
