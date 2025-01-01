@@ -1,4 +1,5 @@
 import ArkavoSocial
+import UniformTypeIdentifiers
 import AuthenticationServices
 import CryptoKit
 import CoreML
@@ -7,8 +8,8 @@ import SwiftUI
 struct ArkavoWorkflowView: View {
     @StateObject private var viewModel: WorkflowViewModel
     @State private var searchText = ""
-    @State private var selectedItems = Set<UUID>()
     @State private var isFileDialogPresented = false
+    @State private var selectedMessages = Set<UUID>()
 
     init() {
         print("ArkavoWorkflowView: Initializing")
@@ -42,37 +43,48 @@ struct ArkavoWorkflowView: View {
 
     private var contentView: some View {
         NavigationView {
-            List(selection: $selectedItems) {
-                ForEach(viewModel.messageDelegate.getMessageManager().messages) { message in
-                    MessageRow(message: message)
-                        .tag(message.id)
-                        .contextMenu {
-                            if message.status == .failed {
-                                Button {
-                                    Task {
-                                        // Retry logic
-                                    }
-                                } label: {
-                                    Label("Retry", systemImage: "arrow.clockwise")
-                                }
-                            }
-                            
-                            Button(role: .destructive) {
-                                // Delete logic
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                }
-            }
+            MessageListView(
+                messageManager: viewModel.messageDelegate.getMessageManager(),
+                workflowViewModel: viewModel,
+                selectedMessages: $selectedMessages
+            )
             .navigationTitle("Messages")
             .searchable(text: $searchText, prompt: "Search messages")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        Task {
+                            await viewModel.sendSelectedContent(selectedMessages)
+                        }
+                    } label: {
+                        Label("Send", systemImage: "paperplane.fill")
+                    }
+                    .keyboardShortcut("r", modifiers: [.command])
+                    .help("Send content to network")
+                    .disabled(selectedMessages.isEmpty)
+
                     Button(action: { isFileDialogPresented = true }) {
                         Label("Import Content", systemImage: "plus")
                     }
                     .keyboardShortcut("i", modifiers: [.command])
+
+                    Menu {
+                        Button {
+                            Task {
+                                await viewModel.messageDelegate.getMessageManager().retryFailedMessages()
+                            }
+                        } label: {
+                            Label("Retry All Failed", systemImage: "arrow.clockwise")
+                        }
+                        
+                        Button(role: .destructive) {
+                            // Add clear all functionality
+                        } label: {
+                            Label("Clear All", systemImage: "trash")
+                        }
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                    }
 
                     Button {
                         Task {
@@ -82,29 +94,10 @@ struct ArkavoWorkflowView: View {
                         Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                 }
-
-                if !selectedItems.isEmpty {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        Button(action: {
-                            Task {
-                                // Retry selected failed messages
-                            }
-                        }) {
-                            Label("Retry Selected", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(!hasFailedMessages)
-                        
-                        Button(action: {
-                            // Clear selected messages
-                        }) {
-                            Label("Clear Selected", systemImage: "trash")
-                        }
-                    }
-                }
             }
             .fileImporter(
                 isPresented: $isFileDialogPresented,
-                allowedContentTypes: [.quickTimeMovie],
+                allowedContentTypes: [UTType.quickTimeMovie],
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
@@ -123,7 +116,7 @@ struct ArkavoWorkflowView: View {
                 }
             }
 
-            // Empty state view
+            // Empty state view when no messages
             if viewModel.messageDelegate.getMessageManager().messages.isEmpty {
                 ContentPlaceholderView()
             }
@@ -131,9 +124,9 @@ struct ArkavoWorkflowView: View {
     }
 
     private var hasFailedMessages: Bool {
-        guard !selectedItems.isEmpty else { return false }
+        guard !selectedMessages.isEmpty else { return false }
         return viewModel.messageDelegate.getMessageManager().messages
-            .filter { selectedItems.contains($0.id) }
+            .filter { selectedMessages.contains($0.id) }
             .contains { $0.status == .failed }
     }
 
@@ -234,165 +227,141 @@ struct ArkavoWorkflowView: View {
     }
 }
 
-struct ContentItemRow: View {
-    let content: ContentItem
-    @State private var showingMenu = false
-
+struct MessageRow: View {
+    let message: ArkavoMessage
+    @StateObject private var viewModel: MessageRowViewModel
+    @Environment(\.isEnabled) private var isEnabled
+    
+    init(message: ArkavoMessage, workflowViewModel: WorkflowViewModel) {
+        self.message = message
+        _viewModel = StateObject(wrappedValue: MessageRowViewModel(workflowViewModel: workflowViewModel))
+    }
+    
     var body: some View {
         HStack(spacing: 12) {
-            // Type Icon with proper SF Symbol
-            Label {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(content.title)
-                        .font(.body)
-
-                    HStack(spacing: 8) {
-                        Text(content.type.rawValue)
-                            .foregroundStyle(.secondary)
-
-                        switch content.protectionStatus {
-                        case let .protected(date):
-                            Text("Protected \(date)")
-                                .foregroundStyle(.secondary)
-                        case .registering:
-                            Label("Registering...", systemImage: "arrow.clockwise")
-                                .foregroundStyle(.secondary)
-                        case .unprotected:
-                            Label("Not Protected", systemImage: "lock.open")
-                                .foregroundStyle(.secondary)
-                        case .failed:
-                            Label("Protection Failed", systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.red)
-                        }
-
-                        if !content.patronAccess.isEmpty {
-                            Text("\(content.patronAccess.count) Tiers")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .font(.callout)
-                }
-            } icon: {
-                Image(systemName: content.type.icon)
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                    .frame(width: 32)
-            }
-
-            Spacer()
-
-            if content.views > 0 {
-                VStack(alignment: .trailing) {
-                    Text("\(content.views) views")
-                    Text("\(content.engagement, specifier: "%.1f")% engagement")
+            // Status icon
+            Image(systemName: message.status.icon)
+                .foregroundColor(message.status.color)
+                .font(.system(size: 16))
+            
+            // Message info
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Message \(message.id.uuidString.prefix(8))")
+                    .font(.headline)
+                
+                Text("Received: \(message.timestamp.formatted())")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                if message.status == .pending {
+                    Text("Retry count: \(message.retryCount)")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .font(.callout)
-            }
-
-            Menu {
-                Button("View Details") {}
-                Button("Edit") {}
-
-                if case .unprotected = content.protectionStatus {
-                    Divider()
-                    Button("Protect Content") {}
+                
+                if let lastRetry = message.lastRetryDate {
+                    Text("Last retry: \(lastRetry.formatted())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-
-                Divider()
-                Button("Delete", role: .destructive) {}
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .symbolVariant(.fill)
-                    .contentTransition(.symbolEffect(.replace))
             }
-            .menuIndicator(.hidden)
-            .fixedSize()
+            
+            Spacer()
+            
+            // Only show retry button for failed messages
+            if message.status == .failed {
+                Button {
+                    Task {
+                        await viewModel.retryMessage(message)
+                    }
+                } label: {
+                    if viewModel.isSending {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.isSending || !isEnabled)
+                .help("Retry failed message")
+                .scaleEffect(viewModel.isSending ? 0.95 : 1.0)
+                .animation(.spring(response: 0.2), value: viewModel.isSending)
+            }
+            
+            Text(message.status.rawValue.capitalized)
+                .font(.caption)
+                .foregroundColor(message.status.color)
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 }
 
-struct ProtectionConfigSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var isRegistering = false
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Protect Content")
-                .font(.title)
-
-            if isRegistering {
-                ProgressView("Registering with Arkavo Network...")
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Registration will:")
-                        .font(.headline)
-
-                    Label("Create immutable record", systemImage: "checkmark.circle")
-                    Label("Generate unique identifier", systemImage: "checkmark.circle")
-                    Label("Enable patron distribution", systemImage: "checkmark.circle")
-                }
-            }
-
-            HStack {
-                Button("Cancel", action: { dismiss() })
-                    .keyboardShortcut(.cancelAction)
-
-                Button("Register Content") {
-                    isRegistering = true
-                    // Registration logic
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.top)
-        }
-        .padding()
-        .frame(width: 400)
+@MainActor
+class MessageRowViewModel: ObservableObject {
+    @Published var isSending = false
+    @Published var error: Error?
+    
+    private let workflowViewModel: WorkflowViewModel
+    
+    init(workflowViewModel: WorkflowViewModel) {
+        self.workflowViewModel = workflowViewModel
+    }
+    
+    func retryMessage(_ message: ArkavoMessage) async {
+        guard !isSending else { return }
+        
+        isSending = true
+        await workflowViewModel.messageDelegate.getMessageManager().retryMessage(message.id)
+        isSending = false
     }
 }
 
-struct PatronAccessSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var selectedTiers: Set<UUID> = []
-
+struct MessageListView: View {
+    @ObservedObject var messageManager: ArkavoMessageManager
+    let workflowViewModel: WorkflowViewModel
+    @Binding var selectedMessages: Set<UUID>
+    
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Set Patron Access")
-                .font(.title)
-
-//            List(sampleTiers, selection: $selectedTiers) { tier in
-//                HStack {
-//                    VStack(alignment: .leading) {
-//                        Text(tier.name)
-//                            .font(.headline)
-//                        Text("\(tier.patronCount) patrons")
-//                            .font(.caption)
-//                            .foregroundStyle(.secondary)
-//                    }
-//
-//                    Spacer()
-//
-//                    Text("$\(tier.price, specifier: "%.2f")/month")
-//                        .foregroundStyle(.secondary)
-//                }
-//            }
-
-            HStack {
-                Button("Cancel", action: { dismiss() })
-                    .keyboardShortcut(.cancelAction)
-
-                Button("Confirm Access") {
-                    // Distribution logic
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+        List(selection: $selectedMessages) {
+            ForEach(messageManager.messages) { message in
+                MessageRow(message: message, workflowViewModel: workflowViewModel)
+                    .tag(message.id)
             }
         }
-        .padding()
-        .frame(width: 400, height: 500)
+        .toolbar {
+            if !selectedMessages.isEmpty {
+                ToolbarItem {
+                    Button {
+                        Task {
+                            await retrySelected()
+                        }
+                    } label: {
+                        Label("Retry Selected", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(!hasFailedMessages)
+                }
+            }
+        }
+    }
+    
+    private var hasFailedMessages: Bool {
+        guard !selectedMessages.isEmpty else { return false }
+        return messageManager.messages
+            .filter { selectedMessages.contains($0.id) }
+            .contains { $0.status == .failed }
+    }
+    
+    private func retrySelected() async {
+        let failedMessages = selectedMessages.filter { messageId in
+            messageManager.messages.first { $0.id == messageId }?.status == .failed
+        }
+        
+        for messageId in failedMessages {
+            await messageManager.retryMessage(messageId)
+        }
     }
 }
 
@@ -462,44 +431,6 @@ enum ProtectionStatus {
         }
     }
 }
-
-// MARK: - Sample Content
-
-let sampleContent: [ContentItem] = [
-    ContentItem(
-        id: UUID(),
-        title: "Getting Started with SwiftUI",
-        type: .blogPost,
-        createdDate: Date().addingTimeInterval(-86400 * 2),
-        lastModified: Date().addingTimeInterval(-3600 * 2),
-        protectionStatus: .protected(Date().addingTimeInterval(-3600)),
-        patronAccess: [],
-        views: 156,
-        engagement: 78.5
-    ),
-    ContentItem(
-        id: UUID(),
-        title: "Monthly Update Video",
-        type: .video,
-        createdDate: Date().addingTimeInterval(-86400),
-        lastModified: Date().addingTimeInterval(-3600),
-        protectionStatus: .unprotected,
-        patronAccess: [],
-        views: 0,
-        engagement: 0
-    ),
-    ContentItem(
-        id: UUID(),
-        title: "Project Documentation",
-        type: .document,
-        createdDate: Date(),
-        lastModified: Date(),
-        protectionStatus: .registering,
-        patronAccess: [],
-        views: 0,
-        engagement: 0
-    ),
-]
 
 // MARK: - Content Row View
 
@@ -852,6 +783,42 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         }
     }
 
+    func sendSelectedContent(_ selectedIds: Set<UUID>) async {
+        guard client.currentState == .connected else {
+            errorMessage = "Not connected to network"
+            return
+        }
+        
+        guard !selectedIds.isEmpty else {
+            errorMessage = "No messages selected"
+            return
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        let manager = messageDelegate.getMessageManager()
+        
+        do {
+            // Get all selected messages
+            let selectedMessages = manager.messages.filter { selectedIds.contains($0.id) }
+            
+            // Send each selected message
+            for message in selectedMessages {
+                // Convert the first 20 bytes of the message data to hex
+                let first20Bytes = message.data.prefix(20)
+                let hexString = first20Bytes.map { String(format: "%02x", $0) }.joined(separator: " ")
+                
+                print("Message \(message.id): \(hexString)")
+                
+                try await client.sendMessage(message.data)
+                print("Sent message: \(message.id)")
+            }
+        } catch {
+            errorMessage = "Failed to send message: \(error.localizedDescription)"
+        }
+    }
+    
     // MARK: - Computed Properties
 
     var isConnected: Bool {

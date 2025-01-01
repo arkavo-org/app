@@ -45,7 +45,7 @@ class ArkavoMessageManager: ObservableObject {
     private let fileManager = FileManager.default
     private let client: ArkavoClient
     private let messageDirectory: URL
-    private let replayInterval: TimeInterval = 30.0
+    private let replayInterval: TimeInterval = 2.2
     private let maxRetries = 3
     
     init(client: ArkavoClient) {
@@ -197,61 +197,6 @@ class ArkavoMessageManager: ObservableObject {
         timers.removeAll()
     }
 }
-
-// MARK: - Message List View
-
-struct MessageListView: View {
-    @ObservedObject var messageManager: ArkavoMessageManager
-    
-    var body: some View {
-        List {
-            ForEach(messageManager.messages) { message in
-                MessageRow(message: message)
-            }
-        }
-    }
-}
-
-struct MessageRow: View {
-    let message: ArkavoMessage
-    
-    var body: some View {
-        HStack {
-            Image(systemName: message.status.icon)
-                .foregroundColor(Color(message.status.color))
-            
-            VStack(alignment: .leading) {
-                Text("Message \(message.id.uuidString.prefix(8))")
-                    .font(.headline)
-                
-                Text("Received: \(message.timestamp.formatted())")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                if message.status == .pending {
-                    Text("Retry count: \(message.retryCount)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                
-                if let lastRetry = message.lastRetryDate {
-                    Text("Last retry: \(lastRetry.formatted())")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            Spacer()
-            
-            Text(message.status.rawValue.capitalized)
-                .font(.caption)
-                .foregroundColor(Color(message.status.color))
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - ArkavoClientDelegate Extension
 
 // MARK: - Delegate Chain
 

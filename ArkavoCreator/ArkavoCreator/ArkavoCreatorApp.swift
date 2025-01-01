@@ -30,7 +30,7 @@ struct ArkavoCreatorApp: App {
     init() {
         arkavoClient = ArkavoClient(
             authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://kas.arkavo.net")!,
+            websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
         )
