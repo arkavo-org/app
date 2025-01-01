@@ -34,11 +34,11 @@ final class Profile: Identifiable {
         self.location = location
         self.hasHighEncryption = hasHighEncryption
         self.hasHighIdentityAssurance = hasHighIdentityAssurance
-        self.publicID = Profile.generatePublicID(from: id)
+        publicID = Profile.generatePublicID(from: id)
     }
 
     func finalizeRegistration(did: String, handle: String) {
-        guard self.did == nil && self.handle == nil else {
+        guard self.did == nil, self.handle == nil else {
             fatalError("Profile is already finalized.")
         }
         self.did = did

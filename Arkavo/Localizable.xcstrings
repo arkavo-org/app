@@ -114,6 +114,9 @@
     "Authentication Status" : {
 
     },
+    "Available" : {
+
+    },
     "Back" : {
 
     },
@@ -176,6 +179,7 @@
 
     },
     "Create Profile" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -229,7 +233,7 @@
     "Encryption" : {
 
     },
-    "Enter profile name" : {
+    "Enter handle" : {
 
     },
     "Error" : {
@@ -433,6 +437,9 @@
 
     },
     "No Active Streams" : {
+
+    },
+    "Not available" : {
 
     },
     "Not available on macOS" : {
@@ -890,10 +897,10 @@
     "You helped protect" : {
 
     },
-    "Your Privacy Matters" : {
+    "Your handle must be unique within arkavo.social" : {
 
     },
-    "Your profile name must be unique with arkavo.social" : {
+    "Your Privacy Matters" : {
 
     },
     "Your Protection Stats" : {

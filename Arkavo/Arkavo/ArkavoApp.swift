@@ -135,7 +135,7 @@ struct ArkavoApp: App {
         do {
             // Generate default handle from name
             let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "-")
-            
+
             // Generate DID key and get the DID string
             let did: String
             do {
@@ -151,17 +151,17 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             // Finalize the profile with DID and handle
             profile.finalizeRegistration(did: did, handle: handle)
-            
+
             // Complete WebAuthn registration
             do {
                 let token = try await client.registerUser(handle: handle, did: did)
                 try KeychainManager.saveAuthenticationToken(token)
             } catch let error as ArkavoError {
                 switch error {
-                case .authenticationFailed(let message):
+                case let .authenticationFailed(message):
                     connectionError = ConnectionError(
                         title: "Registration Failed",
                         message: message,
@@ -201,11 +201,11 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            
+
             // Create streams
             do {
                 let videoStream = try await createVideoStream(account: account, profile: profile)
@@ -221,9 +221,9 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             ViewModelFactory.shared.setAccount(account)
-            
+
             // Connect with WebAuthn
             do {
                 try await client.connect(accountName: profile.name)
@@ -231,7 +231,7 @@ struct ArkavoApp: App {
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
-                    selectedView = .main  // Only change view on complete success
+                    selectedView = .main // Only change view on complete success
                 }
             } catch {
                 print("Failed to connect: \(error)")
@@ -243,7 +243,7 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
         } catch {
             print("Failed to save profile: \(error)")
             connectionError = ConnectionError(

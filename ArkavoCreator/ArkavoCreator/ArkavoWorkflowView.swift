@@ -536,6 +536,9 @@ class WorkflowViewModel: ObservableObject {
     init(client: ArkavoClient) {
         print("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
+        if let handle = KeychainManager.getHandle() {
+            accountName = handle
+        }
     }
 
     var isConnected: Bool {

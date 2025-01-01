@@ -1,3 +1,4 @@
+import Combine
 import CoreML
 import NaturalLanguage
 import SwiftUI
@@ -15,7 +16,7 @@ enum RegistrationStep: Int, CaseIterable {
 //        case .selectInterests:
 //            "Select Interests" // What topics are you interested in?
         case .generateScreenName:
-            "Create Profile"
+            "Create Handle"
         case .enablePasskeys:
             "Create Passkey"
         }
@@ -44,6 +45,14 @@ struct RegistrationView: View {
     @State private var selectedScreenName = ""
     @State private var selectedInterests: Set<String> = []
     @State private var currentWelcomeIndex = 0
+    @State private var isCheckingAvailability = false
+    @State private var isScreenNameAvailable = true
+    @State private var screenNameCancellable: AnyCancellable?
+    private var debouncedScreenNamePublisher: Publishers.Debounce<NotificationCenter.Publisher, RunLoop> {
+        NotificationCenter.default
+            .publisher(for: UITextField.textDidChangeNotification)
+            .debounce(for: .seconds(0.2), scheduler: RunLoop.main)
+    }
 
     let interests = ["Animals", "Arts", "Education", "Environment", "Gaming", "Food", "Human Rights", "Legal", "Music", "Politics", "Sports"]
 
@@ -91,7 +100,7 @@ struct RegistrationView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(currentStep == .generateScreenName && selectedScreenName.isEmpty)
+                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
 
                         ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                             .padding()
@@ -110,7 +119,7 @@ struct RegistrationView: View {
                                 Button("Next") {
                                     handleButtonAction()
                                 }
-                                .disabled(currentStep == .generateScreenName && selectedScreenName.isEmpty)
+                                .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
                             }
                         }
                         .padding()
@@ -222,20 +231,45 @@ struct RegistrationView: View {
 
     private var generateScreenNameView: some View {
         VStack(spacing: 20) {
-            Text("Your profile name must be unique with arkavo.social")
+            Text("Your handle must be unique within arkavo.social")
                 .padding()
             HStack {
                 #if os(iOS)
-                    TextField("Enter profile name", text: $selectedScreenName)
+                    TextField("Enter handle", text: screenNameBinding)
                         .writingToolsBehavior(.automatic)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .padding()
-                        .disableAutocorrection(true)
                         .border(.secondary)
+                        .onAppear {
+                            screenNameCancellable = debouncedScreenNamePublisher
+                                .sink { _ in
+                                    Task {
+                                        await checkScreenNameAvailability()
+                                    }
+                                }
+                        }
+                        .onDisappear {
+                            screenNameCancellable?.cancel()
+                        }
                 #else
-                    TextField("Enter profile name", text: $selectedScreenName)
+                    TextField("Enter handle", text: screenNameBinding)
+                        .writingToolsBehavior(.automatic)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .padding()
-                        .disableAutocorrection(true)
                         .border(.secondary)
+                        .onAppear {
+                            screenNameCancellable = debouncedScreenNamePublisher
+                                .sink { _ in
+                                    Task {
+                                        await checkScreenNameAvailability()
+                                    }
+                                }
+                        }
+                        .onDisappear {
+                            screenNameCancellable?.cancel()
+                        }
                 #endif
 //                Button(action: generateScreenNames) {
 //                    Image(systemName: "wand.and.stars")
@@ -244,6 +278,20 @@ struct RegistrationView: View {
 //                        .background(Color.blue)
 //                        .cornerRadius(8)
 //                }
+                if isCheckingAvailability {
+                    ProgressView()
+                        .padding(.horizontal)
+                } else if !selectedScreenName.isEmpty {
+                    Image(systemName: isScreenNameAvailable ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(isScreenNameAvailable ? .green : .red)
+                        .padding(.horizontal)
+                }
+                if !selectedScreenName.isEmpty {
+                    Text(isScreenNameAvailable ? "Available" : "Not available")
+                        .font(.caption)
+                        .foregroundColor(isScreenNameAvailable ? .green : .red)
+                        .padding(.leading)
+                }
             }
             .padding()
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
@@ -265,6 +313,64 @@ struct RegistrationView: View {
         }
         .multilineTextAlignment(.leading)
         .padding()
+    }
+
+    // filter characters
+    private func validateAndFormatScreenName(_ input: String) -> String {
+        // Convert to lowercase and keep only allowed characters
+        let filtered = input.lowercased().filter { char in
+            char.isLetter || char.isNumber || char == "-"
+        }
+        return filtered
+    }
+
+    // TextField binding to use the validation
+    private var screenNameBinding: Binding<String> {
+        Binding(
+            get: { selectedScreenName },
+            set: { newValue in
+                selectedScreenName = validateAndFormatScreenName(newValue)
+            }
+        )
+    }
+
+    private func checkScreenNameAvailability() async {
+        // Empty state should show as available
+        guard !selectedScreenName.isEmpty else {
+            isCheckingAvailability = false
+            isScreenNameAvailable = true
+            return
+        }
+
+        // Only check if handle is at least 3 characters
+        guard selectedScreenName.count >= 3 else {
+            isCheckingAvailability = false
+            isScreenNameAvailable = true
+            return
+        }
+
+        isCheckingAvailability = true
+        let urlString = "https://xrpc.arkavo.net/xrpc/com.atproto.identity.resolveHandle?handle=\(selectedScreenName).arkavo.social"
+
+        guard let url = URL(string: urlString) else {
+            isCheckingAvailability = false
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                isScreenNameAvailable = httpResponse.statusCode != 200
+            }
+        } catch {
+            // Handle network errors
+            print("Error checking availability: \(error.localizedDescription)")
+        }
+
+        isCheckingAvailability = false
     }
 
     private func generateScreenNames() {
@@ -340,9 +446,4 @@ struct LogoView: View {
 
 enum SlideDirection {
     case left, right
-}
-
-#Preview {
-    RegistrationView(onComplete: { _ in })
-        .modelContainer(for: Profile.self, inMemory: true)
 }
