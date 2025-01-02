@@ -44,11 +44,18 @@ class ArkavoMessageChainDelegate: NSObject, ArkavoClientDelegate {
 @MainActor
 class ArkavoMessageManager: ObservableObject {
     @Published var messages: [ArkavoMessage] = []
+    @Published var replayToProduction = true  // Controls where messages are replayed to
+    
     private var relayManager: WebSocketRelayManager?
+    private let arkavoClient: ArkavoClient
     private let fileManager = FileManager.default
     private let messageDirectory: URL
+    private var replayTask: Task<Void, Never>?
+    private var currentReplayIndex = 0
+    private var isReplaying = false
     
     init(client: ArkavoClient) {
+        self.arkavoClient = client
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         messageDirectory = appSupport.appendingPathComponent("ArkavoMessages", isDirectory: true)
         
@@ -66,6 +73,9 @@ class ArkavoMessageManager: ObservableObject {
         
         // Load existing messages
         loadMessages()
+        
+        // Start message replay
+        startMessageReplay()
     }
     
     private func initializeRelay() {
@@ -74,15 +84,78 @@ class ArkavoMessageManager: ObservableObject {
                 relayManager = WebSocketRelayManager()
                 try await relayManager?.connect()
                 print("Local WebSocket relay initialized")
-                
-                // Relay existing messages
-                for message in messages {
-                    try await relayMessage(message)
-                }
             } catch {
                 print("Failed to initialize relay: \(error)")
             }
         }
+    }
+    
+    private func startMessageReplay() {
+        // Cancel any existing replay task
+        replayTask?.cancel()
+        currentReplayIndex = 0
+        isReplaying = true
+        
+        // Sort messages by timestamp to maintain chronological order
+        messages.sort { $0.timestamp < $1.timestamp }
+        
+        // Create a new async task for message replay
+        replayTask = Task { [weak self] in
+            while !Task.isCancelled, let self = self, self.isReplaying {
+                await self.replayNextMessage()
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
+            }
+        }
+    }
+    
+    private func replayNextMessage() async {
+        guard currentReplayIndex < messages.count else {
+            // Reset index to create continuous loop
+            currentReplayIndex = 0
+            return
+        }
+        
+        let message = messages[currentReplayIndex]
+        
+        do {
+            if replayToProduction {
+                // Send to production server
+                try await arkavoClient.sendMessage(message.data)
+                print("Replayed message \(message.id) to production server")
+            } else {
+                // Send to local relay
+                try await relayMessage(message)
+                print("Replayed message \(message.id) to localhost")
+            }
+            
+            // Update message status
+            var updatedMessage = message
+            updatedMessage.status = .replayed
+            updatedMessage.lastRetryDate = Date()
+            updatedMessage.retryCount += 1
+            
+            // Update in array and save
+            if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = updatedMessage
+            }
+            saveMessage(updatedMessage)
+            
+        } catch {
+            // Update message status on failure
+            var updatedMessage = message
+            updatedMessage.status = .failed
+            updatedMessage.lastRetryDate = Date()
+            updatedMessage.retryCount += 1
+            
+            if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = updatedMessage
+            }
+            saveMessage(updatedMessage)
+            
+            print("Failed to replay message \(message.id): \(error)")
+        }
+        
+        currentReplayIndex += 1
     }
     
     func handleMessage(_ data: Data) {
@@ -102,9 +175,11 @@ class ArkavoMessageManager: ObservableObject {
         messages.append(message)
         saveMessage(message)
         
-        // Forward to local WebSocket server
-        Task {
-            try await relayMessage(message)
+        // Forward to local WebSocket server if not in production mode
+        if !replayToProduction {
+            Task {
+                try await relayMessage(message)
+            }
         }
     }
     
@@ -119,6 +194,7 @@ class ArkavoMessageManager: ObservableObject {
             print("Message \(message.id) relayed to localhost")
         } catch {
             print("Failed to relay message \(message.id): \(error)")
+            throw error
         }
     }
     
@@ -154,6 +230,11 @@ class ArkavoMessageManager: ObservableObject {
         } catch {
             print("Error loading messages: \(error)")
         }
+    }
+    
+    deinit {
+        isReplaying = false
+        replayTask?.cancel()
     }
 }
 
