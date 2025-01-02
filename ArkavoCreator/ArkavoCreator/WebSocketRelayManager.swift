@@ -1,12 +1,10 @@
 import Foundation
-import Network
 
-@MainActor
+// WebSocket Relay Manager
 class WebSocketRelayManager {
     private var webSocket: URLSessionWebSocketTask?
+    private let localWebSocketURL = URL(string: "ws://localhost:8080")!
     private let session: URLSession
-    private let queue = OperationQueue()
-    private var isConnected = false
     
     init() {
         let config = URLSessionConfiguration.default
@@ -14,34 +12,51 @@ class WebSocketRelayManager {
     }
     
     func connect() async throws {
-        guard !isConnected else { return }
-        
-        let url = URL(string: "ws://localhost:8080")!
-        var request = URLRequest(url: url)
-        request.setValue("websocket", forHTTPHeaderField: "Upgrade")
-        request.setValue("Upgrade", forHTTPHeaderField: "Connection")
-        
+        // Create WebSocket connection to localhost
+        let request = URLRequest(url: localWebSocketURL)
         webSocket = session.webSocketTask(with: request)
         webSocket?.resume()
-        isConnected = true
+        
+        // Send initial ping to verify connection
+        try await ping()
+        print("Local WebSocket relay connected successfully")
+        
+        // Start listening for messages
+        receiveMessages()
+    }
+    
+    private func ping() async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            webSocket?.sendPing { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+    
+    private func receiveMessages() {
+        webSocket?.receive { [weak self] result in
+            switch result {
+            case .success(let message):
+                print("Local WebSocket received: \(message)")
+                // Continue listening
+                self?.receiveMessages()
+            case .failure(let error):
+                print("Local WebSocket error: \(error)")
+            }
+        }
+    }
+    
+    func relayMessage(_ data: Data) async throws {
+        print("Relaying message to localhost:8080")
+        try await webSocket?.send(.data(data))
     }
     
     func disconnect() {
         webSocket?.cancel()
         webSocket = nil
-        isConnected = false
     }
-    
-    // Forward a message to the local WebSocket server
-    func relayMessage(_ data: Data) async throws {
-        guard isConnected, let webSocket = webSocket else {
-            throw RelayError.notConnected
-        }
-        
-        try await webSocket.send(.data(data))
-    }
-}
-
-enum RelayError: Error {
-    case notConnected
 }

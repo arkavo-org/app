@@ -41,42 +41,54 @@ class ArkavoMessageChainDelegate: NSObject, ArkavoClientDelegate {
     }
 }
 
-// Now, let's update the ArkavoMessageManager to properly save messages
 @MainActor
 class ArkavoMessageManager: ObservableObject {
     @Published var messages: [ArkavoMessage] = []
+    private var relayManager: WebSocketRelayManager?
     private let fileManager = FileManager.default
     private let messageDirectory: URL
     
     init(client: ArkavoClient) {
-        // Set up message directory in Application Support
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         messageDirectory = appSupport.appendingPathComponent("ArkavoMessages", isDirectory: true)
         
         // Create directory if it doesn't exist
         do {
             try fileManager.createDirectory(at: messageDirectory,
-                                         withIntermediateDirectories: true,
-                                         attributes: nil)
+                                         withIntermediateDirectories: true)
             print("Message directory created/verified at: \(messageDirectory.path)")
         } catch {
             print("Error creating message directory: \(error)")
         }
         
+        // Initialize relay manager and connect
+        initializeRelay()
+        
         // Load existing messages
         loadMessages()
     }
     
-    func handleMessage(_ data: Data) {
-        print("Handling message of size: \(data.count) bytes")
-        
-        // Only cache and manage type 0x05 messages
-        guard data.first == 0x05 else {
-            print("Ignoring non-0x05 message")
-            return
+    private func initializeRelay() {
+        Task {
+            do {
+                relayManager = WebSocketRelayManager()
+                try await relayManager?.connect()
+                print("Local WebSocket relay initialized")
+                
+                // Relay existing messages
+                for message in messages {
+                    try await relayMessage(message)
+                }
+            } catch {
+                print("Failed to initialize relay: \(error)")
+            }
         }
+    }
+    
+    func handleMessage(_ data: Data) {
+        guard data.first == 0x05 else { return }
         
-        // Create new message
+        // Create message
         let message = ArkavoMessage(
             id: UUID(),
             timestamp: Date(),
@@ -86,11 +98,28 @@ class ArkavoMessageManager: ObservableObject {
             lastRetryDate: nil
         )
         
-        print("Created new message with ID: \(message.id)")
-        
-        // Update state and save
+        // Store to filesystem
         messages.append(message)
         saveMessage(message)
+        
+        // Forward to local WebSocket server
+        Task {
+            try await relayMessage(message)
+        }
+    }
+    
+    private func relayMessage(_ message: ArkavoMessage) async throws {
+        guard let relayManager = relayManager else {
+            print("Relay manager not initialized")
+            return
+        }
+        
+        do {
+            try await relayManager.relayMessage(message.data)
+            print("Message \(message.id) relayed to localhost")
+        } catch {
+            print("Failed to relay message \(message.id): \(error)")
+        }
     }
     
     private func saveMessage(_ message: ArkavoMessage) {
