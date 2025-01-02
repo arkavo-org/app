@@ -14,15 +14,14 @@ struct VideoCreateView: View {
     @State private var errorMessage = ""
 
     init(feedViewModel _: VideoFeedViewModel) {
-        let recordingVM = ViewModelFactory.shared.makeVideoRecordingViewModel()
-        _viewModel = StateObject(wrappedValue: recordingVM)
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoRecordingViewModel())
     }
 
     var body: some View {
         ModernRecordingInterface(
             viewModel: viewModel,
-            onComplete: { result in
-                await handleRecordingComplete(result)
+            onComplete: { _ in
+                // Simply dismiss the view when complete
                 sharedState.showCreateView = false
             }
         )
@@ -31,140 +30,13 @@ struct VideoCreateView: View {
                 sharedState.showCreateView = false
             }
         } message: {
-            Text(errorMessage)
+            Text(viewModel.errorMessage ?? "An unknown error occurred")
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            showError = newValue != nil
         }
     }
-
-    private func handleRecordingComplete(_ result: UploadResult?) async {
-        guard let result else {
-            showError(message: "Failed to get recording result")
-            return
-        }
-        // Account for NanoTDF overhead - target ~950KB for the video
-        let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
-        do {
-            let videoURL = URL(string: result.playbackURL)!
-            let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
-            let fileSize = resourceValues.fileSize ?? 0
-
-            print("Original video size: \(fileSize) bytes")
-
-            // Analyze the original video
-            let asset = AVURLAsset(url: videoURL)
-            if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
-                let naturalSize = try await videoTrack.load(.naturalSize)
-                let transform = try await videoTrack.load(.preferredTransform)
-                let videoAngle = atan2(transform.b, transform.a)
-
-                print("\n📹 Original Video Analysis:")
-                print("- File size: \(fileSize) bytes")
-                print("- Natural size: \(naturalSize)")
-                print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
-                print("- Transform angle: \(videoAngle * 180 / .pi)°")
-                print("- Transform matrix: \(transform)")
-            }
-
-            // Compress video with optimized settings
-            let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
-            print("Compressed video size: \(compressedData.count) bytes")
-
-            // Create NanoTDF
-            let nanoTDFData = try await viewModel.client.encryptRemotePolicy(
-                payload: compressedData,
-                remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
-            )
-
-            guard nanoTDFData.count <= 1_000_000 else {
-                throw NSError(domain: "VideoCompression", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
-            }
-
-            // Send over websocket
-            try await viewModel.client.sendNATSMessage(nanoTDFData)
-
-            // Process video metadata and save
-            let persistenceController = PersistenceController.shared
-            let context = persistenceController.container.mainContext
-
-            // Find video stream
-            guard let videoStream = viewModel.account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .video
-            }) else {
-                showError(message: "No video stream available")
-                return
-            }
-
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            let title = formatter.string(from: Date())
-
-            // Create metadata
-            let metadata = Thought.Metadata(
-                creator: viewModel.profile.id,
-                streamPublicID: videoStream.publicID,
-                mediaType: .video,
-                createdAt: Date(),
-                summary: title,
-                contributors: []
-            )
-
-            // Create thought with policy and encrypted data
-            let videoThought = try await viewModel.createThoughtWithPolicy(
-                videoData: compressedData,
-                metadata: metadata
-            )
-
-            videoStream.addThought(videoThought)
-            try context.save()
-        } catch {
-            print("Failed to process video - Error:", error)
-            showError(message: "Failed to process video: \(error.localizedDescription)")
-        }
-    }
-
-    private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
-        let asset = AVURLAsset(url: url)
-
-        // Try different export presets in order of decreasing quality
-        let presets = [
-            AVAssetExportPresetHighestQuality,
-            AVAssetExportPreset1920x1080,
-            AVAssetExportPreset1280x720,
-            AVAssetExportPresetMediumQuality,
-            AVAssetExportPreset960x540,
-            AVAssetExportPresetLowQuality,
-            AVAssetExportPreset640x480,
-        ]
-
-        for preset in presets {
-            let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
-
-            print("\nTrying compression with preset: \(preset)")
-
-            guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
-                continue
-            }
-
-            exporter.outputURL = outputURL
-            exporter.outputFileType = .mp4
-            exporter.shouldOptimizeForNetworkUse = true
-
-            try await exporter.export(to: outputURL, as: .mp4)
-
-            let compressedData = try Data(contentsOf: outputURL)
-            print("Compressed size: \(compressedData.count) bytes")
-
-            try? FileManager.default.removeItem(at: outputURL)
-
-            if compressedData.count <= targetSize {
-                return compressedData
-            }
-        }
-
-        throw VideoError.compressionFailed("Could not compress video to target size with any preset")
-    }
-
+    
     @MainActor
     private func exportVideo(
         asset: AVURLAsset,
@@ -389,29 +261,34 @@ struct RecordingControl: View {
             case .initial:
                 ProgressView()
                     .tint(.white)
+                    
             case .setupComplete:
                 ModernRecordButton(isRecording: false) {
                     Task {
                         await viewModel.startRecording()
                     }
                 }
+                
             case .recording:
                 ModernRecordButton(isRecording: true) {
                     Task {
                         await viewModel.stopRecording()
                     }
                 }
+                
             case .processing, .uploading:
                 ProcessingView(state: viewModel.recordingState)
-            case let .complete(result):
-                SendButton(
-                    state: viewModel.recordingState == .processing ? .processing :
-                        viewModel.recordingState == .uploading ? .sending : .ready
-                ) {
-                    Task {
-                        await onComplete(result)
+                
+            case .complete:
+                // Automatically trigger completion
+                ProgressView()
+                    .tint(.white)
+                    .onAppear {
+                        Task {
+                            await onComplete(nil)
+                        }
                     }
-                }
+                
             case .error:
                 EmptyView()
             }
@@ -648,6 +525,7 @@ final class VideoRecordingViewModel: ObservableObject {
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0
     @Published private(set) var previewLayer: CALayer?
+    @Published private(set) var errorMessage: String?
 
     private var recordingManager: VideoRecordingManager?
     private let processingManager = HLSProcessingManager()
@@ -708,15 +586,23 @@ final class VideoRecordingViewModel: ObservableObject {
 
             // Upload the video
             recordingState = .uploading
-            // FIXME: create nano and send here
+            
+            // First create the result
             let result = UploadResult(
                 id: processedVideo.directory.lastPathComponent,
                 playbackURL: videoURL.absoluteString
             )
-
-            recordingState = .complete(result)
+            
+            // Handle all the processing and uploading
+            try await handleRecordingComplete(result)
+            
+            // Only transition to complete state after everything is done
+            await MainActor.run {
+                recordingState = .complete(result)
+            }
         } catch {
             print("❌ Recording stop failed with error: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
             recordingState = .error(error.localizedDescription)
         }
     }
@@ -814,8 +700,133 @@ final class VideoRecordingViewModel: ObservableObject {
         )
     }
 
+    private func handleRecordingComplete(_ result: UploadResult?) async throws {
+        guard let result else {
+            throw VideoError.processingFailed("Failed to get recording result")
+        }
+        
+        // Account for NanoTDF overhead - target ~950KB for the video
+        let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
+        
+        let videoURL = URL(string: result.playbackURL)!
+        let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = resourceValues.fileSize ?? 0
+
+        print("Original video size: \(fileSize) bytes")
+
+        // Analyze the original video
+        let asset = AVURLAsset(url: videoURL)
+        if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
+            let naturalSize = try await videoTrack.load(.naturalSize)
+            let transform = try await videoTrack.load(.preferredTransform)
+            let videoAngle = atan2(transform.b, transform.a)
+
+            print("\n📹 Original Video Analysis:")
+            print("- File size: \(fileSize) bytes")
+            print("- Natural size: \(naturalSize)")
+            print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
+            print("- Transform angle: \(videoAngle * 180 / .pi)°")
+            print("- Transform matrix: \(transform)")
+        }
+
+        // Compress video with optimized settings
+        let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
+        print("Compressed video size: \(compressedData.count) bytes")
+
+        // Create NanoTDF
+        let nanoTDFData = try await client.encryptRemotePolicy(
+            payload: compressedData,
+            remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
+        )
+
+        guard nanoTDFData.count <= 1_000_000 else {
+            throw NSError(domain: "VideoCompression", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
+        }
+
+        // Send over websocket
+//        try await client.sendNATSMessage(nanoTDFData)
+
+        // Process video metadata and save
+        let persistenceController = PersistenceController.shared
+        let context = persistenceController.container.mainContext
+
+        // Find video stream
+        guard let videoStream = account.streams.first(where: { stream in
+            stream.source?.metadata.mediaType == .video
+        }) else {
+            throw VideoError.processingFailed("No video stream available")
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        let title = formatter.string(from: Date())
+
+        // Create metadata
+        let metadata = Thought.Metadata(
+            creator: profile.id,
+            streamPublicID: videoStream.publicID,
+            mediaType: .video,
+            createdAt: Date(),
+            summary: title,
+            contributors: []
+        )
+
+        // Create thought with policy and encrypted data
+        let videoThought = try await createThoughtWithPolicy(
+            videoData: compressedData,
+            metadata: metadata
+        )
+
+        videoStream.addThought(videoThought)
+        try context.save()
+    }
+    
     // MARK: - Private Helpers
 
+    private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
+        let asset = AVURLAsset(url: url)
+
+        // Try different export presets in order of decreasing quality
+        let presets = [
+            AVAssetExportPresetHighestQuality,
+            AVAssetExportPreset1920x1080,
+            AVAssetExportPreset1280x720,
+            AVAssetExportPresetMediumQuality,
+            AVAssetExportPreset960x540,
+            AVAssetExportPresetLowQuality,
+            AVAssetExportPreset640x480,
+        ]
+
+        for preset in presets {
+            let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+
+            print("\nTrying compression with preset: \(preset)")
+
+            guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
+                continue
+            }
+
+            exporter.outputURL = outputURL
+            exporter.outputFileType = .mp4
+            exporter.shouldOptimizeForNetworkUse = true
+
+            try await exporter.export(to: outputURL, as: .mp4)
+
+            let compressedData = try Data(contentsOf: outputURL)
+            print("Compressed size: \(compressedData.count) bytes")
+
+            try? FileManager.default.removeItem(at: outputURL)
+
+            if compressedData.count <= targetSize {
+                return compressedData
+            }
+        }
+
+        throw VideoError.compressionFailed("Could not compress video to target size with any preset")
+    }
+    
     private func startProgressTimer() {
         recordingProgress = 0
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in

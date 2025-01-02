@@ -69,14 +69,6 @@ struct ArkavoWorkflowView: View {
                     .keyboardShortcut("i", modifiers: [.command])
 
                     Menu {
-                        Button {
-                            Task {
-                                await viewModel.messageDelegate.getMessageManager().retryFailedMessages()
-                            }
-                        } label: {
-                            Label("Retry All Failed", systemImage: "arrow.clockwise")
-                        }
-                        
                         Button(role: .destructive) {
                             // Add clear all functionality
                         } label: {
@@ -268,28 +260,6 @@ struct MessageRow: View {
             
             Spacer()
             
-            // Only show retry button for failed messages
-            if message.status == .failed {
-                Button {
-                    Task {
-                        await viewModel.retryMessage(message)
-                    }
-                } label: {
-                    if viewModel.isSending {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("Retry", systemImage: "arrow.clockwise")
-                            .labelStyle(.iconOnly)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.isSending || !isEnabled)
-                .help("Retry failed message")
-                .scaleEffect(viewModel.isSending ? 0.95 : 1.0)
-                .animation(.spring(response: 0.2), value: viewModel.isSending)
-            }
-            
             Text(message.status.rawValue.capitalized)
                 .font(.caption)
                 .foregroundColor(message.status.color)
@@ -308,14 +278,6 @@ class MessageRowViewModel: ObservableObject {
     
     init(workflowViewModel: WorkflowViewModel) {
         self.workflowViewModel = workflowViewModel
-    }
-    
-    func retryMessage(_ message: ArkavoMessage) async {
-        guard !isSending else { return }
-        
-        isSending = true
-        await workflowViewModel.messageDelegate.getMessageManager().retryMessage(message.id)
-        isSending = false
     }
 }
 
@@ -358,10 +320,7 @@ struct MessageListView: View {
         let failedMessages = selectedMessages.filter { messageId in
             messageManager.messages.first { $0.id == messageId }?.status == .failed
         }
-        
-        for messageId in failedMessages {
-            await messageManager.retryMessage(messageId)
-        }
+        await workflowViewModel.sendSelectedContent(failedMessages)
     }
 }
 

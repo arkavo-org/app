@@ -1,4 +1,5 @@
 import ArkavoSocial
+import FlatBuffers
 import Foundation
 import OpenTDFKit
 
@@ -44,10 +45,10 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                     try await handleRewrappedKey(messageData)
 
                 case 0x05: // NATS message
-                    try await handleNATSMessage(messageData, type: .message)
+                    try await handleNATSMessage(messageData)
 
                 case 0x06: // NATS event
-                    try await handleNATSMessage(messageData, type: .event)
+                    try await handleNATSEvent(messageData)
 
                 default:
                     print("Unknown message type: 0x\(String(format: "%02X", messageType))")
@@ -72,7 +73,80 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     // MARK: - Message Handling
+    
+    private func handleNATSEvent(_ payload: Data) async throws {
+        print("Received NATS event: \(payload.base64EncodedString())")
+        var bb = ByteBuffer(data: payload)
+        let rootOffset = bb.read(def: Int32.self, position: 0)
+        do {
+            var verifier = try Verifier(buffer: &bb)
+            try Arkavo_Event.verify(&verifier, at: Int(rootOffset), of: Arkavo_Event.self)
+            print("The bytes represent a valid Arkavo_Event")
+        } catch {
+            print("Verification failed: \(error)")
+            return
+        }
+        let event = Arkavo_Event(bb, o: Int32(Int(rootOffset)))
+        print("  Action: \(event.action)")
+        switch event.dataType {
+        case .userevent:
+            if let userEvent = event.data(type: Arkavo_UserEvent.self) {
+                try await handleUserEvent(userEvent)
+            }
+        case .cacheevent:
+            if let cacheEvent = event.data(type: Arkavo_CacheEvent.self) {
+                try await handleCacheEvent(cacheEvent)
+            }
+        case .routeevent:
+            if event.status == Arkavo_ActionStatus.fulfilled,
+               let routeEvent = event.data(type: Arkavo_RouteEvent.self)
+            {
+                print("Route Event: fulfilled")
+                // Handle fulfilled route event (e.g., call a service)
+                // Example: streamService.handleRouteEventFulfilled(routeEvent)
+                return
+            }
+            if event.status == Arkavo_ActionStatus.preparing,
+               let routeEvent = event.data(type: Arkavo_RouteEvent.self)
+            {
+                try await handleRouteEvent(routeEvent)
+            }
+        case .none_:
+            print("  No event data")
+        }
+    }
+    
+    
+    private func handleUserEvent(_ userEvent: Arkavo_UserEvent?) async throws {
+        guard let userEvent = userEvent else {
+            throw ArkavoError.invalidEvent("UserEvent is nil")
+        }
 
+        // Process the UserEvent
+        print("Processing UserEvent")
+        // Add your logic here to handle the UserEvent
+    }
+
+    private func handleCacheEvent(_ cacheEvent: Arkavo_CacheEvent?) async throws {
+        guard let cacheEvent = cacheEvent else {
+            throw ArkavoError.invalidEvent("CacheEvent is nil")
+        }
+
+        // Process the CacheEvent
+        print("Processing CacheEvent")
+        // Add your logic here to handle the CacheEvent
+    }
+
+    private func handleRouteEvent(_ routeEvent: Arkavo_RouteEvent?) async throws {
+        guard let routeEvent = routeEvent else {
+            throw ArkavoError.invalidEvent("RouteEvent is nil")
+        }
+
+        // Process the RouteEvent
+        print("Processing RouteEvent")
+        // Add your logic here to handle the RouteEvent
+    }
+    
     private func handleRewrapMessage(_ data: Data) async throws {
         print("Handling Rewrap message of size: \(data.count)")
 
@@ -103,7 +177,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         )
     }
 
-    private func handleNATSMessage(_ data: Data, type _: NATSMessageType) async throws {
+    private func handleNATSMessage(_ data: Data) async throws {
         print("Handling NATS message of size: \(data.count)")
 
         // Create a deep copy of the data
@@ -182,13 +256,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             ]
         )
     }
-}
-
-// MARK: - Supporting Types
-
-enum NATSMessageType {
-    case message
-    case event
 }
 
 // MARK: - Notification Names

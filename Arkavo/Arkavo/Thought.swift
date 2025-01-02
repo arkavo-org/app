@@ -160,3 +160,42 @@ enum MediaType: String, Codable {
         }
     }
 }
+
+// for transmission, serializes to payload
+struct ThoughtServiceModel: Codable {
+    var publicID: Data
+    var creatorPublicID: Data
+    var streamPublicID: Data
+    var mediaType: MediaType
+    var content: Data
+
+    init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, content: Data) {
+        self.creatorPublicID = creatorPublicID
+        self.streamPublicID = streamPublicID
+        self.mediaType = mediaType
+        self.content = content
+        let hashData = creatorPublicID + streamPublicID + content
+        publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
+    }
+}
+
+extension ThoughtServiceModel {
+    private static let decoder = PropertyListDecoder()
+    private static let encoder: PropertyListEncoder = {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        return encoder
+    }()
+
+    var publicIDString: String {
+        publicID.base58EncodedString
+    }
+
+    func serialize() throws -> Data {
+        try ThoughtServiceModel.encoder.encode(self)
+    }
+
+    static func deserialize(from data: Data) throws -> ThoughtServiceModel {
+        try decoder.decode(ThoughtServiceModel.self, from: data)
+    }
+}

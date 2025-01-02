@@ -69,8 +69,6 @@ public final class ArkavoClient: NSObject {
     private let socketDelegate: WebSocketDelegate
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
-    private var natsMessageHandler: ((Data) -> Void)?
-    private var natsEventHandler: ((Data) -> Void)?
 
     public var currentState: ArkavoClientState = .disconnected {
         didSet {
@@ -232,11 +230,18 @@ public final class ArkavoClient: NSObject {
         guard currentState == .connected, let webSocket else {
             throw ArkavoError.notConnected
         }
-
+        // Check if the message is of type 0x06
+        if let messageType = data.first, messageType == 0x06 {
+            let maxSize = 2000 // Maximum allowed size for type 0x06
+            if data.count > maxSize {
+                print("Error: Outbound message type 0x06 exceeds maximum allowed size of \(maxSize) bytes")
+                throw ArkavoError.messageError("Outbound message type 0x06 exceeds maximum allowed size")
+            }
+        }
         print("Sending WebSocket message:")
         print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
         print("Message length: \(data.count)")
-
+        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
         try await webSocket.send(.data(data))
     }
 
@@ -443,7 +448,7 @@ public final class ArkavoClient: NSObject {
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
 
         // Fetch authentication options from server
-        var components = URLComponents(url: authURL.appendingPathComponent("authenticate/\(accountName)"), resolvingAgainstBaseURL: true)
+        let components = URLComponents(url: authURL.appendingPathComponent("authenticate/\(accountName)"), resolvingAgainstBaseURL: true)
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
@@ -570,14 +575,6 @@ public final class ArkavoClient: NSObject {
         receiveMessage()
     }
 
-    public func setNATSMessageHandler(_ handler: @escaping (Data) -> Void) {
-        natsMessageHandler = handler
-    }
-
-    public func setNATSEventHandler(_ handler: @escaping (Data) -> Void) {
-        natsEventHandler = handler
-    }
-
     private func receiveMessage() {
         print("receiveMessage")
         guard let webSocket else {
@@ -635,10 +632,17 @@ public final class ArkavoClient: NSObject {
         print("Received data message:")
         print("Length: \(data.count) bytes")
         print("Message type: 0x\(String(format: "%02X", messageType))")
-        let first200Bytes = data.prefix(200) // Limit to the first 200 bytes
-        print("Raw data (hex): \(first200Bytes.map { String(format: "%02X", $0) }.joined(separator: " "))")
+        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
 
-        let messageData = data.dropFirst() // Remove message type byte
+        // Validate message size for type 0x06
+        if messageType == 0x06 {
+            let maxSize = 2000 // Maximum allowed size for type 0x06
+            if data.count > maxSize {
+                print("Error: Message type 0x06 exceeds maximum allowed size of \(maxSize) bytes")
+                delegate?.clientDidReceiveError(self, error: ArkavoError.messageError("Message type 0x06 exceeds maximum allowed size"))
+                return
+            }
+        }
 
         // Handle continuation-based messages first
         if let continuation = messageHandlers.removeValue(forKey: messageType) {

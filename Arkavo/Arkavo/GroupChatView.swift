@@ -388,7 +388,7 @@ class GroupChatViewModel: ObservableObject {
             case 0x04: // Rewrapped key
                 await handleRewrappedKeyMessage(messageData)
 
-            case 0x05, 0x06: // NATS message/event
+            case 0x05: // NATS message NanoTDF
                 await handleNATSMessage(messageData)
 
             default:
