@@ -613,9 +613,11 @@ final class VideoRecordingViewModel: ObservableObject {
     }
 
     func createThoughtWithPolicy(videoData: Data, metadata: Thought.Metadata) async throws -> Thought {
-        var builder = FlatBufferBuilder()
+        // Start with a new builder for metadata
+        var builder = FlatBufferBuilder(initialSize: 512)
+        print("Starting FlatBuffer construction...")
 
-        // Create rating based on video content
+        // 1. Create rating
         let rating = Arkavo_Rating.createRating(
             &builder,
             violent: .mild,
@@ -627,12 +629,13 @@ final class VideoRecordingViewModel: ObservableObject {
             mature: .none_,
             bully: .none_
         )
+        print("📊 Rating created at offset: \(rating.o)")
 
-        // Create purpose probabilities
+        // 2. Create purpose
         let purpose = Arkavo_Purpose.createPurpose(
             &builder,
             educational: 0.2,
-            entertainment: 0.8, // Video content is primarily entertainment
+            entertainment: 0.8,
             news: 0.0,
             promotional: 0.0,
             personal: 0.0,
@@ -641,52 +644,82 @@ final class VideoRecordingViewModel: ObservableObject {
             harmful: 0.0,
             confidence: 0.9
         )
+        print("🎯 Purpose created at offset: \(purpose.o)")
 
-        // Create format info for video
-        let formatVersionString = builder.create(string: "H.265")
-        let formatProfileString = builder.create(string: "HEVC")
+        // 3. Create format info
+        let versionString = builder.create(string: "H.265")
+        let profileString = builder.create(string: "HEVC")
         let formatInfo = Arkavo_FormatInfo.createFormatInfo(
             &builder,
-            type: .plain, // Update with appropriate video format type
-            versionOffset: formatVersionString,
-            profileOffset: formatProfileString
+            type: .plain,
+            versionOffset: versionString,
+            profileOffset: profileString
         )
+        print("📄 Format info created at offset: \(formatInfo.o)")
 
-        // Create content format
+        // 4. Create content format
         let contentFormat = Arkavo_ContentFormat.createContentFormat(
             &builder,
             mediaType: .video,
             dataEncoding: .binary,
             formatOffset: formatInfo
         )
+        print("📦 Content format created at offset: \(contentFormat.o)")
 
-        // Create vectors for IDs
-        let idVector = builder.createVector(bytes: metadata.creator.uuidString.data(using: .utf8) ?? Data())
-        let relatedVector = builder.createVector(bytes: metadata.streamPublicID)
+        // 5. Create vectors
+        guard let idData = metadata.creator.uuidString.data(using: .utf8) else {
+            throw VideoError.processingFailed("Invalid creator ID format")
+        }
+        let idVector = builder.createVector(idData.map(\.self))
+        print("🔑 ID vector created, size: \(idData.count)")
 
-        // Create topics vector (if needed)
-        let topics: [UInt32] = [] // Add relevant topic IDs
-        let topicsVector = builder.createVector(topics)
+        let relatedVector = builder.createVector(metadata.streamPublicID.map(\.self))
+        print("🔗 Related vector created, size: \(metadata.streamPublicID.count)")
 
-        // Create metadata root
-        let arkMetadata = Arkavo_Metadata.createMetadata(
-            &builder,
-            created: Int64(Date().timeIntervalSince1970),
-            idVectorOffset: idVector,
-            relatedVectorOffset: relatedVector,
-            ratingOffset: rating,
-            purposeOffset: purpose,
-            topicsVectorOffset: topicsVector,
-            contentOffset: contentFormat
-        )
+        let topicsVector = builder.createVector([UInt32]())
+        print("📝 Topics vector created")
 
+        // 6. Start metadata creation
+        let start = Arkavo_Metadata.startMetadata(&builder)
+
+        // Add all fields
+        Arkavo_Metadata.add(created: Int64(Date().timeIntervalSince1970), &builder)
+        Arkavo_Metadata.addVectorOf(id: idVector, &builder)
+        Arkavo_Metadata.addVectorOf(related: relatedVector, &builder)
+        Arkavo_Metadata.add(rating: rating, &builder)
+        Arkavo_Metadata.add(purpose: purpose, &builder)
+        Arkavo_Metadata.addVectorOf(topics: topicsVector, &builder)
+        Arkavo_Metadata.add(content: contentFormat, &builder)
+
+        // End metadata
+        let arkMetadata = Arkavo_Metadata.endMetadata(&builder, start: start)
+        print("📋 Metadata created at offset: \(arkMetadata.o)")
+
+        // 7. Finish the buffer
         builder.finish(offset: arkMetadata)
+        print("🏁 Builder finished")
 
-        // Get policy data
-        let policyData = Data(
-            bytes: builder.sizedBuffer.memory.advanced(by: builder.sizedBuffer.reader),
-            count: Int(builder.sizedBuffer.size)
-        )
+        // Now verify the finished buffer
+        do {
+            var verificationBuffer = ByteBuffer(data: builder.data)
+            var verifier = try Verifier(buffer: &verificationBuffer)
+
+            // Get the root offset from the buffer
+            let rootOffset = verificationBuffer.read(def: Int32.self, position: 0)
+            print("🔍 Root offset: \(rootOffset)")
+
+            // Verify the root object
+            try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
+            print("✅ Metadata verification successful")
+        } catch {
+            print("❌ Metadata verification failed: \(error)")
+            throw FlatBufferVerificationError.verificationFailed("Invalid metadata structure: \(error)")
+        }
+
+        // Get the final bytes
+        let bytes = builder.sizedBuffer
+        let policyData = Data(bytes: bytes.memory.advanced(by: bytes.reader), count: Int(bytes.size))
+        print("📦 Final policy data size: \(policyData.count) bytes")
 
         // Create NanoTDF with metadata in policy
         let nanoTDFData = try await client.encryptAndSendPayload(

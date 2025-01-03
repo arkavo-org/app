@@ -296,3 +296,34 @@ extension Notification.Name {
     static let messageProcessingFailed = Notification.Name("messageProcessingFailed")
     static let retryMessageProcessing = Notification.Name("retryMessageProcessing")
 }
+
+enum FlatBufferVerificationError: Error {
+    case verificationFailed(String)
+    case invalidBuffer(String)
+    case invalidOffset(String)
+}
+
+func verifyFlatBufferObject<T: Verifiable>(
+    offset: Offset,
+    type: T.Type,
+    builderData: ByteBuffer,
+    errorMessage: String
+) throws {
+    // Validate offset
+    guard offset.o > 0 else {
+        throw FlatBufferVerificationError.invalidOffset("Invalid offset for \(T.self)")
+    }
+
+    // Create and configure verifier
+    do {
+        // Create a mutable copy of the buffer
+        var mutableBuffer = builderData
+        var verifier = try Verifier(buffer: &mutableBuffer)
+        try type.verify(&verifier, at: Int(offset.o), of: type)
+    } catch {
+        print("❌ \(type) verification failed: \(error)")
+        print("- Offset: \(offset.o)")
+        print("- Buffer size: \(builderData.size)")
+        throw FlatBufferVerificationError.verificationFailed("\(errorMessage): \(error)")
+    }
+}
