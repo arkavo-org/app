@@ -1,13 +1,13 @@
-//import CryptoKit
-//import FlatBuffers
-//import Foundation
-//import OpenTDFKit
+// import CryptoKit
+// import FlatBuffers
+// import Foundation
+// import OpenTDFKit
 //
 
 //
 
 //
-//class ThoughtService {
+// class ThoughtService {
 //    private let service: ArkavoService
 //    public var streamViewModel: StreamViewModel?
 //    weak var thoughtStreamViewModel: ThoughtStreamViewModel?
@@ -205,4 +205,4 @@
 //    enum ThoughtServiceError: Error {
 //        case missingThoughtStreamViewModel
 //    }
-//}
+// }

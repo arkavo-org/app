@@ -39,6 +39,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func setupNotifications() {
+        print("ChatViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()

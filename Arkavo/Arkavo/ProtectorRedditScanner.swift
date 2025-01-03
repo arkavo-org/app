@@ -1,8 +1,8 @@
-//import AuthenticationServices
-//import Foundation
-//import Security
+// import AuthenticationServices
+// import Foundation
+// import Security
 //
-//class RedditAuthManager: NSObject, ASWebAuthenticationPresentationContextProviding {
+// class RedditAuthManager: NSObject, ASWebAuthenticationPresentationContextProviding {
 //    private let clientId = "5Yf5m-g6oyKSWjMZO1nCHQ"
 //    private let redirectUri = "arkavo://oauth/callback"
 //    private let clientSecret = "" // not needed for this flow
@@ -138,9 +138,9 @@
 //
 //        return token
 //    }
-//}
+// }
 //
-//struct RedditToken: Codable {
+// struct RedditToken: Codable {
 //    let accessToken: String
 //    let refreshToken: String
 //    let expiresIn: Int
@@ -152,9 +152,9 @@
 //        case expiresIn = "expires_in"
 //        case scope
 //    }
-//}
+// }
 //
-//class RedditScanner {
+// class RedditScanner {
 //    private let authManager: RedditAuthManager
 //    private let apiBaseURL = "https://oauth.reddit.com"
 //    private let contentMatcher = ContentMatcher()
@@ -268,14 +268,14 @@
 //            ]
 //        )
 //    }
-//}
+// }
 //
 //// Notification extension for content matches
-//extension Notification.Name {
+// extension Notification.Name {
 //    static let redditContentMatch = Notification.Name("RedditContentMatch")
-//}
+// }
 //
-//actor RedditRateLimiter {
+// actor RedditRateLimiter {
 //    // Token bucket configuration
 //    private let maxTokens: Double = 60 // Maximum number of tokens (requests)
 //    private let refillRate: Double = 1 // Tokens added per second
@@ -337,9 +337,9 @@
 //        refillTokens()
 //        return currentTokens
 //    }
-//}
+// }
 //
-//class RedditAPIClient {
+// class RedditAPIClient {
 //    private let rateLimiter = RedditRateLimiter()
 //    let authManager: RedditAuthManager
 //    private let retryLimit = 3
@@ -463,25 +463,25 @@
 //        // For now, just throw unauthorized to trigger a new login
 //        throw APIError.unauthorized
 //    }
-//}
+// }
 //
-//struct RedditListing: Codable {
+// struct RedditListing: Codable {
 //    let kind: String
 //    let data: ListingData
-//}
+// }
 //
-//struct ListingData: Codable {
+// struct ListingData: Codable {
 //    let children: [RedditChild]
 //    let after: String?
 //    let before: String?
-//}
+// }
 //
-//struct RedditChild: Codable {
+// struct RedditChild: Codable {
 //    let kind: String
 //    let data: RedditPost
-//}
+// }
 //
-//struct RedditPost: Codable {
+// struct RedditPost: Codable {
 //    let id: String
 //    let title: String
 //    let url: String?
@@ -496,9 +496,9 @@
 //    enum CodingKeys: String, CodingKey {
 //        case id, title, url, author, created_utc, subreddit, selftext, thumbnail, permalink
 //    }
-//}
+// }
 //
-//class RedditScannerService {
+// class RedditScannerService {
 //    private let apiClient: RedditAPIClient
 //    private var scanTask: Task<Void, Error>?
 //    private let contentQueue = DispatchQueue(label: "com.arkavo.redditscanner", qos: .utility)
@@ -606,4 +606,4 @@
 //            )
 //        }
 //    }
-//}
+// }

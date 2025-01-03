@@ -1,7 +1,7 @@
-import Compression
 import AVFoundation
-import UIKit
+import Compression
 import Foundation
+import UIKit
 
 extension DateFormatter {
     static let shortDateTime: DateFormatter = {
@@ -131,7 +131,7 @@ extension String {
 
 // MARK: - Data Compression Extensions
 
-//extension Data {
+// extension Data {
 //    func compressed() throws -> Data {
 //        guard !isEmpty else { return self }
 //
@@ -212,7 +212,7 @@ extension String {
 //            return 1.0
 //        }
 //    }
-//}
+// }
 
 extension UIImage {
     func heifData(maxSizeBytes: Int = 1_048_576, initialQuality: CGFloat = 0.9) -> Data? {

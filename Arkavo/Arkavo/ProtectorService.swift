@@ -1,8 +1,8 @@
-//import FlatBuffers
-//import Foundation
-//import OpenTDFKit
+// import FlatBuffers
+// import Foundation
+// import OpenTDFKit
 //
-//class ProtectorService: ObservableObject {
+// class ProtectorService: ObservableObject {
 //    @Published private(set) var isWaitingForSignature = false
 //    @Published private(set) var hasSignature = false
 //    let redditAuthManager = RedditAuthManager()
@@ -124,9 +124,9 @@
 //        signatureReceivedContinuation = nil
 //        isWaitingForSignature = false
 //    }
-//}
+// }
 //
-//enum ProtectorError: Error {
+// enum ProtectorError: Error {
 //    case missingAccountOrProfile
 //    case missingKASkey
 //    case flatBufferCreationFailed
@@ -136,4 +136,4 @@
 //    case missingProfile
 //    case missingCreatorPublicId
 //    case missingPublicId
-//}
+// }

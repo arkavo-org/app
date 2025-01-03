@@ -28,31 +28,13 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        guard let messageType = message.first else {
+        guard message.first != nil else {
             print("Invalid message: empty data")
             return
         }
-
-        let messageData = message.dropFirst()
-
         Task {
             do {
-                switch messageType {
-                case 0x03: // Rewrap
-                    try await handleRewrapMessage(messageData)
-
-                case 0x04: // Rewrapped key
-                    try await handleRewrappedKey(messageData)
-
-                case 0x05: // NATS message
-                    try await handleNATSMessage(messageData)
-
-                case 0x06: // NATS event
-                    try await handleNATSEvent(messageData)
-
-                default:
-                    print("Unknown message type: 0x\(String(format: "%02X", messageType))")
-                }
+                try await processMessage(message)
             } catch {
                 print("Error handling message: \(error)")
                 NotificationCenter.default.post(
@@ -61,6 +43,46 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                     userInfo: ["error": error]
                 )
             }
+        }
+    }
+
+    func processMessage(_ data: Data, messageId: UUID? = nil) async throws {
+        guard let messageType = data.first else {
+            throw ArkavoError.messageError("Invalid message: empty data")
+        }
+
+        do {
+            let messageData = data.dropFirst()
+
+            switch messageType {
+            case 0x03: // Rewrap
+                try await handleRewrapMessage(messageData)
+            case 0x04: // Rewrapped key
+                try await handleRewrappedKey(messageData)
+            case 0x05: // NATS message
+                try await handleNATSMessage(messageData)
+            case 0x06: // NATS event
+                if data.count > 2000 {
+                    throw ArkavoError.messageError("Message type 0x06 exceeds maximum allowed size")
+                }
+                try await handleNATSEvent(messageData)
+            default:
+                print("Unknown message type: 0x\(String(format: "%02X", messageType))")
+            }
+
+            // If processing succeeded and this was a cached message, remove it
+            if let messageId {
+                let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+                try cacheManager.removeMessage(messageId)
+            }
+
+        } catch {
+            // If processing failed and this wasn't already a cached message, cache it
+            if messageId == nil {
+                let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+                try cacheManager.cacheMessage(data: data, messageType: messageType)
+            }
+            throw error
         }
     }
 
@@ -73,7 +95,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     // MARK: - Message Handling
-    
+
     private func handleNATSEvent(_ payload: Data) async throws {
         print("Received NATS event: \(payload.base64EncodedString())")
         var bb = ByteBuffer(data: payload)
@@ -101,7 +123,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             if event.status == Arkavo_ActionStatus.fulfilled,
                let routeEvent = event.data(type: Arkavo_RouteEvent.self)
             {
-                print("Route Event: fulfilled")
+                print("Route Event: fulfilled \(routeEvent.sourceId)")
                 // Handle fulfilled route event (e.g., call a service)
                 // Example: streamService.handleRouteEventFulfilled(routeEvent)
                 return
@@ -115,38 +137,37 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("  No event data")
         }
     }
-    
-    
+
     private func handleUserEvent(_ userEvent: Arkavo_UserEvent?) async throws {
-        guard let userEvent = userEvent else {
+        guard let userEvent else {
             throw ArkavoError.invalidEvent("UserEvent is nil")
         }
 
         // Process the UserEvent
-        print("Processing UserEvent")
+        print("TODO Processing UserEvent \(userEvent.sourceId)")
         // Add your logic here to handle the UserEvent
     }
 
     private func handleCacheEvent(_ cacheEvent: Arkavo_CacheEvent?) async throws {
-        guard let cacheEvent = cacheEvent else {
+        guard let cacheEvent else {
             throw ArkavoError.invalidEvent("CacheEvent is nil")
         }
 
         // Process the CacheEvent
-        print("Processing CacheEvent")
+        print("TODO Processing CacheEvent \(cacheEvent.targetId)")
         // Add your logic here to handle the CacheEvent
     }
 
     private func handleRouteEvent(_ routeEvent: Arkavo_RouteEvent?) async throws {
-        guard let routeEvent = routeEvent else {
+        guard let routeEvent else {
             throw ArkavoError.invalidEvent("RouteEvent is nil")
         }
 
         // Process the RouteEvent
-        print("Processing RouteEvent")
+        print("TODO Processing RouteEvent \(routeEvent.sourceId)")
         // Add your logic here to handle the RouteEvent
     }
-    
+
     private func handleRewrapMessage(_ data: Data) async throws {
         print("Handling Rewrap message of size: \(data.count)")
 
@@ -270,4 +291,8 @@ extension Notification.Name {
     static let rewrapDenied = Notification.Name("rewrapDenied")
     static let rewrappedKeyReceived = Notification.Name("rewrappedKeyReceived")
     static let rewrapRequestReceived = Notification.Name("rewrapRequestReceived")
+    static let messageCached = Notification.Name("messageCached")
+    static let messageRemovedFromCache = Notification.Name("messageRemovedFromCache")
+    static let messageProcessingFailed = Notification.Name("messageProcessingFailed")
+    static let retryMessageProcessing = Notification.Name("retryMessageProcessing")
 }

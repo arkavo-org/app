@@ -36,7 +36,7 @@ struct VideoCreateView: View {
             showError = newValue != nil
         }
     }
-    
+
     @MainActor
     private func exportVideo(
         asset: AVURLAsset,
@@ -261,24 +261,24 @@ struct RecordingControl: View {
             case .initial:
                 ProgressView()
                     .tint(.white)
-                    
+
             case .setupComplete:
                 ModernRecordButton(isRecording: false) {
                     Task {
                         await viewModel.startRecording()
                     }
                 }
-                
+
             case .recording:
                 ModernRecordButton(isRecording: true) {
                     Task {
                         await viewModel.stopRecording()
                     }
                 }
-                
+
             case .processing, .uploading:
                 ProcessingView(state: viewModel.recordingState)
-                
+
             case .complete:
                 // Automatically trigger completion
                 ProgressView()
@@ -288,7 +288,7 @@ struct RecordingControl: View {
                             await onComplete(nil)
                         }
                     }
-                
+
             case .error:
                 EmptyView()
             }
@@ -586,16 +586,16 @@ final class VideoRecordingViewModel: ObservableObject {
 
             // Upload the video
             recordingState = .uploading
-            
+
             // First create the result
             let result = UploadResult(
                 id: processedVideo.directory.lastPathComponent,
                 playbackURL: videoURL.absoluteString
             )
-            
+
             // Handle all the processing and uploading
             try await handleRecordingComplete(result)
-            
+
             // Only transition to complete state after everything is done
             await MainActor.run {
                 recordingState = .complete(result)
@@ -704,10 +704,10 @@ final class VideoRecordingViewModel: ObservableObject {
         guard let result else {
             throw VideoError.processingFailed("Failed to get recording result")
         }
-        
+
         // Account for NanoTDF overhead - target ~950KB for the video
         let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
-        
+
         let videoURL = URL(string: result.playbackURL)!
         let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
         let fileSize = resourceValues.fileSize ?? 0
@@ -782,7 +782,7 @@ final class VideoRecordingViewModel: ObservableObject {
         videoStream.addThought(videoThought)
         try context.save()
     }
-    
+
     // MARK: - Private Helpers
 
     private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
@@ -826,7 +826,7 @@ final class VideoRecordingViewModel: ObservableObject {
 
         throw VideoError.compressionFailed("Could not compress video to target size with any preset")
     }
-    
+
     private func startProgressTimer() {
         recordingProgress = 0
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in

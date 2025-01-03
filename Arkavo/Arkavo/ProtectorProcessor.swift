@@ -1,9 +1,9 @@
-//import Compression
-//import CoreML
-//import CryptoKit
-//import Foundation
+// import Compression
+// import CoreML
+// import CryptoKit
+// import Foundation
 //
-//struct ContentSignature: Codable {
+// struct ContentSignature: Codable {
 //    let version: Int
 //    let embeddings: [Float] // Semantic embeddings from BERT
 //    let ngrams: Set<String> // Efficient n-gram sets
@@ -18,18 +18,18 @@
 //            keyphrases.joined().utf8.count +
 //            MemoryLayout<SignatureMetadata>.size
 //    }
-//}
+// }
 //
-//struct SignatureMetadata: Codable {
+// struct SignatureMetadata: Codable {
 //    let createdAt: Date
 //    let sourceType: String
 //    let processingVersion: String
 //    let contentLength: Int
-//}
+// }
 //
 //// MARK: - MacOS Preprocessing
 //
-//class ContentPreprocessor {
+// class ContentPreprocessor {
 //    private let model: TextEmbedding
 //    private let tokenizer: BERTTokenizer
 //    private let batchSize = 32
@@ -222,11 +222,11 @@
 //
 //        return ngrams
 //    }
-//}
+// }
 //
 //// MARK: - iOS Detection
 //
-//class ContentMatcher {
+// class ContentMatcher {
 //    private let similarityThreshold: Float = 0.85
 //    private let ngramMatchThreshold: Float = 0.3
 //
@@ -381,21 +381,21 @@
 //
 //        return 1.0 - (distance / maxLength)
 //    }
-//}
+// }
 //
 //// MARK: - Utility Extensions
 //
-//extension Array {
+// extension Array {
 //    func chunked(into size: Int) -> [[Element]] {
 //        stride(from: 0, to: count, by: size).map {
 //            Array(self[$0 ..< Swift.min($0 + size, count)])
 //        }
 //    }
-//}
+// }
 //
 //// MARK: - BERT Tokenizer
 //
-//class BERTTokenizer {
+// class BERTTokenizer {
 //    // Special tokens
 //    private let padToken = "[PAD]"
 //    private let unknownToken = "[UNK]"
@@ -521,11 +521,11 @@
 //
 //        return vocab
 //    }
-//}
+// }
 //
 //// MARK: - Vocabulary Loading Extension
 //
-//extension BERTTokenizer {
+// extension BERTTokenizer {
 //    // Load vocabulary from a file
 //    static func loadFromFile(_: URL) throws -> BERTTokenizer {
 //        let tokenizer = BERTTokenizer()
@@ -540,19 +540,19 @@
 //        }
 //        return try loadFromFile(url)
 //    }
-//}
+// }
 //
 //// MARK: - Error Types
 //
-//enum TokenizerError: Error {
+// enum TokenizerError: Error {
 //    case vocabularyNotFound
 //    case invalidVocabularyFormat
 //    case tokenizationError
-//}
+// }
 //
 //// MARK: - Match Types
 //
-//struct Match: Codable {
+// struct Match: Codable {
 //    /// The matching signature that was found
 //    let signature: ContentSignature
 //
@@ -579,11 +579,11 @@
 //        self.matchDetails = matchDetails
 //        timestamp = Date()
 //    }
-//}
+// }
 //
 //// MARK: - Match Details
 //
-//struct MatchDetails: Codable {
+// struct MatchDetails: Codable {
 //    /// Similarity score from embeddings comparison
 //    let embeddingSimilarity: Float?
 //
@@ -606,11 +606,11 @@
 //        self.phraseMatches = phraseMatches
 //        self.metadata = metadata
 //    }
-//}
+// }
 //
 //// MARK: - Match Type
 //
-//enum MatchType: String, Codable {
+// enum MatchType: String, Codable {
 //    /// Exact or near-exact match (similarity > 0.95)
 //    case exact
 //
@@ -636,21 +636,21 @@
 //            .weak
 //        }
 //    }
-//}
+// }
 //
 //// MARK: - Compression Extensions
 //
-//enum CompressionError: Error {
+// enum CompressionError: Error {
 //    case compressionFailed
 //    case decompressionFailed
 //    case encodingFailed
 //    case decodingFailed
 //    case invalidPointer
-//}
+// }
 //
 //// MARK: - Compression Extensions
 //
-//extension ContentSignature {
+// extension ContentSignature {
 //    /// Compress the signature for efficient transmission
 //    func compressed() throws -> Data {
 //        let encoder = JSONEncoder()
@@ -664,4 +664,4 @@
 //        let decoder = JSONDecoder()
 //        return try decoder.decode(ContentSignature.self, from: jsonData)
 //    }
-//}
+// }

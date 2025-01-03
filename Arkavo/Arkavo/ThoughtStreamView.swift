@@ -1,12 +1,12 @@
-//import AVFoundation
-//import CoreLocation
-//import CryptoKit
-//import FlatBuffers
-//import OpenTDFKit
-//import SwiftData
-//import SwiftUI
+// import AVFoundation
+// import CoreLocation
+// import CryptoKit
+// import FlatBuffers
+// import OpenTDFKit
+// import SwiftData
+// import SwiftUI
 //
-//struct ThoughtStreamView: View {
+// struct ThoughtStreamView: View {
 //    @Environment(\.dismiss) private var dismiss
 //    @State var service: ThoughtService
 //    @State var streamService: StreamService
@@ -279,32 +279,32 @@
 //        viewModel.thoughts.append(thoughtViewModel)
 //        inputText = ""
 //    }
-//}
+// }
 //
-//#if os(iOS) || os(visionOS)
+// #if os(iOS) || os(visionOS)
 
-//#endif
+// #endif
 //
-//struct LocationPicker: View {
+// struct LocationPicker: View {
 //    let onLocationPicked: (CLLocation) -> Void
 //
 //    var body: some View {
 //        Text("Location Picker Placeholder")
 //        // Implement a map view or location selection interface
 //    }
-//}
+// }
 //
-//struct StickerPicker: View {
+// struct StickerPicker: View {
 //    let onStickerPicked: (String) -> Void
 //
 //    var body: some View {
 //        Text("Sticker Picker Placeholder")
 //        // Implement a sticker selection interface
 //    }
-//}
+// }
 //
-//@MainActor
-//class ThoughtStreamViewModel: StreamViewModel {
+// @MainActor
+// class ThoughtStreamViewModel: StreamViewModel {
 //    var service: ThoughtService
 //    @Published var thoughts: [ThoughtViewModel] = []
 //
@@ -374,9 +374,9 @@
 //    enum ThoughtServiceError: Error {
 //        case missingThoughtStreamViewModel
 //    }
-//}
+// }
 //
 //// Extension to convert UIImage to HEIF data
-//#if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
+// #if os(iOS) || os(visionOS) || targetEnvironment(macCatalyst)
 
-//#endif
+// #endif

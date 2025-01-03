@@ -1,10 +1,10 @@
-//import CryptoKit
-//import FlatBuffers
-//import Foundation
-//import OpenTDFKit
-//import SwiftData
+// import CryptoKit
+// import FlatBuffers
+// import Foundation
+// import OpenTDFKit
+// import SwiftData
 //
-//struct StreamServiceModel {
+// struct StreamServiceModel {
 //    var publicID: Data
 //    var streamProfile: Profile
 //    var admissionPolicy: AdmissionPolicy
@@ -16,15 +16,15 @@
 //        admissionPolicy = .open
 //        interactionPolicy = .open
 //    }
-//}
+// }
 //
-//extension StreamServiceModel {
+// extension StreamServiceModel {
 //    var publicIDString: String {
 //        publicID.base58EncodedString
 //    }
-//}
+// }
 //
-//class StreamService {
+// class StreamService {
 //    let service: ArkavoService
 //    public var streamViewModel: StreamViewModel?
 //    private var locationContinuation: CheckedContinuation<(LocationData, Data), Error>?
@@ -386,4 +386,4 @@
 //        case missingProfile
 //        case invalidEntityType
 //    }
-//}
+// }

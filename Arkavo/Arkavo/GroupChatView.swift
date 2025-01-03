@@ -44,6 +44,7 @@ class GroupChatViewModel: ObservableObject {
     }
 
     private func setupNotifications() {
+        print("GroupChatViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()

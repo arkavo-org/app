@@ -34,6 +34,12 @@ struct ArkavoApp: App {
         )
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
+        do {
+            let cacheManager = try MessageCacheManager()
+            ViewModelFactory.shared.serviceLocator.register(cacheManager)
+        } catch {
+            print("Failed to initialize message cache: \(error)")
+        }
     }
 
     var body: some Scene {

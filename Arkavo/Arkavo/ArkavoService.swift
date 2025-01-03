@@ -1,10 +1,10 @@
-//import Combine
-//import CryptoKit
-//import FlatBuffers
-//import Foundation
-//import OpenTDFKit
+// import Combine
+// import CryptoKit
+// import FlatBuffers
+// import Foundation
+// import OpenTDFKit
 //
-//class ArkavoService {
+// class ArkavoService {
 //    public static var kasPublicKey: P256.KeyAgreement.PublicKey?
 //    let webSocketManager: WebSocketManager
 //    private var cancellables = Set<AnyCancellable>()
@@ -396,9 +396,9 @@
 //            print("Invalid NanoTDF signing")
 //        }
 //    }
-//}
+// }
 //
-//class NanoTDFManager {
+// class NanoTDFManager {
 //    private var nanoTDFs: [Data: (NanoTDF, CheckedContinuation<SymmetricKey?, Error>)] = [:]
 //    private let queue = DispatchQueue(label: "com.arkavo.nanotdf-manager", attributes: .concurrent)
 //
@@ -430,9 +430,9 @@
 //            nanoTDFs[identifier]?.0
 //        }
 //    }
-//}
+// }
 //
-//struct NATSMessage {
+// struct NATSMessage {
 //    let messageType: Data
 //    let payload: Data
 //
@@ -452,9 +452,9 @@
 //        data.append(payload)
 //        return data
 //    }
-//}
+// }
 //
-//struct NATSEvent {
+// struct NATSEvent {
 //    let messageType: Data
 //    let payload: Data
 //
@@ -474,4 +474,4 @@
 //        data.append(payload)
 //        return data
 //    }
-//}
+// }

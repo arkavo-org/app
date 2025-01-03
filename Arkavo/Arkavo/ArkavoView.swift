@@ -1,8 +1,8 @@
-//import OpenTDFKit
-//import SwiftData
-//import SwiftUI
+// import OpenTDFKit
+// import SwiftData
+// import SwiftUI
 //
-//struct ArkavoView: View {
+// struct ArkavoView: View {
 //    @Environment(\.locale) var locale
 //    @State var service: ArkavoService
 //    @State private var persistenceController: PersistenceController?
@@ -196,4 +196,4 @@
 //            print("No profile no webSocket no token")
 //        }
 //    }
-//}
+// }

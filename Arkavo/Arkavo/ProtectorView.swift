@@ -1,13 +1,13 @@
-//import SwiftUI
-//#if os(iOS)
+// import SwiftUI
+// #if os(iOS)
 //    import UIKit
-//#elseif os(macOS)
+// #elseif os(macOS)
 //    import AppKit
-//#endif
+// #endif
 //
 //// MARK: - Main Content View
 //
-//struct ProtectorView: View {
+// struct ProtectorView: View {
 //    @StateObject var service: ProtectorService
 //    @State private var currentScreen: Screen = .intro
 //
@@ -35,11 +35,11 @@
 //            }
 //        }
 //    }
-//}
+// }
 //
 //// MARK: - Introduction Screen
 //
-//struct IntroductionView: View {
+// struct IntroductionView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //
 //    var body: some View {
@@ -79,11 +79,11 @@
 //        .padding()
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }
 //
 //// MARK: - Information Screen
 //
-//struct InformationView: View {
+// struct InformationView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //
 //    var body: some View {
@@ -127,11 +127,11 @@
 //        .padding()
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }
 //
 //// MARK: - Settings Screen
 //
-//struct SettingsView: View {
+// struct SettingsView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //    @StateObject var service: ProtectorService
 //    @State private var nightOnly = false
@@ -244,18 +244,18 @@
 //            }
 //        }
 //    }
-//}
+// }
 //
 //// Preview Provider
-//struct SettingsView_Previews: PreviewProvider {
+// struct SettingsView_Previews: PreviewProvider {
 //    static var previews: some View {
 //        SettingsView(currentScreen: .constant(.settings), service: ProtectorService())
 //    }
-//}
+// }
 //
 //// MARK: - Privacy Screen
 //
-//struct PrivacyView: View {
+// struct PrivacyView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //
 //    var body: some View {
@@ -312,11 +312,11 @@
 //        }
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }
 //
 //// MARK: - Scanning Screen
 //
-//struct ScanningView: View {
+// struct ScanningView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //    @State private var progress: [String: CGFloat] = [
 //        //        "instagram": 0.0,
@@ -563,10 +563,10 @@
 //        // This is now handled by the notification observers for Reddit
 //        // Update other network progress here...
 //    }
-//}
+// }
 //
 //// Supporting Views
-//struct NetworkStatusRow: View {
+// struct NetworkStatusRow: View {
 //    let network: String
 //    let progress: CGFloat
 //    let status: String
@@ -618,16 +618,16 @@
 //            "network"
 //        }
 //    }
-//}
+// }
 //
 //// Notification extension for Reddit scanning progress
-//extension Notification.Name {
+// extension Notification.Name {
 //    static let redditScanningProgress = Notification.Name("RedditScanningProgress")
-//}
+// }
 //
 //// MARK: - Impact Screen
 //
-//struct ImpactView: View {
+// struct ImpactView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //
 //    var body: some View {
@@ -664,11 +664,11 @@
 //        }
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }
 //
 //// MARK: - Dashboard Screen
 //
-//struct DashboardView: View {
+// struct DashboardView: View {
 //    @Binding var currentScreen: ProtectorView.Screen
 //    @State private var selectedTimeFrame = 0
 //    let timeFrames = ["Week", "Month", "Year"]
@@ -734,11 +734,11 @@
 //        }
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }
 //
 //// MARK: - Supporting Views
 //
-//struct FeatureCard: View {
+// struct FeatureCard: View {
 //    let icon: String
 //    let title: String
 //    let description: String
@@ -771,11 +771,11 @@
 //                .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
 //        )
 //    }
-//}
+// }
 //
 //// MARK: - Privacy Card
 //
-//struct PrivacyCard: View {
+// struct PrivacyCard: View {
 //    let icon: String
 //    let title: String
 //    let description: String
@@ -783,11 +783,11 @@
 //    var body: some View {
 //        FeatureCard(icon: icon, title: title, description: description)
 //    }
-//}
+// }
 //
 //// MARK: - Info Card
 //
-//struct InfoCard: View {
+// struct InfoCard: View {
 //    let icon: String
 //    let title: String
 //    let description: String
@@ -795,9 +795,9 @@
 //    var body: some View {
 //        FeatureCard(icon: icon, title: title, description: description)
 //    }
-//}
+// }
 //
-//struct SectionTitle: View {
+// struct SectionTitle: View {
 //    let title: String
 //
 //    init(_ title: String) {
@@ -809,9 +809,9 @@
 //            .font(.headline)
 //            .foregroundColor(.arkavoSecondary)
 //    }
-//}
+// }
 //
-//struct ToggleRow: View {
+// struct ToggleRow: View {
 //    let title: String
 //    let subtitle: String
 //    @Binding var isOn: Bool
@@ -838,11 +838,11 @@
 //        .cornerRadius(12)
 //        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
 //    }
-//}
+// }
 //
 //// MARK: - Network Toggle Row
 //
-//struct NetworkToggleRow: View {
+// struct NetworkToggleRow: View {
 //    let network: String
 //    let isSelected: Bool
 //    let action: () -> Void
@@ -893,11 +893,11 @@
 //            )
 //        }
 //    }
-//}
+// }
 //
 //// MARK: - Impact Stats View
 //
-//struct ImpactStatsView: View {
+// struct ImpactStatsView: View {
 //    var body: some View {
 //        VStack(spacing: 20) {
 //            Text("You helped protect")
@@ -925,11 +925,11 @@
 //                .stroke(Color.arkavoBrand.opacity(0.2), lineWidth: 1)
 //        )
 //    }
-//}
+// }
 //
 //// MARK: - Stat Card
 //
-//struct StatCard: View {
+// struct StatCard: View {
 //    let title: String
 //    let value: String
 //    let trend: String
@@ -962,11 +962,11 @@
 //                .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
 //        )
 //    }
-//}
+// }
 //
 //// MARK: - Activity Row
 //
-//struct ActivityRow: View {
+// struct ActivityRow: View {
 //    var body: some View {
 //        HStack {
 //            Circle()
@@ -1002,11 +1002,11 @@
 //                .stroke(Color.arkavoBrand.opacity(0.1), lineWidth: 1)
 //        )
 //    }
-//}
+// }
 //
 //// MARK: - Brand Colors
 //
-//extension Color {
+// extension Color {
 //    static let arkavoBrand = Color(red: 225 / 255, green: 113 / 255, blue: 51 / 255) // Orange from image
 //    static let arkavoText = Color.black
 //    static let arkavoSecondary = Color.gray
@@ -1014,11 +1014,11 @@
 //
 //    // Opacity variants
 //    static let arkavoBrandLight = Color(red: 225 / 255, green: 113 / 255, blue: 51 / 255).opacity(0.1)
-//}
+// }
 //
 //// MARK: - Theme Modifications for Views
 //
-//extension View {
+// extension View {
 //    func brandPrimaryButton() -> some View {
 //        fontWeight(.semibold)
 //            .frame(maxWidth: .infinity)
@@ -1036,17 +1036,17 @@
 //            .foregroundColor(.arkavoBrand)
 //            .cornerRadius(12)
 //    }
-//}
+// }
 //
 //// MARK: - Preview Provider
 //
-//struct ContentView_Previews: PreviewProvider {
+// struct ContentView_Previews: PreviewProvider {
 //    static var previews: some View {
 //        ProtectorView(service: ProtectorService())
 //    }
-//}
+// }
 //
-//struct ShareButton: View {
+// struct ShareButton: View {
 //    private let shareMessage = "I'm helping protect creators with Arkavo! Join me in safeguarding creative content across social networks. 🛡️"
 //
 //    var body: some View {
@@ -1090,10 +1090,10 @@
 //            }
 //        #endif
 //    }
-//}
+// }
 //
 //// Preview Provider
-//struct ShareButton_Previews: PreviewProvider {
+// struct ShareButton_Previews: PreviewProvider {
 //    static var previews: some View {
 //        VStack(spacing: 20) {
 //            ShareButton()
@@ -1101,4 +1101,4 @@
 //        .padding()
 //        .background(Color.arkavoBackground)
 //    }
-//}
+// }

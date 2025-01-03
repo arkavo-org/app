@@ -33,6 +33,7 @@ class PostFeedViewModel: ObservableObject {
     }
 
     private func setupNotifications() {
+        print("PostFeedViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()
@@ -174,12 +175,34 @@ class PostFeedViewModel: ObservableObject {
 
     private func loadThoughts() async {
         isLoading = true
-        // Wait until thoughts have a count greater than 0
+        defer { isLoading = false }
+
+        // First try to load from stream
+        if let postStream = getPostStream() {
+            // Load any cached messages first
+            let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+            let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+            let cachedMessages = cacheManager.getCachedMessages(forStream: postStream.publicID)
+
+            // Process cached messages
+            for (messageId, message) in cachedMessages {
+                do {
+                    try await router.processMessage(message.data, messageId: messageId)
+                } catch {
+                    print("Failed to process cached message: \(error)")
+                }
+            }
+
+            // If still no thoughts, load from stream
+            if thoughts.isEmpty {
+                thoughts = postStream.thoughts.sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+            }
+        }
+
+        // Wait until we have some thoughts to show
         while thoughts.isEmpty {
-            // Sleep for a short duration to avoid busy-waiting
             try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
         }
-        isLoading = false
     }
 
     func getCurrentCreator() -> Creator {

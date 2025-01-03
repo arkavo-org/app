@@ -1,7 +1,7 @@
-//import SwiftData
-//import SwiftUI
+// import SwiftData
+// import SwiftUI
 //
-//struct StreamView: View {
+// struct StreamView: View {
 //    @State var service: StreamService
 //    @State var showingCreateStream = false
 //    @State var showingThoughtView = false
@@ -131,9 +131,9 @@
 //        let account = try await PersistenceController.shared.getOrCreateAccount()
 //        try await PersistenceController.shared.deleteStreams(at: offsets, from: account)
 //    }
-//}
+// }
 //
-//struct StreamManagementView_Previews: PreviewProvider {
+// struct StreamManagementView_Previews: PreviewProvider {
 //    static var previews: some View {
 //        Group {
 //            CreateStreamProfileView { _, _, _, _ in
@@ -179,4 +179,4 @@
 //            fatalError("Failed to create preview container: \(error.localizedDescription)")
 //        }
 //    }
-//}
+// }
