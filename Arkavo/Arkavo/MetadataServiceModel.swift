@@ -75,7 +75,7 @@ public enum Arkavo_ArchiveType: Int8, Enum, Verifiable {
 
 public struct Arkavo_Rating: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -152,7 +152,7 @@ public struct Arkavo_Rating: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Purpose: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -235,7 +235,7 @@ public struct Arkavo_Purpose: FlatBufferObject, Verifiable {
 
 public struct Arkavo_FormatInfo: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -284,7 +284,7 @@ public struct Arkavo_FormatInfo: FlatBufferObject, Verifiable {
 
 public struct Arkavo_ArchiveInfo: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -333,7 +333,7 @@ public struct Arkavo_ArchiveInfo: FlatBufferObject, Verifiable {
 
 public struct Arkavo_ContentFormat: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -350,7 +350,7 @@ public struct Arkavo_ContentFormat: FlatBufferObject, Verifiable {
 
   public var mediaType: Arkavo_MediaType { let o = _accessor.offset(VTOFFSET.mediaType.v); return o == 0 ? .unused : Arkavo_MediaType(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .unused }
   public var dataEncoding: Arkavo_DataEncoding { let o = _accessor.offset(VTOFFSET.dataEncoding.v); return o == 0 ? .binary : Arkavo_DataEncoding(rawValue: _accessor.readBuffer(of: Int8.self, at: o)) ?? .binary }
-  public var format: Arkavo_FormatInfo? { let o = _accessor.offset(VTOFFSET.format.v); return o == 0 ? nil : Arkavo_FormatInfo(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var format: Arkavo_FormatInfo? { let o = _accessor.offset(VTOFFSET.format.v); return o == 0 ? nil : Arkavo_FormatInfo(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public static func startContentFormat(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 3) }
   public static func add(mediaType: Arkavo_MediaType, _ fbb: inout FlatBufferBuilder) { fbb.add(element: mediaType.rawValue, def: 0, at: VTOFFSET.mediaType.p) }
   public static func add(dataEncoding: Arkavo_DataEncoding, _ fbb: inout FlatBufferBuilder) { fbb.add(element: dataEncoding.rawValue, def: 0, at: VTOFFSET.dataEncoding.p) }
@@ -380,7 +380,7 @@ public struct Arkavo_ContentFormat: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -409,14 +409,14 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
   public var relatedCount: Int32 { let o = _accessor.offset(VTOFFSET.related.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func related(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.related.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
   public var related: [UInt8] { return _accessor.getVector(at: VTOFFSET.related.v) ?? [] }
-  public var rating: Arkavo_Rating? { let o = _accessor.offset(VTOFFSET.rating.v); return o == 0 ? nil : Arkavo_Rating(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var purpose: Arkavo_Purpose? { let o = _accessor.offset(VTOFFSET.purpose.v); return o == 0 ? nil : Arkavo_Purpose(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var rating: Arkavo_Rating? { let o = _accessor.offset(VTOFFSET.rating.v); return o == 0 ? nil : Arkavo_Rating(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var purpose: Arkavo_Purpose? { let o = _accessor.offset(VTOFFSET.purpose.v); return o == 0 ? nil : Arkavo_Purpose(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var hasTopics: Bool { let o = _accessor.offset(VTOFFSET.topics.v); return o == 0 ? false : true }
   public var topicsCount: Int32 { let o = _accessor.offset(VTOFFSET.topics.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func topics(at index: Int32) -> UInt32 { let o = _accessor.offset(VTOFFSET.topics.v); return o == 0 ? 0 : _accessor.directRead(of: UInt32.self, offset: _accessor.vector(at: o) + index * 4) }
   public var topics: [UInt32] { return _accessor.getVector(at: VTOFFSET.topics.v) ?? [] }
-  public var archive: Arkavo_ArchiveInfo? { let o = _accessor.offset(VTOFFSET.archive.v); return o == 0 ? nil : Arkavo_ArchiveInfo(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var content: Arkavo_ContentFormat? { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? nil : Arkavo_ContentFormat(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var archive: Arkavo_ArchiveInfo? { let o = _accessor.offset(VTOFFSET.archive.v); return o == 0 ? nil : Arkavo_ArchiveInfo(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var content: Arkavo_ContentFormat? { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? nil : Arkavo_ContentFormat(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public static func startMetadata(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 8) }
   public static func add(created: Int64, _ fbb: inout FlatBufferBuilder) { fbb.add(element: created, def: 0, at: VTOFFSET.created.p) }
   public static func addVectorOf(id: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: id, at: VTOFFSET.id.p) }
