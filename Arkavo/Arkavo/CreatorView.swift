@@ -431,19 +431,27 @@ struct VideoThoughtView: View {
 
 struct CreatorPostsSection: View {
     @StateObject var viewModel: CreatorViewModel
+    @EnvironmentObject var sharedState: SharedState
 
     var body: some View {
         LazyVStack(spacing: 16) {
-            ForEach(viewModel.postThoughts.map { thought in
-                CreatorPost(
+            ForEach(viewModel.postThoughts) { thought in
+                CreatorPostCard(post: CreatorPost(
                     id: thought.id.uuidString,
                     content: thought.metadata.summary,
                     mediaURL: nil,
                     timestamp: thought.metadata.createdAt,
                     tierAccess: .basic
-                )
-            }) { post in
-                CreatorPostCard(post: post)
+                ))
+                .onTapGesture {
+                    // Set selected post and switch to social tab
+                    sharedState.selectedThought = thought
+                    sharedState.selectedTab = .social
+                    let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+                    Task {
+                        try await router.processMessage(thought.nano)
+                    }
+                }
             }
         }
         .padding()
