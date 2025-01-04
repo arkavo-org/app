@@ -86,7 +86,7 @@ public enum Arkavo_EventData: UInt8, UnionEnum {
 
 public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -159,7 +159,7 @@ public struct Arkavo_UserEvent: FlatBufferObject, Verifiable {
 
 public struct Arkavo_CacheEvent: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -219,7 +219,7 @@ public struct Arkavo_CacheEvent: FlatBufferObject, Verifiable {
 
 public struct Arkavo_RouteEvent: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -299,7 +299,7 @@ public struct Arkavo_RouteEvent: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Event: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 

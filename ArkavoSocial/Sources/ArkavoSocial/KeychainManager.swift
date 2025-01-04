@@ -8,6 +8,7 @@ public class KeychainManager {
         case duplicateItem
         case unknown(OSStatus)
         case itemNotFound
+        case invalidHandle
     }
 
     static func save(value: String, service: String, account: String) {
@@ -232,6 +233,57 @@ public class KeychainManager {
 }
 
 extension KeychainManager {
+    
+    // DID and Handle pair management
+    public static func saveHandle(_ handle: String) throws {
+        guard !handle.isEmpty else {
+            throw KeychainError.invalidHandle
+        }
+        try save(handle.data(using: .utf8)!,
+                service: "com.arkavo.identity",
+                account: "handle")
+    }
+
+    public static func getHandle() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.identity", account: "handle")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    public static func saveIdentityPair(handle: String, did: String) throws {
+        // Save handle first
+        try saveHandle(handle)
+        // Then save DID using existing method
+        try save(did.data(using: .utf8)!,
+                service: "com.arkavo.identity",
+                account: "did")
+    }
+
+    public static func getIdentityPair() -> (handle: String, did: String)? {
+        guard let handle = getHandle(),
+              let did = getDID() else {
+            return nil
+        }
+        return (handle: handle, did: did)
+    }
+
+    public static func getDID() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.identity", account: "did")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    public static func deleteIdentityPair() {
+        try? delete(service: "com.arkavo.identity", account: "handle")
+        try? delete(service: "com.arkavo.identity", account: "did")
+    }
+   
     // MARK: - DID Key Management
 
     enum DIDKeyError: Error {
@@ -373,6 +425,61 @@ extension KeychainManager {
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unknown(status)
         }
+    }
+    
+    // Arkavo Handle
+    public static func saveArkavoHandle(_ handle: String) throws {
+        try save(handle.data(using: .utf8)!,
+                 service: "com.arkavo.handle",
+                 account: "arkavo")
+    }
+    
+    public static func getArkavoHandle() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.handle",
+                              account: "arkavo")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+    
+    // Arkavo DID
+    public static func saveArkavoDID(_ did: String) throws {
+        try save(did.data(using: .utf8)!,
+                 service: "com.arkavo.did",
+                 account: "arkavo")
+    }
+    
+    public static func getArkavoDID() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.did",
+                              account: "arkavo")
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+    
+    // Helper to save both at once
+    public static func saveArkavoCredentials(handle: String, did: String) throws {
+        try saveArkavoHandle(handle)
+        try saveArkavoDID(did)
+    }
+    
+    // Helper to get both at once
+    public static func getArkavoCredentials() -> (handle: String, did: String)? {
+        guard let handle = getArkavoHandle(),
+              let did = getArkavoDID() else {
+            return nil
+        }
+        return (handle: handle, did: did)
+    }
+    
+    // Helper to delete both
+    public static func deleteArkavoCredentials() {
+        try? delete(service: "com.arkavo.handle", account: "arkavo")
+        try? delete(service: "com.arkavo.did", account: "arkavo")
     }
 }
 

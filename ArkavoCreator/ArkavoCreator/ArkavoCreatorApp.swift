@@ -1,4 +1,6 @@
 import ArkavoSocial
+import AuthenticationServices
+import LocalAuthentication
 import SwiftData
 import SwiftUI
 
@@ -23,6 +25,24 @@ struct ArkavoCreatorApp: App {
         clientSecret: Secrets.youtubeClientSecret,
         redirectUri: "urn:ietf:wg:oauth:2.0:oob"
     )
+    let arkavoClient: ArkavoClient
+
+    init() {
+        arkavoClient = ArkavoClient(
+            authURL: URL(string: "https://webauthn.arkavo.net")!,
+            websocketURL: URL(string: "wss://100.arkavo.net")!,
+            relyingPartyID: "webauthn.arkavo.net",
+            curve: .p256
+        )
+        ViewModelFactory.shared.serviceLocator.register(arkavoClient)
+        // TODO: Initialize router
+//        let router = ArkavoMessageRouter(
+//            client: client,
+//            persistenceController: PersistenceController.shared
+//        )
+//        _messageRouter = StateObject(wrappedValue: router)
+//        ViewModelFactory.shared.serviceLocator.register(router)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -148,5 +168,95 @@ class AppState: ObservableObject {
     init() {
         // Default to enabled if no value is set
         isFeedbackEnabled = UserDefaults.standard.object(forKey: "isFeedbackEnabled") as? Bool ?? true
+    }
+}
+
+final class ServiceLocator {
+    private var services: [String: Any] = [:]
+
+    func register<T>(_ service: T) {
+        let key = String(describing: T.self)
+        services[key] = service
+    }
+
+    func resolve<T>() -> T {
+        let key = String(describing: T.self)
+        guard let service = services[key] as? T else {
+            fatalError("No registered service for type \(T.self)")
+        }
+        return service
+    }
+}
+
+final class ViewModelFactory {
+    @MainActor public static let shared = ViewModelFactory(serviceLocator: ServiceLocator())
+    public let serviceLocator: ServiceLocator
+    private var messageDelegate: ArkavoMessageChainDelegate?
+
+    private init(serviceLocator: ServiceLocator) {
+        self.serviceLocator = serviceLocator
+    }
+
+    @MainActor
+    func makeWorkflowViewModel() -> WorkflowViewModel {
+        let client = serviceLocator.resolve() as ArkavoClient
+        // Create message delegate if it doesn't exist
+        if messageDelegate == nil {
+            messageDelegate = ArkavoMessageChainDelegate(client: client, existingDelegate: nil)
+        }
+        return WorkflowViewModel(client: client, messageDelegate: messageDelegate!)
+    }
+}
+
+class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegate {
+    private let continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>
+
+    init(continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>) {
+        self.continuation = continuation
+        super.init()
+    }
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("\n=== WebAuthn Authorization Completed ===")
+        guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
+            print("Error: Invalid credential type received")
+            continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
+            return
+        }
+        continuation.resume(returning: credential)
+    }
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("\n=== WebAuthn Authorization Error ===")
+        print("Error occurred: \(error.localizedDescription)")
+        if let authError = error as? ASAuthorizationError {
+            print("Authorization Error Code: \(authError.code.rawValue)")
+        }
+        continuation.resume(throwing: error)
+    }
+}
+
+// Helper classes to maintain strong references
+private class DelegateBox {
+    let delegate: AnyObject
+    init(delegate: AnyObject) {
+        self.delegate = delegate
+    }
+}
+
+private enum AssociatedKeys {
+    @MainActor static var delegateKey = "delegateKey"
+    @MainActor static var providerKey = "providerKey"
+}
+
+class DefaultMacPresentationProvider: NSObject, ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
+        print("Providing presentation anchor...")
+        guard let window = NSApplication.shared.windows.first else {
+            print("Warning: No window found, creating new window")
+            return NSWindow()
+        }
+        print("Using window: \(window)")
+        return window
     }
 }

@@ -21,9 +21,9 @@ struct ArkavoApp: App {
 
     init() {
         client = ArkavoClient(
-            authURL: URL(string: "https://arkavo.net")!,
-            websocketURL: URL(string: "wss://kas.arkavo.net")!,
-            relyingPartyID: "arkavo.net",
+            authURL: URL(string: "https://webauthn.arkavo.net")!,
+            websocketURL: URL(string: "wss://100.arkavo.net")!,
+            relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
@@ -34,6 +34,12 @@ struct ArkavoApp: App {
         )
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
+        do {
+            let cacheManager = try MessageCacheManager()
+            ViewModelFactory.shared.serviceLocator.register(cacheManager)
+        } catch {
+            print("Failed to initialize message cache: \(error)")
+        }
     }
 
     var body: some Scene {
@@ -134,8 +140,8 @@ struct ArkavoApp: App {
     private func saveProfile(profile: Profile) async -> Bool {
         do {
             // Generate default handle from name
-            let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "")
-            
+            let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "-")
+
             // Generate DID key and get the DID string
             let did: String
             do {
@@ -151,17 +157,17 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             // Finalize the profile with DID and handle
             profile.finalizeRegistration(did: did, handle: handle)
-            
+
             // Complete WebAuthn registration
             do {
-                let token = try await client.registerUser(accountName: profile.name, handle: handle, did: did)
+                let token = try await client.registerUser(handle: handle, did: did)
                 try KeychainManager.saveAuthenticationToken(token)
             } catch let error as ArkavoError {
                 switch error {
-                case .authenticationFailed(let message):
+                case let .authenticationFailed(message):
                     connectionError = ConnectionError(
                         title: "Registration Failed",
                         message: message,
@@ -201,11 +207,11 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
             account.profile = profile
-            
+
             // Create streams
             do {
                 let videoStream = try await createVideoStream(account: account, profile: profile)
@@ -221,9 +227,9 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
             ViewModelFactory.shared.setAccount(account)
-            
+
             // Connect with WebAuthn
             do {
                 try await client.connect(accountName: profile.name)
@@ -231,7 +237,7 @@ struct ArkavoApp: App {
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
-                    selectedView = .main  // Only change view on complete success
+                    selectedView = .main // Only change view on complete success
                 }
             } catch {
                 print("Failed to connect: \(error)")
@@ -243,7 +249,7 @@ struct ArkavoApp: App {
                 )
                 return false
             }
-            
+
         } catch {
             print("Failed to save profile: \(error)")
             connectionError = ConnectionError(
@@ -591,6 +597,7 @@ enum ArkavoError: Error {
     case messageError(String)
     case notConnected
     case invalidState
+    case invalidEvent(String)
 }
 
 class SharedState: ObservableObject {

@@ -143,7 +143,7 @@ public enum Arkavo_Entity: UInt8, UnionEnum {
 
 public struct Arkavo_PublicId: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -181,7 +181,7 @@ public struct Arkavo_PublicId: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Account: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -196,9 +196,9 @@ public struct Arkavo_Account: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public static func startAccount(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 3) }
   public static func add(publicId: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: publicId, at: VTOFFSET.publicId.p) }
   public static func add(profile: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: profile, at: VTOFFSET.profile.p) }
@@ -228,7 +228,7 @@ public struct Arkavo_Account: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Stream: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -246,10 +246,10 @@ public struct Arkavo_Stream: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var profile: Arkavo_Profile? { let o = _accessor.offset(VTOFFSET.profile.v); return o == 0 ? nil : Arkavo_Profile(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var activity: Arkavo_Activity? { let o = _accessor.offset(VTOFFSET.activity.v); return o == 0 ? nil : Arkavo_Activity(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var hasMembersPublicId: Bool { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? false : true }
   public var membersPublicIdCount: Int32 { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func membersPublicId(at index: Int32) -> Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.membersPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(_accessor.vector(at: o) + index * 4)) }
@@ -295,7 +295,7 @@ public struct Arkavo_Stream: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Thought: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -312,9 +312,9 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
     var p: VOffset { self.rawValue }
   }
 
-  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
-  public var streamPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.streamPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.postion)) }
+  public var publicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.publicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var creatorPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.creatorPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
+  public var streamPublicId: Arkavo_PublicId? { let o = _accessor.offset(VTOFFSET.streamPublicId.v); return o == 0 ? nil : Arkavo_PublicId(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var hasContent: Bool { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? false : true }
   public var contentCount: Int32 { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func content(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
@@ -357,7 +357,7 @@ public struct Arkavo_Thought: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Profile: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -432,7 +432,7 @@ public struct Arkavo_Profile: FlatBufferObject, Verifiable {
 
 public struct Arkavo_Activity: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 
@@ -485,7 +485,7 @@ public struct Arkavo_Activity: FlatBufferObject, Verifiable {
 
 public struct Arkavo_EntityRoot: FlatBufferObject, Verifiable {
 
-  static func validateVersion() { FlatBuffersVersion_24_3_25() }
+  static func validateVersion() { FlatBuffersVersion_24_12_23() }
   public var __buffer: ByteBuffer! { return _accessor.bb }
   private var _accessor: Table
 

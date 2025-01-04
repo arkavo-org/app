@@ -195,6 +195,7 @@ struct VideoPlayerView: View {
     private let swipeThreshold: CGFloat = 50
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
+    private let servers: [Server]
 
     init(video: Video,
          viewModel: VideoFeedViewModel,
@@ -203,6 +204,7 @@ struct VideoPlayerView: View {
         self.video = video
         self.viewModel = viewModel
         self.size = size
+        servers = viewModel.servers()
     }
 
     var body: some View {
@@ -241,7 +243,7 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            servers: viewModel.servers(),
+                            servers: servers,
                             comments: video.comments,
                             showChat: $showChat
                         )
@@ -465,9 +467,14 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
         self.account = account
         self.profile = profile
         setupNotifications()
+        // Load initial videos
+        Task {
+            await loadVideos()
+        }
     }
 
     private func setupNotifications() {
+        print("VideoFeedViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()
@@ -512,6 +519,42 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             }
         }
         notificationObservers.append(errorObserver)
+    }
+
+    private func loadVideos() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        // First try to load from stream
+        if let videoStream = try? await getOrCreateVideoStream() {
+            // Load any cached messages first
+            let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+            let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+            let cachedMessages = cacheManager.getCachedMessages(forStream: videoStream.publicID)
+
+            // Process cached messages
+            for (messageId, message) in cachedMessages {
+                do {
+                    try await router.processMessage(message.data, messageId: messageId)
+                } catch {
+                    print("Failed to process cached message: \(error)")
+                }
+            }
+
+            // If still no videos, load from stream's thoughts
+            if videos.isEmpty {
+                for thought in videoStream.thoughts {
+                    print("thought: \(thought.publicID) \(thought.nano.count)")
+                }
+            }
+            // Wait for a limited time if we still have no videos
+            let maxAttempts = 10 // 1 second total wait
+            var attempts = 0
+            while videos.isEmpty, attempts < maxAttempts {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                attempts += 1
+            }
+        }
     }
 
     deinit {
@@ -583,6 +626,49 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 self.error = error
             }
         }
+    }
+
+    func servers() -> [Server] {
+        let servers = account.streams.map { stream in
+            Server(
+                id: stream.id.uuidString,
+                name: stream.profile.name,
+                imageURL: nil,
+                icon: iconForStream(stream),
+                unreadCount: stream.thoughts.count,
+                hasNotification: !stream.thoughts.isEmpty,
+                description: "description",
+                policies: StreamPolicies(
+                    agePolicy: .onlyKids,
+                    admissionPolicy: .open,
+                    interactionPolicy: .open
+                )
+            )
+        }
+        return servers
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        // Convert the publicID to a hash value
+        let hashValue = stream.publicID.hashValue
+
+        // Use the hash value modulo 32 to determine the icon
+        let iconIndex = abs(hashValue) % 32
+
+        // Define an array of 32 SF Symbols
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
+        ]
+
+        // Ensure the iconIndex is within bounds
+        return iconNames[iconIndex]
     }
 
     func cleanupOldCacheFiles() {
@@ -679,89 +765,6 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             } catch {
                 self.error = error
             }
-        }
-    }
-
-    func loadMoreVideosIfNeeded(currentIndex: Int) {
-        // Load more videos when user reaches near the end
-        if currentIndex >= videos.count - 2 {
-            loadMoreVideos()
-        }
-    }
-
-    private func loadMoreVideos() {
-        guard !isLoading else { return }
-        isLoading = true
-
-        Task {
-            do {
-                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
-
-                // In a real app, this would be an API call
-                let newVideos = [
-                    Video(
-                        id: UUID().uuidString,
-                        url: URL(string: "https://example.com/video4.mp4")!,
-                        contributors: [],
-                        description: "Tech tutorial collab 💻",
-                        likes: 950,
-                        comments: 85,
-                        shares: 40
-                    ),
-                ]
-
-                await MainActor.run {
-                    videos.append(contentsOf: newVideos)
-                    isLoading = false
-                }
-
-                // Preload new videos
-                for video in newVideos {
-                    preloadVideo(url: video.url)
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error
-                    isLoading = false
-                }
-            }
-        }
-    }
-
-    func servers() -> [Server] {
-        let allStreams = account.streams
-        let streams = allStreams.filter { stream in
-            stream.isGroupChatStream
-        }
-        let servers = streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
-        return servers
-    }
-
-    private func iconForStream(_ stream: Stream) -> String {
-        switch stream.policies.age {
-        case .onlyAdults:
-            "person.fill"
-        case .onlyKids:
-            "figure.child"
-        case .forAll:
-            "figure.wave"
-        case .onlyTeens:
-            "person.3.fill"
         }
     }
 }

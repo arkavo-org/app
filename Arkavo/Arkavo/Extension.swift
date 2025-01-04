@@ -1,5 +1,7 @@
+import AVFoundation
 import Compression
 import Foundation
+import UIKit
 
 extension DateFormatter {
     static let shortDateTime: DateFormatter = {
@@ -129,85 +131,122 @@ extension String {
 
 // MARK: - Data Compression Extensions
 
-extension Data {
-    func compressed() throws -> Data {
-        guard !isEmpty else { return self }
+// extension Data {
+//    func compressed() throws -> Data {
+//        guard !isEmpty else { return self }
+//
+//        let sourceSize = count
+//        let destinationSize = sourceSize + 64 * 1024 // Add headroom for compression
+//        var destinationBuffer = Data(count: destinationSize)
+//
+//        let result = try destinationBuffer.withUnsafeMutableBytes { destinationPtr -> Int in
+//            guard let destinationAddress = destinationPtr.baseAddress else {
+//                throw CompressionError.invalidPointer
+//            }
+//
+//            return try self.withUnsafeBytes { sourcePtr -> Int in
+//                guard let sourceAddress = sourcePtr.baseAddress else {
+//                    throw CompressionError.invalidPointer
+//                }
+//
+//                return compression_encode_buffer(
+//                    destinationAddress.assumingMemoryBound(to: UInt8.self),
+//                    destinationSize,
+//                    sourceAddress.assumingMemoryBound(to: UInt8.self),
+//                    sourceSize,
+//                    nil,
+//                    COMPRESSION_LZFSE
+//                )
+//            }
+//        }
+//
+//        guard result > 0 else {
+//            throw CompressionError.compressionFailed
+//        }
+//
+//        return destinationBuffer.prefix(result)
+//    }
+//
+//    func decompressed() throws -> Data {
+//        guard !isEmpty else { return self }
+//
+//        let sourceSize = count
+//        let destinationSize = sourceSize * 4 // Estimate expanded size
+//        var destinationBuffer = Data(count: destinationSize)
+//
+//        let result = try destinationBuffer.withUnsafeMutableBytes { destinationPtr -> Int in
+//            guard let destinationAddress = destinationPtr.baseAddress else {
+//                throw CompressionError.invalidPointer
+//            }
+//
+//            return try self.withUnsafeBytes { sourcePtr -> Int in
+//                guard let sourceAddress = sourcePtr.baseAddress else {
+//                    throw CompressionError.invalidPointer
+//                }
+//
+//                return compression_decode_buffer(
+//                    destinationAddress.assumingMemoryBound(to: UInt8.self),
+//                    destinationSize,
+//                    sourceAddress.assumingMemoryBound(to: UInt8.self),
+//                    sourceSize,
+//                    nil,
+//                    COMPRESSION_LZFSE
+//                )
+//            }
+//        }
+//
+//        guard result > 0 else {
+//            throw CompressionError.decompressionFailed
+//        }
+//
+//        return destinationBuffer.prefix(result)
+//    }
+//
+//    /// Get compression ratio
+//    var compressionRatio: Double {
+//        guard !isEmpty else { return 1.0 }
+//        do {
+//            let compressed = try compressed()
+//            return Double(compressed.count) / Double(count)
+//        } catch {
+//            return 1.0
+//        }
+//    }
+// }
 
-        let sourceSize = count
-        let destinationSize = sourceSize + 64 * 1024 // Add headroom for compression
-        var destinationBuffer = Data(count: destinationSize)
+extension UIImage {
+    func heifData(maxSizeBytes: Int = 1_048_576, initialQuality: CGFloat = 0.9) -> Data? {
+        var compressionQuality = initialQuality
+        var imageData: Data?
 
-        let result = try destinationBuffer.withUnsafeMutableBytes { destinationPtr -> Int in
-            guard let destinationAddress = destinationPtr.baseAddress else {
-                throw CompressionError.invalidPointer
+        while compressionQuality > 0.1 {
+            let data = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, AVFileType.heic as CFString, 1, nil) else {
+                return nil
             }
 
-            return try self.withUnsafeBytes { sourcePtr -> Int in
-                guard let sourceAddress = sourcePtr.baseAddress else {
-                    throw CompressionError.invalidPointer
+            let options: [CFString: Any] = [
+                kCGImageDestinationLossyCompressionQuality: compressionQuality,
+                kCGImageDestinationOptimizeColorForSharing: true,
+            ]
+
+            guard let cgImage else {
+                return nil
+            }
+
+            CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
+
+            if CGImageDestinationFinalize(destination) {
+                imageData = data as Data
+                if let imageData, imageData.count <= maxSizeBytes {
+                    return imageData
                 }
-
-                return compression_encode_buffer(
-                    destinationAddress.assumingMemoryBound(to: UInt8.self),
-                    destinationSize,
-                    sourceAddress.assumingMemoryBound(to: UInt8.self),
-                    sourceSize,
-                    nil,
-                    COMPRESSION_LZFSE
-                )
-            }
-        }
-
-        guard result > 0 else {
-            throw CompressionError.compressionFailed
-        }
-
-        return destinationBuffer.prefix(result)
-    }
-
-    func decompressed() throws -> Data {
-        guard !isEmpty else { return self }
-
-        let sourceSize = count
-        let destinationSize = sourceSize * 4 // Estimate expanded size
-        var destinationBuffer = Data(count: destinationSize)
-
-        let result = try destinationBuffer.withUnsafeMutableBytes { destinationPtr -> Int in
-            guard let destinationAddress = destinationPtr.baseAddress else {
-                throw CompressionError.invalidPointer
             }
 
-            return try self.withUnsafeBytes { sourcePtr -> Int in
-                guard let sourceAddress = sourcePtr.baseAddress else {
-                    throw CompressionError.invalidPointer
-                }
-
-                return compression_decode_buffer(
-                    destinationAddress.assumingMemoryBound(to: UInt8.self),
-                    destinationSize,
-                    sourceAddress.assumingMemoryBound(to: UInt8.self),
-                    sourceSize,
-                    nil,
-                    COMPRESSION_LZFSE
-                )
-            }
+            compressionQuality -= 0.1
         }
 
-        guard result > 0 else {
-            throw CompressionError.decompressionFailed
-        }
-
-        return destinationBuffer.prefix(result)
-    }
-
-    /// Get compression ratio
-    var compressionRatio: Double {
-        guard !isEmpty else { return 1.0 }
-        do {
-            let compressed = try compressed()
-            return Double(compressed.count) / Double(count)
-        } catch {
-            return 1.0
-        }
+        // If we couldn't get it under the limit, return nil or consider other options
+        return nil
     }
 }

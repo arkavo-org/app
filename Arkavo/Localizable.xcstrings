@@ -27,16 +27,7 @@
         }
       }
     },
-    "%lld%%" : {
-
-    },
     "•" : {
-
-    },
-    "2m ago" : {
-
-    },
-    "512" : {
 
     },
     "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
@@ -64,9 +55,6 @@
           }
         }
       }
-    },
-    "across 16 Social Networks" : {
-
     },
     "Activity Level: %@" : {
 
@@ -108,10 +96,7 @@
     "Audio message" : {
 
     },
-    "Authenticating..." : {
-
-    },
-    "Authentication Status" : {
+    "Available" : {
 
     },
     "Back" : {
@@ -124,18 +109,6 @@
 
     },
     "Blurb: %@" : {
-
-    },
-    "By enabling content protection, you'll help identify unauthorized uses of creators' work across social networks." : {
-
-    },
-    "Camera" : {
-
-    },
-    "Camera Location Protected" : {
-
-    },
-    "Camera Time Protected" : {
 
     },
     "Cancel" : {
@@ -163,19 +136,14 @@
     "Connecting..." : {
 
     },
-    "Content Protection" : {
-
-    },
     "Contributors" : {
 
     },
     "Create" : {
 
     },
-    "Create New Stream" : {
-
-    },
     "Create Profile" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -195,15 +163,6 @@
         }
       }
     },
-    "Creators" : {
-
-    },
-    "Customize Settings" : {
-
-    },
-    "Customize Your Contribution" : {
-
-    },
     "Data mode" : {
 
     },
@@ -220,16 +179,13 @@
         }
       }
     },
-    "Empty" : {
-
-    },
     "Enable passkeys" : {
 
     },
     "Encryption" : {
 
     },
-    "Enter profile name" : {
+    "Enter handle" : {
 
     },
     "Error" : {
@@ -249,9 +205,6 @@
 
     },
     "Error: %@" : {
-
-    },
-    "Every day, content creators face challenges protecting their work online. You can make a real difference!" : {
 
     },
     "Expert Level: %@" : {
@@ -275,12 +228,6 @@
     "Home" : {
 
     },
-    "How It Works" : {
-
-    },
-    "I Understand" : {
-
-    },
     "Identity" : {
 
     },
@@ -301,12 +248,6 @@
 
     },
     "Invite Friends" : {
-
-    },
-    "Join the Movement to Protect Creators" : {
-
-    },
-    "Keep it up! Your contribution safeguards the creative community." : {
 
     },
     "Last known location: %lf, %lf" : {
@@ -359,9 +300,6 @@
         }
       }
     },
-    "Learn More" : {
-
-    },
     "Learn more, view our" : {
 
     },
@@ -374,9 +312,6 @@
     "Location Permission" : {
 
     },
-    "Location Picker Placeholder" : {
-
-    },
     "Location: %@" : {
 
     },
@@ -384,6 +319,7 @@
 
     },
     "Map" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -403,9 +339,6 @@
 
     },
     "My Account" : {
-
-    },
-    "My Streams" : {
 
     },
     "Name: %@" : {
@@ -432,7 +365,7 @@
     "Next" : {
 
     },
-    "No Active Streams" : {
+    "Not available" : {
 
     },
     "Not available on macOS" : {
@@ -449,12 +382,6 @@
       }
     },
     "Owner:" : {
-
-    },
-    "Pause Scanning" : {
-
-    },
-    "Photo" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
@@ -480,12 +407,6 @@
 
     },
     "Privacy" : {
-
-    },
-    "Privacy Policy" : {
-
-    },
-    "Process File..." : {
 
     },
     "Processing..." : {
@@ -525,13 +446,7 @@
     "Protect" : {
 
     },
-    "Protecting Creators in Progress" : {
-
-    },
     "Public ID" : {
-
-    },
-    "Read Our Full Privacy Policy" : {
 
     },
     "Ready to join?" : {
@@ -548,13 +463,7 @@
     "Recall" : {
 
     },
-    "Recent Activity" : {
-
-    },
     "Recording Error" : {
-
-    },
-    "Reddit • 2 issues found" : {
 
     },
     "Refine Interests" : {
@@ -574,9 +483,6 @@
     "Resend" : {
 
     },
-    "Resume Scanning" : {
-
-    },
     "Retry" : {
 
     },
@@ -589,15 +495,6 @@
           }
         }
       }
-    },
-    "Save and Start Protecting" : {
-
-    },
-    "Scan" : {
-
-    },
-    "Scan Completed" : {
-
     },
     "Section" : {
 
@@ -615,6 +512,7 @@
 
     },
     "Share" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -644,9 +542,6 @@
         }
       }
     },
-    "Share Your Impact" : {
-
-    },
     "Share your thought..." : {
 
     },
@@ -673,6 +568,7 @@
       }
     },
     "Start" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -693,16 +589,11 @@
         }
       }
     },
-    "Start New Scan" : {
-
-    },
     "Start Verification" : {
 
     },
-    "Sticker Picker Placeholder" : {
-
-    },
     "Stop" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -739,10 +630,8 @@
     "Stream not found" : {
 
     },
-    "Stream not set" : {
-
-    },
     "Streams" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -767,9 +656,6 @@
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
-    "Thank You for Making a Difference!" : {
-
-    },
     "The stream you're looking for couldn't be found" : {
 
     },
@@ -777,6 +663,7 @@
 
     },
     "Thought service is unavailable" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -785,9 +672,6 @@
           }
         }
       }
-    },
-    "Time Frame" : {
-
     },
     "Topic of Interest" : {
 
@@ -824,6 +708,7 @@
 
     },
     "Video" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -834,12 +719,6 @@
       }
     },
     "Video message" : {
-
-    },
-    "View Dashboard" : {
-
-    },
-    "View Results" : {
 
     },
     "View Secure Stream" : {
@@ -887,16 +766,7 @@
     "What We are Discussing" : {
 
     },
-    "You helped protect" : {
-
-    },
-    "Your Privacy Matters" : {
-
-    },
-    "Your profile name must be unique with arkavo.social" : {
-
-    },
-    "Your Protection Stats" : {
+    "Your handle must be unique within arkavo.social" : {
 
     }
   },

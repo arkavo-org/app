@@ -78,6 +78,8 @@
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
+		DAF5E9D32D276C0300016EBE /* ArkavoMessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */; };
+		DAF5E9D72D27761900016EBE /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,6 +168,8 @@
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
+		DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageCache.swift; sourceTree = "<group>"; };
+		DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -233,8 +237,9 @@
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
+				DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */,
+				DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */,
 				DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */,
-				DA24F91E2CB1D044003211CD /* Topics.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
 				DA0FEC402C586DF700C0A010 /* Stream.swift */,
@@ -275,8 +280,9 @@
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
 				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
-				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
 				DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */,
+				DA24F91E2CB1D044003211CD /* Topics.swift */,
+				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
 				DA44D8842CF6E16F0007C89B /* Secrets.swift */,
 				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
@@ -491,6 +497,7 @@
 				DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */,
 				DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
+				DAF5E9D72D27761900016EBE /* MessageCacheManager.swift in Sources */,
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
@@ -522,6 +529,7 @@
 				DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
+				DAF5E9D32D276C0300016EBE /* ArkavoMessageCache.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
@@ -955,7 +963,7 @@
 			repositoryURL = "https://github.com/google/flatbuffers.git";
 			requirement = {
 				kind = exactVersion;
-				version = 24.3.25;
+				version = 24.12.23;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
