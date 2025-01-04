@@ -661,9 +661,7 @@ struct ImmersiveThoughtCard: View {
                         GroupChatIconList(
                             currentVideo: nil,
                             currentThought: thought,
-                            servers: viewModel.servers(),
-                            comments: 0,
-                            showChat: $showChat
+                            servers: viewModel.servers()
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -683,8 +681,7 @@ struct ImmersiveThoughtCard: View {
         }
         .sheet(isPresented: $showChat) {
             if let postStream = viewModel.getPostStream() {
-                let chatViewModel = ViewModelFactory.shared.makeChatViewModel(stream: postStream)
-                ChatView(viewModel: chatViewModel)
+                ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: postStream))
             }
         }
     }

@@ -543,7 +543,7 @@ struct GroupChatView: View {
                     GroupCreateView()
                 }
             }
-            .onChange(of: sharedState.selectedServer) { _, newServer in
+            .onChange(of: sharedState.selectedStream) { _, newServer in
                 if let newServer {
                     // Find the corresponding stream in the viewModel.streams
                     if let stream = viewModel.streams.first(where: { $0.id == newServer.id }) {

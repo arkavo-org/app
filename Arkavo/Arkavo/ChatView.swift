@@ -14,8 +14,6 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            connectionStatusBar
-
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(viewModel.messages) { message in
@@ -50,32 +48,6 @@ struct ChatView: View {
             Text(errorMessage)
         }
     }
-
-    private var connectionStatusBar: some View {
-        HStack {
-            switch viewModel.connectionState {
-            case .connected:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                Text("Connected")
-            case .connecting, .authenticating:
-                ProgressView()
-                Text("Connecting...")
-            case .disconnected:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.orange)
-                Text("Disconnected")
-            case let .error(error):
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.red)
-                Text("Error: \(error.localizedDescription)")
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal)
-        .background(Color(.systemBackground))
-        .shadow(radius: 1)
-    }
 }
 
 // MARK: - Supporting Views
@@ -85,6 +57,7 @@ struct MessageInputBar: View {
     let placeholder: String
     let onAttachmentTap: () -> Void
     let onSend: () -> Void
+    @FocusState var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,6 +71,7 @@ struct MessageInputBar: View {
 
                 TextField(placeholder, text: $messageText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($isFocused)
 
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -306,6 +280,93 @@ struct ReactionButton: View {
             .background(reaction.hasReacted ? Color.blue.opacity(0.2) : Color.secondary.opacity(0.2))
             .cornerRadius(12)
         }
+    }
+}
+
+struct ChatOverlay: View {
+    @EnvironmentObject var sharedState: SharedState
+    @FocusState private var isChatFieldFocused: Bool
+
+    var body: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation {
+                        sharedState.showChatOverlay = false
+                    }
+                }
+                .zIndex(1)
+
+            // Chat content
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Comments")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation {
+                            sharedState.showChatOverlay = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+
+                // Chat view
+                if let stream = getAppropriateStream() {
+                    ChatView(
+                        viewModel: ViewModelFactory.shared.makeChatViewModel(
+                            stream: stream
+                        )
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .focused($isChatFieldFocused)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 44) // Start below status bar
+            .background(.regularMaterial)
+            .ignoresSafeArea(.keyboard)
+            .zIndex(2)
+        }
+        .transition(.move(edge: .bottom))
+        .ignoresSafeArea()
+        .onAppear {
+            // Delay focus slightly to allow animation to complete
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isChatFieldFocused = true
+            }
+        }
+    }
+
+    private func getAppropriateStream() -> Stream? {
+        // If there's a selected server, use that
+        if let selectedServer = sharedState.selectedStream {
+            return selectedServer
+        }
+
+        // Otherwise, get the appropriate stream based on content type
+        if let account = ViewModelFactory.shared.getCurrentAccount() {
+            if sharedState.selectedVideo != nil {
+                // For video content, use the first stream (as per existing logic)
+                return account.streams.first
+            } else if let thought = sharedState.selectedThought {
+                // For posts/thoughts, find the matching stream
+                return account.streams.first { stream in
+                    stream.thoughts.contains { $0.id == thought.id }
+                }
+            }
+        }
+
+        return nil
     }
 }
 

@@ -11,19 +11,23 @@ struct Video: Identifiable {
     let url: URL
     let contributors: [Contributor]
     let description: String
-    var likes: Int
-    var comments: Int
-    var shares: Int
 
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
             id: uploadResult.id,
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
-            description: "Just recorded!",
-            likes: 0,
-            comments: 0,
-            shares: 0
+            description: "Just recorded!"
+        )
+    }
+
+    static func from(thought: Thought) -> Video? {
+        let url = URL(string: "nano://\(thought.publicID.base58EncodedString)/")!
+        return Video(
+            id: thought.id.uuidString,
+            url: url,
+            contributors: thought.metadata.contributors,
+            description: thought.metadata.summary
         )
     }
 }
@@ -44,7 +48,7 @@ struct VideoContentView: View {
             if sharedState.showCreateView {
                 VideoCreateView(feedViewModel: feedViewModel)
             } else {
-                VideoFeedView(viewModel: feedViewModel)
+                VideoFeedView()
             }
         }
         .animation(.spring, value: sharedState.showCreateView)
@@ -53,11 +57,16 @@ struct VideoContentView: View {
 
 struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @ObservedObject var viewModel: VideoFeedViewModel
+    @StateObject private var viewModel: VideoFeedViewModel
+
+    init() {
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                // Main feed content
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
@@ -79,6 +88,7 @@ struct VideoFeedView: View {
                     }
                 }
 
+                // Loading state
                 if viewModel.videos.isEmpty {
                     VStack {
                         Spacer()
@@ -90,6 +100,11 @@ struct VideoFeedView: View {
                     .background(Color(.systemBackground))
                     .onAppear { sharedState.isAwaiting = true }
                     .onDisappear { sharedState.isAwaiting = false }
+                }
+
+                // Reusable chat overlay
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
                 }
             }
         }
@@ -188,7 +203,6 @@ struct ContributorsView: View {
 struct VideoPlayerView: View {
     @EnvironmentObject var sharedState: SharedState
     @ObservedObject var viewModel: VideoFeedViewModel
-    @State private var showChat = false
     @State private var dragOffset = CGSize.zero
     let video: Video
     let size: CGSize
@@ -243,9 +257,7 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            servers: servers,
-                            comments: video.comments,
-                            showChat: $showChat
+                            servers: servers
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -289,14 +301,6 @@ struct VideoPlayerView: View {
         }
         .frame(width: size.width, height: size.height)
         .ignoresSafeArea()
-        .sheet(isPresented: $showChat) {
-            if let stream = viewModel.account.streams.first {
-                let viewModel = ViewModelFactory.shared.makeChatViewModel(stream: stream)
-                ChatView(
-                    viewModel: viewModel
-                )
-            }
-        }
     }
 }
 
@@ -305,10 +309,8 @@ struct GroupChatIconList: View {
     let currentVideo: Video?
     let currentThought: Thought?
     let servers: [Stream]
-    let comments: Int
     @State private var isCollapsed = true
     @State private var showMenuButton = true
-    @Binding var showChat: Bool
 
     // Timer to auto-collapse after 4 seconds
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
@@ -322,7 +324,7 @@ struct GroupChatIconList: View {
                         Button {
                             sharedState.selectedVideo = currentVideo
                             sharedState.selectedThought = currentThought
-                            sharedState.selectedServer = server
+                            sharedState.selectedStream = server
                             sharedState.selectedTab = .communities
                         } label: {
                             Image(systemName: iconForStream(server))
@@ -334,7 +336,7 @@ struct GroupChatIconList: View {
 
                     // Comment button integrated into the list
                     Button {
-                        showChat = true
+                        sharedState.showChatOverlay = true
                         withAnimation(.spring()) {
                             isCollapsed = true
                             showMenuButton = true
@@ -567,7 +569,10 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             // If still no videos, load from stream's thoughts
             if videos.isEmpty {
                 for thought in videoStream.thoughts {
-                    print("thought: \(thought.publicID) \(thought.nano.count)")
+                    // Convert thought to Video
+                    if let video = Video.from(thought: thought) {
+                        videos.append(video)
+                    }
                 }
             }
             // Wait for a limited time if we still have no videos
@@ -623,14 +628,12 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             }
 
             // Create new video object using the cached file URL
+            // FIXME: use ArkavoPolicy.Metadata
             let video = Video(
                 id: UUID().uuidString,
                 url: videoFileURL,
                 contributors: [], // Add contributors if available in policy
-                description: "New video",
-                likes: 0,
-                comments: 0,
-                shares: 0
+                description: policy.type.rawValue
             )
 
             // Update UI

@@ -53,7 +53,7 @@ struct ContentView: View {
                     } else {
                         GroupChatView()
                             .onDisappear {
-                                sharedState.selectedServer = nil
+                                sharedState.selectedStream = nil
                             }
                     }
                 case .social:
@@ -93,7 +93,7 @@ struct ContentView: View {
                 }
 
                 // Create Button
-                if !sharedState.showCreateView {
+                if !(sharedState.showCreateView || sharedState.showChatOverlay) {
                     Button {
                         sharedState.showCreateView = true
                     } label: {

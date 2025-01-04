@@ -374,10 +374,7 @@ struct CreatorVideosSection: View {
                             id: thought.id.uuidString,
                             url: URL(string: "pending-decryption://\(thought.id)")!, // Placeholder URL
                             contributors: thought.metadata.contributors,
-                            description: thought.metadata.summary,
-                            likes: 0,
-                            comments: 0,
-                            shares: 0
+                            description: thought.metadata.summary
                         )
                         sharedState.selectedTab = .home
                         let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter

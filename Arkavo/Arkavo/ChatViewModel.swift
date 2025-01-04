@@ -11,28 +11,33 @@ class ChatViewModel: ObservableObject {
     let profile: Profile
     let stream: Stream
     @Published var messages: [ChatMessage] = []
-    @Published var connectionState: ArkavoClientState = .disconnected
-    // Add set to track processed message IDs
-    private var processedMessageIds = Set<Data>()
     private var notificationObservers: [NSObjectProtocol] = []
+    private static var instanceCount = 0
+    private let instanceId: Int
 
     init(client: ArkavoClient, account: Account, profile: Profile, stream: Stream) {
+        Self.instanceCount += 1
+        instanceId = Self.instanceCount
+        print("🔵 Initializing ChatViewModel #\(instanceId)")
+
         self.client = client
         self.account = account
         self.profile = profile
         self.stream = stream
-        connectionState = client.currentState
         setupNotifications()
         loadThoughts()
     }
 
     private func loadThoughts() {
-        Task {
-            for thought in stream.thoughts {
-                do {
-                    try await client.sendNanoForRewrap(thought.nano)
-                } catch {
-                    print("Error rewrapping NanoTDF for thought with ID: \(thought.publicID): \(error)")
+        if !stream.thoughts.isEmpty {
+            Task {
+                let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+                for thought in stream.thoughts {
+                    do {
+                        try await router.processMessage(thought.nano, messageId: thought.id)
+                    } catch {
+                        print("Error rewrapping thought \(thought.publicID): \(error)")
+                    }
                 }
             }
         }
@@ -43,19 +48,6 @@ class ChatViewModel: ObservableObject {
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()
-
-        // Add observers
-        let stateObserver = NotificationCenter.default.addObserver(
-            forName: .arkavoClientStateChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
-            Task { @MainActor in
-                self?.connectionState = state
-            }
-        }
-        notificationObservers.append(stateObserver)
 
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted,
@@ -72,6 +64,7 @@ class ChatViewModel: ObservableObject {
     }
 
     deinit {
+        print("🔴 Deinitializing ChatViewModel #\(instanceId)")
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
@@ -242,11 +235,6 @@ class ChatViewModel: ObservableObject {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
             print("Deserialized thought model")
             print("Media type: \(thoughtModel.mediaType)")
-            // Check if we've already processed this message
-            if processedMessageIds.contains(thoughtModel.publicID) {
-                print("⚠️ Skipping duplicate message with ID: \(thoughtModel.publicID.hexEncodedString())")
-                return
-            }
             // Process content based on media type
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
             print("Processed content: \(displayContent)")
@@ -268,15 +256,6 @@ class ChatViewModel: ObservableObject {
 
             await MainActor.run {
                 messages.append(message)
-                // Add this line to prevent reprocessing:
-                processedMessageIds.insert(thoughtModel.publicID)
-                print("✅ Added message to chat view - Type: \(thoughtModel.mediaType)")
-
-                // Debug current messages
-                print("Current messages:")
-                for (index, msg) in messages.enumerated() {
-                    print("[\(index)] \(msg.username) [\(msg.mediaType)]: \(msg.content)")
-                }
             }
         } catch {
             print("❌ Error handling decrypted thought: \(error)")

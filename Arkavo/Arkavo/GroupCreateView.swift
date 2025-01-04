@@ -72,7 +72,7 @@ struct GroupCreateView: View {
             try await PersistenceController.shared.saveChanges()
 
             await MainActor.run {
-                sharedState.selectedServer = newStream
+                sharedState.selectedStream = newStream
             }
         } catch {
             await MainActor.run {
