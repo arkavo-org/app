@@ -455,102 +455,56 @@ class GroupChatViewModel: ObservableObject {
 struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
-    @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
+    
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            GeometryReader { geometry in
-                HStack(spacing: 0) {
-                    // MARK: - Stream List
-
-                    if viewModel.streams.isEmpty {
-                        VStack {
-                            Spacer()
-                            WaveLoadingView(message: "Awaiting")
-                                .frame(maxWidth: .infinity)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.systemBackground))
-                        .onAppear { sharedState.isAwaiting = true }
-                        .onDisappear { sharedState.isAwaiting = false }
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(viewModel.streams) { stream in
-                                    ServerCardView(
-                                        stream: stream,
-                                        onSelect: {
-                                            viewModel.selectedStream = stream
-                                            navigationPath.append(stream)
-                                        }
-                                    )
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                        }
-                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        GeometryReader { geometry in
+            ZStack {
+                // MARK: - Stream List
+                if viewModel.streams.isEmpty {
+                    VStack {
+                        Spacer()
+                        WaveLoadingView(message: "Awaiting")
+                            .frame(maxWidth: .infinity)
+                        Spacer()
                     }
-
-                    // MARK: - Chat View (iPad/Mac)
-
-                    if horizontalSizeClass == .regular,
-                       let selectedStream = viewModel.selectedStream
-                    {
-                        ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: selectedStream))
-                    }
-                }
-            }
-            .navigationDestination(for: Stream.self) { stream in
-                if horizontalSizeClass == .compact {
-                    ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: stream))
-                        .navigationTitle(stream.profile.name)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    Task {
-                                        do {
-                                            viewModel.selectedStream = stream
-                                            try await viewModel.sendStreamCacheEvent(stream: stream)
-                                            isShareSheetPresented = true
-                                        } catch {
-                                            print("Error caching stream: \(error)")
-                                        }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .onAppear { sharedState.isAwaiting = true }
+                    .onDisappear { sharedState.isAwaiting = false }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(viewModel.streams) { stream in
+                                ServerCardView(
+                                    stream: stream,
+                                    onSelect: {
+                                        viewModel.selectedStream = stream
+                                        sharedState.selectedStream = stream
+                                        sharedState.showChatOverlay = true
                                     }
-                                } label: {
-                                    Image(systemName: "square.and.arrow.up")
-                                }
+                                )
                             }
                         }
-                }
-            }
-            .navigationDestination(for: DeepLinkDestination.self) { destination in
-                switch destination {
-                case let .stream(publicID):
-                    StreamLoadingView(publicID: publicID)
-                case .profile:
-                    EmptyView()
-                }
-            }
-            .sheet(isPresented: $showCreateServer) {
-                NavigationStack {
-                    GroupCreateView()
-                }
-            }
-            .onChange(of: sharedState.selectedStream) { _, newServer in
-                if let newServer {
-                    // Find the corresponding stream in the viewModel.streams
-                    if let stream = viewModel.streams.first(where: { $0.id == newServer.id }) {
-                        viewModel.selectedStream = stream
-                        navigationPath.append(stream)
+                        .padding(.horizontal)
+                        .padding(.vertical, 16)
                     }
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
                 }
+                
+                // MARK: - Chat Overlay
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
+                }
+            }
+        }
+        .sheet(isPresented: $showCreateServer) {
+            NavigationStack {
+                GroupCreateView()
             }
         }
         .sheet(isPresented: $isShareSheetPresented) {
