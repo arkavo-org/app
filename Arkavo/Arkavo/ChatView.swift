@@ -11,34 +11,49 @@ struct ChatView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(viewModel.messages) { message in
-                        MessageRow(message: message)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(viewModel.messages) { message in
+                                MessageRow(message: message)
+                                    .id(message.id) // Ensure each message has an id for scrolling
+                            }
+                        }
+                        .padding()
                     }
-                }
-                .padding()
-            }
-
-            MessageInputBar(
-                messageText: $messageText,
-                placeholder: "Type a message...",
-                onAttachmentTap: { showingAttachmentPicker.toggle() },
-                onSend: {
-                    Task {
-                        do {
-                            try await viewModel.sendMessage(content: messageText)
-                            messageText = ""
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
+                    .frame(maxHeight: geometry.size.height - keyboardHeight - 56)
+                    .onChange(of: viewModel.messages) { _, _ in
+                        // Scroll to the last message with animation
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation {
+                                scrollProxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
-            )
+
+                MessageInputBar(
+                    messageText: $messageText,
+                    placeholder: "Type a message...",
+                    onAttachmentTap: { showingAttachmentPicker.toggle() },
+                    onSend: {
+                        Task {
+                            do {
+                                try await viewModel.sendMessage(content: messageText)
+                                messageText = ""
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                showError = true
+                            }
+                        }
+                    }
+                )
+            }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {
@@ -46,6 +61,18 @@ struct ChatView: View {
             }
         } message: {
             Text(errorMessage)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    keyboardHeight = keyboardFrame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.16)) {
+                keyboardHeight = 0
+            }
         }
     }
 }
@@ -290,7 +317,7 @@ struct ChatOverlay: View {
     var body: some View {
         ZStack {
             // Semi-transparent background
-            Color.black.opacity(0.3)
+            Color.black.opacity(0.7)
                 .ignoresSafeArea()
                 .onTapGesture {
                     withAnimation {
@@ -331,10 +358,8 @@ struct ChatOverlay: View {
                     .focused($isChatFieldFocused)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 44) // Start below status bar
-            .background(.regularMaterial)
-            .ignoresSafeArea(.keyboard)
             .zIndex(2)
         }
         .transition(.move(edge: .bottom))
@@ -356,10 +381,8 @@ struct ChatOverlay: View {
         // Otherwise, get the appropriate stream based on content type
         if let account = ViewModelFactory.shared.getCurrentAccount() {
             if sharedState.selectedVideo != nil {
-                // For video content, use the first stream (as per existing logic)
                 return account.streams.first
             } else if let thought = sharedState.selectedThought {
-                // For posts/thoughts, find the matching stream
                 return account.streams.first { stream in
                     stream.thoughts.contains { $0.id == thought.id }
                 }
