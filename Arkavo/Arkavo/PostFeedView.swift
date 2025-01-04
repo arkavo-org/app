@@ -123,23 +123,8 @@ class PostFeedViewModel: ObservableObject {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
-    func servers() -> [Server] {
-        let servers = account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
+    func servers() -> [Stream] {
+        let servers = account.streams
         return servers
     }
 

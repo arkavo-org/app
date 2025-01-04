@@ -195,7 +195,7 @@ struct VideoPlayerView: View {
     private let swipeThreshold: CGFloat = 50
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
-    private let servers: [Server]
+    private let servers: [Stream]
 
     init(video: Video,
          viewModel: VideoFeedViewModel,
@@ -304,7 +304,7 @@ struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video?
     let currentThought: Thought?
-    let servers: [Server]
+    let servers: [Stream]
     let comments: Int
     @State private var isCollapsed = true
     @State private var showMenuButton = true
@@ -325,7 +325,7 @@ struct GroupChatIconList: View {
                             sharedState.selectedServer = server
                             sharedState.selectedTab = .communities
                         } label: {
-                            Image(systemName: server.icon)
+                            Image(systemName: iconForStream(server))
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                                 .frame(width: 44, height: 44)
@@ -396,6 +396,29 @@ struct GroupChatIconList: View {
         withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
             isCollapsed = false
         }
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        // Convert the publicID to a hash value
+        let hashValue = stream.publicID.hashValue
+
+        // Use the hash value modulo 32 to determine the icon
+        let iconIndex = abs(hashValue) % 32
+
+        // Define an array of 32 SF Symbols
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
+        ]
+
+        // Ensure the iconIndex is within bounds
+        return iconNames[iconIndex]
     }
 }
 
@@ -628,47 +651,9 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
         }
     }
 
-    func servers() -> [Server] {
-        let servers = account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
+    func servers() -> [Stream] {
+        let servers = account.streams
         return servers
-    }
-
-    private func iconForStream(_ stream: Stream) -> String {
-        // Convert the publicID to a hash value
-        let hashValue = stream.publicID.hashValue
-
-        // Use the hash value modulo 32 to determine the icon
-        let iconIndex = abs(hashValue) % 32
-
-        // Define an array of 32 SF Symbols
-        let iconNames = [
-            "person.fill", "figure.child", "figure.wave", "person.3.fill",
-            "star.fill", "heart.fill", "flag.fill", "book.fill",
-            "house.fill", "car.fill", "bicycle", "airplane",
-            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
-            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
-            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
-            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
-            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
-        ]
-
-        // Ensure the iconIndex is within bounds
-        return iconNames[iconIndex]
     }
 
     func cleanupOldCacheFiles() {
