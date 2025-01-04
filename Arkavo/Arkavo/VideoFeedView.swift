@@ -218,7 +218,7 @@ struct VideoPlayerView: View {
         self.video = video
         self.viewModel = viewModel
         self.size = size
-        servers = viewModel.servers()
+        servers = viewModel.streams()
     }
 
     var body: some View {
@@ -257,7 +257,7 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            servers: servers
+                            streams: servers
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -308,7 +308,7 @@ struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video?
     let currentThought: Thought?
-    let servers: [Stream]
+    let streams: [Stream]
     @State private var isCollapsed = true
     @State private var showMenuButton = true
 
@@ -320,14 +320,14 @@ struct GroupChatIconList: View {
             if !isCollapsed {
                 // Expanded view with all buttons
                 VStack(spacing: 20) { // Even spacing between all items
-                    ForEach(servers) { server in
+                    ForEach(streams) { stream in
                         Button {
                             sharedState.selectedVideo = currentVideo
                             sharedState.selectedThought = currentThought
-                            sharedState.selectedStream = server
+                            sharedState.selectedStream = stream
                             sharedState.selectedTab = .communities
                         } label: {
-                            Image(systemName: iconForStream(server))
+                            Image(systemName: iconForStream(stream))
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                                 .frame(width: 44, height: 44)
@@ -566,13 +566,10 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 }
             }
 
-            // If still no videos, load from stream's thoughts
+            // If still no videos, load from account video-stream thoughts
             if videos.isEmpty {
-                for thought in videoStream.thoughts {
-                    // Convert thought to Video
-                    if let video = Video.from(thought: thought) {
-                        videos.append(video)
-                    }
+                if let thought = videoStream.thoughts.last(where: { $0.metadata.mediaType == .video }) {
+                    try? await router.processMessage(thought.nano)
                 }
             }
             // Wait for a limited time if we still have no videos
@@ -654,9 +651,9 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
         }
     }
 
-    func servers() -> [Stream] {
-        let servers = account.streams
-        return servers
+    func streams() -> [Stream] {
+        let streams = account.streams.dropFirst(2)
+        return Array(streams)
     }
 
     func cleanupOldCacheFiles() {

@@ -123,9 +123,9 @@ class PostFeedViewModel: ObservableObject {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
-    func servers() -> [Stream] {
-        let servers = account.streams
-        return servers
+    func streams() -> [Stream] {
+        let streams = account.streams.dropFirst(2)
+        return Array(streams)
     }
 
     private func iconForStream(_ stream: Stream) -> String {
@@ -658,7 +658,7 @@ struct ImmersiveThoughtCard: View {
                         GroupChatIconList(
                             currentVideo: nil,
                             currentThought: thought,
-                            servers: viewModel.servers()
+                            streams: viewModel.streams()
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)

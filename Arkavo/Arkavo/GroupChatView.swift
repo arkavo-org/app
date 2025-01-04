@@ -459,11 +459,12 @@ struct GroupChatView: View {
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 // MARK: - Stream List
+
                 if viewModel.streams.isEmpty {
                     VStack {
                         Spacer()
@@ -495,8 +496,9 @@ struct GroupChatView: View {
                     .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
                     .background(Color(.systemGroupedBackground).ignoresSafeArea())
                 }
-                
+
                 // MARK: - Chat Overlay
+
                 if sharedState.showChatOverlay {
                     ChatOverlay()
                 }
