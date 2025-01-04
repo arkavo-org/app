@@ -405,7 +405,6 @@ struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
     @State private var currentIndex = 0
-    @State private var showChat = false
 
     var body: some View {
         ZStack {
@@ -441,8 +440,7 @@ struct PostFeedView: View {
                                     ImmersiveThoughtCard(
                                         viewModel: viewModel,
                                         thought: thought,
-                                        size: geometry.size,
-                                        showChat: $showChat
+                                        size: geometry.size
                                     )
                                     .frame(width: geometry.size.width, height: geometry.size.height)
                                 }
@@ -636,7 +634,6 @@ struct ImmersiveThoughtCard: View {
     @StateObject var viewModel: PostFeedViewModel
     let thought: Thought
     let size: CGSize
-    @Binding var showChat: Bool
     private let systemMargin: CGFloat = 16
 
     var body: some View {
@@ -677,11 +674,15 @@ struct ImmersiveThoughtCard: View {
                         Spacer()
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showChat) {
-            if let postStream = viewModel.getPostStream() {
-                ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: postStream))
+
+                // Chat overlay
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
+                        .onAppear {
+                            sharedState.selectedThought = thought
+                            sharedState.selectedStream = viewModel.getPostStream()
+                        }
+                }
             }
         }
     }
