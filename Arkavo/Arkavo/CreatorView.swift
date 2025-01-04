@@ -358,6 +358,7 @@ struct CreatorAboutSection: View {
 }
 
 struct CreatorVideosSection: View {
+    @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
@@ -368,7 +369,21 @@ struct CreatorVideosSection: View {
             ForEach(viewModel.videoThoughts) { thought in
                 VideoThoughtView(thought: thought)
                     .onTapGesture {
-                        // Handle video selection
+                        // Set selected video and switch to video tab
+                        sharedState.selectedVideo = Video(
+                            id: thought.id.uuidString,
+                            url: URL(string: "pending-decryption://\(thought.id)")!, // Placeholder URL
+                            contributors: thought.metadata.contributors,
+                            description: thought.metadata.summary,
+                            likes: 0,
+                            comments: 0,
+                            shares: 0
+                        )
+                        sharedState.selectedTab = .home
+                        let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+                        Task {
+                            try await router.processMessage(thought.nano)
+                        }
                     }
             }
         }

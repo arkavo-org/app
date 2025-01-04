@@ -46,9 +46,17 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         }
     }
 
+    // handles WebSocket messages and NanoTDF in Data format
     func processMessage(_ data: Data, messageId: UUID? = nil) async throws {
         guard let messageType = data.first else {
             throw ArkavoError.messageError("Invalid message: empty data")
+        }
+        // if data is NanoTDF, decrypt it
+        if data.count >= 3 {
+            let magicNumberAndVersion = data.prefix(3)
+            if magicNumberAndVersion == Data([0x4C, 0x31, 0x4C]) {
+                try await handleNATSMessage(data)
+            }
         }
 
         do {
