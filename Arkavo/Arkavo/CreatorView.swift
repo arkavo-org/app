@@ -682,3 +682,35 @@ extension Int {
         return String(format: "%d:%02d", minutes, seconds)
     }
 }
+
+// MARK: - Creator
+
+@available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
+struct Creator: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let imageURL: String
+    let latestUpdate: String
+    let tier: String
+    let socialLinks: [SocialLink]
+    let notificationCount: Int
+    let bio: String
+}
+
+// MARK: - SocialLink
+
+struct SocialLink: Codable, Identifiable, Hashable {
+    let id: String
+    let platform: SocialPlatform
+    let username: String
+    let url: String
+}
+
+// MARK: - SocialPlatform
+
+enum SocialPlatform: String, Codable {
+    case twitter = "Twitter"
+    case instagram = "Instagram"
+    case youtube = "YouTube"
+    case tiktok = "TikTok"
+}

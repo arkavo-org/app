@@ -283,7 +283,6 @@ class PostFeedViewModel: ObservableObject {
             streamPublicID: postStream.publicID,
             mediaType: .text,
             createdAt: Date(),
-            summary: content,
             contributors: []
         )
 
@@ -307,10 +306,12 @@ class PostFeedViewModel: ObservableObject {
             throw ArkavoError.messageError("Failed to convert image to HEIF data")
         }
 
+        let postStream = getPostStream()
+
         // Create thought service model for image
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for now
+            streamPublicID: postStream.publicID,
             mediaType: .image,
             content: imageData
         )
@@ -327,10 +328,9 @@ class PostFeedViewModel: ObservableObject {
 
         let thoughtMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for feed posts
+            streamPublicID: postStream.publicID,
             mediaType: .image,
             createdAt: Date(),
-            summary: "image",
             contributors: []
         )
 

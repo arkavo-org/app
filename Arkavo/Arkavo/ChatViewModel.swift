@@ -215,7 +215,6 @@ class ChatViewModel: ObservableObject {
             streamPublicID: streamPublicID,
             mediaType: .text,
             createdAt: Date(),
-            summary: content,
             contributors: []
         )
 

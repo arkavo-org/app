@@ -791,7 +791,6 @@ final class VideoRecordingViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        let title = formatter.string(from: Date())
 
         // Create metadata
         let metadata = Thought.Metadata(
@@ -799,7 +798,6 @@ final class VideoRecordingViewModel: ObservableObject {
             streamPublicID: videoStream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            summary: title,
             contributors: []
         )
 

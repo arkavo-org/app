@@ -283,7 +283,6 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            summary: "Video Stream",
             contributors: []
         )
 
@@ -331,7 +330,6 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .text, // Posts are primarily text-based
             createdAt: Date(),
-            summary: "Post Stream",
             contributors: []
         )
 

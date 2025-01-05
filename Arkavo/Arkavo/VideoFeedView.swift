@@ -699,7 +699,6 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                     streamPublicID: videoStream.publicID,
                     mediaType: .video,
                     createdAt: Date(),
-                    summary: newVideo.description,
                     contributors: contributors
                 )
 
