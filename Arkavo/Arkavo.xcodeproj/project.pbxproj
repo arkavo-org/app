@@ -78,7 +78,6 @@
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
-		DAF5E9D32D276C0300016EBE /* ArkavoMessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */; };
 		DAF5E9D72D27761900016EBE /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -168,7 +167,6 @@
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
-		DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageCache.swift; sourceTree = "<group>"; };
 		DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -237,9 +235,9 @@
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
-				DAF5E9D22D276C0300016EBE /* ArkavoMessageCache.swift */,
 				DAF5E9D62D27761900016EBE /* MessageCacheManager.swift */,
 				DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */,
+				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
 				DA0FEC402C586DF700C0A010 /* Stream.swift */,
@@ -249,7 +247,6 @@
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
-				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA7598C02C96108C0021A8FC /* ArkavoService.swift */,
 				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
 				DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */,
@@ -529,7 +526,6 @@
 				DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
-				DAF5E9D32D276C0300016EBE /* ArkavoMessageCache.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,

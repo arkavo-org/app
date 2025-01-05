@@ -76,18 +76,7 @@ struct ContentView: View {
                     CreatorView()
                         .onAppear {
                             if let profile = ViewModelFactory.shared.getCurrentProfile() {
-                                // Create a Creator object from current profile
-                                let selfCreator = Creator(
-                                    id: profile.id.uuidString,
-                                    name: profile.name,
-                                    imageURL: "",
-                                    latestUpdate: "My Profile",
-                                    tier: "Creator",
-                                    socialLinks: [], // Add any social links if available
-                                    notificationCount: 0,
-                                    bio: profile.blurb ?? ""
-                                )
-                                sharedState.selectedCreator = selfCreator
+                                sharedState.selectedCreatorPublicID = profile.publicID
                             }
                         }
                 }

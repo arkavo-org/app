@@ -183,35 +183,6 @@ class PostFeedViewModel: ObservableObject {
         }
     }
 
-    func getCurrentCreator() -> Creator {
-        let tier = if account.identityAssuranceLevel == .ial1 || profile.hasHighIdentityAssurance {
-            "Verified"
-        } else if profile.hasHighEncryption {
-            "Premium"
-        } else {
-            "Basic"
-        }
-
-        let bio = [
-            profile.blurb,
-            !profile.interests.isEmpty ? "Interests: \(profile.interests)" : nil,
-            !profile.location.isEmpty ? "📍 \(profile.location)" : nil,
-        ]
-        .compactMap(\.self)
-        .joined(separator: "\n")
-
-        return Creator(
-            id: profile.publicID.base58EncodedString,
-            name: profile.name,
-            imageURL: "",
-            latestUpdate: profile.blurb ?? "",
-            tier: tier,
-            socialLinks: [],
-            notificationCount: 0,
-            bio: bio
-        )
-    }
-
     private func createFlatBuffersPolicy(for thoughtModel: ThoughtServiceModel) throws -> Data {
         var builder = FlatBufferBuilder()
 

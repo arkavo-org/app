@@ -7,7 +7,6 @@ import OpenTDFKit
 class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     let client: ArkavoClient
     let persistenceController: PersistenceController
-
     // Track pending messages by their ephemeral public key
     private var pendingMessages: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
 
@@ -15,6 +14,12 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         self.client = client
         self.persistenceController = persistenceController
         client.delegate = self
+    }
+
+    // MARK: - Client HTTP requests
+
+    func getProfile(for publicID: String) async throws -> Profile {
+        Profile(name: publicID)
     }
 
     // MARK: - ArkavoClientDelegate Methods

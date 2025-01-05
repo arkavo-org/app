@@ -110,13 +110,17 @@ extension Thought {
 // MARK: - Contributor
 
 struct Contributor: Codable, Identifiable {
-    let id: String
-    let creator: Creator
+    let profilePublicID: Data
     let role: String
+
+    var id: String {
+        "\(profilePublicID.base58EncodedString)-\(role)"
+    }
 }
 
 // MARK: - Creator
 
+@available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
 struct Creator: Codable, Identifiable, Hashable {
     let id: String
     let name: String

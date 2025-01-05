@@ -125,8 +125,7 @@ struct ContributorsView: View {
             // Main creator
             if let mainContributor = contributors.first {
                 Button {
-                    sharedState.selectedCreator = mainContributor.creator
-                    // FIXME: creators
+                    sharedState.selectedCreatorPublicID = mainContributor.profilePublicID
                     sharedState.selectedTab = .profile
                     sharedState.showCreateView = false
                 } label: {
@@ -138,7 +137,7 @@ struct ContributorsView: View {
                             .foregroundColor(.blue)
 
                         VStack(alignment: .leading) {
-                            Text(mainContributor.creator.name)
+                            Text(mainContributor.profilePublicID.base58EncodedString)
                                 .font(.headline)
 
                             Text(mainContributor.role)
@@ -154,7 +153,7 @@ struct ContributorsView: View {
                 if showAllContributors {
                     ForEach(contributors.dropFirst()) { contributor in
                         Button {
-                            sharedState.selectedCreator = contributor.creator
+                            sharedState.selectedCreatorPublicID = contributor.profilePublicID
                             // FIXME: creators
                             sharedState.selectedTab = .profile
                             sharedState.showCreateView = false
@@ -166,7 +165,7 @@ struct ContributorsView: View {
                                     .clipShape(Circle())
                                     .foregroundColor(.blue.opacity(0.7))
                                 VStack(alignment: .leading) {
-                                    Text(contributor.creator.name)
+                                    Text(contributor.profilePublicID.base58EncodedString)
                                         .font(.subheadline)
 
                                     Text(contributor.role)

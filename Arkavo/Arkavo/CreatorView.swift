@@ -4,7 +4,6 @@ import SwiftUI
 struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    @State private var creators: [Creator] = []
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
 
@@ -14,16 +13,14 @@ struct CreatorView: View {
 
     var body: some View {
         NavigationStack {
-            if let creator = sharedState.selectedCreator {
-                CreatorDetailView(viewModel: viewModel, creator: creator)
+            if sharedState.selectedCreatorPublicID != nil {
+                CreatorDetailView(viewModel: viewModel)
             } else {
-                CreatorListView(creators: creators) { creator in
-                    sharedState.selectedCreator = creator
-                }
+                CreatorListView(viewModel: viewModel)
             }
         }
         .onDisappear {
-            sharedState.selectedCreator = nil
+            sharedState.selectedCreatorPublicID = nil
         }
         // TODO: after Patreon Support added
 //        .sheet(isPresented: $sharedState.showCreateView) {
@@ -37,15 +34,15 @@ struct CreatorView: View {
 }
 
 struct CreatorListView: View {
-    let creators: [Creator]
-    let onCreatorSelected: (Creator) -> Void
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(creators) { creator in
+                ForEach(viewModel.creators) { creator in
                     Button {
-                        onCreatorSelected(creator)
+                        sharedState.selectedCreatorPublicID = creator.id.data(using: String.defaultCStringEncoding)
                     } label: {
                         CreatorCard(creator: creator)
                     }
@@ -154,7 +151,6 @@ struct CreatorCard: View {
 struct CreatorDetailView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    let creator: Creator
     @State private var selectedSection: DetailSection = .about
 
     enum DetailSection {
@@ -172,7 +168,7 @@ struct CreatorDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                CreatorHeaderView(viewModel: viewModel, creator: creator) {
+                CreatorHeaderView(viewModel: viewModel) {
                     // onSupport callback
                 }
 
@@ -195,14 +191,13 @@ struct CreatorDetailView: View {
                 }
             }
         }
-        .navigationTitle(creator.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct CreatorHeaderView: View {
+    @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    let creator: Creator
     let onSupport: () -> Void
 
     private let profileImageSize: CGFloat = 80
