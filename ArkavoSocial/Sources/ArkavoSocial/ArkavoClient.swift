@@ -595,11 +595,8 @@ public final class ArkavoClient: NSObject {
                         await self.handleIncomingMessage(data)
                     case let .string(string):
                         print("Received string message: \(string)")
-                        if let data = string.data(using: .utf8) {
-                            self.delegate?.clientDidReceiveMessage(self, message: data)
-                        }
                     @unknown default:
-                        print("Received unknown message type")
+                        print("Received unknown message type \(message)")
                     }
 
                 case let .failure(error):

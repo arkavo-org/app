@@ -24,12 +24,10 @@ class PostFeedViewModel: ObservableObject {
         self.client = client
         self.account = account
         self.profile = profile
-
-        // Load initial thoughts
+        setupNotifications()
         Task {
             await loadThoughts()
         }
-        setupNotifications()
     }
 
     private func setupNotifications() {
@@ -161,7 +159,6 @@ class PostFeedViewModel: ObservableObject {
     private func loadThoughts() async {
         isLoading = true
         defer { isLoading = false }
-
         // First try to load from stream
         if let postStream = getPostStream() {
             // Load any cached messages first
@@ -177,16 +174,12 @@ class PostFeedViewModel: ObservableObject {
                     print("Failed to process cached message: \(error)")
                 }
             }
-
-            // If still no thoughts, load from stream
+            // If still no videos, load from account video-stream thoughts
             if thoughts.isEmpty {
-                thoughts = postStream.thoughts.sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+                if let thought = postStream.thoughts.last(where: { $0.metadata.mediaType == .text }) {
+                    try? await router.processMessage(thought.nano, messageId: thought.id)
+                }
             }
-        }
-
-        // Wait until we have some thoughts to show
-        while thoughts.isEmpty {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
         }
     }
 

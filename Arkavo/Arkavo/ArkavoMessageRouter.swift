@@ -32,6 +32,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("Invalid message: empty data")
             return
         }
+        print("ArkavoMessageRouter.clientDidReceiveMessage")
         Task {
             do {
                 try await processMessage(message)
@@ -56,6 +57,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             let magicNumberAndVersion = data.prefix(3)
             if magicNumberAndVersion == Data([0x4C, 0x31, 0x4C]) {
                 try await handleNATSMessage(data)
+                return
             }
         }
 

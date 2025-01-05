@@ -325,7 +325,7 @@ struct GroupChatIconList: View {
                             sharedState.selectedVideo = currentVideo
                             sharedState.selectedThought = currentThought
                             sharedState.selectedStream = stream
-                            sharedState.selectedTab = .communities
+                            sharedState.showChatOverlay = true
                         } label: {
                             Image(systemName: iconForStream(stream))
                                 .font(.title3)
@@ -569,7 +569,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             // If still no videos, load from account video-stream thoughts
             if videos.isEmpty {
                 if let thought = videoStream.thoughts.last(where: { $0.metadata.mediaType == .video }) {
-                    try? await router.processMessage(thought.nano)
+                    try? await router.processMessage(thought.nano, messageId: thought.id)
                 }
             }
             // Wait for a limited time if we still have no videos

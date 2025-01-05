@@ -29,7 +29,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func loadThoughts() {
-        if !stream.thoughts.isEmpty {
+        if stream.thoughts.isEmpty {
             Task {
                 let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
                 for thought in stream.thoughts {

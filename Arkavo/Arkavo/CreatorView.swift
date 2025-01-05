@@ -379,7 +379,7 @@ struct CreatorVideosSection: View {
                         sharedState.selectedTab = .home
                         let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
                         Task {
-                            try await router.processMessage(thought.nano)
+                            try await router.processMessage(thought.nano, messageId: thought.id)
                         }
                     }
             }
@@ -446,7 +446,7 @@ struct CreatorPostsSection: View {
                     sharedState.selectedTab = .social
                     let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
                     Task {
-                        try await router.processMessage(thought.nano)
+                        try await router.processMessage(thought.nano, messageId: thought.id)
                     }
                 }
             }

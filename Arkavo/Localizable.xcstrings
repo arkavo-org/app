@@ -198,12 +198,6 @@
         }
       }
     },
-    "Error loading stream" : {
-
-    },
-    "Error loading stream: %@" : {
-
-    },
     "Error: %@" : {
 
     },
@@ -301,9 +295,6 @@
       }
     },
     "Learn more, view our" : {
-
-    },
-    "Loading stream..." : {
 
     },
     "Location" : {
@@ -613,9 +604,6 @@
         }
       }
     },
-    "Stream corrupted" : {
-
-    },
     "Stream ID" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -626,9 +614,6 @@
           }
         }
       }
-    },
-    "Stream not found" : {
-
     },
     "Streams" : {
       "extractionState" : "stale",
@@ -654,9 +639,6 @@
 
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
-
-    },
-    "The stream you're looking for couldn't be found" : {
 
     },
     "This will be the name of your new community" : {
