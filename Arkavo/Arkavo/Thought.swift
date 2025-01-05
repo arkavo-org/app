@@ -7,11 +7,12 @@ final class Thought: Identifiable, Codable {
     // MARK: - Nested Types
 
     struct Metadata: Codable {
-        let creator: UUID
+        var creatorPublicID: Data
         let streamPublicID: Data
         let mediaType: MediaType
         let createdAt: Date
-        let summary: String
+        @available(*, deprecated, message: "The summary field will be removed in a future version")
+        var summary: String?
         let contributors: [Contributor]
 
         private static let decoder = PropertyListDecoder()
@@ -201,5 +202,76 @@ extension ThoughtServiceModel {
 
     static func deserialize(from data: Data) throws -> ThoughtServiceModel {
         try decoder.decode(ThoughtServiceModel.self, from: data)
+    }
+}
+
+extension Thought {
+    static func from(_ model: ThoughtServiceModel, arkavoMetadata: Arkavo_Metadata) throws -> Thought {
+        // Get creator UUID from model's creatorPublicID
+        // This assumes the creatorPublicID is a SHA256 hash of the UUID
+        guard model.creatorPublicID.count == 32 else {
+            throw NSError(domain: "Thought", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid creator public ID length"])
+        }
+
+        // Create metadata using Arkavo metadata and model data
+        let metadata = try Metadata.from(
+            arkavoMetadata,
+            model: model
+        )
+
+        // Create nano TDF data from content
+        let nano = model.content
+
+        // Create the thought
+        return Thought(nano: nano, metadata: metadata)
+    }
+}
+
+extension Thought.Metadata {
+    // Create Thought.Metadata from Arkavo_Metadata
+    static func from(_ arkavoMetadata: Arkavo_Metadata, model: ThoughtServiceModel) throws -> Thought.Metadata {
+        // Extract creation date
+        let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
+
+        // Determine media type from content format
+        let mediaType: MediaType = if let content = arkavoMetadata.content {
+            switch content.mediaType {
+            case .video: .video
+            case .audio: .audio
+            case .image: .image
+            default: .text
+            }
+        } else {
+            .text // Default to text if no content format
+        }
+
+        // Create summary from purpose if available
+        let summary: String
+        if let purpose = arkavoMetadata.purpose {
+            let purposes = [
+                (purpose.educational, "Educational"),
+                (purpose.entertainment, "Entertainment"),
+                (purpose.news, "News"),
+                (purpose.promotional, "Promotional"),
+                (purpose.personal, "Personal"),
+                (purpose.opinion, "Opinion"),
+            ]
+            let mainPurpose = purposes.max(by: { $0.0 < $1.0 })?.1 ?? "General"
+            summary = "\(mainPurpose) content"
+        } else {
+            summary = "Content"
+        }
+
+        // For now, using empty contributors array
+        let contributors: [Contributor] = []
+
+        return Thought.Metadata(
+            creatorPublicID: model.creatorPublicID,
+            streamPublicID: model.streamPublicID,
+            mediaType: mediaType,
+            createdAt: createdAt,
+            summary: summary,
+            contributors: contributors
+        )
     }
 }

@@ -17,7 +17,7 @@ struct Video: Identifiable {
             id: uploadResult.id,
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
-            description: "Just recorded!"
+            description: Date().ISO8601Format()
         )
     }
 
@@ -27,7 +27,7 @@ struct Video: Identifiable {
             id: thought.id.uuidString,
             url: url,
             contributors: thought.metadata.contributors,
-            description: thought.metadata.summary
+            description: thought.metadata.createdAt.ISO8601Format()
         )
     }
 }
@@ -695,7 +695,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 
                 // Create thought for the video
                 let metadata = Thought.Metadata(
-                    creator: profile.id,
+                    creatorPublicID: profile.publicID,
                     streamPublicID: videoStream.publicID,
                     mediaType: .video,
                     createdAt: Date(),

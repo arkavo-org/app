@@ -1,11 +1,10 @@
 import ArkavoSocial
 import CryptoKit
-import Foundation
-import SwiftUI
-#if os(iOS)
-    import UIKit
-#endif
 import FlatBuffers
+import Foundation
+import OpenTDFKit
+import SwiftUI
+import UIKit
 
 // MARK: - View Models
 
@@ -56,10 +55,10 @@ class PostFeedViewModel: ObservableObject {
             queue: nil
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data,
-                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+                  let header = notification.userInfo?["header"] as? Header else { return }
 
             Task { @MainActor [weak self] in
-                await self?.handleDecryptedMessage(data: data, policy: policy)
+                await self?.handleDecryptedMessage(data: data, header: header)
             }
         }
         notificationObservers.append(messageObserver)
@@ -82,32 +81,22 @@ class PostFeedViewModel: ObservableObject {
         // Handle connection state changes if needed
     }
 
-    private func handleDecryptedMessage(data: Data, policy _: ArkavoPolicy) async {
+    private func handleDecryptedMessage(data: Data, header: Header) async {
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+            if let bodyData = header.policy.body?.body {
+                let metadata = try ArkavoPolicy.parseMetadata(from: bodyData)
 
-            // Create thought metadata
-            let thoughtMetadata = Thought.Metadata(
-                creator: UUID(), // This should be derived from creator public ID
-                streamPublicID: thoughtModel.streamPublicID,
-                mediaType: thoughtModel.mediaType,
-                createdAt: Date(),
-                summary: String(data: thoughtModel.content, encoding: .utf8) ?? "",
-                contributors: []
-            )
+                // Create and save thought
+                let thought = try Thought.from(thoughtModel, arkavoMetadata: metadata)
 
-            // Create and save thought
-            let thought = Thought(
-                nano: data, // Store the encrypted data
-                metadata: thoughtMetadata
-            )
+                // Save thought
+                _ = try PersistenceController.shared.saveThought(thought)
+                try await PersistenceController.shared.saveChanges()
 
-            // Save thought
-            _ = try PersistenceController.shared.saveThought(thought)
-            try await PersistenceController.shared.saveChanges()
-
-            // Update UI
-            thoughts.insert(thought, at: 0)
+                // Update UI
+                thoughts.insert(thought, at: 0)
+            }
         } catch {
             self.error = error
         }
@@ -149,36 +138,35 @@ class PostFeedViewModel: ObservableObject {
         return iconNames[iconIndex]
     }
 
-    func getPostStream() -> Stream? {
+    func getPostStream() -> Stream {
         // Find the stream that's marked as a post stream (has a text source thought)
         account.streams.first { stream in
             stream.source?.metadata.mediaType == .text
-        }
+        }!
     }
 
     private func loadThoughts() async {
         isLoading = true
         defer { isLoading = false }
         // First try to load from stream
-        if let postStream = getPostStream() {
-            // Load any cached messages first
-            let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
-            let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
-            let cachedMessages = cacheManager.getCachedMessages(forStream: postStream.publicID)
+        let postStream = getPostStream()
+        // Load any cached messages first
+        let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+        let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+        let cachedMessages = cacheManager.getCachedMessages(forStream: postStream.publicID)
 
-            // Process cached messages
-            for (messageId, message) in cachedMessages {
-                do {
-                    try await router.processMessage(message.data, messageId: messageId)
-                } catch {
-                    print("Failed to process cached message: \(error)")
-                }
+        // Process cached messages
+        for (messageId, message) in cachedMessages {
+            do {
+                try await router.processMessage(message.data, messageId: messageId)
+            } catch {
+                print("Failed to process cached message: \(error)")
             }
-            // If still no videos, load from account video-stream thoughts
-            if thoughts.isEmpty {
-                if let thought = postStream.thoughts.last(where: { $0.metadata.mediaType == .text }) {
-                    try? await router.processMessage(thought.nano, messageId: thought.id)
-                }
+        }
+        // If still no videos, load from account video-stream thoughts
+        if thoughts.isEmpty {
+            if let thought = postStream.thoughts.last(where: { $0.metadata.mediaType == .text }) {
+                try? await router.processMessage(thought.nano, messageId: thought.id)
             }
         }
     }
@@ -270,10 +258,12 @@ class PostFeedViewModel: ObservableObject {
         // Create message data
         let messageData = content.data(using: .utf8) ?? Data()
 
+        let postStream = getPostStream()
+
         // Create thought service model
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for feed posts
+            streamPublicID: postStream.publicID,
             mediaType: .text,
             content: messageData
         )
@@ -289,8 +279,8 @@ class PostFeedViewModel: ObservableObject {
         )
 
         let thoughtMetadata = Thought.Metadata(
-            creator: profile.id,
-            streamPublicID: Data(), // No specific stream for feed posts
+            creatorPublicID: profile.publicID,
+            streamPublicID: postStream.publicID,
             mediaType: .text,
             createdAt: Date(),
             summary: content,
@@ -307,10 +297,8 @@ class PostFeedViewModel: ObservableObject {
         _ = try PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
 
-        if let postStream = getPostStream() {
-            postStream.addThought(thought)
-            try await PersistenceController.shared.saveChanges()
-        }
+        postStream.addThought(thought)
+        try await PersistenceController.shared.saveChanges()
     }
 
     func handleSelectedImage(_ image: UIImage) async throws {
@@ -338,7 +326,7 @@ class PostFeedViewModel: ObservableObject {
         )
 
         let thoughtMetadata = Thought.Metadata(
-            creator: profile.id,
+            creatorPublicID: profile.publicID,
             streamPublicID: Data(), // No specific stream for feed posts
             mediaType: .image,
             createdAt: Date(),
@@ -608,7 +596,7 @@ struct ImmersiveThoughtCard: View {
 
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
-                        Text(thought.metadata.summary)
+                        Text(thought.metadata.createdAt.ISO8601Format())
                             .font(.system(size: 24, weight: .heavy))
                             .foregroundColor(.white)
                     }

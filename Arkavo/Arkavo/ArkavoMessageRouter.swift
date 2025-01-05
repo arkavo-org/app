@@ -288,6 +288,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "data": decryptedData,
                 "header": header,
                 "payload": payload,
+                // perhaps remove this and have handlers use header
                 "policy": ArkavoPolicy(header.policy),
             ]
         )
