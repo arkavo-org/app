@@ -337,37 +337,6 @@ class GroupChatViewModel: ObservableObject {
         //        }
     }
 
-    // Convert Stream to Server view model
-    func serverFromStream(_ stream: Stream) -> Server {
-        Server(
-            id: stream.id.uuidString,
-            name: stream.profile.name,
-            imageURL: nil,
-            icon: iconForStream(stream),
-            unreadCount: stream.thoughts.count,
-            hasNotification: !stream.thoughts.isEmpty,
-            description: stream.profile.blurb ?? "",
-            policies: StreamPolicies(
-                agePolicy: stream.policies.age,
-                admissionPolicy: stream.policies.admission,
-                interactionPolicy: stream.policies.interaction
-            )
-        )
-    }
-
-    private func iconForStream(_ stream: Stream) -> String {
-        switch stream.policies.age {
-        case .onlyAdults:
-            "person.fill"
-        case .onlyKids:
-            "figure.child"
-        case .forAll:
-            "figure.wave"
-        case .onlyTeens:
-            "person.3.fill"
-        }
-    }
-
     nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
         Task { @MainActor in
             self.connectionState = state
@@ -481,148 +450,63 @@ class GroupChatViewModel: ObservableObject {
     }
 }
 
-struct StreamPolicies: Hashable, Equatable {
-    let agePolicy: AgePolicy
-    let admissionPolicy: AdmissionPolicy
-    let interactionPolicy: InteractionPolicy
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(agePolicy)
-        hasher.combine(admissionPolicy)
-        hasher.combine(interactionPolicy)
-    }
-
-    static func == (lhs: StreamPolicies, rhs: StreamPolicies) -> Bool {
-        lhs.agePolicy == rhs.agePolicy &&
-            lhs.admissionPolicy == rhs.admissionPolicy &&
-            lhs.interactionPolicy == rhs.interactionPolicy
-    }
-}
-
-struct Server: Identifiable, Hashable, Equatable {
-    let id: String
-    let name: String
-    let imageURL: String?
-    let icon: String
-    var unreadCount: Int
-    var hasNotification: Bool
-    let description: String
-    let policies: StreamPolicies
-
-    static func == (lhs: Server, rhs: Server) -> Bool {
-        lhs.id == rhs.id &&
-            lhs.name == rhs.name &&
-            lhs.imageURL == rhs.imageURL &&
-            lhs.icon == rhs.icon &&
-            lhs.unreadCount == rhs.unreadCount &&
-            lhs.hasNotification == rhs.hasNotification &&
-            lhs.description == rhs.description &&
-            lhs.policies == rhs.policies
-    }
-}
-
 // MARK: - Main View
 
 struct GroupChatView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
-    @State private var navigationPath = NavigationPath()
     @State private var showCreateServer = false
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            GeometryReader { geometry in
-                HStack(spacing: 0) {
-                    // MARK: - Stream List
+        GeometryReader { geometry in
+            ZStack {
+                // MARK: - Stream List
 
-                    if viewModel.streams.isEmpty {
-                        VStack {
-                            Spacer()
-                            WaveLoadingView(message: "Awaiting")
-                                .frame(maxWidth: .infinity)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.systemBackground))
-                        .onAppear { sharedState.isAwaiting = true }
-                        .onDisappear { sharedState.isAwaiting = false }
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(viewModel.streams) { stream in
-                                    ServerCardView(
-                                        server: viewModel.serverFromStream(stream),
-                                        stream: stream,
-                                        onSelect: {
-                                            viewModel.selectedStream = stream
-                                            navigationPath.append(stream)
-                                        }
-                                    )
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                        }
-                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+                if viewModel.streams.isEmpty {
+                    VStack {
+                        Spacer()
+                        WaveLoadingView(message: "Awaiting")
+                            .frame(maxWidth: .infinity)
+                        Spacer()
                     }
-
-                    // MARK: - Chat View (iPad/Mac)
-
-                    if horizontalSizeClass == .regular,
-                       let selectedStream = viewModel.selectedStream
-                    {
-                        ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: selectedStream))
-                    }
-                }
-            }
-            .navigationDestination(for: Stream.self) { stream in
-                if horizontalSizeClass == .compact {
-                    ChatView(viewModel: ViewModelFactory.shared.makeChatViewModel(stream: stream))
-                        .navigationTitle(stream.profile.name)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    Task {
-                                        do {
-                                            viewModel.selectedStream = stream
-                                            try await viewModel.sendStreamCacheEvent(stream: stream)
-                                            isShareSheetPresented = true
-                                        } catch {
-                                            print("Error caching stream: \(error)")
-                                        }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .onAppear { sharedState.isAwaiting = true }
+                    .onDisappear { sharedState.isAwaiting = false }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(viewModel.streams) { stream in
+                                ServerCardView(
+                                    stream: stream,
+                                    onSelect: {
+                                        viewModel.selectedStream = stream
+                                        sharedState.selectedStream = stream
+                                        sharedState.showChatOverlay = true
                                     }
-                                } label: {
-                                    Image(systemName: "square.and.arrow.up")
-                                }
+                                )
                             }
                         }
-                }
-            }
-            .navigationDestination(for: DeepLinkDestination.self) { destination in
-                switch destination {
-                case let .stream(publicID):
-                    StreamLoadingView(publicID: publicID)
-                case .profile:
-                    EmptyView()
-                }
-            }
-            .sheet(isPresented: $showCreateServer) {
-                NavigationStack {
-                    GroupCreateView()
-                }
-            }
-            .onChange(of: sharedState.selectedServer) { _, newServer in
-                if let newServer {
-                    // Find the corresponding stream in the viewModel.streams
-                    if let stream = viewModel.streams.first(where: { $0.id.uuidString == newServer.id }) {
-                        viewModel.selectedStream = stream
-                        navigationPath.append(stream)
+                        .padding(.horizontal)
+                        .padding(.vertical, 16)
                     }
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
                 }
+
+                // MARK: - Chat Overlay
+
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
+                }
+            }
+        }
+        .sheet(isPresented: $showCreateServer) {
+            NavigationStack {
+                GroupCreateView()
             }
         }
         .sheet(isPresented: $isShareSheetPresented) {
@@ -639,10 +523,8 @@ struct GroupChatView: View {
 // MARK: - Server Card
 
 struct ServerCardView: View {
-    let server: Server
     let stream: Stream
     let onSelect: () -> Void
-    @State private var isExpanded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -654,7 +536,7 @@ struct ServerCardView: View {
                             .fill(Color.blue.opacity(0.1))
                             .frame(width: 40, height: 40)
 
-                        Image(systemName: server.icon)
+                        Image(systemName: iconForStream(stream))
                             .font(.title3)
                             .foregroundStyle(.blue)
                     }
@@ -662,74 +544,43 @@ struct ServerCardView: View {
                     // Server Info
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(server.name)
+                            Text(stream.profile.name)
                                 .font(.headline)
                                 .foregroundColor(.primary)
-
-                            if server.hasNotification {
-                                NotificationBadge(count: server.unreadCount)
-                            }
                         }
-
-                        Text(server.description)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
                     }
 
                     Spacer()
-
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            isExpanded.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    }
                 }
             }
             .buttonStyle(.plain)
             .padding()
             .background(Color(.secondarySystemGroupedBackground))
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 12) {
-                    PolicyRow(icon: "person.3.fill",
-                              title: "Age Policy",
-                              value: server.policies.agePolicy.rawValue)
-                    PolicyRow(icon: "door.left.hand.open",
-                              title: "Admission",
-                              value: server.policies.admissionPolicy.rawValue)
-                    PolicyRow(icon: "bubble.left.and.bubble.right",
-                              title: "Interaction",
-                              value: server.policies.interactionPolicy.rawValue)
-
-                    Divider()
-                        .padding(.vertical, 8)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
-                .background(Color(.secondarySystemGroupedBackground))
-            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
-}
 
-struct NotificationBadge: View {
-    let count: Int
+    private func iconForStream(_ stream: Stream) -> String {
+        // Convert the publicID to a hash value
+        let hashValue = stream.publicID.hashValue
 
-    var body: some View {
-        Text("\(count)")
-            .font(.caption2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.red)
-            .foregroundColor(.white)
-            .clipShape(Capsule())
+        // Use the hash value modulo 32 to determine the icon
+        let iconIndex = abs(hashValue) % 32
+
+        // Define an array of 32 SF Symbols
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
+        ]
+
+        // Ensure the iconIndex is within bounds
+        return iconNames[iconIndex]
     }
 }
 

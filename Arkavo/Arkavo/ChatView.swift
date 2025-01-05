@@ -11,36 +11,49 @@ struct ChatView: View {
     @State private var isConnecting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            connectionStatusBar
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(viewModel.messages) { message in
-                        MessageRow(message: message)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(viewModel.messages) { message in
+                                MessageRow(message: message)
+                                    .id(message.id) // Ensure each message has an id for scrolling
+                            }
+                        }
+                        .padding()
                     }
-                }
-                .padding()
-            }
-
-            MessageInputBar(
-                messageText: $messageText,
-                placeholder: "Type a message...",
-                onAttachmentTap: { showingAttachmentPicker.toggle() },
-                onSend: {
-                    Task {
-                        do {
-                            try await viewModel.sendMessage(content: messageText)
-                            messageText = ""
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
+                    .frame(maxHeight: geometry.size.height - keyboardHeight - 56)
+                    .onChange(of: viewModel.messages) { _, _ in
+                        // Scroll to the last message with animation
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation {
+                                scrollProxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
-            )
+
+                MessageInputBar(
+                    messageText: $messageText,
+                    placeholder: "Type a message...",
+                    onAttachmentTap: { showingAttachmentPicker.toggle() },
+                    onSend: {
+                        Task {
+                            do {
+                                try await viewModel.sendMessage(content: messageText)
+                                messageText = ""
+                            } catch {
+                                errorMessage = error.localizedDescription
+                                showError = true
+                            }
+                        }
+                    }
+                )
+            }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {
@@ -49,32 +62,18 @@ struct ChatView: View {
         } message: {
             Text(errorMessage)
         }
-    }
-
-    private var connectionStatusBar: some View {
-        HStack {
-            switch viewModel.connectionState {
-            case .connected:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                Text("Connected")
-            case .connecting, .authenticating:
-                ProgressView()
-                Text("Connecting...")
-            case .disconnected:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.orange)
-                Text("Disconnected")
-            case let .error(error):
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.red)
-                Text("Error: \(error.localizedDescription)")
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    keyboardHeight = keyboardFrame.height
+                }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal)
-        .background(Color(.systemBackground))
-        .shadow(radius: 1)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.16)) {
+                keyboardHeight = 0
+            }
+        }
     }
 }
 
@@ -85,6 +84,7 @@ struct MessageInputBar: View {
     let placeholder: String
     let onAttachmentTap: () -> Void
     let onSend: () -> Void
+    @FocusState var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,6 +98,7 @@ struct MessageInputBar: View {
 
                 TextField(placeholder, text: $messageText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($isFocused)
 
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -306,6 +307,89 @@ struct ReactionButton: View {
             .background(reaction.hasReacted ? Color.blue.opacity(0.2) : Color.secondary.opacity(0.2))
             .cornerRadius(12)
         }
+    }
+}
+
+struct ChatOverlay: View {
+    @EnvironmentObject var sharedState: SharedState
+    @FocusState private var isChatFieldFocused: Bool
+
+    var body: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation {
+                        sharedState.showChatOverlay = false
+                    }
+                }
+                .zIndex(1)
+
+            // Chat content
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Comments")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation {
+                            sharedState.showChatOverlay = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+
+                // Chat view
+                if let stream = getAppropriateStream() {
+                    ChatView(
+                        viewModel: ViewModelFactory.shared.makeChatViewModel(
+                            stream: stream
+                        )
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .focused($isChatFieldFocused)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 44) // Start below status bar
+            .zIndex(2)
+        }
+        .transition(.move(edge: .bottom))
+        .ignoresSafeArea()
+        .onAppear {
+            // Delay focus slightly to allow animation to complete
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isChatFieldFocused = true
+            }
+        }
+    }
+
+    private func getAppropriateStream() -> Stream? {
+        // If there's a selected server, use that
+        if let selectedServer = sharedState.selectedStream {
+            return selectedServer
+        }
+
+        // Otherwise, get the appropriate stream based on content type
+        if let account = ViewModelFactory.shared.getCurrentAccount() {
+            if sharedState.selectedVideo != nil {
+                return account.streams.first
+            } else if let thought = sharedState.selectedThought {
+                return account.streams.first { stream in
+                    stream.thoughts.contains { $0.id == thought.id }
+                }
+            }
+        }
+
+        return nil
     }
 }
 

@@ -11,19 +11,23 @@ struct Video: Identifiable {
     let url: URL
     let contributors: [Contributor]
     let description: String
-    var likes: Int
-    var comments: Int
-    var shares: Int
 
     static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
         Video(
             id: uploadResult.id,
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
-            description: "Just recorded!",
-            likes: 0,
-            comments: 0,
-            shares: 0
+            description: "Just recorded!"
+        )
+    }
+
+    static func from(thought: Thought) -> Video? {
+        let url = URL(string: "nano://\(thought.publicID.base58EncodedString)/")!
+        return Video(
+            id: thought.id.uuidString,
+            url: url,
+            contributors: thought.metadata.contributors,
+            description: thought.metadata.summary
         )
     }
 }
@@ -44,7 +48,7 @@ struct VideoContentView: View {
             if sharedState.showCreateView {
                 VideoCreateView(feedViewModel: feedViewModel)
             } else {
-                VideoFeedView(viewModel: feedViewModel)
+                VideoFeedView()
             }
         }
         .animation(.spring, value: sharedState.showCreateView)
@@ -53,11 +57,16 @@ struct VideoContentView: View {
 
 struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @ObservedObject var viewModel: VideoFeedViewModel
+    @StateObject private var viewModel: VideoFeedViewModel
+
+    init() {
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                // Main feed content
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
@@ -79,6 +88,7 @@ struct VideoFeedView: View {
                     }
                 }
 
+                // Loading state
                 if viewModel.videos.isEmpty {
                     VStack {
                         Spacer()
@@ -90,6 +100,11 @@ struct VideoFeedView: View {
                     .background(Color(.systemBackground))
                     .onAppear { sharedState.isAwaiting = true }
                     .onDisappear { sharedState.isAwaiting = false }
+                }
+
+                // Reusable chat overlay
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
                 }
             }
         }
@@ -188,14 +203,13 @@ struct ContributorsView: View {
 struct VideoPlayerView: View {
     @EnvironmentObject var sharedState: SharedState
     @ObservedObject var viewModel: VideoFeedViewModel
-    @State private var showChat = false
     @State private var dragOffset = CGSize.zero
     let video: Video
     let size: CGSize
     private let swipeThreshold: CGFloat = 50
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
-    private let servers: [Server]
+    private let servers: [Stream]
 
     init(video: Video,
          viewModel: VideoFeedViewModel,
@@ -204,7 +218,7 @@ struct VideoPlayerView: View {
         self.video = video
         self.viewModel = viewModel
         self.size = size
-        servers = viewModel.servers()
+        servers = viewModel.streams()
     }
 
     var body: some View {
@@ -243,9 +257,7 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            servers: servers,
-                            comments: video.comments,
-                            showChat: $showChat
+                            streams: servers
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -289,14 +301,6 @@ struct VideoPlayerView: View {
         }
         .frame(width: size.width, height: size.height)
         .ignoresSafeArea()
-        .sheet(isPresented: $showChat) {
-            if let stream = viewModel.account.streams.first {
-                let viewModel = ViewModelFactory.shared.makeChatViewModel(stream: stream)
-                ChatView(
-                    viewModel: viewModel
-                )
-            }
-        }
     }
 }
 
@@ -304,11 +308,9 @@ struct GroupChatIconList: View {
     @EnvironmentObject var sharedState: SharedState
     let currentVideo: Video?
     let currentThought: Thought?
-    let servers: [Server]
-    let comments: Int
+    let streams: [Stream]
     @State private var isCollapsed = true
     @State private var showMenuButton = true
-    @Binding var showChat: Bool
 
     // Timer to auto-collapse after 4 seconds
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
@@ -318,14 +320,14 @@ struct GroupChatIconList: View {
             if !isCollapsed {
                 // Expanded view with all buttons
                 VStack(spacing: 20) { // Even spacing between all items
-                    ForEach(servers) { server in
+                    ForEach(streams) { stream in
                         Button {
                             sharedState.selectedVideo = currentVideo
                             sharedState.selectedThought = currentThought
-                            sharedState.selectedServer = server
-                            sharedState.selectedTab = .communities
+                            sharedState.selectedStream = stream
+                            sharedState.showChatOverlay = true
                         } label: {
-                            Image(systemName: server.icon)
+                            Image(systemName: iconForStream(stream))
                                 .font(.title3)
                                 .foregroundColor(.secondary)
                                 .frame(width: 44, height: 44)
@@ -334,7 +336,7 @@ struct GroupChatIconList: View {
 
                     // Comment button integrated into the list
                     Button {
-                        showChat = true
+                        sharedState.showChatOverlay = true
                         withAnimation(.spring()) {
                             isCollapsed = true
                             showMenuButton = true
@@ -396,6 +398,29 @@ struct GroupChatIconList: View {
         withAnimation(.spring(response: 0.1, dampingFraction: 0.8)) {
             isCollapsed = false
         }
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        // Convert the publicID to a hash value
+        let hashValue = stream.publicID.hashValue
+
+        // Use the hash value modulo 32 to determine the icon
+        let iconIndex = abs(hashValue) % 32
+
+        // Define an array of 32 SF Symbols
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
+        ]
+
+        // Ensure the iconIndex is within bounds
+        return iconNames[iconIndex]
     }
 }
 
@@ -541,10 +566,10 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 }
             }
 
-            // If still no videos, load from stream's thoughts
+            // If still no videos, load from account video-stream thoughts
             if videos.isEmpty {
-                for thought in videoStream.thoughts {
-                    print("thought: \(thought.publicID) \(thought.nano.count)")
+                if let thought = videoStream.thoughts.last(where: { $0.metadata.mediaType == .video }) {
+                    try? await router.processMessage(thought.nano, messageId: thought.id)
                 }
             }
             // Wait for a limited time if we still have no videos
@@ -600,14 +625,12 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
             }
 
             // Create new video object using the cached file URL
+            // FIXME: use ArkavoPolicy.Metadata
             let video = Video(
                 id: UUID().uuidString,
                 url: videoFileURL,
                 contributors: [], // Add contributors if available in policy
-                description: "New video",
-                likes: 0,
-                comments: 0,
-                shares: 0
+                description: policy.type.rawValue
             )
 
             // Update UI
@@ -628,47 +651,9 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
         }
     }
 
-    func servers() -> [Server] {
-        let servers = account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
-        return servers
-    }
-
-    private func iconForStream(_ stream: Stream) -> String {
-        // Convert the publicID to a hash value
-        let hashValue = stream.publicID.hashValue
-
-        // Use the hash value modulo 32 to determine the icon
-        let iconIndex = abs(hashValue) % 32
-
-        // Define an array of 32 SF Symbols
-        let iconNames = [
-            "person.fill", "figure.child", "figure.wave", "person.3.fill",
-            "star.fill", "heart.fill", "flag.fill", "book.fill",
-            "house.fill", "car.fill", "bicycle", "airplane",
-            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
-            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
-            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
-            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
-            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
-        ]
-
-        // Ensure the iconIndex is within bounds
-        return iconNames[iconIndex]
+    func streams() -> [Stream] {
+        let streams = account.streams.dropFirst(2)
+        return Array(streams)
     }
 
     func cleanupOldCacheFiles() {

@@ -602,12 +602,13 @@ enum ArkavoError: Error {
 
 class SharedState: ObservableObject {
     @Published var selectedCreator: Creator?
-    @Published var selectedServer: Server?
+    @Published var selectedStream: Stream?
     @Published var selectedVideo: Video?
     @Published var selectedThought: Thought?
+    @Published var selectedChannel: Channel?
     @Published var selectedTab: Tab = .home
     @Published var showCreateView: Bool = false
-    @Published var selectedChannel: Channel?
+    @Published var showChatOverlay: Bool = false
     @Published var isAwaiting: Bool = false
 }
 

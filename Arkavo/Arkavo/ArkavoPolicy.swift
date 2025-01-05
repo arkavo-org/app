@@ -44,7 +44,7 @@ class ArkavoPolicy {
     }
 
     private static func parseMetadata(from data: Data) throws -> PolicyType {
-        print("Raw FlatBuffer Data: \(data.map { String(format: "%02x", $0) }.joined())")
+//        print("Raw FlatBuffer Data: \(data.map { String(format: "%02x", $0) }.joined())")
         // Create ByteBuffer with the data
         var bb = ByteBuffer(data: data)
         let rootOffset = bb.read(def: Int32.self, position: 0)
@@ -52,47 +52,45 @@ class ArkavoPolicy {
         // Verify the FlatBuffer data structure
         var verifier = try Verifier(buffer: &bb)
         try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-        print("Successfully verified Arkavo_Metadata structure")
+//        print("Successfully verified Arkavo_Metadata structure")
 
         // Create metadata object with verified offset
         let metadata = Arkavo_Metadata(bb, o: rootOffset)
-        print(metadata)
-
-        // Print or use the deserialized data
-        print("Created: \(metadata.created)")
-        print("ID: \(metadata.id)")
-        print("Related: \(metadata.related)")
-
-        if let rating = metadata.rating {
-            print("Rating - Violent: \(rating.violent)")
-            print("Rating - Sexual: \(rating.sexual)")
-            // Print other rating fields...
-        }
-
-        if let purpose = metadata.purpose {
-            print("Purpose - Educational: \(purpose.educational)")
-            print("Purpose - Entertainment: \(purpose.entertainment)")
-            // Print other purpose fields...
-        }
-
-        print("Topics: \(metadata.topics)")
-
-        if let archive = metadata.archive {
-            print("Archive - Type: \(archive.type)")
-            print("Archive - Version: \(archive.version ?? "N/A")")
-            print("Archive - Profile: \(archive.profile ?? "N/A")")
-        }
-
-        if let content = metadata.content {
-            print("Content - Media Type: \(content.mediaType)")
-            print("Content - Data Encoding: \(content.dataEncoding)")
-
-            if let format = content.format {
-                print("Format - Type: \(format.type)")
-                print("Format - Version: \(format.version ?? "N/A")")
-                print("Format - Profile: \(format.profile ?? "N/A")")
-            }
-        }
+//        print(metadata)
+//
+//        // Print or use the deserialized data
+//        print("Created: \(metadata.created)")
+//        print("ID: \(metadata.id)")
+//        print("Related: \(metadata.related)")
+//
+//        if let rating = metadata.rating {
+//            print("Rating - Violent: \(rating.violent)")
+//            print("Rating - Sexual: \(rating.sexual)")
+//        }
+//
+//        if let purpose = metadata.purpose {
+//            print("Purpose - Educational: \(purpose.educational)")
+//            print("Purpose - Entertainment: \(purpose.entertainment)")
+//        }
+//
+//        print("Topics: \(metadata.topics)")
+//
+//        if let archive = metadata.archive {
+//            print("Archive - Type: \(archive.type)")
+//            print("Archive - Version: \(archive.version ?? "N/A")")
+//            print("Archive - Profile: \(archive.profile ?? "N/A")")
+//        }
+//
+//        if let content = metadata.content {
+//            print("Content - Media Type: \(content.mediaType)")
+//            print("Content - Data Encoding: \(content.dataEncoding)")
+//
+//            if let format = content.format {
+//                print("Format - Type: \(format.type)")
+//                print("Format - Version: \(format.version ?? "N/A")")
+//                print("Format - Profile: \(format.profile ?? "N/A")")
+//            }
+//        }
         // Check for video content first
         if let content = metadata.content,
            content.mediaType == .video

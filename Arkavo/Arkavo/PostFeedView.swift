@@ -24,12 +24,10 @@ class PostFeedViewModel: ObservableObject {
         self.client = client
         self.account = account
         self.profile = profile
-
-        // Load initial thoughts
+        setupNotifications()
         Task {
             await loadThoughts()
         }
-        setupNotifications()
     }
 
     private func setupNotifications() {
@@ -123,24 +121,9 @@ class PostFeedViewModel: ObservableObject {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
-    func servers() -> [Server] {
-        let servers = account.streams.map { stream in
-            Server(
-                id: stream.id.uuidString,
-                name: stream.profile.name,
-                imageURL: nil,
-                icon: iconForStream(stream),
-                unreadCount: stream.thoughts.count,
-                hasNotification: !stream.thoughts.isEmpty,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
-        }
-        return servers
+    func streams() -> [Stream] {
+        let streams = account.streams.dropFirst(2)
+        return Array(streams)
     }
 
     private func iconForStream(_ stream: Stream) -> String {
@@ -176,7 +159,6 @@ class PostFeedViewModel: ObservableObject {
     private func loadThoughts() async {
         isLoading = true
         defer { isLoading = false }
-
         // First try to load from stream
         if let postStream = getPostStream() {
             // Load any cached messages first
@@ -192,16 +174,12 @@ class PostFeedViewModel: ObservableObject {
                     print("Failed to process cached message: \(error)")
                 }
             }
-
-            // If still no thoughts, load from stream
+            // If still no videos, load from account video-stream thoughts
             if thoughts.isEmpty {
-                thoughts = postStream.thoughts.sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+                if let thought = postStream.thoughts.last(where: { $0.metadata.mediaType == .text }) {
+                    try? await router.processMessage(thought.nano, messageId: thought.id)
+                }
             }
-        }
-
-        // Wait until we have some thoughts to show
-        while thoughts.isEmpty {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
         }
     }
 
@@ -420,7 +398,6 @@ struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
     @State private var currentIndex = 0
-    @State private var showChat = false
 
     var body: some View {
         ZStack {
@@ -456,8 +433,7 @@ struct PostFeedView: View {
                                     ImmersiveThoughtCard(
                                         viewModel: viewModel,
                                         thought: thought,
-                                        size: geometry.size,
-                                        showChat: $showChat
+                                        size: geometry.size
                                     )
                                     .frame(width: geometry.size.width, height: geometry.size.height)
                                 }
@@ -651,7 +627,6 @@ struct ImmersiveThoughtCard: View {
     @StateObject var viewModel: PostFeedViewModel
     let thought: Thought
     let size: CGSize
-    @Binding var showChat: Bool
     private let systemMargin: CGFloat = 16
 
     var body: some View {
@@ -676,9 +651,7 @@ struct ImmersiveThoughtCard: View {
                         GroupChatIconList(
                             currentVideo: nil,
                             currentThought: thought,
-                            servers: viewModel.servers(),
-                            comments: 0,
-                            showChat: $showChat
+                            streams: viewModel.streams()
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -694,12 +667,15 @@ struct ImmersiveThoughtCard: View {
                         Spacer()
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showChat) {
-            if let postStream = viewModel.getPostStream() {
-                let chatViewModel = ViewModelFactory.shared.makeChatViewModel(stream: postStream)
-                ChatView(viewModel: chatViewModel)
+
+                // Chat overlay
+                if sharedState.showChatOverlay {
+                    ChatOverlay()
+                        .onAppear {
+                            sharedState.selectedThought = thought
+                            sharedState.selectedStream = viewModel.getPostStream()
+                        }
+                }
             }
         }
     }

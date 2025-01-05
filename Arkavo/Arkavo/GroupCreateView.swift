@@ -65,20 +65,6 @@ struct GroupCreateView: View {
                 policies: Policies(admission: .openInvitation, interaction: .open, age: .onlyKids)
             )
             print("newStream newStream \(newStream.publicID.base58EncodedString)")
-            let server = Server(
-                id: newStream.id.uuidString,
-                name: serverName,
-                imageURL: nil,
-                icon: "bubble.left.and.bubble.right",
-                unreadCount: 0,
-                hasNotification: false,
-                description: "description",
-                policies: StreamPolicies(
-                    agePolicy: .onlyKids,
-                    admissionPolicy: .open,
-                    interactionPolicy: .open
-                )
-            )
 
             let account = ViewModelFactory.shared.getCurrentAccount()!
             account.streams.append(newStream)
@@ -86,7 +72,7 @@ struct GroupCreateView: View {
             try await PersistenceController.shared.saveChanges()
 
             await MainActor.run {
-                sharedState.selectedServer = server
+                sharedState.selectedStream = newStream
             }
         } catch {
             await MainActor.run {
