@@ -277,7 +277,7 @@ final class VideoPlayerManager: NSObject {
     }
 
     func playVideo(url: URL) {
-        print("📊 Playing video: \(url)")
+//        print("📊 Playing video: \(url)")
         if let preloadedItem = preloadedItems[url.absoluteString] {
             currentItem = preloadedItem
             player.replaceCurrentItem(with: preloadedItem)
