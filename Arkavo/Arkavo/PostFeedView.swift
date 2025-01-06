@@ -151,17 +151,18 @@ class PostFeedViewModel: ObservableObject {
         // First try to load from stream
         let postStream = getPostStream()
         // Load any cached messages first
-        let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
+        let queueManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageQueueManager
         let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
-        let cachedMessages = cacheManager.getCachedMessages(forStream: postStream.publicID)
-
-        // Process cached messages
-        for (messageId, message) in cachedMessages {
+        if let (messageId, message) = queueManager.getNextMessage(
+            ofType: 0x05,
+            forStream: postStream.publicID
+        ) {
             do {
                 try await router.processMessage(message.data, messageId: messageId)
             } catch {
                 print("Failed to process cached message: \(error)")
             }
+            queueManager.removeMessage(messageId)
         }
         // If still no videos, load from account video-stream thoughts
         if thoughts.isEmpty {

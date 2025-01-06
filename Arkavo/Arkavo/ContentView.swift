@@ -211,10 +211,9 @@ struct WaveLoadingView: View {
 
             // Message with dots
             HStack(spacing: 4) {
-                Text(message + " ")
+                Text(message + " ...")
                     .foregroundColor(.gray)
                     .font(.title3)
-                LoadingDots()
             }
         }
         .onAppear {
@@ -224,30 +223,6 @@ struct WaveLoadingView: View {
             withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
                 boatOffset = .pi * 2
             }
-        }
-    }
-}
-
-struct LoadingDots: View {
-    @State private var dotOpacity = 0.2
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(0 ..< 3) { index in
-                Circle()
-                    .frame(width: 6, height: 6)
-                    .foregroundColor(.gray)
-                    .opacity(dotOpacity)
-                    .animation(
-                        .easeInOut(duration: 1.2) // Slowed down animation
-                            .repeatForever()
-                            .delay(Double(index) * 0.4), // Increased delay between dots
-                        value: dotOpacity
-                    )
-            }
-        }
-        .onAppear {
-            dotOpacity = 1
         }
     }
 }
