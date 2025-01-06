@@ -19,12 +19,13 @@ public class KeychainManager {
         }
     }
 
-    static func save(_ data: Data, service: String, account: String) throws {
+    static func save(_ data: Data, service: String, account: String, accessGroup: String = "com.arkavo.shared") throws {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
             kSecAttrAccount as String: account as AnyObject,
             kSecValueData as String: data as AnyObject,
+            kSecAttrAccessGroup as String: accessGroup as AnyObject
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -43,13 +44,14 @@ public class KeychainManager {
         }
     }
 
-    static func load(service: String, account: String) throws -> Data {
+    static func load(service: String, account: String, accessGroup: String = "com.arkavo.shared") throws -> Data {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
             kSecAttrAccount as String: account as AnyObject,
             kSecReturnData as String: kCFBooleanTrue,
             kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecAttrAccessGroup as String: accessGroup as AnyObject
         ]
 
         var result: AnyObject?
@@ -75,11 +77,12 @@ public class KeychainManager {
         }
     }
 
-    static func delete(service: String, account: String) throws {
+    static func delete(service: String, account: String, accessGroup: String = "com.arkavo.shared") throws {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
             kSecAttrAccount as String: account as AnyObject,
+            kSecAttrAccessGroup as String: accessGroup as AnyObject // Add access group
         ]
 
         let status = SecItemDelete(query as CFDictionary)
