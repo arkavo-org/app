@@ -35,8 +35,8 @@ struct ArkavoApp: App {
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
         do {
-            let cacheManager = try MessageCacheManager()
-            ViewModelFactory.shared.serviceLocator.register(cacheManager)
+            let queueManager = try MessageQueueManager()
+            ViewModelFactory.shared.serviceLocator.register(queueManager)
         } catch {
             print("Failed to initialize message cache: \(error)")
         }
@@ -279,11 +279,10 @@ struct ArkavoApp: App {
 
         // Create initial thought that marks this as a video stream
         let initialMetadata = Thought.Metadata(
-            creator: profile.id,
+            creatorPublicID: profile.publicID,
             streamPublicID: stream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            summary: "Video Stream",
             contributors: []
         )
 
@@ -327,11 +326,10 @@ struct ArkavoApp: App {
 
         // Create initial thought that marks this as a post stream
         let initialMetadata = Thought.Metadata(
-            creator: profile.id,
+            creatorPublicID: profile.publicID,
             streamPublicID: stream.publicID,
             mediaType: .text, // Posts are primarily text-based
             createdAt: Date(),
-            summary: "Post Stream",
             contributors: []
         )
 
@@ -601,7 +599,7 @@ enum ArkavoError: Error {
 }
 
 class SharedState: ObservableObject {
-    @Published var selectedCreator: Creator?
+    @Published var selectedCreatorPublicID: Data?
     @Published var selectedStream: Stream?
     @Published var selectedVideo: Video?
     @Published var selectedThought: Thought?

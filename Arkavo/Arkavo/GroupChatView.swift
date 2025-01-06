@@ -77,10 +77,10 @@ class GroupChatViewModel: ObservableObject {
 
             Task { @MainActor [weak self] in
                 do {
-                    print("\n=== Processing Decrypted Stream Data ===")
-                    print("Data size: \(data.count)")
-                    print("Policy type: \(policy.type)")
                     if policy.type == .streamProfile {
+                        print("\n=== GroupChatViewModel Processing Decrypted Stream Data ===")
+                        print("Data size: \(data.count)")
+                        print("Policy type: \(policy.type)")
                         try await self?.handleStreamData(data)
                     }
                 } catch {

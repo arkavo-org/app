@@ -667,14 +667,11 @@ final class VideoRecordingViewModel: ObservableObject {
         print("📦 Content format created at offset: \(contentFormat.o)")
 
         // 5. Create vectors
-        guard let idData = metadata.creator.uuidString.data(using: .utf8) else {
-            throw VideoError.processingFailed("Invalid creator ID format")
-        }
-        let idVector = builder.createVector(idData.map(\.self))
-        print("🔑 ID vector created, size: \(idData.count)")
+        let idVector = builder.createVector(bytes: metadata.creatorPublicID)
+        print("🔑 ID vector created, size: \(metadata.creatorPublicID.base58EncodedString)")
 
-        let relatedVector = builder.createVector(metadata.streamPublicID.map(\.self))
-        print("🔗 Related vector created, size: \(metadata.streamPublicID.count)")
+        let relatedVector = builder.createVector(bytes: metadata.streamPublicID)
+        print("🔗 Related vector created, size: \(metadata.streamPublicID.base58EncodedString)")
 
         let topicsVector = builder.createVector([UInt32]())
         print("📝 Topics vector created")
@@ -794,15 +791,13 @@ final class VideoRecordingViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        let title = formatter.string(from: Date())
 
         // Create metadata
         let metadata = Thought.Metadata(
-            creator: profile.id,
+            creatorPublicID: profile.publicID,
             streamPublicID: videoStream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            summary: title,
             contributors: []
         )
 

@@ -1,11 +1,10 @@
 import ArkavoSocial
 import CryptoKit
-import Foundation
-import SwiftUI
-#if os(iOS)
-    import UIKit
-#endif
 import FlatBuffers
+import Foundation
+import OpenTDFKit
+import SwiftUI
+import UIKit
 
 // MARK: - View Models
 
@@ -19,6 +18,7 @@ class PostFeedViewModel: ObservableObject {
     @Published var currentThoughtIndex = 0
     @Published var isLoading = false
     @Published var error: Error?
+    @Published var postQueue = PostMessageQueue()
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -56,10 +56,10 @@ class PostFeedViewModel: ObservableObject {
             queue: nil
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data,
-                  let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
+                  let header = notification.userInfo?["header"] as? Header else { return }
 
             Task { @MainActor [weak self] in
-                await self?.handleDecryptedMessage(data: data, policy: policy)
+                await self?.handleDecryptedMessage(data: data, header: header)
             }
         }
         notificationObservers.append(messageObserver)
@@ -82,32 +82,24 @@ class PostFeedViewModel: ObservableObject {
         // Handle connection state changes if needed
     }
 
-    private func handleDecryptedMessage(data: Data, policy _: ArkavoPolicy) async {
+    private func handleDecryptedMessage(data: Data, header: Header) async {
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+            if let bodyData = header.policy.body?.body {
+                let metadata = try ArkavoPolicy.parseMetadata(from: bodyData)
 
-            // Create thought metadata
-            let thoughtMetadata = Thought.Metadata(
-                creator: UUID(), // This should be derived from creator public ID
-                streamPublicID: thoughtModel.streamPublicID,
-                mediaType: thoughtModel.mediaType,
-                createdAt: Date(),
-                summary: String(data: thoughtModel.content, encoding: .utf8) ?? "",
-                contributors: []
-            )
+                // Create and save thought
+                let thought = try Thought.from(thoughtModel, arkavoMetadata: metadata)
 
-            // Create and save thought
-            let thought = Thought(
-                nano: data, // Store the encrypted data
-                metadata: thoughtMetadata
-            )
+                // Save thought
+                _ = try PersistenceController.shared.saveThought(thought)
+                try await PersistenceController.shared.saveChanges()
 
-            // Save thought
-            _ = try PersistenceController.shared.saveThought(thought)
-            try await PersistenceController.shared.saveChanges()
-
-            // Update UI
-            thoughts.insert(thought, at: 0)
+                await MainActor.run {
+                    thoughts.insert(thought, at: 0)
+                    postQueue.enqueuePost(thought)
+                }
+            }
         } catch {
             self.error = error
         }
@@ -149,67 +141,52 @@ class PostFeedViewModel: ObservableObject {
         return iconNames[iconIndex]
     }
 
-    func getPostStream() -> Stream? {
+    func getPostStream() -> Stream {
         // Find the stream that's marked as a post stream (has a text source thought)
         account.streams.first { stream in
             stream.source?.metadata.mediaType == .text
-        }
+        }!
     }
 
     private func loadThoughts() async {
         isLoading = true
         defer { isLoading = false }
-        // First try to load from stream
-        if let postStream = getPostStream() {
-            // Load any cached messages first
-            let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
-            let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
-            let cachedMessages = cacheManager.getCachedMessages(forStream: postStream.publicID)
 
-            // Process cached messages
-            for (messageId, message) in cachedMessages {
+        // First try to load from stream
+        let postStream = getPostStream()
+
+        // Load any cached messages first
+        let queueManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageQueueManager
+        let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+
+        // Try to load multiple messages
+        for _ in 0 ..< 10 { // Load up to 10 messages initially
+            if let (messageId, message) = queueManager.getNextMessage(
+                ofType: 0x05,
+                forStream: postStream.publicID
+            ) {
                 do {
                     try await router.processMessage(message.data, messageId: messageId)
+                    queueManager.removeMessage(messageId)
                 } catch {
                     print("Failed to process cached message: \(error)")
                 }
-            }
-            // If still no videos, load from account video-stream thoughts
-            if thoughts.isEmpty {
-                if let thought = postStream.thoughts.last(where: { $0.metadata.mediaType == .text }) {
-                    try? await router.processMessage(thought.nano, messageId: thought.id)
-                }
+            } else {
+                break // No more messages available
             }
         }
-    }
 
-    func getCurrentCreator() -> Creator {
-        let tier = if account.identityAssuranceLevel == .ial1 || profile.hasHighIdentityAssurance {
-            "Verified"
-        } else if profile.hasHighEncryption {
-            "Premium"
-        } else {
-            "Basic"
+        // If still no thoughts, load from account post-stream thoughts
+        if thoughts.isEmpty {
+            let relevantThoughts = postStream.thoughts
+                .filter { $0.metadata.mediaType == .text }
+                .suffix(10) // Load up to 10 thoughts
+
+            for thought in relevantThoughts {
+                try? await router.processMessage(thought.nano, messageId: thought.id)
+                postQueue.enqueuePost(thought)
+            }
         }
-
-        let bio = [
-            profile.blurb,
-            !profile.interests.isEmpty ? "Interests: \(profile.interests)" : nil,
-            !profile.location.isEmpty ? "📍 \(profile.location)" : nil,
-        ]
-        .compactMap(\.self)
-        .joined(separator: "\n")
-
-        return Creator(
-            id: profile.publicID.base58EncodedString,
-            name: profile.name,
-            imageURL: "",
-            latestUpdate: profile.blurb ?? "",
-            tier: tier,
-            socialLinks: [],
-            notificationCount: 0,
-            bio: bio
-        )
     }
 
     private func createFlatBuffersPolicy(for thoughtModel: ThoughtServiceModel) throws -> Data {
@@ -299,10 +276,12 @@ class PostFeedViewModel: ObservableObject {
         // Create message data
         let messageData = content.data(using: .utf8) ?? Data()
 
+        let postStream = getPostStream()
+
         // Create thought service model
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for feed posts
+            streamPublicID: postStream.publicID,
             mediaType: .text,
             content: messageData
         )
@@ -318,11 +297,10 @@ class PostFeedViewModel: ObservableObject {
         )
 
         let thoughtMetadata = Thought.Metadata(
-            creator: profile.id,
-            streamPublicID: Data(), // No specific stream for feed posts
+            creatorPublicID: profile.publicID,
+            streamPublicID: postStream.publicID,
             mediaType: .text,
             createdAt: Date(),
-            summary: content,
             contributors: []
         )
 
@@ -336,10 +314,8 @@ class PostFeedViewModel: ObservableObject {
         _ = try PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
 
-        if let postStream = getPostStream() {
-            postStream.addThought(thought)
-            try await PersistenceController.shared.saveChanges()
-        }
+        postStream.addThought(thought)
+        try await PersistenceController.shared.saveChanges()
     }
 
     func handleSelectedImage(_ image: UIImage) async throws {
@@ -348,10 +324,12 @@ class PostFeedViewModel: ObservableObject {
             throw ArkavoError.messageError("Failed to convert image to HEIF data")
         }
 
+        let postStream = getPostStream()
+
         // Create thought service model for image
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
-            streamPublicID: Data(), // No specific stream for now
+            streamPublicID: postStream.publicID,
             mediaType: .image,
             content: imageData
         )
@@ -367,11 +345,10 @@ class PostFeedViewModel: ObservableObject {
         )
 
         let thoughtMetadata = Thought.Metadata(
-            creator: profile.id,
-            streamPublicID: Data(), // No specific stream for feed posts
+            creatorPublicID: profile.publicID,
+            streamPublicID: postStream.publicID,
             mediaType: .image,
             createdAt: Date(),
-            summary: "image",
             contributors: []
         )
 
@@ -637,7 +614,7 @@ struct ImmersiveThoughtCard: View {
 
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
-                        Text(thought.metadata.summary)
+                        Text(thought.metadata.createdAt.ISO8601Format())
                             .font(.system(size: 24, weight: .heavy))
                             .foregroundColor(.white)
                     }
@@ -678,5 +655,138 @@ struct ImmersiveThoughtCard: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - PostFeedViewModel Extension
+
+extension PostFeedViewModel {
+    @MainActor
+    func handleSwipe(_ direction: SwipeDirection) async {
+        print("Handling swipe: \(direction)")
+        switch direction {
+        case .up:
+            if currentThoughtIndex < thoughts.count - 1 {
+                print("Moving to next post")
+                currentThoughtIndex += 1
+                // Process state change
+                postQueue.moveToNext()
+                // Check if we need more posts
+                if postQueue.needsMorePosts {
+                    await loadThoughts()
+                }
+                await prepareNextPost()
+            }
+        case .down:
+            if currentThoughtIndex > 0 {
+                print("Moving to previous post")
+                currentThoughtIndex -= 1
+                try? postQueue.moveToPrevious()
+                await prepareNextPost()
+            }
+        }
+    }
+
+    @MainActor
+    func prepareNextPost() async {
+        // Prepare the next post if available
+        if postQueue.stats.pending > 1 {
+            let nextIndex = postQueue.stats.current + 1
+            if nextIndex < postQueue.posts.count {
+                // Any preparation needed for the next post can go here
+            }
+        }
+    }
+
+    enum SwipeDirection {
+        case up
+        case down
+    }
+}
+
+@MainActor
+final class PostMessageQueue {
+    // MARK: - Constants
+
+    private enum Constants {
+        static let maxBufferAhead = 10 // Number of posts to keep ready
+        static let maxBufferBehind = 5 // Number of viewed posts to keep
+    }
+
+    // MARK: - Types
+
+    enum PostQueueError: Error {
+        case invalidIndex
+        case postNotFound
+        case bufferEmpty
+    }
+
+    // MARK: - Properties
+
+    private var viewedPosts: [Thought] = [] // Posts already viewed, limited to maxBufferBehind
+    private var pendingPosts: [Thought] = [] // Posts ready to view, limited to maxBufferAhead
+    private var currentIndex: Int = 0 // Index in the combined post array
+
+    var posts: [Thought] { viewedPosts + pendingPosts }
+    var needsMorePosts: Bool { pendingPosts.count < Constants.maxBufferAhead }
+
+    // MARK: - Public Methods
+
+    /// Add a new post to the pending queue
+    func enqueuePost(_ post: Thought) {
+        // Only add if we haven't hit the buffer limit
+        if pendingPosts.count < Constants.maxBufferAhead {
+            pendingPosts.append(post)
+        }
+    }
+
+    /// Get the current post
+    func currentPost() throws -> Thought {
+        guard !posts.isEmpty else { throw PostQueueError.bufferEmpty }
+        guard currentIndex >= 0, currentIndex < posts.count else {
+            throw PostQueueError.invalidIndex
+        }
+        return posts[currentIndex]
+    }
+
+    /// Move to next post and maintain buffers
+    func moveToNext() {
+        guard currentIndex + 1 < posts.count else {
+            return
+        }
+
+        // If moving forward, move current post to viewed
+        if let currentPost = try? currentPost() {
+            viewedPosts.append(currentPost)
+            pendingPosts.removeFirst()
+
+            // Maintain viewed buffer size
+            while viewedPosts.count > Constants.maxBufferBehind {
+                viewedPosts.removeFirst()
+            }
+        }
+
+        currentIndex = min(currentIndex + 1, posts.count - 1)
+    }
+
+    /// Move to previous post
+    func moveToPrevious() throws {
+        guard currentIndex > 0 else {
+            throw PostQueueError.invalidIndex
+        }
+
+        currentIndex = max(0, currentIndex - 1)
+    }
+
+    /// Clear all posts
+    func clear() {
+        viewedPosts.removeAll()
+        pendingPosts.removeAll()
+        currentIndex = 0
+    }
+
+    /// Get current queue stats
+    var stats: (viewed: Int, pending: Int, current: Int) {
+        (viewedPosts.count, pendingPosts.count, currentIndex)
     }
 }

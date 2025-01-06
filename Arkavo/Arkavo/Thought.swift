@@ -7,11 +7,10 @@ final class Thought: Identifiable, Codable {
     // MARK: - Nested Types
 
     struct Metadata: Codable {
-        let creator: UUID
+        var creatorPublicID: Data
         let streamPublicID: Data
         let mediaType: MediaType
         let createdAt: Date
-        let summary: String
         let contributors: [Contributor]
 
         private static let decoder = PropertyListDecoder()
@@ -110,40 +109,12 @@ extension Thought {
 // MARK: - Contributor
 
 struct Contributor: Codable, Identifiable {
-    let id: String
-    let creator: Creator
+    let profilePublicID: Data
     let role: String
-}
 
-// MARK: - Creator
-
-struct Creator: Codable, Identifiable, Hashable {
-    let id: String
-    let name: String
-    let imageURL: String
-    let latestUpdate: String
-    let tier: String
-    let socialLinks: [SocialLink]
-    let notificationCount: Int
-    let bio: String
-}
-
-// MARK: - SocialLink
-
-struct SocialLink: Codable, Identifiable, Hashable {
-    let id: String
-    let platform: SocialPlatform
-    let username: String
-    let url: String
-}
-
-// MARK: - SocialPlatform
-
-enum SocialPlatform: String, Codable {
-    case twitter = "Twitter"
-    case instagram = "Instagram"
-    case youtube = "YouTube"
-    case tiktok = "TikTok"
+    var id: String {
+        "\(profilePublicID.base58EncodedString)-\(role)"
+    }
 }
 
 // MARK: - MediaType
@@ -161,7 +132,8 @@ enum MediaType: String, Codable {
     }
 }
 
-// for transmission, serializes to payload
+// MARK: - ThoughtServiceModel
+
 struct ThoughtServiceModel: Codable {
     var publicID: Data
     var creatorPublicID: Data
@@ -197,5 +169,48 @@ extension ThoughtServiceModel {
 
     static func deserialize(from data: Data) throws -> ThoughtServiceModel {
         try decoder.decode(ThoughtServiceModel.self, from: data)
+    }
+}
+
+extension Thought {
+    static func from(_ model: ThoughtServiceModel, arkavoMetadata: Arkavo_Metadata) throws -> Thought {
+        guard model.creatorPublicID.count == 32 else {
+            throw NSError(domain: "Thought", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid creator public ID length"])
+        }
+
+        let metadata = try Metadata.from(arkavoMetadata, model: model)
+        let nano = model.content
+
+        return Thought(nano: nano, metadata: metadata)
+    }
+}
+
+extension Thought.Metadata {
+    static func from(_ arkavoMetadata: Arkavo_Metadata, model: ThoughtServiceModel) throws -> Thought.Metadata {
+        let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
+
+        // Map Arkavo_MediaType to MediaType
+        let mediaType: MediaType = if let arkavoMediaType = arkavoMetadata.content?.mediaType {
+            switch arkavoMediaType {
+            case .video:
+                .video
+            case .audio:
+                .audio
+            case .image:
+                .image
+            default:
+                .text
+            }
+        } else {
+            .text // Default to text if no media type is provided
+        }
+
+        return Thought.Metadata(
+            creatorPublicID: model.creatorPublicID,
+            streamPublicID: model.streamPublicID,
+            mediaType: mediaType,
+            createdAt: createdAt,
+            contributors: []
+        )
     }
 }

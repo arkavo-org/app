@@ -7,7 +7,6 @@ import OpenTDFKit
 class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     let client: ArkavoClient
     let persistenceController: PersistenceController
-
     // Track pending messages by their ephemeral public key
     private var pendingMessages: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
 
@@ -15,6 +14,12 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         self.client = client
         self.persistenceController = persistenceController
         client.delegate = self
+    }
+
+    // MARK: - Client HTTP requests
+
+    func getProfile(for publicID: String) async throws -> Profile {
+        Profile(name: publicID)
     }
 
     // MARK: - ArkavoClientDelegate Methods
@@ -48,7 +53,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     // handles WebSocket messages and NanoTDF in Data format
-    func processMessage(_ data: Data, messageId: UUID? = nil) async throws {
+    func processMessage(_ data: Data, messageId _: UUID? = nil) async throws {
         guard let messageType = data.first else {
             throw ArkavoError.messageError("Invalid message: empty data")
         }
@@ -61,38 +66,22 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             }
         }
 
-        do {
-            let messageData = data.dropFirst()
+        let messageData = data.dropFirst()
 
-            switch messageType {
-            case 0x03: // Rewrap
-                try await handleRewrapMessage(messageData)
-            case 0x04: // Rewrapped key
-                try await handleRewrappedKey(messageData)
-            case 0x05: // NATS message
-                try await handleNATSMessage(messageData)
-            case 0x06: // NATS event
-                if data.count > 2000 {
-                    throw ArkavoError.messageError("Message type 0x06 exceeds maximum allowed size")
-                }
-                try await handleNATSEvent(messageData)
-            default:
-                print("Unknown message type: 0x\(String(format: "%02X", messageType))")
+        switch messageType {
+        case 0x03: // Rewrap
+            try await handleRewrapMessage(messageData)
+        case 0x04: // Rewrapped key
+            try await handleRewrappedKey(messageData)
+        case 0x05: // NATS message
+            try await handleNATSMessage(messageData)
+        case 0x06: // NATS event
+            if data.count > 2000 {
+                throw ArkavoError.messageError("Message type 0x06 exceeds maximum allowed size")
             }
-
-            // If processing succeeded and this was a cached message, remove it
-            if let messageId {
-                let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
-                try cacheManager.removeMessage(messageId)
-            }
-
-        } catch {
-            // If processing failed and this wasn't already a cached message, cache it
-            if messageId == nil {
-                let cacheManager = ViewModelFactory.shared.serviceLocator.resolve() as MessageCacheManager
-                try cacheManager.cacheMessage(data: data, messageType: messageType)
-            }
-            throw error
+            try await handleNATSEvent(messageData)
+        default:
+            print("Unknown message type: 0x\(String(format: "%02X", messageType))")
         }
     }
 
@@ -283,6 +272,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "data": decryptedData,
                 "header": header,
                 "payload": payload,
+                // perhaps remove this and have handlers use header
                 "policy": ArkavoPolicy(header.policy),
             ]
         )

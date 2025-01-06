@@ -4,7 +4,6 @@ import SwiftUI
 struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    @State private var creators: [Creator] = []
     @State private var messages: [Message] = Message.sampleMessages
     @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
 
@@ -14,16 +13,14 @@ struct CreatorView: View {
 
     var body: some View {
         NavigationStack {
-            if let creator = sharedState.selectedCreator {
-                CreatorDetailView(viewModel: viewModel, creator: creator)
+            if sharedState.selectedCreatorPublicID != nil {
+                CreatorDetailView(viewModel: viewModel)
             } else {
-                CreatorListView(creators: creators) { creator in
-                    sharedState.selectedCreator = creator
-                }
+                CreatorListView(viewModel: viewModel)
             }
         }
         .onDisappear {
-            sharedState.selectedCreator = nil
+            sharedState.selectedCreatorPublicID = nil
         }
         // TODO: after Patreon Support added
 //        .sheet(isPresented: $sharedState.showCreateView) {
@@ -37,15 +34,15 @@ struct CreatorView: View {
 }
 
 struct CreatorListView: View {
-    let creators: [Creator]
-    let onCreatorSelected: (Creator) -> Void
+    @EnvironmentObject var sharedState: SharedState
+    @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(creators) { creator in
+                ForEach(viewModel.creators) { creator in
                     Button {
-                        onCreatorSelected(creator)
+                        sharedState.selectedCreatorPublicID = creator.id.data(using: String.defaultCStringEncoding)
                     } label: {
                         CreatorCard(creator: creator)
                     }
@@ -154,7 +151,6 @@ struct CreatorCard: View {
 struct CreatorDetailView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    let creator: Creator
     @State private var selectedSection: DetailSection = .about
 
     enum DetailSection {
@@ -172,7 +168,7 @@ struct CreatorDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                CreatorHeaderView(viewModel: viewModel, creator: creator) {
+                CreatorHeaderView(viewModel: viewModel) {
                     // onSupport callback
                 }
 
@@ -195,14 +191,13 @@ struct CreatorDetailView: View {
                 }
             }
         }
-        .navigationTitle(creator.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct CreatorHeaderView: View {
+    @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    let creator: Creator
     let onSupport: () -> Void
 
     private let profileImageSize: CGFloat = 80
@@ -374,7 +369,7 @@ struct CreatorVideosSection: View {
                             id: thought.id.uuidString,
                             url: URL(string: "pending-decryption://\(thought.id)")!, // Placeholder URL
                             contributors: thought.metadata.contributors,
-                            description: thought.metadata.summary
+                            description: thought.metadata.createdAt.ISO8601Format()
                         )
                         sharedState.selectedTab = .home
                         let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
@@ -410,7 +405,7 @@ struct VideoThoughtView: View {
             .frame(height: 120)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thought.metadata.summary)
+                Text(thought.metadata.createdAt.ISO8601Format())
                     .font(.subheadline)
                     .lineLimit(2)
                     .foregroundColor(.primary)
@@ -435,7 +430,7 @@ struct CreatorPostsSection: View {
             ForEach(viewModel.postThoughts) { thought in
                 CreatorPostCard(post: CreatorPost(
                     id: thought.id.uuidString,
-                    content: thought.metadata.summary,
+                    content: thought.metadata.createdAt.ISO8601Format(),
                     mediaURL: nil,
                     timestamp: thought.metadata.createdAt,
                     tierAccess: .basic
@@ -543,7 +538,9 @@ final class CreatorViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var error: Error?
     @Published private(set) var creators: [Creator] = []
+    // TODO: update to Video - the decrypted form
     @Published private(set) var videoThoughts: [Thought] = []
+    // TODO: update to Post - the decrypted form
     @Published private(set) var postThoughts: [Thought] = []
     @Published private(set) var supportedCreators: [Creator] = []
     @Published private(set) var messages: [Message] = []
@@ -684,4 +681,36 @@ extension Int {
         let seconds = self % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
+}
+
+// MARK: - Creator
+
+@available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
+struct Creator: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let imageURL: String
+    let latestUpdate: String
+    let tier: String
+    let socialLinks: [SocialLink]
+    let notificationCount: Int
+    let bio: String
+}
+
+// MARK: - SocialLink
+
+struct SocialLink: Codable, Identifiable, Hashable {
+    let id: String
+    let platform: SocialPlatform
+    let username: String
+    let url: String
+}
+
+// MARK: - SocialPlatform
+
+enum SocialPlatform: String, Codable {
+    case twitter = "Twitter"
+    case instagram = "Instagram"
+    case youtube = "YouTube"
+    case tiktok = "TikTok"
 }

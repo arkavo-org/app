@@ -211,11 +211,10 @@ class ChatViewModel: ObservableObject {
         )
 
         let thoughtMetadata = Thought.Metadata(
-            creator: profile.id,
+            creatorPublicID: profile.publicID,
             streamPublicID: streamPublicID,
             mediaType: .text,
             createdAt: Date(),
-            summary: content,
             contributors: []
         )
 
