@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftUICore
 import ArkavoSocial
 
@@ -103,7 +104,7 @@ class ArkavoMessageManager: ObservableObject {
         replayTask = Task { [weak self] in
             while !Task.isCancelled, let self = self, self.isReplaying {
                 await self.replayNextMessage()
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
+                try? await Task.sleep(nanoseconds: 8_000_000_000) // 2 second delay
             }
         }
     }
@@ -161,17 +162,38 @@ class ArkavoMessageManager: ObservableObject {
     func handleMessage(_ data: Data) {
         guard data.first == 0x05 else { return }
         
-        // Create message
+        // Drop the first byte (0x05) before writing
+        let messageData = data.dropFirst()
+        
+        // Hash the first 200 bytes to generate the file ID
+        let hashData = messageData.prefix(200)
+        let hash = SHA256.hash(data: hashData)
+        let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+        
+        // Create the file URL with .tdf extension
+        let fileURL = messageDirectory.appendingPathComponent("\(hashString).tdf")
+        
+        // Write the message data to the file
+        do {
+            try messageData.write(to: fileURL)
+            print("Successfully saved message with hash \(hashString) to \(fileURL.path)")
+        } catch {
+            print("Error saving message: \(error)")
+        }
+        
+        // Create an ArkavoMessage object for tracking
         let message = ArkavoMessage(
             id: UUID(),
             timestamp: Date(),
             data: data,
             status: .pending,
             retryCount: 0,
-            lastRetryDate: nil
+            lastRetryDate: nil,
+            hashString: hashString, // Add hashString
+            sendCount: 0 // Initialize sendCount to 0
         )
         
-        // Store to filesystem
+        // Add the message to the list and save it
         messages.append(message)
         saveMessage(message)
         
@@ -199,13 +221,21 @@ class ArkavoMessageManager: ObservableObject {
     }
     
     private func saveMessage(_ message: ArkavoMessage) {
-        let encoder = JSONEncoder()
-        let fileURL = messageDirectory.appendingPathComponent("\(message.id.uuidString).json")
+        // Drop the first byte (0x05) before saving
+        let messageData = message.data.dropFirst()
         
+        // Hash the first 200 bytes to generate the file ID
+        let hashData = messageData.prefix(200)
+        let hash = SHA256.hash(data: hashData)
+        let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+        
+        // Create the file URL with .tdf extension
+        let fileURL = messageDirectory.appendingPathComponent("\(hashString).tdf")
+        
+        // Write the message data to the file
         do {
-            let data = try encoder.encode(message)
-            try data.write(to: fileURL)
-            print("Successfully saved message \(message.id) to \(fileURL.path)")
+            try messageData.write(to: fileURL)
+            print("Successfully saved message with hash \(hashString) to \(fileURL.path)")
         } catch {
             print("Error saving message: \(error)")
         }
@@ -213,18 +243,44 @@ class ArkavoMessageManager: ObservableObject {
     
     private func loadMessages() {
         do {
+            // Get the list of files in the message directory
             let files = try fileManager.contentsOfDirectory(
                 at: messageDirectory,
                 includingPropertiesForKeys: nil
             )
             
-            let decoder = JSONDecoder()
-            messages = try files.compactMap { fileURL in
-                guard fileURL.pathExtension == "json" else { return nil }
-                let data = try Data(contentsOf: fileURL)
-                return try decoder.decode(ArkavoMessage.self, from: data)
+            // Filter for .tdf files
+            let tdfFiles = files.filter { $0.pathExtension == "tdf" }
+            
+            // Process each .tdf file
+            for fileURL in tdfFiles {
+                // Read the raw message data from the file
+                let messageData = try Data(contentsOf: fileURL)
+                
+                // Add the 0x05 byte back to the data (since it was dropped when saving)
+                var fullData = Data([0x05])
+                fullData.append(messageData)
+                
+                // Hash the first 200 bytes to generate the hashString (file ID)
+                let hashData = messageData.prefix(200)
+                let hash = SHA256.hash(data: hashData)
+                let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+                
+                // Create an ArkavoMessage object
+                let message = ArkavoMessage(
+                    id: UUID(),
+                    timestamp: Date(), // Use the file's creation date if available
+                    data: fullData,
+                    status: .pending, // Default status
+                    retryCount: 0, // Default retry count
+                    lastRetryDate: nil, // No retries yet
+                    hashString: hashString, // Set the hashString
+                    sendCount: 0 // Default send count
+                )
+                
+                // Add the message to the messages array
+                messages.append(message)
             }
-            .sorted { $0.timestamp > $1.timestamp }
             
             print("Loaded \(messages.count) messages from filesystem")
         } catch {
@@ -245,12 +301,14 @@ struct ArkavoMessage: Codable, Identifiable {
     var status: MessageStatus
     var retryCount: Int
     var lastRetryDate: Date?
-    
+    var hashString: String // Add hashString property
+    var sendCount: Int // Add sendCount property
+
     enum MessageStatus: String, Codable {
         case pending
         case replayed
         case failed
-        
+
         var icon: String {
             switch self {
             case .pending: return "clock"
@@ -258,7 +316,7 @@ struct ArkavoMessage: Codable, Identifiable {
             case .failed: return "exclamationmark.triangle"
             }
         }
-        
+
         var color: Color {
             switch self {
             case .pending: return .yellow
@@ -267,12 +325,12 @@ struct ArkavoMessage: Codable, Identifiable {
             }
         }
     }
-    
+
     // Custom coding keys to ensure proper encoding/decoding
     enum CodingKeys: String, CodingKey {
-        case id, timestamp, data, status, retryCount, lastRetryDate
+        case id, timestamp, data, status, retryCount, lastRetryDate, hashString, sendCount
     }
-    
+
     // Custom encoding to handle Data type
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -282,16 +340,20 @@ struct ArkavoMessage: Codable, Identifiable {
         try container.encode(status, forKey: .status)
         try container.encode(retryCount, forKey: .retryCount)
         try container.encode(lastRetryDate, forKey: .lastRetryDate)
+        try container.encode(hashString, forKey: .hashString)
+        try container.encode(sendCount, forKey: .sendCount)
     }
-    
+
     // Standard initializer
-    init(id: UUID, timestamp: Date, data: Data, status: MessageStatus, retryCount: Int, lastRetryDate: Date?) {
+    init(id: UUID, timestamp: Date, data: Data, status: MessageStatus, retryCount: Int, lastRetryDate: Date?, hashString: String, sendCount: Int) {
         self.id = id
         self.timestamp = timestamp
         self.data = data
         self.status = status
         self.retryCount = retryCount
         self.lastRetryDate = lastRetryDate
+        self.hashString = hashString
+        self.sendCount = sendCount
     }
 
     // Custom decoding to handle Data type
@@ -312,5 +374,7 @@ struct ArkavoMessage: Codable, Identifiable {
         status = try container.decode(MessageStatus.self, forKey: .status)
         retryCount = try container.decode(Int.self, forKey: .retryCount)
         lastRetryDate = try container.decodeIfPresent(Date.self, forKey: .lastRetryDate)
+        hashString = try container.decode(String.self, forKey: .hashString)
+        sendCount = try container.decode(Int.self, forKey: .sendCount)
     }
 }
