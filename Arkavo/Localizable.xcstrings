@@ -219,6 +219,12 @@
     "Granularity" : {
 
     },
+    "Group Details" : {
+
+    },
+    "Group Name" : {
+
+    },
     "Home" : {
 
     },
@@ -493,12 +499,6 @@
     "Send" : {
 
     },
-    "Server Details" : {
-
-    },
-    "Server Name" : {
-
-    },
     "Settings" : {
 
     },
@@ -641,7 +641,7 @@
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
-    "This will be the name of your new community" : {
+    "This will be the name of your new group" : {
 
     },
     "Thought service is unavailable" : {

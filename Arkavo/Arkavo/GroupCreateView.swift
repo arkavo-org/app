@@ -5,7 +5,7 @@ struct GroupCreateView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
 
-    @State private var serverName = ""
+    @State private var groupName = ""
     @State private var showError = false
     @State private var errorMessage = ""
     @FocusState private var isNameFieldFocused: Bool
@@ -13,14 +13,14 @@ struct GroupCreateView: View {
     var body: some View {
         Form {
             Section {
-                TextField("Server Name", text: $serverName)
+                TextField("Group Name", text: $groupName)
                     .focused($isNameFieldFocused)
                     .autocapitalization(.words)
                     .textContentType(.organizationName)
             } header: {
-                Text("Server Details")
+                Text("Group Details")
             } footer: {
-                Text("This will be the name of your new community")
+                Text("This will be the name of your new group")
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -35,12 +35,12 @@ struct GroupCreateView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Create") {
                     Task {
-                        await createServer()
+                        await createGroup()
                         sharedState.showCreateView = false
                         dismiss()
                     }
                 }
-                .disabled(serverName.isEmpty)
+                .disabled(groupName.isEmpty)
             }
         }
         .alert("Error", isPresented: $showError) {
@@ -55,13 +55,13 @@ struct GroupCreateView: View {
         }
     }
 
-    private func createServer() async {
+    private func createGroup() async {
         do {
-            let serverProfile = Profile(name: serverName)
+            let groupProfile = Profile(name: groupName)
 
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
-                profile: serverProfile,
+                profile: groupProfile,
                 policies: Policies(admission: .openInvitation, interaction: .open, age: .onlyKids)
             )
             print("newStream newStream \(newStream.publicID.base58EncodedString)")
@@ -76,7 +76,7 @@ struct GroupCreateView: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = "Failed to create server: \(error.localizedDescription)"
+                errorMessage = "Failed to create group: \(error.localizedDescription)"
                 showError = true
             }
         }
