@@ -308,7 +308,7 @@ class GroupChatViewModel: ObservableObject {
             &builder,
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: targetPayloadVector,
-            ttl: 3600, // 1 hour TTL
+            ttl: 604800, // 1 week TTL
             oneTimeAccess: false
         )
 
@@ -480,7 +480,7 @@ struct GroupChatView: View {
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(viewModel.streams) { stream in
-                                ServerCardView(
+                                GroupCardView(
                                     stream: stream,
                                     onSelect: {
                                         viewModel.selectedStream = stream
@@ -522,42 +522,59 @@ struct GroupChatView: View {
 
 // MARK: - Server Card
 
-struct ServerCardView: View {
+struct GroupCardView: View {
     let stream: Stream
     let onSelect: () -> Void
-
+    @State private var isShareSheetPresented = false
+    
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onSelect) {
-                HStack(spacing: 12) {
-                    // Server Icon
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue.opacity(0.1))
-                            .frame(width: 40, height: 40)
+            HStack(spacing: 12) {
+                // Group Icon
+                Button(action: onSelect) {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                                .frame(width: 40, height: 40)
 
-                        Image(systemName: iconForStream(stream))
-                            .font(.title3)
-                            .foregroundStyle(.blue)
-                    }
+                            Image(systemName: iconForStream(stream))
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                        }
 
-                    // Server Info
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
+                        // Group Info
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(stream.profile.name)
                                 .font(.headline)
                                 .foregroundColor(.primary)
                         }
+                        
+                        Spacer()
                     }
-
-                    Spacer()
                 }
+                .buttonStyle(.plain)
+                
+                // Share Button
+                Button(action: {
+                    isShareSheetPresented = true
+                }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.trailing, 4)
             }
-            .buttonStyle(.plain)
             .padding()
             .background(Color(.secondarySystemGroupedBackground))
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .sheet(isPresented: $isShareSheetPresented) {
+            ShareSheet(
+                activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
+                isPresented: $isShareSheetPresented
+            )
+        }
     }
 
     private func iconForStream(_ stream: Stream) -> String {
