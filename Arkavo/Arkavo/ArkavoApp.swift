@@ -360,6 +360,55 @@ struct ArkavoApp: App {
     }
 
     @MainActor
+    private func validateStreams() async {
+        do {
+            let account = try await persistenceController.getOrCreateAccount()
+
+            // Check video stream
+            let videoStream = account.streams.first(where: { stream in
+                stream.source?.metadata.mediaType == .video
+            })
+
+            if videoStream == nil {
+                print("⚠️ Video stream missing - attempting to create")
+                guard let profile = account.profile else {
+                    print("❌ Cannot create video stream: Profile not found")
+                    return
+                }
+
+                let newVideoStream = try await createVideoStream(account: account, profile: profile)
+                print("✅ Created new video stream: \(newVideoStream.id)")
+            } else {
+                print("✅ Video stream found: \(videoStream!.id)")
+            }
+
+            // Check post stream
+            let postStream = account.streams.first(where: { stream in
+                stream.source?.metadata.mediaType == .text
+            })
+
+            if postStream == nil {
+                print("⚠️ Post stream missing - attempting to create")
+                guard let profile = account.profile else {
+                    print("❌ Cannot create post stream: Profile not found")
+                    return
+                }
+
+                let newPostStream = try await createPostStream(account: account, profile: profile)
+                print("✅ Created new post stream: \(newPostStream.id)")
+            } else {
+                print("✅ Post stream found: \(postStream!.id)")
+            }
+
+            // Save any changes
+            try await persistenceController.saveChanges()
+
+        } catch {
+            print("❌ Error validating streams: \(error)")
+        }
+    }
+
+    @MainActor
     private func saveChanges() async {
         do {
             try await persistenceController.saveChanges()
@@ -393,6 +442,34 @@ struct ArkavoApp: App {
                 selectedView = .registration
                 return
             }
+
+            // Validate that required streams exist
+            let videoStream = account.streams.first(where: { stream in
+                stream.source?.metadata.mediaType == .video
+            })
+
+            if videoStream == nil {
+                print("⚠️ Video stream missing - attempting to create")
+                let newVideoStream = try await createVideoStream(account: account, profile: profile)
+                print("✅ Created new video stream: \(newVideoStream.id)")
+            } else {
+                print("✅ Video stream exists: \(videoStream!.id)")
+            }
+
+            let postStream = account.streams.first(where: { stream in
+                stream.source?.metadata.mediaType == .text
+            })
+
+            if postStream == nil {
+                print("⚠️ Post stream missing - attempting to create")
+                let newPostStream = try await createPostStream(account: account, profile: profile)
+                print("✅ Created new post stream: \(newPostStream.id)")
+            } else {
+                print("✅ Post stream exists: \(postStream!.id)")
+            }
+
+            try await persistenceController.saveChanges()
+
             // If we're already connected, nothing to do
             if case .connected = client.currentState {
                 print("Client already connected, no action needed")
