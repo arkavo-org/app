@@ -18,6 +18,7 @@ enum ArkavoError: Error {
     case messageError(String)
     case notConnected
     case invalidState
+    case profileNotFound(String)
 }
 
 /// Represents the current state of the ArkavoClient
@@ -693,6 +694,62 @@ public final class ArkavoClient: NSObject {
         try await sendMessage(message.toData())
     }
 
+    /// Fetches a profile using the actor's handle (e.g. "username.arkavo.social")
+    public func fetchProfile(forHandle handle: String) async throws -> ArkavoProfile {
+        guard !handle.isEmpty else {
+            throw ArkavoError.invalidURL
+        }
+
+        var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
+        components?.queryItems = [URLQueryItem(name: "actor", value: handle)]
+        
+        guard let url = components?.url else {
+            throw ArkavoError.invalidURL
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ArkavoError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            let decoder = JSONDecoder()
+            return try decoder.decode(ArkavoProfile.self, from: data)
+        case 404:
+            throw ArkavoError.profileNotFound("Profile not found for handle: \(handle)")
+        default:
+            throw ArkavoError.invalidResponse
+        }
+    }
+
+    /// Fetches a profile using a 32-byte public ID
+    public func fetchProfile(forPublicID publicID: Data) async throws -> ArkavoProfile {
+        var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
+        components?.queryItems = [URLQueryItem(name: "id", value: publicID.base58String)]
+        
+        guard let url = components?.url else {
+            throw ArkavoError.invalidURL
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ArkavoError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            let decoder = JSONDecoder()
+            return try decoder.decode(ArkavoProfile.self, from: data)
+        case 404:
+            throw ArkavoError.profileNotFound("Profile not found for ID: \(publicID.base58String)")
+        default:
+            throw ArkavoError.invalidResponse
+        }
+    }
+    
     /// Register a new user with WebAuthn
     public func registerUser(handle: String, did: String) async throws -> String {
         print("registerUser \(handle) \(relyingPartyID) \(did)")
@@ -1368,4 +1425,14 @@ private struct PublicKeyAuthenticationOptions: Decodable {
 private struct AllowCredential: Decodable {
     let id: String
     let type: String
+}
+
+public struct ArkavoProfile: Codable {
+    public let handle: String
+    public let did: String
+    public let displayName: String
+    public let avatarUrl: String
+    public let description: String
+    public let creationDate: String
+    public let publicID: String
 }
