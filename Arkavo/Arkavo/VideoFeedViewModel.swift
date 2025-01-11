@@ -166,11 +166,27 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 //                print("- Transform matrix: \(transform)")
 //            }
 
+            // Create contributor with metadata if available, or empty contributor if not
+            let contributor: Contributor = {
+                if let bodyData = header.policy.body?.body,
+                   let metadata = try? ArkavoPolicy.parseMetadata(from: bodyData)
+                {
+                    return Contributor(
+                        profilePublicID: Data(metadata.id),
+                        role: "creator"
+                    )
+                }
+                return Contributor(
+                    profilePublicID: Data(),
+                    role: "creator"
+                )
+            }()
+
             // Create new video object using the cached file URL
             let video = Video(
                 id: videoID,
                 url: videoFileURL,
-                contributors: [], // Add contributors if available in policy
+                contributors: [contributor],
                 description: policy.type.rawValue
             )
 
