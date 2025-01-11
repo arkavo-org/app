@@ -34,7 +34,7 @@ final class Profile: Identifiable {
         self.location = location
         self.hasHighEncryption = hasHighEncryption
         self.hasHighIdentityAssurance = hasHighIdentityAssurance
-        publicID = Profile.generatePublicID(from: id)
+        publicID = Profile.generatePublicID(from: name)
     }
 
     func finalizeRegistration(did: String, handle: String) {
@@ -45,8 +45,8 @@ final class Profile: Identifiable {
         self.handle = handle
     }
 
-    private static func generatePublicID(from uuid: UUID) -> Data {
-        withUnsafeBytes(of: uuid) { buffer in
+    private static func generatePublicID(from name: String) -> Data {
+        withUnsafeBytes(of: name) { buffer in
             Data(SHA256.hash(data: buffer))
         }
     }
