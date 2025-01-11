@@ -135,27 +135,3 @@ struct MessageBubble: View {
         print("Recalling message")
     }
 }
-
-struct MessageBubble_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            MessageBubble(viewModel: ThoughtViewModel.createText(
-                creatorProfile: Profile(name: "John Doe"),
-                streamPublicIDString: "stream1",
-                text: "Hello, this is a test message!"
-            ),
-            isCurrentUser: true)
-                .previewDisplayName("Current User")
-
-            MessageBubble(viewModel: ThoughtViewModel.createText(
-                creatorProfile: Profile(name: "Jane Smith"),
-                streamPublicIDString: "stream1",
-                text: "Hi there! This is a response."
-            ),
-            isCurrentUser: false)
-                .previewDisplayName("Other User")
-        }
-        .padding()
-        .previewLayout(.sizeThatFits)
-    }
-}

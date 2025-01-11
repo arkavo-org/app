@@ -94,26 +94,3 @@ struct AccountProfileBadge: View {
         }
     }
 }
-
-struct AccountProfileBadge_Previews: PreviewProvider {
-    static var previews: some View {
-        let activityServiceModel = ActivityServiceModel(
-            dateCreated: Date(),
-            expertLevel: "Advanced",
-            activityLevel: .high,
-            trustLevel: "Very High"
-        )
-        let sampleProfile = Profile(
-            name: "John Doe",
-            interests: "Swift,iOS,SwiftUI",
-            location: "New York, NY",
-            hasHighEncryption: true,
-            hasHighIdentityAssurance: true
-        )
-        let viewModel = AccountProfileViewModel(profile: sampleProfile, activityService: activityServiceModel)
-
-        AccountProfileBadge(viewModel: viewModel)
-            .previewLayout(.sizeThatFits)
-            .padding()
-    }
-}

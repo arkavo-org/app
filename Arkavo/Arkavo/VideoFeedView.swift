@@ -88,63 +88,47 @@ struct VideoFeedView: View {
 
 struct ContributorsView: View {
     @EnvironmentObject var sharedState: SharedState
+    let client: ArkavoClient
     let contributors: [Contributor]
     @State private var showAllContributors = false
+    @State private var profile: ArkavoProfile?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Main creator
             if let mainContributor = contributors.first {
-                Button {
-                    sharedState.selectedCreatorPublicID = mainContributor.profilePublicID
-                    sharedState.selectedTab = .profile
-                    sharedState.showCreateView = false
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .frame(width: 32, height: 32)
-                            .clipShape(Circle())
-                            .foregroundColor(.blue)
-
-                        VStack(alignment: .leading) {
-                            Text(mainContributor.profilePublicID.base58EncodedString)
-                                .font(.headline)
-
-                            Text(mainContributor.role)
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
+                ContributorProfileButton(
+                    contributor: mainContributor,
+                    profile: profile,
+                    sharedState: sharedState,
+                    size: .large,
+                    showRole: false
+                )
+                .task {
+                    do {
+                        profile = try await client.fetchProfile(forPublicID: mainContributor.profilePublicID)
+                    } catch {
+                        print("Error fetching profile: \(error)")
                     }
                 }
             }
 
-            // Other contributors (collapsed by default)
             if contributors.count > 1 {
                 if showAllContributors {
                     ForEach(contributors.dropFirst()) { contributor in
-                        Button {
-                            sharedState.selectedCreatorPublicID = contributor.profilePublicID
-                            // FIXME: creators
-                            sharedState.selectedTab = .profile
-                            sharedState.showCreateView = false
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.circle.fill")
-                                    .resizable()
-                                    .frame(width: 24, height: 24)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.blue.opacity(0.7))
-                                VStack(alignment: .leading) {
-                                    Text(contributor.profilePublicID.base58EncodedString)
-                                        .font(.subheadline)
-
-                                    Text(contributor.role)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
+                        ContributorProfileButton(
+                            contributor: contributor,
+                            profile: profile,
+                            sharedState: sharedState,
+                            size: .small,
+                            showRole: true
+                        )
+                        .padding(.leading, 8)
+                        .task {
+                            do {
+                                profile = try await client.fetchProfile(forPublicID: contributor.profilePublicID)
+                            } catch {
+                                print("Error fetching profile: \(error)")
                             }
-                            .padding(.leading, 8)
                         }
                     }
                 } else {
@@ -156,7 +140,6 @@ struct ContributorsView: View {
                         HStack {
                             Text("Contributors")
                                 .font(.caption)
-
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .rotationEffect(.degrees(showAllContributors ? 90 : 0))
@@ -167,6 +150,64 @@ struct ContributorsView: View {
             }
         }
         .foregroundColor(.white)
+    }
+}
+
+private struct ContributorProfileButton: View {
+    let contributor: Contributor
+    let profile: ArkavoProfile?
+    let sharedState: SharedState
+
+    enum Size {
+        case large
+        case small
+    }
+
+    let size: Size
+    let showRole: Bool
+
+    var body: some View {
+        Button {
+            sharedState.selectedCreatorPublicID = contributor.profilePublicID
+            sharedState.selectedTab = .profile
+            sharedState.showCreateView = false
+        } label: {
+            HStack(spacing: 8) {
+                if let profile {
+                    AsyncImage(url: URL(string: profile.avatarUrl)) { image in
+                        image
+                            .resizable()
+                            .clipShape(Circle())
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .foregroundColor(.blue)
+                    }
+                    .frame(width: size == .large ? 32 : 24,
+                           height: size == .large ? 32 : 24)
+
+                    VStack(alignment: .leading) {
+                        Text(profile.displayName)
+                            .font(size == .large ? .headline : .subheadline)
+                        HStack {
+                            Text(profile.handle)
+                            if showRole {
+                                Text("• \(contributor.role)")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    }
+                } else {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .frame(width: size == .large ? 32 : 24,
+                               height: size == .large ? 32 : 24)
+                        .clipShape(Circle())
+                        .foregroundColor(.blue)
+                }
+            }
+        }
     }
 }
 
@@ -238,6 +279,7 @@ struct VideoPlayerView: View {
                     Spacer()
                     HStack {
                         ContributorsView(
+                            client: viewModel.client,
                             contributors: video.contributors
                         )
                         .padding(.horizontal, systemMargin)

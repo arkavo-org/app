@@ -1,5 +1,6 @@
 import ArkavoSocial
 import AVFoundation
+import CryptoKit
 import FlatBuffers
 import SwiftData
 import SwiftUI
@@ -666,10 +667,13 @@ final class VideoRecordingViewModel: ObservableObject {
         )
         print("📦 Content format created at offset: \(contentFormat.o)")
 
+        let thoughtUUID = UUID()
+        let thoughtPublicID = VideoRecordingViewModel.generatePublicID(from: thoughtUUID)
         // 5. Create vectors
-        let idVector = builder.createVector(bytes: metadata.creatorPublicID)
+        let idVector = builder.createVector(bytes: thoughtPublicID)
         print("🔑 ID vector created, size: \(metadata.creatorPublicID.base58EncodedString)")
-
+        let creatorVector = builder.createVector(bytes: metadata.creatorPublicID)
+        print("🔑 ID vector created, size: \(metadata.creatorPublicID.base58EncodedString)")
         let relatedVector = builder.createVector(bytes: metadata.streamPublicID)
         print("🔗 Related vector created, size: \(metadata.streamPublicID.base58EncodedString)")
 
@@ -683,6 +687,7 @@ final class VideoRecordingViewModel: ObservableObject {
         Arkavo_Metadata.add(created: Int64(Date().timeIntervalSince1970), &builder)
         Arkavo_Metadata.addVectorOf(id: idVector, &builder)
         Arkavo_Metadata.addVectorOf(related: relatedVector, &builder)
+        Arkavo_Metadata.addVectorOf(creator: creatorVector, &builder)
         Arkavo_Metadata.add(rating: rating, &builder)
         Arkavo_Metadata.add(purpose: purpose, &builder)
         Arkavo_Metadata.addVectorOf(topics: topicsVector, &builder)
@@ -725,9 +730,16 @@ final class VideoRecordingViewModel: ObservableObject {
         )
 
         return Thought(
+            id: thoughtUUID,
             nano: nanoTDFData,
             metadata: metadata // This is now redundant since it's in the policy
         )
+    }
+
+    private static func generatePublicID(from uuid: UUID) -> Data {
+        withUnsafeBytes(of: uuid) { buffer in
+            Data(SHA256.hash(data: buffer))
+        }
     }
 
     private func handleRecordingComplete(_ result: UploadResult?) async throws {
@@ -792,6 +804,7 @@ final class VideoRecordingViewModel: ObservableObject {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
 
+        print("handleRecordingComplete profile.publicID \(profile.publicID.base58EncodedString)")
         // Create metadata
         let metadata = Thought.Metadata(
             creatorPublicID: profile.publicID,

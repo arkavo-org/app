@@ -391,11 +391,12 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
     case created = 4
     case id = 6
     case related = 8
-    case rating = 10
-    case purpose = 12
-    case topics = 14
-    case archive = 16
-    case content = 18
+    case creator = 10
+    case rating = 12
+    case purpose = 14
+    case topics = 16
+    case archive = 18
+    case content = 20
     var v: Int32 { Int32(self.rawValue) }
     var p: VOffset { self.rawValue }
   }
@@ -409,6 +410,10 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
   public var relatedCount: Int32 { let o = _accessor.offset(VTOFFSET.related.v); return o == 0 ? 0 : _accessor.vector(count: o) }
   public func related(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.related.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
   public var related: [UInt8] { return _accessor.getVector(at: VTOFFSET.related.v) ?? [] }
+  public var hasCreator: Bool { let o = _accessor.offset(VTOFFSET.creator.v); return o == 0 ? false : true }
+  public var creatorCount: Int32 { let o = _accessor.offset(VTOFFSET.creator.v); return o == 0 ? 0 : _accessor.vector(count: o) }
+  public func creator(at index: Int32) -> UInt8 { let o = _accessor.offset(VTOFFSET.creator.v); return o == 0 ? 0 : _accessor.directRead(of: UInt8.self, offset: _accessor.vector(at: o) + index * 1) }
+  public var creator: [UInt8] { return _accessor.getVector(at: VTOFFSET.creator.v) ?? [] }
   public var rating: Arkavo_Rating? { let o = _accessor.offset(VTOFFSET.rating.v); return o == 0 ? nil : Arkavo_Rating(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var purpose: Arkavo_Purpose? { let o = _accessor.offset(VTOFFSET.purpose.v); return o == 0 ? nil : Arkavo_Purpose(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var hasTopics: Bool { let o = _accessor.offset(VTOFFSET.topics.v); return o == 0 ? false : true }
@@ -417,10 +422,11 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
   public var topics: [UInt32] { return _accessor.getVector(at: VTOFFSET.topics.v) ?? [] }
   public var archive: Arkavo_ArchiveInfo? { let o = _accessor.offset(VTOFFSET.archive.v); return o == 0 ? nil : Arkavo_ArchiveInfo(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
   public var content: Arkavo_ContentFormat? { let o = _accessor.offset(VTOFFSET.content.v); return o == 0 ? nil : Arkavo_ContentFormat(_accessor.bb, o: _accessor.indirect(o + _accessor.position)) }
-  public static func startMetadata(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 8) }
+  public static func startMetadata(_ fbb: inout FlatBufferBuilder) -> UOffset { fbb.startTable(with: 9) }
   public static func add(created: Int64, _ fbb: inout FlatBufferBuilder) { fbb.add(element: created, def: 0, at: VTOFFSET.created.p) }
   public static func addVectorOf(id: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: id, at: VTOFFSET.id.p) }
   public static func addVectorOf(related: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: related, at: VTOFFSET.related.p) }
+  public static func addVectorOf(creator: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: creator, at: VTOFFSET.creator.p) }
   public static func add(rating: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: rating, at: VTOFFSET.rating.p) }
   public static func add(purpose: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: purpose, at: VTOFFSET.purpose.p) }
   public static func addVectorOf(topics: Offset, _ fbb: inout FlatBufferBuilder) { fbb.add(offset: topics, at: VTOFFSET.topics.p) }
@@ -432,6 +438,7 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
     created: Int64 = 0,
     idVectorOffset id: Offset = Offset(),
     relatedVectorOffset related: Offset = Offset(),
+    creatorVectorOffset creator: Offset = Offset(),
     ratingOffset rating: Offset = Offset(),
     purposeOffset purpose: Offset = Offset(),
     topicsVectorOffset topics: Offset = Offset(),
@@ -442,6 +449,7 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
     Arkavo_Metadata.add(created: created, &fbb)
     Arkavo_Metadata.addVectorOf(id: id, &fbb)
     Arkavo_Metadata.addVectorOf(related: related, &fbb)
+    Arkavo_Metadata.addVectorOf(creator: creator, &fbb)
     Arkavo_Metadata.add(rating: rating, &fbb)
     Arkavo_Metadata.add(purpose: purpose, &fbb)
     Arkavo_Metadata.addVectorOf(topics: topics, &fbb)
@@ -455,6 +463,7 @@ public struct Arkavo_Metadata: FlatBufferObject, Verifiable {
     try _v.visit(field: VTOFFSET.created.p, fieldName: "created", required: false, type: Int64.self)
     try _v.visit(field: VTOFFSET.id.p, fieldName: "id", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     try _v.visit(field: VTOFFSET.related.p, fieldName: "related", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
+    try _v.visit(field: VTOFFSET.creator.p, fieldName: "creator", required: false, type: ForwardOffset<Vector<UInt8, UInt8>>.self)
     try _v.visit(field: VTOFFSET.rating.p, fieldName: "rating", required: false, type: ForwardOffset<Arkavo_Rating>.self)
     try _v.visit(field: VTOFFSET.purpose.p, fieldName: "purpose", required: false, type: ForwardOffset<Arkavo_Purpose>.self)
     try _v.visit(field: VTOFFSET.topics.p, fieldName: "topics", required: false, type: ForwardOffset<Vector<UInt32, UInt32>>.self)
