@@ -10,7 +10,7 @@ import UIKit
 
 @MainActor
 class PostFeedViewModel: ObservableObject {
-    private let client: ArkavoClient
+    let client: ArkavoClient
     private let account: Account
     private let profile: Profile
     private var notificationObservers: [Any] = []
@@ -239,7 +239,8 @@ class PostFeedViewModel: ObservableObject {
 
         // Create ID and related vectors
         let idVector = builder.createVector(bytes: thoughtModel.publicID)
-        let relatedVector = builder.createVector(bytes: Data())
+        let relatedVector = builder.createVector(bytes: thoughtModel.streamPublicID)
+        let creatorVector = builder.createVector(bytes: thoughtModel.creatorPublicID)
 
         // Create topics vector
         let topics: [UInt32] = [1, 2, 3]
@@ -251,6 +252,7 @@ class PostFeedViewModel: ObservableObject {
             created: Int64(Date().timeIntervalSince1970),
             idVectorOffset: idVector,
             relatedVectorOffset: relatedVector,
+            creatorVectorOffset: creatorVector,
             ratingOffset: rating,
             purposeOffset: purpose,
             topicsVectorOffset: topicsVector,
@@ -638,9 +640,12 @@ struct ImmersiveThoughtCard: View {
                 VStack {
                     Spacer()
                     HStack {
-                        ContributorsView(contributors: thought.metadata.contributors)
-                            .padding(.horizontal, systemMargin)
-                            .padding(.bottom, systemMargin * 8)
+                        ContributorsView(
+                            client: viewModel.client,
+                            contributors: thought.metadata.contributors
+                        )
+                        .padding(.horizontal, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
                         Spacer()
                     }
                 }

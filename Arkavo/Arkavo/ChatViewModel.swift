@@ -169,10 +169,11 @@ class ChatViewModel: ObservableObject {
 
         // Create ID and related vectors
         let idVector = builder.createVector(bytes: thoughtModel.publicID)
-        let relatedVector = builder.createVector(bytes: streamPublicID)
+        let relatedVector = builder.createVector(bytes: thoughtModel.streamPublicID)
+        let creatorVector = builder.createVector(bytes: thoughtModel.creatorPublicID)
 
         // Create topics vector
-        let topics: [UInt32] = [1, 2, 3]
+        let topics: [UInt32] = []
         let topicsVector = builder.createVector(topics)
 
         // Create metadata root
@@ -181,6 +182,7 @@ class ChatViewModel: ObservableObject {
             created: Int64(Date().timeIntervalSince1970),
             idVectorOffset: idVector,
             relatedVectorOffset: relatedVector,
+            creatorVectorOffset: creatorVector,
             ratingOffset: rating,
             purposeOffset: purpose,
             topicsVectorOffset: topicsVector,

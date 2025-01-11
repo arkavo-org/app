@@ -42,6 +42,10 @@ class ArkavoPolicy {
                 }
             } catch {
                 print("Failed to parse embedded policy metadata: \(error)")
+                // Add debug info about the data
+                print("Data size: \(bodyData.count)")
+                let hexString = bodyData.prefix(32).map { String(format: "%02x", $0) }.joined()
+                print("First 32 bytes: \(hexString)")
                 type = .thought
             }
             return
@@ -52,14 +56,21 @@ class ArkavoPolicy {
     }
 
     public static func parseMetadata(from data: Data) throws -> Arkavo_Metadata {
-        // Create ByteBuffer with the data
-        var bb = ByteBuffer(data: data)
-        let rootOffset = bb.read(def: Int32.self, position: 0)
-        // Verify the FlatBuffer data structure
-        var verifier = try Verifier(buffer: &bb)
-        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-        // Create and return metadata object
-        return Arkavo_Metadata(bb, o: rootOffset)
+        do {
+            var bb = ByteBuffer(data: data)
+            let rootOffset = bb.read(def: Int32.self, position: 0)
+            print("Root offset: \(rootOffset)") // Debug info
+
+            // Verify the FlatBuffer data structure
+            var verifier = try Verifier(buffer: &bb)
+            try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
+
+            // Create and return metadata object
+            return Arkavo_Metadata(bb, o: rootOffset)
+        } catch {
+            print("Error during metadata parsing: \(error)")
+            throw error
+        }
     }
 }
 

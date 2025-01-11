@@ -178,7 +178,7 @@ extension Thought {
             throw NSError(domain: "Thought", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid creator public ID length"])
         }
 
-        let metadata = try Metadata.from(arkavoMetadata, model: model)
+        let metadata = try Metadata.from(arkavoMetadata)
         let nano = model.content
 
         return Thought(nano: nano, metadata: metadata)
@@ -186,7 +186,7 @@ extension Thought {
 }
 
 extension Thought.Metadata {
-    static func from(_ arkavoMetadata: Arkavo_Metadata, model: ThoughtServiceModel) throws -> Thought.Metadata {
+    static func from(_ arkavoMetadata: Arkavo_Metadata) throws -> Thought.Metadata {
         let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
 
         // Map Arkavo_MediaType to MediaType
@@ -206,8 +206,8 @@ extension Thought.Metadata {
         }
 
         return Thought.Metadata(
-            creatorPublicID: model.creatorPublicID,
-            streamPublicID: model.streamPublicID,
+            creatorPublicID: Data(arkavoMetadata.creator),
+            streamPublicID: Data(arkavoMetadata.related),
             mediaType: mediaType,
             createdAt: createdAt,
             contributors: []

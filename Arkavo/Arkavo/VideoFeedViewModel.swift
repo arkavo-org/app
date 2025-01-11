@@ -171,6 +171,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 if let bodyData = header.policy.body?.body,
                    let metadata = try? ArkavoPolicy.parseMetadata(from: bodyData)
                 {
+                    print("VideoFeedViewModel contributor profilePublicID \(Data(metadata.id).base58EncodedString)")
                     return Contributor(
                         profilePublicID: Data(metadata.id),
                         role: "creator"

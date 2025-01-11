@@ -362,12 +362,14 @@ struct CreatorVideosSection: View {
             GridItem(.flexible(), spacing: 16),
         ], spacing: 16) {
             ForEach(viewModel.videoThoughts) { thought in
-                VideoThoughtView(thought: thought)
-                    .onTapGesture {
+                VideoThoughtView(
+                    thought: thought,
+                    isOwner: viewModel.isProfileOwner,
+                    onView: {
                         // Set selected video and switch to video tab
                         sharedState.selectedVideo = Video(
                             id: thought.id.uuidString,
-                            url: URL(string: "pending-decryption://\(thought.id)")!, // Placeholder URL
+                            url: URL(string: "pending-decryption://\(thought.id)")!,
                             contributors: thought.metadata.contributors,
                             description: thought.metadata.createdAt.ISO8601Format()
                         )
@@ -376,7 +378,20 @@ struct CreatorVideosSection: View {
                         Task {
                             try await router.processMessage(thought.nano, messageId: thought.id)
                         }
+                    },
+                    onSend: {
+                        // Handle send action
+                        Task {
+                            await viewModel.sendVideo(thought)
+                        }
+                    },
+                    onDelete: {
+                        // Handle delete action
+                        Task {
+                            await viewModel.deleteVideo(thought)
+                        }
                     }
+                )
             }
         }
         .padding()
@@ -385,6 +400,12 @@ struct CreatorVideosSection: View {
 
 struct VideoThoughtView: View {
     let thought: Thought
+    let isOwner: Bool
+    let onView: () -> Void
+    let onSend: () -> Void
+    let onDelete: () -> Void
+
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -397,9 +418,12 @@ struct VideoThoughtView: View {
                         .cornerRadius(8)
                         .clipped()
 
-                    Image(systemName: "paperplane.fill")
-                        .font(.largeTitle)
+                    Image(systemName: "play.circle.fill") // Changed from paperplane.fill
+                        .font(.system(size: 44))
                         .foregroundColor(.white)
+                }
+                .onTapGesture {
+                    onView()
                 }
             }
             .frame(height: 120)
@@ -413,6 +437,35 @@ struct VideoThoughtView: View {
                 Text(thought.metadata.createdAt, style: .relative)
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if isOwner {
+                    HStack {
+                        Button(action: onSend) {
+                            Label("Send", systemImage: "paperplane")
+                                .font(.caption)
+                        }
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                                .font(.caption)
+                        }
+                        .confirmationDialog(
+                            "Delete Video",
+                            isPresented: $showingDeleteConfirmation,
+                            presenting: thought
+                        ) { _ in
+                            Button("Delete", role: .destructive, action: onDelete)
+                            Button("Cancel", role: .cancel) {}
+                        } message: { _ in
+                            Text("Are you sure you want to delete this video? This action cannot be undone.")
+                        }
+                    }
+                    .padding(.top, 4)
+                }
             }
         }
         .background(Color(.systemBackground))
@@ -545,6 +598,13 @@ final class CreatorViewModel: ObservableObject {
     @Published private(set) var supportedCreators: [Creator] = []
     @Published private(set) var messages: [Message] = []
 
+    var isProfileOwner: Bool {
+        if let accountProfile = account.profile {
+            return profile.publicID == accountProfile.publicID
+        }
+        return false
+    }
+
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
@@ -589,6 +649,27 @@ final class CreatorViewModel: ObservableObject {
             videoThoughts = videoStream!.thoughts.sorted { thought1, thought2 in
                 thought1.metadata.createdAt > thought2.metadata.createdAt
             }
+        }
+    }
+
+    func deleteVideo(_ thought: Thought) async {
+        isLoading = true
+        if let videoStream = account.streams.first(where: { $0.source?.metadata.mediaType == .video }) {
+            videoStream.removeThought(thought)
+            // Update the UI
+            loadVideoThoughts()
+        }
+        isLoading = false
+    }
+
+    func sendVideo(_: Thought) async {
+        isLoading = true
+        do {
+            // Implementation for sending video
+            // This would likely involve your messaging/sharing system
+            isLoading = false
+        } catch {
+            handleError(error)
         }
     }
 

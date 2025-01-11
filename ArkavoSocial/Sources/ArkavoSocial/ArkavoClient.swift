@@ -727,12 +727,12 @@ public final class ArkavoClient: NSObject {
     /// Fetches a profile using a 32-byte public ID
     public func fetchProfile(forPublicID publicID: Data) async throws -> ArkavoProfile {
         var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
-        components?.queryItems = [URLQueryItem(name: "id", value: publicID.base58String)]
+        components?.queryItems = [URLQueryItem(name: "actor", value: publicID.base58String)]
         
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-        
+        print("url: \(url)")
         let (data, response) = try await URLSession.shared.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -746,6 +746,7 @@ public final class ArkavoClient: NSObject {
         case 404:
             throw ArkavoError.profileNotFound("Profile not found for ID: \(publicID.base58String)")
         default:
+            print("statusCode: \(httpResponse.statusCode) response: \(String(decoding: data, as: UTF8.self))")
             throw ArkavoError.invalidResponse
         }
     }

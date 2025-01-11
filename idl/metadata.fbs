@@ -95,6 +95,7 @@ table Metadata {
   created: int64;
   id: [uint8];          // publicID 32 bytes array 256-bit
   related:  [uint8];    // publicID 32 bytes array 256-bit
+  creator:  [uint8];    // publicID 32 bytes array 256-bit
   rating: Rating;
   purpose: Purpose;
   topics: [uint32];

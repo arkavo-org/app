@@ -308,7 +308,7 @@ class GroupChatViewModel: ObservableObject {
             &builder,
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: targetPayloadVector,
-            ttl: 604800, // 1 week TTL
+            ttl: 604_800, // 1 week TTL
             oneTimeAccess: false
         )
 
@@ -526,7 +526,7 @@ struct GroupCardView: View {
     let stream: Stream
     let onSelect: () -> Void
     @State private var isShareSheetPresented = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -549,12 +549,12 @@ struct GroupCardView: View {
                                 .font(.headline)
                                 .foregroundColor(.primary)
                         }
-                        
+
                         Spacer()
                     }
                 }
                 .buttonStyle(.plain)
-                
+
                 // Share Button
                 Button(action: {
                     isShareSheetPresented = true
