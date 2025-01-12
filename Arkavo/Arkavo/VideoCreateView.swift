@@ -13,6 +13,7 @@ struct VideoCreateView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var videoDescription: String = ""
 
     init(feedViewModel _: VideoFeedViewModel) {
         _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoRecordingViewModel())
@@ -21,6 +22,7 @@ struct VideoCreateView: View {
     var body: some View {
         ModernRecordingInterface(
             viewModel: viewModel,
+            videoDescription: $videoDescription,
             onComplete: { _ in
                 // Simply dismiss the view when complete
                 sharedState.showCreateView = false
@@ -187,6 +189,7 @@ struct PreviewViewWrapper: UIViewRepresentable {
 
 struct ModernRecordingInterface: View {
     @ObservedObject var viewModel: VideoRecordingViewModel
+    @Binding var videoDescription: String
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -207,6 +210,10 @@ struct ModernRecordingInterface: View {
                 }
 
             VStack {
+                TextField("Add a description...", text: $videoDescription)
+                    .textFieldStyle(.roundedBorder)
+                    .padding()
+                    .background(.ultraThinMaterial)
                 Spacer()
 
                 VStack(spacing: 32) {
@@ -217,6 +224,7 @@ struct ModernRecordingInterface: View {
                     ZStack {
                         RecordingControl(
                             viewModel: viewModel,
+                            description: videoDescription,
                             onComplete: onComplete
                         )
 
@@ -254,6 +262,7 @@ struct FlipCameraButton: View {
 
 struct RecordingControl: View {
     @ObservedObject var viewModel: VideoRecordingViewModel
+    let description: String
     let onComplete: (UploadResult?) async -> Void
 
     var body: some View {
@@ -273,7 +282,7 @@ struct RecordingControl: View {
             case .recording:
                 ModernRecordButton(isRecording: true) {
                     Task {
-                        await viewModel.stopRecording()
+                        await viewModel.stopRecording(description: description)
                     }
                 }
 
@@ -570,7 +579,7 @@ final class VideoRecordingViewModel: ObservableObject {
         }
     }
 
-    func stopRecording() async {
+    func stopRecording(description: String) async {
         guard let recordingManager else { return }
 
         do {
@@ -595,7 +604,7 @@ final class VideoRecordingViewModel: ObservableObject {
             )
 
             // Handle all the processing and uploading
-            try await handleRecordingComplete(result)
+            try await handleRecordingComplete(result, description: description)
 
             // Only transition to complete state after everything is done
             await MainActor.run {
@@ -742,7 +751,7 @@ final class VideoRecordingViewModel: ObservableObject {
         }
     }
 
-    private func handleRecordingComplete(_ result: UploadResult?) async throws {
+    private func handleRecordingComplete(_ result: UploadResult?, description: String) async throws {
         guard let result else {
             throw VideoError.processingFailed("Failed to get recording result")
         }
@@ -772,7 +781,7 @@ final class VideoRecordingViewModel: ObservableObject {
         }
 
         // Compress video with optimized settings
-        let compressedData = try await compressVideo(url: videoURL, targetSize: videoTargetSize)
+        let compressedData = try await compressVideo(url: videoURL, description: description, targetSize: videoTargetSize)
         print("Compressed video size: \(compressedData.count) bytes")
 
         // Create NanoTDF
@@ -804,7 +813,7 @@ final class VideoRecordingViewModel: ObservableObject {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
 
-        print("handleRecordingComplete profile.publicID \(profile.publicID.base58EncodedString)")
+//        print("handleRecordingComplete profile.publicID \(profile.publicID.base58EncodedString)")
         // Create metadata
         let metadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
@@ -826,7 +835,7 @@ final class VideoRecordingViewModel: ObservableObject {
 
     // MARK: - Private Helpers
 
-    private func compressVideo(url: URL, targetSize: Int) async throws -> Data {
+    private func compressVideo(url: URL, description: String, targetSize: Int) async throws -> Data {
         let asset = AVURLAsset(url: url)
 
         // Try different export presets in order of decreasing quality
@@ -845,15 +854,20 @@ final class VideoRecordingViewModel: ObservableObject {
 
             print("\nTrying compression with preset: \(preset)")
 
-            guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
+            guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset) else {
                 continue
             }
+            // Create metadata
+            let metadataItem = AVMutableMetadataItem()
+            metadataItem.identifier = AVMetadataIdentifier(rawValue: "uiso/dscp")
+            metadataItem.value = description as NSString
+            metadataItem.extendedLanguageTag = "und"
+            exportSession.metadata = [metadataItem]
+            exportSession.outputURL = outputURL
+            exportSession.outputFileType = .mp4
+            exportSession.shouldOptimizeForNetworkUse = true
 
-            exporter.outputURL = outputURL
-            exporter.outputFileType = .mp4
-            exporter.shouldOptimizeForNetworkUse = true
-
-            try await exporter.export(to: outputURL, as: .mp4)
+            try await exportSession.export(to: outputURL, as: .mp4)
 
             let compressedData = try Data(contentsOf: outputURL)
             print("Compressed size: \(compressedData.count) bytes")
@@ -874,10 +888,10 @@ final class VideoRecordingViewModel: ObservableObject {
             guard let self else { return }
             DispatchQueue.main.async {
                 if self.recordingProgress < 1.0 {
-                    self.recordingProgress += 0.1 / 5.5 // 5.5 seconds max based on compression ratio
+                    self.recordingProgress += 0.1 / 18 // based on compression ratio and under 1MB limit
                 } else {
                     Task {
-                        await self.stopRecording()
+                        await self.stopRecording(description: "")
                     }
                 }
             }

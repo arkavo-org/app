@@ -178,14 +178,16 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 // Safely handle the related data conversion
                 return (Contributor(profilePublicID: Data(metadata.id), role: "creator"), Data(metadata.related))
             }()
-
+            // Extract description from video metadata
+            let asset = AVURLAsset(url: videoFileURL)
+            let description = try await extractVideoDescription(from: asset) ?? ""
             // Create new video object using the cached file URL
             let video = Video(
                 id: videoID,
                 streamPublicID: streamPublicID,
                 url: videoFileURL,
                 contributors: [contributor],
-                description: policy.type.rawValue
+                description: description
             )
 
             // Add to queue
@@ -210,6 +212,39 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 self.error = error
             }
         }
+    }
+
+    private func extractVideoDescription(from asset: AVURLAsset) async throws -> String? {
+//        print("📝 Attempting to extract description from video metadata")
+        let metadata = try await asset.load(.metadata)
+//        print("📝 Found \(metadata.count) metadata items")
+
+        // Log all metadata items for debugging
+//        for (index, item) in metadata.enumerated() {
+//            print("📝 Metadata item \(index):")
+//            print("  - Identifier: \(String(describing: item.identifier?.rawValue))")
+//            if let value = try? await item.load(.value) {
+//                print("  - Value: \(value)")
+//            }
+//        }
+
+        // Check for both standard and custom identifier
+        let descriptionItem = metadata.first { item in
+            if let identifier = item.identifier?.rawValue {
+                return identifier == AVMetadataIdentifier.commonIdentifierDescription.rawValue ||
+                    identifier == "uiso/dscp"
+            }
+            return false
+        }
+
+        guard let descriptionItem else {
+            print("❌ No description metadata found")
+            return nil
+        }
+
+        let value = try await descriptionItem.load(.value) as? String
+//        print("📝 Extracted description: \(value ?? "nil")")
+        return value
     }
 
     func streams() -> [Stream] {
@@ -347,6 +382,7 @@ struct Video: Identifiable {
         )
     }
 
+    // FIXME: this isn't working
     static func from(thought: Thought) -> Video? {
         Video(
             id: thought.id.uuidString,
