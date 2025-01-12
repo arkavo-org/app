@@ -176,8 +176,8 @@ public final class ArkavoClient: NSObject {
         do {
             // First authenticate
             currentState = .authenticating
-            let token = try await authenticateUser(accountName: accountName)
-            try KeychainManager.saveAuthenticationToken(token)
+//            let token = try await authenticateUser(accountName: accountName)
+//            try KeychainManager.saveAuthenticationToken(token)
 
             // Then establish WebSocket connection
             currentState = .connecting
