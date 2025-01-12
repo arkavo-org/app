@@ -329,7 +329,7 @@ struct GroupChatIconList: View {
                         Button {
                             sharedState.selectedVideo = currentVideo
                             sharedState.selectedThought = currentThought
-                            sharedState.selectedStream = stream
+                            sharedState.selectedStreamPublicID = stream.publicID
                             sharedState.showChatOverlay = true
                         } label: {
                             Image(systemName: iconForStream(stream))
@@ -341,6 +341,8 @@ struct GroupChatIconList: View {
 
                     // Comment button integrated into the list
                     Button {
+                        sharedState.selectedVideo = currentVideo
+                        sharedState.selectedStreamPublicID = currentVideo?.streamPublicID
                         sharedState.showChatOverlay = true
                         withAnimation(.spring()) {
                             isCollapsed = true

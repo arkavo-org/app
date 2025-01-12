@@ -655,7 +655,7 @@ struct ImmersiveThoughtCard: View {
                     ChatOverlay()
                         .onAppear {
                             sharedState.selectedThought = thought
-                            sharedState.selectedStream = viewModel.getPostStream()
+                            sharedState.selectedStreamPublicID = viewModel.getPostStream().publicID
                         }
                 }
             }

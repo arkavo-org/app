@@ -114,7 +114,7 @@ class GroupChatViewModel: ObservableObject {
         print("Requesting stream with publicID: \(publicID.base58EncodedString)")
 
         // Check if we already have the stream locally
-        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
             print("Found existing stream: \(existingStream.profile.name)")
             return existingStream
         }
@@ -156,7 +156,7 @@ class GroupChatViewModel: ObservableObject {
 
         while Date().timeIntervalSince(startTime) < TimeInterval(timeoutSeconds) {
             // Check if stream has been created
-            if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID)?.first {
+            if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
                 print("Stream received and saved: \(stream.profile.name)")
                 return stream
             }
@@ -195,7 +195,7 @@ class GroupChatViewModel: ObservableObject {
         print("Processing stream: \(streamName) with ID: \(newStreamPublicID.base58EncodedString)")
 
         // Check if stream already exists
-        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID)?.first {
+        if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID) {
             print("Stream already exists: \(existingStream.profile.name)")
             return
         }
@@ -484,7 +484,7 @@ struct GroupChatView: View {
                                     stream: stream,
                                     onSelect: {
                                         viewModel.selectedStream = stream
-                                        sharedState.selectedStream = stream
+                                        sharedState.selectedStreamPublicID = stream.publicID
                                         sharedState.showChatOverlay = true
                                     }
                                 )

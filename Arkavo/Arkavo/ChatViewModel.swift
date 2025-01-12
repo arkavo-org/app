@@ -9,13 +9,13 @@ class ChatViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    let stream: Stream
+    let streamPublicID: Data
     @Published var messages: [ChatMessage] = []
     private var notificationObservers: [NSObjectProtocol] = []
     private static var instanceCount = 0
     private let instanceId: Int
 
-    init(client: ArkavoClient, account: Account, profile: Profile, stream: Stream) {
+    init(client: ArkavoClient, account: Account, profile: Profile, streamPublicID: Data) {
         Self.instanceCount += 1
         instanceId = Self.instanceCount
         print("🔵 Initializing ChatViewModel #\(instanceId)")
@@ -23,13 +23,15 @@ class ChatViewModel: ObservableObject {
         self.client = client
         self.account = account
         self.profile = profile
-        self.stream = stream
+        self.streamPublicID = streamPublicID
         setupNotifications()
-        loadThoughts()
+        Task {
+            try? await loadThoughts()
+        }
     }
 
-    private func loadThoughts() {
-        if stream.thoughts.isEmpty {
+    private func loadThoughts() async throws {
+        if let stream = try await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) {
             Task {
                 let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
                 for thought in stream.thoughts {
@@ -70,7 +72,6 @@ class ChatViewModel: ObservableObject {
 
     func sendMessage(content: String) async throws {
         let messageData = content.data(using: .utf8) ?? Data()
-        let streamPublicID = stream.publicID
 
         // Create thought service model
         let thoughtModel = ThoughtServiceModel(
@@ -101,57 +102,18 @@ class ChatViewModel: ObservableObject {
             formatOffset: formatInfo
         )
 
-        // Create rating based on stream age policy
-        let rating: Offset = switch stream.policies.age {
-        case .onlyAdults:
-            Arkavo_Rating.createRating(
-                &builder,
-                violent: .severe,
-                sexual: .severe,
-                profane: .severe,
-                substance: .severe,
-                hate: .severe,
-                harm: .severe,
-                mature: .severe,
-                bully: .severe
-            )
-        case .onlyKids:
-            Arkavo_Rating.createRating(
-                &builder,
-                violent: .mild,
-                sexual: .none_,
-                profane: .none_,
-                substance: .none_,
-                hate: .none_,
-                harm: .none_,
-                mature: .none_,
-                bully: .none_
-            )
-        case .forAll:
-            Arkavo_Rating.createRating(
-                &builder,
-                violent: .mild,
-                sexual: .mild,
-                profane: .mild,
-                substance: .none_,
-                hate: .none_,
-                harm: .none_,
-                mature: .mild,
-                bully: .none_
-            )
-        case .onlyTeens:
-            Arkavo_Rating.createRating(
-                &builder,
-                violent: .mild,
-                sexual: .none_,
-                profane: .none_,
-                substance: .none_,
-                hate: .none_,
-                harm: .none_,
-                mature: .none_,
-                bully: .none_
-            )
-        }
+        // TODO: determine rating using ML analysis
+        let rating: Offset = Arkavo_Rating.createRating(
+            &builder,
+            violent: .mild,
+            sexual: .none_,
+            profane: .none_,
+            substance: .none_,
+            hate: .none_,
+            harm: .none_,
+            mature: .none_,
+            bully: .none_
+        )
 
         // Create purpose
         let purpose = Arkavo_Purpose.createPurpose(
@@ -225,9 +187,13 @@ class ChatViewModel: ObservableObject {
             metadata: thoughtMetadata
         )
         _ = try PersistenceController.shared.saveThought(thought)
-        // Save thought to stream
-        stream.thoughts.append(thought)
-        try await PersistenceController.shared.saveChanges()
+        // Save thought to stream if locally stored
+        if let stream = try await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) {
+            Task {
+                stream.thoughts.append(thought)
+                try await PersistenceController.shared.saveChanges()
+            }
+        }
     }
 
     private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy) async {
