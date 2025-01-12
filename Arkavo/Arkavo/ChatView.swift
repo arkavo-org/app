@@ -348,10 +348,10 @@ struct ChatOverlay: View {
                 .background(.ultraThinMaterial)
 
                 // Chat view
-                if let stream = getAppropriateStream() {
+                if let streamPublicID = getAppropriateStreamPublicID() {
                     ChatView(
                         viewModel: ViewModelFactory.shared.makeChatViewModel(
-                            stream: stream
+                            streamPublicID: streamPublicID
                         )
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -372,22 +372,22 @@ struct ChatOverlay: View {
         }
     }
 
-    private func getAppropriateStream() -> Stream? {
+    private func getAppropriateStreamPublicID() -> Data? {
         // If there's a selected server, use that
-        if let selectedServer = sharedState.selectedStream {
+        if let selectedServer = sharedState.selectedStreamPublicID {
             return selectedServer
         }
 
         // Otherwise, get the appropriate stream based on content type
-        if let account = ViewModelFactory.shared.getCurrentAccount() {
-            if sharedState.selectedVideo != nil {
-                return account.streams.first
-            } else if let thought = sharedState.selectedThought {
-                return account.streams.first { stream in
-                    stream.thoughts.contains { $0.id == thought.id }
-                }
-            }
-        }
+//        if let account = ViewModelFactory.shared.getCurrentAccount() {
+//            if sharedState.selectedVideo != nil {
+//                return account.streams.first
+//            } else if let thought = sharedState.selectedThought {
+//                return account.streams.first { stream in
+//                    stream.thoughts.contains { $0.id == thought.id }
+//                }
+//            }
+//        }
 
         return nil
     }

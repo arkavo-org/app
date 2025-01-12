@@ -136,7 +136,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 
             // Verify this is a video message based on policy
             guard policy.type == .videoFrame else {
-                print("❌ Incorrect policy type")
+//                print("❌ Incorrect policy type")
                 return
             }
             // using EPK as an ID
@@ -167,28 +167,27 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 //            }
 
             // Create contributor with metadata if available, or empty contributor if not
-            let contributor: Contributor = {
-                if let bodyData = header.policy.body?.body,
-                   let metadata = try? ArkavoPolicy.parseMetadata(from: bodyData)
-                {
-                    print("VideoFeedViewModel contributor profilePublicID \(Data(metadata.id).base58EncodedString)")
-                    return Contributor(
-                        profilePublicID: Data(metadata.id),
-                        role: "creator"
-                    )
+            let (contributor, streamPublicID): (Contributor, Data) = {
+                guard let bodyData = header.policy.body?.body,
+                      let metadata = try? ArkavoPolicy.parseMetadata(from: bodyData)
+                else {
+                    print("❌ Failed to parse metadata. Using default contributor and streamPublicID.")
+                    return (Contributor(profilePublicID: Data(), role: "creator"), Data())
                 }
-                return Contributor(
-                    profilePublicID: Data(),
-                    role: "creator"
-                )
-            }()
 
+                // Safely handle the related data conversion
+                return (Contributor(profilePublicID: Data(metadata.id), role: "creator"), Data(metadata.related))
+            }()
+            // Extract description from video metadata
+            let asset = AVURLAsset(url: videoFileURL)
+            let description = try await extractVideoDescription(from: asset) ?? ""
             // Create new video object using the cached file URL
             let video = Video(
                 id: videoID,
+                streamPublicID: streamPublicID,
                 url: videoFileURL,
                 contributors: [contributor],
-                description: policy.type.rawValue
+                description: description
             )
 
             // Add to queue
@@ -213,6 +212,39 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 self.error = error
             }
         }
+    }
+
+    private func extractVideoDescription(from asset: AVURLAsset) async throws -> String? {
+//        print("📝 Attempting to extract description from video metadata")
+        let metadata = try await asset.load(.metadata)
+//        print("📝 Found \(metadata.count) metadata items")
+
+        // Log all metadata items for debugging
+//        for (index, item) in metadata.enumerated() {
+//            print("📝 Metadata item \(index):")
+//            print("  - Identifier: \(String(describing: item.identifier?.rawValue))")
+//            if let value = try? await item.load(.value) {
+//                print("  - Value: \(value)")
+//            }
+//        }
+
+        // Check for both standard and custom identifier
+        let descriptionItem = metadata.first { item in
+            if let identifier = item.identifier?.rawValue {
+                return identifier == AVMetadataIdentifier.commonIdentifierDescription.rawValue ||
+                    identifier == "uiso/dscp"
+            }
+            return false
+        }
+
+        guard let descriptionItem else {
+            print("❌ No description metadata found")
+            return nil
+        }
+
+        let value = try await descriptionItem.load(.value) as? String
+//        print("📝 Extracted description: \(value ?? "nil")")
+        return value
     }
 
     func streams() -> [Stream] {
@@ -256,7 +288,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 let videoStream = try await getOrCreateVideoStream()
 
                 // Create new video
-                let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors)
+                let newVideo = Video.from(uploadResult: uploadResult, contributors: contributors, streamPublicID: videoStream.publicID)
 
                 // Create thought for the video
                 let metadata = Thought.Metadata(
@@ -335,24 +367,27 @@ extension VideoFeedUpdating {
 
 struct Video: Identifiable {
     let id: String
+    let streamPublicID: Data
     let url: URL
     let contributors: [Contributor]
     let description: String
 
-    static func from(uploadResult: UploadResult, contributors: [Contributor]) -> Video {
+    static func from(uploadResult: UploadResult, contributors: [Contributor], streamPublicID: Data) -> Video {
         Video(
             id: uploadResult.id,
+            streamPublicID: streamPublicID,
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
             description: Date().ISO8601Format()
         )
     }
 
+    // FIXME: this isn't working
     static func from(thought: Thought) -> Video? {
-        let url = URL(string: "nano://\(thought.publicID.base58EncodedString)/")!
-        return Video(
+        Video(
             id: thought.id.uuidString,
-            url: url,
+            streamPublicID: thought.metadata.streamPublicID,
+            url: URL(string: "nano://\(thought.publicID.base58EncodedString)/")!,
             contributors: thought.metadata.contributors,
             description: thought.metadata.createdAt.ISO8601Format()
         )

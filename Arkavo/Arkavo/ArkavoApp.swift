@@ -677,7 +677,7 @@ enum ArkavoError: Error {
 
 class SharedState: ObservableObject {
     @Published var selectedCreatorPublicID: Data?
-    @Published var selectedStream: Stream?
+    @Published var selectedStreamPublicID: Data?
     @Published var selectedVideo: Video?
     @Published var selectedThought: Thought?
     @Published var selectedChannel: Channel?
@@ -753,13 +753,13 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeChatViewModel(stream: Stream) -> ChatViewModel {
+    func makeChatViewModel(streamPublicID: Data) -> ChatViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
         return ChatViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!,
-            stream: stream
+            streamPublicID: streamPublicID
         )
     }
 

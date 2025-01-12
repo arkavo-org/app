@@ -367,12 +367,7 @@ struct CreatorVideosSection: View {
                     isOwner: viewModel.isProfileOwner,
                     onView: {
                         // Set selected video and switch to video tab
-                        sharedState.selectedVideo = Video(
-                            id: thought.id.uuidString,
-                            url: URL(string: "pending-decryption://\(thought.id)")!,
-                            contributors: thought.metadata.contributors,
-                            description: thought.metadata.createdAt.ISO8601Format()
-                        )
+                        sharedState.selectedVideo = Video.from(thought: thought)
                         sharedState.selectedTab = .home
                         let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
                         Task {

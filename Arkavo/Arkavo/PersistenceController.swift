@@ -67,9 +67,9 @@ class PersistenceController {
         try container.mainContext.fetch(FetchDescriptor<Stream>(predicate: #Predicate { $0.id == id })).first
     }
 
-    func fetchStream(withPublicID publicID: Data) async throws -> [Stream]? {
+    func fetchStream(withPublicID publicID: Data) async throws -> Stream? {
         let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicID == publicID })
-        return try container.mainContext.fetch(fetchDescriptor)
+        return try container.mainContext.fetch(fetchDescriptor).first
     }
 
     func saveStream(_ stream: Stream) throws {

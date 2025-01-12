@@ -53,7 +53,7 @@ struct ContentView: View {
                     } else {
                         GroupChatView()
                             .onDisappear {
-                                sharedState.selectedStream = nil
+                                sharedState.selectedStreamPublicID = nil
                             }
                     }
                 case .social:
