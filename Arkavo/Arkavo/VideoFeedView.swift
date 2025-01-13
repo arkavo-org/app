@@ -41,7 +41,8 @@ struct VideoFeedView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(viewModel.videos) { video in
+                            // Use uniqueVideos to avoid duplicates
+                            ForEach(Array(Set(viewModel.videos)), id: \.id) { video in
                                 VideoPlayerView(
                                     video: video,
                                     viewModel: viewModel,
@@ -107,7 +108,12 @@ struct ContributorsView: View {
                     do {
                         profile = try await client.fetchProfile(forPublicID: mainContributor.profilePublicID)
                     } catch {
-                        print("Error fetching profile: \(error)")
+                        if let urlError = error as? URLError, urlError.code == .cancelled {
+                            // Ignore cancellation errors
+                        } else {
+                            // Log other errors
+                            print("Error fetching profile: \(error)")
+                        }
                     }
                 }
             }
@@ -127,7 +133,12 @@ struct ContributorsView: View {
                             do {
                                 profile = try await client.fetchProfile(forPublicID: contributor.profilePublicID)
                             } catch {
-                                print("Error fetching profile: \(error)")
+                                if let urlError = error as? URLError, urlError.code == .cancelled {
+                                    // Ignore cancellation errors
+                                } else {
+                                    // Log other errors
+                                    print("Error fetching profile: \(error)")
+                                }
                             }
                         }
                     }

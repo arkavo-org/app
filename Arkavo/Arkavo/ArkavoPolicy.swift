@@ -59,7 +59,7 @@ class ArkavoPolicy {
         do {
             var bb = ByteBuffer(data: data)
             let rootOffset = bb.read(def: Int32.self, position: 0)
-            print("Root offset: \(rootOffset)") // Debug info
+//            print("Root offset: \(rootOffset)") // Debug info
 
             // Verify the FlatBuffer data structure
             var verifier = try Verifier(buffer: &bb)

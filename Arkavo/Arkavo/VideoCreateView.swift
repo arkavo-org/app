@@ -717,11 +717,11 @@ final class VideoRecordingViewModel: ObservableObject {
 
             // Get the root offset from the buffer
             let rootOffset = verificationBuffer.read(def: Int32.self, position: 0)
-            print("🔍 Root offset: \(rootOffset)")
+//            print("🔍 Root offset: \(rootOffset)")
 
             // Verify the root object
             try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-            print("✅ Metadata verification successful")
+//            print("✅ Metadata verification successful")
         } catch {
             print("❌ Metadata verification failed: \(error)")
             throw FlatBufferVerificationError.verificationFailed("Invalid metadata structure: \(error)")
@@ -730,7 +730,7 @@ final class VideoRecordingViewModel: ObservableObject {
         // Get the final bytes
         let bytes = builder.sizedBuffer
         let policyData = Data(bytes: bytes.memory.advanced(by: bytes.reader), count: Int(bytes.size))
-        print("📦 Final policy data size: \(policyData.count) bytes")
+//        print("📦 Final policy data size: \(policyData.count) bytes")
 
         // Create NanoTDF with metadata in policy
         let nanoTDFData = try await client.encryptAndSendPayload(
