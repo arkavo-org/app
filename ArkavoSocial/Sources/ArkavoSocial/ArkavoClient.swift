@@ -239,10 +239,10 @@ public final class ArkavoClient: NSObject {
                 throw ArkavoError.messageError("Outbound message type 0x06 exceeds maximum allowed size")
             }
         }
-        print("Sending WebSocket message:")
-        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
-        print("Message length: \(data.count)")
-        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
+//        print("Sending WebSocket message:")
+//        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
+//        print("Message length: \(data.count)")
+//        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
         try await webSocket.send(.data(data))
     }
 
@@ -577,7 +577,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func receiveMessage() {
-        print("receiveMessage")
+//        print("receiveMessage")
         guard let webSocket else {
             print("WebSocket is nil, cannot receive message")
             return
@@ -589,8 +589,8 @@ public final class ArkavoClient: NSObject {
             Task { @MainActor in
                 switch result {
                 case let .success(message):
-                    print("\n=== Received WebSocket Message ===")
-                    print("Message type: \(message)")
+//                    print("\n=== Received WebSocket Message ===")
+//                    print("Message type: \(message)")
                     switch message {
                     case let .data(data):
                         await self.handleIncomingMessage(data)
@@ -627,10 +627,10 @@ public final class ArkavoClient: NSObject {
             return
         }
 
-        print("Received data message:")
-        print("Length: \(data.count) bytes")
-        print("Message type: 0x\(String(format: "%02X", messageType))")
-        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
+//        print("Received data message:")
+//        print("Length: \(data.count) bytes")
+//        print("Message type: 0x\(String(format: "%02X", messageType))")
+//        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
 
         // Validate message size for type 0x06
         if messageType == 0x06 {
@@ -653,7 +653,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
-        print("ArkavoClient Handling rewrapped key message of length: \(data.count)")
+//        print("ArkavoClient Handling rewrapped key message of length: \(data.count)")
         guard data.count == 93 else {
             if data.count == 33 {
                 // DENY -- Notify the app with the identifier
@@ -732,7 +732,7 @@ public final class ArkavoClient: NSObject {
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-        print("url: \(url)")
+//        print("url: \(url)")
         let (data, response) = try await URLSession.shared.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse else {

@@ -17,6 +17,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     @Published var videoQueue = VideoMessageQueue()
     let playerManager = VideoPlayerManager()
     private var notificationObservers: [NSObjectProtocol] = []
+    private var processedMessageIDs = Set<String>() // Track processed message IDs
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -30,7 +31,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     }
 
     private func setupNotifications() {
-        print("VideoFeedViewModel: setupNotifications")
+//        print("VideoFeedViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()
@@ -129,6 +130,13 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     }
 
     private func handleDecryptedMessage(data: Data, header: Header, policy: ArkavoPolicy) async {
+        let messageID = header.ephemeralPublicKey.hexEncodedString()
+        guard !processedMessageIDs.contains(messageID) else {
+            print("Message with ID \(messageID) already processed")
+            return
+        }
+        processedMessageIDs.insert(messageID)
+
         do {
 //            print("\nHandling decrypted video message:")
 //            print("- Data size: \(data.count)")
@@ -176,7 +184,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 }
 
                 // Safely handle the related data conversion
-                return (Contributor(profilePublicID: Data(metadata.id), role: "creator"), Data(metadata.related))
+                return (Contributor(profilePublicID: Data(metadata.creator), role: "creator"), Data(metadata.related))
             }()
             // Extract description from video metadata
             let asset = AVURLAsset(url: videoFileURL)
@@ -365,12 +373,21 @@ extension VideoFeedUpdating {
 
 // MARK: - Models
 
-struct Video: Identifiable {
+struct Video: Identifiable, Hashable {
     let id: String
     let streamPublicID: Data
     let url: URL
     let contributors: [Contributor]
     let description: String
+
+    // Conform to Hashable
+    static func == (lhs: Video, rhs: Video) -> Bool {
+        lhs.id == rhs.id // Compare based on the unique ID
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id) // Use the unique ID for hashing
+    }
 
     static func from(uploadResult: UploadResult, contributors: [Contributor], streamPublicID: Data) -> Video {
         Video(
@@ -448,7 +465,10 @@ final class VideoMessageQueue {
         // If moving forward, move current video to viewed
         if let currentVideo = try? currentVideo() {
             viewedVideos.append(currentVideo)
-            pendingVideos.removeFirst()
+            // Only remove the first element if pendingVideos is not empty
+            if !pendingVideos.isEmpty {
+                pendingVideos.removeFirst()
+            }
 
             // Maintain viewed buffer size
             while viewedVideos.count > Constants.maxBufferBehind {
@@ -484,6 +504,8 @@ final class VideoMessageQueue {
 extension VideoFeedViewModel {
     @MainActor
     func handleSwipe(_ direction: SwipeDirection) async {
+        // Debounce rapid swipes
+        try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
         print("Handling swipe: \(direction)")
         switch direction {
         case .up:

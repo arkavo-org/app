@@ -45,9 +45,12 @@ final class Profile: Identifiable {
         self.handle = handle
     }
 
+    // FIXME: should really be handle
     private static func generatePublicID(from name: String) -> Data {
-        withUnsafeBytes(of: name) { buffer in
-            Data(SHA256.hash(data: buffer))
+        // Ensure consistent string encoding
+        guard let nameData = name.data(using: .utf8) else {
+            fatalError("Failed to encode name as UTF-8")
         }
+        return Data(SHA256.hash(data: nameData))
     }
 }

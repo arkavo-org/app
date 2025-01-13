@@ -427,21 +427,21 @@ class GroupChatViewModel: ObservableObject {
         let authTag = keyData.suffix(16)
 
         do {
-            print("Decrypting rewrapped key...")
+//            print("Decrypting rewrapped key...")
             let symmetricKey = try client.decryptRewrappedKey(
                 nonce: nonce,
                 rewrappedKey: rewrappedKey,
                 authTag: authTag
             )
-            print("Successfully decrypted rewrapped key")
+//            print("Successfully decrypted rewrapped key")
 
             // Decrypt the stream data
-            print("Decrypting stream data...")
+//            print("Decrypting stream data...")
             let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-            print("Successfully decrypted stream data of size: \(decryptedData.count)")
+//            print("Successfully decrypted stream data of size: \(decryptedData.count)")
 
             // Now process the decrypted FlatBuffer data
-            print("Processing decrypted stream data...")
+//            print("Processing decrypted stream data...")
             try await handleStreamData(decryptedData)
 
         } catch {

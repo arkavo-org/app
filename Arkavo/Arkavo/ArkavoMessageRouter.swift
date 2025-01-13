@@ -16,12 +16,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         client.delegate = self
     }
 
-    // MARK: - Client HTTP requests
-
-    func getProfile(for publicID: String) async throws -> Profile {
-        Profile(name: publicID)
-    }
-
     // MARK: - ArkavoClientDelegate Methods
 
     func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
@@ -37,7 +31,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("Invalid message: empty data")
             return
         }
-        print("ArkavoMessageRouter.clientDidReceiveMessage")
+//        print("ArkavoMessageRouter.clientDidReceiveMessage")
         Task {
             do {
                 try await processMessage(message)
@@ -168,7 +162,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     private func handleRewrapMessage(_ data: Data) async throws {
-        print("Handling Rewrap message of size: \(data.count)")
+//        print("Handling Rewrap message of size: \(data.count)")
 
         // Create a deep copy of the data
         let copiedData = Data(data)
@@ -178,12 +172,12 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
         let epk = header.ephemeralPublicKey
-        print("Message components:")
-        print("- Header size: \(header.toData().count)")
-        print("- EPK: \(epk.hexEncodedString())")
+//        print("Message components:")
+//        print("- Header size: \(header.toData().count)")
+//        print("- EPK: \(epk.hexEncodedString())")
         // Store message data with detailed logging
         pendingMessages[epk] = (header, payload, nano)
-        print("Stored pending message with EPK: \(epk.hexEncodedString())")
+//        print("Stored pending message with EPK: \(epk.hexEncodedString())")
 
         // Create and send rewrap message containing only the header
         let rewrapMessage = RewrapMessage(header: header)
@@ -198,7 +192,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     private func handleNATSMessage(_ data: Data) async throws {
-        print("Handling NATS message of size: \(data.count)")
+//        print("Handling NATS message of size: \(data.count)")
 
         // Create a deep copy of the data
         let copiedData = Data(data)
@@ -208,14 +202,14 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
         let epk = header.ephemeralPublicKey
-        print("Message components:")
-        print("- Header size: \(header.toData().count)")
-        print("- Payload size: \(payload.toData().count)")
-        print("- Nano size: \(nano.toData().count)")
+//        print("Message components:")
+//        print("- Header size: \(header.toData().count)")
+//        print("- Payload size: \(payload.toData().count)")
+//        print("- Nano size: \(nano.toData().count)")
 
         // Store message data with detailed logging
         pendingMessages[epk] = (header, payload, nano)
-        print("Stored pending message with EPK: \(epk.hexEncodedString())")
+//        print("Stored pending message with EPK: \(epk.hexEncodedString())")
 
         // Send rewrap message
         let rewrapMessage = RewrapMessage(header: header)
@@ -223,17 +217,17 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     private func handleRewrappedKey(_ data: Data) async throws {
-        print("\nDecrypting rewrapped key:")
+//        print("\nDecrypting rewrapped key:")
 
         let identifier = data.prefix(33)
-        print("- EPK: \(identifier.hexEncodedString())")
+//        print("- EPK: \(identifier.hexEncodedString())")
 
         // Find corresponding message
         guard let (header, payload, nano) = pendingMessages.removeValue(forKey: identifier) else {
             print("❌ No pending message found for EPK")
             throw ArkavoError.messageError("No pending message found")
         }
-        print("✅ Found pending message")
+//        print("✅ Found pending message")
 
         // Extract key components
         let keyData = data.suffix(60)
@@ -242,10 +236,10 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
         let authTag = keyData.suffix(16)
 
-        print("Key components:")
-        print("- Nonce: \(nonce.hexEncodedString())")
-        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
-        print("- Auth tag: \(authTag.hexEncodedString())")
+//        print("Key components:")
+//        print("- Nonce: \(nonce.hexEncodedString())")
+//        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
+//        print("- Auth tag: \(authTag.hexEncodedString())")
 
         // Decrypt the key
         let symmetricKey = try client.decryptRewrappedKey(
@@ -253,11 +247,11 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             rewrappedKey: rewrappedKey,
             authTag: authTag
         )
-        print("✅ Decrypted symmetric key")
+//        print("✅ Decrypted symmetric key")
 
         // Decrypt the message content
         let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
-        print("✅ Decrypted payload of size: \(decryptedData.count)")
+//        print("✅ Decrypted payload of size: \(decryptedData.count)")
 
         // Check if decrypted data is a valid URL string
         if let urlString = String(data: decryptedData, encoding: .utf8) {
