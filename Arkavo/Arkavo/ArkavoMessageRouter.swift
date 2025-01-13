@@ -16,12 +16,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         client.delegate = self
     }
 
-    // MARK: - Client HTTP requests
-
-    func getProfile(for publicID: String) async throws -> Profile {
-        Profile(name: publicID)
-    }
-
     // MARK: - ArkavoClientDelegate Methods
 
     func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {

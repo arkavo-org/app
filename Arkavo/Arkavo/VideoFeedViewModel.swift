@@ -176,7 +176,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
                 }
 
                 // Safely handle the related data conversion
-                return (Contributor(profilePublicID: Data(metadata.id), role: "creator"), Data(metadata.related))
+                return (Contributor(profilePublicID: Data(metadata.creator), role: "creator"), Data(metadata.related))
             }()
             // Extract description from video metadata
             let asset = AVURLAsset(url: videoFileURL)
