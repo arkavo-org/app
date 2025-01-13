@@ -44,6 +44,7 @@ final class Profile: Identifiable {
         self.did = did
         self.handle = handle
     }
+
     // FIXME: should really be handle
     private static func generatePublicID(from name: String) -> Data {
         // Ensure consistent string encoding
