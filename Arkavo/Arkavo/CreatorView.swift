@@ -5,7 +5,6 @@ struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
     @State private var messages: [Message] = Message.sampleMessages
-    @State private var exclusiveContent: [CreatorPost] = CreatorPost.samplePosts
 
     init() {
         _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makePatreonViewModel())
@@ -424,11 +423,6 @@ struct VideoThoughtView: View {
             .frame(height: 120)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thought.metadata.createdAt.ISO8601Format())
-                    .font(.subheadline)
-                    .lineLimit(2)
-                    .foregroundColor(.primary)
-
                 Text(thought.metadata.createdAt, style: .relative)
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -470,31 +464,111 @@ struct VideoThoughtView: View {
 }
 
 struct CreatorPostsSection: View {
-    @StateObject var viewModel: CreatorViewModel
     @EnvironmentObject var sharedState: SharedState
+    @StateObject var viewModel: CreatorViewModel
 
     var body: some View {
-        LazyVStack(spacing: 16) {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16),
+        ], spacing: 16) {
             ForEach(viewModel.postThoughts) { thought in
-                CreatorPostCard(post: CreatorPost(
-                    id: thought.id.uuidString,
-                    content: thought.metadata.createdAt.ISO8601Format(),
-                    mediaURL: nil,
-                    timestamp: thought.metadata.createdAt,
-                    tierAccess: .basic
-                ))
-                .onTapGesture {
-                    // Set selected post and switch to social tab
-                    sharedState.selectedThought = thought
-                    sharedState.selectedTab = .social
-                    let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
-                    Task {
-                        try await router.processMessage(thought.nano, messageId: thought.id)
+                PostThoughtView(
+                    thought: thought,
+                    isOwner: viewModel.isProfileOwner,
+                    onView: {
+                        sharedState.selectedThought = thought
+                        sharedState.selectedTab = .social
+                        let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
+                        Task {
+                            try await router.processMessage(thought.nano, messageId: thought.id)
+                        }
+                    },
+                    onSend: {
+                        Task {
+                            await viewModel.sendPost(thought)
+                        }
+                    },
+                    onDelete: {
+                        Task {
+                            await viewModel.deletePost(thought)
+                        }
                     }
-                }
+                )
             }
         }
         .padding()
+    }
+}
+
+struct PostThoughtView: View {
+    let thought: Thought
+    let isOwner: Bool
+    let onView: () -> Void
+    let onSend: () -> Void
+    let onDelete: () -> Void
+
+    @State private var showingDeleteConfirmation = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geometry in
+                ZStack {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .aspectRatio(16 / 9, contentMode: .fill)
+                        .frame(width: geometry.size.width)
+                        .cornerRadius(8)
+                        .clipped()
+
+                    Image(systemName: "eye.circle.fill")
+                        .font(.system(size: 44))
+                        .foregroundColor(.white)
+                }
+                .onTapGesture {
+                    onView()
+                }
+            }
+            .frame(height: 120)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(thought.metadata.createdAt, style: .relative)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if isOwner {
+                    HStack {
+                        Button(action: onSend) {
+                            Label("Send", systemImage: "paperplane")
+                                .font(.caption)
+                        }
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                                .font(.caption)
+                        }
+                        .confirmationDialog(
+                            "Delete Post",
+                            isPresented: $showingDeleteConfirmation,
+                            presenting: thought
+                        ) { _ in
+                            Button("Delete", role: .destructive, action: onDelete)
+                            Button("Cancel", role: .cancel) {}
+                        } message: { _ in
+                            Text("Are you sure you want to delete this post? This action cannot be undone.")
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(radius: 2)
     }
 }
 
@@ -526,33 +600,6 @@ struct CreatorPostCard: View {
         .cornerRadius(12)
         .shadow(radius: 2)
     }
-}
-
-// Models Extensions
-extension CreatorPost {
-    static let samplePosts = [
-        CreatorPost(
-            id: "1",
-            content: "🎨 New Digital Art Tutorial: Master Character Design",
-            mediaURL: "https://example.com/tutorial1.jpg",
-            timestamp: Date().addingTimeInterval(-3600),
-            tierAccess: .basic
-        ),
-        CreatorPost(
-            id: "2",
-            content: "🎵 Exclusive Behind-the-Scenes: Studio Session",
-            mediaURL: "https://example.com/studio.jpg",
-            timestamp: Date().addingTimeInterval(-7200),
-            tierAccess: .premium
-        ),
-        CreatorPost(
-            id: "3",
-            content: "🍳 Premium Recipe Collection: Spring Edition",
-            mediaURL: "https://example.com/recipes.jpg",
-            timestamp: Date().addingTimeInterval(-10800),
-            tierAccess: .exclusive
-        ),
-    ]
 }
 
 extension Message {
@@ -661,6 +708,27 @@ final class CreatorViewModel: ObservableObject {
         isLoading = true
         do {
             // Implementation for sending video
+            // This would likely involve your messaging/sharing system
+            isLoading = false
+        } catch {
+            handleError(error)
+        }
+    }
+
+    func deletePost(_ thought: Thought) async {
+        isLoading = true
+        if let postStream = account.streams.first(where: { $0.source?.metadata.mediaType == .text }) {
+            postStream.removeThought(thought)
+            // Update the UI
+            loadPostThoughts()
+        }
+        isLoading = false
+    }
+
+    func sendPost(_: Thought) async {
+        isLoading = true
+        do {
+            // Implementation for sending post
             // This would likely involve your messaging/sharing system
             isLoading = false
         } catch {

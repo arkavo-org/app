@@ -93,6 +93,9 @@
     "Age Verification" : {
 
     },
+    "Are you sure you want to delete this post? This action cannot be undone." : {
+
+    },
     "Are you sure you want to delete this video? This action cannot be undone." : {
 
     },
@@ -176,6 +179,9 @@
 
     },
     "Delete" : {
+
+    },
+    "Delete Post" : {
 
     },
     "Delete Video" : {

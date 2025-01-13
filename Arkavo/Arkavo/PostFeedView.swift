@@ -6,6 +6,60 @@ import OpenTDFKit
 import SwiftUI
 import UIKit
 
+// MARK: - Model
+
+struct Post: Identifiable, Hashable {
+    let id: String
+    let streamPublicID: Data
+    let url: URL? // Optional since not all posts may have images
+    let contributors: [Contributor]
+    let description: String
+    let createdAt: Date
+    let mediaType: MediaType // To distinguish between text and image posts
+    let creatorPublicID: Data
+    let thought: Thought
+
+    // Implement Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    // Implement Equatable
+    static func == (lhs: Post, rhs: Post) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    static func from(_ thought: Thought, decryptedData: Data) throws -> Post {
+        // Deserialize the decrypted data
+        let thoughtModel = try ThoughtServiceModel.deserialize(from: decryptedData)
+
+        // Convert content data to string
+        let description = String(data: thoughtModel.content, encoding: .utf8) ?? ""
+
+        // For image posts, create URL from content data
+        var url: URL? = nil
+        if thought.metadata.mediaType == .image {
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileName = "\(thought.id).heif"
+            let fileURL = tempDir.appendingPathComponent(fileName)
+            try thoughtModel.content.write(to: fileURL)
+            url = fileURL
+        }
+
+        return Post(
+            id: thought.id.uuidString,
+            streamPublicID: thought.metadata.streamPublicID,
+            url: url,
+            contributors: thought.metadata.contributors,
+            description: description,
+            createdAt: thought.metadata.createdAt,
+            mediaType: thought.metadata.mediaType,
+            creatorPublicID: thought.metadata.creatorPublicID,
+            thought: thought
+        )
+    }
+}
+
 // MARK: - View Models
 
 @MainActor
@@ -14,6 +68,7 @@ class PostFeedViewModel: ObservableObject {
     private let account: Account
     private let profile: Profile
     private var notificationObservers: [Any] = []
+    @Published var posts: [Post] = []
     @Published var thoughts: [Thought] = []
     @Published var currentThoughtIndex = 0
     @Published var isLoading = false
@@ -91,12 +146,16 @@ class PostFeedViewModel: ObservableObject {
                 // Create and save thought
                 let thought = try Thought.from(thoughtModel, arkavoMetadata: metadata)
 
-                // Save thought
-                _ = try PersistenceController.shared.saveThought(thought)
-                try await PersistenceController.shared.saveChanges()
+                // FIXME: Save thought?
+//                _ = try PersistenceController.shared.saveThought(thought)
+//                try await PersistenceController.shared.saveChanges()
 
+                // Create post from decrypted data
+                let post = try Post.from(thought, decryptedData: data)
+                print("post: \(post) stream: \(post.streamPublicID.base58EncodedString)")
                 await MainActor.run {
                     thoughts.insert(thought, at: 0)
+                    posts.insert(post, at: 0)
                     postQueue.enqueuePost(thought)
                 }
             }
@@ -183,6 +242,7 @@ class PostFeedViewModel: ObservableObject {
                 .suffix(10) // Load up to 10 thoughts
 
             for thought in relevantThoughts {
+                try? await client.sendMessage(thought.nano)
                 try? await router.processMessage(thought.nano, messageId: thought.id)
                 postQueue.enqueuePost(thought)
             }
@@ -376,7 +436,6 @@ class PostFeedViewModel: ObservableObject {
 struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
-    @State private var currentIndex = 0
 
     var body: some View {
         ZStack {
@@ -393,7 +452,7 @@ struct PostFeedView: View {
     private var mainFeedView: some View {
         GeometryReader { geometry in
             ZStack {
-                if viewModel.thoughts.isEmpty {
+                if viewModel.posts.isEmpty {
                     VStack {
                         Spacer()
                         WaveLoadingView(message: "Awaiting")
@@ -408,10 +467,10 @@ struct PostFeedView: View {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(spacing: 0) {
-                                ForEach(viewModel.thoughts) { thought in
+                                ForEach(viewModel.posts) { post in
                                     ImmersiveThoughtCard(
                                         viewModel: viewModel,
-                                        thought: thought,
+                                        post: post,
                                         size: geometry.size
                                     )
                                     .frame(width: geometry.size.width, height: geometry.size.height)
@@ -421,7 +480,7 @@ struct PostFeedView: View {
                         .scrollDisabled(true)
                         .onChange(of: viewModel.currentThoughtIndex) { _, newIndex in
                             withAnimation {
-                                proxy.scrollTo(viewModel.thoughts[newIndex].id, anchor: .center)
+                                proxy.scrollTo(viewModel.posts[newIndex].id, anchor: .center)
                             }
                         }
                         .gesture(
@@ -434,7 +493,7 @@ struct PostFeedView: View {
                                         withAnimation {
                                             if verticalMovement > 0, viewModel.currentThoughtIndex > 0 {
                                                 viewModel.currentThoughtIndex -= 1
-                                            } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.thoughts.count - 1 {
+                                            } else if verticalMovement < 0, viewModel.currentThoughtIndex < viewModel.posts.count - 1 {
                                                 viewModel.currentThoughtIndex += 1
                                             }
                                         }
@@ -604,7 +663,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 struct ImmersiveThoughtCard: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: PostFeedViewModel
-    let thought: Thought
+    let post: Post // Changed from thought to post
     let size: CGSize
     private let systemMargin: CGFloat = 16
 
@@ -616,33 +675,36 @@ struct ImmersiveThoughtCard: View {
 
                 HStack(spacing: systemMargin * 1.25) {
                     ZStack(alignment: .center) {
-                        Text(thought.metadata.createdAt.ISO8601Format())
+                        Text(post.description)
                             .font(.system(size: 24, weight: .heavy))
                             .foregroundColor(.white)
                     }
                     .padding(systemMargin * 2)
                     Spacer()
                 }
+
+                // Group chat icons (you may need to adjust this to work with post instead of thought)
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
                         GroupChatIconList(
                             currentVideo: nil,
-                            currentThought: thought,
+                            currentThought: post.thought,
                             streams: viewModel.streams()
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)
                     }
                 }
-                // Contributors section - Positioned at bottom-left
+
+                // Contributors section
                 VStack {
                     Spacer()
                     HStack {
                         ContributorsView(
                             client: viewModel.client,
-                            contributors: thought.metadata.contributors
+                            contributors: post.contributors
                         )
                         .padding(.horizontal, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -650,12 +712,11 @@ struct ImmersiveThoughtCard: View {
                     }
                 }
 
-                // Chat overlay
                 if sharedState.showChatOverlay {
                     ChatOverlay()
                         .onAppear {
-                            sharedState.selectedThought = thought
-                            sharedState.selectedStreamPublicID = viewModel.getPostStream().publicID
+                            sharedState.selectedThought = post.thought
+                            sharedState.selectedStreamPublicID = post.streamPublicID
                         }
                 }
             }
