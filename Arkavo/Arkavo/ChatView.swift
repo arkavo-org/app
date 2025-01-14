@@ -150,7 +150,7 @@ struct MessageRow: View {
                 // Content
                 Group {
                     switch message.mediaType {
-                    case .text:
+                    case .text, .post, .say:
                         Text(message.content)
                             .font(.body)
                             .textSelection(.enabled)
@@ -313,6 +313,7 @@ struct ReactionButton: View {
 struct ChatOverlay: View {
     @EnvironmentObject var sharedState: SharedState
     @FocusState private var isChatFieldFocused: Bool
+    var streamPublicID: Data
 
     var body: some View {
         ZStack {
@@ -348,15 +349,13 @@ struct ChatOverlay: View {
                 .background(.ultraThinMaterial)
 
                 // Chat view
-                if let streamPublicID = getAppropriateStreamPublicID() {
-                    ChatView(
-                        viewModel: ViewModelFactory.shared.makeChatViewModel(
-                            streamPublicID: streamPublicID
-                        )
+                ChatView(
+                    viewModel: ViewModelFactory.shared.makeChatViewModel(
+                        streamPublicID: streamPublicID
                     )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .focused($isChatFieldFocused)
-                }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focused($isChatFieldFocused)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 44) // Start below status bar

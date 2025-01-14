@@ -108,4 +108,15 @@ class PersistenceController {
             return false
         }
     }
+
+    func fetchThoughtsForStream(withPublicID streamPublicID: Data) async throws -> [Thought] {
+        let descriptor = FetchDescriptor<Thought>(
+            predicate: #Predicate<Thought> { thought in
+                thought.metadata.streamPublicID == streamPublicID
+            },
+            sortBy: [SortDescriptor(\.metadata.createdAt)]
+        )
+
+        return try container.mainContext.fetch(descriptor)
+    }
 }

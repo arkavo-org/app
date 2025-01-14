@@ -717,7 +717,7 @@ final class CreatorViewModel: ObservableObject {
 
     func deletePost(_ thought: Thought) async {
         isLoading = true
-        if let postStream = account.streams.first(where: { $0.source?.metadata.mediaType == .text }) {
+        if let postStream = account.streams.first(where: { $0.source?.metadata.mediaType == .post }) {
             postStream.removeThought(thought)
             // Update the UI
             loadPostThoughts()
@@ -748,7 +748,7 @@ final class CreatorViewModel: ObservableObject {
 
     func loadPostThoughts() {
         let postStream = account.streams.first(where: { stream in
-            stream.source?.metadata.mediaType == .text
+            stream.source?.metadata.mediaType == .post
         })
         if postStream != nil {
             postThoughts = postStream!.thoughts.sorted { thought1, thought2 in

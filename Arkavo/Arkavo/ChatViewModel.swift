@@ -2,6 +2,7 @@ import ArkavoSocial
 import CryptoKit
 import FlatBuffers
 import OpenTDFKit
+import SwiftData
 import SwiftUI
 
 @MainActor
@@ -25,23 +26,21 @@ class ChatViewModel: ObservableObject {
         self.profile = profile
         self.streamPublicID = streamPublicID
         setupNotifications()
+        // Load existing thoughts for this stream
         Task {
-            try? await loadThoughts()
+            await loadExistingMessages()
         }
     }
 
-    private func loadThoughts() async throws {
-        if let stream = try await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) {
-            Task {
-                let router = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoMessageRouter
-                for thought in stream.thoughts {
-                    do {
-                        try await router.processMessage(thought.nano, messageId: thought.id)
-                    } catch {
-                        print("Error rewrapping thought \(thought.publicID): \(error)")
-                    }
-                }
+    private func loadExistingMessages() async {
+        do {
+            let thoughts = try await PersistenceController.shared.fetchThoughtsForStream(withPublicID: streamPublicID)
+            print("stream thoughts: \(thoughts.count) \(streamPublicID.base58EncodedString)")
+            for thought in thoughts {
+                try? await client.sendMessage(thought.nano)
             }
+        } catch {
+            print("Error loading existing messages: \(error)")
         }
     }
 
@@ -71,13 +70,14 @@ class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(content: String) async throws {
+        print("ChatViewModel: sendMessage")
         let messageData = content.data(using: .utf8) ?? Data()
 
         // Create thought service model
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
             streamPublicID: streamPublicID,
-            mediaType: .text,
+            mediaType: .say,
             content: messageData
         )
 
@@ -177,7 +177,7 @@ class ChatViewModel: ObservableObject {
         let thoughtMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
             streamPublicID: streamPublicID,
-            mediaType: .text,
+            mediaType: .say,
             createdAt: Date(),
             contributors: []
         )
@@ -197,14 +197,14 @@ class ChatViewModel: ObservableObject {
     }
 
     private func handleDecryptedThought(payload: Data, policy _: ArkavoPolicy) async {
-        print("\nHandling decrypted thought:")
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
-            print("Deserialized thought model")
-            print("Media type: \(thoughtModel.mediaType)")
+            guard thoughtModel.mediaType == .say else {
+//                print("❌ Incorrect mediaType received \(thoughtModel.mediaType)")
+                return
+            }
             // Process content based on media type
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
-            print("Processed content: \(displayContent)")
 
             let message = ChatMessage(
                 id: UUID().uuidString,
@@ -231,7 +231,7 @@ class ChatViewModel: ObservableObject {
 
     private func processContent(_ content: Data, mediaType: MediaType) -> String {
         switch mediaType {
-        case .text:
+        case .text, .post, .say:
             return String(data: content, encoding: .utf8) ?? "[Invalid text content]"
 
         case .image:

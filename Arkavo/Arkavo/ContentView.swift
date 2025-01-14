@@ -48,14 +48,10 @@ struct ContentView: View {
                 case .home:
                     VideoContentView()
                 case .communities:
-                    if sharedState.showCreateView {
-                        GroupCreateView()
-                    } else {
-                        GroupChatView()
-                            .onDisappear {
-                                sharedState.selectedStreamPublicID = nil
-                            }
-                    }
+                    GroupView()
+                        .onDisappear {
+                            sharedState.selectedStreamPublicID = nil
+                        }
                 case .social:
                     PostFeedView()
 //                case .creators:
