@@ -131,7 +131,7 @@ class PostFeedViewModel: ObservableObject {
                     creatorPublicID: thought.metadata.creatorPublicID,
                     thought: thought
                 )
-                print("post: \(post) stream: \(post.streamPublicID.base58EncodedString)")
+//                print("post: \(post) stream: \(post.streamPublicID.base58EncodedString)")
                 await MainActor.run {
                     thoughts.insert(thought, at: 0)
                     posts.insert(post, at: 0)
