@@ -238,6 +238,7 @@ struct ArkavoApp: App {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
                     selectedView = .main // Only change view on complete success
+                    return true
                 }
             } catch {
                 print("Failed to connect: \(error)")
