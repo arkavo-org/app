@@ -3,7 +3,7 @@ import SwiftUI
 struct GroupCreateView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
+    @StateObject var viewModel: GroupViewModel
 
     @State private var groupName = ""
     @State private var showError = false

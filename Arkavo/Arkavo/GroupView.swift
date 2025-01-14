@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - Models
 
 @MainActor
-class GroupChatViewModel: ObservableObject {
+class GroupViewModel: ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -452,69 +452,67 @@ class GroupChatViewModel: ObservableObject {
 
 // MARK: - Main View
 
-struct GroupChatView: View {
+struct GroupView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: GroupChatViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
-    @State private var showCreateServer = false
+    @StateObject var viewModel: GroupViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // MARK: - Stream List
-
-                if viewModel.streams.isEmpty {
-                    VStack {
-                        Spacer()
-                        WaveLoadingView(message: "Awaiting")
-                            .frame(maxWidth: .infinity)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground))
-                    .onAppear { sharedState.isAwaiting = true }
-                    .onDisappear { sharedState.isAwaiting = false }
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(viewModel.streams) { stream in
-                                GroupCardView(
-                                    stream: stream,
-                                    onSelect: {
-                                        viewModel.selectedStream = stream
-                                        sharedState.selectedStreamPublicID = stream.publicID
-                                        sharedState.showChatOverlay = true
-                                    }
-                                )
-                            }
+        if sharedState.showCreateView {
+            GroupCreateView(viewModel: viewModel)
+        } else {
+            GeometryReader { geometry in
+                ZStack {
+                    // MARK: - Stream List
+                    
+                    if viewModel.streams.isEmpty {
+                        VStack {
+                            Spacer()
+                            WaveLoadingView(message: "Awaiting")
+                                .frame(maxWidth: .infinity)
+                            Spacer()
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.systemBackground))
+                        .onAppear { sharedState.isAwaiting = true }
+                        .onDisappear { sharedState.isAwaiting = false }
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(viewModel.streams) { stream in
+                                    GroupCardView(
+                                        stream: stream,
+                                        onSelect: {
+                                            viewModel.selectedStream = stream
+                                            sharedState.selectedStreamPublicID = stream.publicID
+                                            sharedState.showChatOverlay = true
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 16)
+                        }
+                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
                     }
-                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                    .background(Color(.systemGroupedBackground).ignoresSafeArea())
-                }
-
-                // MARK: - Chat Overlay
-
-                if sharedState.showChatOverlay {
-                    ChatOverlay()
+                    
+                    // MARK: - Chat Overlay
+                    
+                    if sharedState.showChatOverlay {
+                        ChatOverlay()
+                    }
                 }
             }
-        }
-        .sheet(isPresented: $showCreateServer) {
-            NavigationStack {
-                GroupCreateView()
-            }
-        }
-        .sheet(isPresented: $isShareSheetPresented) {
-            if let stream = viewModel.selectedStream {
-                ShareSheet(
-                    activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
-                    isPresented: $isShareSheetPresented
-                )
+            .sheet(isPresented: $isShareSheetPresented) {
+                if let stream = viewModel.selectedStream {
+                    ShareSheet(
+                        activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
+                        isPresented: $isShareSheetPresented
+                    )
+                }
             }
         }
     }

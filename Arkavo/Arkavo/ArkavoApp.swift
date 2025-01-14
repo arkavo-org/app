@@ -743,9 +743,9 @@ final class ViewModelFactory {
     }
 
     @MainActor
-    func makeGroupChatViewModel() -> GroupChatViewModel {
+    func makeGroupChatViewModel() -> GroupViewModel {
         let client = serviceLocator.resolve() as ArkavoClient
-        return GroupChatViewModel(
+        return GroupViewModel(
             client: client,
             account: currentAccount!,
             profile: currentProfile!
