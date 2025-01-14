@@ -10,7 +10,7 @@ import UIKit
 
 struct Post: Identifiable, Hashable {
     let id: String
-    let streamPublicID: Data
+    let streamPublicID: Data // Thought.publicID
     let url: URL? // Optional since not all posts may have images
     let contributors: [Contributor]
     let description: String
@@ -27,36 +27,6 @@ struct Post: Identifiable, Hashable {
     // Implement Equatable
     static func == (lhs: Post, rhs: Post) -> Bool {
         lhs.id == rhs.id
-    }
-
-    static func from(_ thought: Thought, decryptedData: Data) throws -> Post {
-        // Deserialize the decrypted data
-        let thoughtModel = try ThoughtServiceModel.deserialize(from: decryptedData)
-
-        // Convert content data to string
-        let description = String(data: thoughtModel.content, encoding: .utf8) ?? ""
-
-        // For image posts, create URL from content data
-        var url: URL? = nil
-        if thought.metadata.mediaType == .image {
-            let tempDir = FileManager.default.temporaryDirectory
-            let fileName = "\(thought.id).heif"
-            let fileURL = tempDir.appendingPathComponent(fileName)
-            try thoughtModel.content.write(to: fileURL)
-            url = fileURL
-        }
-
-        return Post(
-            id: thought.id.uuidString,
-            streamPublicID: thought.metadata.streamPublicID,
-            url: url,
-            contributors: thought.metadata.contributors,
-            description: description,
-            createdAt: thought.metadata.createdAt,
-            mediaType: thought.metadata.mediaType,
-            creatorPublicID: thought.metadata.creatorPublicID,
-            thought: thought
-        )
     }
 }
 
@@ -140,18 +110,27 @@ class PostFeedViewModel: ObservableObject {
     private func handleDecryptedMessage(data: Data, header: Header) async {
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: data)
+            guard thoughtModel.mediaType == .post else {
+//                print("❌ Incorrect mediaType received \(thoughtModel.mediaType)")
+                return
+            }
             if let bodyData = header.policy.body?.body {
                 let metadata = try ArkavoPolicy.parseMetadata(from: bodyData)
 
-                // Create and save thought
+                // Create thought
                 let thought = try Thought.from(thoughtModel, arkavoMetadata: metadata)
-
-                // FIXME: Save thought?
-//                _ = try PersistenceController.shared.saveThought(thought)
-//                try await PersistenceController.shared.saveChanges()
-
-                // Create post from decrypted data
-                let post = try Post.from(thought, decryptedData: data)
+                // Create post
+                let post = Post(
+                    id: thought.id.uuidString,
+                    streamPublicID: thought.metadata.streamPublicID,
+                    url: nil,
+                    contributors: thought.metadata.contributors,
+                    description: String(data: thoughtModel.content, encoding: .utf8) ?? "",
+                    createdAt: thought.metadata.createdAt,
+                    mediaType: thought.metadata.mediaType,
+                    creatorPublicID: thought.metadata.creatorPublicID,
+                    thought: thought
+                )
                 print("post: \(post) stream: \(post.streamPublicID.base58EncodedString)")
                 await MainActor.run {
                     thoughts.insert(thought, at: 0)
@@ -203,7 +182,7 @@ class PostFeedViewModel: ObservableObject {
     func getPostStream() -> Stream {
         // Find the stream that's marked as a post stream (has a text source thought)
         account.streams.first { stream in
-            stream.source?.metadata.mediaType == .text
+            stream.source?.metadata.mediaType == .post
         }!
     }
 
@@ -238,8 +217,8 @@ class PostFeedViewModel: ObservableObject {
         // If still no thoughts, load from account post-stream thoughts
         if thoughts.isEmpty {
             let relevantThoughts = postStream.thoughts
-                .filter { $0.metadata.mediaType == .text }
-                .suffix(10) // Load up to 10 thoughts
+                .filter { $0.metadata.mediaType == .post }
+                .suffix(10) // Load up to 10 post
 
             for thought in relevantThoughts {
                 try? await client.sendMessage(thought.nano)
@@ -334,7 +313,8 @@ class PostFeedViewModel: ObservableObject {
         )
     }
 
-    func createAndSendThought(content: String) async throws {
+    func sendPost(content: String) async throws {
+        print("PostFeedViewModel: sendPost")
         // Create message data
         let messageData = content.data(using: .utf8) ?? Data()
 
@@ -344,7 +324,7 @@ class PostFeedViewModel: ObservableObject {
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
             streamPublicID: postStream.publicID,
-            mediaType: .text,
+            mediaType: .post,
             content: messageData
         )
 
@@ -357,13 +337,13 @@ class PostFeedViewModel: ObservableObject {
             payload: payload,
             policyData: policyData
         )
-
+        let contributors: [Contributor] = [Contributor(profilePublicID: profile.publicID, role: "creator")]
         let thoughtMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
             streamPublicID: postStream.publicID,
-            mediaType: .text,
+            mediaType: .post,
             createdAt: Date(),
-            contributors: []
+            contributors: contributors
         )
 
         let thought = Thought(
@@ -375,7 +355,19 @@ class PostFeedViewModel: ObservableObject {
         // Save thought
         _ = try PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
-
+        // Create new stream For post chat
+        let stream = Stream(
+            publicID: thought.publicID,
+            creatorPublicID: profile.publicID,
+            profile: Profile(name: thought.publicID.base58EncodedString),
+            policies: Policies(
+                admission: .open,
+                interaction: .open,
+                age: .forAll
+            )
+        )
+        stream.source = thought
+        _ = try PersistenceController.shared.saveStream(stream)
         postStream.addThought(thought)
         try await PersistenceController.shared.saveChanges()
     }
@@ -566,7 +558,7 @@ struct PostCreateView: View {
                         Button {
                             Task {
                                 do {
-                                    try await viewModel.createAndSendThought(content: thoughtText)
+                                    try await viewModel.sendPost(content: thoughtText)
                                     sharedState.showCreateView = false
                                 } catch {
                                     self.error = error
@@ -663,7 +655,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 struct ImmersiveThoughtCard: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: PostFeedViewModel
-    let post: Post // Changed from thought to post
+    let post: Post
     let size: CGSize
     private let systemMargin: CGFloat = 16
 
@@ -713,7 +705,7 @@ struct ImmersiveThoughtCard: View {
                 }
 
                 if sharedState.showChatOverlay {
-                    ChatOverlay()
+                    ChatOverlay(streamPublicID: post.streamPublicID)
                         .onAppear {
                             sharedState.selectedThought = post.thought
                             sharedState.selectedStreamPublicID = post.streamPublicID

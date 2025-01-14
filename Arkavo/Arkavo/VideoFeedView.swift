@@ -75,8 +75,10 @@ struct VideoFeedView: View {
                 }
 
                 // Reusable chat overlay
-                if sharedState.showChatOverlay {
-                    ChatOverlay()
+                if sharedState.showChatOverlay,
+                   let streamPublicID = sharedState.selectedStreamPublicID
+                {
+                    ChatOverlay(streamPublicID: streamPublicID)
                 }
             }
         }

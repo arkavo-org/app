@@ -328,7 +328,7 @@ struct ArkavoApp: App {
         let initialMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
             streamPublicID: stream.publicID,
-            mediaType: .text, // Posts are primarily text-based
+            mediaType: .post, // Posts are primarily text-based
             createdAt: Date(),
             contributors: []
         )
@@ -384,7 +384,7 @@ struct ArkavoApp: App {
 
             // Check post stream
             let postStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .text
+                stream.source?.metadata.mediaType == .post
             })
 
             if postStream == nil {
@@ -457,7 +457,7 @@ struct ArkavoApp: App {
             }
 
             let postStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .text
+                stream.source?.metadata.mediaType == .post
             })
 
             if postStream == nil {
@@ -680,7 +680,6 @@ class SharedState: ObservableObject {
     @Published var selectedStreamPublicID: Data?
     @Published var selectedVideo: Video?
     @Published var selectedThought: Thought?
-    @Published var selectedChannel: Channel?
     @Published var selectedTab: Tab = .home
     @Published var showCreateView: Bool = false
     @Published var showChatOverlay: Bool = false

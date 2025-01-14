@@ -9,7 +9,7 @@ final class Thought: Identifiable, Codable {
     struct Metadata: Codable {
         var creatorPublicID: Data
         let streamPublicID: Data
-        let mediaType: MediaType
+        let mediaType: MediaType // Kind
         let createdAt: Date
         let contributors: [Contributor]
 
@@ -33,7 +33,6 @@ final class Thought: Identifiable, Codable {
     // Using SHA256 hash as a public identifier, stored as 32 bytes
     @Attribute(.unique) var publicID: Data
     var stream: Stream?
-    var sourceStream: Stream?
     var metadata: Metadata
     var nano: Data
 
@@ -120,7 +119,7 @@ struct Contributor: Codable, Identifiable {
 // MARK: - MediaType
 
 enum MediaType: String, Codable {
-    case text, video, audio, image
+    case text, video, audio, image, post, say
 
     var icon: String {
         switch self {
@@ -128,6 +127,8 @@ enum MediaType: String, Codable {
         case .audio: "waveform"
         case .image: "photo.fill"
         case .text: "doc.fill"
+        case .post: "post.fill"
+        case .say: "speaker.fill"
         }
     }
 }

@@ -105,9 +105,6 @@
     "Assurance" : {
 
     },
-    "Audio message" : {
-
-    },
     "Available" : {
 
     },
@@ -478,9 +475,6 @@
         }
       }
     },
-    "Recall" : {
-
-    },
     "Recording Error" : {
 
     },
@@ -497,9 +491,6 @@
           }
         }
       }
-    },
-    "Resend" : {
-
     },
     "Retry" : {
 
@@ -695,12 +686,6 @@
         }
       }
     },
-    "Unable to decode text" : {
-
-    },
-    "Unable to load image" : {
-
-    },
     "Update" : {
 
     },
@@ -720,9 +705,6 @@
           }
         }
       }
-    },
-    "Video message" : {
-
     },
     "View Secure Stream" : {
       "extractionState" : "stale",

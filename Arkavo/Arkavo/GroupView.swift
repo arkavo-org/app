@@ -26,7 +26,7 @@ class GroupViewModel: ObservableObject {
             await loadStreams()
         }
         // Add logging to track initialization
-        print("GroupChatViewModel initialized:")
+        print("GroupViewModel initialized:")
         print("- Client delegate set: \(client.delegate != nil)")
         print("- Account streams count: \(account.streams.count)")
         print("- Profile name: \(profile.name)")
@@ -44,7 +44,7 @@ class GroupViewModel: ObservableObject {
     }
 
     private func setupNotifications() {
-        print("GroupChatViewModel: setupNotifications")
+        print("GroupViewModel: setupNotifications")
         // Clean up any existing observers
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         notificationObservers.removeAll()
@@ -78,7 +78,7 @@ class GroupViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 do {
                     if policy.type == .streamProfile {
-                        print("\n=== GroupChatViewModel Processing Decrypted Stream Data ===")
+                        print("\n=== GroupViewModel Processing Decrypted Stream Data ===")
                         print("Data size: \(data.count)")
                         print("Policy type: \(policy.type)")
                         try await self?.handleStreamData(data)
@@ -454,7 +454,7 @@ class GroupViewModel: ObservableObject {
 
 struct GroupView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject var viewModel: GroupViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
+    @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -466,7 +466,7 @@ struct GroupView: View {
             GeometryReader { geometry in
                 ZStack {
                     // MARK: - Stream List
-                    
+
                     if viewModel.streams.isEmpty {
                         VStack {
                             Spacer()
@@ -498,11 +498,13 @@ struct GroupView: View {
                         .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
                         .background(Color(.systemGroupedBackground).ignoresSafeArea())
                     }
-                    
+
                     // MARK: - Chat Overlay
-                    
-                    if sharedState.showChatOverlay {
-                        ChatOverlay()
+
+                    if sharedState.showChatOverlay,
+                       let streamPublicID = sharedState.selectedStreamPublicID
+                    {
+                        ChatOverlay(streamPublicID: streamPublicID)
                     }
                 }
             }
