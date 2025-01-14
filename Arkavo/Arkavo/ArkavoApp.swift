@@ -114,8 +114,11 @@ struct ArkavoApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
-                Task {
-                    await checkAccountStatus()
+                // Only check account status if we're currently disconnected
+                if case .disconnected = client.currentState {
+                    Task {
+                        await checkAccountStatus()
+                    }
                 }
             case .background:
                 Task {
@@ -424,6 +427,12 @@ struct ArkavoApp: App {
         guard !isCheckingAccountStatus else { return }
         isCheckingAccountStatus = true
         defer { isCheckingAccountStatus = false }
+
+        if case .connected = client.currentState {
+            // Already connected, no need to re-authenticate
+            selectedView = .main
+            return
+        }
 
         do {
             let account = try await persistenceController.getOrCreateAccount()
