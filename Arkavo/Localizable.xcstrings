@@ -33,6 +33,15 @@
     "• %@" : {
 
     },
+    "• This user has been blocked" : {
+
+    },
+    "• You will be notified of the outcome" : {
+
+    },
+    "• Your report will be reviewed within 24 hours" : {
+
+    },
     "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
 
     },
@@ -115,6 +124,21 @@
 
     },
     "Bio" : {
+
+    },
+    "Block User" : {
+
+    },
+    "Block user from interacting with you" : {
+
+    },
+    "Block User?" : {
+
+    },
+    "Blocked Users" : {
+
+    },
+    "Blocking this user will prevent them from interacting with your content or messaging you. You can unblock them later in settings." : {
 
     },
     "Blurb: %@" : {
@@ -492,6 +516,15 @@
         }
       }
     },
+    "Report Content" : {
+
+    },
+    "Report Submitted" : {
+
+    },
+    "Reports are reviewed within 24 hours. Severe violations may be acted upon sooner." : {
+
+    },
     "Retry" : {
 
     },
@@ -638,6 +671,9 @@
         }
       }
     },
+    "Submit" : {
+
+    },
     "Support" : {
 
     },
@@ -651,6 +687,9 @@
 
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
+    "Thank you for helping keep our community safe." : {
 
     },
     "This will be the name of your new group" : {

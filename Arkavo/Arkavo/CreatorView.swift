@@ -166,10 +166,11 @@ struct CreatorDetailView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                 CreatorHeaderView(viewModel: viewModel) {
                     // onSupport callback
                 }
+                .padding(.bottom)
 
                 Picker("Section", selection: $selectedSection) {
                     ForEach([DetailSection.about, .videos, .posts], id: \.self) { section in
@@ -178,19 +179,76 @@ struct CreatorDetailView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding()
+                .padding(.horizontal)
 
-                switch selectedSection {
-                case .about:
-                    CreatorAboutSection(viewModel: viewModel)
-                case .videos:
-                    CreatorVideosSection(viewModel: viewModel)
-                case .posts:
-                    CreatorPostsSection(viewModel: viewModel)
+                if viewModel.isProfileOwner {
+                    BlockedUsersSection(viewModel: viewModel)
+                        .padding(.top)
                 }
+
+                contentSection
+                    .padding(.top)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private var contentSection: some View {
+        switch selectedSection {
+        case .about:
+            CreatorAboutSection(viewModel: viewModel)
+        case .videos:
+            CreatorVideosSection(viewModel: viewModel)
+        case .posts:
+            CreatorPostsSection(viewModel: viewModel)
+        }
+    }
+}
+
+struct BlockedUsersSection: View {
+    @StateObject var viewModel: CreatorViewModel
+
+    var body: some View {
+        if !viewModel.blockedProfiles.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Blocked Users")
+                    .font(.headline)
+                    .padding(.horizontal)
+
+                ForEach(viewModel.blockedProfiles) { blockedProfile in
+                    BlockedUserRow(blockedProfile: blockedProfile)
+                }
+            }
+            .padding(.vertical)
+        }
+    }
+}
+
+struct BlockedUserRow: View {
+    let blockedProfile: BlockedProfile
+
+    var body: some View {
+        HStack {
+            Label {
+                Text(blockedProfile.blockedPublicID.description)
+                    .lineLimit(1)
+            } icon: {
+                Image(systemName: "person.slash.fill")
+                    .foregroundStyle(.red)
+            }
+
+            Spacer()
+
+            Text(blockedProfile.reportTimestamp.formatted(date: .abbreviated, time: .omitted))
+                .foregroundStyle(.secondary)
+                .font(.caption)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal)
     }
 }
 
@@ -639,6 +697,7 @@ final class CreatorViewModel: ObservableObject {
     @Published private(set) var postThoughts: [Thought] = []
     @Published private(set) var supportedCreators: [Creator] = []
     @Published private(set) var messages: [Message] = []
+    @Published private(set) var blockedProfiles: [BlockedProfile] = []
 
     var isProfileOwner: Bool {
         if let accountProfile = account.profile {
@@ -653,9 +712,20 @@ final class CreatorViewModel: ObservableObject {
         self.profile = profile
         loadVideoThoughts()
         loadPostThoughts()
+        Task {
+            await loadBlockedProfiles()
+        }
     }
 
-    // MARK: - Public Methods
+    func loadBlockedProfiles() async {
+        do {
+            let profiles = try await PersistenceController.shared.fetchBlockedProfiles()
+            blockedProfiles = profiles
+        } catch {
+            print("Error loading blocked profiles: \(error)")
+            blockedProfiles = []
+        }
+    }
 
     func loadCreators() async {
 //        isLoading = true

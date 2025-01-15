@@ -666,20 +666,14 @@ public final class ArkavoClient: NSObject {
             return
         }
 
-        let identifier = data.prefix(33)
         let keyData = data.suffix(60)
         // Parse key data components
-        let nonce = keyData.prefix(12)
         let encryptedKeyLength = keyData.count - 12 - 16 // Total - nonce - tag
 
         guard encryptedKeyLength >= 0 else {
             print("Invalid encrypted key length: \(encryptedKeyLength)")
             return
         }
-
-        let rewrappedKey = keyData.prefix(keyData.count - 16).suffix(encryptedKeyLength)
-        let authTag = keyData.suffix(16)
-
         // Process the rewrapped key...
         // (Implementation specific to your needs)
         delegate?.clientDidReceiveMessage(self, message: data)
@@ -920,7 +914,7 @@ public final class ArkavoClient: NSObject {
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = try KasMetadata(
             resourceLocator: kasRL,
-            publicKey: kasPublicKey,
+            publicKey: kasPublicKey as Any,
             curve: .secp256r1
         )
 
@@ -952,7 +946,7 @@ public final class ArkavoClient: NSObject {
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = try KasMetadata(
             resourceLocator: kasRL,
-            publicKey: kasPublicKey,
+            publicKey: kasPublicKey as Any,
             curve: .secp256r1
         )
 
@@ -1036,7 +1030,7 @@ private class AuthenticationDelegate: NSObject, ASAuthorizationControllerDelegat
 // MARK: - WebSocket Delegate
 
 private actor WebSocketStateHandler {
-    var stateHandler: ((ArkavoClientState) -> Void)?
+    var stateHandler: ((ArkavoClientState) async -> Void)?
 
     func updateHandler(_ handler: @escaping (ArkavoClientState) -> Void) {
         stateHandler = handler

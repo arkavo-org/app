@@ -690,6 +690,7 @@ enum ArkavoError: Error {
     case notConnected
     case invalidState
     case invalidEvent(String)
+    case profileError(String)
 }
 
 class SharedState: ObservableObject {

@@ -329,6 +329,7 @@ struct GroupChatIconList: View {
     let streams: [Stream]
     @State private var isCollapsed = true
     @State private var showMenuButton = true
+    @State private var showReportView = false
 
     // Timer to auto-collapse after 4 seconds
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
@@ -367,6 +368,21 @@ struct GroupChatIconList: View {
                             .foregroundColor(.secondary)
                             .frame(width: 44, height: 44)
                     }
+
+                    // Spacer and divider to separate report button
+                    Divider()
+                        .frame(width: 32)
+                        .background(.ultraThinMaterial)
+
+                    // Report button at the bottom
+                    Button {
+                        showReportView = true
+                    } label: {
+                        Image(systemName: "flag")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
                 }
                 .padding(.vertical, 16)
                 .frame(width: 60) // Fixed width container
@@ -396,6 +412,13 @@ struct GroupChatIconList: View {
                 }
                 .transition(.opacity)
             }
+        }
+        .sheet(isPresented: $showReportView) {
+            ReportView(
+                content: currentVideo as Any,
+                contentId: currentVideo?.id ?? "",
+                currentUserId: currentVideo?.contributors.first?.profilePublicID.base58EncodedString ?? ""
+            )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .onReceive(collapseTimer) { _ in

@@ -258,6 +258,21 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("Decrypted URL: \(urlString)")
         }
 
+        let arkavoPolicyMetadata = ArkavoPolicy(header.policy)
+        if let creatorPublicID = arkavoPolicyMetadata.metadata?.creator,
+           let messagePublicID = arkavoPolicyMetadata.metadata?.id
+        {
+            do {
+                let blocked = try await PersistenceController.shared.isBlockedProfile(Data(creatorPublicID))
+                if blocked {
+                    print("Blocked creator not delivered: \(creatorPublicID) \(messagePublicID)")
+                    return
+                }
+            } catch {
+                print("Error checking if creator is blocked: \(error)")
+            }
+        }
+
         // Broadcast the decrypted message
         NotificationCenter.default.post(
             name: .messageDecrypted,
