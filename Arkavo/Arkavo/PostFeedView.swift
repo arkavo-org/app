@@ -152,7 +152,7 @@ class PostFeedViewModel: ObservableObject {
     }
 
     func streams() -> [Stream] {
-        let streams = account.streams.dropFirst(2)
+        let streams = account.streams.dropFirst(2).filter { $0.source == nil }
         return Array(streams)
     }
 

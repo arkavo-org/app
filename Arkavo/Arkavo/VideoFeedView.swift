@@ -339,6 +339,17 @@ struct GroupChatIconList: View {
             if !isCollapsed {
                 // Expanded view with all buttons
                 VStack(spacing: 20) { // Even spacing between all items
+                    // Report button at the top
+                    Button {
+                        showReportView = true
+                    } label: {
+                        Image(systemName: "exclamationmark.bubble")
+                            .font(.title3)
+                            .foregroundColor(.red)
+                            .frame(width: 44, height: 44)
+                    }
+                    .padding(.bottom, 44)
+
                     ForEach(streams) { stream in
                         Button {
                             sharedState.selectedVideo = currentVideo
@@ -364,21 +375,6 @@ struct GroupChatIconList: View {
                         }
                     } label: {
                         Image(systemName: "bubble.right")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                            .frame(width: 44, height: 44)
-                    }
-
-                    // Spacer and divider to separate report button
-                    Divider()
-                        .frame(width: 32)
-                        .background(.ultraThinMaterial)
-
-                    // Report button at the bottom
-                    Button {
-                        showReportView = true
-                    } label: {
-                        Image(systemName: "flag")
                             .font(.title3)
                             .foregroundColor(.secondary)
                             .frame(width: 44, height: 44)
