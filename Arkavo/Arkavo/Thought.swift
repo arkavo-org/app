@@ -206,12 +206,15 @@ extension Thought.Metadata {
             .text // Default to text if no media type is provided
         }
 
+        // Create contributor with metadata if available, or empty contributor if not
+        let contributor = Contributor(profilePublicID: Data(arkavoMetadata.creator), role: "creator")
+
         return Thought.Metadata(
             creatorPublicID: Data(arkavoMetadata.creator),
             streamPublicID: Data(arkavoMetadata.related),
             mediaType: mediaType,
             createdAt: createdAt,
-            contributors: []
+            contributors: [contributor]
         )
     }
 }

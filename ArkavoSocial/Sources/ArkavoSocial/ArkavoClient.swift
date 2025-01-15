@@ -70,6 +70,7 @@ public final class ArkavoClient: NSObject {
     private let socketDelegate: WebSocketDelegate
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
+    private let profileCache = ProfileCache(capacity: 100)
 
     public var currentState: ArkavoClientState = .disconnected {
         didSet {
@@ -158,6 +159,7 @@ public final class ArkavoClient: NSObject {
 
     @MainActor
     public func connect(accountName: String) async throws {
+        print("ArkavoClient: Connecting...")
         // Check current state more thoroughly
         switch currentState {
         case .disconnected:
@@ -726,13 +728,18 @@ public final class ArkavoClient: NSObject {
 
     /// Fetches a profile using a 32-byte public ID
     public func fetchProfile(forPublicID publicID: Data) async throws -> ArkavoProfile {
+        // Check cache first
+        if let cachedProfile = profileCache.get(publicID) {
+            return cachedProfile
+        }
+
         var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
         components?.queryItems = [URLQueryItem(name: "actor", value: publicID.base58String)]
         
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-//        print("url: \(url)")
+
         let (data, response) = try await URLSession.shared.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -742,7 +749,10 @@ public final class ArkavoClient: NSObject {
         switch httpResponse.statusCode {
         case 200:
             let decoder = JSONDecoder()
-            return try decoder.decode(ArkavoProfile.self, from: data)
+            let profile = try decoder.decode(ArkavoProfile.self, from: data)
+            // Cache the profile
+            profileCache.set(publicID, value: profile)
+            return profile
         case 404:
             throw ArkavoError.profileNotFound("Profile not found for ID: \(publicID.base58String)")
         default:
@@ -1436,4 +1446,44 @@ public struct ArkavoProfile: Codable {
     public let description: String
     public let creationDate: String
     public let publicID: String
+}
+
+class ProfileCache {
+    private let capacity: Int
+    private var cache = [Data: ArkavoProfile]()
+    private var usageOrder = [Data]()
+    
+    init(capacity: Int = 100) {
+        self.capacity = capacity
+    }
+    
+    func get(_ key: Data) -> ArkavoProfile? {
+        guard let value = cache[key] else { return nil }
+        
+        // Move to most recently used
+        if let index = usageOrder.firstIndex(of: key) {
+            usageOrder.remove(at: index)
+        }
+        usageOrder.append(key)
+        
+        return value
+    }
+    
+    func set(_ key: Data, value: ArkavoProfile) {
+        // If key exists, update value and move to most recent
+        if cache[key] != nil {
+            if let index = usageOrder.firstIndex(of: key) {
+                usageOrder.remove(at: index)
+            }
+        } else if cache.count >= capacity {
+            // Remove least recently used item
+            if let lru = usageOrder.first {
+                cache.removeValue(forKey: lru)
+                usageOrder.removeFirst()
+            }
+        }
+        
+        cache[key] = value
+        usageOrder.append(key)
+    }
 }
