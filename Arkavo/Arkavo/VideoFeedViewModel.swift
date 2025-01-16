@@ -5,7 +5,7 @@ import OpenTDFKit
 import SwiftUI
 
 @MainActor
-final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
+final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile

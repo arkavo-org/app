@@ -4,10 +4,9 @@ import SwiftUI
 struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    @State private var messages: [Message] = Message.sampleMessages
 
     init() {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makePatreonViewModel())
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -754,10 +753,10 @@ extension Message {
 // Models
 
 @MainActor
-final class CreatorViewModel: ObservableObject {
-    private let client: ArkavoClient
-    private let account: Account
-    private let profile: Profile
+final class CreatorViewModel: ViewModel, ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
 
     // Published properties
     @Published private(set) var isLoading = false
@@ -810,7 +809,7 @@ final class CreatorViewModel: ObservableObject {
     }
 
     var bio: String {
-        profile.blurb ?? "No bio available"
+        profile.blurb ?? ""
     }
 
     func saveBio(_ newBio: String) async {

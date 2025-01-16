@@ -16,7 +16,7 @@ struct VideoCreateView: View {
     @State private var videoDescription: String = ""
 
     init(feedViewModel _: VideoFeedViewModel) {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoRecordingViewModel())
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -525,7 +525,7 @@ enum RecordingState: Equatable {
 // MARK: - View Model
 
 @MainActor
-final class VideoRecordingViewModel: ObservableObject {
+final class VideoRecordingViewModel: ViewModel, ObservableObject {
     // MARK: - Properties
 
     let client: ArkavoClient

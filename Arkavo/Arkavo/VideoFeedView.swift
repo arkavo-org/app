@@ -11,7 +11,7 @@ struct VideoContentView: View {
     @StateObject private var feedViewModel: VideoFeedViewModel
 
     init() {
-        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
+        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -19,7 +19,7 @@ struct VideoContentView: View {
             if sharedState.showCreateView {
                 VideoCreateView(feedViewModel: feedViewModel)
             } else {
-                VideoFeedView()
+                VideoFeedView(viewModel: feedViewModel)
             }
         }
         .animation(.spring, value: sharedState.showCreateView)
@@ -28,11 +28,7 @@ struct VideoContentView: View {
 
 struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: VideoFeedViewModel
-
-    init() {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
-    }
+    @ObservedObject var viewModel: VideoFeedViewModel
 
     var body: some View {
         GeometryReader { geometry in
