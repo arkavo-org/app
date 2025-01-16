@@ -14,6 +14,7 @@ class PersistenceController {
                 Profile.self,
                 Stream.self,
                 Thought.self,
+                BlockedProfile.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             print(modelConfiguration.url)
@@ -118,5 +119,42 @@ class PersistenceController {
         )
 
         return try container.mainContext.fetch(descriptor)
+    }
+
+    // MARK: - BlockedProfile Operations
+
+    func saveBlockedProfile(_ blockedProfile: BlockedProfile) async throws {
+        let context = container.mainContext
+
+        // Get current user's profile
+        let descriptor = FetchDescriptor<Profile>()
+        guard let currentProfile = try context.fetch(descriptor).first else {
+            throw ArkavoError.profileError("Current profile not found")
+        }
+
+        // Prevent blocking self
+        if blockedProfile.blockedPublicID == currentProfile.publicID {
+            throw ArkavoError.profileError("Cannot block own profile")
+        }
+
+        context.insert(blockedProfile)
+        try await saveChanges()
+    }
+
+    func fetchBlockedProfiles() async throws -> [BlockedProfile] {
+        let descriptor = FetchDescriptor<BlockedProfile>()
+        let context = container.mainContext
+        return try context.fetch(descriptor)
+    }
+
+    func isBlockedProfile(_ publicID: Data) async throws -> Bool {
+        // Define a predicate to filter blocked profiles by the given publicID
+        let predicate = #Predicate<BlockedProfile> { $0.blockedPublicID == publicID }
+        // Create a FetchDescriptor with the predicate
+        let descriptor = FetchDescriptor<BlockedProfile>(predicate: predicate)
+        // Fetch the blocked profiles that match the predicate
+        let blockedProfiles = try container.mainContext.fetch(descriptor)
+        // Return true if any matching profile is found
+        return !blockedProfiles.isEmpty
     }
 }

@@ -52,6 +52,8 @@
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */; };
 		DA91AA0B2CFB655900BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA0A2CFB655900BE9912 /* ArkavoSocial */; };
+		DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C042D380ADE0033F6B8 /* ReportView.swift */; };
+		DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C062D3849910033F6B8 /* BlockedProfile.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
 		DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */; };
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
@@ -140,6 +142,8 @@
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedViewModel.swift; sourceTree = "<group>"; };
+		DA975C042D380ADE0033F6B8 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
+		DA975C062D3849910033F6B8 /* BlockedProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedProfile.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorView.swift; sourceTree = "<group>"; };
 		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -226,6 +230,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA975C042D380ADE0033F6B8 /* ReportView.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
@@ -238,11 +243,13 @@
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
+				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
 				DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */,
 				DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */,
 				DA7598C42C9615F30021A8FC /* ArkavoPolicy.swift */,
 				DA1A4DDC2C67EAE000722E3E /* Account.swift */,
 				DA1A4DDE2C67EDB600722E3E /* Profile.swift */,
+				DA975C062D3849910033F6B8 /* BlockedProfile.swift */,
 				DA0FEC402C586DF700C0A010 /* Stream.swift */,
 				DA2046192C603C05006AB6E4 /* Thought.swift */,
 				DA78EF882C85FE4F00B89422 /* PersistenceController.swift */,
@@ -275,7 +282,6 @@
 				DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */,
 				DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */,
 				DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */,
-				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
 				DA484F342CDD948A0023B016 /* ProtectorView.swift */,
 				DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */,
 				DA8A1F932CE1A54400E1D7FC /* ProtectorProcessor.swift */,
@@ -497,6 +503,7 @@
 				DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */,
 				DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
+				DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */,
 				DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */,
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
@@ -504,6 +511,7 @@
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */,
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,

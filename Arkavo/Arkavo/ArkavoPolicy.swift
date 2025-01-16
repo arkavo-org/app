@@ -16,6 +16,7 @@ class ArkavoPolicy {
     }
 
     let type: PolicyType
+    let metadata: Arkavo_Metadata?
 
     init(_ policy: Policy) {
         // Handle remote policy if it exists
@@ -23,6 +24,7 @@ class ArkavoPolicy {
            let remoteBody = policy.remote?.body
         {
             type = PolicyType.from(remoteBody)
+            metadata = nil
             return
         }
 
@@ -32,6 +34,7 @@ class ArkavoPolicy {
         {
             do {
                 let metadata = try Self.parseMetadata(from: bodyData)
+                self.metadata = metadata
                 // Check for video content first
                 if let content = metadata.content,
                    content.mediaType == .video
@@ -47,12 +50,14 @@ class ArkavoPolicy {
                 let hexString = bodyData.prefix(32).map { String(format: "%02x", $0) }.joined()
                 print("First 32 bytes: \(hexString)")
                 type = .thought
+                metadata = nil
             }
             return
         }
 
         // Default case if neither remote nor valid embedded policy
         type = .thought
+        metadata = nil
     }
 
     public static func parseMetadata(from data: Data) throws -> Arkavo_Metadata {

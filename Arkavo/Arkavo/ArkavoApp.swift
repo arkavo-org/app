@@ -114,11 +114,18 @@ struct ArkavoApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
-                // Only check account status if we're currently disconnected
-                if case .disconnected = client.currentState {
+                switch client.currentState {
+                case .disconnected:
                     Task {
                         await checkAccountStatus()
                     }
+                case let .error(error):
+                    print("error: \(error)")
+                    Task {
+                        await checkAccountStatus()
+                    }
+                case .authenticating, .connected, .connecting:
+                    break
                 }
             case .background:
                 Task {
@@ -683,6 +690,8 @@ enum ArkavoError: Error {
     case notConnected
     case invalidState
     case invalidEvent(String)
+    case profileError(String)
+    case profileNotFound(String)
 }
 
 class SharedState: ObservableObject {

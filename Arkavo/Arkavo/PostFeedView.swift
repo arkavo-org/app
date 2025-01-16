@@ -152,7 +152,7 @@ class PostFeedViewModel: ObservableObject {
     }
 
     func streams() -> [Stream] {
-        let streams = account.streams.dropFirst(2)
+        let streams = account.streams.dropFirst(2).filter { $0.source == nil }
         return Array(streams)
     }
 
@@ -721,7 +721,7 @@ struct ImmersiveThoughtCard: View {
 extension PostFeedViewModel {
     @MainActor
     func handleSwipe(_ direction: SwipeDirection) async {
-        print("Handling swipe: \(direction)")
+//        print("Handling swipe: \(direction)")
         switch direction {
         case .up:
             if currentThoughtIndex < thoughts.count - 1 {
