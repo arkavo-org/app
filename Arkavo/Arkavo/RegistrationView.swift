@@ -170,26 +170,6 @@ struct RegistrationView: View {
         }
     }
 
-    private var eulaView: some View {
-        VStack(spacing: 20) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("End User License Agreement (EULA)")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .padding(.bottom, 8)
-
-                    Text(EULA) // Store the EULA text in a constant
-                        .font(.body)
-
-                    Toggle("I have read and agree to the End User License Agreement", isOn: $eulaAccepted)
-                        .padding(.vertical)
-                }
-                .padding()
-            }
-        }
-    }
-
     private func startWelcomeAnimation() {
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
             withAnimation {
@@ -237,7 +217,7 @@ struct RegistrationView: View {
             slideDirection = .left
             switch currentStep {
             case .welcome:
-                currentStep = .generateScreenName
+                currentStep = .eula
                 generatedScreenNames = []
             case .eula:
                 currentStep = .generateScreenName
@@ -436,6 +416,138 @@ struct RegistrationView: View {
         }
         .padding()
     }
+
+    private var eulaView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("End User License Agreement (EULA)")
+                    .font(.title)
+                    .fontWeight(.bold)
+
+                Text("Effective Date: 2025-01-15")
+                    .font(.headline)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Group {
+                        Text("1. Agreement to Terms")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.")
+                    }
+
+                    Group {
+                        Text("2. Prohibited Conduct")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:")
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            BulletPoint("Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.")
+                            BulletPoint("Engaging in harassment, threats, or abuse towards other users.")
+                            BulletPoint("Sharing content that infringes intellectual property rights or violates laws.")
+                            BulletPoint("Misusing the platform to distribute spam or malicious software.")
+                        }
+                    }
+
+                    Group {
+                        Text("3. Content Moderation")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.")
+                    }
+
+                    Group {
+                        Text("4. Reporting and Flagging Mechanisms")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Users can report objectionable content through the following steps:")
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            NumberedPoint(1, "Use the \"Report\" button available on all posts and user profiles.")
+                            NumberedPoint(2, "Specify the nature of the objectionable content or behavior.")
+                        }
+
+                        Text("Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account.")
+                    }
+
+                    Group {
+                        Text("5. Blocking Abusive Users")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Arkavo allows users to block other users who engage in abusive behavior. To block a user:")
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            NumberedPoint(1, "Navigate to the user's profile.")
+                            NumberedPoint(2, "Select the \"Block User\" option.")
+                        }
+
+                        Text("Blocked users will no longer be able to interact with or view the blocker's profile or content.")
+                    }
+
+                    Group {
+                        Text("6. Enforcement Actions")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Users found violating this EULA may face one or more of the following actions:")
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            BulletPoint("Warning notifications for minor violations.")
+                            BulletPoint("Temporary suspension of account privileges.")
+                            BulletPoint("Permanent account termination for severe or repeated violations.")
+                        }
+                    }
+
+                    Group {
+                        Text("7. Developer's Responsibility")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Arkavo's development team is committed to:")
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            BulletPoint("Reviewing and acting on all reports of objectionable content within 24 hours.")
+                            BulletPoint("Permanently removing content that violates this EULA.")
+                            BulletPoint("Ejecting users who repeatedly or severely violate these terms.")
+                        }
+                    }
+
+                    Group {
+                        Text("8. Updates to the EULA")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.")
+                    }
+
+                    Group {
+                        Text("9. Contact Information")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.")
+                    }
+
+                    Divider()
+                        .padding(.vertical)
+
+                    Text("By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.")
+                        .fontWeight(.medium)
+                }
+
+                Spacer(minLength: 20)
+
+                Toggle("I have read and agree to the End User License Agreement", isOn: $eulaAccepted)
+                    .padding(.top)
+            }
+            .padding()
+        }
+    }
 }
 
 struct InterestButton: View {
@@ -480,63 +592,36 @@ enum SlideDirection {
     case left, right
 }
 
-private let EULA = """
-**End User License Agreement (EULA)**
+struct BulletPoint: View {
+    let text: String
 
-**Effective Date:** [Insert Date]
+    init(_ text: String) {
+        self.text = text
+    }
 
-**1. Agreement to Terms**
-By creating an account or using Arkavo (“App”), you agree to be bound by this End User License Agreement (“EULA”). If you do not agree to these terms, you must not use the App.
+    var body: some View {
+        HStack(alignment: .top) {
+            Text("•")
+                .padding(.trailing, 4)
+            Text(text)
+        }
+    }
+}
 
-**2. Prohibited Conduct**
-Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:
+struct NumberedPoint: View {
+    let number: Int
+    let text: String
 
-- Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.
-- Engaging in harassment, threats, or abuse towards other users.
-- Sharing content that infringes intellectual property rights or violates laws.
-- Misusing the platform to distribute spam or malicious software.
+    init(_ number: Int, _ text: String) {
+        self.number = number
+        self.text = text
+    }
 
-**3. Content Moderation**
-Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.
-
-**4. Reporting and Flagging Mechanisms**
-Users can report objectionable content through the following steps:
-
-1. Use the “Report” button available on all posts and user profiles.
-2. Specify the nature of the objectionable content or behavior.
-
-Arkavo’s moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user’s account.
-
-**5. Blocking Abusive Users**
-Arkavo allows users to block other users who engage in abusive behavior. To block a user:
-
-1. Navigate to the user’s profile.
-2. Select the “Block User” option.
-
-Blocked users will no longer be able to interact with or view the blocker’s profile or content.
-
-**6. Enforcement Actions**
-Users found violating this EULA may face one or more of the following actions:
-
-- Warning notifications for minor violations.
-- Temporary suspension of account privileges.
-- Permanent account termination for severe or repeated violations.
-
-**7. Developer’s Responsibility**
-Arkavo’s development team is committed to:
-
-- Reviewing and acting on all reports of objectionable content within 24 hours.
-- Permanently removing content that violates this EULA.
-- Ejecting users who repeatedly or severely violate these terms.
-
-**8. Updates to the EULA**
-Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.
-
-**9. Contact Information**
-For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.
-
----
-
-By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.
-
-"""
+    var body: some View {
+        HStack(alignment: .top) {
+            Text("\(number).")
+                .padding(.trailing, 4)
+            Text(text)
+        }
+    }
+}

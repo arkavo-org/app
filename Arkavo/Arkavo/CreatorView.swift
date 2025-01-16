@@ -217,7 +217,14 @@ struct BlockedUsersSection: View {
                     .padding(.horizontal)
 
                 ForEach(viewModel.blockedProfiles) { blockedProfile in
-                    BlockedUserRow(blockedProfile: blockedProfile)
+                    BlockedUserRow(
+                        blockedProfile: blockedProfile,
+                        onUnblock: {
+                            Task {
+                                await viewModel.unblockProfile(blockedProfile)
+                            }
+                        }
+                    )
                 }
             }
             .padding(.vertical)
@@ -227,28 +234,93 @@ struct BlockedUsersSection: View {
 
 struct BlockedUserRow: View {
     let blockedProfile: BlockedProfile
+    let onUnblock: () -> Void
+    @State private var showingUnblockConfirmation = false
+    @State private var profile: ArkavoProfile?
+    @State private var isLoadingProfile = false
+    @State private var errorMessage: String?
 
     var body: some View {
-        HStack {
-            Label {
-                Text(blockedProfile.blockedPublicID.description)
-                    .lineLimit(1)
-            } icon: {
-                Image(systemName: "person.slash.fill")
-                    .foregroundStyle(.red)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label {
+                    if let profile {
+                        Text(profile.handle)
+                            .lineLimit(1)
+                    } else if isLoadingProfile {
+                        Text("Loading profile...")
+                            .foregroundStyle(.secondary)
+                    } else if let error = errorMessage {
+                        Text(error)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(blockedProfile.blockedPublicID.base58EncodedString)
+                            .lineLimit(1)
+                    }
+                } icon: {
+                    Image(systemName: "person.slash.fill")
+                        .foregroundStyle(.red)
+                }
+
+                Spacer()
+
+                Text(blockedProfile.reportTimestamp.formatted(date: .abbreviated, time: .omitted))
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+
+                Button(role: .destructive) {
+                    showingUnblockConfirmation = true
+                } label: {
+                    Image(systemName: "person.badge.plus")
+                        .foregroundStyle(.blue)
+                }
             }
 
-            Spacer()
+            if let profile {
+                Text(profile.displayName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-            Text(blockedProfile.reportTimestamp.formatted(date: .abbreviated, time: .omitted))
-                .foregroundStyle(.secondary)
-                .font(.caption)
+                if !profile.description.isEmpty {
+                    Text(profile.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal)
+        .confirmationDialog(
+            "Unblock User",
+            isPresented: $showingUnblockConfirmation
+        ) {
+            Button("Unblock", role: .destructive, action: onUnblock)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to unblock this user? They will be able to interact with your content again.")
+        }
+        .task {
+            await loadProfile()
+        }
+    }
+
+    private func loadProfile() async {
+        guard !isLoadingProfile else { return }
+
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+
+        do {
+            let client = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoClient
+            profile = try await client.fetchProfile(forPublicID: blockedProfile.blockedPublicID)
+        } catch ArkavoError.profileNotFound {
+            errorMessage = "Profile not found"
+        } catch {
+            errorMessage = "Error loading profile"
+        }
     }
 }
 
@@ -804,6 +876,22 @@ final class CreatorViewModel: ObservableObject {
         } catch {
             handleError(error)
         }
+    }
+
+    func unblockProfile(_ blockedProfile: BlockedProfile) async {
+        isLoading = true
+        do {
+            // Remove from Core Data
+            let context = PersistenceController.shared.container.mainContext
+            context.delete(blockedProfile)
+            try await PersistenceController.shared.saveChanges()
+
+            // Refresh the blocked profiles list
+            await loadBlockedProfiles()
+        } catch {
+            handleError(error)
+        }
+        isLoading = false
     }
 
     func loadSupportedCreators() async {

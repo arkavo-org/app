@@ -37,30 +37,6 @@ struct VideoFeedView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Main feed content
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            // Use uniqueVideos to avoid duplicates
-                            ForEach(Array(Set(viewModel.videos)), id: \.id) { video in
-                                VideoPlayerView(
-                                    video: video,
-                                    viewModel: viewModel,
-                                    size: geometry.size
-                                )
-                                .id(video.id)
-                            }
-                        }
-                    }
-                    .scrollDisabled(true)
-                    .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
-                        withAnimation {
-                            proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
-                        }
-                    }
-                }
-
-                // Loading state
                 if viewModel.videos.isEmpty {
                     VStack {
                         Spacer()
@@ -72,20 +48,51 @@ struct VideoFeedView: View {
                     .background(Color(.systemBackground))
                     .onAppear { sharedState.isAwaiting = true }
                     .onDisappear { sharedState.isAwaiting = false }
-                }
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 0) {
+                                ForEach(viewModel.videos) { video in
+                                    VideoPlayerView(
+                                        video: video,
+                                        viewModel: viewModel,
+                                        size: geometry.size
+                                    )
+                                    .id(video.id)
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                }
+                            }
+                        }
+                        .scrollDisabled(true)
+                        .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
+                            if newIndex >= 0, newIndex < viewModel.videos.count {
+                                withAnimation {
+                                    proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
+                                }
+                            }
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onEnded { gesture in
+                                    let verticalMovement = gesture.translation.height
+                                    let swipeThreshold: CGFloat = 50
 
-                // Reusable chat overlay
-                if sharedState.showChatOverlay,
-                   let streamPublicID = sharedState.selectedStreamPublicID
-                {
-                    ChatOverlay(streamPublicID: streamPublicID)
+                                    if abs(verticalMovement) > swipeThreshold {
+                                        withAnimation {
+                                            if verticalMovement > 0, viewModel.currentVideoIndex > 0 {
+                                                viewModel.currentVideoIndex -= 1
+                                            } else if verticalMovement < 0, viewModel.currentVideoIndex < viewModel.videos.count - 1 {
+                                                viewModel.currentVideoIndex += 1
+                                            }
+                                        }
+                                    }
+                                }
+                        )
+                    }
                 }
             }
         }
         .ignoresSafeArea()
-        .task {
-            viewModel.cleanupOldCacheFiles()
-        }
     }
 }
 
@@ -252,9 +259,9 @@ struct VideoPlayerView: View {
                     url: video.url,
                     playerManager: viewModel.playerManager,
                     size: size,
-                    isCurrentVideo: viewModel.videos[viewModel.currentVideoIndex].id == video.id
+                    isCurrentVideo: viewModel.currentVideoIndex < viewModel.videos.count &&
+                        viewModel.videos[viewModel.currentVideoIndex].id == video.id
                 )
-
                 // Content overlay
                 HStack(spacing: 0) {
                     // Left side - Vertically centered description text
@@ -413,7 +420,7 @@ struct GroupChatIconList: View {
             ReportView(
                 content: currentVideo as Any,
                 contentId: currentVideo?.id ?? "",
-                currentUserId: currentVideo?.contributors.first?.profilePublicID.base58EncodedString ?? ""
+                contributor: currentVideo?.contributors.first
             )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

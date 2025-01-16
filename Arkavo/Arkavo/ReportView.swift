@@ -11,7 +11,7 @@ struct ReportView: View {
 
     let content: Any
     let contentId: String
-    let currentUserId: String
+    let contributor: Contributor?
 
     var body: some View {
         NavigationStack {
@@ -152,21 +152,43 @@ struct ReportView: View {
     }
 
     private func submitReport() {
-        let report = ContentReport(
-            reasons: selectedSeverities,
-            includeSnapshot: includeContentSnapshot,
-            blockUser: blockUser,
-            timestamp: Date(),
-            contentId: contentId,
-            reporterId: currentUserId
-        )
-
         Task {
             do {
+                // Retrieve the account profile
+                guard let accountProfile = try await PersistenceController.shared.getOrCreateAccount().profile,
+                      let creatorPublicID = contributor?.profilePublicID
+                else {
+                    // If the profile or public ID is nil, return early
+                    return
+                }
+                let accountProfilePublicID = accountProfile.publicID
+                // Create the report object
+                let report = ContentReport(
+                    reasons: selectedSeverities,
+                    includeSnapshot: includeContentSnapshot,
+                    blockUser: blockUser,
+                    timestamp: Date(),
+                    contentId: contentId,
+                    reporterId: accountProfilePublicID.base58EncodedString
+                )
+
+                // Handle blocking the user if enabled
+                if blockUser {
+                    let blockedProfile = BlockedProfile(
+                        blockedPublicID: creatorPublicID,
+                        report: report
+                    )
+                    try await PersistenceController.shared.saveBlockedProfile(blockedProfile)
+                }
+
+                // Submit the report to the backend
                 try await submitReportToBackend(report)
+
+                // Show confirmation message
                 showingConfirmation = true
             } catch {
-                // Handle error
+                // Handle error (optional: show an error message to the user)
+                print("Failed to submit the report: \(error.localizedDescription)")
             }
         }
     }
@@ -189,12 +211,4 @@ struct ContentReportSelection: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-}
-
-#Preview("Report View") {
-    ReportView(
-        content: "Sample content to report",
-        contentId: "content123",
-        currentUserId: "user456"
-    )
 }

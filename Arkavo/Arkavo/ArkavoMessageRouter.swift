@@ -265,7 +265,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             do {
                 let blocked = try await PersistenceController.shared.isBlockedProfile(Data(creatorPublicID))
                 if blocked {
-                    print("Blocked creator not delivered: \(creatorPublicID) \(messagePublicID)")
+                    print("Blocked creator not delivered: \(Data(creatorPublicID).base58EncodedString) \(Data(messagePublicID).base58EncodedString)")
                     return
                 }
             } catch {

@@ -721,7 +721,7 @@ struct ImmersiveThoughtCard: View {
 extension PostFeedViewModel {
     @MainActor
     func handleSwipe(_ direction: SwipeDirection) async {
-        print("Handling swipe: \(direction)")
+//        print("Handling swipe: \(direction)")
         switch direction {
         case .up:
             if currentThoughtIndex < thoughts.count - 1 {

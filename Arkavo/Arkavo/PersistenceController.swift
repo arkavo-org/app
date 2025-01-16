@@ -14,6 +14,7 @@ class PersistenceController {
                 Profile.self,
                 Stream.self,
                 Thought.self,
+                BlockedProfile.self,
             ])
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             print(modelConfiguration.url)

@@ -10,7 +10,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     let account: Account
     let profile: Profile
     @Published var videos: [Video] = []
-    @Published private(set) var currentVideoIndex: Int = 0
+    @Published var currentVideoIndex: Int = 0
     @Published var isLoading = false
     @Published var error: Error?
     @Published var connectionState: ArkavoClientState = .disconnected
@@ -132,7 +132,7 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
     private func handleDecryptedMessage(data: Data, header: Header, policy: ArkavoPolicy) async {
         let messageID = header.ephemeralPublicKey.hexEncodedString()
         guard !processedMessageIDs.contains(messageID) else {
-            print("Message with ID \(messageID) already processed")
+//            print("Message with ID \(messageID) already processed")
             return
         }
         processedMessageIDs.insert(messageID)
@@ -200,13 +200,13 @@ final class VideoFeedViewModel: ObservableObject, VideoFeedUpdating {
 
             // Add to queue
             await MainActor.run {
-                print("Adding video to queue")
+//                print("Adding video to queue")
                 videoQueue.enqueueVideo(video)
 
                 // If this is our first video, set it as current and preload
                 if videos.isEmpty {
                     videos = [video] // Initialize videos array with first video
-                    print("Preloading first video")
+//                    print("Preloading first video")
                     preloadVideo(url: video.url)
                 } else {
                     // Update videos array to match queue state
@@ -504,26 +504,21 @@ final class VideoMessageQueue {
 extension VideoFeedViewModel {
     @MainActor
     func handleSwipe(_ direction: SwipeDirection) async {
-        // Debounce rapid swipes
-        try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
-        print("Handling swipe: \(direction)")
+//        print("Handling swipe: \(direction)")
         switch direction {
         case .up:
             if currentVideoIndex < videos.count - 1 {
-                print("Moving to next video")
+//                print("Moving to next video")
                 currentVideoIndex += 1
-                // Process state change
                 videoQueue.moveToNext()
-                // Check if we need more videos
                 if videoQueue.needsMoreVideos {
                     await loadVideos()
                 }
-                // Prepare next video
                 await prepareNextVideo()
             }
         case .down:
             if currentVideoIndex > 0 {
-                print("Moving to previous video")
+//                print("Moving to previous video")
                 currentVideoIndex -= 1
                 try? videoQueue.moveToPrevious()
                 await prepareNextVideo()
@@ -533,16 +528,14 @@ extension VideoFeedViewModel {
 
     @MainActor
     func prepareNextVideo() async {
-        // Get the next video's URL and preload it
         if videoQueue.stats.pending > 1 {
-            // Get the next video URL
             let nextIndex = videoQueue.stats.current + 1
             if nextIndex < videoQueue.videos.count {
                 let nextVideo = videoQueue.videos[nextIndex]
                 do {
                     try await playerManager.preloadVideo(url: nextVideo.url)
                 } catch {
-                    print("load initial videos error: \(error)")
+                    print("Failed to preload video: \(error)")
                 }
             }
         }

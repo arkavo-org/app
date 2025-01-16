@@ -27,6 +27,9 @@
         }
       }
     },
+    "%lld." : {
+
+    },
     "•" : {
 
     },
@@ -40,6 +43,33 @@
 
     },
     "• Your report will be reviewed within 24 hours" : {
+
+    },
+    "1. Agreement to Terms" : {
+
+    },
+    "2. Prohibited Conduct" : {
+
+    },
+    "3. Content Moderation" : {
+
+    },
+    "4. Reporting and Flagging Mechanisms" : {
+
+    },
+    "5. Blocking Abusive Users" : {
+
+    },
+    "6. Enforcement Actions" : {
+
+    },
+    "7. Developer's Responsibility" : {
+
+    },
+    "8. Updates to the EULA" : {
+
+    },
+    "9. Contact Information" : {
 
     },
     "A stream lets you start conversations about any topic. You can choose who joins and interacts with your stream." : {
@@ -108,7 +138,28 @@
     "Are you sure you want to delete this video? This action cannot be undone." : {
 
     },
+    "Are you sure you want to unblock this user? They will be able to interact with your content again." : {
+
+    },
     "Arkavo" : {
+
+    },
+    "Arkavo allows users to block other users who engage in abusive behavior. To block a user:" : {
+
+    },
+    "Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:" : {
+
+    },
+    "Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws." : {
+
+    },
+    "Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms." : {
+
+    },
+    "Arkavo's development team is committed to:" : {
+
+    },
+    "Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account." : {
 
     },
     "Assurance" : {
@@ -138,10 +189,19 @@
     "Blocked Users" : {
 
     },
+    "Blocked users will no longer be able to interact with or view the blocker's profile or content." : {
+
+    },
     "Blocking this user will prevent them from interacting with your content or messaging you. You can unblock them later in settings." : {
 
     },
     "Blurb: %@" : {
+
+    },
+    "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App." : {
+
+    },
+    "By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community." : {
 
     },
     "Cancel" : {
@@ -221,6 +281,9 @@
         }
       }
     },
+    "Effective Date: 2025-01-15" : {
+
+    },
     "Enable passkeys" : {
 
     },
@@ -259,6 +322,9 @@
 
     },
     "Features" : {
+
+    },
+    "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
 
     },
     "Granularity" : {
@@ -349,6 +415,9 @@
       }
     },
     "Learn more, view our" : {
+
+    },
+    "Loading profile..." : {
 
     },
     "Location" : {
@@ -731,6 +800,12 @@
         }
       }
     },
+    "Unblock" : {
+
+    },
+    "Unblock User" : {
+
+    },
     "Update" : {
 
     },
@@ -738,6 +813,12 @@
 
     },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
+
+    },
+    "Users can report objectionable content through the following steps:" : {
+
+    },
+    "Users found violating this EULA may face one or more of the following actions:" : {
 
     },
     "Video" : {
