@@ -5,6 +5,7 @@ import SwiftUI
 
 enum RegistrationStep: Int, CaseIterable {
     case welcome
+    case eula
 //    case selectInterests
     case generateScreenName
     case enablePasskeys
@@ -13,6 +14,8 @@ enum RegistrationStep: Int, CaseIterable {
         switch self {
         case .welcome:
             "Welcome"
+        case .eula:
+            "Terms of Service"
 //        case .selectInterests:
 //            "Select Interests" // What topics are you interested in?
         case .generateScreenName:
@@ -26,6 +29,8 @@ enum RegistrationStep: Int, CaseIterable {
         switch self {
         case .welcome:
             "Get Started"
+        case .eula:
+            "Accept & Continue"
 //        case .selectInterests:
 //            "Continue"
         case .generateScreenName:
@@ -48,6 +53,8 @@ struct RegistrationView: View {
     @State private var isCheckingAvailability = false
     @State private var isScreenNameAvailable = true
     @State private var screenNameCancellable: AnyCancellable?
+    @State private var eulaAccepted = false
+
     private var debouncedScreenNamePublisher: Publishers.Debounce<NotificationCenter.Publisher, RunLoop> {
         NotificationCenter.default
             .publisher(for: UITextField.textDidChangeNotification)
@@ -72,6 +79,8 @@ struct RegistrationView: View {
                                 switch step {
                                 case .welcome:
                                     welcomeView
+                                case .eula:
+                                    eulaView
 //                                case .selectInterests:
 //                                    chooseInterestsView
                                 case .generateScreenName:
@@ -100,7 +109,7 @@ struct RegistrationView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
 
                         ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                             .padding()
@@ -161,6 +170,26 @@ struct RegistrationView: View {
         }
     }
 
+    private var eulaView: some View {
+        VStack(spacing: 20) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("End User License Agreement (EULA)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .padding(.bottom, 8)
+
+                    Text(EULA) // Store the EULA text in a constant
+                        .font(.body)
+
+                    Toggle("I have read and agree to the End User License Agreement", isOn: $eulaAccepted)
+                        .padding(.vertical)
+                }
+                .padding()
+            }
+        }
+    }
+
     private func startWelcomeAnimation() {
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
             withAnimation {
@@ -208,6 +237,9 @@ struct RegistrationView: View {
             slideDirection = .left
             switch currentStep {
             case .welcome:
+                currentStep = .generateScreenName
+                generatedScreenNames = []
+            case .eula:
                 currentStep = .generateScreenName
                 generatedScreenNames = []
 //            case .selectInterests:
@@ -447,3 +479,64 @@ struct LogoView: View {
 enum SlideDirection {
     case left, right
 }
+
+private let EULA = """
+**End User License Agreement (EULA)**
+
+**Effective Date:** [Insert Date]
+
+**1. Agreement to Terms**
+By creating an account or using Arkavo (“App”), you agree to be bound by this End User License Agreement (“EULA”). If you do not agree to these terms, you must not use the App.
+
+**2. Prohibited Conduct**
+Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:
+
+- Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.
+- Engaging in harassment, threats, or abuse towards other users.
+- Sharing content that infringes intellectual property rights or violates laws.
+- Misusing the platform to distribute spam or malicious software.
+
+**3. Content Moderation**
+Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.
+
+**4. Reporting and Flagging Mechanisms**
+Users can report objectionable content through the following steps:
+
+1. Use the “Report” button available on all posts and user profiles.
+2. Specify the nature of the objectionable content or behavior.
+
+Arkavo’s moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user’s account.
+
+**5. Blocking Abusive Users**
+Arkavo allows users to block other users who engage in abusive behavior. To block a user:
+
+1. Navigate to the user’s profile.
+2. Select the “Block User” option.
+
+Blocked users will no longer be able to interact with or view the blocker’s profile or content.
+
+**6. Enforcement Actions**
+Users found violating this EULA may face one or more of the following actions:
+
+- Warning notifications for minor violations.
+- Temporary suspension of account privileges.
+- Permanent account termination for severe or repeated violations.
+
+**7. Developer’s Responsibility**
+Arkavo’s development team is committed to:
+
+- Reviewing and acting on all reports of objectionable content within 24 hours.
+- Permanently removing content that violates this EULA.
+- Ejecting users who repeatedly or severely violate these terms.
+
+**8. Updates to the EULA**
+Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.
+
+**9. Contact Information**
+For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.
+
+---
+
+By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.
+
+"""
