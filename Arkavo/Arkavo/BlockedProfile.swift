@@ -12,128 +12,129 @@ final class BlockedProfile {
         id = UUID()
         self.blockedPublicID = blockedPublicID
         reportTimestamp = report.timestamp
-        reportReasons = Dictionary(uniqueKeysWithValues: report.reasons.map {
-            ($0.key.rawValue, $0.value.rawValue)
+        // Explicitly map to Int values
+        reportReasons = Dictionary(uniqueKeysWithValues: report.reasons.map { reason, severity in
+            (reason.rawValue, severity.rawValue)
         })
     }
 }
 
-struct ContentReport {
+struct ContentReport: Codable {
+    let id: UUID
     let reasons: [ReportReason: ContentRatingLevel]
     let includeSnapshot: Bool
     let blockUser: Bool
     let timestamp: Date
     let contentId: String
     let reporterId: String
+    var blockedPublicID: String?
+    
+    init(reasons: [ReportReason: ContentRatingLevel],
+         includeSnapshot: Bool,
+         blockUser: Bool,
+         timestamp: Date,
+         contentId: String,
+         reporterId: String,
+         blockedPublicID: String? = nil) {
+        self.id = UUID()
+        self.reasons = reasons
+        self.includeSnapshot = includeSnapshot
+        self.blockUser = blockUser
+        self.timestamp = timestamp
+        self.contentId = contentId
+        self.reporterId = reporterId
+        self.blockedPublicID = blockedPublicID
+    }
 }
 
-enum ContentRatingLevel: Int, CaseIterable {
-    case mild = 2
-    case moderate = 3
-    case severe = 4
+enum ReportReason: String, Codable, CaseIterable {
+    case spam = "Spam"
+    case harassment = "Harassment"
+    case hateSpeech = "Hate Speech"
+    case violence = "Violence"
+    case adultContent = "Adult Content"
+    case copyright = "Copyright Violation"
+    case privacy = "Privacy Violation"
+    case misinformation = "Misinformation"
+    case other = "Other"
+    
+    var description: String {
+        switch self {
+        case .spam: "Commercial spam, scams, or unwanted promotional content"
+        case .harassment: "Targeted harassment or bullying"
+        case .hateSpeech: "Hate speech or discriminatory content"
+        case .violence: "Violence, threats, or dangerous behavior"
+        case .adultContent: "Adult content, nudity, or sexual content"
+        case .copyright: "Copyright or trademark infringement"
+        case .privacy: "Personal information or privacy violation"
+        case .misinformation: "False or misleading information"
+        case .other: "Other violation of community guidelines"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .spam: "exclamationmark.triangle"
+        case .harassment: "person.2.slash"
+        case .hateSpeech: "speaker.slash"
+        case .violence: "exclamationmark.shield"
+        case .adultContent: "eye.slash"
+        case .copyright: "doc.on.doc"
+        case .privacy: "lock.shield"
+        case .misinformation: "exclamationmark.bubble"
+        case .other: "flag"
+        }
+    }
+    
+    var colorName: String {
+        switch self {
+        case .spam: "orange"
+        case .harassment: "red"
+        case .hateSpeech: "red"
+        case .violence: "red"
+        case .adultContent: "pink"
+        case .copyright: "purple"
+        case .privacy: "indigo"
+        case .misinformation: "yellow"
+        case .other: "orange"
+        }
+    }
+}
 
+enum ContentRatingLevel: Int, Codable, CaseIterable {
+    case low = 1
+    case medium = 2
+    case high = 3
+    
     var title: String {
         switch self {
-        case .mild:
-            "Mild"
-        case .moderate:
-            "Moderate"
-        case .severe:
-            "Severe"
+        case .low: "Low"
+        case .medium: "Medium"
+        case .high: "High"
         }
     }
-
-    var icon: String {
-        switch self {
-        case .mild:
-            "exclamationmark.circle"
-        case .moderate:
-            "exclamationmark.triangle"
-        case .severe:
-            "exclamationmark.shield"
-        }
-    }
-
-    var colorName: String {
-        switch self {
-        case .mild: "gray"
-        case .moderate: "orange"
-        case .severe: "red"
-        }
-    }
-
+    
     var description: String {
         switch self {
-        case .mild:
-            "Content that may be mildly inappropriate"
-        case .moderate:
-            "Content that clearly violates community guidelines"
-        case .severe:
-            "Content requiring immediate review and action"
+        case .low: "Minor violation that should be reviewed"
+        case .medium: "Significant violation requiring attention"
+        case .high: "Severe violation needing immediate action"
         }
     }
-}
-
-enum ReportReason: String, CaseIterable {
-    case violence = "Violence"
-    case sexual = "Sexual Content"
-    case profanity = "Profanity"
-    case substance = "Substance Abuse"
-    case hate = "Hate Speech"
-    case harm = "Harmful Content"
-    case mature = "Mature Content"
-    case bullying = "Bullying"
-
-    var description: String {
-        switch self {
-        case .violence:
-            "Content containing violence or graphic material"
-        case .sexual:
-            "Inappropriate sexual content or nudity"
-        case .profanity:
-            "Excessive profanity or offensive language"
-        case .substance:
-            "Content promoting substance abuse"
-        case .hate:
-            "Hate speech or discriminatory content"
-        case .harm:
-            "Content promoting self-harm or harmful activities"
-        case .mature:
-            "Age-inappropriate or mature content"
-        case .bullying:
-            "Harassment or bullying behavior"
-        }
-    }
-
+    
     var icon: String {
         switch self {
-        case .violence:
-            "person.crop.circle.badge.exclamationmark"
-        case .sexual:
-            "eye.trianglebadge.exclamationmark"
-        case .profanity:
-            "bubble.left.and.exclamationmark.bubble.right"
-        case .substance:
-            "pills.circle"
-        case .hate:
-            "hand.raised.slash.fill"
-        case .harm:
-            "bandage"
-        case .mature:
-            "exclamationmark.triangle"
-        case .bullying:
-            "person.2.slash"
+        case .low: "exclamationmark.circle"
+        case .medium: "exclamationmark.triangle"
+        case .high: "exclamationmark.shield"
         }
     }
-
+    
     var colorName: String {
         switch self {
-        case .violence, .hate: "red"
-        case .sexual, .mature: "orange"
-        case .profanity: "yellow"
-        case .substance: "purple"
-        case .harm: "pink"
-        case .bullying: "indigo"
+        case .low: "gray"
+        case .medium: "orange"
+        case .high: "red"
         }
     }
 }
