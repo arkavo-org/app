@@ -37,7 +37,7 @@ struct ContentView: View {
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
-    @State private var showTooltip = true
+    @State private var showTooltip = false
     @State private var timeOnScreen: TimeInterval = 0
     let tooltipTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
@@ -174,15 +174,16 @@ struct ContentView: View {
             if !sharedState.showCreateView, !sharedState.showChatOverlay {
                 timeOnScreen += 1
 
-                // Show tooltip after 5 seconds of inactivity
-                if timeOnScreen == 5 {
+                // Show tooltip after inactivity
+                if timeOnScreen == 3 {
                     withAnimation(.easeInOut) {
-                        showTooltip = true
+                        // if a view has no content then show tooltip, repurposing isAwaiting
+                        showTooltip = sharedState.isAwaiting
                     }
                 }
 
-                // Hide tooltip after 3 seconds of being shown
-                if timeOnScreen == 20 {
+                // Hide tooltip after being shown
+                if timeOnScreen == 9 {
                     withAnimation(.easeInOut) {
                         showTooltip = false
                     }
@@ -218,13 +219,13 @@ struct ContentView: View {
     private func getTooltipText() -> String {
         switch sharedState.selectedTab {
         case .home:
-            "Tap here to create a new video post"
+            "Create a new video post"
         case .communities:
-            "Tap here to create a group"
+            "Create a group"
         case .social:
             "Share your thoughts with a new post"
         case .profile:
-            "Update your profile and bio"
+            "Update your bio"
         }
     }
 }

@@ -17,6 +17,9 @@ struct CreatorView: View {
                 CreatorListView(viewModel: viewModel)
             }
         }
+        .onAppear {
+            sharedState.isAwaiting = viewModel.bio.isEmpty
+        }
         .onDisappear {
             sharedState.selectedCreatorPublicID = nil
         }
@@ -442,6 +445,7 @@ struct CreatorAboutSection: View {
                 } else {
                     Text(viewModel.bio)
                         .font(.body)
+                        .frame(maxWidth: .infinity)
                 }
             }
             .padding()
