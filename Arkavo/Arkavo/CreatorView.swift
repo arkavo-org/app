@@ -479,8 +479,10 @@ struct CreatorAboutSection: View {
     private func submitBlurb() async {
         isSubmitting = true
         defer { isSubmitting = false }
+        if editedBio == viewModel.bio { return }
         await viewModel.saveBio(editedBio)
         sharedState.showCreateView = false
+        sharedState.isAwaiting = editedBio.isEmpty
     }
 }
 
