@@ -286,11 +286,33 @@ struct MessageListView: View {
     let workflowViewModel: WorkflowViewModel
     @Binding var selectedMessages: Set<UUID>
     
+    // Group messages by hashString and calculate sendCount
+    var groupedMessages: [String: (sendCount: Int, messages: [ArkavoMessage])] {
+        var grouped: [String: (sendCount: Int, messages: [ArkavoMessage])] = [:]
+        for message in messageManager.messages {
+            if let existing = grouped[message.hashString] {
+                grouped[message.hashString] = (sendCount: existing.sendCount + message.sendCount, messages: existing.messages + [message])
+            } else {
+                grouped[message.hashString] = (sendCount: message.sendCount, messages: [message])
+            }
+        }
+        return grouped
+    }
+    
     var body: some View {
-        List(selection: $selectedMessages) {
-            ForEach(messageManager.messages) { message in
-                MessageRow(message: message, workflowViewModel: workflowViewModel)
-                    .tag(message.id)
+        List {
+            ForEach(Array(groupedMessages.keys), id: \.self) { hashString in
+                if let group = groupedMessages[hashString] {
+                    HStack {
+                        Text(hashString)
+                            .font(.headline)
+                        Spacer()
+                        Text("Sent \(group.sendCount) times")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
             }
         }
         .toolbar {
@@ -772,6 +794,11 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
                 
                 try await client.sendMessage(message.data)
                 print("Sent message: \(message.id)")
+                
+                // Increment the sendCount for this file
+                if let index = manager.messages.firstIndex(where: { $0.id == message.id }) {
+                    manager.messages[index].sendCount += 1
+                }
             }
         } catch {
             errorMessage = "Failed to send message: \(error.localizedDescription)"

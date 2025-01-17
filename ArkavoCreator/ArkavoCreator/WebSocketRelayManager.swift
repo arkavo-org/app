@@ -1,6 +1,6 @@
 import Foundation
 
-// WebSocket Relay Manager
+
 class WebSocketRelayManager {
     private var webSocket: URLSessionWebSocketTask?
     private let localWebSocketURL = URL(string: "ws://localhost:8080")!
@@ -39,11 +39,12 @@ class WebSocketRelayManager {
     
     private func receiveMessages() {
         webSocket?.receive { [weak self] result in
+            guard let self = self else { return }
             switch result {
             case .success(let message):
                 print("Local WebSocket received: \(message)")
                 // Continue listening
-                self?.receiveMessages()
+                self.receiveMessages()
             case .failure(let error):
                 print("Local WebSocket error: \(error)")
             }
