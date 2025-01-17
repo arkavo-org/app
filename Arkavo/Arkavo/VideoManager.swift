@@ -337,4 +337,5 @@ struct VideoMetadata: Codable, Sendable {
 struct UploadResult: Codable, Sendable {
     let id: String
     let playbackURL: String
+    var nano: Data?
 }

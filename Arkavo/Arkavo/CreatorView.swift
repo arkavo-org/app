@@ -509,13 +509,11 @@ struct CreatorVideosSection: View {
                         }
                     },
                     onSend: {
-                        // Handle send action
                         Task {
                             await viewModel.sendVideo(thought)
                         }
                     },
                     onDelete: {
-                        // Handle delete action
                         Task {
                             await viewModel.deleteVideo(thought)
                         }
@@ -565,7 +563,7 @@ struct VideoThoughtView: View {
                 if isOwner {
                     HStack {
                         Button(action: onSend) {
-                            Label("Send", systemImage: "paperplane")
+                            Label("Broadcast", systemImage: "megaphone")
                                 .font(.caption)
                         }
 
@@ -674,7 +672,7 @@ struct PostThoughtView: View {
                 if isOwner {
                     HStack {
                         Button(action: onSend) {
-                            Label("Send", systemImage: "paperplane")
+                            Label("Broadcast", systemImage: "megaphone")
                                 .font(.caption)
                         }
 
@@ -851,11 +849,10 @@ final class CreatorViewModel: ViewModel, ObservableObject {
         isLoading = false
     }
 
-    func sendVideo(_: Thought) async {
+    func sendVideo(_ thought: Thought) async {
         isLoading = true
         do {
-            // Implementation for sending video
-            // This would likely involve your messaging/sharing system
+            try await client.sendMessage(thought.nano)
             isLoading = false
         } catch {
             handleError(error)
@@ -872,11 +869,10 @@ final class CreatorViewModel: ViewModel, ObservableObject {
         isLoading = false
     }
 
-    func sendPost(_: Thought) async {
+    func sendPost(_ thought: Thought) async {
         isLoading = true
         do {
-            // Implementation for sending post
-            // This would likely involve your messaging/sharing system
+            try await client.sendMessage(thought.nano)
             isLoading = false
         } catch {
             handleError(error)
@@ -992,7 +988,7 @@ extension Int {
 
 // MARK: - Creator
 
-@available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
+// @available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
 struct Creator: Codable, Identifiable, Hashable {
     let id: String
     let name: String

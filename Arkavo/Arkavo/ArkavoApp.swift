@@ -786,8 +786,8 @@ final class ViewModelFactory {
         let client = serviceLocator.resolve() as ArkavoClient
         return ChatViewModel(
             client: client,
-            account: currentAccount!,
-            profile: currentProfile!,
+            account: account,
+            profile: profile,
             streamPublicID: streamPublicID
         )
     }

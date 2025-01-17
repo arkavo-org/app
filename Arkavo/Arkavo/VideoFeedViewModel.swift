@@ -377,6 +377,7 @@ struct Video: Identifiable, Hashable {
     let url: URL
     let contributors: [Contributor]
     let description: String
+    var nano: Data?
 
     // Conform to Hashable
     static func == (lhs: Video, rhs: Video) -> Bool {
@@ -393,7 +394,8 @@ struct Video: Identifiable, Hashable {
             streamPublicID: streamPublicID,
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
-            description: Date().ISO8601Format()
+            description: Date().ISO8601Format(),
+            nano: uploadResult.nano
         )
     }
 

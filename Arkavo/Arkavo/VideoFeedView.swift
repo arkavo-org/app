@@ -283,7 +283,14 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            streams: servers
+                            streams: servers,
+                            onBroadcast: {
+                                Task {
+                                    if let nano = video.nano {
+                                        try? await viewModel.client.sendMessage(nano)
+                                    }
+                                }
+                            }
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -330,6 +337,7 @@ struct GroupChatIconList: View {
     let currentVideo: Video?
     let currentThought: Thought?
     let streams: [Stream]
+    let onBroadcast: (() -> Void)?
     @State private var isCollapsed = true
     @State private var showMenuButton = true
     @State private var showReportView = false
@@ -352,7 +360,16 @@ struct GroupChatIconList: View {
                             .frame(width: 44, height: 44)
                     }
                     .padding(.bottom, 44)
-
+                    // Broadcast
+                    if let onBroadcast {
+                        Button(action: onBroadcast) {
+                            Image(systemName: "megaphone")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+                    // Group chat
                     ForEach(streams) { stream in
                         Button {
                             sharedState.selectedVideo = currentVideo
@@ -366,8 +383,7 @@ struct GroupChatIconList: View {
                                 .frame(width: 44, height: 44)
                         }
                     }
-
-                    // Comment button integrated into the list
+                    // Global chat
                     Button {
                         sharedState.selectedVideo = currentVideo
                         sharedState.selectedStreamPublicID = currentVideo?.streamPublicID

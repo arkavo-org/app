@@ -683,7 +683,12 @@ struct ImmersiveThoughtCard: View {
                         GroupChatIconList(
                             currentVideo: nil,
                             currentThought: post.thought,
-                            streams: viewModel.streams()
+                            streams: viewModel.streams(),
+                            onBroadcast: {
+                                Task {
+                                    try? await viewModel.client.sendMessage(post.thought.nano)
+                                }
+                            }
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)
