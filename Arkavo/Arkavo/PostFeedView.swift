@@ -33,10 +33,10 @@ struct Post: Identifiable, Hashable {
 // MARK: - View Models
 
 @MainActor
-class PostFeedViewModel: ObservableObject {
+class PostFeedViewModel: ViewModel, ObservableObject {
     let client: ArkavoClient
-    private let account: Account
-    private let profile: Profile
+    let account: Account
+    let profile: Profile
     private var notificationObservers: [Any] = []
     @Published var posts: [Post] = []
     @Published var thoughts: [Thought] = []
@@ -45,7 +45,7 @@ class PostFeedViewModel: ObservableObject {
     @Published var error: Error?
     @Published var postQueue = PostMessageQueue()
 
-    init(client: ArkavoClient, account: Account, profile: Profile) {
+    required init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
@@ -427,7 +427,7 @@ class PostFeedViewModel: ObservableObject {
 
 struct PostFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel = ViewModelFactory.shared.makePostFeedViewModel()
+    @StateObject private var viewModel: PostFeedViewModel = ViewModelFactory.shared.makeViewModel()
 
     var body: some View {
         ZStack {
@@ -683,7 +683,12 @@ struct ImmersiveThoughtCard: View {
                         GroupChatIconList(
                             currentVideo: nil,
                             currentThought: post.thought,
-                            streams: viewModel.streams()
+                            streams: viewModel.streams(),
+                            onBroadcast: {
+                                Task {
+                                    try? await viewModel.client.sendMessage(post.thought.nano)
+                                }
+                            }
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)

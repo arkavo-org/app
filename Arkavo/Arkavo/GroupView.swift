@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - Models
 
 @MainActor
-class GroupViewModel: ObservableObject {
+final class GroupViewModel: ViewModel, ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -17,15 +17,19 @@ class GroupViewModel: ObservableObject {
     private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     private var notificationObservers: [NSObjectProtocol] = []
 
+    @MainActor
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
-        setupNotifications()
-        Task {
-            await loadStreams()
+        Task { @MainActor in
+            await self.setup()
         }
-        // Add logging to track initialization
+    }
+
+    private func setup() async {
+        setupNotifications()
+        await loadStreams()
         print("GroupViewModel initialized:")
         print("- Client delegate set: \(client.delegate != nil)")
         print("- Account streams count: \(account.streams.count)")
@@ -454,7 +458,7 @@ class GroupViewModel: ObservableObject {
 
 struct GroupView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeGroupChatViewModel()
+    @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeViewModel()
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass

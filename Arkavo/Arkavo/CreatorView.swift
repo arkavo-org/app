@@ -4,10 +4,9 @@ import SwiftUI
 struct CreatorView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
-    @State private var messages: [Message] = Message.sampleMessages
 
     init() {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makePatreonViewModel())
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -17,6 +16,9 @@ struct CreatorView: View {
             } else {
                 CreatorListView(viewModel: viewModel)
             }
+        }
+        .onAppear {
+            sharedState.isAwaiting = viewModel.bio.isEmpty
         }
         .onDisappear {
             sharedState.selectedCreatorPublicID = nil
@@ -443,6 +445,7 @@ struct CreatorAboutSection: View {
                 } else {
                     Text(viewModel.bio)
                         .font(.body)
+                        .frame(maxWidth: .infinity)
                 }
             }
             .padding()
@@ -476,8 +479,10 @@ struct CreatorAboutSection: View {
     private func submitBlurb() async {
         isSubmitting = true
         defer { isSubmitting = false }
+        if editedBio == viewModel.bio { return }
         await viewModel.saveBio(editedBio)
         sharedState.showCreateView = false
+        sharedState.isAwaiting = editedBio.isEmpty
     }
 }
 
@@ -504,13 +509,11 @@ struct CreatorVideosSection: View {
                         }
                     },
                     onSend: {
-                        // Handle send action
                         Task {
                             await viewModel.sendVideo(thought)
                         }
                     },
                     onDelete: {
-                        // Handle delete action
                         Task {
                             await viewModel.deleteVideo(thought)
                         }
@@ -560,7 +563,7 @@ struct VideoThoughtView: View {
                 if isOwner {
                     HStack {
                         Button(action: onSend) {
-                            Label("Send", systemImage: "paperplane")
+                            Label("Broadcast", systemImage: "megaphone")
                                 .font(.caption)
                         }
 
@@ -669,7 +672,7 @@ struct PostThoughtView: View {
                 if isOwner {
                     HStack {
                         Button(action: onSend) {
-                            Label("Send", systemImage: "paperplane")
+                            Label("Broadcast", systemImage: "megaphone")
                                 .font(.caption)
                         }
 
@@ -754,10 +757,10 @@ extension Message {
 // Models
 
 @MainActor
-final class CreatorViewModel: ObservableObject {
-    private let client: ArkavoClient
-    private let account: Account
-    private let profile: Profile
+final class CreatorViewModel: ViewModel, ObservableObject {
+    let client: ArkavoClient
+    let account: Account
+    let profile: Profile
 
     // Published properties
     @Published private(set) var isLoading = false
@@ -810,7 +813,7 @@ final class CreatorViewModel: ObservableObject {
     }
 
     var bio: String {
-        profile.blurb ?? "No bio available"
+        profile.blurb ?? ""
     }
 
     func saveBio(_ newBio: String) async {
@@ -846,11 +849,10 @@ final class CreatorViewModel: ObservableObject {
         isLoading = false
     }
 
-    func sendVideo(_: Thought) async {
+    func sendVideo(_ thought: Thought) async {
         isLoading = true
         do {
-            // Implementation for sending video
-            // This would likely involve your messaging/sharing system
+            try await client.sendMessage(thought.nano)
             isLoading = false
         } catch {
             handleError(error)
@@ -867,11 +869,10 @@ final class CreatorViewModel: ObservableObject {
         isLoading = false
     }
 
-    func sendPost(_: Thought) async {
+    func sendPost(_ thought: Thought) async {
         isLoading = true
         do {
-            // Implementation for sending post
-            // This would likely involve your messaging/sharing system
+            try await client.sendMessage(thought.nano)
             isLoading = false
         } catch {
             handleError(error)
@@ -987,7 +988,7 @@ extension Int {
 
 // MARK: - Creator
 
-@available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
+// @available(*, deprecated, message: "The `Creator` struct is deprecated. Use `Profile` instead")
 struct Creator: Codable, Identifiable, Hashable {
     let id: String
     let name: String

@@ -16,7 +16,7 @@ struct VideoCreateView: View {
     @State private var videoDescription: String = ""
 
     init(feedViewModel _: VideoFeedViewModel) {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoRecordingViewModel())
+        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -525,7 +525,7 @@ enum RecordingState: Equatable {
 // MARK: - View Model
 
 @MainActor
-final class VideoRecordingViewModel: ObservableObject {
+final class VideoRecordingViewModel: ViewModel, ObservableObject {
     // MARK: - Properties
 
     let client: ArkavoClient
@@ -752,7 +752,7 @@ final class VideoRecordingViewModel: ObservableObject {
     }
 
     private func handleRecordingComplete(_ result: UploadResult?, description: String) async throws {
-        guard let result else {
+        guard var result else {
             throw VideoError.processingFailed("Failed to get recording result")
         }
 
@@ -809,9 +809,7 @@ final class VideoRecordingViewModel: ObservableObject {
             throw VideoError.processingFailed("No video stream available")
         }
 
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
+        let contributor = Contributor(profilePublicID: profile.publicID, role: "creator")
 
 //        print("handleRecordingComplete profile.publicID \(profile.publicID.base58EncodedString)")
         // Create metadata
@@ -820,7 +818,7 @@ final class VideoRecordingViewModel: ObservableObject {
             streamPublicID: videoStream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            contributors: []
+            contributors: [contributor]
         )
 
         // Create thought with policy and encrypted data
@@ -828,6 +826,7 @@ final class VideoRecordingViewModel: ObservableObject {
             videoData: compressedData,
             metadata: metadata
         )
+        result.nano = videoThought.nano
 
         videoStream.addThought(videoThought)
         try context.save()

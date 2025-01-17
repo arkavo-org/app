@@ -11,7 +11,7 @@ struct VideoContentView: View {
     @StateObject private var feedViewModel: VideoFeedViewModel
 
     init() {
-        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
+        _feedViewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeViewModel())
     }
 
     var body: some View {
@@ -19,7 +19,7 @@ struct VideoContentView: View {
             if sharedState.showCreateView {
                 VideoCreateView(feedViewModel: feedViewModel)
             } else {
-                VideoFeedView()
+                VideoFeedView(viewModel: feedViewModel)
             }
         }
         .animation(.spring, value: sharedState.showCreateView)
@@ -28,11 +28,7 @@ struct VideoContentView: View {
 
 struct VideoFeedView: View {
     @EnvironmentObject var sharedState: SharedState
-    @StateObject private var viewModel: VideoFeedViewModel
-
-    init() {
-        _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeVideoFeedViewModel())
-    }
+    @ObservedObject var viewModel: VideoFeedViewModel
 
     var body: some View {
         GeometryReader { geometry in
@@ -287,7 +283,14 @@ struct VideoPlayerView: View {
                         GroupChatIconList(
                             currentVideo: video,
                             currentThought: nil,
-                            streams: servers
+                            streams: servers,
+                            onBroadcast: {
+                                Task {
+                                    if let nano = video.nano {
+                                        try? await viewModel.client.sendMessage(nano)
+                                    }
+                                }
+                            }
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -334,6 +337,7 @@ struct GroupChatIconList: View {
     let currentVideo: Video?
     let currentThought: Thought?
     let streams: [Stream]
+    let onBroadcast: (() -> Void)?
     @State private var isCollapsed = true
     @State private var showMenuButton = true
     @State private var showReportView = false
@@ -356,7 +360,16 @@ struct GroupChatIconList: View {
                             .frame(width: 44, height: 44)
                     }
                     .padding(.bottom, 44)
-
+                    // Broadcast
+                    if let onBroadcast {
+                        Button(action: onBroadcast) {
+                            Image(systemName: "megaphone")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+                    // Group chat
                     ForEach(streams) { stream in
                         Button {
                             sharedState.selectedVideo = currentVideo
@@ -370,8 +383,7 @@ struct GroupChatIconList: View {
                                 .frame(width: 44, height: 44)
                         }
                     }
-
-                    // Comment button integrated into the list
+                    // Global chat
                     Button {
                         sharedState.selectedVideo = currentVideo
                         sharedState.selectedStreamPublicID = currentVideo?.streamPublicID

@@ -722,6 +722,16 @@ final class ServiceLocator {
     }
 }
 
+@MainActor
+protocol ViewModel: ObservableObject {
+    var client: ArkavoClient { get }
+    var account: Account { get }
+    var profile: Profile { get }
+
+    init(client: ArkavoClient, account: Account, profile: Profile)
+}
+
+@MainActor
 final class ViewModelFactory {
     public static var shared = ViewModelFactory(serviceLocator: ServiceLocator())
 
@@ -760,64 +770,25 @@ final class ViewModelFactory {
         currentProfile
     }
 
-    @MainActor
-    func makeGroupChatViewModel() -> GroupViewModel {
+    func makeViewModel<T: ViewModel>() -> T {
+        guard let account = currentAccount, let profile = currentProfile else {
+            fatalError("Attempting to create ViewModel without account/profile")
+        }
         let client = serviceLocator.resolve() as ArkavoClient
-        return GroupViewModel(
-            client: client,
-            account: currentAccount!,
-            profile: currentProfile!
-        )
+        return T(client: client, account: account, profile: profile)
     }
 
     @MainActor
     func makeChatViewModel(streamPublicID: Data) -> ChatViewModel {
+        guard let account = currentAccount, let profile = currentProfile else {
+            fatalError("Attempting to create ChatViewModel without account/profile")
+        }
         let client = serviceLocator.resolve() as ArkavoClient
         return ChatViewModel(
             client: client,
-            account: currentAccount!,
-            profile: currentProfile!,
+            account: account,
+            profile: profile,
             streamPublicID: streamPublicID
-        )
-    }
-
-    @MainActor
-    func makeVideoFeedViewModel() -> VideoFeedViewModel {
-        let client = serviceLocator.resolve() as ArkavoClient
-        return VideoFeedViewModel(
-            client: client,
-            account: currentAccount!,
-            profile: currentProfile!
-        )
-    }
-
-    @MainActor
-    func makeVideoRecordingViewModel() -> VideoRecordingViewModel {
-        let client = serviceLocator.resolve() as ArkavoClient
-        return VideoRecordingViewModel(
-            client: client,
-            account: currentAccount!,
-            profile: currentProfile!
-        )
-    }
-
-    @MainActor
-    func makePostFeedViewModel() -> PostFeedViewModel {
-        let client = serviceLocator.resolve() as ArkavoClient
-        return PostFeedViewModel(
-            client: client,
-            account: currentAccount!,
-            profile: currentProfile!
-        )
-    }
-
-    @MainActor
-    func makePatreonViewModel() -> CreatorViewModel {
-        let client = serviceLocator.resolve() as ArkavoClient
-        return CreatorViewModel(
-            client: client,
-            account: currentAccount!,
-            profile: currentProfile!
         )
     }
 }

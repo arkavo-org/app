@@ -37,7 +37,9 @@ struct ContentView: View {
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
-
+    @State private var showTooltip = false
+    @State private var timeOnScreen: TimeInterval = 0
+    let tooltipTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -77,21 +79,40 @@ struct ContentView: View {
                         }
                 }
 
-                // Create Button
+                // Create Button with Tooltip
                 if !(sharedState.showCreateView || sharedState.showChatOverlay) {
-                    Button {
-                        sharedState.showCreateView = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
+                    HStack(alignment: .top, spacing: 8) {
+                        // Create Button
+                        Button {
+                            sharedState.showCreateView = true
+                            showTooltip = false
+                            timeOnScreen = 0
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        .padding(.top, 0)
+                        .padding(.leading, 8)
+                        .modifier(BounceAnimationModifier(isAwaiting: sharedState.isAwaiting || showTooltip))
+
+                        // Tooltip
+                        if showTooltip {
+                            Text(getTooltipText())
+                                .font(.callout)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.black.opacity(0.8))
+                                )
+                                .transition(.opacity.combined(with: .slide))
+                        }
                     }
-                    .padding(.top, 0)
-                    .padding(.leading, 8)
-                    .modifier(BounceAnimationModifier(isAwaiting: sharedState.isAwaiting))
                 }
             }
 
@@ -149,6 +170,31 @@ struct ContentView: View {
                 }
             }
         }
+        .onReceive(tooltipTimer) { _ in
+            if !sharedState.showCreateView, !sharedState.showChatOverlay {
+                timeOnScreen += 1
+
+                // Show tooltip after inactivity
+                if timeOnScreen == 3 {
+                    withAnimation(.easeInOut) {
+                        // if a view has no content then show tooltip, repurposing isAwaiting
+                        showTooltip = sharedState.isAwaiting
+                    }
+                }
+
+                // Hide tooltip after being shown
+                if timeOnScreen == 9 {
+                    withAnimation(.easeInOut) {
+                        showTooltip = false
+                    }
+                }
+            }
+        }
+        .onChange(of: sharedState.selectedTab) { _, _ in
+            // Reset timer when tab changes
+            timeOnScreen = 0
+            showTooltip = false
+        }
     }
 
     private func expandMenu() {
@@ -166,6 +212,20 @@ struct ContentView: View {
         sharedState.showCreateView = false
         withAnimation(.spring()) {
             isCollapsed = false
+        }
+    }
+
+    // Helper function to get contextual tooltip text
+    private func getTooltipText() -> String {
+        switch sharedState.selectedTab {
+        case .home:
+            "Create a new video post"
+        case .communities:
+            "Create a group"
+        case .social:
+            "Share your thoughts with a new post"
+        case .profile:
+            "Update your bio"
         }
     }
 }
@@ -300,6 +360,36 @@ struct BounceAnimationModifier: ViewModifier {
         withAnimation(.easeOut) {
             bounceOffset = 0
             scaleEffect = 1.0
+        }
+    }
+}
+
+struct EmptyStateView: View {
+    let tab: Tab
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "plus.circle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+
+            Text(getEmptyStateMessage())
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+        }
+    }
+
+    private func getEmptyStateMessage() -> String {
+        switch tab {
+        case .communities:
+            "Need help? Tap the '+' to start creating your group."
+        case .home:
+            "Share your first video! Tap '+' to get started."
+        case .social:
+            "Start the conversation! Tap '+' to create your first post."
+        case .profile:
+            "Tell others about yourself by tapping '+' to update your bio."
         }
     }
 }
