@@ -9,7 +9,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    @Published var videos: [Video] = []
+    @Published private(set) var videos: [Video] = []
     @Published var currentVideoIndex: Int = 0
     @Published var isLoading = false
     @Published var error: Error?
@@ -18,6 +18,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
     let playerManager = VideoPlayerManager()
     private var notificationObservers: [NSObjectProtocol] = []
     private var processedMessageIDs = Set<String>() // Track processed message IDs
+    private var uniqueVideoIDs: Set<String> = Set() // Track video IDs
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -200,18 +201,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
 
             // Add to queue
             await MainActor.run {
-//                print("Adding video to queue")
-                videoQueue.enqueueVideo(video)
-
-                // If this is our first video, set it as current and preload
-                if videos.isEmpty {
-                    videos = [video] // Initialize videos array with first video
-//                    print("Preloading first video")
-                    preloadVideo(url: video.url)
-                } else {
-                    // Update videos array to match queue state
-                    videos = videoQueue.videos
-                }
+                addVideo(video)
             }
 
         } catch {
@@ -220,6 +210,14 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
                 self.error = error
             }
         }
+    }
+
+    func addVideo(_ video: Video) {
+        guard !uniqueVideoIDs.contains(video.id) else { return }
+
+        uniqueVideoIDs.insert(video.id)
+        videoQueue.enqueueVideo(video)
+        videos = videoQueue.videos // Let the queue manage the video array
     }
 
     private func extractVideoDescription(from asset: AVURLAsset) async throws -> String? {
