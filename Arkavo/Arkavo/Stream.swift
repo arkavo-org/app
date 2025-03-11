@@ -118,4 +118,8 @@ extension Stream {
         // A group chat stream has no initial thought/sources
         source == nil
     }
+    
+    var isInnerCircleStream: Bool {
+        isGroupChatStream && profile.name == "InnerCircle"
+    }
 }

@@ -27,6 +27,16 @@
         }
       }
     },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
     "%lld." : {
 
     },
@@ -97,6 +107,9 @@
           }
         }
       }
+    },
+    "Actively Searching" : {
+
     },
     "Activity Level: %@" : {
 
@@ -201,6 +214,15 @@
     "Broadcast" : {
 
     },
+    "Broadcasting and listening for nearby devices..." : {
+
+    },
+    "Broadcasting your presence to nearby devices" : {
+
+    },
+    "Browse Manually" : {
+
+    },
     "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App." : {
 
     },
@@ -232,10 +254,22 @@
     "Connected" : {
 
     },
+    "Connected %@" : {
+
+    },
+    "Connecting..." : {
+
+    },
+    "Connection Failed" : {
+
+    },
     "Contributors" : {
 
     },
     "Create" : {
+
+    },
+    "Create Inner Circle (Local P2P)" : {
 
     },
     "Create Profile" : {
@@ -327,6 +361,12 @@
     "Features" : {
 
     },
+    "Find More Peers" : {
+
+    },
+    "Find other devices in your immediate area" : {
+
+    },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
 
     },
@@ -346,6 +386,12 @@
 
     },
     "Identity" : {
+
+    },
+    "Inactive" : {
+
+    },
+    "Inner Circle enables direct peer-to-peer communication with nearby devices" : {
 
     },
     "Interaction" : {
@@ -479,7 +525,13 @@
         }
       }
     },
+    "Nearby Devices" : {
+
+    },
     "Next" : {
+
+    },
+    "No Devices Found" : {
 
     },
     "Not available" : {
@@ -616,6 +668,12 @@
         }
       }
     },
+    "Scanning for Devices..." : {
+
+    },
+    "Search for Nearby Devices" : {
+
+    },
     "Section" : {
 
     },
@@ -681,6 +739,9 @@
         }
       }
     },
+    "Special Groups" : {
+
+    },
     "Start" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -703,6 +764,9 @@
         }
       }
     },
+    "Start Searching" : {
+
+    },
     "Start Verification" : {
 
     },
@@ -716,6 +780,9 @@
           }
         }
       }
+    },
+    "Stop Searching" : {
+
     },
     "Stream" : {
       "localizations" : {
@@ -770,6 +837,9 @@
     "Thank you for helping keep our community safe." : {
 
     },
+    "This may take a moment" : {
+
+    },
     "This will be the name of your new group" : {
 
     },
@@ -783,6 +853,9 @@
           }
         }
       }
+    },
+    "Toggle the search button to start looking for nearby devices" : {
+
     },
     "Topic of Interest" : {
 

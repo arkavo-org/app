@@ -4,6 +4,7 @@ import FlatBuffers
 import OpenTDFKit
 import SwiftData
 import SwiftUI
+import MultipeerConnectivity
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -72,8 +73,16 @@ class ChatViewModel: ObservableObject {
     func sendMessage(content: String) async throws {
         print("ChatViewModel: sendMessage")
         let messageData = content.data(using: .utf8) ?? Data()
+        
+        // Check if this is an InnerCircle stream for p2p messaging
+        if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID),
+           stream.isInnerCircleStream {
+            // Send via MultipeerConnectivity
+            sendP2PMessage(content, stream: stream)
+            return
+        }
 
-        // Create thought service model
+        // Create thought service model for regular messaging
         let thoughtModel = ThoughtServiceModel(
             creatorPublicID: profile.publicID,
             streamPublicID: streamPublicID,
@@ -256,5 +265,47 @@ class ChatViewModel: ObservableObject {
     enum ChatError: Error {
         case noProfile
         case serializationError
+    }
+    
+    // MARK: - P2P Messaging
+    
+    func sendP2PMessage(_ content: String, stream: Stream) {
+        // Create local chat message to display in UI
+        let message = ChatMessage(
+            id: UUID().uuidString,
+            userId: profile.publicID.base58EncodedString,
+            username: "Me (P2P)",
+            content: content,
+            timestamp: Date(),
+            attachments: [],
+            reactions: [],
+            isPinned: false,
+            publicID: Data(),
+            creatorPublicID: profile.publicID,
+            mediaType: .say,
+            rawContent: content.data(using: .utf8) ?? Data()
+        )
+        
+        messages.append(message)
+    }
+    
+    func handleIncomingP2PMessage(_ message: String, from peer: String, timestamp: Date) {
+        // Create a message to represent the incoming peer message
+        let chatMessage = ChatMessage(
+            id: UUID().uuidString,
+            userId: "p2p-\(peer)",
+            username: "\(peer) (P2P)",
+            content: message,
+            timestamp: timestamp,
+            attachments: [],
+            reactions: [],
+            isPinned: false,
+            publicID: Data(),
+            creatorPublicID: Data(),
+            mediaType: .say,
+            rawContent: message.data(using: .utf8) ?? Data()
+        )
+        
+        messages.append(chatMessage)
     }
 }

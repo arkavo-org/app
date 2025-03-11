@@ -791,4 +791,22 @@ final class ViewModelFactory {
             streamPublicID: streamPublicID
         )
     }
+    
+    func getChatViewModel(for streamPublicID: Data) -> ChatViewModel? {
+        guard currentAccount != nil, currentProfile != nil else {
+            return nil
+        }
+        return makeChatViewModel(streamPublicID: streamPublicID)
+    }
+    
+    // Access the MultipeerConnectivity view model for peer discovery
+    private var peerDiscoveryManager: PeerDiscoveryManager?
+    
+    @MainActor
+    func getPeerDiscoveryManager() -> PeerDiscoveryManager {
+        if peerDiscoveryManager == nil {
+            peerDiscoveryManager = PeerDiscoveryManager()
+        }
+        return peerDiscoveryManager!
+    }
 }

@@ -8,6 +8,7 @@ class PersistenceController {
     let container: ModelContainer
 
     private init() {
+        print("init here")
         do {
             let schema = Schema([
                 Account.self,
