@@ -2,6 +2,7 @@ import ArkavoSocial
 import FlatBuffers
 import OpenTDFKit
 import SwiftUI
+import MultipeerConnectivity
 
 // MARK: - Models
 
@@ -461,64 +462,588 @@ struct GroupView: View {
     @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeViewModel()
     @State private var showMembersList = false
     @State private var isShareSheetPresented = false
+    @State private var isPeerSearchActive = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         if sharedState.showCreateView {
             GroupCreateView(viewModel: viewModel)
         } else {
-            GeometryReader { geometry in
-                ZStack {
-                    // MARK: - Stream List
-
-                    if viewModel.streams.isEmpty {
-                        VStack {
-                            Spacer()
-                            WaveLoadingView(message: "Awaiting")
-                                .frame(maxWidth: .infinity)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.systemBackground))
-                        .onAppear { sharedState.isAwaiting = true }
-                        .onDisappear { sharedState.isAwaiting = false }
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(viewModel.streams) { stream in
-                                    GroupCardView(
-                                        stream: stream,
-                                        onSelect: {
-                                            viewModel.selectedStream = stream
-                                            sharedState.selectedStreamPublicID = stream.publicID
-                                            sharedState.showChatOverlay = true
-                                        }
-                                    )
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
-                        }
-                        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-                    }
-
-                    // MARK: - Chat Overlay
-
-                    if sharedState.showChatOverlay,
-                       let streamPublicID = sharedState.selectedStreamPublicID
-                    {
-                        ChatOverlay(streamPublicID: streamPublicID)
-                    }
-                }
+            mainContent
+        }
+    }
+    
+    // Breaking down the complex body into smaller views
+    private var mainContent: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Stream list or loading view
+                streamListView(geometry: geometry)
+                
+                // Chat overlay
+                chatOverlayView
             }
-            .sheet(isPresented: $isShareSheetPresented) {
-                if let stream = viewModel.selectedStream {
+        }
+        .sheet(isPresented: $isShareSheetPresented) {
+            if let stream = viewModel.selectedStream {
+                let urlString = "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)"
+                if let url = URL(string: urlString) {
                     ShareSheet(
-                        activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
+                        activityItems: [url],
                         isPresented: $isShareSheetPresented
                     )
                 }
+            }
+        }
+    }
+    
+    // Stream list or loading view
+    private func streamListView(geometry: GeometryProxy) -> some View {
+        Group {
+            if viewModel.streams.isEmpty {
+                emptyStreamView
+            } else {
+                streamScrollView(geometry: geometry)
+            }
+        }
+    }
+    
+    // Empty state view
+    private var emptyStreamView: some View {
+        VStack {
+            Spacer()
+            WaveLoadingView(message: "Awaiting")
+                .frame(maxWidth: .infinity)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+        .onAppear { sharedState.isAwaiting = true }
+        .onDisappear { sharedState.isAwaiting = false }
+    }
+    
+    // Scrollable stream list
+    private func streamScrollView(geometry: GeometryProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(viewModel.streams) { stream in
+                    streamRow(stream: stream)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 16)
+        }
+        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+    
+    // Individual stream row with InnerCircle UI if applicable
+    private func streamRow(stream: Stream) -> some View {
+        VStack(spacing: 0) {
+            // Main card view
+            GroupCardView(
+                stream: stream,
+                onSelect: {
+                    viewModel.selectedStream = stream
+                    sharedState.selectedStreamPublicID = stream.publicID
+                    sharedState.showChatOverlay = true
+                }
+            )
+            
+            // InnerCircle UI if applicable
+            if stream.isInnerCircleStream {
+                innerCirclePeerDiscoveryUI(for: stream)
+            }
+        }
+    }
+    
+    // Inner Circle peer discovery UI
+    private func innerCirclePeerDiscoveryUI(for stream: Stream) -> some View {
+        VStack(spacing: 0) {
+            // Search toggle button with improved visual design
+            HStack {
+                Button(action: {
+                    togglePeerSearch(for: stream)
+                }) {
+                    HStack {
+                        // Icon with dynamic appearance
+                        ZStack {
+                            Circle()
+                                .fill(isPeerSearchActive ? Color.red.opacity(0.15) : Color.blue.opacity(0.15))
+                                .frame(width: 36, height: 36)
+                            
+                            Image(systemName: isPeerSearchActive ? "antenna.radiowaves.left.and.right.slash" : "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(isPeerSearchActive ? .red : .blue)
+                        }
+                        
+                        // Text label with more detail
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isPeerSearchActive ? "Stop Searching" : "Search for Nearby Devices")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(isPeerSearchActive ? .red : .blue)
+                            
+                            Text(isPeerSearchActive ? "Broadcasting your presence to nearby devices" : "Find other devices in your immediate area")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        // Indicator for active state
+                        if isPeerSearchActive {
+                            // Pulsing dot when active
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .opacity(isPeerSearchActive ? 1.0 : 0.0)
+                                .scaleEffect(isPeerSearchActive ? 1.0 : 0.5)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle()) // Use plain button style for custom appearance
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemGroupedBackground))
+            .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
+            
+            // Connected peers list when active
+            if isPeerSearchActive && viewModel.selectedStream == stream {
+                connectedPeersView
+            }
+        }
+    }
+    
+    // Toggle peer search state
+    private func togglePeerSearch(for stream: Stream) {
+        isPeerSearchActive.toggle()
+        
+        // Connect to the peer discovery manager
+        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
+        
+        if isPeerSearchActive {
+            do {
+                // Select this stream and start searching
+                peerManager.selectedStream = stream
+                try peerManager.setupMultipeerConnectivity(for: stream)
+                try peerManager.startSearchingForPeers()
+                
+                // Optionally present the browser controller for manual peer selection
+                if let browserVC = peerManager.getPeerBrowser(),
+                   let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootController = windowScene.windows.first?.rootViewController {
+                    rootController.present(browserVC, animated: true)
+                }
+            } catch {
+                // If there was an error starting peer search, show it to the user
+                print("Failed to start peer search: \(error.localizedDescription)")
+                isPeerSearchActive = false
+            }
+        } else {
+            // Stop searching
+            peerManager.stopSearchingForPeers()
+        }
+    }
+    
+    // Connected peers list view
+    private var connectedPeersView: some View {
+        VStack(spacing: 8) {
+            // Get the peer discovery manager to display connected peers
+            let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
+            let peerCount = peerManager.connectedPeers.count
+            let connectionStatus = peerManager.connectionStatus
+            
+            // Status bar with improved connection status display
+            HStack {
+                connectionStatusIndicator(status: connectionStatus)
+                
+                Spacer()
+                
+                // Show connected peer count with icon
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2.fill")
+                        .font(.caption)
+                        .foregroundColor(peerCount > 0 ? .blue : .secondary)
+                    
+                    Text("\(peerCount) \(peerCount == 1 ? "Peer" : "Peers")")
+                        .font(.caption)
+                        .foregroundColor(peerCount > 0 ? .blue : .secondary)
+                }
+            }
+            .padding(.top, 6)
+            .padding(.horizontal, 4)
+            
+            // Show search status banner when active
+            if case .searching = connectionStatus {
+                // Searching animation banner
+                HStack {
+                    Text("Broadcasting and listening for nearby devices...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    // Activity indicator
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 4)
+                .background(Color(.secondarySystemBackground).opacity(0.5))
+                .cornerRadius(6)
+            }
+            
+            // Show error message if there's an error
+            if case .failed(let error) = connectionStatus {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    
+                    Text(error.localizedDescription)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 4)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(6)
+            }
+            
+            // Divider if we have peers
+            if peerCount > 0 {
+                Divider()
+                    .padding(.vertical, 4)
+                
+                // Title for peers section
+                Text("Nearby Devices")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 2)
+                
+                // Show list of connected peers with spacing between them
+                VStack(spacing: 6) {
+                    ForEach(peerManager.connectedPeers, id: \.self) { peer in
+                        peerRow(peer: peer)
+                    }
+                }
+                
+                // Add a browse button for finding more peers
+                Button(action: {
+                    presentBrowserController()
+                }) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                        Text("Find More Peers")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 8)
+                
+            } else if case .idle = connectionStatus {
+                // Not searching and no peers
+                emptyStateView()
+            } else {
+                // Searching or connecting but no peers yet
+                searchingStateView()
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+        .background(Color(.secondarySystemGroupedBackground))
+        .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
+    }
+    
+    // Connection status indicator
+    private func connectionStatusIndicator(status: ConnectionStatus) -> some View {
+        HStack {
+            switch status {
+            case .idle:
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: 8, height: 8)
+                Text("Inactive")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+            case .searching:
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .opacity(0.8)
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(), value: true)
+                Text("Actively Searching")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                
+            case .connecting:
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 8, height: 8)
+                Text("Connecting...")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                
+            case .connected:
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                Text("Connected")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                
+            case .failed:
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                Text("Connection Failed")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+    
+    // Empty state view when no search is active
+    private func emptyStateView() -> some View {
+        VStack(spacing: 8) {
+            Spacer().frame(height: 20)
+            
+            Image(systemName: "person.2.slash")
+                .font(.largeTitle)
+                .foregroundColor(.secondary.opacity(0.5))
+            
+            Text("No Devices Found")
+                .font(.callout)
+                .foregroundColor(.secondary)
+            
+            Text("Toggle the search button to start looking for nearby devices")
+                .font(.caption2)
+                .foregroundColor(.secondary.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Button(action: {
+                if let stream = viewModel.selectedStream {
+                    togglePeerSearch(for: stream)
+                }
+            }) {
+                Text("Start Searching")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 8)
+            
+            Spacer().frame(height: 20)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground).opacity(0.3))
+        .cornerRadius(8)
+        .padding(.top, 8)
+    }
+    
+    // Searching state view when actively looking for peers
+    private func searchingStateView() -> some View {
+        VStack(spacing: 8) {
+            Spacer().frame(height: 10)
+            
+            // Pulsing signal animation
+            SignalPulseView()
+                .frame(width: 50, height: 50)
+            
+            Text("Scanning for Devices...")
+                .font(.callout)
+                .foregroundColor(.secondary)
+            
+            Text("This may take a moment")
+                .font(.caption2)
+                .foregroundColor(.secondary.opacity(0.8))
+            
+            Button(action: {
+                presentBrowserController()
+            }) {
+                Text("Browse Manually")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 8)
+            
+            Spacer().frame(height: 10)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground).opacity(0.3))
+        .cornerRadius(8)
+        .padding(.top, 8)
+    }
+    
+    // Present the browser controller manually
+    private func presentBrowserController() {
+        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
+        if let browserVC = peerManager.getPeerBrowser(),
+           let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootController = windowScene.windows.first?.rootViewController {
+            rootController.present(browserVC, animated: true)
+        }
+    }
+    
+    // Individual peer row
+    private func peerRow(peer: MCPeerID) -> some View {
+        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
+        
+        return HStack {
+            Image(systemName: "person.circle.fill")
+                .foregroundColor(.green)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(peer.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                // Display connection timestamp with real time if available
+                if let connectionTime = peerManager.peerConnectionTimes[peer] {
+                    Text("Connected \(connectionTimeString(connectionTime))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Connected")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            // Connection status indicator with animation
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.2))
+                    .frame(width: 16, height: 16)
+                
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+            }
+            
+            // Add message button
+            Button(action: {
+                // Handle sending a message to this specific peer
+                // Would be implemented in a more complete version
+            }) {
+                Image(systemName: "message.fill")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+            .buttonStyle(BorderlessButtonStyle())
+            .padding(.leading, 8)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(8)
+        .padding(.horizontal, 4)
+    }
+    
+    // Format the connection time
+    private func connectionTimeString(_ date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+        
+        if timeInterval < 60 {
+            return "just now"
+        } else if timeInterval < 3600 {
+            let minutes = Int(timeInterval / 60)
+            return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
+        } else if timeInterval < 86400 {
+            let hours = Int(timeInterval / 3600)
+            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+    }
+    
+    // Animated signal pulse for searching animation
+    struct SignalPulseView: View {
+        @State private var scale: CGFloat = 1.0
+        @State private var rotation: Double = 0.0
+        @State private var pulsate: Bool = false
+        
+        var body: some View {
+            ZStack {
+                // First concentric circle group with pulse animation
+                ZStack {
+                    ForEach(0..<3) { i in
+                        Circle()
+                            .stroke(Color.blue.opacity(0.7 - Double(i) * 0.2), lineWidth: 1)
+                            .scaleEffect(scale - CGFloat(i) * 0.1)
+                    }
+                }
+                .scaleEffect(pulsate ? 1.2 : 0.8)
+                
+                // Second ring that rotates
+                Circle()
+                    .trim(from: 0.2, to: 0.8)
+                    .stroke(Color.blue.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 3]))
+                    .rotationEffect(.degrees(rotation))
+                    .scaleEffect(0.7)
+                
+                // Center elements
+                ZStack {
+                    // Center dot background
+                    Circle()
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(width: 12, height: 12)
+                    
+                    // Center dot
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .onAppear {
+                // Pulse animation
+                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    pulsate = true
+                }
+                
+                // Continuous rotation animation
+                withAnimation(Animation.linear(duration: 3).repeatForever(autoreverses: false)) {
+                    rotation = 360
+                }
+                
+                // Scale animation
+                withAnimation(Animation.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                    scale = 1.1
+                }
+            }
+        }
+    }
+    
+    // Chat overlay view
+    private var chatOverlayView: some View {
+        Group {
+            if sharedState.showChatOverlay,
+               let streamPublicID = sharedState.selectedStreamPublicID {
+                ChatOverlay(streamPublicID: streamPublicID)
             }
         }
     }
