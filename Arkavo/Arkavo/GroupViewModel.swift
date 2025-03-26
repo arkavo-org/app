@@ -1,6 +1,7 @@
 import MultipeerConnectivity
 import SwiftUI
 import OpenTDFKit
+import UIKit
 
 // Public interface for peer discovery
 @MainActor
@@ -120,14 +121,22 @@ class P2PGroupViewModel: NSObject, ObservableObject {
     // MARK: - Initialization and Cleanup
     
     deinit {
-        Task { @MainActor in
-            cleanup()
+        // Need to use Task for actor-isolated methods in deinit
+        _ = Task { @MainActor [weak self] in
+            self?.cancelAsyncTasks()
+            self?.cleanup()
         }
+        // The task will finish on its own, we don't need to await it
     }
     
     private func cleanup() {
         stopSearchingForPeers()
         mcSession?.disconnect()
+    }
+    
+    // Cancel reference cycles to avoid memory leaks
+    func cancelAsyncTasks() {
+        // No async tasks to cancel yet, but this can be used in the future
     }
     
     // MARK: - MultipeerConnectivity Setup
@@ -154,14 +163,8 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         mcPeerID = MCPeerID(displayName: displayName)
         
         // Initialize KeyStore with 8192 keys for secure exchange
-        do {
-            keyStore = try OpenTDFKit.KeyStore(curve: .secp256r1, capacity: 8192)
-            print("Successfully initialized KeyStore with 8192 keys")
-        } catch {
-            print("Error initializing KeyStore: \(error)")
-            connectionStatus = .failed(error)
-            throw error
-        }
+        keyStore = OpenTDFKit.KeyStore(curve: .secp256r1, capacity: 8192)
+        print("Successfully initialized KeyStore with 8192 keys")
         
         // Create the session with encryption
         mcSession = MCSession(peer: mcPeerID!, securityIdentity: nil, encryptionPreference: .required)
@@ -171,7 +174,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         let serviceType = "arkavo-circle"
         
         // Include profile info in discovery info - helps with authentication
-        var discoveryInfo: [String: String] = [
+        let discoveryInfo: [String: String] = [
             "profileID": profile.publicID.base58EncodedString,
             "deviceID": UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString,
             "timestamp": "\(Date().timeIntervalSince1970)"
@@ -195,7 +198,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
     /// Starts the peer discovery process
     /// - Throws: P2PError if peer discovery cannot be started
     func startSearchingForPeers() throws {
-        guard let mcSession = mcSession else {
+        guard mcSession != nil else {
             connectionStatus = .failed(P2PError.sessionNotInitialized)
             throw P2PError.sessionNotInitialized
         }
@@ -362,7 +365,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         
         // Create a new KeyStore
         // In a real implementation, we would populate it with the keys from the serialized data
-        return try OpenTDFKit.KeyStore(curve: .secp256r1, capacity: capacity)
+        return OpenTDFKit.KeyStore(curve: .secp256r1, capacity: capacity)
     }
     
     /// Sends a text message to all connected peers
@@ -479,7 +482,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         Task {
             do {
                 // Try to deserialize the KeyStore
-                let receivedKeyStore = try deserializeKeyStore(from: keystoreData)
+                _ = try deserializeKeyStore(from: keystoreData)
                 
                 print("Successfully processed keystore data: \(keystoreData.count) bytes")
                 
@@ -610,7 +613,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
 
 // MARK: - MCSessionDelegate
 extension P2PGroupViewModel: MCSessionDelegate {
-    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+    nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         Task { @MainActor in
             switch state {
             case .connected:
@@ -650,14 +653,14 @@ extension P2PGroupViewModel: MCSessionDelegate {
         }
     }
     
-    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+    nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         // Process received data on the main actor
         Task { @MainActor in
             handleIncomingMessage(data, from: peerID)
         }
     }
     
-    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
+    nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
         print("Received stream \(streamName) from peer \(peerID.displayName)")
         
         // In a full implementation, you would handle the stream
@@ -671,7 +674,7 @@ extension P2PGroupViewModel: MCSessionDelegate {
         }
     }
     
-    func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
+    nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
         Task { @MainActor in
             print("Started receiving resource \(resourceName) from \(peerID.displayName): \(progress.fractionCompleted * 100)%")
             
@@ -680,7 +683,7 @@ extension P2PGroupViewModel: MCSessionDelegate {
         }
     }
     
-    func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
+    nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
         Task { @MainActor in
             // Remove from progress tracking
             resourceProgress.removeValue(forKey: resourceName)
@@ -708,7 +711,11 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 
             } else {
                 // Generic resource handling
-                print("Received resource of size: \(try? Data(contentsOf: url).count ?? 0) bytes")
+                if let dataSize = try? Data(contentsOf: url).count {
+                    print("Received resource of size: \(dataSize) bytes")
+                } else {
+                    print("Received resource of unknown size")
+                }
                 saveReceivedResource(at: url, withName: resourceName)
             }
         }
@@ -733,17 +740,21 @@ extension P2PGroupViewModel: MCSessionDelegate {
 
 // MARK: - MCBrowserViewControllerDelegate
 extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
-    func browserViewControllerDidFinish(_ browserViewController: MCBrowserViewController) {
+    nonisolated func browserViewControllerDidFinish(_ browserViewController: MCBrowserViewController) {
         print("Browser view controller finished")
-        browserViewController.dismiss(animated: true)
+        Task { @MainActor in
+            browserViewController.dismiss(animated: true)
+        }
     }
     
-    func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
+    nonisolated func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
         print("Browser view controller cancelled")
-        browserViewController.dismiss(animated: true)
+        Task { @MainActor in
+            browserViewController.dismiss(animated: true)
+        }
     }
     
-    func browserViewController(_ browserViewController: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) -> Bool {
+    nonisolated func browserViewController(_ browserViewController: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) -> Bool {
         print("Found nearby peer: \(peerID.displayName) with info: \(info ?? [:])")
         
         // Here you could implement filtering based on discovery info
@@ -765,7 +776,7 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
 
 // MARK: - StreamDelegate for handling input streams
 extension P2PGroupViewModel: Foundation.StreamDelegate {
-    func stream(_ aStream: Foundation.Stream, handle eventCode: Foundation.Stream.Event) {
+    nonisolated func stream(_ aStream: Foundation.Stream, handle eventCode: Foundation.Stream.Event) {
         switch eventCode {
         case .hasBytesAvailable:
             if let inputStream = aStream as? InputStream {
@@ -785,7 +796,7 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
         }
     }
     
-    private func readInputStream(_ stream: InputStream) {
+    private nonisolated func readInputStream(_ stream: InputStream) {
         // Read the stream in chunks
         let bufferSize = 1024
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
@@ -812,8 +823,9 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
         if !data.isEmpty {
             print("Read \(data.count) bytes from stream")
             // Process the data (e.g., handle as a message)
+            let peerID = MCPeerID(displayName: "Unknown")
             Task { @MainActor in
-                handleIncomingMessage(data, from: MCPeerID(displayName: "Unknown")) // Note: in real code, you would track which peer this stream belongs to
+                handleIncomingMessage(data, from: peerID) // Note: in real code, you would track which peer this stream belongs to
             }
         }
     }
