@@ -124,23 +124,23 @@ public final class ArkavoClient: NSObject {
                         self.connectionContinuation = nil
                         continuation.resume(returning: ())
                     }
-                case let .error(error):
-                    if let continuation = connectionContinuation {
-                        connectionContinuation = nil
+                case .error(let error):
+                    if let continuation = self.connectionContinuation {
+                        self.connectionContinuation = nil
                         continuation.resume(throwing: error)
                     }
                     // Also handle any pending message handlers
-                    for handler in messageHandlers.values {
+                    for handler in self.messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    messageHandlers.removeAll()
+                    self.messageHandlers.removeAll()
                 case .disconnected:
                     // Clean up any pending handlers on disconnect
                     let error = ArkavoError.connectionFailed("Connection disconnected")
-                    for handler in messageHandlers.values {
+                    for handler in self.messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    messageHandlers.removeAll()
+                    self.messageHandlers.removeAll()
                 case .connecting:
                     print("connecting")
                 case .authenticating:
