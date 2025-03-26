@@ -226,7 +226,11 @@ struct ArkavoApp: App {
             do {
                 let videoStream = try await createVideoStream(account: account, profile: profile)
                 let postStream = try await createPostStream(account: account, profile: profile)
-                print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
+
+                // Create InnerCircle stream for P2P communication
+                let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+
+                print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
             } catch {
                 print("Failed to create streams: \(error)")
                 connectionError = ConnectionError(
@@ -370,6 +374,47 @@ struct ArkavoApp: App {
         return stream
     }
 
+    func createInnerCircleStream(account: Account, profile: Profile) async throws -> Stream {
+        print("Creating InnerCircle stream for profile: \(profile.name)")
+
+        // Check if InnerCircle already exists
+        if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
+            print("InnerCircle stream already exists with ID: \(existingInnerCircle.id)")
+            return existingInnerCircle
+        }
+
+        // Create a special profile for InnerCircle
+        let innerCircleProfile = Profile(
+            name: "InnerCircle",
+            blurb: "Local peer-to-peer communication",
+            interests: "local",
+            location: ""
+        )
+
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: innerCircleProfile,
+            policies: Policies(
+                admission: .openInvitation,
+                interaction: .open,
+                age: .forAll
+            )
+        )
+
+        // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
+
+        // Add to account
+        try account.addStream(stream)
+        print("Added InnerCircle stream to account. Stream ID: \(stream.id)")
+
+        // Save changes
+        try await persistenceController.saveChanges()
+        print("InnerCircle stream creation completed")
+
+        return stream
+    }
+
     @MainActor
     private func validateStreams() async {
         do {
@@ -409,6 +454,24 @@ struct ArkavoApp: App {
                 print("✅ Created new post stream: \(newPostStream.id)")
             } else {
                 print("✅ Post stream found: \(postStream!.id)")
+            }
+
+            // Check InnerCircle stream
+            let innerCircleStream = account.streams.first(where: { stream in
+                stream.isInnerCircleStream
+            })
+
+            if innerCircleStream == nil {
+                print("⚠️ InnerCircle stream missing - attempting to create")
+                guard let profile = account.profile else {
+                    print("❌ Cannot create InnerCircle stream: Profile not found")
+                    return
+                }
+
+                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
+            } else {
+                print("✅ InnerCircle stream found: \(innerCircleStream!.id)")
             }
 
             // Save any changes

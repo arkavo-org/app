@@ -22,7 +22,7 @@ struct GroupCreateView: View {
             } footer: {
                 Text("This will be the name of your new group")
             }
-            
+
             Section {
                 Button(action: {
                     Task {
@@ -102,22 +102,34 @@ struct GroupCreateView: View {
             }
         }
     }
-    
+
     private func createInnerCircleGroup() async {
         do {
-            let groupProfile = Profile(name: "InnerCircle")
-            
+            let account = ViewModelFactory.shared.getCurrentAccount()!
+
+            // Check if InnerCircle already exists
+            if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
+                print("Using existing InnerCircle with ID: \(existingInnerCircle.id)")
+
+                await MainActor.run {
+                    sharedState.selectedStreamPublicID = existingInnerCircle.publicID
+                }
+                return
+            }
+
+            // Create a new InnerCircle if none exists
+            let groupProfile = Profile(name: "InnerCircle", blurb: "Local peer-to-peer communication")
+
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: groupProfile,
                 policies: Policies(admission: .openInvitation, interaction: .open, age: .forAll)
             )
-            
-            let account = ViewModelFactory.shared.getCurrentAccount()!
+
             account.streams.append(newStream)
-            
+
             try await PersistenceController.shared.saveChanges()
-            
+
             await MainActor.run {
                 sharedState.selectedStreamPublicID = newStream.publicID
             }
