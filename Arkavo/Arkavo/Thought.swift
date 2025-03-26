@@ -35,6 +35,24 @@ final class Thought: Identifiable, Codable {
     var stream: Stream?
     var metadata: Metadata
     var nano: Data
+    
+    // Default empty init required by SwiftData
+    init() {
+        self.id = UUID()
+        self.publicID = Data() // Initialize with empty data first
+        self.nano = Data()
+        self.metadata = Metadata(
+            creatorPublicID: Data(),
+            streamPublicID: Data(),
+            mediaType: .text,
+            createdAt: Date(),
+            contributors: []
+        )
+        // Update publicID after all properties are initialized
+        self.publicID = withUnsafeBytes(of: self.id) { buffer in
+            Data(SHA256.hash(data: buffer))
+        }
+    }
 
     init(id: UUID = UUID(), nano: Data, metadata: Metadata) {
         self.id = id

@@ -124,23 +124,23 @@ public final class ArkavoClient: NSObject {
                         self.connectionContinuation = nil
                         continuation.resume(returning: ())
                     }
-                case .error(let error):
-                    if let continuation = self.connectionContinuation {
-                        self.connectionContinuation = nil
+                case let .error(error):
+                    if let continuation = connectionContinuation {
+                        connectionContinuation = nil
                         continuation.resume(throwing: error)
                     }
                     // Also handle any pending message handlers
-                    for handler in self.messageHandlers.values {
+                    for handler in messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    self.messageHandlers.removeAll()
+                    messageHandlers.removeAll()
                 case .disconnected:
                     // Clean up any pending handlers on disconnect
                     let error = ArkavoError.connectionFailed("Connection disconnected")
-                    for handler in self.messageHandlers.values {
+                    for handler in messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    self.messageHandlers.removeAll()
+                    messageHandlers.removeAll()
                 case .connecting:
                     print("connecting")
                 case .authenticating:
@@ -455,34 +455,42 @@ public final class ArkavoClient: NSObject {
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-        
+
         let (data, response) = try await URLSession.shared.data(from: url)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            print("fetchAuthenticationOptions.invalidResponse \(String(decoding: data, as: UTF8.self))")
+              (200 ... 299).contains(httpResponse.statusCode)
+        else {
+            let errorString = String(decoding: data, as: UTF8.self)
+            print("fetchAuthenticationOptions.invalidResponse \(errorString)")
+
+            // Check for specific error conditions
+            if errorString.contains("User Not Found") {
+                throw ArkavoError.authenticationFailed("User Not Found")
+            }
+
             throw ArkavoError.invalidResponse
         }
-        
+
         let decoder = JSONDecoder()
         let authOptions = try decoder.decode(AuthenticationOptionsResponse.self, from: data)
-        
+
         let challengeData = Data(base64Encoded: authOptions.publicKey.challenge.base64URLToBase64())!
         print("Challenge data: \(challengeData)")
-        
+
         // Create assertion request
         let assertionRequest = provider.createCredentialAssertionRequest(
             challenge: challengeData
         )
-        
+
         // Perform the authentication
         let assertion = try await performAuthentication(request: assertionRequest)
-        
+
         // Complete the authentication with server
         var completeRequest = URLRequest(url: authURL.appendingPathComponent("authenticate"))
         completeRequest.httpMethod = "POST"
         completeRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         let parameters: [String: Any] = [
             "id": assertion.credentialID.base64URLEncodedString(),
             "rawId": assertion.credentialID.base64URLEncodedString(),
@@ -490,42 +498,45 @@ public final class ArkavoClient: NSObject {
                 "clientDataJSON": assertion.rawClientDataJSON.base64URLEncodedString(),
                 "authenticatorData": assertion.rawAuthenticatorData.base64URLEncodedString(),
                 "signature": assertion.signature.base64URLEncodedString(),
-                "userHandle": assertion.userID?.base64URLEncodedString() ?? ""
+                "userHandle": assertion.userID?.base64URLEncodedString() ?? "",
             ],
-            "type": "public-key"
+            "type": "public-key",
         ]
-        
+
         completeRequest.httpBody = try JSONSerialization.data(withJSONObject: parameters)
-        
+
         print("\n=== Authentication Completion Request ===")
         print("URL: \(completeRequest.url?.absoluteString ?? "none")")
         print("Headers: \(completeRequest.allHTTPHeaderFields ?? [:])")
         print("Parameters: \(parameters)")
-        
+
         let (responseData, completionResponse) = try await URLSession.shared.data(for: completeRequest)
-        
+
         print("\nServer Response:")
         print("Status Code: \((completionResponse as? HTTPURLResponse)?.statusCode ?? -1)")
         print("Response Headers: \((completionResponse as? HTTPURLResponse)?.allHeaderFields ?? [:])")
         print("Response Body: \(String(data: responseData, encoding: .utf8) ?? "none")")
         print("=== End Authentication Completion ===\n")
-        
+
         guard let completionHttpResponse = completionResponse as? HTTPURLResponse,
-              (200...299).contains(completionHttpResponse.statusCode) else {
+              (200 ... 299).contains(completionHttpResponse.statusCode)
+        else {
             // If we got an error response, try to parse it
             if let errorJson = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-               let errorMessage = errorJson["error"] as? String {
+               let errorMessage = errorJson["error"] as? String
+            {
                 throw ArkavoError.authenticationFailed(errorMessage)
             }
             throw ArkavoError.authenticationFailed("Invalid response from server")
         }
-        
+
         // Parse token from response body
         guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-              let token = json["jwt_token"] as? String else {
+              let token = json["jwt_token"] as? String
+        else {
             throw ArkavoError.authenticationFailed("No authentication token received")
         }
-        
+
         return token
     }
 
@@ -678,7 +689,7 @@ public final class ArkavoClient: NSObject {
         // (Implementation specific to your needs)
         delegate?.clientDidReceiveMessage(self, message: data)
     }
- 
+
     // Add methods to send NATS messages
     public func sendNATSMessage(_ payload: Data) async throws {
         let message = NATSMessage(message: payload)
@@ -698,17 +709,17 @@ public final class ArkavoClient: NSObject {
 
         var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
         components?.queryItems = [URLQueryItem(name: "actor", value: handle)]
-        
+
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-        
+
         let (data, response) = try await URLSession.shared.data(from: url)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ArkavoError.invalidResponse
         }
-        
+
         switch httpResponse.statusCode {
         case 200:
             let decoder = JSONDecoder()
@@ -729,17 +740,17 @@ public final class ArkavoClient: NSObject {
 
         var components = URLComponents(string: "https://xrpc.arkavo.net/xrpc/app.arkavo.actor.getProfile")
         components?.queryItems = [URLQueryItem(name: "actor", value: publicID.base58String)]
-        
+
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
 
         let (data, response) = try await URLSession.shared.data(from: url)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ArkavoError.invalidResponse
         }
-        
+
         switch httpResponse.statusCode {
         case 200:
             let decoder = JSONDecoder()
@@ -754,7 +765,7 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.invalidResponse
         }
     }
-    
+
     /// Register a new user with WebAuthn
     public func registerUser(handle: String, did: String) async throws -> String {
         print("registerUser \(handle) \(relyingPartyID) \(did)")
@@ -768,7 +779,7 @@ public final class ArkavoClient: NSObject {
         let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
         let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64())!
         print("userIDData: \(userIDData) challengeData: \(challengeData)")
-        
+
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
             name: handle,
@@ -782,7 +793,7 @@ public final class ArkavoClient: NSObject {
             did: did
         )
     }
-    
+
     private func fetchRegistrationOptions(
         handle: String,
         did: String
@@ -791,17 +802,17 @@ public final class ArkavoClient: NSObject {
         var components = URLComponents(url: authURL.appendingPathComponent("register/\(handle)"), resolvingAgainstBaseURL: true)
         components?.queryItems = [
             URLQueryItem(name: "handle", value: handle),
-            URLQueryItem(name: "did", value: did)
+            URLQueryItem(name: "did", value: did),
         ]
-        
+
         guard let url = components?.url else {
             throw ArkavoError.invalidURL
         }
-        
+
         let (data, response) = try await URLSession.shared.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode)
+              (200 ... 299).contains(httpResponse.statusCode)
         else {
             print("fetchRegistrationOptions.invalidResponse \(String(decoding: data, as: UTF8.self))")
             throw ArkavoError.invalidResponse
@@ -827,37 +838,37 @@ public final class ArkavoClient: NSObject {
             controller.performRequests()
         }
     }
-    
+
     func performAuthentication(request: ASAuthorizationRequest) async throws -> ASAuthorizationPlatformPublicKeyCredentialAssertion {
-            try await withCheckedThrowingContinuation { continuation in
-                print("\n=== WebAuthn Authentication ===")
-                print("Starting performAuthentication")
-                
-                if let platformProvider = request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest {
-                    print("Challenge: \(platformProvider.challenge.base64EncodedString())")
-                    print("RelyingPartyIdentifier: \(platformProvider.relyingPartyIdentifier)")
-                    let allowedCredentials = platformProvider.allowedCredentials
-                    print("Allowed credentials count: \(allowedCredentials.count)")
-                    for (index, credential) in allowedCredentials.enumerated() {
-                        print("Credential [\(index)]: \(credential.credentialID.base64EncodedString())")
-                    }
-                } else {
-                    print("Warning: Request is not a platform credential assertion request")
+        try await withCheckedThrowingContinuation { continuation in
+            print("\n=== WebAuthn Authentication ===")
+            print("Starting performAuthentication")
+
+            if let platformProvider = request as? ASAuthorizationPlatformPublicKeyCredentialAssertionRequest {
+                print("Challenge: \(platformProvider.challenge.base64EncodedString())")
+                print("RelyingPartyIdentifier: \(platformProvider.relyingPartyIdentifier)")
+                let allowedCredentials = platformProvider.allowedCredentials
+                print("Allowed credentials count: \(allowedCredentials.count)")
+                for (index, credential) in allowedCredentials.enumerated() {
+                    print("Credential [\(index)]: \(credential.credentialID.base64EncodedString())")
                 }
-                
-                let controller = ASAuthorizationController(authorizationRequests: [request])
-                let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
-                controller.delegate = delegate
-                controller.presentationContextProvider = self
-                
-                // Retain delegate until authentication completes
-                objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-                
-                print("Performing authorization requests...")
-                controller.performRequests()
-                print("=== End WebAuthn Authentication Setup ===\n")
+            } else {
+                print("Warning: Request is not a platform credential assertion request")
             }
+
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            let delegate = WebAuthnAuthenticationDelegate(continuation: continuation)
+            controller.delegate = delegate
+            controller.presentationContextProvider = self
+
+            // Retain delegate until authentication completes
+            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+
+            print("Performing authorization requests...")
+            controller.performRequests()
+            print("=== End WebAuthn Authentication Setup ===\n")
         }
+    }
 
     private func completeRegistration(
         credential: ASAuthorizationPlatformPublicKeyCredentialRegistration,
@@ -877,32 +888,33 @@ public final class ArkavoClient: NSObject {
                 "attestationObject": credential.rawAttestationObject!.base64URLEncodedString(),
             ],
             "type": "public-key",
-            
+
             // Additional Arkavo registration data
             "handle": handle,
-            "did": did
+            "did": did,
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               let token = httpResponse.allHeaderFields["x-auth-token"] as? String
         else {
             // If we got an error response, try to parse it
             if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = errorJson["error"] as? String {
+               let errorMessage = errorJson["error"] as? String
+            {
                 throw ArkavoError.authenticationFailed(errorMessage)
             }
             throw ArkavoError.authenticationFailed("No authentication token received")
         }
-        
+
         // Verify token format
         if !token.starts(with: "eyJ") {
             throw ArkavoError.authenticationFailed("Invalid token format")
         }
-        
+
         return token
     }
 
@@ -995,9 +1007,9 @@ extension ArkavoClient: ASAuthorizationControllerPresentationContextProviding {
 }
 
 // MARK: - DID Key Management Extension
-extension ArkavoClient {
-   
-    public func generateDID() throws -> String {
+
+public extension ArkavoClient {
+    func generateDID() throws -> String {
         try KeychainManager.generateAndSaveDIDKey()
     }
 
@@ -1335,7 +1347,7 @@ private class WebAuthnRegistrationDelegate: NSObject, ASAuthorizationControllerD
         self.continuation = continuation
     }
 
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration else {
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
@@ -1343,28 +1355,28 @@ private class WebAuthnRegistrationDelegate: NSObject, ASAuthorizationControllerD
         continuation.resume(returning: credential)
     }
 
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
         continuation.resume(throwing: error)
     }
 }
 
 private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegate {
     private let continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>
-    
+
     init(continuation: CheckedContinuation<ASAuthorizationPlatformPublicKeyCredentialAssertion, Error>) {
         self.continuation = continuation
     }
-    
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         print("\n=== WebAuthn Authentication Completion ===")
-        
+
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
             print("Error: Received invalid credential type")
             print("Actual type: \(type(of: authorization.credential))")
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
         }
-        
+
         print("Successfully received credential:")
         print("Credential ID: \(credential.credentialID.base64EncodedString())")
         print("Raw AuthenticatorData length: \(credential.rawAuthenticatorData.count) bytes")
@@ -1376,29 +1388,29 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
             print("No UserID present")
         }
         print("=== End WebAuthn Authentication Completion ===\n")
-        
+
         continuation.resume(returning: credential)
     }
-    
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+
+    func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
         print("\n=== WebAuthn Authentication Error ===")
         print("Error: \(error)")
         if let authError = error as? ASAuthorizationError {
             print("ASAuthorization Error Code: \(authError.code.rawValue)")
             print("Error Domain: \(authError.errorCode)")
             switch authError.code {
-                case .canceled:
-                    print("User cancelled the authorization")
-                case .invalidResponse:
-                    print("The authorization request received an invalid response")
-                case .notHandled:
-                    print("The authorization request wasn't handled")
-                case .failed:
-                    print("The authorization request failed")
-                case .notInteractive:
-                    print("The authorization request requires an interactive session")
-                case .unknown:
-                    print("An unknown error occurred")
+            case .canceled:
+                print("User cancelled the authorization")
+            case .invalidResponse:
+                print("The authorization request received an invalid response")
+            case .notHandled:
+                print("The authorization request wasn't handled")
+            case .failed:
+                print("The authorization request failed")
+            case .notInteractive:
+                print("The authorization request requires an interactive session")
+            case .unknown:
+                print("An unknown error occurred")
             case .matchedExcludedCredential:
                 print("matched excluded credential")
             case .credentialImport:
@@ -1406,7 +1418,7 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
             case .credentialExport:
                 print("credemtial export")
             @unknown default:
-                    print("An unexpected error occurred")
+                print("An unexpected error occurred")
             }
         }
         print("=== End WebAuthn Authentication Error ===\n")
@@ -1446,23 +1458,23 @@ class ProfileCache {
     private let capacity: Int
     private var cache = [Data: ArkavoProfile]()
     private var usageOrder = [Data]()
-    
+
     init(capacity: Int = 100) {
         self.capacity = capacity
     }
-    
+
     func get(_ key: Data) -> ArkavoProfile? {
         guard let value = cache[key] else { return nil }
-        
+
         // Move to most recently used
         if let index = usageOrder.firstIndex(of: key) {
             usageOrder.remove(at: index)
         }
         usageOrder.append(key)
-        
+
         return value
     }
-    
+
     func set(_ key: Data, value: ArkavoProfile) {
         // If key exists, update value and move to most recent
         if cache[key] != nil {
@@ -1476,7 +1488,7 @@ class ProfileCache {
                 usageOrder.removeFirst()
             }
         }
-        
+
         cache[key] = value
         usageOrder.append(key)
     }

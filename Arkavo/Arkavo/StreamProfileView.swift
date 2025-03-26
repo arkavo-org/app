@@ -38,9 +38,9 @@ struct DetailedStreamProfileView: View {
                         }
                     }
                     Section(header: Text("Policies")) {
-                        Text("Admission: \(viewModel.stream!.policies.admission.rawValue)")
-                        Text("Interaction: \(viewModel.stream!.policies.interaction.rawValue)")
-                        Text("Age Policy: \(viewModel.stream!.policies.age.rawValue)")
+                        Text("Admission: \(viewModel.stream!.policiesSafe.admission.rawValue)")
+                        Text("Interaction: \(viewModel.stream!.policiesSafe.interaction.rawValue)")
+                        Text("Age Policy: \(viewModel.stream!.policiesSafe.age.rawValue)")
                     }
                     Section(header: Text("Public ID")) {
                         Text(viewModel.stream!.publicID.base58EncodedString)
@@ -59,7 +59,7 @@ struct DetailedStreamProfileView: View {
                             Image(systemName: "x.circle")
                         }
                     }
-                    if viewModel.stream!.policies.admission != .closed {
+                    if viewModel.stream!.policiesSafe.admission != .closed {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
                                 isShareSheetPresented = true

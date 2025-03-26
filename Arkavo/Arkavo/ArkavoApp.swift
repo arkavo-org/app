@@ -5,7 +5,7 @@ import SwiftUI
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-    @State private var selectedView: AppView = .registration
+    @State private var selectedView: AppView = .registration // Default to registration view
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
@@ -443,13 +443,20 @@ struct ArkavoApp: App {
 
         do {
             let account = try await persistenceController.getOrCreateAccount()
-            ViewModelFactory.shared.setAccount(account)
+            print("Account retrieved: \(account.id), profile: \(String(describing: account.profile))")
+
+            // If profile is nil, go to registration immediately
             if account.profile == nil {
+                print("No profile found - routing to registration")
                 selectedView = .registration
                 return
             }
 
+            // Set the account only after confirming it has a profile
+            ViewModelFactory.shared.setAccount(account)
+
             guard let profile = account.profile else {
+                print("Profile is nil after check - this shouldn't happen")
                 connectionError = ConnectionError(
                     title: "Profile Error",
                     message: "There was an error loading your profile. Please try signing up again.",
@@ -517,9 +524,30 @@ struct ArkavoApp: App {
 
             // Only reach here if no token, token connection failed, or we're disconnected
             print("Attempting fresh connection")
-            try await client.connect(accountName: profile.name)
-            selectedView = .main
-            print("checkAccountStatus: Connected with fresh connection")
+            do {
+                try await client.connect(accountName: profile.name)
+                selectedView = .main
+                print("checkAccountStatus: Connected with fresh connection")
+            } catch let error as ArkavoError {
+                if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
+                    // User exists locally but not on server, go to registration
+                    print("User exists locally but not on server - routing to registration")
+
+                    // Clear the invalid account data
+                    KeychainManager.deleteAuthenticationToken()
+
+                    // Reset account state so registration can create a new one
+                    account.profile = nil
+                    try? await persistenceController.saveChanges()
+
+                    // Route to registration
+                    selectedView = .registration
+                    ViewModelFactory.shared.clearAccount()
+                    return
+                } else {
+                    throw error // Re-throw if it's not the specific error we're looking for
+                }
+            }
 
         } catch let error as ArkavoError {
             switch error {
@@ -748,8 +776,14 @@ final class ViewModelFactory {
     // Set current account and profile
     @MainActor
     func setAccount(_ account: Account) {
+        // Only set the account if it has a valid profile
+        guard let profile = account.profile else {
+            print("Warning: Attempted to set account without profile")
+            return
+        }
         currentAccount = account
-        currentProfile = account.profile
+        currentProfile = profile
+        print("Set account with profile: \(profile.name)")
     }
 
     // Clear current account and profile
@@ -791,17 +825,17 @@ final class ViewModelFactory {
             streamPublicID: streamPublicID
         )
     }
-    
+
     func getChatViewModel(for streamPublicID: Data) -> ChatViewModel? {
         guard currentAccount != nil, currentProfile != nil else {
             return nil
         }
         return makeChatViewModel(streamPublicID: streamPublicID)
     }
-    
+
     // Access the MultipeerConnectivity view model for peer discovery
     private var peerDiscoveryManager: PeerDiscoveryManager?
-    
+
     @MainActor
     func getPeerDiscoveryManager() -> PeerDiscoveryManager {
         if peerDiscoveryManager == nil {

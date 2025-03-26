@@ -17,6 +17,18 @@ final class Profile: Identifiable {
     // Optional properties for phased workflow
     @Attribute(.unique) var did: String?
     var handle: String?
+    
+    // Default empty init required by SwiftData
+    init() {
+        self.id = UUID()
+        self.name = "Default"
+        self.publicID = Data()  // Initialize with empty data first
+        self.hasHighEncryption = false
+        self.hasHighIdentityAssurance = false
+        // Update publicID after all properties are initialized
+        let nameData = self.name.data(using: .utf8) ?? Data()
+        self.publicID = Data(SHA256.hash(data: nameData))
+    }
 
     init(
         id: UUID = UUID(),
