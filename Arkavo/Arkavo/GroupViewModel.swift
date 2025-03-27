@@ -1220,28 +1220,29 @@ extension P2PGroupViewModel {
         // Check if we should use local KeyStore or our own KeyStore
         let useLocalKeyStore = profileID != nil && peerKeyStores[profileID!] != nil
         
-        // Create a KAS service using the appropriate KeyStore
+        // Create a P2P key service using the appropriate KeyStore
+        // Note: In a true P2P implementation, we wouldn't need a baseURL
+        // but keeping it for API compatibility
         let kasService = KASService(
             keyStore: keyStore,
-            baseURL: URL(string: "https://local.p2p.kas")!
+            baseURL: URL(string: "p2p://local")!
         )
 
-        // Process the request locally using the KAS service
+        // Process the request locally in a true P2P manner
         do {
-            // Get the KAS public key from ArkavoClient
-            let kasPublicKey = try await getKasPublicKey(from: keyStore)
+            // In a P2P context, we don't need a KAS public key from a central server
+            // Instead, we use the public key directly from the peer or our local keystore
             
             // Log details for debugging
-            print("KAS public key obtained: \(kasPublicKey.count) bytes")
-            print("Using \(useLocalKeyStore ? "peer's" : "local") KeyStore for rewrap request")
+            print("Using \(useLocalKeyStore ? "peer's" : "local") KeyStore for P2P rewrap request")
             
             // Process the key access request
             // This will look for the matching private key in the KeyStore
             // and use it to decrypt and rewrap the session key
+            // The kasPublicKey parameter should be nil or not used in a pure P2P implementation
             let rewrapResult = try await kasService.processKeyAccess(
                 ephemeralPublicKey: ephemeralPublicKey,
-                encryptedKey: encryptedSessionKey,
-                kasPublicKey: kasPublicKey
+                encryptedKey: encryptedSessionKey
             )
             
             // Track the used key if one-time TDF is enabled
@@ -1294,14 +1295,13 @@ extension P2PGroupViewModel {
                 do {
                     let kasService = KASService(
                         keyStore: localKeyStore,
-                        baseURL: URL(string: "https://local.p2p.kas")!
+                        baseURL: URL(string: "p2p://local")!
                     )
                     
-                    let kasPublicKey = try await getKasPublicKey(from: localKeyStore)
+                    // In P2P mode, we don't need a KAS public key
                     let rewrapResult = try await kasService.processKeyAccess(
                         ephemeralPublicKey: ephemeralPublicKey,
-                        encryptedKey: encryptedSessionKey,
-                        kasPublicKey: kasPublicKey
+                        encryptedKey: encryptedSessionKey
                     )
                     
                     // Also track the key usage for fallback path
@@ -1389,46 +1389,7 @@ extension P2PGroupViewModel {
         return nil
     }
 
-    /// Get the KAS public key from the ArkavoClient
-    /// - Parameter keyStore: The KeyStore to use (only used for curve type compatibility)
-    /// - Returns: The KAS public key from the ArkavoClient
-    private func getKasPublicKey(from keyStore: KeyStore) async throws -> Data {
-        // Get the KAS public key from the ArkavoClient
-        // The ArkavoClient exchanges this key during the initial connection with the server
-        // via ArkavoMessageType.kasKey message type
-        
-        guard let kasPublicKey = client?.getKASPublicKey() else {
-            // Fallback to a mock key if we can't get the real KAS public key
-            print("Warning: Could not get KAS public key from ArkavoClient, using mock key")
-            // Return a mock public key with proper compression format (0x02 or 0x03 prefix for secp256r1)
-            var mockKey = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
-            mockKey.insert(0x02, at: 0) // Add compression prefix
-            return mockKey
-        }
-        
-        print("Using KAS public key from ArkavoClient: \(kasPublicKey.count) bytes")
-        
-        // Validate that the KAS public key is in the correct format
-        if kasPublicKey.count != 33 { // P-256 compressed public key is 33 bytes
-            print("Warning: KAS public key from ArkavoClient has unexpected size: \(kasPublicKey.count), expected 33 bytes")
-            // If wrong size, return a properly formatted mock key
-            var mockKey = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
-            mockKey.insert(0x02, at: 0) // Add compression prefix
-            return mockKey
-        }
-        
-        // Verify the prefix byte is either 0x02 or 0x03 for compressed format
-        let prefix = kasPublicKey.first ?? 0
-        if prefix != 0x02 && prefix != 0x03 {
-            print("Warning: KAS public key has invalid prefix: \(prefix), expected 0x02 or 0x03")
-            // Create a new key with the correct prefix
-            var fixedKey = kasPublicKey
-            fixedKey[0] = 0x02
-            return fixedKey
-        }
-        
-        return kasPublicKey
-    }
+    // P2P implementation doesn't need to access a central KAS server
 }
 
 // MARK: - MCNearbyServiceAdvertiserDelegate
