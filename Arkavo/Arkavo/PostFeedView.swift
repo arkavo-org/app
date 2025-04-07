@@ -115,10 +115,11 @@ class PostFeedViewModel: ViewModel, ObservableObject {
                 return
             }
             if let bodyData = header.policy.body?.body {
-                let metadata = try ArkavoPolicy.parseMetadata(from: bodyData)
+                // Parse metadata but don't use it anymore (now using new Thought.from API)
+                _ = try ArkavoPolicy.parseMetadata(from: bodyData)
 
                 // Create thought
-                let thought = try Thought.from(thoughtModel, arkavoMetadata: metadata)
+                let thought = try Thought.from(thoughtModel)
                 // Create post
                 let post = Post(
                     id: thought.id.uuidString,

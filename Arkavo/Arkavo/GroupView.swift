@@ -17,6 +17,8 @@ final class GroupViewModel: ViewModel, ObservableObject {
     // Track pending streams by their ephemeral public key
     private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     private var notificationObservers: [NSObjectProtocol] = []
+    // Expose the one-time TDF mode flag
+    let oneTimeTDFEnabled: Bool = true
 
     @MainActor
     init(client: ArkavoClient, account: Account, profile: Profile) {
@@ -552,6 +554,23 @@ struct GroupView: View {
             
             // InnerCircle UI if applicable
             if stream.isInnerCircleStream {
+                // Add one-time TDF badge
+                HStack {
+                    Spacer()
+                    if viewModel.oneTimeTDFEnabled {
+                        Text("One-Time TDF")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+                
                 innerCirclePeerDiscoveryUI(for: stream)
             }
         }
@@ -563,7 +582,9 @@ struct GroupView: View {
             // Search toggle button with improved visual design
             HStack {
                 Button(action: {
-                    togglePeerSearch(for: stream)
+                    Task {
+                        await togglePeerSearch(for: stream)
+                    }
                 }) {
                     HStack {
                         // Icon with dynamic appearance
@@ -624,7 +645,7 @@ struct GroupView: View {
     }
     
     // Toggle peer search state
-    private func togglePeerSearch(for stream: Stream) {
+    private func togglePeerSearch(for stream: Stream) async {
         isPeerSearchActive.toggle()
         
         // Connect to the peer discovery manager
@@ -634,7 +655,7 @@ struct GroupView: View {
             do {
                 // Select this stream and start searching
                 peerManager.selectedStream = stream
-                try peerManager.setupMultipeerConnectivity(for: stream)
+                try await peerManager.setupMultipeerConnectivity(for: stream)
                 try peerManager.startSearchingForPeers()
                 
                 // Optionally present the browser controller for manual peer selection
@@ -839,7 +860,9 @@ struct GroupView: View {
             
             Button(action: {
                 if let stream = viewModel.selectedStream {
-                    togglePeerSearch(for: stream)
+                    Task {
+                        await togglePeerSearch(for: stream)
+                    }
                 }
             }) {
                 Text("Start Searching")

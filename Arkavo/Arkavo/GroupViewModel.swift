@@ -896,12 +896,41 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             print("No sender profile ID provided")
         }
         
-        // Process the rewrap request with the appropriate parameters
-        return try await processRewrapRequest(
-            ephemeralPublicKey: publicKey,
-            encryptedSessionKey: encryptedSessionKey,
-            profileID: senderProfileID
-        )
+        // Find the appropriate KeyStore for this request
+        guard let keyStore = self.keyStore else {
+            print("No KeyStore available for rewrapping")
+            return nil
+        }
+        
+        // Create a dummy KAS public key (required by updated API)
+        var dummyKasPublicKey = Data(repeating: 0, count: 32)
+        dummyKasPublicKey[0] = 0x02 // Add compression prefix for P-256
+        
+        // Create a KAS service to handle the request
+        let kasService = KASService(keyStore: keyStore, baseURL: URL(string: "p2p://local")!)
+        
+        // Process the rewrap request
+        do {
+            let rewrappedKey = try await kasService.processKeyAccess(
+                ephemeralPublicKey: publicKey,
+                encryptedKey: encryptedSessionKey,
+                kasPublicKey: dummyKasPublicKey  // Add required kasPublicKey parameter
+            )
+            
+            // If one-time TDF is enabled, mark the key as used
+            if oneTimeTDFEnabled {
+                print("One-time TDF mode: Key used and will be discarded")
+                // In the upgraded OpenTDFKit, keys will be automatically removed
+                // We should also check if we need to regenerate keys
+                await checkAndRegenerateKeys()
+            }
+            
+            print("Successfully rewrapped key")
+            return rewrappedKey
+        } catch {
+            print("Failed to rewrap key: \(error)")
+            return nil
+        }
     }
 }
 
@@ -1230,8 +1259,10 @@ extension P2PGroupViewModel {
 
         // Process the request locally in a true P2P manner
         do {
-            // In a P2P context, we don't need a KAS public key from a central server
-            // Instead, we use the public key directly from the peer or our local keystore
+            // In a P2P context, we need a local KAS public key that matches the one we'll look up
+            // Create a dummy KAS public key required by updated API
+            var dummyKasPublicKey = Data(repeating: 0, count: 32)
+            dummyKasPublicKey[0] = 0x02 // Add compression prefix for P-256
             
             // Log details for debugging
             print("Using \(useLocalKeyStore ? "peer's" : "local") KeyStore for P2P rewrap request")
@@ -1239,10 +1270,10 @@ extension P2PGroupViewModel {
             // Process the key access request
             // This will look for the matching private key in the KeyStore
             // and use it to decrypt and rewrap the session key
-            // The kasPublicKey parameter should be nil or not used in a pure P2P implementation
             let rewrapResult = try await kasService.processKeyAccess(
                 ephemeralPublicKey: ephemeralPublicKey,
-                encryptedKey: encryptedSessionKey
+                encryptedKey: encryptedSessionKey,
+                kasPublicKey: dummyKasPublicKey
             )
             
             // Track the used key if one-time TDF is enabled
@@ -1298,10 +1329,14 @@ extension P2PGroupViewModel {
                         baseURL: URL(string: "p2p://local")!
                     )
                     
-                    // In P2P mode, we don't need a KAS public key
+                    // Create a dummy KAS public key required by updated API
+                    var dummyKasPublicKey = Data(repeating: 0, count: 32)
+                    dummyKasPublicKey[0] = 0x02 // Add compression prefix for P-256
+                    
                     let rewrapResult = try await kasService.processKeyAccess(
                         ephemeralPublicKey: ephemeralPublicKey,
-                        encryptedKey: encryptedSessionKey
+                        encryptedKey: encryptedSessionKey,
+                        kasPublicKey: dummyKasPublicKey
                     )
                     
                     // Also track the key usage for fallback path

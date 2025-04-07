@@ -25,6 +25,8 @@ struct ArkavoApp: App {
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
+            // Note: Modified for compatibility with latest OpenTDFKit
+            // Capacity of 8192 keys is set in GroupViewModel.swift
         )
         ViewModelFactory.shared.serviceLocator.register(client)
         // Initialize router
@@ -810,6 +812,11 @@ final class ServiceLocator {
             fatalError("No registered service for type \(T.self)")
         }
         return service
+    }
+    
+    func resolve<T>(type: T.Type) -> T? {
+        let key = String(describing: type)
+        return services[key] as? T
     }
 }
 

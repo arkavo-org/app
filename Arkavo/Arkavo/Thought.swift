@@ -3,30 +3,17 @@ import Foundation
 import SwiftData
 
 @Model
-final class Thought: Identifiable, Codable {
+final class Thought: Identifiable { // Removed Codable conformance
     // MARK: - Nested Types
 
-    struct Metadata: Codable {
+    struct Metadata: Codable { // Still Codable for SwiftData storage
         var creatorPublicID: Data
         let streamPublicID: Data
         let mediaType: MediaType // Kind
         let createdAt: Date
         let contributors: [Contributor]
 
-        private static let decoder = PropertyListDecoder()
-        private static let encoder: PropertyListEncoder = {
-            let encoder = PropertyListEncoder()
-            encoder.outputFormat = .binary
-            return encoder
-        }()
-
-        func serialize() throws -> Data {
-            try Metadata.encoder.encode(self)
-        }
-
-        static func deserialize(from data: Data) throws -> Metadata {
-            try decoder.decode(Metadata.self, from: data)
-        }
+        // Removed serialize/deserialize and encoder/decoder from Metadata
     }
 
     @Attribute(.unique) var id: UUID
@@ -34,8 +21,8 @@ final class Thought: Identifiable, Codable {
     @Attribute(.unique) var publicID: Data
     var stream: Stream?
     var metadata: Metadata
-    var nano: Data
-    
+    var nano: Data // Represents the content payload (e.g., for NanoTDF)
+
     // Default empty init required by SwiftData
     init() {
         self.id = UUID()
@@ -61,27 +48,7 @@ final class Thought: Identifiable, Codable {
         self.nano = nano
     }
 
-    // MARK: - Codable Conformance
-
-    enum CodingKeys: String, CodingKey {
-        case id, publicID, metadata, nano
-    }
-
-    required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        publicID = try container.decode(Data.self, forKey: .publicID)
-        metadata = try container.decode(Metadata.self, forKey: .metadata)
-        nano = try container.decode(Data.self, forKey: .nano)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(publicID, forKey: .publicID)
-        try container.encode(metadata, forKey: .metadata)
-        try container.encode(nano, forKey: .nano)
-    }
+    // Removed explicit Codable conformance (CodingKeys, init(from:), encode(to:))
 
     private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
@@ -98,30 +65,14 @@ extension Thought {
             stream?.thoughts.append(self)
         }
     }
-}
 
-// MARK: - Serialization
-
-extension Thought {
-    private static let decoder = PropertyListDecoder()
-    private static let encoder: PropertyListEncoder = {
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        return encoder
-    }()
-
+    // Added convenience accessor for publicID string representation
     var publicIDString: String {
         publicID.base58EncodedString
     }
-
-    func serialize() throws -> Data {
-        try Thought.encoder.encode(self)
-    }
-
-    static func deserialize(from data: Data) throws -> Thought {
-        try decoder.decode(Thought.self, from: data)
-    }
 }
+
+// Removed the separate Serialization extension for Thought
 
 // MARK: - Contributor
 
@@ -151,26 +102,33 @@ enum MediaType: String, Codable {
     }
 }
 
-// MARK: - ThoughtServiceModel
+// MARK: - ThoughtServiceModel (DTO for Network/Serialization)
 
 struct ThoughtServiceModel: Codable {
     var publicID: Data
     var creatorPublicID: Data
     var streamPublicID: Data
     var mediaType: MediaType
-    var content: Data
+    var content: Data // This is the payload for NanoTDF
 
+    // Original initializer (if needed for creating directly)
     init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, content: Data) {
         self.creatorPublicID = creatorPublicID
         self.streamPublicID = streamPublicID
         self.mediaType = mediaType
         self.content = content
+        // Calculate publicID based on content hash if required by service definition
         let hashData = creatorPublicID + streamPublicID + content
         publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
     }
+
+    // Note: The publicID calculation above might differ from the Thought's publicID (which is based on UUID).
+    // Decide if the service model should use the Thought's publicID or generate its own.
+    // The new init(from thought: Thought) below uses the Thought's publicID.
 }
 
 extension ThoughtServiceModel {
+    // Keep encoder/decoder and serialize/deserialize specific to the service model
     private static let decoder = PropertyListDecoder()
     private static let encoder: PropertyListEncoder = {
         let encoder = PropertyListEncoder()
@@ -189,42 +147,67 @@ extension ThoughtServiceModel {
     static func deserialize(from data: Data) throws -> ThoughtServiceModel {
         try decoder.decode(ThoughtServiceModel.self, from: data)
     }
-}
 
-extension Thought {
-    static func from(_ model: ThoughtServiceModel, arkavoMetadata: Arkavo_Metadata) throws -> Thought {
-        guard model.creatorPublicID.count == 32 else {
-            throw NSError(domain: "Thought", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid creator public ID length"])
-        }
-
-        let metadata = try Metadata.from(arkavoMetadata)
-        let nano = model.content
-
-        return Thought(nano: nano, metadata: metadata)
+    // NEW Initializer to convert from Thought model to Service model
+    init(from thought: Thought) {
+        // Use the Thought's existing publicID for the service model
+        self.publicID = thought.publicID
+        self.creatorPublicID = thought.metadata.creatorPublicID
+        self.streamPublicID = thought.metadata.streamPublicID
+        self.mediaType = thought.metadata.mediaType
+        self.content = thought.nano // Map 'nano' to 'content' for the service model
     }
 }
 
+// Keep the conversion from Service Model back to Thought Model
+extension Thought {
+    // This function likely needs adjustment based on how Arkavo_Metadata relates
+    // to ThoughtServiceModel now. Assuming ThoughtServiceModel is the primary input.
+    static func from(_ model: ThoughtServiceModel) throws -> Thought {
+        // We need to reconstruct the Metadata struct from the service model fields
+        // This might require fetching contributor info or making assumptions.
+        // Example reconstruction (adjust based on actual requirements):
+        let contributor = Contributor(profilePublicID: model.creatorPublicID, role: "creator")
+        let metadata = Metadata(
+            creatorPublicID: model.creatorPublicID,
+            streamPublicID: model.streamPublicID,
+            mediaType: model.mediaType,
+            createdAt: Date(), // Might need timestamp from service model if available
+            contributors: [contributor]
+        )
+
+        let nano = model.content
+
+        // Create the Thought instance. The publicID will be regenerated based on UUID.
+        // If you need the publicID to match the service model exactly,
+        // you might need a different init or assignment strategy.
+        return Thought(nano: nano, metadata: metadata)
+    }
+
+    // Original 'from' method might be deprecated or adapted if Arkavo_Metadata is still used elsewhere
+    // static func from(_ model: ThoughtServiceModel, arkavoMetadata: Arkavo_Metadata) throws -> Thought { ... }
+}
+
+// Keep Metadata conversion if needed elsewhere, but it's not used by Thought directly for Codable now
+// If Arkavo_Metadata is defined elsewhere (e.g., EntityServiceModel.swift), this extension might need to be moved or adapted.
+/*
 extension Thought.Metadata {
+    // Assuming Arkavo_Metadata is a separate Protobuf or similar structure
     static func from(_ arkavoMetadata: Arkavo_Metadata) throws -> Thought.Metadata {
         let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
 
         // Map Arkavo_MediaType to MediaType
         let mediaType: MediaType = if let arkavoMediaType = arkavoMetadata.content?.mediaType {
             switch arkavoMediaType {
-            case .video:
-                .video
-            case .audio:
-                .audio
-            case .image:
-                .image
-            default:
-                .text
+            case .video: .video
+            case .audio: .audio
+            case .image: .image
+            default: .text
             }
         } else {
             .text // Default to text if no media type is provided
         }
 
-        // Create contributor with metadata if available, or empty contributor if not
         let contributor = Contributor(profilePublicID: Data(arkavoMetadata.creator), role: "creator")
 
         return Thought.Metadata(
@@ -236,3 +219,6 @@ extension Thought.Metadata {
         )
     }
 }
+*/
+
+// Removed placeholder definitions for Arkavo_Metadata, Arkavo_ContentMetadata, Arkavo_MediaType

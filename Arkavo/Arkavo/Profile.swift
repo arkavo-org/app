@@ -17,17 +17,18 @@ final class Profile: Identifiable {
     // Optional properties for phased workflow
     @Attribute(.unique) var did: String?
     var handle: String?
-    
+
     // Default empty init required by SwiftData
     init() {
-        self.id = UUID()
+        let newID = UUID() // Generate UUID first
+        self.id = newID
         self.name = "Default"
-        self.publicID = Data()  // Initialize with empty data first
+        // Initialize publicID temporarily, then generate from id
+        self.publicID = Data()
         self.hasHighEncryption = false
         self.hasHighIdentityAssurance = false
-        // Update publicID after all properties are initialized
-        let nameData = self.name.data(using: .utf8) ?? Data()
-        self.publicID = Data(SHA256.hash(data: nameData))
+        // Generate the publicID from the initialized id
+        self.publicID = Profile.generatePublicID(from: newID)
     }
 
     init(
@@ -39,14 +40,15 @@ final class Profile: Identifiable {
         hasHighEncryption: Bool = false,
         hasHighIdentityAssurance: Bool = false
     ) {
-        self.id = id
+        self.id = id // Use provided or default UUID
         self.name = name
         self.blurb = blurb
         self.interests = interests
         self.location = location
         self.hasHighEncryption = hasHighEncryption
         self.hasHighIdentityAssurance = hasHighIdentityAssurance
-        publicID = Profile.generatePublicID(from: name)
+        // Generate publicID from the id
+        self.publicID = Profile.generatePublicID(from: id)
     }
 
     func finalizeRegistration(did: String, handle: String) {
@@ -57,12 +59,10 @@ final class Profile: Identifiable {
         self.handle = handle
     }
 
-    // FIXME: should really be handle
-    private static func generatePublicID(from name: String) -> Data {
-        // Ensure consistent string encoding
-        guard let nameData = name.data(using: .utf8) else {
-            fatalError("Failed to encode name as UTF-8")
+    // Generate publicID from the unique UUID
+    private static func generatePublicID(from id: UUID) -> Data {
+        withUnsafeBytes(of: id) { buffer in
+            Data(SHA256.hash(data: buffer))
         }
-        return Data(SHA256.hash(data: nameData))
     }
 }
