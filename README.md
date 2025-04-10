@@ -99,6 +99,7 @@ mv metadata_generated.swift MetadataServiceModel.swift
 ### Dependencies 
 
 - OpenTDFKit https://github.com/arkavo-org/OpenTDFKit.git
+- Flatbuffers
 
 ### Format
 
@@ -122,4 +123,72 @@ xcodebuild -scheme Arkavo -sdk iphoneos -configuration Release build
 cd ArkavoCreator
 xcodebuild -scheme ArkavoCreator -sdk macosx -configuration Release build
 xcodebuild -scheme ArkavoCreator -sdk iphoneos -configuration Release build
+```
+
+### SwiftData ERD
+
+```mermaid
+erDiagram
+    Account {
+        Int id PK "unique"
+        String _identityAssuranceLevel
+        String _ageVerificationStatus
+        Profile profile FK "(0..1)"
+        Stream streams FK "(0..*)"
+    }
+
+    Profile {
+        UUID id PK
+        Data publicID UK "unique"
+        String name
+        String blurb "nullable"
+        String interests
+        String location
+        Boolean hasHighEncryption
+        Boolean hasHighIdentityAssurance
+        String did UK "nullable, unique"
+        String handle "nullable"
+        Date lastSeen "nullable"
+        Data keyStoreData "nullable"
+        String keyStoreCurve "nullable"
+        Int keyStoreCapacity "nullable"
+        Date keyStoreUpdatedAt "nullable"
+    }
+
+    Stream {
+        UUID id PK "unique"
+        Data publicID UK "unique"
+        Data creatorPublicID "Ref -> Profile.publicID"
+        Policies policies "nullable, Codable struct"
+        Profile profile FK "Stream's identity (1)"
+        Profile innerCircleProfiles FK "(0..*)"
+        Thought source FK "Source thought (0..1)"
+        Thought thoughts FK "(0..*), cascade delete"
+    }
+
+    Thought {
+        UUID id PK "unique"
+        Data publicID UK "unique"
+        Metadata metadata "Codable struct"
+        Data nano
+        Stream stream FK "(0..1)"
+    }
+
+    BlockedProfile {
+        UUID id PK
+        Data blockedPublicID "Ref -> Profile.publicID"
+        Date reportTimestamp
+        Map_String_Int_ reportReasons
+    }
+
+    Account ||--o{ Profile : "has profile"
+    Account ||--|{ Stream : "has streams"
+    Stream ||--|| Profile : "identified by"
+    Stream }o--o{ Profile : "inner circle member"
+    Stream ||--o| Thought : "sourced by"
+    Stream ||--|{ Thought : "contains thoughts"
+    Thought }o--|| Stream : "belongs to stream"
+
+    %% BlockedProfile conceptually references Profile via blockedPublicID
+    %% BlockedProfile .. Profile : "blocks"
 ```
