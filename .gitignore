@@ -108,3 +108,5 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 .netrc
 /ArkavoSocial/.swiftpm/
 /ArkavoCreator/ArkavoCreator.xcodeproj/xcshareddata/xcschemes/ArkavoCreator.xcscheme
+/.mcp.json
+.aider*

@@ -4,6 +4,19 @@
     "" : {
 
     },
+    "(%lld online, %lld offline)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "(%1$lld online, %2$lld offline)"
+          }
+        }
+      }
+    },
+    "(%lld)" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -26,6 +39,9 @@
           }
         }
       }
+    },
+    "%lld / 8192" : {
+
     },
     "%lld %@" : {
       "localizations" : {
@@ -107,9 +123,6 @@
           }
         }
       }
-    },
-    "Actively Searching" : {
-
     },
     "Activity Level: %@" : {
 
@@ -214,10 +227,10 @@
     "Broadcast" : {
 
     },
-    "Broadcasting and listening for nearby devices..." : {
+    "Broadcasting and listening..." : {
 
     },
-    "Broadcasting your presence to nearby devices" : {
+    "Broadcasting your presence" : {
 
     },
     "Browse Manually" : {
@@ -238,6 +251,9 @@
           }
         }
       }
+    },
+    "Chat with %@" : {
+
     },
     "Classification" : {
 
@@ -330,6 +346,9 @@
     "End User License Agreement (EULA)" : {
 
     },
+    "Ensure other devices are also searching." : {
+
+    },
     "Enter handle" : {
 
     },
@@ -364,7 +383,7 @@
     "Find More Peers" : {
 
     },
-    "Find other devices in your immediate area" : {
+    "Find other devices nearby" : {
 
     },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
@@ -394,6 +413,12 @@
     "Inner Circle enables direct peer-to-peer communication with nearby devices" : {
 
     },
+    "InnerCircle" : {
+
+    },
+    "InnerCircle Members" : {
+
+    },
     "Interaction" : {
       "localizations" : {
         "es-US" : {
@@ -413,6 +438,15 @@
     "Invite Friends" : {
 
     },
+    "Keys:" : {
+
+    },
+    "Keys: %lld" : {
+
+    },
+    "KeyStore information not available." : {
+
+    },
     "Last known location: %lf, %lf" : {
       "localizations" : {
         "en" : {
@@ -422,6 +456,9 @@
           }
         }
       }
+    },
+    "Last seen %@" : {
+
     },
     "Later" : {
 
@@ -469,6 +506,9 @@
     "Loading profile..." : {
 
     },
+    "Local KeyStore Status" : {
+
+    },
     "Location" : {
 
     },
@@ -496,6 +536,9 @@
 
     },
     "Member since: %@" : {
+
+    },
+    "Members" : {
 
     },
     "Members:" : {
@@ -531,13 +574,25 @@
     "Next" : {
 
     },
-    "No Devices Found" : {
+    "No connected peers." : {
+
+    },
+    "No KeyStore" : {
+
+    },
+    "No Members Found" : {
+
+    },
+    "No members match your search." : {
 
     },
     "Not available" : {
 
     },
     "Not available on macOS" : {
+
+    },
+    "Not Searching" : {
 
     },
     "OK" : {
@@ -550,10 +605,13 @@
         }
       }
     },
-    "One-Time TDF" : {
+    "Online" : {
 
     },
     "Owner:" : {
+
+    },
+    "Peer KeyStore Status" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
@@ -638,6 +696,9 @@
     "Refine Interests" : {
 
     },
+    "Regenerate Keys" : {
+
+    },
     "Register" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -675,6 +736,9 @@
 
     },
     "Search for Nearby Devices" : {
+
+    },
+    "Search members" : {
 
     },
     "Section" : {
@@ -718,6 +782,9 @@
       }
     },
     "Share your thought..." : {
+
+    },
+    "Show Offline" : {
 
     },
     "Sign In" : {
@@ -840,7 +907,7 @@
     "Thank you for helping keep our community safe." : {
 
     },
-    "This may take a moment" : {
+    "There are no members to display." : {
 
     },
     "This will be the name of your new group" : {
@@ -857,7 +924,7 @@
         }
       }
     },
-    "Toggle the search button to start looking for nearby devices" : {
+    "Toggle the search button to find nearby devices." : {
 
     },
     "Topic of Interest" : {
