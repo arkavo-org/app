@@ -25,10 +25,10 @@ final class Thought: Identifiable { // Removed Codable conformance
 
     // Default empty init required by SwiftData
     init() {
-        self.id = UUID()
-        self.publicID = Data() // Initialize with empty data first
-        self.nano = Data()
-        self.metadata = Metadata(
+        id = UUID()
+        publicID = Data() // Initialize with empty data first
+        nano = Data()
+        metadata = Metadata(
             creatorPublicID: Data(),
             streamPublicID: Data(),
             mediaType: .text,
@@ -36,7 +36,7 @@ final class Thought: Identifiable { // Removed Codable conformance
             contributors: []
         )
         // Update publicID after all properties are initialized
-        self.publicID = withUnsafeBytes(of: self.id) { buffer in
+        publicID = withUnsafeBytes(of: id) { buffer in
             Data(SHA256.hash(data: buffer))
         }
     }
@@ -151,11 +151,11 @@ extension ThoughtServiceModel {
     // NEW Initializer to convert from Thought model to Service model
     init(from thought: Thought) {
         // Use the Thought's existing publicID for the service model
-        self.publicID = thought.publicID
-        self.creatorPublicID = thought.metadata.creatorPublicID
-        self.streamPublicID = thought.metadata.streamPublicID
-        self.mediaType = thought.metadata.mediaType
-        self.content = thought.nano // Map 'nano' to 'content' for the service model
+        publicID = thought.publicID
+        creatorPublicID = thought.metadata.creatorPublicID
+        streamPublicID = thought.metadata.streamPublicID
+        mediaType = thought.metadata.mediaType
+        content = thought.nano // Map 'nano' to 'content' for the service model
     }
 }
 
@@ -191,34 +191,34 @@ extension Thought {
 // Keep Metadata conversion if needed elsewhere, but it's not used by Thought directly for Codable now
 // If Arkavo_Metadata is defined elsewhere (e.g., EntityServiceModel.swift), this extension might need to be moved or adapted.
 /*
-extension Thought.Metadata {
-    // Assuming Arkavo_Metadata is a separate Protobuf or similar structure
-    static func from(_ arkavoMetadata: Arkavo_Metadata) throws -> Thought.Metadata {
-        let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
+ extension Thought.Metadata {
+     // Assuming Arkavo_Metadata is a separate Protobuf or similar structure
+     static func from(_ arkavoMetadata: Arkavo_Metadata) throws -> Thought.Metadata {
+         let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
 
-        // Map Arkavo_MediaType to MediaType
-        let mediaType: MediaType = if let arkavoMediaType = arkavoMetadata.content?.mediaType {
-            switch arkavoMediaType {
-            case .video: .video
-            case .audio: .audio
-            case .image: .image
-            default: .text
-            }
-        } else {
-            .text // Default to text if no media type is provided
-        }
+         // Map Arkavo_MediaType to MediaType
+         let mediaType: MediaType = if let arkavoMediaType = arkavoMetadata.content?.mediaType {
+             switch arkavoMediaType {
+             case .video: .video
+             case .audio: .audio
+             case .image: .image
+             default: .text
+             }
+         } else {
+             .text // Default to text if no media type is provided
+         }
 
-        let contributor = Contributor(profilePublicID: Data(arkavoMetadata.creator), role: "creator")
+         let contributor = Contributor(profilePublicID: Data(arkavoMetadata.creator), role: "creator")
 
-        return Thought.Metadata(
-            creatorPublicID: Data(arkavoMetadata.creator),
-            streamPublicID: Data(arkavoMetadata.related),
-            mediaType: mediaType,
-            createdAt: createdAt,
-            contributors: [contributor]
-        )
-    }
-}
-*/
+         return Thought.Metadata(
+             creatorPublicID: Data(arkavoMetadata.creator),
+             streamPublicID: Data(arkavoMetadata.related),
+             mediaType: mediaType,
+             createdAt: createdAt,
+             contributors: [contributor]
+         )
+     }
+ }
+ */
 
 // Removed placeholder definitions for Arkavo_Metadata, Arkavo_ContentMetadata, Arkavo_MediaType
