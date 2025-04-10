@@ -1,8 +1,9 @@
 import ArkavoSocial
 import FlatBuffers
+import MultipeerConnectivity
 import OpenTDFKit
 import SwiftUI
-import MultipeerConnectivity
+import UIKit
 
 // MARK: - Models
 
@@ -17,8 +18,7 @@ final class GroupViewModel: ViewModel, ObservableObject {
     // Track pending streams by their ephemeral public key
     private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     private var notificationObservers: [NSObjectProtocol] = []
-    // Expose the one-time TDF mode flag
-    let oneTimeTDFEnabled: Bool = true
+    // One-time TDF is now always enabled
 
     @MainActor
     init(client: ArkavoClient, account: Account, profile: Profile) {
@@ -335,14 +335,8 @@ final class GroupViewModel: ViewModel, ObservableObject {
         try await client.sendNATSEvent(data)
     }
 
-    func shareVideo(_ video: Video, to stream: Stream) async {
-        print("Sharing video \(video.id) to stream \(stream.profile.name)")
-        //        do {
-        //            try await client.shareVideo(video, to: stream)
-        //        } catch {
-        //            print("Error sharing video: \(error)")
-        //        }
-    }
+    // Removed shareVideo function as it was commented out and not implemented
+    // func shareVideo(_ video: Video, to stream: Stream) async { ... }
 
     nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
         Task { @MainActor in
@@ -457,12 +451,24 @@ final class GroupViewModel: ViewModel, ObservableObject {
     }
 }
 
+// MARK: - SharedState Extension
+
+// Add showMembersList property to SharedState
+extension SharedState {
+    // This property is used to control the display of the InnerCircle members list
+    var showMembersList: Bool {
+        get { getState(forKey: "showMembersList") as? Bool ?? false }
+        set { setState(newValue, forKey: "showMembersList") }
+    }
+}
+
 // MARK: - Main View
 
 struct GroupView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeViewModel()
-    @State private var showMembersList = false
+    // Observe the PeerDiscoveryManager for OT-TDF data
+    @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager()
     @State private var isShareSheetPresented = false
     @State private var isPeerSearchActive = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -474,14 +480,14 @@ struct GroupView: View {
             mainContent
         }
     }
-    
+
     // Breaking down the complex body into smaller views
     private var mainContent: some View {
         GeometryReader { geometry in
             ZStack {
                 // Stream list or loading view
                 streamListView(geometry: geometry)
-                
+
                 // Chat overlay
                 chatOverlayView
             }
@@ -497,8 +503,31 @@ struct GroupView: View {
                 }
             }
         }
+        .sheet(isPresented: $sharedState.showMembersList) {
+            if let stream = viewModel.selectedStream {
+                NavigationView {
+                    InnerCircleView(stream: stream, peerManager: peerManager)
+                        .navigationTitle("InnerCircle Members")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("Done") {
+                                    sharedState.showMembersList = false
+                                }
+                            }
+                        }
+                }
+            }
+        }
+        // Refresh peer profiles when the view appears or peer list changes
+        .onAppear {
+            Task { await peerManager.refreshKeyStoreStatus() } // Also refreshes profiles
+        }
+        .onChange(of: peerManager.connectedPeers) { _, _ in
+            Task { await peerManager.refreshKeyStoreStatus() } // Refresh profiles when peers change
+        }
     }
-    
+
     // Stream list or loading view
     private func streamListView(geometry: GeometryProxy) -> some View {
         Group {
@@ -509,7 +538,7 @@ struct GroupView: View {
             }
         }
     }
-    
+
     // Empty state view
     private var emptyStreamView: some View {
         VStack {
@@ -523,7 +552,7 @@ struct GroupView: View {
         .onAppear { sharedState.isAwaiting = true }
         .onDisappear { sharedState.isAwaiting = false }
     }
-    
+
     // Scrollable stream list
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
@@ -538,7 +567,7 @@ struct GroupView: View {
         .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
-    
+
     // Individual stream row with InnerCircle UI if applicable
     private func streamRow(stream: Stream) -> some View {
         VStack(spacing: 0) {
@@ -551,31 +580,54 @@ struct GroupView: View {
                     sharedState.showChatOverlay = true
                 }
             )
-            
+
             // InnerCircle UI if applicable
             if stream.isInnerCircleStream {
-                // Add one-time TDF badge
-                HStack {
-                    Spacer()
-                    if viewModel.oneTimeTDFEnabled {
-                        Text("One-Time TDF")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundColor(.blue)
-                            .cornerRadius(12)
+                VStack(spacing: 0) {
+                    // Members button
+                    Button(action: {
+                        viewModel.selectedStream = stream
+                        sharedState.showMembersList = true
+                    }) {
+                        HStack {
+                            Image(systemName: "person.2.fill")
+                                .foregroundColor(.blue)
+
+                            Text("InnerCircle Members")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+
+                            Spacer()
+
+                            // Member count badge
+                            let onlineCount = peerManager.connectedPeers.count
+                            Text("\(onlineCount)")
+                                .font(.caption2.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.blue))
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(10)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+
+                    // Peer discovery UI
+                    innerCirclePeerDiscoveryUI(for: stream)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 4)
-                
-                innerCirclePeerDiscoveryUI(for: stream)
             }
         }
     }
-    
+
     // Inner Circle peer discovery UI
     private func innerCirclePeerDiscoveryUI(for stream: Stream) -> some View {
         VStack(spacing: 0) {
@@ -592,26 +644,26 @@ struct GroupView: View {
                             Circle()
                                 .fill(isPeerSearchActive ? Color.red.opacity(0.15) : Color.blue.opacity(0.15))
                                 .frame(width: 36, height: 36)
-                            
+
                             Image(systemName: isPeerSearchActive ? "antenna.radiowaves.left.and.right.slash" : "antenna.radiowaves.left.and.right")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(isPeerSearchActive ? .red : .blue)
                         }
-                        
+
                         // Text label with more detail
                         VStack(alignment: .leading, spacing: 2) {
                             Text(isPeerSearchActive ? "Stop Searching" : "Search for Nearby Devices")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(isPeerSearchActive ? .red : .blue)
-                            
-                            Text(isPeerSearchActive ? "Broadcasting your presence to nearby devices" : "Find other devices in your immediate area")
+
+                            Text(isPeerSearchActive ? "Broadcasting your presence" : "Find other devices nearby")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         Spacer()
-                        
+
                         // Indicator for active state
                         if isPeerSearchActive {
                             // Pulsing dot when active
@@ -636,65 +688,90 @@ struct GroupView: View {
             .padding(.vertical, 8)
             .background(Color(.secondarySystemGroupedBackground))
             .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
-            
-            // Connected peers list when active
-            if isPeerSearchActive && viewModel.selectedStream == stream {
-                connectedPeersView
+
+            // Connected peers list and OT-TDF views when active
+            if isPeerSearchActive, viewModel.selectedStream == stream {
+                VStack(spacing: 12) {
+                    connectedPeersView
+
+                    // Always show OT-TDF views when search is active
+                    Divider().padding(.horizontal)
+
+                    KeyStoreStatusView(
+                        localInfo: peerManager.localKeyStoreInfo,
+                        isRegenerating: peerManager.isRegeneratingKeys,
+                        regenerateAction: {
+                            Task {
+                                await peerManager.regenerateLocalKeys()
+                            }
+                        }
+                    )
+                    .padding(.horizontal)
+
+                    Divider().padding(.horizontal)
+
+                    MemberKeyStoreView(
+                        connectedPeers: peerManager.connectedPeers,
+                        peerKeyStoreCounts: peerManager.peerKeyStoreCounts,
+                        refreshAction: {
+                            Task {
+                                await peerManager.refreshKeyStoreStatus()
+                            }
+                        }
+                    )
+                    .padding(.horizontal)
+                }
+                .padding(.bottom, 8)
+                .background(Color(.secondarySystemGroupedBackground))
+                .transition(.opacity.combined(with: .move(edge: .top))) // Add transition
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive) // Animate the whole section
+        .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
+        .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo?.count) // Animate key count changes
+        .animation(.easeInOut(duration: 0.3), value: peerManager.peerKeyStoreCounts) // Animate peer key count changes
+        .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles) // Animate profile changes
     }
-    
+
     // Toggle peer search state
     private func togglePeerSearch(for stream: Stream) async {
         isPeerSearchActive.toggle()
-        
-        // Connect to the peer discovery manager
-        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
-        
+
         if isPeerSearchActive {
             do {
                 // Select this stream and start searching
                 peerManager.selectedStream = stream
                 try await peerManager.setupMultipeerConnectivity(for: stream)
                 try peerManager.startSearchingForPeers()
-                
+
                 // Optionally present the browser controller for manual peer selection
-                if let browserVC = peerManager.getPeerBrowser(),
-                   let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootController = windowScene.windows.first?.rootViewController {
-                    rootController.present(browserVC, animated: true)
-                }
+                // presentBrowserController() // Uncomment to show browser automatically
             } catch {
                 // If there was an error starting peer search, show it to the user
                 print("Failed to start peer search: \(error.localizedDescription)")
-                isPeerSearchActive = false
+                // Update status via peerManager's published properties
+                isPeerSearchActive = false // Revert state if failed
             }
         } else {
             // Stop searching
             peerManager.stopSearchingForPeers()
         }
     }
-    
+
     // Connected peers list view
     private var connectedPeersView: some View {
         VStack(spacing: 8) {
-            // Get the peer discovery manager to display connected peers
-            let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
             let peerCount = peerManager.connectedPeers.count
             let connectionStatus = peerManager.connectionStatus
-            
+
             // Status bar with improved connection status display
             HStack {
                 connectionStatusIndicator(status: connectionStatus)
-                
                 Spacer()
-                
-                // Show connected peer count with icon
                 HStack(spacing: 4) {
                     Image(systemName: "person.2.fill")
                         .font(.caption)
                         .foregroundColor(peerCount > 0 ? .blue : .secondary)
-                    
                     Text("\(peerCount) \(peerCount == 1 ? "Peer" : "Peers")")
                         .font(.caption)
                         .foregroundColor(peerCount > 0 ? .blue : .secondary)
@@ -702,37 +779,27 @@ struct GroupView: View {
             }
             .padding(.top, 6)
             .padding(.horizontal, 4)
-            
+
             // Show search status banner when active
             if case .searching = connectionStatus {
-                // Searching animation banner
                 HStack {
-                    Text("Broadcasting and listening for nearby devices...")
+                    Text("Broadcasting and listening...")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
                     Spacer()
-                    
-                    // Activity indicator
-                    ProgressView()
-                        .scaleEffect(0.7)
+                    ProgressView().scaleEffect(0.7)
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 4)
                 .background(Color(.secondarySystemBackground).opacity(0.5))
                 .cornerRadius(6)
             }
-            
+
             // Show error message if there's an error
-            if case .failed(let error) = connectionStatus {
+            if case let .failed(error) = connectionStatus {
                 HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    
-                    Text(error.localizedDescription)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                    
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                    Text(error.localizedDescription).font(.caption).foregroundColor(.red)
                     Spacer()
                 }
                 .padding(.vertical, 4)
@@ -740,12 +807,13 @@ struct GroupView: View {
                 .background(Color.red.opacity(0.1))
                 .cornerRadius(6)
             }
-            
-            // Divider if we have peers
+
+            // Divider if we have peers or specific states
+            if peerCount > 0 || connectionStatus == .searching || connectionStatus == .connecting {
+                Divider().padding(.vertical, 4)
+            }
+
             if peerCount > 0 {
-                Divider()
-                    .padding(.vertical, 4)
-                
                 // Title for peers section
                 Text("Nearby Devices")
                     .font(.caption)
@@ -754,18 +822,18 @@ struct GroupView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
                     .padding(.bottom, 2)
-                
+
                 // Show list of connected peers with spacing between them
                 VStack(spacing: 6) {
+                    // Use peerManager.connectedPeerProfiles which holds the Profile data
                     ForEach(peerManager.connectedPeers, id: \.self) { peer in
-                        peerRow(peer: peer)
+                        // Pass the peer and the profile (if available) to peerRow
+                        peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer])
                     }
                 }
-                
+
                 // Add a browse button for finding more peers
-                Button(action: {
-                    presentBrowserController()
-                }) {
+                Button(action: { presentBrowserController() }) {
                     HStack {
                         Image(systemName: "magnifyingglass")
                         Text("Find More Peers")
@@ -775,103 +843,85 @@ struct GroupView: View {
                 }
                 .buttonStyle(.bordered)
                 .padding(.top, 8)
-                
+
             } else if case .idle = connectionStatus {
-                // Not searching and no peers
-                emptyStateView()
-            } else {
-                // Searching or connecting but no peers yet
-                searchingStateView()
+                emptyStateView() // Not searching and no peers
+            } else if isPeerSearchActive {
+                searchingStateView() // Searching or connecting but no peers yet
             }
         }
         .padding(.horizontal)
-        .padding(.bottom, 8)
-        .background(Color(.secondarySystemGroupedBackground))
-        .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
+        // Removed bottom padding to let parent control spacing
+        // .padding(.bottom, 8)
+        // Removed background to let parent control background
+        // .background(Color(.secondarySystemGroupedBackground))
     }
-    
+
     // Connection status indicator
     private func connectionStatusIndicator(status: ConnectionStatus) -> some View {
-        HStack {
-            switch status {
-            case .idle:
-                Circle()
-                    .fill(Color.gray)
-                    .frame(width: 8, height: 8)
-                Text("Inactive")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                
-            case .searching:
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                    .opacity(0.8)
-                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(), value: true)
-                Text("Actively Searching")
-                    .font(.caption)
-                    .foregroundColor(.green)
-                
-            case .connecting:
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 8, height: 8)
-                Text("Connecting...")
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                
-            case .connected:
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                Text("Connected")
-                    .font(.caption)
-                    .foregroundColor(.green)
-                
-            case .failed:
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 8, height: 8)
-                Text("Connection Failed")
-                    .font(.caption)
-                    .foregroundColor(.red)
+        HStack(spacing: 5) { // Added spacing
+            Group { // Group for applying frame consistently
+                switch status {
+                case .idle:
+                    Circle().fill(Color.gray)
+                case .searching:
+                    // Use pulsing animation for searching
+                    Circle()
+                        .fill(Color.blue)
+                        .opacity(0.8)
+                        .scaleEffect(pulsate ? 1.2 : 0.8) // Add pulsation
+                        .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulsate)
+                case .connecting:
+                    Circle().fill(Color.orange) // Changed color for connecting
+                case .connected:
+                    Circle().fill(Color.green)
+                case .failed:
+                    Circle().fill(Color.red)
+                }
             }
+            .frame(width: 8, height: 8)
+
+            Text(statusText(for: status))
+                .font(.caption)
+                .foregroundColor(statusColor(for: status))
+        }
+        .onAppear { pulsate = true } // Start pulsation on appear
+        .onDisappear { pulsate = false } // Stop pulsation on disappear
+    }
+
+    @State private var pulsate: Bool = false // State for pulsation animation
+
+    private func statusText(for status: ConnectionStatus) -> String {
+        switch status {
+        case .idle: "Inactive"
+        case .searching: "Searching"
+        case .connecting: "Connecting..."
+        case .connected: "Connected"
+        case .failed: "Failed"
         }
     }
-    
+
+    private func statusColor(for status: ConnectionStatus) -> Color {
+        switch status {
+        case .idle: .gray
+        case .searching: .blue
+        case .connecting: .orange
+        case .connected: .green
+        case .failed: .red
+        }
+    }
+
     // Empty state view when no search is active
     private func emptyStateView() -> some View {
         VStack(spacing: 8) {
             Spacer().frame(height: 20)
-            
-            Image(systemName: "person.2.slash")
-                .font(.largeTitle)
-                .foregroundColor(.secondary.opacity(0.5))
-            
-            Text("No Devices Found")
-                .font(.callout)
-                .foregroundColor(.secondary)
-            
-            Text("Toggle the search button to start looking for nearby devices")
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            
+            Image(systemName: "person.2.slash").font(.largeTitle).foregroundColor(.secondary.opacity(0.5))
+            Text("Not Searching").font(.callout).foregroundColor(.secondary)
+            Text("Toggle the search button to find nearby devices.").font(.caption2).foregroundColor(.secondary.opacity(0.8)).multilineTextAlignment(.center).padding(.horizontal)
             Button(action: {
-                if let stream = viewModel.selectedStream {
-                    Task {
-                        await togglePeerSearch(for: stream)
-                    }
-                }
-            }) {
-                Text("Start Searching")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, 8)
-            
+                if let stream = viewModel.selectedStream { Task { await togglePeerSearch(for: stream) } }
+            }) { Text("Start Searching").padding(.horizontal, 16).padding(.vertical, 8) }
+                .buttonStyle(.bordered).padding(.top, 8)
             Spacer().frame(height: 20)
         }
         .frame(maxWidth: .infinity)
@@ -879,34 +929,18 @@ struct GroupView: View {
         .cornerRadius(8)
         .padding(.top, 8)
     }
-    
+
     // Searching state view when actively looking for peers
     private func searchingStateView() -> some View {
         VStack(spacing: 8) {
             Spacer().frame(height: 10)
-            
-            // Pulsing signal animation
-            SignalPulseView()
-                .frame(width: 50, height: 50)
-            
-            Text("Scanning for Devices...")
-                .font(.callout)
-                .foregroundColor(.secondary)
-            
-            Text("This may take a moment")
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.8))
-            
-            Button(action: {
-                presentBrowserController()
-            }) {
-                Text("Browse Manually")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+            SignalPulseView().frame(width: 50, height: 50)
+            Text("Scanning for Devices...").font(.callout).foregroundColor(.secondary)
+            Text("Ensure other devices are also searching.").font(.caption2).foregroundColor(.secondary.opacity(0.8))
+            Button(action: { presentBrowserController() }) {
+                Text("Browse Manually").padding(.horizontal, 16).padding(.vertical, 8)
             }
-            .buttonStyle(.bordered)
-            .padding(.top, 8)
-            
+            .buttonStyle(.bordered).padding(.top, 8)
             Spacer().frame(height: 10)
         }
         .frame(maxWidth: .infinity)
@@ -914,161 +948,704 @@ struct GroupView: View {
         .cornerRadius(8)
         .padding(.top, 8)
     }
-    
+
     // Present the browser controller manually
     private func presentBrowserController() {
-        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
         if let browserVC = peerManager.getPeerBrowser(),
            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootController = windowScene.windows.first?.rootViewController {
+           let rootController = windowScene.windows.first?.rootViewController
+        {
+            // Dismiss existing presentation if any before presenting new one
+            rootController.presentedViewController?.dismiss(animated: false)
             rootController.present(browserVC, animated: true)
+        } else {
+            print("Could not get browser view controller or root view controller.")
         }
     }
-    
-    // Individual peer row
-    private func peerRow(peer: MCPeerID) -> some View {
-        let peerManager = ViewModelFactory.shared.getPeerDiscoveryManager()
-        
-        return HStack {
-            Image(systemName: "person.circle.fill")
-                .foregroundColor(.green)
-                .font(.title3)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(peer.displayName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                // Display connection timestamp with real time if available
-                if let connectionTime = peerManager.peerConnectionTimes[peer] {
-                    Text("Connected \(connectionTimeString(connectionTime))")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("Connected")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+
+    // Individual peer row - Updated to accept Profile
+    private func peerRow(peer: MCPeerID, profile: Profile?) -> some View {
+        HStack {
+            // Use PeerProfileView if profile exists, otherwise fallback
+            if let profile {
+                PeerProfileView(profile: profile, connectionTime: peerManager.peerConnectionTimes[peer])
+            } else {
+                // Fallback view when profile is not yet available
+                HStack {
+                    Image(systemName: "person.circle.fill").foregroundColor(.gray).font(.title3) // Placeholder avatar
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(peer.displayName).font(.subheadline).fontWeight(.medium).foregroundColor(.secondary) // Indicate loading/fallback
+                        Text("Connecting...").font(.caption2).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    ProgressView().scaleEffect(0.5) // Indicate loading state
                 }
             }
-            
-            Spacer()
-            
-            // Connection status indicator with animation
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.2))
-                    .frame(width: 16, height: 16)
-                
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-            }
-            
-            // Add message button
-            Button(action: {
-                // Handle sending a message to this specific peer
-                // Would be implemented in a more complete version
-            }) {
-                Image(systemName: "message.fill")
-                    .font(.caption)
-                    .foregroundColor(.blue)
-            }
-            .buttonStyle(BorderlessButtonStyle())
-            .padding(.leading, 8)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(8)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 4) // Add horizontal padding for spacing between rows
     }
-    
+
     // Format the connection time
     private func connectionTimeString(_ date: Date) -> String {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
-        
-        if timeInterval < 60 {
-            return "just now"
-        } else if timeInterval < 3600 {
-            let minutes = Int(timeInterval / 60)
-            return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
-        } else if timeInterval < 86400 {
-            let hours = Int(timeInterval / 3600)
-            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .short
-            formatter.timeStyle = .short
-            return formatter.string(from: date)
-        }
+
+        if timeInterval < 60 { return "just now" }
+        if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
+        if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
-    
+
     // Animated signal pulse for searching animation
     struct SignalPulseView: View {
         @State private var scale: CGFloat = 1.0
         @State private var rotation: Double = 0.0
         @State private var pulsate: Bool = false
-        
+
         var body: some View {
             ZStack {
-                // First concentric circle group with pulse animation
                 ZStack {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .stroke(Color.blue.opacity(0.7 - Double(i) * 0.2), lineWidth: 1)
-                            .scaleEffect(scale - CGFloat(i) * 0.1)
+                    ForEach(0 ..< 3) { i in
+                        Circle().stroke(Color.blue.opacity(0.7 - Double(i) * 0.2), lineWidth: 1).scaleEffect(scale - CGFloat(i) * 0.1)
                     }
-                }
-                .scaleEffect(pulsate ? 1.2 : 0.8)
-                
-                // Second ring that rotates
-                Circle()
-                    .trim(from: 0.2, to: 0.8)
-                    .stroke(Color.blue.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 3]))
-                    .rotationEffect(.degrees(rotation))
-                    .scaleEffect(0.7)
-                
-                // Center elements
+                }.scaleEffect(pulsate ? 1.2 : 0.8)
+                Circle().trim(from: 0.2, to: 0.8).stroke(Color.blue.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 3])).rotationEffect(.degrees(rotation)).scaleEffect(0.7)
                 ZStack {
-                    // Center dot background
-                    Circle()
-                        .fill(Color.blue.opacity(0.2))
-                        .frame(width: 12, height: 12)
-                    
-                    // Center dot
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 6, height: 6)
+                    Circle().fill(Color.blue.opacity(0.2)).frame(width: 12, height: 12)
+                    Circle().fill(Color.blue).frame(width: 6, height: 6)
                 }
             }
             .onAppear {
-                // Pulse animation
-                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    pulsate = true
-                }
-                
-                // Continuous rotation animation
-                withAnimation(Animation.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-                
-                // Scale animation
-                withAnimation(Animation.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                    scale = 1.1
-                }
+                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { pulsate = true }
+                withAnimation(Animation.linear(duration: 3).repeatForever(autoreverses: false)) { rotation = 360 }
+                withAnimation(Animation.easeInOut(duration: 2).repeatForever(autoreverses: true)) { scale = 1.1 }
             }
         }
     }
-    
+
     // Chat overlay view
     private var chatOverlayView: some View {
         Group {
             if sharedState.showChatOverlay,
-               let streamPublicID = sharedState.selectedStreamPublicID {
+               let streamPublicID = sharedState.selectedStreamPublicID
+            {
                 ChatOverlay(streamPublicID: streamPublicID)
             }
         }
+    }
+}
+
+// MARK: - InnerCircle Member Views
+
+// Main view for displaying all InnerCircle members
+struct InnerCircleView: View {
+    let stream: Stream
+    let peerManager: PeerDiscoveryManager
+    @EnvironmentObject var sharedState: SharedState
+    @State private var showOfflineMembers: Bool = true
+    @State private var searchText: String = ""
+    @State private var innerCircleProfiles: [Profile] = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search and filter bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search members", text: $searchText)
+                    .font(.subheadline)
+
+                Spacer()
+
+                Toggle(isOn: $showOfflineMembers) {
+                    Text("Show Offline")
+                        .font(.caption)
+                }
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .scaleEffect(0.8)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemBackground))
+
+            // Member count header
+            HStack {
+                Text("Members")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+
+                Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button(action: {
+                    Task {
+                        await loadInnerCircleProfiles()
+                        await peerManager.refreshKeyStoreStatus()
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Members list
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    // Online members section
+                    if !filteredOnlineProfiles.isEmpty {
+                        sectionHeader(title: "Online", count: filteredOnlineProfiles.count)
+
+                        ForEach(filteredOnlineProfiles) { profile in
+                            InnerCircleMemberRow(
+                                profile: profile,
+                                isOnline: true,
+                                connectionTime: getConnectionTime(for: profile),
+                                stream: stream
+                            )
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
+                            .environmentObject(sharedState)
+                        }
+                    }
+
+                    // Offline members section
+                    if showOfflineMembers, !filteredOfflineProfiles.isEmpty {
+                        sectionHeader(title: "Offline", count: filteredOfflineProfiles.count)
+
+                        ForEach(filteredOfflineProfiles) { profile in
+                            InnerCircleMemberRow(
+                                profile: profile,
+                                isOnline: false,
+                                lastSeen: profile.lastSeen,
+                                stream: stream
+                            )
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
+                            .environmentObject(sharedState)
+                        }
+                    }
+
+                    // Empty state
+                    if filteredOnlineProfiles.isEmpty, filteredOfflineProfiles.isEmpty || !showOfflineMembers {
+                        emptyStateView
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .onAppear {
+            Task {
+                await loadInnerCircleProfiles()
+            }
+        }
+    }
+
+    // All online profiles from peer manager
+    private var onlineProfiles: [Profile] {
+        Array(peerManager.connectedPeerProfiles.values)
+    }
+
+    // All offline profiles (in InnerCircle but not currently connected)
+    private var offlineProfiles: [Profile] {
+        innerCircleProfiles.filter { profile in
+            !isProfileOnline(profile)
+        }
+    }
+
+    // Filtered online profiles based on search text
+    private var filteredOnlineProfiles: [Profile] {
+        if searchText.isEmpty {
+            return onlineProfiles
+        }
+        return onlineProfiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    // Filtered offline profiles based on search text
+    private var filteredOfflineProfiles: [Profile] {
+        if searchText.isEmpty {
+            return offlineProfiles
+        }
+        return offlineProfiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    // Check if a profile is currently online via P2P
+    private func isProfileOnline(_ profile: Profile) -> Bool {
+        peerManager.connectedPeerProfiles.values.contains { $0.id == profile.id }
+    }
+
+    // Load all InnerCircle profiles from persistence
+    private func loadInnerCircleProfiles() async {
+        do {
+            // Fetch all profiles that belong to the InnerCircle stream
+            // This would ideally use a relationship query in the real implementation
+            let allProfiles = try await PersistenceController.shared.fetchAllProfiles()
+
+            // Filter to include only profiles that have been added to InnerCircle
+            // In real implementation, this would use a proper relationship query
+            innerCircleProfiles = allProfiles.filter { profile in
+                // Exclude current user's profile
+                profile.id != ViewModelFactory.shared.getCurrentProfile()?.id
+            }
+
+            // Update lastSeen for online profiles
+            let now = Date()
+            for i in 0 ..< innerCircleProfiles.count {
+                if isProfileOnline(innerCircleProfiles[i]) {
+                    innerCircleProfiles[i].lastSeen = now
+                }
+            }
+
+            // Save updated lastSeen times
+            try await PersistenceController.shared.saveChanges()
+
+        } catch {
+            print("Error loading InnerCircle profiles: \(error)")
+            innerCircleProfiles = []
+        }
+    }
+
+    // Get connection time for an online profile
+    private func getConnectionTime(for profile: Profile) -> Date? {
+        // Find the MCPeerID for this profile
+        for (peer, peerProfile) in peerManager.connectedPeerProfiles {
+            if peerProfile.id == profile.id {
+                return peerManager.peerConnectionTimes[peer]
+            }
+        }
+        return nil
+    }
+
+    // Section header view
+    private func sectionHeader(title: String, count: Int) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+
+            Text("(\(count))")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // Empty state view
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.2.slash")
+                .font(.largeTitle)
+                .foregroundColor(.secondary.opacity(0.5))
+
+            Text("No Members Found")
+                .font(.headline)
+                .foregroundColor(.secondary)
+
+            Text(searchText.isEmpty ?
+                "There are no members to display." :
+                "No members match your search.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+}
+
+// Row view for individual InnerCircle members
+struct InnerCircleMemberRow: View {
+    let profile: Profile
+    let isOnline: Bool
+    var connectionTime: Date? = nil
+    var lastSeen: Date? = nil
+    @EnvironmentObject var sharedState: SharedState
+    var stream: Stream
+
+    var body: some View {
+        HStack {
+            // Avatar
+            avatarView
+                .frame(width: 40, height: 40)
+
+            // Profile info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profile.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                if isOnline {
+                    if let time = connectionTime {
+                        Text("Connected \(timeAgoString(time))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Online")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                } else if let seen = lastSeen {
+                    Text("Last seen \(timeAgoString(seen))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Status indicator
+            statusIndicator
+
+            // Action button - Only enabled for online peers
+            Button(action: {
+                // Open chat with this member
+                if isOnline {
+                    openDirectChat()
+                }
+            }) {
+                Image(systemName: "message")
+                    .font(.subheadline)
+                    .foregroundColor(isOnline ? .blue : .gray)
+                    .padding(8)
+                    .background(Circle().fill(isOnline ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!isOnline)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(10)
+    }
+
+    // Open direct chat with this member
+    private func openDirectChat() {
+        // Set the InnerCircle stream as selected
+        sharedState.selectedStreamPublicID = stream.publicID
+
+        // Close members list
+        sharedState.showMembersList = false
+
+        // Show chat overlay
+        sharedState.showChatOverlay = true
+
+        // Store the selected profile for direct messaging
+        sharedState.setState(profile, forKey: "selectedDirectMessageProfile")
+    }
+
+    // Avatar view
+    private var avatarView: some View {
+        let initials = profile.name.prefix(2).uppercased()
+        let color = avatarColor(for: profile.publicID)
+
+        return ZStack {
+            Circle()
+                .fill(color)
+            Text(initials)
+                .font(.subheadline.bold())
+                .foregroundColor(.white)
+        }
+    }
+
+    // Status indicator
+    private var statusIndicator: some View {
+        Group {
+            if isOnline {
+                // Online indicator
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.2))
+                        .frame(width: 16, height: 16)
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
+                }
+            } else {
+                // Offline indicator
+                Circle()
+                    .stroke(Color.gray.opacity(0.5), lineWidth: 1.5)
+                    .frame(width: 12, height: 12)
+            }
+        }
+    }
+
+    // Generate avatar color from profile ID
+    private func avatarColor(for data: Data) -> Color {
+        var hash = 0
+        for byte in data {
+            hash = hash &* 31 &+ Int(byte)
+        }
+        let hue = Double(abs(hash) % 360) / 360.0
+        return Color(hue: hue, saturation: 0.7, brightness: 0.8)
+    }
+
+    // Format time ago string
+    private func timeAgoString(_ date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+
+        if timeInterval < 60 { return "just now" }
+        if timeInterval < 3600 {
+            let minutes = Int(timeInterval / 60)
+            return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
+        }
+        if timeInterval < 86400 {
+            let hours = Int(timeInterval / 3600)
+            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
+        }
+        if timeInterval < 604_800 { // 7 days
+            let days = Int(timeInterval / 86400)
+            return "\(days) day\(days == 1 ? "" : "s") ago"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Peer Profile View
+
+struct PeerProfileView: View {
+    let profile: Profile
+    let connectionTime: Date?
+
+    var body: some View {
+        HStack {
+            // Generated Avatar
+            avatarView
+                .frame(width: 32, height: 32) // Consistent size
+
+            // Profile Info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profile.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary) // Use primary color for name
+
+                if let time = connectionTime {
+                    Text("Connected \(connectionTimeString(time))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Connected") // Fallback if time isn't available
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Connection Status Indicator (Green dot)
+            ZStack {
+                Circle().fill(Color.green.opacity(0.2)).frame(width: 16, height: 16)
+                Circle().fill(Color.green).frame(width: 8, height: 8)
+            }
+        }
+    }
+
+    // Generates a simple avatar based on the profile name
+    private var avatarView: some View {
+        let initials = profile.name.prefix(2).uppercased()
+        let color = avatarColor(for: profile.publicID) // Use publicID for consistent color
+
+        return ZStack {
+            Circle()
+                .fill(color)
+            Text(initials)
+                .font(.caption.bold())
+                .foregroundColor(.white)
+        }
+    }
+
+    // Generates a consistent color based on profile data (e.g., publicID)
+    private func avatarColor(for data: Data) -> Color {
+        // Simple hash-based color generation
+        var hash = 0
+        for byte in data {
+            hash = hash &* 31 &+ Int(byte) // Basic hash combining
+        }
+        let hue = Double(abs(hash) % 360) / 360.0
+        return Color(hue: hue, saturation: 0.7, brightness: 0.8)
+    }
+
+    // Format the connection time (copied from GroupView for encapsulation)
+    private func connectionTimeString(_ date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+
+        if timeInterval < 60 { return "just now" }
+        if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
+        if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - One-Time TDF Views
+
+// View for displaying local KeyStore status
+struct KeyStoreStatusView: View {
+    let localInfo: (count: Int, capacity: Int)?
+    let isRegenerating: Bool
+    let regenerateAction: () -> Void
+
+    private var percentage: Double {
+        guard let info = localInfo else { return 0 }
+        // Use hardcoded capacity of 8192
+        return Double(info.count) / 8192.0
+    }
+
+    private var gaugeColor: Color {
+        switch percentage {
+        case let p where p < 0.1: .red
+        case let p where p < 0.5: .orange
+        default: .green
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Local KeyStore Status")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                Spacer()
+                if isRegenerating {
+                    ProgressView().scaleEffect(0.7)
+                }
+            }
+
+            if let info = localInfo {
+                HStack {
+                    Text("Keys:")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    // Use hardcoded capacity of 8192
+                    Text("\(info.count) / 8192")
+                        .font(.caption2.bold())
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text(String(format: "%.0f%%", percentage * 100))
+                        .font(.caption2)
+                        .foregroundColor(gaugeColor)
+                }
+
+                ProgressView(value: percentage)
+                    .progressViewStyle(LinearProgressViewStyle(tint: gaugeColor))
+                    .animation(.easeInOut, value: percentage)
+
+                Button(action: regenerateAction) {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle")
+                        Text("Regenerate Keys")
+                    }
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRegenerating)
+                .padding(.top, 4)
+
+            } else {
+                Text("KeyStore information not available.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 8) // Add vertical padding
+    }
+}
+
+// View for displaying member KeyStore status
+struct MemberKeyStoreView: View {
+    let connectedPeers: [MCPeerID]
+    let peerKeyStoreCounts: [MCPeerID: Int]
+    let refreshAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Peer KeyStore Status")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                Spacer()
+                Button(action: refreshAction) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .font(.caption)
+                .buttonStyle(.borderless) // Use borderless for icon-only button
+            }
+
+            if connectedPeers.isEmpty {
+                Text("No connected peers.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 10)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(connectedPeers, id: \.self) { peer in
+                        HStack {
+                            Image(systemName: "person.fill") // Generic icon, profile shown in peer list
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(peer.displayName) // Still show display name here for context
+                                .font(.caption)
+                            Spacer()
+                            if let count = peerKeyStoreCounts[peer] {
+                                Text("Keys: \(count)")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(.green)
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                            } else {
+                                Text("No KeyStore")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Image(systemName: "questionmark.circle")
+                                    .foregroundColor(.orange)
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color(.tertiarySystemBackground)) // Use tertiary for list items
+                        .cornerRadius(6)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8) // Add vertical padding
     }
 }
 
@@ -1100,6 +1677,17 @@ struct GroupCardView: View {
                             Text(stream.profile.name)
                                 .font(.headline)
                                 .foregroundColor(.primary)
+                            // Add InnerCircle badge if applicable
+                            if stream.isInnerCircleStream {
+                                Text("InnerCircle")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.15))
+                                    .foregroundColor(.blue)
+                                    .cornerRadius(8)
+                            }
                         }
 
                         Spacer()
@@ -1130,13 +1718,14 @@ struct GroupCardView: View {
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        // Convert the publicID to a hash value
+        // Use specific icon for InnerCircle
+        if stream.isInnerCircleStream {
+            return "network" // Or "wifi", "shared.with.you" etc.
+        }
+
+        // Fallback to hash-based icon for regular streams
         let hashValue = stream.publicID.hashValue
-
-        // Use the hash value modulo 32 to determine the icon
         let iconIndex = abs(hashValue) % 32
-
-        // Define an array of 32 SF Symbols
         let iconNames = [
             "person.fill", "figure.child", "figure.wave", "person.3.fill",
             "star.fill", "heart.fill", "flag.fill", "book.fill",
@@ -1147,8 +1736,6 @@ struct GroupCardView: View {
             "camera.fill", "phone.fill", "envelope.fill", "message.fill",
             "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
         ]
-
-        // Ensure the iconIndex is within bounds
         return iconNames[iconIndex]
     }
 }
@@ -1181,8 +1768,9 @@ struct ThoughtRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(thought.nano.hexEncodedString())
+                Text(thought.nano.hexEncodedString()) // Consider showing something more user-friendly
                     .font(.headline)
+                    .lineLimit(1) // Limit display if hex is too long
                 Spacer()
                 Text(thought.metadata.createdAt, style: .relative)
                     .font(.caption)

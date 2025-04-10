@@ -15,6 +15,8 @@ final class Stream: Identifiable, Hashable, @unchecked Sendable {
         interaction: .closed,
         age: .forAll
     )
+    // InnerCircle profiles - direct profiles for members
+    var innerCircleProfiles: [Profile] = []
     // Initial thought that determines stream type
     var source: Thought?
     @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
@@ -80,6 +82,27 @@ extension Stream {
             thought.stream = nil
         }
     }
+
+    // InnerCircle management methods
+
+    // Add a profile to the InnerCircle
+    func addToInnerCircle(_ profile: Profile) {
+        if !innerCircleProfiles.contains(where: { $0.id == profile.id }) {
+            innerCircleProfiles.append(profile)
+            // Update the last seen time
+            profile.lastSeen = Date()
+        }
+    }
+
+    // Remove a profile from the InnerCircle
+    func removeFromInnerCircle(_ profile: Profile) {
+        innerCircleProfiles.removeAll { $0.id == profile.id }
+    }
+
+    // Check if a profile is part of the InnerCircle
+    func isInInnerCircle(_ profile: Profile) -> Bool {
+        innerCircleProfiles.contains { $0.id == profile.id }
+    }
 }
 
 struct Policies: Codable {
@@ -141,6 +164,10 @@ extension Stream {
 
     var isInnerCircleStream: Bool {
         isGroupChatStream && profile.name == "InnerCircle"
+    }
+
+    var hasInnerCircleMembers: Bool {
+        !innerCircleProfiles.isEmpty
     }
 
     // Safely access policies with a default if nil

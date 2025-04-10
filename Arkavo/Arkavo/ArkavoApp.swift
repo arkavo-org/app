@@ -36,6 +36,10 @@ struct ArkavoApp: App {
         )
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
+        // Create a separate instance of SharedState for initialization
+        // This avoids accessing the @StateObject property before it's installed
+        let initialSharedState = SharedState()
+        ViewModelFactory.shared.setSharedState(initialSharedState)
         do {
             let queueManager = try MessageQueueManager()
             ViewModelFactory.shared.serviceLocator.register(queueManager)
@@ -68,6 +72,10 @@ struct ArkavoApp: App {
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
+            .onAppear {
+                // Update the shared state reference now that the StateObject is properly installed
+                ViewModelFactory.shared.setSharedState(sharedState)
+            }
             // BEGIN screenshots
 //            .onAppear {
 //                // Set up window accessor for screenshots
@@ -309,7 +317,7 @@ struct ArkavoApp: App {
         )
 
         // Save the initial thought
-        let saved = try PersistenceController.shared.saveThought(initialThought)
+        let saved = try await PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a video stream
@@ -358,7 +366,7 @@ struct ArkavoApp: App {
         print("Created initial post stream thought with ID: \(initialThought.id)")
 
         // Save the initial thought
-        let saved = try PersistenceController.shared.saveThought(initialThought)
+        let saved = try await PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a post stream
@@ -763,6 +771,7 @@ enum DeepLinkDestination: Hashable {
 extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
+    static let p2pMessageReceived = Notification.Name("P2PMessageReceived")
 }
 
 @MainActor
@@ -796,6 +805,19 @@ class SharedState: ObservableObject {
     @Published var showCreateView: Bool = false
     @Published var showChatOverlay: Bool = false
     @Published var isAwaiting: Bool = false
+
+    // Store additional state values that don't need @Published
+    private var stateStorage: [String: Any] = [:]
+
+    func getState(forKey key: String) -> Any? {
+        stateStorage[key]
+    }
+
+    func setState(_ value: Any, forKey key: String) {
+        stateStorage[key] = value
+        // Trigger objectWillChange if needed for UI updates
+        objectWillChange.send()
+    }
 }
 
 final class ServiceLocator {
@@ -813,7 +835,7 @@ final class ServiceLocator {
         }
         return service
     }
-    
+
     func resolve<T>(type: T.Type) -> T? {
         let key = String(describing: type)
         return services[key] as? T
@@ -905,6 +927,7 @@ final class ViewModelFactory {
 
     // Access the MultipeerConnectivity view model for peer discovery
     private var peerDiscoveryManager: PeerDiscoveryManager?
+    private var globalSharedState: SharedState?
 
     @MainActor
     func getPeerDiscoveryManager() -> PeerDiscoveryManager {
@@ -912,5 +935,18 @@ final class ViewModelFactory {
             peerDiscoveryManager = PeerDiscoveryManager()
         }
         return peerDiscoveryManager!
+    }
+
+    @MainActor
+    func setSharedState(_ state: SharedState) {
+        globalSharedState = state
+    }
+
+    @MainActor
+    func getSharedState() -> SharedState {
+        if globalSharedState == nil {
+            globalSharedState = SharedState()
+        }
+        return globalSharedState!
     }
 }
