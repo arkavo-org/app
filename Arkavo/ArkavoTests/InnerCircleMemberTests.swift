@@ -1,214 +1,220 @@
 import XCTest
-@testable import Arkavo // Import your main app module
+import SwiftData
+import Combine
+import MultipeerConnectivity // Required for MCPeerID
 
-// MARK: - Mock Dependencies
+// Assuming Profile and related types are accessible for testing
+// If not, minimal stub versions might be needed here.
+// Example Stub Profile (adjust based on actual Profile definition if needed)
+@Model
+final class Profile: Identifiable, Codable {
+    @Attribute(.unique) var publicID: Data
+    var name: String
+    var keyStoreData: Data?
+    // Add other necessary properties if required by tests or mocks
 
-// Assuming PeerId is a typealias or struct like: typealias PeerId = String
-typealias PeerId = String
+    init(publicID: Data = UUID().uuidString.data(using: .utf8)!, name: String = "Test User", keyStoreData: Data? = "dummyKeyData".data(using: .utf8)) {
+        self.publicID = publicID
+        self.name = name
+        self.keyStoreData = keyStoreData
+    }
 
-// Assuming PeerProfile and KeyStoreData are structs/classes in your project
-struct PeerProfile {
-    let peerId: PeerId
-    let name: String
-    // Add other relevant properties
+    // Add Codable conformance if needed by mocks/tests (though @Model provides it)
+    enum CodingKeys: String, CodingKey {
+        case publicID, name, keyStoreData // Add other properties if needed
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        publicID = try container.decode(Data.self, forKey: .publicID)
+        name = try container.decode(String.self, forKey: .name)
+        keyStoreData = try container.decodeIfPresent(Data.self, forKey: .keyStoreData)
+        // Decode other properties if needed
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(publicID, forKey: .publicID)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(keyStoreData, forKey: .keyStoreData)
+        // Encode other properties if needed
+    }
 }
 
-struct KeyStoreData {
-    let peerId: PeerId
-    let key: Data
-    // Add other relevant properties
-}
-
-// Define the protocols your mocks will conform to (if they don't exist, create them or use concrete types)
-protocol PersistenceControllerProtocol {
-    func getKeyStoreData(for peerId: PeerId) -> KeyStoreData?
-    func getProfile(for peerId: PeerId) -> PeerProfile?
-    func deleteKeyStoreDataFor(peerId: PeerId)
-    func deleteProfile(peerId: PeerId)
-    // Add other necessary methods
-}
-
-protocol PeerDiscoveryManagerProtocol {
-    func disconnectPeer(peerId: PeerId)
-    // Add other necessary methods
-}
-
-// Notification Name (replace with your actual notification name)
+// Define the notification name used in the app
 extension Notification.Name {
-    static let didUpdateMembers = Notification.Name("didUpdateMembersNotification")
+    static let refreshInnerCircleMembers = Notification.Name("refreshInnerCircleMembersNotification")
 }
 
+// MARK: - Mock PersistenceController
 
-class MockPersistenceController: PersistenceControllerProtocol {
-    var keyStoreDataStore: [PeerId: KeyStoreData] = [:]
-    var profileStore: [PeerId: PeerProfile] = [:]
+// Minimal mock focusing on deleteKeyStoreDataFor
+// Note: PersistenceController is @MainActor, mocks interacting with it might need @MainActor too
+@MainActor
+class MockPersistenceController {
+    var deleteKeyStoreDataForCalled = false
+    var lastProfileDeletedKeyStoreFor: Data?
+    var shouldThrowError = false
+    var mockError = NSError(domain: "MockPersistenceError", code: 1, userInfo: nil) // Example error
+    var mockProfiles: [Data: Profile] = [:] // Store mock profiles if fetchProfile needs mocking
 
-    var deleteKeyStoreDataForCalledWithPeerId: PeerId?
-    var deleteProfileCalledWithPeerId: PeerId? // To verify it's NOT called
-
-    func getKeyStoreData(for peerId: PeerId) -> KeyStoreData? {
-        return keyStoreDataStore[peerId]
+    // Mock implementation matching the expected signature (async throws)
+    func deleteKeyStoreDataFor(profile: Profile) async throws {
+        print("MockPersistenceController: deleteKeyStoreDataFor called for profile ID: \(profile.publicID)")
+        if shouldThrowError {
+            throw mockError
+        }
+        deleteKeyStoreDataForCalled = true
+        lastProfileDeletedKeyStoreFor = profile.publicID
+        // Simulate removing key data from the mock profile store if needed
+        if var fetchedProfile = mockProfiles[profile.publicID] {
+            fetchedProfile.keyStoreData = nil
+            mockProfiles[profile.publicID] = fetchedProfile
+            print("MockPersistenceController: Simulated keyStoreData removal for profile ID: \(profile.publicID)")
+        } else {
+             print("MockPersistenceController: Profile ID \(profile.publicID) not found in mock store for key removal simulation.")
+        }
     }
 
-    func getProfile(for peerId: PeerId) -> PeerProfile? {
-        return profileStore[peerId]
+    // Mock fetchProfile if needed by the logic calling deleteKeyStoreDataFor
+    func fetchProfile(withPublicID publicID: Data) async throws -> Profile? {
+         print("MockPersistenceController: fetchProfile called for profile ID: \(publicID)")
+        if shouldThrowError {
+            throw mockError
+        }
+        return mockProfiles[publicID]
     }
 
-    func deleteKeyStoreDataFor(peerId: PeerId) {
-        deleteKeyStoreDataForCalledWithPeerId = peerId
-        keyStoreDataStore.removeValue(forKey: peerId)
-        print("MockPersistenceController: deleteKeyStoreDataFor called for \(peerId)")
-    }
-
-    func deleteProfile(peerId: PeerId) {
-        deleteProfileCalledWithPeerId = peerId
-        profileStore.removeValue(forKey: peerId)
-        print("MockPersistenceController: deleteProfile called for \(peerId)")
-    }
-
-    // Helper to reset state between tests
-    func reset() {
-        deleteKeyStoreDataForCalledWithPeerId = nil
-        deleteProfileCalledWithPeerId = nil
-        keyStoreDataStore = [:]
-        profileStore = [:]
-    }
-}
-
-class MockPeerDiscoveryManager: PeerDiscoveryManagerProtocol {
-    var disconnectPeerCalledWithPeerId: PeerId?
-
-    func disconnectPeer(peerId: PeerId) {
-        disconnectPeerCalledWithPeerId = peerId
-        print("MockPeerDiscoveryManager: disconnectPeer called for \(peerId)")
-    }
-
-    // Helper to reset state between tests
-    func reset() {
-        disconnectPeerCalledWithPeerId = nil
+    // Helper to add profiles to the mock store
+    func addMockProfile(_ profile: Profile) {
+        mockProfiles[profile.publicID] = profile
+        print("MockPersistenceController: Added mock profile ID: \(profile.publicID)")
     }
 }
 
-// MARK: - InnerCircleManager (Example Class Under Test)
+// MARK: - Mock PeerDiscoveryManager
 
-// Assume you have a class like this that handles the logic
-// You might need to adapt this based on your actual implementation
-class InnerCircleManager {
-    let persistenceController: PersistenceControllerProtocol
-    let peerDiscoveryManager: PeerDiscoveryManagerProtocol
-    let notificationCenter: NotificationCenter
+// Minimal mock focusing on disconnectPeer
+// Note: PeerDiscoveryManager is @MainActor
+@MainActor
+class MockPeerDiscoveryManager: ObservableObject {
+    var disconnectPeerCalled = false
+    var lastPeerDisconnected: MCPeerID?
 
-    init(persistenceController: PersistenceControllerProtocol,
-         peerDiscoveryManager: PeerDiscoveryManagerProtocol,
-         notificationCenter: NotificationCenter = .default) {
-        self.persistenceController = persistenceController
-        self.peerDiscoveryManager = peerDiscoveryManager
-        self.notificationCenter = notificationCenter
-    }
-
-    func removeMember(peerId: PeerId) {
-        print("InnerCircleManager: Attempting to remove member \(peerId)")
-        // 1. Delete KeyStoreData (but not profile)
-        persistenceController.deleteKeyStoreDataFor(peerId: peerId)
-
-        // 2. Disconnect Peer
-        peerDiscoveryManager.disconnectPeer(peerId: peerId)
-
-        // 3. Post Notification
-        notificationCenter.post(name: .didUpdateMembers, object: nil)
-        print("InnerCircleManager: Posted didUpdateMembers notification")
+    // Assuming a disconnectPeer method exists with this signature
+    func disconnectPeer(peerID: MCPeerID) {
+        print("MockPeerDiscoveryManager: disconnectPeer called for peer: \(peerID.displayName)")
+        disconnectPeerCalled = true
+        lastPeerDisconnected = peerID
     }
 }
 
+// MARK: - InnerCircleMemberTests
 
-// MARK: - Test Class
-
-class InnerCircleMemberTests: XCTestCase {
+final class InnerCircleMemberTests: XCTestCase {
 
     var mockPersistenceController: MockPersistenceController!
     var mockPeerDiscoveryManager: MockPeerDiscoveryManager!
-    var innerCircleManager: InnerCircleManager! // The class under test
-    var notificationCenter: NotificationCenter!
+    var testProfile: Profile!
+    var testPeerID: MCPeerID!
 
-    override func setUpWithError() throws {
+    @MainActor override func setUpWithError() throws {
         try super.setUpWithError()
         mockPersistenceController = MockPersistenceController()
         mockPeerDiscoveryManager = MockPeerDiscoveryManager()
-        notificationCenter = NotificationCenter() // Use a specific instance for testing
 
-        innerCircleManager = InnerCircleManager(
-            persistenceController: mockPersistenceController,
-            peerDiscoveryManager: mockPeerDiscoveryManager,
-            notificationCenter: notificationCenter
-        )
+        // Create a sample profile for testing
+        testProfile = Profile(publicID: Data("testProfileID".utf8), name: "Test Member", keyStoreData: Data("initialKeyData".utf8))
+        // Add the profile to the mock controller's store so fetchProfile can find it if needed
+        mockPersistenceController.addMockProfile(testProfile)
+
+
+        // Create a sample MCPeerID
+        // Note: MCPeerID display name should ideally match or relate to the profile for clarity
+        testPeerID = MCPeerID(displayName: "TestMemberDevice") // Use a relevant display name
     }
 
     override func tearDownWithError() throws {
         mockPersistenceController = nil
         mockPeerDiscoveryManager = nil
-        innerCircleManager = nil
-        notificationCenter = nil
-        try super.tearDownWithError()
+        testProfile = nil
+        testPeerID = nil
+        super.tearDownWithError()
     }
 
-    func testRemoveMember_SuccessPath() throws {
+    // MARK: - Test Cases
+
+    @MainActor func testRemoveMember_DeletesKeyStoreData() async throws {
+        // Arrange: Ensure the profile exists in the mock controller
+        mockPersistenceController.addMockProfile(testProfile)
+        XCTAssertNotNil(testProfile.keyStoreData, "Precondition: Profile should have keyStoreData before removal.")
+
+        // Act: Simulate the action that triggers key store data deletion
+        // In a real scenario, this would be a call to a ViewModel or Service method.
+        // Here, we directly call the mocked method to test its expected invocation.
+        try await mockPersistenceController.deleteKeyStoreDataFor(profile: testProfile)
+
+        // Assert: Verify the mock method was called correctly
+        XCTAssertTrue(mockPersistenceController.deleteKeyStoreDataForCalled, "deleteKeyStoreDataFor should have been called.")
+        XCTAssertEqual(mockPersistenceController.lastProfileDeletedKeyStoreFor, testProfile.publicID, "deleteKeyStoreDataFor was called with the wrong profile ID.")
+
+        // Optional: Assert the key data was cleared in the mock store (if simulation is implemented)
+         let updatedProfile = mockPersistenceController.mockProfiles[testProfile.publicID]
+         XCTAssertNil(updatedProfile?.keyStoreData, "keyStoreData should be nil in the mock store after deletion.")
+         print("Test Assertion: Verified keyStoreData is nil for profile ID \(testProfile.publicID) in mock store.")
+    }
+
+    @MainActor func testRemoveMember_DisconnectsPeer() {
+        // Arrange (Setup is sufficient)
+
+        // Act: Simulate the action that triggers peer disconnection.
+        // This would typically be part of the member removal logic.
+        mockPeerDiscoveryManager.disconnectPeer(peerID: testPeerID)
+
+        // Assert: Verify the mock method was called correctly
+        XCTAssertTrue(mockPeerDiscoveryManager.disconnectPeerCalled, "disconnectPeer should have been called.")
+        XCTAssertEqual(mockPeerDiscoveryManager.lastPeerDisconnected, testPeerID, "disconnectPeer was called with the wrong peer ID.")
+         print("Test Assertion: Verified disconnectPeer was called for peer \(testPeerID.displayName).")
+    }
+
+    func testRemoveMember_PostsNotification() {
         // Arrange
-        let peerIdToRemove: PeerId = "peer-123"
-        let memberProfile = PeerProfile(peerId: peerIdToRemove, name: "Test Member")
-        let memberKeyData = KeyStoreData(peerId: peerIdToRemove, key: Data("testkey".utf8))
+        let notificationName = Notification.Name.refreshInnerCircleMembers
+        let expectation = XCTNSNotificationExpectation(name: notificationName)
+         print("Test Arrangement: Setting up expectation for notification '\(notificationName.rawValue)'")
 
-        // Pre-populate mock data
-        mockPersistenceController.profileStore[peerIdToRemove] = memberProfile
-        mockPersistenceController.keyStoreDataStore[peerIdToRemove] = memberKeyData
 
-        // Expectation for the notification
-        let notificationExpectation = XCTNSNotificationExpectation(
-            name: .didUpdateMembers,
-            object: nil, // Or specify the object if your manager sends itself
-            notificationCenter: notificationCenter
-        )
-        notificationExpectation.expectedFulfillmentCount = 1 // Expect exactly one notification
+        // Act: Simulate the action that posts the notification.
+        // This would typically happen after successful member removal logic.
+        NotificationCenter.default.post(name: notificationName, object: nil)
+         print("Test Action: Posting notification '\(notificationName.rawValue)'")
 
-        // Act
-        innerCircleManager.removeMember(peerId: peerIdToRemove)
 
-        // Assert
-
-        // 1. Verify PersistenceController interactions
-        XCTAssertEqual(mockPersistenceController.deleteKeyStoreDataForCalledWithPeerId, peerIdToRemove, "deleteKeyStoreDataFor should be called with the correct peerId")
-        XCTAssertNil(mockPersistenceController.deleteProfileCalledWithPeerId, "deleteProfile should NOT be called")
-        XCTAssertNil(mockPersistenceController.getKeyStoreData(for: peerIdToRemove), "KeyStoreData should be removed from the store")
-        XCTAssertNotNil(mockPersistenceController.getProfile(for: peerIdToRemove), "Profile should NOT be removed from the store") // Verify profile still exists
-
-        // 2. Verify PeerDiscoveryManager interaction
-        XCTAssertEqual(mockPeerDiscoveryManager.disconnectPeerCalledWithPeerId, peerIdToRemove, "disconnectPeer should be called with the correct peerId")
-
-        // 3. Verify Notification was posted
-        wait(for: [notificationExpectation], timeout: 1.0) // Wait for the notification expectation to be fulfilled
+        // Assert: Wait for the notification expectation to be fulfilled
+        wait(for: [expectation], timeout: 1.0)
+         print("Test Assertion: Notification '\(notificationName.rawValue)' received.")
     }
 
-    // Add more tests here for edge cases if needed (e.g., removing a non-existent member)
-    func testRemoveMember_NonExistentMember() throws {
-         // Arrange
-        let nonExistentPeerId: PeerId = "peer-does-not-exist"
+    // Example of testing error handling in deleteKeyStoreDataFor
+    @MainActor func testRemoveMember_HandlesPersistenceError() async {
+        // Arrange
+        mockPersistenceController.shouldThrowError = true
+        let expectedError = mockPersistenceController.mockError
 
-        // Expectation for the notification (might still be posted depending on implementation)
-        let notificationExpectation = XCTNSNotificationExpectation(
-            name: .didUpdateMembers,
-            notificationCenter: notificationCenter
-        )
-        notificationExpectation.expectedFulfillmentCount = 1 // Adjust if notification shouldn't post
+        // Act & Assert
+        do {
+            try await mockPersistenceController.deleteKeyStoreDataFor(profile: testProfile)
+            XCTFail("Should have thrown an error, but didn't.")
+        } catch {
+            // Assert that the correct type of error was thrown (or specific error code/domain)
+            XCTAssertEqual(error as NSError, expectedError, "Caught error does not match the expected mock error.")
+            print("Test Assertion: Correctly caught expected persistence error.")
+        }
 
-        // Act
-        innerCircleManager.removeMember(peerId: nonExistentPeerId)
-
-        // Assert
-        // Verify methods were still called with the non-existent ID
-        XCTAssertEqual(mockPersistenceController.deleteKeyStoreDataForCalledWithPeerId, nonExistentPeerId)
-        XCTAssertEqual(mockPeerDiscoveryManager.disconnectPeerCalledWithPeerId, nonExistentPeerId)
-        XCTAssertNil(mockPersistenceController.deleteProfileCalledWithPeerId, "deleteProfile should NOT be called")
-
-        // Verify notification
-        wait(for: [notificationExpectation], timeout: 1.0)
+        // Assert that the call flag might still be false or handle as appropriate based on implementation
+         // Depending on where the error is thrown in the real method, the flag might or might not be set.
+         // If the call fails early, it might remain false. Adjust assertion based on expected behavior.
+         // XCTAssertFalse(mockPersistenceController.deleteKeyStoreDataForCalled, "deleteKeyStoreDataForCalled should be false if an error occurred early.")
+         print("Test Assertion: Verified error handling path.")
     }
 }

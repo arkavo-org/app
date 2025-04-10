@@ -30,7 +30,6 @@ class ChatViewModel: ObservableObject {
     }
 
     init(client: ArkavoClient, account: Account, profile: Profile, streamPublicID: Data) {
-
         self.client = client
         self.account = account
         self.profile = profile
@@ -135,12 +134,12 @@ class ChatViewModel: ObservableObject {
                 // Find sender profile ID if possible (may require lookup based on MCPeerID)
                 // This part depends on how PeerDiscoveryManager maps MCPeerIDs to Profiles/PublicIDs
                 // FIX 1: Moved peerManager access inside Task @MainActor block
-                guard let self = self else { return }
-                let senderProfile = self.peerManager.getProfile(for: senderPeerID)
+                guard let self else { return }
+                let senderProfile = peerManager.getProfile(for: senderPeerID)
                 let senderProfileID = senderProfile?.publicID ?? Data() // Use empty Data if profile not found
 
                 // Decrypt and handle the incoming P2P message
-                await self.handleIncomingP2PData(nanoTDFData, from: senderPeerID.displayName, profileID: senderProfileID)
+                await handleIncomingP2PData(nanoTDFData, from: senderPeerID.displayName, profileID: senderProfileID)
             }
         }
         notificationObservers.append(p2pMessageObserver)
@@ -378,10 +377,9 @@ class ChatViewModel: ObservableObject {
 
             // **FIX:** Ensure thoughtModel has a publicID before proceeding
             guard !thoughtModel.publicID.isEmpty else {
-                 print("❌ ChatViewModel: Incoming P2P thought model missing publicID.")
-                 throw ChatError.missingPublicID
+                print("❌ ChatViewModel: Incoming P2P thought model missing publicID.")
+                throw ChatError.missingPublicID
             }
-
 
             // 4. Create and display the ChatMessage
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
@@ -517,7 +515,7 @@ class ChatViewModel: ObservableObject {
                     }
                 }
             } else {
-                 print("ChatViewModel: Thought \(thought.publicID.base58EncodedString) was a duplicate, skipping association.")
+                print("ChatViewModel: Thought \(thought.publicID.base58EncodedString) was a duplicate, skipping association.")
             }
 
             // This print statement now correctly reflects the ID saved.
@@ -545,14 +543,13 @@ class ChatViewModel: ObservableObject {
         let formatInfo = Arkavo_FormatInfo.createFormatInfo(&builder, type: .plain, versionOffset: formatVersionString, profileOffset: formatProfileString)
 
         // Map app MediaType to Arkavo_MediaType for FlatBuffers
-        let fbMediaType: Arkavo_MediaType
-        switch thoughtModel.mediaType {
-        case .text: fbMediaType = .text
-        case .image: fbMediaType = .image
-        case .video: fbMediaType = .video
-        case .audio: fbMediaType = .audio
+        let fbMediaType: Arkavo_MediaType = switch thoughtModel.mediaType {
+        case .text: .text
+        case .image: .image
+        case .video: .video
+        case .audio: .audio
         // Special handling for types not in FlatBuffers schema
-        case .post, .say: fbMediaType = .text  // Map speech/post types to text
+        case .post, .say: .text // Map speech/post types to text
         }
 
         let contentFormat = Arkavo_ContentFormat.createContentFormat(&builder, mediaType: fbMediaType, dataEncoding: .utf8, formatOffset: formatInfo)
@@ -644,7 +641,7 @@ extension Thought {
         // **NOTE:** If this convenience init is used, the publicID might still be implicitly set.
         // The fix applied in createAndSaveThought explicitly sets it *after* initialization.
         if !model.publicID.isEmpty {
-             self.publicID = model.publicID // Attempt to set it here too, if possible
+            publicID = model.publicID // Attempt to set it here too, if possible
         }
     }
 }

@@ -116,7 +116,7 @@ public final class ArkavoClient: NSObject {
                 guard let self else { return }
                 print("WebSocket state changing to: \(newState)")
                 self.currentState = newState
-                
+
                 // Resume the continuation when connected
                 switch newState {
                 case .connected:
@@ -124,7 +124,7 @@ public final class ArkavoClient: NSObject {
                         self.connectionContinuation = nil
                         continuation.resume(returning: ())
                     }
-                case .error(let error):
+                case let .error(error):
                     if let continuation = self.connectionContinuation {
                         self.connectionContinuation = nil
                         continuation.resume(throwing: error)

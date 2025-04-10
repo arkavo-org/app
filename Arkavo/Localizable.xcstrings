@@ -164,6 +164,9 @@
     "Are you sure you want to delete this video? This action cannot be undone." : {
 
     },
+    "Are you sure you want to remove %@ from your InnerCircle? They will no longer be able to communicate directly with you." : {
+
+    },
     "Are you sure you want to unblock this user? They will be able to interact with your content again." : {
 
     },
@@ -195,6 +198,9 @@
 
     },
     "Back" : {
+
+    },
+    "Base64 Data:" : {
 
     },
     "Become a Supporter" : {
@@ -387,6 +393,9 @@
 
     },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
+
+    },
+    "From: %@" : {
 
     },
     "Granularity" : {
@@ -586,6 +595,9 @@
     "No members match your search." : {
 
     },
+    "Non-JSON Data Received" : {
+
+    },
     "Not available" : {
 
     },
@@ -662,6 +674,9 @@
         }
       }
     },
+    "Profile Management" : {
+
+    },
     "Profile: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -710,6 +725,12 @@
         }
       }
     },
+    "Remove" : {
+
+    },
+    "Remove Member" : {
+
+    },
     "Report Content" : {
 
     },
@@ -717,6 +738,12 @@
 
     },
     "Reports are reviewed within 24 hours. Severe violations may be acted upon sooner." : {
+
+    },
+    "Reset" : {
+
+    },
+    "Reset Profile" : {
 
     },
     "Retry" : {
@@ -808,6 +835,9 @@
           }
         }
       }
+    },
+    "Size: %lld bytes" : {
+
     },
     "Special Groups" : {
 
@@ -911,6 +941,9 @@
 
     },
     "This will be the name of your new group" : {
+
+    },
+    "This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone." : {
 
     },
     "Thought service is unavailable" : {

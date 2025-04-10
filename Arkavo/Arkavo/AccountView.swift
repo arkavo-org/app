@@ -17,6 +17,8 @@ struct AccountView: View {
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
+    @State private var showingDeleteProfileAlert = false
+    @State private var isResettingProfile = false
 
     private var account: Account? {
         accounts.first
@@ -44,6 +46,28 @@ struct AccountView: View {
                             .foregroundColor(.gray)
                     }
                 #endif
+            }
+
+            Section(header: Text("Profile Management")) {
+                Button(action: {
+                    showingDeleteProfileAlert = true
+                }) {
+                    HStack {
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .foregroundColor(.red)
+                        Text("Reset Profile")
+                            .foregroundColor(.red)
+                    }
+                }
+                .disabled(isResettingProfile)
+                .alert("Reset Profile", isPresented: $showingDeleteProfileAlert) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Reset", role: .destructive) {
+                        resetProfile()
+                    }
+                } message: {
+                    Text("This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone.")
+                }
             }
 
             // Rest of the sections remain unchanged
@@ -140,6 +164,33 @@ struct AccountView: View {
             try await PersistenceController.shared.saveChanges()
         } catch {
             print("Error saving verification status: \(error)")
+        }
+    }
+
+    private func resetProfile() {
+        Task {
+            isResettingProfile = true
+            defer { isResettingProfile = false }
+
+            do {
+                guard let account, let profile = account.profile else {
+                    print("No account or profile found to reset")
+                    return
+                }
+
+                // Delete the profile, which will clear KeyStore data and create a new empty profile
+                try await PersistenceController.shared.deleteProfile(profile)
+
+                // Reset local state variables
+                identityAssuranceLevel = .ial0
+                #if !os(macOS)
+                    ageVerificationManager.verificationStatus = .unverified
+                #endif
+
+                print("Profile successfully reset")
+            } catch {
+                print("Error resetting profile: \(error)")
+            }
         }
     }
 }
