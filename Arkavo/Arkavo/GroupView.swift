@@ -451,7 +451,12 @@ final class GroupViewModel: ViewModel, ObservableObject {
     }
 }
 
-// MARK: - SharedState Extension
+// MARK: - Extensions
+
+// Add notification name for refreshing InnerCircle members
+extension Notification.Name {
+    static let refreshInnerCircleMembers = Notification.Name("refreshInnerCircleMembers")
+}
 
 // Add showMembersList property to SharedState
 extension SharedState {
@@ -473,6 +478,14 @@ struct GroupView: View {
     @State private var isPeerSearchActive = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    // For non-JSON data popup
+    @State private var nonJsonBase64Data: String = ""
+    @State private var nonJsonDataSize: Int = 0
+    @State private var nonJsonPeerName: String = ""
+    @State private var showNonJsonDataPopup: Bool = false
+    // Store notification observer token
+    @State private var nonJsonObserver: NSObjectProtocol?
+
     var body: some View {
         if sharedState.showCreateView {
             GroupCreateView(viewModel: viewModel)
@@ -491,6 +504,55 @@ struct GroupView: View {
                 // Chat overlay
                 chatOverlayView
             }
+            .overlay(
+                Group {
+                    if showNonJsonDataPopup {
+                        VStack {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Non-JSON Data Received")
+                                        .font(.headline)
+                                    Spacer()
+                                    Button(action: { showNonJsonDataPopup = false }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+
+                                Text("From: \(nonJsonPeerName)")
+                                    .font(.subheadline)
+
+                                Text("Size: \(nonJsonDataSize) bytes")
+                                    .font(.subheadline)
+
+                                Text("Base64 Data:")
+                                    .font(.subheadline)
+
+                                ScrollView {
+                                    Text(nonJsonBase64Data)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .padding(8)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(4)
+                                }
+                                .frame(maxHeight: 200)
+                            }
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(12)
+                            .shadow(radius: 5)
+                            .padding()
+
+                            Spacer()
+                        }
+                        .background(Color.black.opacity(0.3).edgesIgnoringSafeArea(.all))
+                        .onTapGesture {
+                            // Dismiss when tapping background
+                            showNonJsonDataPopup = false
+                        }
+                    }
+                }
+            )
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if let stream = viewModel.selectedStream {
@@ -522,6 +584,70 @@ struct GroupView: View {
         // Refresh peer profiles when the view appears or peer list changes
         .onAppear {
             Task { await peerManager.refreshKeyStoreStatus() } // Also refreshes profiles
+
+            // Add notification observer for non-JSON data
+            // Store the token so we can remove it when the view disappears
+            // Debug print notification name to ensure it's correct
+            let notificationName = Notification.Name.nonJsonDataReceived
+            print("🔔 Setting up observer for notification: \(notificationName.rawValue)")
+            
+            nonJsonObserver = NotificationCenter.default.addObserver(
+                forName: notificationName,
+                object: nil,
+                queue: .main
+            ) { notification in
+                print("🔥 NOTIFICATION RECEIVED in GroupView: nonJsonDataReceived")
+                
+                guard let userInfo = notification.userInfo else {
+                    print("❌ Notification has no userInfo")
+                    return
+                }
+                
+                print("📄 Notification userInfo: \(userInfo)")
+                
+                guard let base64Data = userInfo["data"] as? String else {
+                    print("❌ No base64Data in notification")
+                    return
+                }
+                
+                guard let dataSize = userInfo["dataSize"] as? Int else {
+                    print("❌ No dataSize in notification")
+                    return
+                }
+                
+                guard let peerName = userInfo["peerName"] as? String else {
+                    print("❌ No peerName in notification")
+                    return
+                }
+
+                print("✅ Received non-JSON data notification: \(dataSize) bytes from \(peerName)")
+                
+                // Update on main thread to ensure UI updates properly
+                DispatchQueue.main.async { [self] in
+                    print("🔄 Updating UI state for popup")
+                    nonJsonBase64Data = base64Data
+                    nonJsonDataSize = dataSize
+                    nonJsonPeerName = peerName
+                    showNonJsonDataPopup = true
+                    print("🎯 showNonJsonDataPopup set to true")
+                    
+                    // Auto-hide after 10 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                        print("⏱️ Auto-hiding popup after 10 seconds")
+                        showNonJsonDataPopup = false
+                    }
+                }
+            }
+            
+            print("Added non-JSON data notification observer")
+        }
+        .onDisappear {
+            // Remove observer when view disappears
+            if let observer = nonJsonObserver {
+                NotificationCenter.default.removeObserver(observer)
+                nonJsonObserver = nil
+                print("Removed non-JSON data notification observer")
+            }
         }
         .onChange(of: peerManager.connectedPeers) { _, _ in
             Task { await peerManager.refreshKeyStoreStatus() } // Refresh profiles when peers change
@@ -744,8 +870,8 @@ struct GroupView: View {
                 try await peerManager.setupMultipeerConnectivity(for: stream)
                 try peerManager.startSearchingForPeers()
 
-                // Optionally present the browser controller for manual peer selection
-                // presentBrowserController() // Uncomment to show browser automatically
+                // Automatically present the browser controller for manual peer selection
+                presentBrowserController() // Show browser by default
             } catch {
                 // If there was an error starting peer search, show it to the user
                 print("Failed to start peer search: \(error.localizedDescription)")
@@ -1053,6 +1179,8 @@ struct InnerCircleView: View {
     @State private var showOfflineMembers: Bool = true
     @State private var searchText: String = ""
     @State private var innerCircleProfiles: [Profile] = []
+    @State private var showStatusMessage = false
+    @State private var statusMessage = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1116,7 +1244,8 @@ struct InnerCircleView: View {
                                 profile: profile,
                                 isOnline: true,
                                 connectionTime: getConnectionTime(for: profile),
-                                stream: stream
+                                stream: stream,
+                                peerManager: peerManager // Pass peerManager
                             )
                             .padding(.horizontal)
                             .padding(.vertical, 4)
@@ -1133,7 +1262,8 @@ struct InnerCircleView: View {
                                 profile: profile,
                                 isOnline: false,
                                 lastSeen: profile.lastSeen,
-                                stream: stream
+                                stream: stream,
+                                peerManager: peerManager // Pass peerManager
                             )
                             .padding(.horizontal)
                             .padding(.vertical, 4)
@@ -1153,7 +1283,47 @@ struct InnerCircleView: View {
             Task {
                 await loadInnerCircleProfiles()
             }
+
+            // Listen for notifications to refresh the member list
+            NotificationCenter.default.addObserver(
+                forName: .refreshInnerCircleMembers,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task {
+                    await loadInnerCircleProfiles()
+                }
+            }
+
+            // Check for status messages
+            if let message = sharedState.getState(forKey: "statusMessage") as? String {
+                statusMessage = message
+                showStatusMessage = true
+                // Clear the message after display
+                sharedState.setState("", forKey: "statusMessage")
+            }
         }
+        .overlay(
+            Group {
+                if showStatusMessage {
+                    VStack {
+                        Text(statusMessage)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.green.opacity(0.8))
+                            .cornerRadius(10)
+                            .padding()
+                            .onAppear {
+                                // Auto-dismiss after a few seconds
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    showStatusMessage = false
+                                }
+                            }
+                        Spacer()
+                    }
+                }
+            }
+        )
     }
 
     // All online profiles from peer manager
@@ -1282,6 +1452,9 @@ struct InnerCircleMemberRow: View {
     var lastSeen: Date? = nil
     @EnvironmentObject var sharedState: SharedState
     var stream: Stream
+    let peerManager: PeerDiscoveryManager // Added peerManager property
+    @State private var showRemoveConfirmation = false
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack {
@@ -1318,7 +1491,7 @@ struct InnerCircleMemberRow: View {
             // Status indicator
             statusIndicator
 
-            // Action button - Only enabled for online peers
+            // Message button - Only enabled for online peers
             Button(action: {
                 // Open chat with this member
                 if isOnline {
@@ -1333,6 +1506,26 @@ struct InnerCircleMemberRow: View {
             }
             .buttonStyle(.plain)
             .disabled(!isOnline)
+
+            // Remove member button
+            Button(action: {
+                showRemoveConfirmation = true
+            }) {
+                Image(systemName: "person.fill.xmark")
+                    .font(.subheadline)
+                    .foregroundColor(.red)
+                    .padding(8)
+                    .background(Circle().fill(Color.red.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .alert("Remove Member", isPresented: $showRemoveConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Remove", role: .destructive) {
+                    removeFromInnerCircle()
+                }
+            } message: {
+                Text("Are you sure you want to remove \(profile.name) from your InnerCircle? They will no longer be able to communicate directly with you.")
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
@@ -1424,6 +1617,51 @@ struct InnerCircleMemberRow: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .none
         return formatter.string(from: date)
+    }
+
+    // Remove member from InnerCircle
+    private func removeFromInnerCircle() {
+        Task { @MainActor in // Ensure execution on main actor
+            do {
+                // 1. Find the MCPeerID associated with the profile being removed
+                var peerToDisconnect: MCPeerID?
+                for (peer, connectedProfile) in peerManager.connectedPeerProfiles {
+                    if connectedProfile.id == profile.id {
+                        peerToDisconnect = peer
+                        break
+                    }
+                }
+
+                // 2. Remove KeyStore data for this profile
+                try await PersistenceController.shared.deleteKeyStoreDataFor(profile: profile)
+
+                // 3. Remove the profile from this stream's members list
+                stream.removeFromInnerCircle(profile)
+                try await PersistenceController.shared.saveChanges() // Save changes after modifying stream
+
+                // 4. Disconnect the peer if they are currently connected
+                if let peer = peerToDisconnect {
+                    print("Disconnecting peer \(peer.displayName) associated with removed profile \(profile.name)")
+                    peerManager.disconnectPeer(peer) // Use the existing method
+                } else {
+                    print("Peer for profile \(profile.name) was not connected, no disconnection needed.")
+                }
+
+                // 5. Update the UI to reflect the member is removed
+                // The list should refresh when InnerCircleView's loadInnerCircleProfiles is called
+
+                // 6. Show an optional toast/banner notifying that the member was removed
+                sharedState.setState("Successfully removed \(profile.name) from your InnerCircle", forKey: "statusMessage")
+
+                // 7. Trigger a refresh of the members list
+                NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
+
+            } catch {
+                print("Error removing member from InnerCircle: \(error)")
+                // Show error message
+                sharedState.setState("Failed to remove \(profile.name): \(error.localizedDescription)", forKey: "errorMessage")
+            }
+        }
     }
 }
 

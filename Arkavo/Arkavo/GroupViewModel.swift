@@ -8,6 +8,8 @@ import UIKit
 // Define custom notification names
 extension Notification.Name {
     static let chatMessagesUpdated = Notification.Name("chatMessagesUpdatedNotification")
+    // Add notification name for non-JSON data received
+    static let nonJsonDataReceived = Notification.Name("nonJsonDataReceivedNotification")
 }
 
 // Public interface for peer discovery
@@ -93,7 +95,7 @@ class PeerDiscoveryManager: ObservableObject {
     func getProfile(for peerID: MCPeerID) -> Profile? {
         implementation.connectedPeerProfiles[peerID]
     }
-    
+
     /// Sends data to all connected peers or specified peers in a stream
     /// - Parameters:
     ///   - data: The data to send
@@ -102,6 +104,12 @@ class PeerDiscoveryManager: ObservableObject {
     /// - Throws: P2PError or session errors if sending fails
     func sendData(_ data: Data, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
         try await implementation.sendData(data, toPeers: peers, in: stream)
+    }
+
+    /// Disconnects a specific peer from the session.
+    /// - Parameter peer: The MCPeerID of the peer to disconnect.
+    func disconnectPeer(_ peer: MCPeerID) {
+        implementation.disconnectPeer(peer)
     }
 }
 
@@ -452,6 +460,37 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             connectionStatus = .connected
         }
     }
+    
+    /// Disconnects a specific peer
+    /// - Parameter peer: The MCPeerID of the peer to disconnect
+    func disconnectPeer(_ peer: MCPeerID) {
+        guard let session = mcSession, connectedPeers.contains(peer) else {
+            print("Cannot disconnect peer: Peer not found or session not active")
+            return
+        }
+        
+        print("Disconnecting peer: \(peer.displayName)")
+        // Cancel any connections with this peer
+        session.cancelConnectPeer(peer)
+        
+        // Remove from mapping and cached data
+        if let profileID = peerIDToProfileID[peer] {
+            print("Removing cached data for profile ID: \(profileID)")
+            peerIDToProfileID.removeValue(forKey: peer)
+            // Note: We don't remove the profile from persistence
+            // so the user can choose to reconnect later
+        }
+        
+        // Update connection status if no peers left
+        if connectedPeers.isEmpty {
+            connectionStatus = isSearchingForPeers ? .searching : .idle
+        }
+        
+        // Refresh KeyStore status to update UI
+        Task {
+            await refreshKeyStoreStatus()
+        }
+    }
 
     /// Returns the browser view controller for manual peer selection
     /// - Returns: MCBrowserViewController instance or nil if not available
@@ -478,7 +517,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
 
         try mcSession.send(data, toPeers: targetPeers, with: .reliable)
     }
-    
+
     /// Sends data to all connected peers or specified peers in a stream
     /// - Parameters:
     ///   - data: The data to send
@@ -489,16 +528,16 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         guard stream.isInnerCircleStream else {
             throw P2PError.invalidStream
         }
-        
+
         guard let mcSession, !mcSession.connectedPeers.isEmpty else {
             throw P2PError.noConnectedPeers
         }
-        
+
         let targetPeers = peers ?? mcSession.connectedPeers
         guard !targetPeers.isEmpty else {
             throw P2PError.noConnectedPeers
         }
-        
+
         try mcSession.send(data, toPeers: targetPeers, with: .reliable)
         print("Raw data (\(data.count) bytes) sent to \(targetPeers.count) peers in stream: \(stream.profile.name)")
     }
@@ -709,6 +748,32 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         } catch {
             // If JSON parsing fails, treat as binary data
             print("Received \(data.count) bytes of non-JSON data from \(peer.displayName)")
+
+            // Special handling for test data (any test device)
+            if peer.displayName.contains("test") {
+                let base64Data = data.base64EncodedString()
+                print("Received non-JSON data from \(peer.displayName): \(data.count) bytes")
+                print("Posting nonJsonDataReceived notification")
+                
+                // Post notification with the data - ensure this runs on main thread
+                DispatchQueue.main.async {
+                    // Debug print notification name to ensure it's correct
+                    let notificationName = Notification.Name.nonJsonDataReceived
+                    print("🔔 Posting notification with name: \(notificationName.rawValue)")
+                    
+                    NotificationCenter.default.post(
+                        name: notificationName,
+                        object: nil,
+                        userInfo: [
+                            "data": base64Data,
+                            "dataSize": data.count,
+                            "peerName": peer.displayName
+                        ]
+                    )
+                    print("Posted nonJsonDataReceived notification successfully")
+                }
+            }
+
             // Application-specific binary data handling
         }
     }
@@ -1154,19 +1219,10 @@ class P2PGroupViewModel: NSObject, ObservableObject {
 
                         updatedProfiles[peer] = profile
                         print("Fetched profile for \(peer.displayName) (\(profileIDString))")
-                    } else {
-                        print("Profile \(profileIDString) not found in persistence for peer \(peer.displayName)")
-                        // Create a new profile if not found in persistence
-                        // Use default init() and set properties
-                        let newProfile = Profile()
-                        newProfile.publicID = profileIDData
-                        newProfile.name = peer.displayName
-                        newProfile.lastSeen = now
-                        profilesNeedingSave.append(newProfile)
-                        updatedProfiles[peer] = newProfile
-                        print("Created new profile for \(peer.displayName)")
-                        // Removed duplicate block that was here
+                    // Removed the 'else' block that created a placeholder profile
                     }
+                    // If profile is nil (not found locally), we simply don't add it to updatedProfiles here.
+                    // It will be added when handleKeyStoreMessage receives and saves it.
                 } catch {
                     print("❌ Error fetching profile \(profileIDString) for peer \(peer.displayName): \(error)")
                 }
@@ -1175,7 +1231,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             }
         }
 
-        // Save updated lastSeen timestamps
+        // Save updated lastSeen timestamps for profiles that were found
         if !profilesNeedingSave.isEmpty {
             do {
                 try await persistenceController.saveChanges()
@@ -1186,8 +1242,9 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         }
 
         // Update the published dictionary on the main thread
+        // This will only contain profiles that were successfully fetched
         connectedPeerProfiles = updatedProfiles
-        print("Finished refreshing connected peer profiles. Found \(updatedProfiles.count) profiles.")
+        print("Finished refreshing connected peer profiles. Found \(updatedProfiles.count) profiles locally.")
     }
 
     /// Manually triggers regeneration of local KeyStore keys.
@@ -1364,7 +1421,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
                 encryptedKey: encryptedSessionKey,
                 kasPublicKey: dummyKasPublicKey // Add required kasPublicKey parameter
             )
-            
+
             // Extract the rewrapped key data from the result tuple
             let rewrappedKey = result.rewrappedKey
 
