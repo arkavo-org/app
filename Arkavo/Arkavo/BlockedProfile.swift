@@ -28,15 +28,16 @@ struct ContentReport: Codable {
     let contentId: String
     let reporterId: String
     var blockedPublicID: String?
-    
+
     init(reasons: [ReportReason: ContentRatingLevel],
          includeSnapshot: Bool,
          blockUser: Bool,
          timestamp: Date,
          contentId: String,
          reporterId: String,
-         blockedPublicID: String? = nil) {
-        self.id = UUID()
+         blockedPublicID: String? = nil)
+    {
+        id = UUID()
         self.reasons = reasons
         self.includeSnapshot = includeSnapshot
         self.blockUser = blockUser
@@ -57,7 +58,7 @@ enum ReportReason: String, Codable, CaseIterable {
     case privacy = "Privacy Violation"
     case misinformation = "Misinformation"
     case other = "Other"
-    
+
     var description: String {
         switch self {
         case .spam: "Commercial spam, scams, or unwanted promotional content"
@@ -71,7 +72,7 @@ enum ReportReason: String, Codable, CaseIterable {
         case .other: "Other violation of community guidelines"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .spam: "exclamationmark.triangle"
@@ -85,7 +86,7 @@ enum ReportReason: String, Codable, CaseIterable {
         case .other: "flag"
         }
     }
-    
+
     var colorName: String {
         switch self {
         case .spam: "orange"
@@ -105,7 +106,7 @@ enum ContentRatingLevel: Int, Codable, CaseIterable {
     case low = 1
     case medium = 2
     case high = 3
-    
+
     var title: String {
         switch self {
         case .low: "Low"
@@ -113,7 +114,7 @@ enum ContentRatingLevel: Int, Codable, CaseIterable {
         case .high: "High"
         }
     }
-    
+
     var description: String {
         switch self {
         case .low: "Minor violation that should be reviewed"
@@ -121,7 +122,7 @@ enum ContentRatingLevel: Int, Codable, CaseIterable {
         case .high: "Severe violation needing immediate action"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .low: "exclamationmark.circle"
@@ -129,7 +130,7 @@ enum ContentRatingLevel: Int, Codable, CaseIterable {
         case .high: "exclamationmark.shield"
         }
     }
-    
+
     var colorName: String {
         switch self {
         case .low: "gray"

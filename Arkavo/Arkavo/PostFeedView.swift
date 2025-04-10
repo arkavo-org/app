@@ -354,7 +354,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         )
 
         // Save thought
-        _ = try PersistenceController.shared.saveThought(thought)
+        _ = try await PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
         // Create new stream For post chat
         let stream = Stream(
@@ -414,7 +414,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         )
 
         // Save thought
-        _ = try PersistenceController.shared.saveThought(thought)
+        _ = try await PersistenceController.shared.saveThought(thought)
         try await PersistenceController.shared.saveChanges()
 
         // Update UI
