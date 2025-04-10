@@ -93,6 +93,16 @@ class PeerDiscoveryManager: ObservableObject {
     func getProfile(for peerID: MCPeerID) -> Profile? {
         implementation.connectedPeerProfiles[peerID]
     }
+    
+    /// Sends data to all connected peers or specified peers in a stream
+    /// - Parameters:
+    ///   - data: The data to send
+    ///   - peers: Optional specific peers to send to (defaults to all connected peers)
+    ///   - stream: The stream context for the data
+    /// - Throws: P2PError or session errors if sending fails
+    func sendData(_ data: Data, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
+        try await implementation.sendData(data, toPeers: peers, in: stream)
+    }
 }
 
 // Connection status enum for UI feedback
@@ -249,7 +259,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             return
         }
 
-        let currentKeyCount = await keyStore.keyPairs.count
+        let currentKeyCount = keyStore.keyPairs.count
         let minThreshold = Int(Double(keyStoreCapacity) * minKeyThresholdPercentage)
         let targetCount = Int(Double(keyStoreCapacity) * targetKeyPercentage)
 
@@ -274,7 +284,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
 
             do {
                 try await keyStore.generateAndStoreKeyPairs(count: keysToGenerate)
-                let newTotal = await keyStore.keyPairs.count
+                let newTotal = keyStore.keyPairs.count
                 print("OT-TDF Key Check: Generated new keys. New total: \(newTotal)")
 
                 // If we have connected peers, exchange the updated KeyStore
@@ -334,7 +344,8 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         mcPeerID = MCPeerID(displayName: displayName)
 
         // Initialize KeyStore with defined capacity
-        keyStore = OpenTDFKit.KeyStore(curve: .secp256r1, capacity: keyStoreCapacity)
+        // Use our locally defined KeyStore instead of OpenTDFKit.KeyStore
+        keyStore = KeyStore(curve: .secp256r1, capacity: keyStoreCapacity)
         print("Initializing KeyStore with capacity: \(keyStoreCapacity)")
 
         // Generate and store key pairs in the KeyStore
@@ -349,7 +360,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             try await ks.generateAndStoreKeyPairs(count: initialKeyCount)
 
             // Get key count and capacity from the actor-isolated properties
-            let keyCount = await ks.keyPairs.count
+            let keyCount = ks.keyPairs.count
             let actualCapacity = 8192
 
             print("Successfully initialized KeyStore with \(keyCount) keys (Target: \(initialKeyCount))")
@@ -466,6 +477,30 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         }
 
         try mcSession.send(data, toPeers: targetPeers, with: .reliable)
+    }
+    
+    /// Sends data to all connected peers or specified peers in a stream
+    /// - Parameters:
+    ///   - data: The data to send
+    ///   - peers: Optional specific peers to send to (defaults to all connected peers)
+    ///   - stream: The stream context for the data
+    /// - Throws: P2PError or session errors if sending fails
+    func sendData(_ data: Data, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
+        guard stream.isInnerCircleStream else {
+            throw P2PError.invalidStream
+        }
+        
+        guard let mcSession, !mcSession.connectedPeers.isEmpty else {
+            throw P2PError.noConnectedPeers
+        }
+        
+        let targetPeers = peers ?? mcSession.connectedPeers
+        guard !targetPeers.isEmpty else {
+            throw P2PError.noConnectedPeers
+        }
+        
+        try mcSession.send(data, toPeers: targetPeers, with: .reliable)
+        print("Raw data (\(data.count) bytes) sent to \(targetPeers.count) peers in stream: \(stream.profile.name)")
     }
 
     /// Initiates a Profile and KeyStore exchange with a newly connected peer
@@ -599,14 +634,14 @@ class P2PGroupViewModel: NSObject, ObservableObject {
     private func deserializeKeyStore(from data: Data) async throws -> KeyStore {
         // Create a new KeyStore with the same curve and capacity
         // Use the defined capacity constant
-        let newKeyStore = OpenTDFKit.KeyStore(curve: .secp256r1, capacity: keyStoreCapacity)
+        let newKeyStore = KeyStore(curve: .secp256r1, capacity: keyStoreCapacity)
         print("Creating KeyStore for deserialization with capacity: \(keyStoreCapacity)")
 
-        // Use the built-in deserialize method from OpenTDFKit
+        // Use the built-in deserialize method from our KeyStore
         try await newKeyStore.deserialize(from: data)
 
         // Log how many keys were loaded
-        let keyCount = await newKeyStore.keyPairs.count
+        let keyCount = newKeyStore.keyPairs.count
         let actualCapacity = 8192
         print("Successfully deserialized KeyStore with \(keyCount) keys, capacity: \(actualCapacity)")
 
@@ -779,7 +814,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
                 guard let keyStore = receivedKeyStore else {
                     throw P2PError.deserializationFailed("deserializeKeyStore returned nil")
                 }
-                keyCount = await keyStore.keyPairs.count
+                keyCount = keyStore.keyPairs.count
                 print("Successfully deserialized keystore with \(keyCount) keys")
 
                 // --- 2d. Persist KeyStoreData ---
@@ -1052,7 +1087,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         print("Refreshing KeyStore status...")
         // Update local KeyStore info
         if let ks = keyStore {
-            let count = await ks.keyPairs.count
+            let count = ks.keyPairs.count
             let actualCapacity = 8192
 
             // Use the actual capacity from the KeyStore instead of the constant
@@ -1075,7 +1110,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         // Iterate through connected peers to get their counts from the cache
         for peer in connectedPeers {
             if let profileID = peerIDToProfileID[peer], let peerKS = peerKeyStores[profileID] {
-                let count = await peerKS.keyPairs.count
+                let count = peerKS.keyPairs.count
                 newPeerCounts[peer] = count
                 print("Peer KeyStore (\(peer.displayName) / \(profileID)): \(count) keys (from cache)")
             } else {
@@ -1218,7 +1253,7 @@ class P2PGroupViewModel: NSObject, ObservableObject {
         // The implementation depends on the OpenTDFKit API, but here's how it might work:
 
         // Get the key count for logging
-        let keyCount = await keyStore.keyPairs.count
+        let keyCount = keyStore.keyPairs.count
         if keyCount == 0 {
             print("KeyStore is empty, cannot contain matching key")
             return false
@@ -1321,15 +1356,17 @@ class P2PGroupViewModel: NSObject, ObservableObject {
             // FIXME: The actual OpenTDFKit KASService.processKeyAccess needs to return the keyID
             // of the private key used for decryption. This UUID is a placeholder.
             // Replace this placeholder once the API provides the actual keyID.
-            // Example: let (rewrappedKey, usedKeyID) = try await kasService.processKeyAccess(...)
             let usedKeyID = UUID() // <<< Placeholder Key ID
             print("OT-TDF: FIXME - Using placeholder key ID \(usedKeyID) for rewrap. Replace with actual key ID from KASService result.")
 
-            let rewrappedKey = try await kasService.processKeyAccess(
+            let result = try await kasService.processKeyAccess(
                 ephemeralPublicKey: publicKey,
                 encryptedKey: encryptedSessionKey,
                 kasPublicKey: dummyKasPublicKey // Add required kasPublicKey parameter
             )
+            
+            // Extract the rewrapped key data from the result tuple
+            let rewrappedKey = result.rewrappedKey
 
             print("Successfully rewrapped key using local KeyStore.")
 
@@ -1711,7 +1748,7 @@ extension P2PGroupViewModel {
 
             // Log the number of keys in this KeyStore for debugging
             Task {
-                let keyCount = await keyStore.keyPairs.count
+                let keyCount = keyStore.keyPairs.count
                 print("Cached KeyStore for profile ID \(profileID) contains \(keyCount) keys")
             }
 

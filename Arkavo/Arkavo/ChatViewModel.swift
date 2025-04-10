@@ -553,7 +553,6 @@ class ChatViewModel: ObservableObject {
         case .audio: fbMediaType = .audio
         // Special handling for types not in FlatBuffers schema
         case .post, .say: fbMediaType = .text  // Map speech/post types to text
-        default: fbMediaType = .text // Default fallback
         }
 
         let contentFormat = Arkavo_ContentFormat.createContentFormat(&builder, mediaType: fbMediaType, dataEncoding: .utf8, formatOffset: formatInfo)
