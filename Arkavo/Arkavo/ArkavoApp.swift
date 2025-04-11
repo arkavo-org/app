@@ -932,7 +932,8 @@ final class ViewModelFactory {
     @MainActor
     func getPeerDiscoveryManager() -> PeerDiscoveryManager {
         if peerDiscoveryManager == nil {
-            peerDiscoveryManager = PeerDiscoveryManager()
+            let client = serviceLocator.resolve() as ArkavoClient
+            peerDiscoveryManager = PeerDiscoveryManager(arkavoClient: client)
         }
         return peerDiscoveryManager!
     }
@@ -948,28 +949,5 @@ final class ViewModelFactory {
             globalSharedState = SharedState()
         }
         return globalSharedState!
-    }
-
-    // MARK: - P2PClient Management
-
-    private var p2pClientInstance: P2PClient?
-
-    @MainActor
-    func getP2PClient() -> P2PClient {
-        if p2pClientInstance == nil {
-            guard let currentProfile = getCurrentProfile() else {
-                fatalError("Cannot create P2PClient without a current profile")
-            }
-
-            let peerManager = getPeerDiscoveryManager()
-            let persistence = PersistenceController.shared
-            p2pClientInstance = P2PClient(
-                peerManager: peerManager,
-                profile: currentProfile,
-                persistenceController: persistence
-            )
-            print("ViewModelFactory: Created new P2PClient instance")
-        }
-        return p2pClientInstance!
     }
 }

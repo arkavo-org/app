@@ -590,38 +590,38 @@ struct GroupView: View {
             // Debug print notification name to ensure it's correct
             let notificationName = Notification.Name.nonJsonDataReceived
             print("🔔 Setting up observer for notification: \(notificationName.rawValue)")
-            
+
             nonJsonObserver = NotificationCenter.default.addObserver(
                 forName: notificationName,
                 object: nil,
                 queue: .main
             ) { notification in
                 print("🔥 NOTIFICATION RECEIVED in GroupView: nonJsonDataReceived")
-                
+
                 guard let userInfo = notification.userInfo else {
                     print("❌ Notification has no userInfo")
                     return
                 }
-                
+
                 print("📄 Notification userInfo: \(userInfo)")
-                
+
                 guard let base64Data = userInfo["data"] as? String else {
                     print("❌ No base64Data in notification")
                     return
                 }
-                
+
                 guard let dataSize = userInfo["dataSize"] as? Int else {
                     print("❌ No dataSize in notification")
                     return
                 }
-                
+
                 guard let peerName = userInfo["peerName"] as? String else {
                     print("❌ No peerName in notification")
                     return
                 }
 
                 print("✅ Received non-JSON data notification: \(dataSize) bytes from \(peerName)")
-                
+
                 // Update on main thread to ensure UI updates properly
                 DispatchQueue.main.async { [self] in
                     print("🔄 Updating UI state for popup")
@@ -630,7 +630,7 @@ struct GroupView: View {
                     nonJsonPeerName = peerName
                     showNonJsonDataPopup = true
                     print("🎯 showNonJsonDataPopup set to true")
-                    
+
                     // Auto-hide after 10 seconds
                     DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
                         print("⏱️ Auto-hiding popup after 10 seconds")
@@ -638,7 +638,7 @@ struct GroupView: View {
                     }
                 }
             }
-            
+
             print("Added non-JSON data notification observer")
         }
         .onDisappear {
@@ -835,17 +835,6 @@ struct GroupView: View {
                     .padding(.horizontal)
 
                     Divider().padding(.horizontal)
-
-                    MemberKeyStoreView(
-                        connectedPeers: peerManager.connectedPeers,
-                        peerKeyStoreCounts: peerManager.peerKeyStoreCounts,
-                        refreshAction: {
-                            Task {
-                                await peerManager.refreshKeyStoreStatus()
-                            }
-                        }
-                    )
-                    .padding(.horizontal)
                 }
                 .padding(.bottom, 8)
                 .background(Color(.secondarySystemGroupedBackground))
@@ -855,7 +844,6 @@ struct GroupView: View {
         .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive) // Animate the whole section
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
         .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo?.count) // Animate key count changes
-        .animation(.easeInOut(duration: 0.3), value: peerManager.peerKeyStoreCounts) // Animate peer key count changes
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles) // Animate profile changes
     }
 
@@ -1178,106 +1166,22 @@ struct InnerCircleView: View {
     @EnvironmentObject var sharedState: SharedState
     @State private var showOfflineMembers: Bool = true
     @State private var searchText: String = ""
-    @State private var innerCircleProfiles: [Profile] = []
+    @State private var innerCircleProfiles: [Profile] = [] // All profiles belonging to this InnerCircle
     @State private var showStatusMessage = false
     @State private var statusMessage = ""
 
     var body: some View {
         VStack(spacing: 0) {
             // Search and filter bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search members", text: $searchText)
-                    .font(.subheadline)
-
-                Spacer()
-
-                Toggle(isOn: $showOfflineMembers) {
-                    Text("Show Offline")
-                        .font(.caption)
-                }
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .scaleEffect(0.8)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemBackground))
+            searchAndFilterBar
 
             // Member count header
-            HStack {
-                Text("Members")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-
-                Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                Button(action: {
-                    Task {
-                        await loadInnerCircleProfiles()
-                        await peerManager.refreshKeyStoreStatus()
-                    }
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            memberCountHeader
 
             Divider()
 
             // Members list
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Online members section
-                    if !filteredOnlineProfiles.isEmpty {
-                        sectionHeader(title: "Online", count: filteredOnlineProfiles.count)
-
-                        ForEach(filteredOnlineProfiles) { profile in
-                            InnerCircleMemberRow(
-                                profile: profile,
-                                isOnline: true,
-                                connectionTime: getConnectionTime(for: profile),
-                                stream: stream,
-                                peerManager: peerManager // Pass peerManager
-                            )
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .environmentObject(sharedState)
-                        }
-                    }
-
-                    // Offline members section
-                    if showOfflineMembers, !filteredOfflineProfiles.isEmpty {
-                        sectionHeader(title: "Offline", count: filteredOfflineProfiles.count)
-
-                        ForEach(filteredOfflineProfiles) { profile in
-                            InnerCircleMemberRow(
-                                profile: profile,
-                                isOnline: false,
-                                lastSeen: profile.lastSeen,
-                                stream: stream,
-                                peerManager: peerManager // Pass peerManager
-                            )
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .environmentObject(sharedState)
-                        }
-                    }
-
-                    // Empty state
-                    if filteredOnlineProfiles.isEmpty, filteredOfflineProfiles.isEmpty || !showOfflineMembers {
-                        emptyStateView
-                    }
-                }
-                .padding(.vertical, 8)
-            }
+            membersScrollView
         }
         .onAppear {
             Task {
@@ -1303,59 +1207,53 @@ struct InnerCircleView: View {
                 sharedState.setState("", forKey: "statusMessage")
             }
         }
-        .overlay(
-            Group {
-                if showStatusMessage {
-                    VStack {
-                        Text(statusMessage)
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.green.opacity(0.8))
-                            .cornerRadius(10)
-                            .padding()
-                            .onAppear {
-                                // Auto-dismiss after a few seconds
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    showStatusMessage = false
-                                }
-                            }
-                        Spacer()
-                    }
-                }
-            }
-        )
+        .overlay(statusMessageOverlay)
     }
 
-    // All online profiles from peer manager
+    // MARK: - Computed Properties (Refactored for Simplicity)
+
+    // All currently connected online profiles from peer manager
     private var onlineProfiles: [Profile] {
         Array(peerManager.connectedPeerProfiles.values)
     }
 
     // All offline profiles (in InnerCircle but not currently connected)
     private var offlineProfiles: [Profile] {
-        innerCircleProfiles.filter { profile in
-            !isProfileOnline(profile)
+        // Get IDs of online profiles for efficient lookup
+        let onlineProfileIDs = Set(onlineProfiles.map { $0.id })
+        // Filter the full list of InnerCircle members
+        return innerCircleProfiles.filter { profile in
+            !onlineProfileIDs.contains(profile.id)
         }
     }
 
     // Filtered online profiles based on search text
     private var filteredOnlineProfiles: [Profile] {
+        let profiles = onlineProfiles // Start with online profiles
         if searchText.isEmpty {
-            return onlineProfiles
+            return profiles // No filter needed
+        } else {
+            // Apply search filter
+            return profiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
-        return onlineProfiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     // Filtered offline profiles based on search text
     private var filteredOfflineProfiles: [Profile] {
+        let profiles = offlineProfiles // Start with offline profiles
         if searchText.isEmpty {
-            return offlineProfiles
+            return profiles // No filter needed
+        } else {
+            // Apply search filter
+            return profiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
-        return offlineProfiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
+
+    // MARK: - Helper Functions
 
     // Check if a profile is currently online via P2P
     private func isProfileOnline(_ profile: Profile) -> Bool {
+        // Check if any profile in the connectedPeerProfiles dictionary has the same ID
         peerManager.connectedPeerProfiles.values.contains { $0.id == profile.id }
     }
 
@@ -1364,25 +1262,22 @@ struct InnerCircleView: View {
         do {
             // Fetch all profiles that belong to the InnerCircle stream
             // This would ideally use a relationship query in the real implementation
+            // For now, assume 'innerCircleProfiles' holds the relevant members
+            // We might need a way to fetch profiles specifically associated with 'stream'
             let allProfiles = try await PersistenceController.shared.fetchAllProfiles()
 
             // Filter to include only profiles that have been added to InnerCircle
             // In real implementation, this would use a proper relationship query
+            // For now, just filter out the current user
+            let currentUserID = ViewModelFactory.shared.getCurrentProfile()?.id
             innerCircleProfiles = allProfiles.filter { profile in
-                // Exclude current user's profile
-                profile.id != ViewModelFactory.shared.getCurrentProfile()?.id
+                profile.id != currentUserID
+                // Add logic here if 'stream' has a list of member IDs/profiles
+                // e.g., stream.memberIDs.contains(profile.id)
             }
 
-            // Update lastSeen for online profiles
-            let now = Date()
-            for i in 0 ..< innerCircleProfiles.count {
-                if isProfileOnline(innerCircleProfiles[i]) {
-                    innerCircleProfiles[i].lastSeen = now
-                }
-            }
-
-            // Save updated lastSeen times
-            try await PersistenceController.shared.saveChanges()
+            // Save updated lastSeen times (if applicable, though lastSeen was removed)
+            // try await PersistenceController.shared.saveChanges()
 
         } catch {
             print("Error loading InnerCircle profiles: \(error)")
@@ -1399,6 +1294,107 @@ struct InnerCircleView: View {
             }
         }
         return nil
+    }
+
+    // MARK: - Subviews
+
+    private var searchAndFilterBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+            TextField("Search members", text: $searchText)
+                .font(.subheadline)
+
+            Spacer()
+
+            Toggle(isOn: $showOfflineMembers) {
+                Text("Show Offline")
+                    .font(.caption)
+            }
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .scaleEffect(0.8)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemBackground))
+    }
+
+    private var memberCountHeader: some View {
+        HStack {
+            Text("Members")
+                .font(.subheadline)
+                .fontWeight(.medium)
+
+            // Use the computed properties for counts
+            Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(action: {
+                Task {
+                    await loadInnerCircleProfiles()
+                    await peerManager.refreshKeyStoreStatus()
+                }
+            }) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var membersScrollView: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                // Online members section
+                let onlineToShow = filteredOnlineProfiles
+                if !onlineToShow.isEmpty {
+                    sectionHeader(title: "Online", count: onlineToShow.count)
+
+                    ForEach(onlineToShow) { profile in
+                        InnerCircleMemberRow(
+                            profile: profile,
+                            isOnline: true,
+                            connectionTime: getConnectionTime(for: profile),
+                            stream: stream,
+                            peerManager: peerManager // Pass peerManager
+                        )
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .environmentObject(sharedState)
+                    }
+                }
+
+                // Offline members section
+                let offlineToShow = filteredOfflineProfiles
+                if showOfflineMembers, !offlineToShow.isEmpty {
+                    sectionHeader(title: "Offline", count: offlineToShow.count)
+
+                    ForEach(offlineToShow) { profile in
+                        InnerCircleMemberRow(
+                            profile: profile,
+                            isOnline: false,
+                            // lastSeen removed
+                            stream: stream,
+                            peerManager: peerManager // Pass peerManager
+                        )
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .environmentObject(sharedState)
+                    }
+                }
+
+                // Empty state
+                if onlineToShow.isEmpty, (offlineToShow.isEmpty || !showOfflineMembers) {
+                    emptyStateView
+                }
+            }
+            .padding(.vertical, 8)
+        }
     }
 
     // Section header view
@@ -1442,6 +1438,28 @@ struct InnerCircleView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
     }
+
+    // Status message overlay
+    @ViewBuilder
+    private var statusMessageOverlay: some View {
+        if showStatusMessage {
+            VStack {
+                Text(statusMessage)
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.green.opacity(0.8))
+                    .cornerRadius(10)
+                    .padding()
+                    .onAppear {
+                        // Auto-dismiss after a few seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showStatusMessage = false
+                        }
+                    }
+                Spacer()
+            }
+        }
+    }
 }
 
 // Row view for individual InnerCircle members
@@ -1449,7 +1467,8 @@ struct InnerCircleMemberRow: View {
     let profile: Profile
     let isOnline: Bool
     var connectionTime: Date? = nil
-    var lastSeen: Date? = nil
+    // Removed lastSeen property as it's no longer in Profile
+    // var lastSeen: Date? = nil
     @EnvironmentObject var sharedState: SharedState
     var stream: Stream
     let peerManager: PeerDiscoveryManager // Added peerManager property
@@ -1479,8 +1498,9 @@ struct InnerCircleMemberRow: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                } else if let seen = lastSeen {
-                    Text("Last seen \(timeAgoString(seen))")
+                } else {
+                    // Removed lastSeen display
+                    Text("Offline") // Simple offline indicator
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1816,71 +1836,6 @@ struct KeyStoreStatusView: View {
                 Text("KeyStore information not available.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 8) // Add vertical padding
-    }
-}
-
-// View for displaying member KeyStore status
-struct MemberKeyStoreView: View {
-    let connectedPeers: [MCPeerID]
-    let peerKeyStoreCounts: [MCPeerID: Int]
-    let refreshAction: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Peer KeyStore Status")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                Spacer()
-                Button(action: refreshAction) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .font(.caption)
-                .buttonStyle(.borderless) // Use borderless for icon-only button
-            }
-
-            if connectedPeers.isEmpty {
-                Text("No connected peers.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 10)
-            } else {
-                VStack(spacing: 6) {
-                    ForEach(connectedPeers, id: \.self) { peer in
-                        HStack {
-                            Image(systemName: "person.fill") // Generic icon, profile shown in peer list
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(peer.displayName) // Still show display name here for context
-                                .font(.caption)
-                            Spacer()
-                            if let count = peerKeyStoreCounts[peer] {
-                                Text("Keys: \(count)")
-                                    .font(.caption2.bold())
-                                    .foregroundColor(.green)
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
-                            } else {
-                                Text("No KeyStore")
-                                    .font(.caption2)
-                                    .foregroundColor(.orange)
-                                Image(systemName: "questionmark.circle")
-                                    .foregroundColor(.orange)
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color(.tertiarySystemBackground)) // Use tertiary for list items
-                        .cornerRadius(6)
-                    }
-                }
             }
         }
         .padding(.vertical, 8) // Add vertical padding

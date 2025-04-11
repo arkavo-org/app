@@ -450,9 +450,6 @@
     "Keys:" : {
 
     },
-    "Keys: %lld" : {
-
-    },
     "KeyStore information not available." : {
 
     },
@@ -465,9 +462,6 @@
           }
         }
       }
-    },
-    "Last seen %@" : {
-
     },
     "Later" : {
 
@@ -583,12 +577,6 @@
     "Next" : {
 
     },
-    "No connected peers." : {
-
-    },
-    "No KeyStore" : {
-
-    },
     "No Members Found" : {
 
     },
@@ -607,6 +595,9 @@
     "Not Searching" : {
 
     },
+    "Offline" : {
+
+    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -621,9 +612,6 @@
 
     },
     "Owner:" : {
-
-    },
-    "Peer KeyStore Status" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {

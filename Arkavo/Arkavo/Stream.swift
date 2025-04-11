@@ -89,8 +89,6 @@ extension Stream {
     func addToInnerCircle(_ profile: Profile) {
         if !innerCircleProfiles.contains(where: { $0.id == profile.id }) {
             innerCircleProfiles.append(profile)
-            // Update the last seen time
-            profile.lastSeen = Date()
         }
     }
 

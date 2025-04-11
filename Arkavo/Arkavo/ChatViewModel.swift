@@ -1,7 +1,7 @@
 import ArkavoSocial
 import CryptoKit
 import FlatBuffers
-import MultipeerConnectivity
+// import MultipeerConnectivity // Removed if not directly needed, ArkavoClient might handle internally
 import OpenTDFKit
 import SwiftData
 import SwiftUI
@@ -11,7 +11,7 @@ import SwiftUI
 // REMOVED MediaType extension as requested
 
 @MainActor
-class ChatViewModel: ObservableObject {
+class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to ArkavoClientDelegate
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -19,15 +19,15 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     private var notificationObservers: [NSObjectProtocol] = []
 
-    // Access to PeerDiscoveryManager (assuming it's available via ViewModelFactory)
+    // Access to PeerDiscoveryManager (might still be needed for profile lookups)
     private var peerManager: PeerDiscoveryManager {
         ViewModelFactory.shared.getPeerDiscoveryManager()
     }
 
-    // Access to P2PClient for peer-to-peer operations
-    private var p2pClient: P2PClient? {
-        ViewModelFactory.shared.getP2PClient()
-    }
+    // Removed P2PClient property
+    // private var p2pClient: P2PClient? {
+    //     ViewModelFactory.shared.getP2PClient()
+    // }
 
     init(client: ArkavoClient, account: Account, profile: Profile, streamPublicID: Data) {
         self.client = client
@@ -35,25 +35,23 @@ class ChatViewModel: ObservableObject {
         self.profile = profile
         self.streamPublicID = streamPublicID
 
+        // Set ArkavoClient delegate
+        self.client.delegate = self
+
         setupNotifications()
 
         // Load existing thoughts for this stream
         Task {
             await loadExistingMessages()
 
-            // Set up P2PClient delegate if this is for a P2P stream
-            if let p2pClient = self.p2pClient {
-                let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID)
-                if stream?.isInnerCircleStream == true {
-                    print("ChatViewModel Setting up as P2PClient delegate for P2P stream")
-                    p2pClient.delegate = self
-                }
-            }
+            // Removed P2PClient delegate setup
+            // if let p2pClient = self.p2pClient { ... }
         }
     }
 
     deinit {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        // Consider setting client.delegate = nil if appropriate lifecycle management is needed
     }
 
     // MARK: - Message Loading and Handling
@@ -64,16 +62,27 @@ class ChatViewModel: ObservableObject {
             print("ChatViewModel: Loading \(thoughts.count) existing thoughts for stream \(streamPublicID.base58EncodedString)")
 
             for thought in thoughts {
-                // All thoughts are assumed to have NanoTDF payload in 'nano'
-                // Send the raw nano data to the client's decryption mechanism
-                // The result will be handled by the .messageDecrypted notification observer
-                print("ChatViewModel: Attempting decryption for thought \(thought.publicID.base58EncodedString)")
-                // Use a non-throwing try? as failure to decrypt one message shouldn't stop others.
+                // Each 'thought' contains encrypted 'nano' data in NanoTDF format.
+                // Based on the ArkavoMessageRouter implementation, decryption happens through
+                // a multi-step process involving rewrap requests and key exchange.
+                
+                // After analyzing ArkavoClient and ArkavoMessageRouter, we found that:
+                // 1. There's no public direct decrypt method in ArkavoClient
+                // 2. ArkavoMessageRouter handles decryption and posts .messageDecrypted notifications
+                // 3. The original pattern was to send nano data to client.sendMessage()
+                
+                // Try the original approach which may trigger ArkavoMessageRouter's processing path
+                // This will either work if ArkavoMessageRouter handles it, or do nothing if it doesn't
+                print("ChatViewModel: Attempting to process stored NanoTDF for thought \(thought.publicID.base58EncodedString)")
                 try? await client.sendMessage(thought.nano)
+                
+                // NOTE TO DEVELOPER: This approach needs verification.
+                // If existing messages don't appear, ArkavoClient may need an additional
+                // method to initiate decryption for local NanoTDF data without sending to server.
             }
 
-            // Sorting will happen as messages are added by the notification handler
-            // We might want an initial sort here if messages appear out of order initially
+            // Sorting will happen as messages are added via notification handlers
+            // Important: If decryption doesn't trigger properly, messages won't appear in UI
             await MainActor.run {
                 messages.sort { $0.timestamp < $1.timestamp }
             }
@@ -82,6 +91,7 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+
     func setupNotifications() {
         print("ChatViewModel: setupNotifications")
         // Clean up any existing observers
@@ -89,9 +99,10 @@ class ChatViewModel: ObservableObject {
         notificationObservers.removeAll()
 
         // Observer for decrypted messages (from client/websocket or local decryption)
+        // This remains the primary way to get decrypted content into the UI.
         let messageObserver = NotificationCenter.default.addObserver(
-            forName: .messageDecrypted,
-            object: nil,
+            forName: .messageDecrypted, // Assuming ArkavoClient posts this after successful decryption
+            object: nil, // Optionally filter by client instance if needed
             queue: .main
         ) { [weak self] notification in
             guard let self, // Ensure self is valid
@@ -112,41 +123,7 @@ class ChatViewModel: ObservableObject {
         }
         notificationObservers.append(messageObserver)
 
-        // Observer for P2P messages received directly via PeerDiscoveryManager
-        let p2pMessageObserver = NotificationCenter.default.addObserver(
-            forName: .p2pMessageReceived, // Assuming this notification carries raw Data
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let notificationStreamID = notification.userInfo?["streamID"] as? Data,
-                  streamPublicID == notificationStreamID,
-                  let nanoTDFData = notification.userInfo?["data"] as? Data, // Expecting encrypted NanoTDF data
-                  let senderPeerID = notification.userInfo?["senderPeerID"] as? MCPeerID // Need the sender PeerID
-            else {
-                // print("ChatViewModel: Ignoring P2P notification (mismatched stream or missing data).")
-                return
-            }
-
-            print("ChatViewModel: Received P2P NanoTDF notification for stream \(notificationStreamID.base58EncodedString)")
-
-            Task { @MainActor [weak self] in
-                // Find sender profile ID if possible (may require lookup based on MCPeerID)
-                // This part depends on how PeerDiscoveryManager maps MCPeerIDs to Profiles/PublicIDs
-                // FIX 1: Moved peerManager access inside Task @MainActor block
-                guard let self else { return }
-                let senderProfile = peerManager.getProfile(for: senderPeerID)
-                let senderProfileID = senderProfile?.publicID ?? Data() // Use empty Data if profile not found
-
-                // Decrypt and handle the incoming P2P message
-                await handleIncomingP2PData(nanoTDFData, from: senderPeerID.displayName, profileID: senderProfileID)
-            }
-        }
-        notificationObservers.append(p2pMessageObserver)
-
-        // Note: Removed handleP2PMessageReceived as its role seemed overlapping or unclear.
-        // Incoming P2P data is handled by .p2pMessageReceived observer.
-        // Stored P2P messages are handled by loadExistingMessages -> client.sendMessage -> .messageDecrypted observer.
+        // Removed P2P message observer (.p2pMessageReceived)
     }
 
     @MainActor
@@ -155,7 +132,7 @@ class ChatViewModel: ObservableObject {
         do {
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
 
-            // Double-check if it belongs to this stream (already checked in notification handler, but good practice)
+            // Double-check if it belongs to this stream
             guard thoughtModel.streamPublicID == streamPublicID else {
                 print("❌ ChatViewModel: Decrypted thought belongs to a different stream. Ignoring.")
                 return
@@ -167,15 +144,22 @@ class ChatViewModel: ObservableObject {
                 return
             }
 
+            // **FIX:** Ensure thoughtModel has a publicID before proceeding
+            guard !thoughtModel.publicID.isEmpty else {
+                print("❌ ChatViewModel: Decrypted thought model missing publicID.")
+                throw ChatError.missingPublicID
+            }
+
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
-            let timestamp = Date() // TODO: Get timestamp from policy/metadata if available, otherwise use current time
+            // TODO: Extract timestamp from policy/metadata if available
+            let timestamp = Date() // Use current time as placeholder
 
             let message = ChatMessage(
-                id: thoughtModel.publicID.base58EncodedString, // Use thought public ID as message ID
+                id: thoughtModel.publicID.base58EncodedString, // Use thought public ID
                 userId: thoughtModel.creatorPublicID.base58EncodedString,
-                username: formatUsername(publicID: thoughtModel.creatorPublicID),
+                username: await formatUsername(publicID: thoughtModel.creatorPublicID), // Fetch username async
                 content: displayContent,
-                timestamp: timestamp, // Adjust if timestamp is available elsewhere
+                timestamp: timestamp,
                 attachments: [],
                 reactions: [],
                 isPinned: false,
@@ -203,98 +187,115 @@ class ChatViewModel: ObservableObject {
         switch mediaType {
         case .text, .post, .say:
             String(data: content, encoding: .utf8) ?? "[Invalid text content]"
-        // Add cases for other media types if they should be displayed differently in chat
         default:
-            "[\(mediaType.rawValue) content]" // Generic placeholder
+            "[\(mediaType.rawValue) content]"
         }
     }
 
-    func formatUsername(publicID: Data) -> String {
-        // TODO: Implement fetching actual username from profile/contacts if possible
-        let shortID = publicID.prefix(6).base58EncodedString
-        return "User-\(shortID)"
+    // Updated to be async to allow fetching profile info
+    func formatUsername(publicID: Data) async -> String {
+        do {
+            // Attempt to fetch profile using ArkavoClient's profile cache/fetch mechanism
+            let profile = try await client.fetchProfile(forPublicID: publicID)
+            return profile.displayName // Or profile.handle
+        } catch {
+            // Fallback if profile fetch fails
+            print("ChatViewModel: Failed to fetch profile for \(publicID.base58EncodedString): \(error)")
+            let shortID = publicID.prefix(6).base58EncodedString
+            return "User-\(shortID)"
+        }
     }
 
     enum ChatError: Error {
         case noProfile
         case serializationError
         case encryptionError(Error)
-        case decryptionError(Error)
+        // case decryptionError(Error) // Decryption errors handled internally by client?
         case persistenceError(Error)
-        case peerSendError(Error)
-        case missingPeerID
-        case missingTDFClient
-        case missingPublicID // Added for clarity
+        // case peerSendError(Error) // Replaced by general client error
+        // case missingPeerID // Less relevant if using profile IDs
+        // case missingTDFClient // Replaced by missing ArkavoClient state
+        case missingPublicID
+        case clientError(Error) // General ArkavoClient error
+        case invalidPolicy(String)
+        case invalidState(String) // For ArkavoClient state issues
     }
 
-    // MARK: - Message Sending
+    // MARK: - Message Sending (Unified Approach)
 
     func sendMessage(content: String) async throws {
         print("ChatViewModel: sendMessage called.")
         guard !content.isEmpty else { return }
+        guard client.currentState == .connected else {
+            throw ChatError.invalidState("ArkavoClient not connected")
+        }
 
-        // Check if this is a direct message chat
+        // Determine policy based on chat type (direct, stream, regular)
+        let policyData: Data
         if let directProfile = directMessageProfile {
             print("ChatViewModel: Sending as direct message to \(directProfile.name)")
-            try await sendDirectMessageToPeer(directProfile, content: content)
-            return
+            policyData = try createPolicyDataForDirectMessage(recipientProfileID: directProfile.publicID)
+        } else if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID),
+                  stream.isInnerCircleStream {
+            print("ChatViewModel: Sending as P2P message in stream \(stream.publicID.base58EncodedString)")
+            policyData = try createPolicyDataForStream() // Assumes stream policy
+        } else {
+            print("ChatViewModel: Sending as regular message via client.")
+            policyData = try createPolicyDataForStream() // Use stream policy for regular messages too? Or a different one?
         }
 
-        // Check if this is a general InnerCircle (P2P) stream
-        if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID),
-           stream.isInnerCircleStream
-        {
-            print("ChatViewModel: Sending as general P2P message in stream \(stream.publicID)")
-            try await sendP2PMessage(content, stream: stream)
-            return
-        }
-
-        // Otherwise, send as a regular (non-P2P) message via the client/websocket
-        print("ChatViewModel: Sending as regular message via client.")
-        try await sendRegularMessage(content: content)
+        // Common sending logic
+        await sendEncryptedMessage(content: content, policyData: policyData)
     }
 
-    /// Sends a regular message (non-P2P) through the ArkavoClient (websocket)
-    private func sendRegularMessage(content: String) async throws {
+    /// Encrypts and sends the message using ArkavoClient, saves locally.
+    private func sendEncryptedMessage(content: String, policyData: Data) async {
         let messageData = content.data(using: .utf8) ?? Data()
+        let newThoughtPublicID = UUID().uuidStringData // Generate unique ID
 
-        // **FIX:** Generate a unique public ID for the thought
-        let newThoughtPublicID = UUID().uuidStringData
+        do {
+            // Create thought service model
+            var thoughtModel = ThoughtServiceModel(
+                creatorPublicID: profile.publicID,
+                streamPublicID: streamPublicID,
+                mediaType: .say,
+                content: messageData
+            )
+            thoughtModel.publicID = newThoughtPublicID // Assign generated ID
 
-        // Create thought service model
-        var thoughtModel = ThoughtServiceModel( // Make mutable to set publicID
-            creatorPublicID: profile.publicID,
-            streamPublicID: streamPublicID,
-            mediaType: .say, // Chat messages use .say
-            content: messageData
-        )
-        // **FIX:** Assign the generated public ID to the model
-        thoughtModel.publicID = newThoughtPublicID
+            // Serialize payload
+            let payload = try thoughtModel.serialize()
 
-        // Create FlatBuffers policy (now uses the correct publicID from thoughtModel)
-        let policyData = try createPolicyData(for: thoughtModel)
+            // Encrypt and send via ArkavoClient
+            // This method handles encryption and sending via WebSocket (NATS msg type 0x05)
+            let nanoData = try await client.encryptAndSendPayload(
+                payload: payload,
+                policyData: policyData
+            )
+            print("ChatViewModel: Encrypted and sent payload via ArkavoClient.")
 
-        // Serialize payload
-        let payload = try thoughtModel.serialize()
+            // Create and save the Thought locally
+            let thought = try await createAndSaveThought(
+                nanoData: nanoData, // Save the *encrypted* data
+                thoughtModel: thoughtModel,
+                publicID: newThoughtPublicID
+            )
 
-        // Encrypt and send via client
-        let nanoData = try await client.encryptAndSendPayload(
-            payload: payload,
-            policyData: policyData
-        )
+            // Add message to local UI immediately
+            addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
 
-        // Create and save the Thought locally, passing the generated publicID
-        let thought = try await createAndSaveThought(
-            nanoData: nanoData,
-            thoughtModel: thoughtModel,
-            publicID: newThoughtPublicID // **FIX:** Pass the ID
-        )
-
-        // Add message to local UI immediately
-        addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
+        } catch {
+            print("❌ ChatViewModel: Failed to send encrypted message: \(error)")
+            // TODO: Notify user of failure
+            // Map error to ChatError if needed
+            // self.lastError = ChatError.clientError(error).localizedDescription
+        }
     }
 
-    // MARK: - P2P Messaging
+    // Removed sendRegularMessage, sendP2PMessage, sendDirectMessageToPeer
+    // Replaced by unified sendMessage -> sendEncryptedMessage
+
+    // MARK: - P2P Messaging (Superseded by Unified Approach)
 
     /// The profile of the direct message recipient, if this is a direct chat
     var directMessageProfile: Profile? {
@@ -312,127 +313,21 @@ class ChatViewModel: ObservableObject {
         directMessageProfile?.name ?? "Peer"
     }
 
-    /// Send a P2P message to all peers in an InnerCircle stream
-    func sendP2PMessage(_ content: String, stream: Stream) async throws {
-        print("ChatViewModel: Preparing P2P message for stream \(stream.publicID)")
-
-        guard let p2pClient else {
-            throw ChatError.missingTDFClient
-        }
-
-        // Use P2PClient to handle the message sending, encryption, and persistence
-        // FIX 2: Discard unused return value
-        _ = try await p2pClient.sendMessage(content, toStream: stream.publicID)
-        print("ChatViewModel: Sent P2P message via P2PClient for stream \(stream.publicID)")
-
-        // This is for immediate UI feedback - the message is already persisted by P2PClient
-        // We use a random UUID here just for display purposes since the actual ID is handled by P2PClient
-        addLocalChatMessage(content: content, thoughtPublicID: UUID().uuidStringData, timestamp: Date(), isP2P: true)
-    }
-
-    /// Send a message directly to a specific peer by their profile
-    func sendDirectMessageToPeer(_ peerProfile: Profile, content: String) async throws {
-        print("ChatViewModel: Preparing direct message to \(peerProfile.name): \(content)")
-
-        guard let p2pClient else {
-            throw ChatError.missingTDFClient
-        }
-
-        // Use P2PClient to handle direct message sending, encryption, and persistence
-        // FIX 2: Discard unused return value
-        _ = try await p2pClient.sendDirectMessage(
-            content,
-            toPeer: peerProfile.publicID,
-            inStream: streamPublicID
-        )
-        print("ChatViewModel: Sent direct message via P2PClient to \(peerProfile.name)")
-
-        // This is for immediate UI feedback - the message is already persisted by P2PClient
-        addLocalChatMessage(content: content, thoughtPublicID: UUID().uuidStringData, timestamp: Date(), isP2P: true)
-    }
-
-    /// Handles incoming raw P2P data (NanoTDF) received from PeerDiscoveryManager
-    func handleIncomingP2PData(_ nanoTDFData: Data, from peerDisplayName: String, profileID: Data) async {
-        print("ChatViewModel: Handling incoming P2P NanoTDF data from \(peerDisplayName), size: \(nanoTDFData.count)")
-
-        guard let p2pClient else {
-            print("❌ ChatViewModel: P2PClient not available for decryption")
-            return
-        }
-
-        do {
-            // 1. Decrypt the NanoTDF data using P2PClient
-            let decryptedPayload = try await p2pClient.decryptMessage(nanoTDFData)
-            print("ChatViewModel: Successfully decrypted incoming P2P data.")
-
-            // 2. Deserialize the payload into ThoughtServiceModel
-            let thoughtModel = try ThoughtServiceModel.deserialize(from: decryptedPayload)
-            print("ChatViewModel: Deserialized incoming P2P thought model, creator: \(thoughtModel.creatorPublicID.base58EncodedString)")
-
-            // 3. Ensure it's a relevant message type
-            guard thoughtModel.mediaType == .say else {
-                print("ChatViewModel: Ignoring incoming P2P data with non-chat mediaType: \(thoughtModel.mediaType)")
-                return
-            }
-
-            // **FIX:** Ensure thoughtModel has a publicID before proceeding
-            guard !thoughtModel.publicID.isEmpty else {
-                print("❌ ChatViewModel: Incoming P2P thought model missing publicID.")
-                throw ChatError.missingPublicID
-            }
-
-            // 4. Create and display the ChatMessage
-            let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
-            let timestamp = Date() // TODO: Extract timestamp if included in thoughtModel or metadata
-
-            // Determine username: Use profileID lookup if possible, otherwise fallback to peerDisplayName
-            // FIX 3: Changed check from `profileID != nil` to `!profileID.isEmpty`
-            let username = !profileID.isEmpty ? formatUsername(publicID: thoughtModel.creatorPublicID) : peerDisplayName
-
-            let message = ChatMessage(
-                id: thoughtModel.publicID.base58EncodedString, // Use thought public ID
-                userId: thoughtModel.creatorPublicID.base58EncodedString,
-                username: username + " (P2P)", // Indicate P2P origin
-                content: displayContent,
-                timestamp: timestamp,
-                attachments: [],
-                reactions: [],
-                isPinned: false,
-                publicID: thoughtModel.publicID,
-                creatorPublicID: thoughtModel.creatorPublicID,
-                mediaType: thoughtModel.mediaType,
-                rawContent: thoughtModel.content
-            )
-
-            // 5. Add to UI if not already present
-            if !messages.contains(where: { $0.id == message.id }) {
-                messages.append(message)
-                messages.sort { $0.timestamp < $1.timestamp } // Keep sorted
-                print("ChatViewModel: Added incoming P2P message ID \(message.id) to UI. Total: \(messages.count)")
-            } else {
-                print("ChatViewModel: Incoming P2P message ID \(message.id) already exists. Ignoring duplicate.")
-            }
-
-        } catch {
-            print("❌ ChatViewModel: Failed to handle incoming P2P data: \(error)")
-            // Optionally notify the user or log more details
-        }
-    }
+    // Removed handleIncomingP2PData - Handled by ArkavoClientDelegate and .messageDecrypted notification
 
     // MARK: - UI Helpers
 
     /// Adds a chat message to the local UI, typically after sending.
-    private func addLocalChatMessage(content: String, thoughtPublicID: Data, timestamp: Date, isP2P: Bool = false) {
-        // **FIX:** Ensure thoughtPublicID is not empty before creating message
+    private func addLocalChatMessage(content: String, thoughtPublicID: Data, timestamp: Date) { // Removed isP2P flag
         guard !thoughtPublicID.isEmpty else {
             print("❌ ChatViewModel: Attempted to add local chat message with empty publicID.")
             return
         }
 
         let message = ChatMessage(
-            id: thoughtPublicID.base58EncodedString, // Use thought public ID as message ID
+            id: thoughtPublicID.base58EncodedString,
             userId: profile.publicID.base58EncodedString,
-            username: "Me" + (isP2P ? " (P2P)" : ""),
+            username: "Me", // Simplified username for local messages
             content: content,
             timestamp: timestamp,
             attachments: [],
@@ -441,33 +336,19 @@ class ChatViewModel: ObservableObject {
             publicID: thoughtPublicID,
             creatorPublicID: profile.publicID,
             mediaType: .say,
-            rawContent: content.data(using: .utf8) ?? Data() // Store raw *unencrypted* content for local display
+            rawContent: content.data(using: .utf8) ?? Data()
         )
 
-        // Avoid adding duplicates if somehow already added
         if !messages.contains(where: { $0.id == message.id }) {
             messages.append(message)
-            messages.sort { $0.timestamp < $1.timestamp } // Keep sorted
+            messages.sort { $0.timestamp < $1.timestamp }
             print("ChatViewModel: Added local message ID \(message.id) to UI. Total: \(messages.count)")
         }
     }
 
-    // MARK: - Cryptography Helpers
+    // MARK: - Cryptography Helpers (Now rely on ArkavoClient)
 
-    // Note: These methods are kept for non-P2P message handling that still uses ArkavoClient
-    // For P2P communication, we use P2PClient instead
-
-    /// Encrypts payload data for non-P2P communication using ArkavoClient
-    private func encryptPayload(_ payload: Data, withPolicy policy: String) async throws -> Data {
-        // Use ArkavoClient for non-P2P encryption
-        do {
-            let nanoTDFData = try await client.encryptAndSendPayload(payload: payload, policyData: policy.data(using: .utf8) ?? Data())
-            return nanoTDFData
-        } catch {
-            print("❌ ChatViewModel: NanoTDF Encryption failed: \(error)")
-            throw ChatError.encryptionError(error)
-        }
-    }
+    // Removed encryptPayload - ArkavoClient.encryptAndSendPayload handles this.
 
     // MARK: - Persistence Helpers
 
@@ -477,48 +358,42 @@ class ChatViewModel: ObservableObject {
             creatorPublicID: model.creatorPublicID,
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
-            createdAt: Date(), // Use current date for creation timestamp
-            contributors: [] // Add contributors if applicable/available
+            createdAt: Date(),
+            contributors: []
         )
     }
 
     /// Creates and saves a Thought object to persistence.
     @discardableResult
-    // **FIX:** Modify signature to accept publicID
     private func createAndSaveThought(nanoData: Data, thoughtModel: ThoughtServiceModel, publicID: Data) async throws -> Thought {
         let thoughtMetadata = createThoughtMetadata(from: thoughtModel)
 
-        // Create the Thought object using the standard initializer
         let thought = Thought(
-            nano: nanoData,
+            nano: nanoData, // Store the encrypted NanoTDF data
             metadata: thoughtMetadata
         )
-
-        // **FIX:** Explicitly set the publicID before saving
-        thought.publicID = publicID
+        thought.publicID = publicID // Explicitly set the publicID
 
         do {
-            // Save the thought itself (now with the correct publicID)
             let saved = try await PersistenceController.shared.saveThought(thought)
-
-            // Only associate if the thought was actually saved (not a duplicate)
             if saved {
-                // Associate thought with the stream if the stream exists locally
-                // This task runs asynchronously and doesn't block the return.
-                Task { // Run association in a separate task to avoid blocking
-                    if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) {
-                        // Use the dedicated PersistenceController method for association
+                Task { // Associate asynchronously
+                    do {
+                        // Attempt to fetch the stream
+                        guard let stream = try await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) else {
+                            print("❌ ChatViewModel: Stream with publicID \(streamPublicID.base58EncodedString) not found")
+                            return
+                        }
                         await PersistenceController.shared.associateThoughtWithStream(thought: thought, stream: stream)
                         print("ChatViewModel: Association task completed for thought \(thought.publicID.base58EncodedString) with stream \(stream.publicID.base58EncodedString)")
-                    } else {
-                        print("ChatViewModel: Stream \(streamPublicID.base58EncodedString) not found for thought association.")
+                    } catch {
+                        // Log the specific error if fetching or association fails
+                        print("❌ ChatViewModel: Error associating thought \(thought.publicID.base58EncodedString) with stream \(streamPublicID.base58EncodedString): \(error)")
                     }
                 }
             } else {
                 print("ChatViewModel: Thought \(thought.publicID.base58EncodedString) was a duplicate, skipping association.")
             }
-
-            // This print statement now correctly reflects the ID saved.
             print("ChatViewModel: Saved thought \(thought.publicID.base58EncodedString) locally (Duplicate: \(!saved)).")
             return thought
         } catch {
@@ -527,221 +402,145 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    // MARK: - FlatBuffer Policy Helper (for regular messages)
+    // MARK: - FlatBuffer Policy Helpers (Adjusted for different scenarios)
 
-    private func createPolicyData(for thoughtModel: ThoughtServiceModel) throws -> Data {
-        // **FIX:** Add guard to ensure thoughtModel.publicID is valid before proceeding
-        guard !thoughtModel.publicID.isEmpty else {
-            print("❌ ChatViewModel: Cannot create policy data, thoughtModel.publicID is empty.")
-            throw ChatError.missingPublicID // Or a more specific error
+    /// Creates policy data for messages intended for the current stream.
+    private func createPolicyDataForStream() throws -> Data {
+        // Policy grants access based on having an attribute matching the stream ID.
+        // Assumes recipients get this attribute via KAS.
+        let attribute = "stream:\(streamPublicID.base58EncodedString)"
+        let policyJson = """
+        {
+          "uuid": "\(UUID().uuidString)",
+          "body": {
+            "dataAttributes": [ { "attribute": "\(attribute)" } ],
+            "dissem": []
+          }
         }
-
-        var builder = FlatBufferBuilder()
-
-        let formatVersionString = builder.create(string: "1.0")
-        let formatProfileString = builder.create(string: "standard")
-        let formatInfo = Arkavo_FormatInfo.createFormatInfo(&builder, type: .plain, versionOffset: formatVersionString, profileOffset: formatProfileString)
-
-        // Map app MediaType to Arkavo_MediaType for FlatBuffers
-        let fbMediaType: Arkavo_MediaType = switch thoughtModel.mediaType {
-        case .text: .text
-        case .image: .image
-        case .video: .video
-        case .audio: .audio
-        // Special handling for types not in FlatBuffers schema
-        case .post, .say: .text // Map speech/post types to text
+        """
+        guard let policyData = policyJson.data(using: .utf8) else {
+            throw ChatError.invalidPolicy("Failed to encode stream policy JSON")
         }
-
-        let contentFormat = Arkavo_ContentFormat.createContentFormat(&builder, mediaType: fbMediaType, dataEncoding: .utf8, formatOffset: formatInfo)
-
-        let rating: Offset = Arkavo_Rating.createRating(&builder, violent: .mild, sexual: .none_, profane: .none_, substance: .none_, hate: .none_, harm: .none_, mature: .none_, bully: .none_)
-        let purpose = Arkavo_Purpose.createPurpose(&builder, educational: 0.8, entertainment: 0.2, news: 0.0, promotional: 0.0, personal: 0.0, opinion: 0.1, transactional: 0.0, harmful: 0.0, confidence: 0.9)
-
-        // These vectors now use the correct IDs from the thoughtModel
-        let idVector = builder.createVector(bytes: thoughtModel.publicID)
-        let relatedVector = builder.createVector(bytes: thoughtModel.streamPublicID)
-        let creatorVector = builder.createVector(bytes: thoughtModel.creatorPublicID)
-        let topics: [UInt32] = []
-        let topicsVector = builder.createVector(topics)
-
-        let metadata = Arkavo_Metadata.createMetadata(
-            &builder,
-            created: Int64(Date().timeIntervalSince1970),
-            idVectorOffset: idVector,
-            relatedVectorOffset: relatedVector,
-            creatorVectorOffset: creatorVector,
-            ratingOffset: rating,
-            purposeOffset: purpose,
-            topicsVectorOffset: topicsVector,
-            contentOffset: contentFormat
-        )
-        builder.finish(offset: metadata)
-
-        var buffer = builder.sizedBuffer
-        let rootOffset = buffer.read(def: Int32.self, position: 0)
-        var verifier = try Verifier(buffer: &buffer)
-        try Arkavo_Metadata.verify(&verifier, at: Int(rootOffset), of: Arkavo_Metadata.self)
-
-        return Data(bytes: buffer.memory.advanced(by: buffer.reader), count: Int(buffer.size))
+        // TODO: Validate if this policy structure is correct for ArkavoClient/OpenTDFKit embedded policies.
+        // This creates an *embedded plaintext* policy. ArkavoClient might need a specific format.
+        // The `encryptAndSendPayload` in ArkavoClient creates an embedded policy body. This seems compatible.
+        return policyData
     }
+
+    /// Creates policy data for a direct message to a specific recipient.
+    private func createPolicyDataForDirectMessage(recipientProfileID: Data) throws -> Data {
+        // Policy grants access based on dissem list containing the recipient's profile ID.
+        let policyJson = """
+        {
+          "uuid": "\(UUID().uuidString)",
+          "body": {
+            "dataAttributes": [],
+            "dissem": ["\(recipientProfileID.base58EncodedString)"]
+          }
+        }
+        """
+        guard let policyData = policyJson.data(using: .utf8) else {
+            throw ChatError.invalidPolicy("Failed to encode direct message policy JSON")
+        }
+        // TODO: Validate if this policy structure is correct.
+        return policyData
+    }
+
+    // Removed the complex FlatBuffer policy creation method (`createPolicyData(for:)`)
+    // Replaced with simpler JSON policy creation for embedded policies.
+    // If FlatBuffer policies are strictly required by ArkavoClient, that method needs to be reinstated and adapted.
+    // However, `ArkavoClient.encryptAndSendPayload` seems designed for embedded plaintext policies.
+
+    // MARK: - ArkavoClientDelegate Methods
+
+    nonisolated func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+        Task { @MainActor in
+            print("ChatViewModel: ArkavoClient state changed to \(state)")
+            // Update UI based on state (e.g., show connection status)
+            switch state {
+            case .connected:
+                // Enable input, show connected status
+                break
+            case .disconnected:
+                // Disable input, show disconnected
+                break
+            case .connecting, .authenticating:
+                // Show connecting status
+                break
+            case .error(let error):
+                // Show error message
+                print("ChatViewModel: ArkavoClient error state: \(error)")
+                break
+            }
+        }
+    }
+
+    nonisolated func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+        // This delegate method receives *raw* data from the WebSocket for message types
+        // not handled by specific continuations (like PublicKey, KASKey responses).
+        // This includes NATS messages (0x05, 0x06) which likely contain NanoTDF payloads.
+        print("ChatViewModel: clientDidReceiveMessage raw data length: \(message.count)")
+
+        // We assume ArkavoClient needs to be explicitly told to decrypt this data.
+        // How? If there's no public decrypt method, this data might be undecryptable here.
+        // Revisit Hypothesis: Does ArkavoClient *internally* decrypt NATS messages (0x05)
+        // containing NanoTDFs and *then* post `.messageDecrypted`?
+        // If yes, this delegate method might only receive *other* kinds of messages,
+        // or NATS messages that *failed* internal decryption.
+
+        // Let's assume the `.messageDecrypted` notification is the correct path for now.
+        // This method could log unexpected message types.
+        if let typeByte = message.first {
+            print("ChatViewModel: Received unhandled message type 0x\(String(format: "%02X", typeByte)) via delegate.")
+            // Potentially handle specific non-chat message types if needed in the future.
+            // If ArkavoClient *doesn't* internally decrypt and post notifications for NATS messages,
+            // this is where we would need to call the hypothetical `client.decryptAndNotify(nanoData: message)`
+            // Task {
+            //     try? await client.decryptAndNotify(nanoData: message)
+            // }
+        }
+    }
+
+    nonisolated func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+        Task { @MainActor in
+            print("❌ ChatViewModel: ArkavoClient received error: \(error)")
+            // Display error to user
+        }
+    }
+
+    // --- Removed ArkavoClientDelegate methods related to KeyStore/Peer Profile Updates ---
+    // These seemed specific to the GroupViewModel/Multipeer context in the reference file.
+    // Add them back if ChatViewModel needs to react to these events.
+    // nonisolated func arkavoClientDidUpdateKeyStatus(...)
+    // nonisolated func arkavoClientDidUpdatePeerProfile(...)
+    // nonisolated func arkavoClientEncounteredError(...) // Covered by clientDidReceiveError?
+
 }
 
-// Extension potentially needed on PeerDiscoveryManager (example)
-// extension PeerDiscoveryManager {
-//     func getProfileId(for peerID: MCPeerID) -> String? {
-//         // Implementation to map MCPeerID back to a profile public ID string
-//         // This might involve looking up connected peers' discovery info
-//         return nil // Placeholder
-//     }
-//
-//     func getPeerID(for profileID: Data) -> MCPeerID? {
-//         // Implementation to map a profile public ID to an MCPeerID
-//         // This might involve iterating through connected peers
-//         return nil // Placeholder
-//     }
-//
-//     func sendDirectDataMessage(to peerID: MCPeerID, data: Data, streamID: Data) throws {
-//         // Implementation to send data directly to a peer,
-//         // possibly encoding streamID and data together or using MCSession's send method.
-//         // Example using MCSession:
-//         // guard let session = mcSession else { throw PeerError.notConnected }
-//         // let packet = P2PDataPacket(streamID: streamID, payload: data) // Define a Codable struct/class
-//         // let encodedData = try JSONEncoder().encode(packet)
-//         // try session.send(encodedData, toPeers: [peerID], with: .reliable)
-//     }
-// }
-
-// Extension potentially needed on ArkavoClient
-// extension ArkavoClient {
-//     var tdfClient: TDFClient? {
-//         // Return the configured TDFClient instance used by ArkavoClient
-//         return self._tdfClientInstance // Placeholder for actual property name
-//     }
-// }
-
-// Extension for Thought convenience initializer
+// Extension for Thought convenience initializer (Keep as is)
 extension Thought {
-    // Convenience initializer or static function to create Thought from ThoughtServiceModel
-    // This replaces the previous `from(_ model: ThoughtServiceModel)` which was in an extension.
-    // Note: This assumes Thought's initializer can take publicID directly.
-    // Adjust based on the actual @Model definition.
     convenience init(from model: ThoughtServiceModel, nano: Data) {
-        let metadata = Metadata( // Reconstruct Metadata struct
+        let metadata = Metadata(
             creatorPublicID: model.creatorPublicID,
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
-            createdAt: Date(), // Or get from model if available
-            contributors: [] // Or get from model if available
+            createdAt: Date(),
+            contributors: []
         )
-        // This assumes the primary initializer correctly sets the publicID
-        // based on the provided metadata or nano structure.
-        // If the publicID needs to be explicitly passed from model.publicID,
-        // this initializer or the primary one needs adjustment.
         self.init(nano: nano, metadata: metadata)
-        // **NOTE:** If this convenience init is used, the publicID might still be implicitly set.
-        // The fix applied in createAndSaveThought explicitly sets it *after* initialization.
         if !model.publicID.isEmpty {
-            publicID = model.publicID // Attempt to set it here too, if possible
+            publicID = model.publicID
         }
     }
 }
 
-// MARK: - P2PClientDelegate Implementation
+// Removed P2PClientDelegate Implementation
 
-extension ChatViewModel: P2PClientDelegate {
-    func clientDidReceiveMessage(_: P2PClient, streamID: Data, messageData: Data, from profile: Profile) {
-        // Only process messages for this ChatViewModel's stream
-        guard streamID == streamPublicID else {
-            return
-        }
-
-        print("ChatViewModel: Received message from P2PClient for stream \(streamID.base58EncodedString)")
-
-        // Process the message data to display in UI
-        Task { @MainActor in // Ensure UI updates happen on the main thread
-            do {
-                let thoughtModel = try ThoughtServiceModel.deserialize(from: messageData)
-
-                // Verify it's a chat message type
-                guard thoughtModel.mediaType == .say else {
-                    print("ChatViewModel: Ignoring message with non-chat mediaType: \(thoughtModel.mediaType)")
-                    return
-                }
-
-                // **FIX:** Ensure thoughtModel has a publicID
-                guard !thoughtModel.publicID.isEmpty else {
-                    print("❌ ChatViewModel: Received P2P message missing publicID.")
-                    return // Or handle error appropriately
-                }
-
-                let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
-                let timestamp = Date()
-
-                let message = ChatMessage(
-                    id: thoughtModel.publicID.base58EncodedString,
-                    userId: profile.publicID.base58EncodedString,
-                    username: profile.name, // Use the sender's profile name directly
-                    content: displayContent,
-                    timestamp: timestamp,
-                    attachments: [],
-                    reactions: [],
-                    isPinned: false,
-                    publicID: thoughtModel.publicID,
-                    creatorPublicID: profile.publicID, // Use sender's profile ID
-                    mediaType: thoughtModel.mediaType,
-                    rawContent: thoughtModel.content
-                )
-
-                // Avoid adding duplicates
-                if !messages.contains(where: { $0.id == message.id }) {
-                    messages.append(message)
-                    messages.sort { $0.timestamp < $1.timestamp }
-                    print("ChatViewModel: Added message from P2PClient to UI")
-                }
-            } catch {
-                print("Error processing received P2P message: \(error)")
-            }
-        }
-    }
-
-    func clientDidChangeConnectionStatus(_: P2PClient, status: P2PConnectionStatus) {
-        // Update UI or other state based on connection status
-        Task { @MainActor in
-            switch status {
-            case let .connected(peerCount):
-                print("ChatViewModel: P2P connected with \(peerCount) peers")
-            // Update UI to show connected status
-            case .connecting:
-                print("ChatViewModel: P2P connecting...")
-            // Show connecting status
-            case .disconnected:
-                print("ChatViewModel: P2P disconnected")
-            // Show disconnected status
-            case let .failed(error):
-                print("ChatViewModel: P2P connection failed: \(error)")
-                // Show error
-            }
-        }
-    }
-
-    func clientDidUpdateKeyStatus(_: P2PClient, localKeys: Int, totalCapacity: Int) {
-        // Update UI to show key status if needed
-        print("ChatViewModel: P2P key status: \(localKeys)/\(totalCapacity)")
-    }
-
-    func clientDidEncounterError(_: P2PClient, error: Error) {
-        // Handle errors from P2PClient
-        print("ChatViewModel: P2P error: \(error)")
-    }
-}
-
-// Add UUID extension to support UUID to Data conversion for publicID
+// Add UUID extension (Keep as is)
 extension UUID {
     var uuidStringData: Data {
-        // Convert UUID to Data for use as publicID
         withUnsafeBytes(of: uuid) { Data($0) }
     }
 }
 
-// **FIX:** Removed placeholder extension for PersistenceController
-// The associateThoughtWithStream function is now implemented in PersistenceController.swift
+// Removed placeholder extensions for PeerDiscoveryManager, ArkavoClient, PersistenceController

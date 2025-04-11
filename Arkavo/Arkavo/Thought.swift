@@ -21,7 +21,8 @@ final class Thought: Identifiable { // Removed Codable conformance
     @Attribute(.unique) var publicID: Data
     var stream: Stream?
     var metadata: Metadata
-    var nano: Data // Represents the content payload (e.g., for NanoTDF)
+    // Optimize storage for potentially large binary data (content payload)
+    @Attribute(.externalStorage) var nano: Data // Represents the content payload (e.g., for NanoTDF)
 
     // Default empty init required by SwiftData
     init() {

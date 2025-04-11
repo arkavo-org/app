@@ -34,6 +34,7 @@ class PersistenceController {
     // MARK: - Account Operations
 
     func getOrCreateAccount() async throws -> Account {
+        // Use SwiftData's native predicate syntax
         let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == 0 })
 
         if let existingAccount = try mainContext.fetch(descriptor).first {
@@ -80,15 +81,19 @@ class PersistenceController {
 
     /// Fetches any profile (user's or peer's) based on its publicID.
     func fetchProfile(withPublicID publicID: Data) async throws -> Profile? {
+        // Use SwiftData's native predicate syntax
         var fetchDescriptor = FetchDescriptor<Profile>(predicate: #Predicate { $0.publicID == publicID })
         fetchDescriptor.fetchLimit = 1 // Limiting results for efficiency
         let profiles = try mainContext.fetch(fetchDescriptor)
         return profiles.first
     }
 
-    /// Saves or updates a profile received from a peer.
-    /// Updates `lastSeen` timestamp. Does not overwrite the main user's profile.
-    func savePeerProfile(_ peerProfile: Profile) async throws {
+    /// Saves or updates a profile received from a peer, including their public KeyStore data.
+    /// Does not overwrite the main user's profile.
+    /// - Parameters:
+    ///   - peerProfile: The profile object received from the peer.
+    ///   - keyStorePublicData: Optional public KeyStore data received from the peer.
+    func savePeerProfile(_ peerProfile: Profile, keyStorePublicData: Data? = nil) async throws {
         let userAccount = try await getOrCreateAccount()
 
         // Prevent overwriting the user's own profile through this method
@@ -109,28 +114,37 @@ class PersistenceController {
             existingProfile.hasHighIdentityAssurance = peerProfile.hasHighIdentityAssurance
             existingProfile.did = peerProfile.did // Update DID/Handle if provided
             existingProfile.handle = peerProfile.handle
-            existingProfile.lastSeen = Date() // Update last seen time
-            // KeyStoreData is managed separately through dedicated methods
+            // Update public KeyStore data if provided
+            if let publicData = keyStorePublicData {
+                existingProfile.keyStorePublic = publicData
+                print("PersistenceController: Updated public KeyStore data for peer profile \(existingProfile.publicID.base58EncodedString)")
+            }
+            // Private KeyStore data is never stored for peers
+            existingProfile.keyStorePrivate = nil
         } else {
             // Insert new peer profile
             print("PersistenceController: Saving new peer profile: \(peerProfile.publicID.base58EncodedString)")
-            peerProfile.lastSeen = Date() // Set last seen time
+            // Set public KeyStore data if provided
+            if let publicData = keyStorePublicData {
+                peerProfile.keyStorePublic = publicData
+                print("PersistenceController: Added public KeyStore data for new peer profile \(peerProfile.publicID.base58EncodedString)")
+            }
+            // Private KeyStore data is never stored for peers
+            peerProfile.keyStorePrivate = nil
             mainContext.insert(peerProfile)
         }
 
         try await saveChanges() // Save the insert or update
     }
 
-    /// Deletes a profile and its associated KeyStore data.
-    /// If this is the user's profile, it will reset the account to have no profile.
+    /// Deletes a profile and its associated KeyStore data (public and private).
+    /// If this is the user's profile, it will reset the account to have no profile and create a new empty one.
     func deleteProfile(_ profile: Profile) async throws {
         print("PersistenceController: Deleting profile: \(profile.publicID.base58EncodedString)")
 
         // Clear KeyStore data first
-        profile.keyStoreData = nil
-        profile.keyStoreCurve = nil
-        profile.keyStoreCapacity = nil
-        profile.keyStoreUpdatedAt = nil
+        profile.keyStorePublic = nil
+        profile.keyStorePrivate = nil
 
         // Check if this is the user's profile
         let userAccount = try await getOrCreateAccount()
@@ -157,24 +171,22 @@ class PersistenceController {
             try await saveChanges()
         }
     }
-    
-    /// Deletes only the KeyStore data for a profile, keeping the profile itself.
-    /// This is useful for removing a peer from the InnerCircle without deleting their profile.
+
+    /// Deletes only the KeyStore data (public and private) for a profile, keeping the profile itself.
+    /// This is useful for removing a peer from the InnerCircle without deleting their profile information.
     func deleteKeyStoreDataFor(profile: Profile) async throws {
         print("PersistenceController: Deleting KeyStore data for profile: \(profile.publicID.base58EncodedString)")
-        
+
         // Ensure we are using the profile instance from the context if possible
         guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
             print("PersistenceController: Profile not found. Cannot delete KeyStore data.")
             throw ArkavoError.profileError("Profile not found in the database")
         }
-        
+
         // Clear all KeyStore-related data
-        profileInContext.keyStoreData = nil
-        profileInContext.keyStoreCurve = nil
-        profileInContext.keyStoreCapacity = nil
-        profileInContext.keyStoreUpdatedAt = nil
-        
+        profileInContext.keyStorePublic = nil
+        profileInContext.keyStorePrivate = nil
+
         // Save changes
         try await saveChanges()
         print("PersistenceController: KeyStore data successfully removed for profile \(profileInContext.publicID.base58EncodedString)")
@@ -190,8 +202,11 @@ class PersistenceController {
         }
 
         // Fetch all profiles *except* the one matching the user's publicID
-        let predicate = #Predicate<Profile> { $0.publicID != userProfilePublicID }
-        let descriptor = FetchDescriptor<Profile>(predicate: predicate, sortBy: [SortDescriptor(\.name)]) // Sort alphabetically
+        // Use SwiftData's native predicate syntax
+        let descriptor = FetchDescriptor<Profile>(
+            predicate: #Predicate { $0.publicID != userProfilePublicID },
+            sortBy: [SortDescriptor(\.name)] // Sort alphabetically
+        )
         return try mainContext.fetch(descriptor)
     }
 
@@ -204,8 +219,13 @@ class PersistenceController {
 
     // MARK: - KeyStore Operations
 
-    /// Saves or updates the KeyStore data associated with a given Profile.
-    func saveKeyStoreData(for profile: Profile, serializedData: Data, keyCurve: Curve, capacity: Int) async throws {
+    /// Saves or updates the KeyStore data (public and private) associated with a given Profile.
+    /// This should typically only be used for the local user's profile.
+    /// - Parameters:
+    ///   - profile: The profile to associate the KeyStore data with.
+    ///   - publicData: The serialized public components of the KeyStore.
+    ///   - privateData: The serialized private components of the KeyStore.
+    func saveKeyStoreData(for profile: Profile, publicData: Data, privateData: Data) async throws {
         // Ensure the profile is associated with the context
         guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
             print("PersistenceController Error: Profile \(profile.publicID.base58EncodedString) not found in context. Cannot save KeyStore data.")
@@ -214,18 +234,18 @@ class PersistenceController {
 
         // Update the profile with KeyStore data
         print("PersistenceController: Updating KeyStore data for profile \(profileInContext.publicID.base58EncodedString)")
-        profileInContext.keyStoreData = serializedData
-        profileInContext.keyStoreCurve = keyCurve.rawValue.description
-        profileInContext.keyStoreCapacity = capacity
-        profileInContext.keyStoreUpdatedAt = Date()
+        profileInContext.keyStorePublic = publicData
+        profileInContext.keyStorePrivate = privateData // Save the distinct private data
 
         try await saveChanges()
         print("PersistenceController: KeyStore data saved successfully for profile \(profileInContext.publicID.base58EncodedString)")
     }
 
-    /// Gets KeyStore details for a specific Profile.
-    /// Returns serialized data, curve, and capacity if available
-    func getKeyStoreDetails(for profile: Profile) async throws -> (data: Data, curve: String, capacity: Int)? {
+    /// Gets KeyStore details (public and private data) for a specific Profile.
+    /// This is typically used to load the local user's KeyStore.
+    /// - Parameter profile: The profile whose KeyStore details are needed.
+    /// - Returns: A tuple containing the public and private KeyStore data, or nil if not available.
+    func getKeyStoreDetails(for profile: Profile) async throws -> (public: Data, private: Data)? {
         // Ensure we are using the profile instance from the context if possible
         guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
             print("PersistenceController: Profile \(profile.publicID.base58EncodedString) not found. Cannot fetch KeyStore data.")
@@ -233,23 +253,25 @@ class PersistenceController {
         }
 
         // Check if KeyStore data is available
-        if let keyStoreData = profileInContext.keyStoreData,
-           let keyStoreCurve = profileInContext.keyStoreCurve,
-           let keyStoreCapacity = profileInContext.keyStoreCapacity
+        if let keyStorePublic = profileInContext.keyStorePublic,
+           let keyStorePrivate = profileInContext.keyStorePrivate
         {
-            return (keyStoreData, keyStoreCurve, keyStoreCapacity)
+            return (public: keyStorePublic, private: keyStorePrivate)
         }
 
+        print("PersistenceController: KeyStore public or private data not found for profile \(profileInContext.publicID.base58EncodedString).")
         return nil
     }
 
     // MARK: - Stream Operations
 
     func fetchStream(withID id: UUID) async throws -> Stream? {
+        // Use SwiftData's native predicate syntax
         try mainContext.fetch(FetchDescriptor<Stream>(predicate: #Predicate { $0.id == id })).first
     }
 
     func fetchStream(withPublicID publicID: Data) async throws -> Stream? {
+        // Use SwiftData's native predicate syntax
         let fetchDescriptor = FetchDescriptor<Stream>(predicate: #Predicate { $0.publicID == publicID })
         return try mainContext.fetch(fetchDescriptor).first
     }
@@ -280,6 +302,7 @@ class PersistenceController {
     // MARK: - Thought Operations
 
     func fetchThought(withPublicID publicID: Data) async throws -> [Thought]? {
+        // Use SwiftData's native predicate syntax
         let fetchDescriptor = FetchDescriptor<Thought>(predicate: #Predicate { $0.publicID == publicID })
         return try mainContext.fetch(fetchDescriptor)
     }
@@ -305,6 +328,7 @@ class PersistenceController {
     }
 
     func fetchThoughtsForStream(withPublicID streamPublicID: Data) async throws -> [Thought] {
+        // Use SwiftData's native predicate syntax for nested properties
         let descriptor = FetchDescriptor<Thought>(
             predicate: #Predicate<Thought> { thought in
                 thought.metadata.streamPublicID == streamPublicID
@@ -372,10 +396,10 @@ class PersistenceController {
     }
 
     func isBlockedProfile(_ publicID: Data) async throws -> Bool {
-        // Define a predicate to filter blocked profiles by the given publicID
-        let predicate = #Predicate<BlockedProfile> { $0.blockedPublicID == publicID }
-        // Create a FetchDescriptor with the predicate
-        var descriptor = FetchDescriptor<BlockedProfile>(predicate: predicate)
+        // Use SwiftData's native predicate syntax
+        var descriptor = FetchDescriptor<BlockedProfile>(
+            predicate: #Predicate { $0.blockedPublicID == publicID }
+        )
         descriptor.fetchLimit = 1 // Optimization for faster queries
         // Fetch the blocked profiles that match the predicate
         let blockedProfiles = try mainContext.fetch(descriptor)
@@ -385,8 +409,10 @@ class PersistenceController {
 
     /// Removes a profile from the blocked list
     func unblockProfile(withPublicID publicID: Data) async throws {
-        let predicate = #Predicate<BlockedProfile> { $0.blockedPublicID == publicID }
-        let descriptor = FetchDescriptor<BlockedProfile>(predicate: predicate)
+        // Use SwiftData's native predicate syntax
+        let descriptor = FetchDescriptor<BlockedProfile>(
+            predicate: #Predicate { $0.blockedPublicID == publicID }
+        )
 
         let blockedEntries = try mainContext.fetch(descriptor)
         if blockedEntries.isEmpty {
@@ -402,3 +428,4 @@ class PersistenceController {
         print("PersistenceController: Unblocked profile \(publicID.base58EncodedString).")
     }
 }
+

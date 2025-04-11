@@ -18,14 +18,14 @@ final class Profile: Identifiable, Codable {
     @Attribute(.unique) var did: String?
     var handle: String?
 
-    // Peer metadata
-    var lastSeen: Date?
+    /// Stores the serialized public components of the user's KeyStore.
+    /// Marked for external storage to optimize database performance for potentially large binary data.
+    @Attribute(.externalStorage) var keyStorePublic: Data?
 
-    // Direct storage of serialized KeyStore data
-    var keyStoreData: Data?
-    var keyStoreCurve: String?
-    var keyStoreCapacity: Int?
-    var keyStoreUpdatedAt: Date?
+    /// Stores the serialized private components of the user's KeyStore.
+    /// Marked for external storage to optimize database performance for potentially large binary data.
+    /// This data is highly sensitive and should be handled securely.
+    @Attribute(.externalStorage) var keyStorePrivate: Data?
 
     // Default empty init required by SwiftData
     init() {
@@ -38,8 +38,8 @@ final class Profile: Identifiable, Codable {
         hasHighIdentityAssurance = false
         // Generate the publicID from the initialized id
         publicID = Profile.generatePublicID(from: newID)
-        lastSeen = nil // Initialize new property
-        keyStoreData = nil // Initialize relationship
+        keyStorePublic = nil // Initialize new property
+        keyStorePrivate = nil // Initialize new property
     }
 
     init(
@@ -49,8 +49,7 @@ final class Profile: Identifiable, Codable {
         interests: String = "",
         location: String = "",
         hasHighEncryption: Bool = false,
-        hasHighIdentityAssurance: Bool = false,
-        lastSeen: Date? = nil // Add new property to init
+        hasHighIdentityAssurance: Bool = false
     ) {
         self.id = id // Use provided or default UUID
         self.name = name
@@ -61,8 +60,8 @@ final class Profile: Identifiable, Codable {
         self.hasHighIdentityAssurance = hasHighIdentityAssurance
         // Generate publicID from the id
         publicID = Profile.generatePublicID(from: id)
-        self.lastSeen = lastSeen // Initialize new property
-        keyStoreData = nil // Initialize relationship
+        keyStorePublic = nil // Initialize new property
+        keyStorePrivate = nil // Initialize new property
     }
 
     func finalizeRegistration(did: String, handle: String) {
@@ -98,8 +97,7 @@ final class Profile: Identifiable, Codable {
         case did
         case handle
         // Do not include these in peer exchange encoding:
-        // - lastSeen (ephemeral connection data)
-        // - keyStoreData, keyStoreCurve, keyStoreCapacity, keyStoreUpdatedAt (sensitive security data)
+        // - keyStorePublic, keyStorePrivate (sensitive security data)
     }
 
     // Encoder
@@ -131,13 +129,14 @@ final class Profile: Identifiable, Codable {
         did = try container.decodeIfPresent(String.self, forKey: .did)
         handle = try container.decodeIfPresent(String.self, forKey: .handle)
         // Initialize non-coded properties
-        lastSeen = nil // Set lastSeen when the profile is actually seen/updated
-        keyStoreData = nil // Relationship managed separately
+        keyStorePublic = nil // Initialize new property
+        keyStorePrivate = nil // Initialize new property
     }
 
     // MARK: - Serialization Helpers
 
     /// Serializes the profile to Data using JSONEncoder.
+    /// Note: This serialization is intended for peer exchange and excludes sensitive key data.
     func toData() throws -> Data {
         let encoder = JSONEncoder()
         // Optional: Configure date encoding strategy if needed
@@ -147,6 +146,7 @@ final class Profile: Identifiable, Codable {
 
     /// Deserializes a Profile from Data using JSONDecoder.
     /// Note: This creates a new Profile instance, it doesn't update an existing one.
+    /// It expects data conforming to the peer exchange format (excluding sensitive key data).
     static func fromData(_ data: Data) throws -> Profile {
         let decoder = JSONDecoder()
         // Optional: Configure date decoding strategy if needed
