@@ -10,16 +10,6 @@ https://github.com/google/flatbuffers
 brew install flatbuffers
 ```
 
-## Design
-
-### Entity
-
-- Account
-- Profile
-- Stream
-- Content
-- Thought
-
 ## Features
 
 ### One-Time TDF (Trusted Data Format)
