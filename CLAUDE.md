@@ -18,6 +18,7 @@
 - **SwiftUI**: Views as structs, ViewModels as ObservableObject classes
 - **Protocols**: Protocol-oriented design with protocol extensions
 - **Files**: One main type per file, grouped by feature
+- **Refactoring**: Keep changes focused and to a minimum - modify only what's needed for the task
 
 ## Key Features
 

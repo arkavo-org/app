@@ -4,13 +4,14 @@ import SwiftData
 @Model
 final class BlockedProfile {
     var id: UUID
-    var blockedPublicID: Data
+    // Relationship to the Profile being blocked
+    var blockedProfile: Profile?
     var reportTimestamp: Date
     var reportReasons: [String: Int] // Store reason:severity pairs
 
-    init(blockedPublicID: Data, report: ContentReport) {
+    init(blockedProfile: Profile, report: ContentReport) {
         id = UUID()
-        self.blockedPublicID = blockedPublicID
+        self.blockedProfile = blockedProfile // Assign the related Profile object
         reportTimestamp = report.timestamp
         // Explicitly map to Int values
         reportReasons = Dictionary(uniqueKeysWithValues: report.reasons.map { reason, severity in

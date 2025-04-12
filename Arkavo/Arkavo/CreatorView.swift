@@ -193,6 +193,12 @@ struct CreatorDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+             // Refresh blocked users when the view appears, in case changes happened elsewhere
+             Task {
+                 await viewModel.loadBlockedProfiles()
+             }
+         }
     }
 
     @ViewBuilder
@@ -230,7 +236,13 @@ struct BlockedUsersSection: View {
                 }
             }
             .padding(.vertical)
-        }
+        } else if viewModel.isProfileOwner {
+             // Optionally show a message if the list is empty for the owner
+             Text("No users are currently blocked.")
+                 .font(.subheadline)
+                 .foregroundColor(.secondary)
+                 .padding()
+         }
     }
 }
 
@@ -247,17 +259,22 @@ struct BlockedUserRow: View {
             HStack {
                 Label {
                     if let profile {
-                        Text(profile.handle)
+                        Text(profile.handle) // Display handle if profile loaded
                             .lineLimit(1)
                     } else if isLoadingProfile {
                         Text("Loading profile...")
                             .foregroundStyle(.secondary)
                     } else if let error = errorMessage {
-                        Text(error)
+                        Text(error) // Show specific error
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text(blockedProfile.blockedPublicID.base58EncodedString)
+                    } else if let publicID = blockedProfile.blockedProfile?.publicID {
+                        // Display publicID if profile not loaded but available
+                        Text(publicID.base58EncodedString)
                             .lineLimit(1)
+                    } else {
+                        // Fallback if profile relationship is nil
+                        Text("Unknown User (Missing Profile Link)")
+                            .foregroundStyle(.secondary)
                     }
                 } icon: {
                     Image(systemName: "person.slash.fill")
@@ -302,7 +319,13 @@ struct BlockedUserRow: View {
             Button("Unblock", role: .destructive, action: onUnblock)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Are you sure you want to unblock this user? They will be able to interact with your content again.")
+            if let handle = profile?.handle {
+                Text("Are you sure you want to unblock \(handle)? They will be able to interact with your content again.")
+            } else if let publicID = blockedProfile.blockedProfile?.publicID {
+                Text("Are you sure you want to unblock user \(publicID.base58EncodedString)? They will be able to interact with your content again.")
+            } else {
+                Text("Are you sure you want to unblock this user? They will be able to interact with your content again.")
+            }
         }
         .task {
             await loadProfile()
@@ -310,18 +333,32 @@ struct BlockedUserRow: View {
     }
 
     private func loadProfile() async {
+        // Ensure we have the related profile
+        guard let targetProfile = blockedProfile.blockedProfile else {
+            // If the relationship is broken, we can't load the profile details
+            errorMessage = "Blocked profile data missing"
+            return
+        }
+        // Access publicID directly since it's non-optional on Profile
+        let publicID = targetProfile.publicID
+
         guard !isLoadingProfile else { return }
 
         isLoadingProfile = true
+        errorMessage = nil // Clear previous errors
         defer { isLoadingProfile = false }
 
         do {
             let client = ViewModelFactory.shared.serviceLocator.resolve() as ArkavoClient
-            profile = try await client.fetchProfile(forPublicID: blockedProfile.blockedPublicID)
-        } catch ArkavoError.profileNotFound {
-            errorMessage = "Profile not found"
+            // Fetch using the publicID (Data) from the related Profile
+            profile = try await client.fetchProfile(forPublicID: publicID)
         } catch {
-            errorMessage = "Error loading profile"
+            if case ArkavoError.profileNotFound(_) = error {
+                errorMessage = "Profile not found"
+            } else {
+                errorMessage = "Error loading profile"
+                print("Error loading profile for \(publicID.base58EncodedString): \(error)")
+            }
         }
     }
 }
@@ -772,7 +809,7 @@ final class CreatorViewModel: ViewModel, ObservableObject {
     @Published private(set) var postThoughts: [Thought] = []
     @Published private(set) var supportedCreators: [Creator] = []
     @Published private(set) var messages: [Message] = []
-    @Published private(set) var blockedProfiles: [BlockedProfile] = []
+    @Published var blockedProfiles: [BlockedProfile] = [] // Made mutable for refresh
 
     var isProfileOwner: Bool {
         if let accountProfile = account.profile {
@@ -795,10 +832,17 @@ final class CreatorViewModel: ViewModel, ObservableObject {
     func loadBlockedProfiles() async {
         do {
             let profiles = try await PersistenceController.shared.fetchBlockedProfiles()
-            blockedProfiles = profiles
+            // Ensure updates happen on the main thread
+            await MainActor.run {
+                self.blockedProfiles = profiles
+                print("CreatorViewModel: Loaded \(profiles.count) blocked profiles.")
+            }
         } catch {
-            print("Error loading blocked profiles: \(error)")
-            blockedProfiles = []
+            print("CreatorViewModel Error: Failed to load blocked profiles: \(error)")
+            await MainActor.run {
+                self.blockedProfiles = [] // Clear list on error
+                handleError(error) // Optionally show error to user
+            }
         }
     }
 
@@ -881,19 +925,41 @@ final class CreatorViewModel: ViewModel, ObservableObject {
 
     func unblockProfile(_ blockedProfile: BlockedProfile) async {
         isLoading = true
-        do {
-            // Remove from Core Data
-            let context = PersistenceController.shared.container.mainContext
-            context.delete(blockedProfile)
-            try await PersistenceController.shared.saveChanges()
+        defer { isLoading = false } // Ensure isLoading is set to false when the function exits
 
-            // Refresh the blocked profiles list
+        do {
+            // Try to unblock using the publicID first
+            if let targetPublicID = blockedProfile.blockedProfile?.publicID {
+                print("CreatorViewModel: Attempting to unblock profile using publicID: \(targetPublicID.base58EncodedString)")
+                try await PersistenceController.shared.unblockProfile(withPublicID: targetPublicID)
+                print("CreatorViewModel: Successfully unblocked profile via PersistenceController.")
+            } else {
+                // Fallback: If publicID is not available (e.g., relationship broken), delete the BlockedProfile entity directly
+                print("CreatorViewModel Warning: Blocked profile publicID not found or relationship broken. Falling back to direct deletion of BlockedProfile entity.")
+                // Ensure the object is managed by the context before deleting
+                if blockedProfile.modelContext != nil {
+                    let context = PersistenceController.shared.mainContext // Use mainContext directly
+                    context.delete(blockedProfile)
+                    try await PersistenceController.shared.saveChanges()
+                    print("CreatorViewModel: Successfully deleted BlockedProfile entity directly.")
+                } else {
+                    // If the object isn't even in the context, it might already be deleted or was never saved properly.
+                    // Log this situation, as it might indicate an issue elsewhere.
+                    print("CreatorViewModel Warning: BlockedProfile entity to be deleted is not managed by the context. Skipping direct deletion.")
+                    // We still refresh the list below in case it was removed by another process or the state is inconsistent.
+                }
+            }
+
+            // Refresh the blocked profiles list regardless of the method used
             await loadBlockedProfiles()
+            print("CreatorViewModel: Blocked profiles list refreshed after unblock operation.")
+
         } catch {
-            handleError(error)
+            print("CreatorViewModel Error: Error during unblock operation: \(error)")
+            handleError(error) // Use the existing error handling
         }
-        isLoading = false
     }
+
 
     func loadSupportedCreators() async {
 //        isLoading = true
@@ -950,8 +1016,13 @@ final class CreatorViewModel: ViewModel, ObservableObject {
     // MARK: - Helper Methods
 
     private func handleError(_ error: Error) {
-        self.error = error
-        isLoading = false
+        // Ensure UI updates related to error handling are on the main thread
+        Task { @MainActor in
+            self.error = error
+            self.isLoading = false
+            // Optionally, present the error to the user here
+            print("CreatorViewModel Error Handled: \(error.localizedDescription)")
+        }
     }
 }
 
