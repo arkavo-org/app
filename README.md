@@ -62,6 +62,7 @@ sequenceDiagram
     participant CVM as ChatViewModel
     participant P2P as P2PClient
     participant UI as ChatView
+
     WS->>+Router: Receives Binary Message (Data)
     Router->>+AC: Get context/routing info
     AC-->>-Router: Context/Info
@@ -74,12 +75,12 @@ sequenceDiagram
         alt mediaType == .say
             CVM->>CVM: Extract message content
             CVM->>+UI: Update displayed messages
-            UI-->>-CVM:
+            UI-->>-CVM: Message displayed
         end
-    else Is Other Message Type
+    else
         Router->>Router: Handle other message types
     end
-    Router-->>-WS:
+    Router-->>-WS: Processing complete
 ```
 
 ### Initialize
@@ -94,8 +95,22 @@ PATREON_CLIENT_SECRET=
 ```
 
 ```shell
-source .env; echo "// Do not commit.\nstruct Secrets {\n    static let youtubeClientId = \"${YOUTUBE_CLIENT_ID}\"\n    static let youtubeClientSecret = \"${YOUTUBE_CLIENT_SECRET}\"\n    static let redditClientId = \"${REDDIT_CLIENT_ID}\"\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "Arkavo/Arkavo/Secrets.swift"
-source .env; echo "// Do not commit.\nstruct Secrets {\n    static let youtubeClientId = \"${YOUTUBE_CLIENT_ID}\"\n    static let youtubeClientSecret = \"${YOUTUBE_CLIENT_SECRET}\"\n    static let redditClientId = \"${REDDIT_CLIENT_ID}\"\n    static let patreonClientId = \"${PATREON_CLIENT_ID}\"\n    static let patreonClientSecret = \"${PATREON_CLIENT_SECRET}\"\n}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
+source .env; echo "// Do not commit.
+struct Secrets {
+    static let youtubeClientId = "${YOUTUBE_CLIENT_ID}"
+    static let youtubeClientSecret = "${YOUTUBE_CLIENT_SECRET}"
+    static let redditClientId = "${REDDIT_CLIENT_ID}"
+    static let patreonClientId = "${PATREON_CLIENT_ID}"
+    static let patreonClientSecret = "${PATREON_CLIENT_SECRET}"
+}" > "Arkavo/Arkavo/Secrets.swift"
+source .env; echo "// Do not commit.
+struct Secrets {
+    static let youtubeClientId = "${YOUTUBE_CLIENT_ID}"
+    static let youtubeClientSecret = "${YOUTUBE_CLIENT_SECRET}"
+    static let redditClientId = "${REDDIT_CLIENT_ID}"
+    static let patreonClientId = "${PATREON_CLIENT_ID}"
+    static let patreonClientSecret = "${PATREON_CLIENT_SECRET}"
+}" > "ArkavoCreator/ArkavoCreator/Secrets.swift"
 ```
 
 Note adding `[ -f "${SRCROOT}/.env" ] && source "${SRCROOT}/.env";` to the Run Script in Build Phases may be needed.
@@ -178,11 +193,7 @@ erDiagram
         Boolean hasHighIdentityAssurance
         String did UK "nullable, unique"
         String handle "nullable"
-        Date lastSeen "nullable"
-        Data keyStoreData "nullable"
-        String keyStoreCurve "nullable"
-        Int keyStoreCapacity "nullable"
-        Date keyStoreUpdatedAt "nullable"
+        Data keyStoreData "nullable, external storage"
     }
 
     Stream {
@@ -200,7 +211,7 @@ erDiagram
         UUID id PK "unique"
         Data publicID UK "unique"
         Metadata metadata "Codable struct"
-        Data nano
+        Data nano "external storage"
         Stream stream FK "(0..1)"
     }
 
