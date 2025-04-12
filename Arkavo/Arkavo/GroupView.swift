@@ -1139,16 +1139,16 @@ struct GroupView: View {
             // Update on main thread to ensure UI updates properly
             DispatchQueue.main.async { [self] in // Explicitly capture self
                 print("🔄 Updating UI state for popup")
-                self.nonJsonBase64Data = base64Data
-                self.nonJsonDataSize = dataSize
-                self.nonJsonPeerName = peerName
-                self.showNonJsonDataPopup = true
+                nonJsonBase64Data = base64Data
+                nonJsonDataSize = dataSize
+                nonJsonPeerName = peerName
+                showNonJsonDataPopup = true
                 print("🎯 showNonJsonDataPopup set to true")
 
                 // Auto-hide after 10 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
                     print("⏱️ Auto-hiding popup after 10 seconds")
-                    self.showNonJsonDataPopup = false
+                    showNonJsonDataPopup = false
                 }
             }
         }
@@ -1254,7 +1254,7 @@ struct InnerCircleView: View {
     // All offline profiles (in InnerCircle but not currently connected)
     private var offlineProfiles: [Profile] {
         // Get IDs of online profiles for efficient lookup
-        let onlineProfileIDs = Set(onlineProfiles.map { $0.id })
+        let onlineProfileIDs = Set(onlineProfiles.map(\.id))
         // Filter the full list of InnerCircle members
         return innerCircleProfiles.filter { profile in
             !onlineProfileIDs.contains(profile.id)
@@ -1423,7 +1423,7 @@ struct InnerCircleView: View {
                 }
 
                 // Empty state
-                if onlineToShow.isEmpty, (offlineToShow.isEmpty || !showOfflineMembers) {
+                if onlineToShow.isEmpty, offlineToShow.isEmpty || !showOfflineMembers {
                     emptyStateView
                 }
             }

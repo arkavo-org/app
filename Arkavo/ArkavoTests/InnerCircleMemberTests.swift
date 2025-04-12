@@ -1,7 +1,7 @@
-import XCTest
-import SwiftData
 import Combine
 import MultipeerConnectivity // Required for MCPeerID
+import SwiftData
+import XCTest
 
 // Assuming Profile and related types are accessible for testing
 // If not, minimal stub versions might be needed here.
@@ -72,13 +72,13 @@ class MockPersistenceController {
             mockProfiles[profile.publicID] = fetchedProfile
             print("MockPersistenceController: Simulated keyStoreData removal for profile ID: \(profile.publicID)")
         } else {
-             print("MockPersistenceController: Profile ID \(profile.publicID) not found in mock store for key removal simulation.")
+            print("MockPersistenceController: Profile ID \(profile.publicID) not found in mock store for key removal simulation.")
         }
     }
 
     // Mock fetchProfile if needed by the logic calling deleteKeyStoreDataFor
     func fetchProfile(withPublicID publicID: Data) async throws -> Profile? {
-         print("MockPersistenceController: fetchProfile called for profile ID: \(publicID)")
+        print("MockPersistenceController: fetchProfile called for profile ID: \(publicID)")
         if shouldThrowError {
             throw mockError
         }
@@ -112,7 +112,6 @@ class MockPeerDiscoveryManager: ObservableObject {
 // MARK: - InnerCircleMemberTests
 
 final class InnerCircleMemberTests: XCTestCase {
-
     var mockPersistenceController: MockPersistenceController!
     var mockPeerDiscoveryManager: MockPeerDiscoveryManager!
     var testProfile: Profile!
@@ -127,7 +126,6 @@ final class InnerCircleMemberTests: XCTestCase {
         testProfile = Profile(publicID: Data("testProfileID".utf8), name: "Test Member", keyStoreData: Data("initialKeyData".utf8))
         // Add the profile to the mock controller's store so fetchProfile can find it if needed
         mockPersistenceController.addMockProfile(testProfile)
-
 
         // Create a sample MCPeerID
         // Note: MCPeerID display name should ideally match or relate to the profile for clarity
@@ -159,9 +157,9 @@ final class InnerCircleMemberTests: XCTestCase {
         XCTAssertEqual(mockPersistenceController.lastProfileDeletedKeyStoreFor, testProfile.publicID, "deleteKeyStoreDataFor was called with the wrong profile ID.")
 
         // Optional: Assert the key data was cleared in the mock store (if simulation is implemented)
-         let updatedProfile = mockPersistenceController.mockProfiles[testProfile.publicID]
-         XCTAssertNil(updatedProfile?.keyStoreData, "keyStoreData should be nil in the mock store after deletion.")
-         print("Test Assertion: Verified keyStoreData is nil for profile ID \(testProfile.publicID) in mock store.")
+        let updatedProfile = mockPersistenceController.mockProfiles[testProfile.publicID]
+        XCTAssertNil(updatedProfile?.keyStoreData, "keyStoreData should be nil in the mock store after deletion.")
+        print("Test Assertion: Verified keyStoreData is nil for profile ID \(testProfile.publicID) in mock store.")
     }
 
     @MainActor func testRemoveMemberDisconnectsPeer() {
@@ -174,25 +172,23 @@ final class InnerCircleMemberTests: XCTestCase {
         // Assert: Verify the mock method was called correctly
         XCTAssertTrue(mockPeerDiscoveryManager.disconnectPeerCalled, "disconnectPeer should have been called.")
         XCTAssertEqual(mockPeerDiscoveryManager.lastPeerDisconnected, testPeerID, "disconnectPeer was called with the wrong peer ID.")
-         print("Test Assertion: Verified disconnectPeer was called for peer \(testPeerID.displayName).")
+        print("Test Assertion: Verified disconnectPeer was called for peer \(testPeerID.displayName).")
     }
 
     func testRemoveMemberPostsNotification() {
         // Arrange
         let notificationName = Notification.Name.refreshInnerCircleMembers
         let expectation = XCTNSNotificationExpectation(name: notificationName)
-         print("Test Arrangement: Setting up expectation for notification '\(notificationName.rawValue)'")
-
+        print("Test Arrangement: Setting up expectation for notification '\(notificationName.rawValue)'")
 
         // Act: Simulate the action that posts the notification.
         // This would typically happen after successful member removal logic.
         NotificationCenter.default.post(name: notificationName, object: nil)
-         print("Test Action: Posting notification '\(notificationName.rawValue)'")
-
+        print("Test Action: Posting notification '\(notificationName.rawValue)'")
 
         // Assert: Wait for the notification expectation to be fulfilled
         wait(for: [expectation], timeout: 1.0)
-         print("Test Assertion: Notification '\(notificationName.rawValue)' received.")
+        print("Test Assertion: Notification '\(notificationName.rawValue)' received.")
     }
 
     // Example of testing error handling in deleteKeyStoreDataFor
@@ -212,9 +208,9 @@ final class InnerCircleMemberTests: XCTestCase {
         }
 
         // Assert that the call flag might still be false or handle as appropriate based on implementation
-         // Depending on where the error is thrown in the real method, the flag might or might not be set.
-         // If the call fails early, it might remain false. Adjust assertion based on expected behavior.
-         // XCTAssertFalse(mockPersistenceController.deleteKeyStoreDataForCalled, "deleteKeyStoreDataForCalled should be false if an error occurred early.")
-         print("Test Assertion: Verified error handling path.")
+        // Depending on where the error is thrown in the real method, the flag might or might not be set.
+        // If the call fails early, it might remain false. Adjust assertion based on expected behavior.
+        // XCTAssertFalse(mockPersistenceController.deleteKeyStoreDataForCalled, "deleteKeyStoreDataForCalled should be false if an error occurred early.")
+        print("Test Assertion: Verified error handling path.")
     }
 }

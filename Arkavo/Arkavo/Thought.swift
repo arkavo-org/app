@@ -190,7 +190,7 @@ extension Thought {
         let thought = Thought(nano: nano, metadata: metadata)
         // If the service model's publicID should override the UUID-based one:
         if !model.publicID.isEmpty {
-             thought.publicID = model.publicID
+            thought.publicID = model.publicID
         }
         return thought
     }

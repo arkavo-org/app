@@ -1,14 +1,9 @@
 import ArkavoSocial
 import CryptoKit
 import FlatBuffers
-// import MultipeerConnectivity // Removed if not directly needed, ArkavoClient might handle internally
 import OpenTDFKit
 import SwiftData
 import SwiftUI
-
-// Helper extension to convert Swift MediaType to FlatBuffers Arkavo_MediaType
-// Assuming MediaType enum cases match Arkavo_MediaType cases. Adjust if needed.
-// REMOVED MediaType extension as requested
 
 @MainActor
 class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to ArkavoClientDelegate
@@ -83,7 +78,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         }
     }
 
-
     func setupNotifications() {
         print("ChatViewModel: setupNotifications")
         // Clean up any existing observers
@@ -147,10 +141,10 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             // Extract timestamp directly from the deserialized thought model
             let timestamp = thoughtModel.createdAt
 
-            let message = ChatMessage(
+            let message = await ChatMessage(
                 id: thoughtModel.publicID.base58EncodedString, // Use thought public ID
                 userId: thoughtModel.creatorPublicID.base58EncodedString,
-                username: await formatUsername(publicID: thoughtModel.creatorPublicID), // Fetch username async
+                username: formatUsername(publicID: thoughtModel.creatorPublicID), // Fetch username async
                 content: displayContent,
                 timestamp: timestamp, // Use timestamp from the model
                 attachments: [],
@@ -225,7 +219,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             print("ChatViewModel: Sending as direct message to \(directProfile.name)")
             policyData = try createPolicyDataForDirectMessage(recipientProfileID: directProfile.publicID)
         } else if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID),
-                  stream.isInnerCircleStream {
+                  stream.isInnerCircleStream
+        {
             print("ChatViewModel: Sending as P2P message in stream \(stream.publicID.base58EncodedString)")
             policyData = try createPolicyDataForStream() // Assumes stream policy
         } else {
@@ -358,7 +353,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         )
     }
 
-
     /// Creates and saves a Thought object to persistence.
     @discardableResult
     private func createAndSaveThought(nanoData: Data, thoughtModel: ThoughtServiceModel, publicID: Data) async throws -> Thought {
@@ -450,7 +444,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
 
     // MARK: - ArkavoClientDelegate Methods
 
-    nonisolated func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
         Task { @MainActor in
             print("ChatViewModel: ArkavoClient state changed to \(state)")
             // Update UI based on state (e.g., show connection status)
@@ -464,14 +458,14 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             case .connecting, .authenticating:
                 // Show connecting status
                 print("ChatViewModel: Client connecting or authenticating")
-            case .error(let error):
+            case let .error(error):
                 // Show error message
                 print("ChatViewModel: ArkavoClient error state: \(error)")
             }
         }
     }
 
-    nonisolated func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
         // This delegate method receives *raw* data from the WebSocket for message types
         // not handled by specific continuations (like PublicKey, KASKey responses).
         // This includes NATS messages (0x05, 0x06) which likely contain NanoTDF payloads.
@@ -497,7 +491,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         }
     }
 
-    nonisolated func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
         Task { @MainActor in
             print("❌ ChatViewModel: ArkavoClient received error: \(error)")
             // Display error to user
@@ -510,7 +504,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
     // nonisolated func arkavoClientDidUpdateKeyStatus(...)
     // nonisolated func arkavoClientDidUpdatePeerProfile(...)
     // nonisolated func arkavoClientEncounteredError(...) // Covered by clientDidReceiveError?
-
 }
 
 // Extension for Thought convenience initializer (Keep as is)

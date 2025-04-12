@@ -136,11 +136,11 @@ enum ConnectionStatus: Equatable {
         switch (lhs, rhs) {
         case (.idle, .idle), (.searching, .searching),
              (.connecting, .connecting), (.connected, .connected):
-            return true
+            true
         case let (.failed(lhsError), .failed(rhsError)):
-            return lhsError.localizedDescription == rhsError.localizedDescription
+            lhsError.localizedDescription == rhsError.localizedDescription
         default:
-            return false
+            false
         }
     }
 }
@@ -626,12 +626,12 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // stream.addThought(thought) // This might cause issues if stream is not the managed instance
         // Fetch the managed stream instance to be safe
         if let managedStream = try await persistenceController.fetchStream(withPublicID: stream.publicID) {
-             // Check if thought is already associated to prevent duplicates if saveThought handles it
+            // Check if thought is already associated to prevent duplicates if saveThought handles it
             if !(managedStream.thoughts.contains { $0.persistentModelID == thought.persistentModelID }) {
                 managedStream.addThought(thought) // Assuming addThought exists and handles relationships
             }
         } else {
-             print("Warning: Could not find managed stream instance to associate thought.")
+            print("Warning: Could not find managed stream instance to associate thought.")
         }
 
         try await PersistenceController.shared.saveChanges()
@@ -670,7 +670,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                         print("Fetched profile for \(peer.displayName) (\(idString))")
                         // Ensure local map is updated
                         if peerIDToProfileID[peer] == nil {
-                             peerIDToProfileID[peer] = idString
+                            peerIDToProfileID[peer] = idString
                         }
                     } else {
                         print("Profile for \(peer.displayName) (\(idString)) not found locally yet.")
@@ -730,7 +730,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
     // MARK: - ArkavoClientDelegate Methods
 
-    nonisolated func arkavoClientDidUpdateKeyStatus(_ client: ArkavoClient, keyCount: Int, capacity: Int, isRegenerating: Bool) {
+    nonisolated func arkavoClientDidUpdateKeyStatus(_: ArkavoClient, keyCount: Int, capacity: Int, isRegenerating: Bool) {
         Task { @MainActor in
             print("Delegate: ArkavoClient Key Status Update - Keys: \(keyCount)/\(capacity), Regenerating: \(isRegenerating)")
             self.localKeyStoreInfo = (count: keyCount, capacity: capacity)
@@ -738,7 +738,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    nonisolated func arkavoClientDidReceiveMessage(_ client: ArkavoClient, message: String, fromProfileID: Data, streamID: Data?) {
+    nonisolated func arkavoClientDidReceiveMessage(_: ArkavoClient, message: String, fromProfileID: Data, streamID: Data?) {
         Task { @MainActor in
             print("Delegate: ArkavoClient Received Message from \(fromProfileID.base58EncodedString)")
             guard let currentStream = self.selectedStream, currentStream.publicID == streamID else {
@@ -789,7 +789,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    nonisolated func arkavoClientDidUpdatePeerProfile(_ client: ArkavoClient, profile: Profile, publicKeyStoreData: Data?) {
+    nonisolated func arkavoClientDidUpdatePeerProfile(_: ArkavoClient, profile: Profile, publicKeyStoreData: Data?) {
         Task { @MainActor in
             print("Delegate: ArkavoClient Updated Peer Profile: \(profile.name) (\(profile.publicID.base58EncodedString))")
             do {
@@ -806,7 +806,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    nonisolated func arkavoClientEncounteredError(_ client: ArkavoClient, error: Error) {
+    nonisolated func arkavoClientEncounteredError(_: ArkavoClient, error: Error) {
         Task { @MainActor in
             print("Delegate: ArkavoClient Encountered Error: \(error.localizedDescription)")
             // Update connection status or display error to user
@@ -817,7 +817,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     // Add other ArkavoClientDelegate methods as needed based on its definition
     // e.g., func arkavoClientDidUpdateConnection(...)
     // Implement required methods if ArkavoClientDelegate protocol demands them
-    nonisolated func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
         // Example implementation (can be expanded)
         Task { @MainActor in
             print("Delegate: ArkavoClient State Changed: \(state)")
@@ -825,7 +825,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    nonisolated func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
         // This delegate method receives *raw* data from the WebSocket/NATS
         // It's distinct from the P2P message delegate method above.
         // P2PGroupViewModel might not need to handle these directly if ChatViewModel does.
@@ -834,7 +834,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    nonisolated func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
         // This seems redundant with arkavoClientEncounteredError, but implement if required.
         Task { @MainActor in
             print("Delegate: ArkavoClient Received Error: \(error.localizedDescription)")
@@ -842,7 +842,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
         }
     }
-
 }
 
 // MARK: - MCSessionDelegate
@@ -894,12 +893,12 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 let peerIdentifier = peerID.displayName
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
                     guard let self else { return }
-                    if self.connectionStatus == .connecting,
-                       !self.connectedPeers.contains(where: { $0.displayName == peerIdentifier })
+                    if connectionStatus == .connecting,
+                       !connectedPeers.contains(where: { $0.displayName == peerIdentifier })
                     {
                         print("⚠️ Connection to \(peerIdentifier) timed out")
-                        if self.connectedPeers.isEmpty {
-                            self.connectionStatus = self.isSearchingForPeers ? .searching : .idle
+                        if connectedPeers.isEmpty {
+                            connectionStatus = isSearchingForPeers ? .searching : .idle
                         }
                     }
                 }

@@ -428,4 +428,3 @@ class PersistenceController {
         print("PersistenceController: Unblocked profile \(publicID.base58EncodedString).")
     }
 }
-
