@@ -10,8 +10,6 @@ https://github.com/google/flatbuffers
 brew install flatbuffers
 ```
 
-```
-
 ## Design
 
 ### Entity
@@ -51,6 +49,38 @@ One-Time TDF combines the trusted data format with a one‑time pad encryption s
 - **Interoperability with TDF Infrastructure**: Seamlessly integrates with existing Trusted Data Format encryption systems, enabling enhanced policy enforcement and auditability.
 
 ## Development
+
+### WebSocket NanoTDF Decryption Process
+
+A WebSocket receives a binary message. The `ArkavoMessageRouter` consults the `ArkavoClient` for necessary context (like user session or routing details). The router then checks if the message is a NanoTDF by identifying its magic number (`0x4C314C`). If it is, the NanoTDF data is routed to the appropriate `ChatViewModel`. The `ChatViewModel` utilizes the `P2PClient` to decrypt the NanoTDF payload. The resulting decrypted data is then deserialized into a `ThoughtServiceModel`. If the message type is `.say` (indicating a chat message), the content is extracted and displayed in the `ChatView`.
+
+```mermaid
+sequenceDiagram
+    participant WS as WebSocket
+    participant Router as ArkavoMessageRouter
+    participant AC as ArkavoClient
+    participant CVM as ChatViewModel
+    participant P2P as P2PClient
+    participant UI as ChatView
+    WS->>+Router: Receives Binary Message (Data)
+    Router->>+AC: Get context/routing info
+    AC-->>-Router: Context/Info
+    Router->>Router: Check magic number (0x4C314C)
+    alt Is NanoTDF
+        Router->>+CVM: Route NanoTDF Data (based on context)
+        CVM->>+P2P: decryptMessage(nanoTDFData)
+        P2P-->>-CVM: Return Decrypted Payload (Data)
+        CVM->>CVM: Deserialize Payload to ThoughtServiceModel
+        alt mediaType == .say
+            CVM->>CVM: Extract message content
+            CVM->>+UI: Update displayed messages
+            UI-->>-CVM:
+        end
+    else Is Other Message Type
+        Router->>Router: Handle other message types
+    end
+    Router-->>-WS:
+```
 
 ### Initialize
 
