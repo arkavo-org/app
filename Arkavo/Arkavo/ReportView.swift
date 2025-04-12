@@ -11,6 +11,7 @@ struct ReportView: View {
     @State private var includeContentSnapshot = true
     @State private var showingBlockConfirmation = false
     @State private var blockUser = false
+    @State private var submissionError: String? = nil // For showing errors
 
     let content: Any
     let contentId: String
@@ -86,6 +87,15 @@ struct ReportView: View {
                                 showingBlockConfirmation = true
                             }
                         }
+                }
+
+                // Display submission error if any
+                if let error = submissionError {
+                    Section {
+                        Text("Error: \(error)")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
                 }
 
                 Section {
@@ -164,6 +174,7 @@ struct ReportView: View {
     private func submitReport() {
         Task {
             do {
+                submissionError = nil // Clear previous errors
                 let accountProfilePublicID = viewModel.profile.publicID
 
                 // Create the report object
@@ -180,13 +191,26 @@ struct ReportView: View {
                 if blockUser,
                    let creatorPublicID = contributor?.profilePublicID
                 {
-                    // set optional
+                    // Set optional blockedPublicID for the report serialization
                     report.blockedPublicID = creatorPublicID.base58EncodedString
-                    let blockedProfile = BlockedProfile(
-                        blockedPublicID: creatorPublicID,
+
+                    // Fetch the Profile to block
+                    guard let profileToBlock = try await PersistenceController.shared.fetchProfile(withPublicID: creatorPublicID) else {
+                        print("ReportView Error: Could not find profile with publicID \(creatorPublicID.base58EncodedString) to block.")
+                        // Optionally set an error state for the UI
+                        submissionError = "Could not find the user profile to block."
+                        // Decide if you want to proceed with submitting the report without blocking
+                        // For now, we'll stop the submission process if blocking fails
+                        return
+                    }
+
+                    // Create BlockedProfile with the fetched Profile object
+                    let blockedProfileEntry = BlockedProfile(
+                        blockedProfile: profileToBlock,
                         report: report
                     )
-                    try await PersistenceController.shared.saveBlockedProfile(blockedProfile)
+                    try await PersistenceController.shared.saveBlockedProfile(blockedProfileEntry)
+                    print("ReportView: Successfully saved blocked profile entry for \(creatorPublicID.base58EncodedString)")
                 }
 
                 // Submit report using ViewModel
@@ -195,7 +219,8 @@ struct ReportView: View {
                 // Show confirmation message
                 showingConfirmation = true
             } catch {
-                print("Failed to submit the report: \(error.localizedDescription)")
+                print("Failed to submit the report or block user: \(error.localizedDescription)")
+                submissionError = "Failed to submit report: \(error.localizedDescription)"
             }
         }
     }
@@ -236,7 +261,7 @@ class ReportViewModel: ViewModel {
         let encoder = JSONEncoder()
         let reportData = try encoder.encode(report)
 
-        // Create target ID from report ID
+        // Create target ID from report ID and optional blocked ID
         let targetId = "\(report.contentId)\(report.blockedPublicID ?? "")"
 
         // Create vectors for target ID and payload

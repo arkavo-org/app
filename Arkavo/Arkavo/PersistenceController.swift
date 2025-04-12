@@ -372,22 +372,46 @@ class PersistenceController {
             throw ArkavoError.profileError("Current profile not found")
         }
 
+        // Get the publicID of the profile being blocked
+        guard let targetPublicID = blockedProfile.blockedProfile?.publicID else {
+            print("PersistenceController Error: BlockedProfile is missing the related Profile object.")
+            throw ArkavoError.profileError("Blocked profile reference missing")
+        }
+
         // Prevent blocking self as a data integrity measure
-        if blockedProfile.blockedPublicID == userProfilePublicID {
+        if targetPublicID == userProfilePublicID {
             print("PersistenceController Error: Attempted to block own profile.")
             throw ArkavoError.profileError("Cannot block own profile")
         }
 
         // Check if already blocked to prevent duplicates
-        let alreadyBlocked = try await isBlockedProfile(blockedProfile.blockedPublicID)
+        let alreadyBlocked = try await isBlockedProfile(targetPublicID)
         if alreadyBlocked {
-            print("PersistenceController: Profile \(blockedProfile.blockedPublicID.base58EncodedString) is already blocked.")
+            print("PersistenceController: Profile \(targetPublicID.base58EncodedString) is already blocked.")
             return
         }
 
+        // Ensure the related Profile is managed by the context before inserting BlockedProfile
+        if let profileToBlock = blockedProfile.blockedProfile, profileToBlock.modelContext == nil {
+             // If the profile exists but isn't in the context, fetch it or handle appropriately.
+             // For simplicity here, we assume the Profile object passed in is either already
+             // managed or should be managed. If it's not managed, inserting BlockedProfile
+             // might implicitly insert the Profile if cascade rules allow, or fail.
+             // A safer approach might be to fetch the Profile by ID first.
+             print("PersistenceController Warning: Related profile \(targetPublicID.base58EncodedString) is not in the context. Ensure it's managed before saving BlockedProfile.")
+             // Optionally fetch and assign the managed instance:
+             // if let managedProfile = try await fetchProfile(withPublicID: targetPublicID) {
+             //     blockedProfile.blockedProfile = managedProfile
+             // } else {
+             //     print("PersistenceController Error: Profile to block not found in database.")
+             //     throw ArkavoError.profileError("Profile to block not found")
+             // }
+        }
+
+
         mainContext.insert(blockedProfile)
         try await saveChanges()
-        print("PersistenceController: Blocked profile \(blockedProfile.blockedPublicID.base58EncodedString) saved.")
+        print("PersistenceController: Blocked profile \(targetPublicID.base58EncodedString) saved.")
     }
 
     func fetchBlockedProfiles() async throws -> [BlockedProfile] {
@@ -396,9 +420,9 @@ class PersistenceController {
     }
 
     func isBlockedProfile(_ publicID: Data) async throws -> Bool {
-        // Use SwiftData's native predicate syntax
+        // Use SwiftData's native predicate syntax, checking the related profile's publicID
         var descriptor = FetchDescriptor<BlockedProfile>(
-            predicate: #Predicate { $0.blockedPublicID == publicID }
+            predicate: #Predicate { $0.blockedProfile?.publicID == publicID }
         )
         descriptor.fetchLimit = 1 // Optimization for faster queries
         // Fetch the blocked profiles that match the predicate
@@ -409,9 +433,9 @@ class PersistenceController {
 
     /// Removes a profile from the blocked list
     func unblockProfile(withPublicID publicID: Data) async throws {
-        // Use SwiftData's native predicate syntax
+        // Use SwiftData's native predicate syntax, checking the related profile's publicID
         let descriptor = FetchDescriptor<BlockedProfile>(
-            predicate: #Predicate { $0.blockedPublicID == publicID }
+            predicate: #Predicate { $0.blockedProfile?.publicID == publicID }
         )
 
         let blockedEntries = try mainContext.fetch(descriptor)
@@ -428,4 +452,3 @@ class PersistenceController {
         print("PersistenceController: Unblocked profile \(publicID.base58EncodedString).")
     }
 }
-
