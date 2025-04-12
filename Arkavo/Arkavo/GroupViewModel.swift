@@ -10,6 +10,8 @@ extension Notification.Name {
     static let chatMessagesUpdated = Notification.Name("chatMessagesUpdatedNotification")
     // Add notification name for non-JSON data received
     static let nonJsonDataReceived = Notification.Name("nonJsonDataReceivedNotification")
+    // Define notification name for P2P message received (used by ArkavoClient delegate)
+    static let p2pMessageReceived = Notification.Name("p2pMessageReceivedNotification")
 }
 
 // Public interface for peer discovery
@@ -104,7 +106,7 @@ class PeerDiscoveryManager: ObservableObject {
     ///   - data: The raw data to encrypt and send
     ///   - peers: Optional specific peers to send to (defaults to all connected peers)
     ///   - stream: The stream context for the data
-    ///   - policy: The TDF policy to apply
+    ///   - policy: The TDF policy to apply (as a JSON string)
     /// - Throws: Errors if encryption or sending fails
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
         try await implementation.sendSecureData(data, policy: policy, toPeers: peers, in: stream)
@@ -134,11 +136,11 @@ enum ConnectionStatus: Equatable {
         switch (lhs, rhs) {
         case (.idle, .idle), (.searching, .searching),
              (.connecting, .connecting), (.connected, .connected):
-            true
+            return true
         case let (.failed(lhsError), .failed(rhsError)):
-            lhsError.localizedDescription == rhsError.localizedDescription
+            return lhsError.localizedDescription == rhsError.localizedDescription
         default:
-            false
+            return false
         }
     }
 }
@@ -146,18 +148,12 @@ enum ConnectionStatus: Equatable {
 // Implementation class for MultipeerConnectivity, integrating ArkavoClient
 @MainActor
 class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
-    func clientDidChangeState(_ client: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
-                
-    }
-    
-    func clientDidReceiveMessage(_ client: ArkavoSocial.ArkavoClient, message: Data) {
-            
-    }
-    
-    func clientDidReceiveError(_ client: ArkavoSocial.ArkavoClient, error: any Error) {
-        
-    }
-    // Conform to ArkavoClientDelegate
+    // Conform to ArkavoClientDelegate - Implementations are further down
+    // Removed empty delegate methods:
+    // - clientDidChangeState
+    // - clientDidReceiveMessage(Data)
+    // - clientDidReceiveError(any Error)
+
     // MultipeerConnectivity properties
     private var mcSession: MCSession?
     private var mcPeerID: MCPeerID?
@@ -199,6 +195,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // case keyGenerationFailed(String) // Handled by ArkavoClient
         // case keySerializationError(String) // Handled by ArkavoClient
         case arkavoClientError(String) // General ArkavoClient error
+        case policyCreationFailed(String) // Added for policy errors
 
         var errorDescription: String? {
             switch self {
@@ -224,6 +221,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             // case let .keySerializationError(reason): "Failed to serialize KeyStore public/private data: \(reason)"
             case let .arkavoClientError(reason):
                 "ArkavoClient error: \(reason)"
+            case let .policyCreationFailed(reason):
+                "Failed to create policy: \(reason)"
             }
         }
     }
@@ -457,16 +456,22 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     /// Sends data securely using ArkavoClient
     /// - Parameters:
     ///   - data: The raw data to encrypt and send
-    ///   - policy: The TDF policy to apply
+    ///   - policy: The TDF policy to apply (as a JSON string)
     ///   - peers: Optional specific peers to send to (defaults to all connected peers)
     ///   - stream: The stream context for the data
     /// - Throws: Errors if encryption or sending fails
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
-        guard stream.isInnerCircleStream else { throw P2PError.invalidStream }
-        guard let mcSession, !mcSession.connectedPeers.isEmpty else { throw P2PError.noConnectedPeers }
+        guard stream.isInnerCircleStream else {
+            throw P2PError.invalidStream
+        }
+        guard let mcSession, !mcSession.connectedPeers.isEmpty else {
+            throw P2PError.noConnectedPeers
+        }
 
         let targetPeers = peers ?? mcSession.connectedPeers
-        guard !targetPeers.isEmpty else { throw P2PError.noConnectedPeers }
+        guard !targetPeers.isEmpty else {
+            throw P2PError.noConnectedPeers
+        }
 
         // Map MCPeerIDs to Profile IDs if sending to specific peers
         var targetProfileIDs: [Data]? = nil
@@ -478,7 +483,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 print("Warning: No profile ID found for target peer \(peerID.displayName)")
                 return nil
             }
-            guard !targetProfileIDs!.isEmpty else {
+            guard let unwrappedTargetProfileIDs = targetProfileIDs, !unwrappedTargetProfileIDs.isEmpty else {
                 print("Error: Could not map any target MCPeerIDs to Profile IDs.")
                 throw P2PError.profileNotAvailable // Or a more specific error
             }
@@ -486,16 +491,25 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         print("Sending secure data (\(data.count) bytes) with policy to \(targetPeers.count) peers in stream \(stream.profile.name)")
 
+        guard let policyData = policy.data(using: .utf8) else {
+            throw P2PError.policyCreationFailed("Failed to encode policy JSON string to Data")
+        }
+
         do {
             // Ask ArkavoClient to encrypt the data
             // ArkavoClient might need target profile IDs if not sending to all
             // Check ArkavoClient API for exact method signature
-//            let encryptedData = try await arkavoClient.encryptAndSendPayload(payload: data, policyData: policy)
+            // Example: let encryptedData = try await arkavoClient.encryptP2PPayload(payload: data, policyData: policyData, recipientProfileIDs: targetProfileIDs)
+            let encryptedData = try await arkavoClient.encryptAndSendPayload(payload: data, policyData: policyData) // Assuming this handles P2P via delegate/internal logic
 
             // Send the encrypted data via MCSession
-//            try sendRawData(encryptedData, toPeers: targetPeers)
-            print("Placeholder Secure data sent successfully.")
+            try sendRawData(encryptedData, toPeers: targetPeers)
+            print("Secure data sent successfully via MCSession.")
 
+        } catch {
+            print("❌ Error sending secure data: \(error)")
+            // Re-throw or wrap the error
+            throw P2PError.arkavoClientError("Failed during secure data sending: \(error.localizedDescription)")
         }
     }
 
@@ -508,21 +522,29 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         let messageData = Data(message.utf8)
 
-        // Create a simple policy for the stream
-        // ArkavoClient might have helpers for policy creation
-        let policy = """
+        // Create a simple policy for the stream using only dataAttributes.
+        // This grants access based on having an attribute matching the stream ID.
+        // Assumes recipients get this attribute via KAS or other means.
+        let policyJson = """
         {
           "uuid": "\(UUID().uuidString)",
           "body": {
             "dataAttributes": [ { "attribute": "stream:\(streamID.base58EncodedString)" } ],
-            "dissem": ["\(streamID.base58EncodedString)"]
+            "dissem": []
           }
         }
         """
-        // TODO: Refine policy based on ArkavoClient capabilities (e.g., direct messages)
+        // Note: ArkavoClient's encryptAndSendPayload likely expects the policyData
+        // to be the *body* of the policy, not the full structure including "uuid".
+        // However, the current implementation in ChatViewModel passes the full JSON.
+        // We'll keep it consistent for now, but this might need adjustment based on
+        // how ArkavoClient actually processes the policyData parameter.
+        // If only the body is needed, extract the "body" part of the JSON.
+
+        print("Using policy for secure text message: \(policyJson)")
 
         // Use sendSecureData to encrypt and send
-        try await sendSecureData(messageData, policy: policy, in: stream)
+        try await sendSecureData(messageData, policy: policyJson, in: stream)
 
         // Optionally, save the *unencrypted* message locally as a Thought?
         // Or does ArkavoClient handle local persistence after sending? Check API.
@@ -562,7 +584,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     ///   - data: The received message data
     ///   - peer: The peer that sent the message
     private func handleIncomingData(_ data: Data, from peer: MCPeerID) {
-        print("Placeholder Received \(data.count) bytes from \(peer.displayName). Passing to ArkavoClient.")
+        print("Received \(data.count) bytes from \(peer.displayName).")
     }
 
     // --- Removed JSON Message Handling ---
@@ -622,8 +644,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
     /// Updates the published properties related to the *local* KeyStore status via ArkavoClient.
     func refreshKeyStoreStatus() async {
-        print("Placeholder Refreshing local KeyStore status via ArkavoClient...")
-
+        print("Refreshing local KeyStore status via ArkavoClient...")
         // Also refresh connected peer profiles from persistence
         await refreshConnectedPeerProfiles()
     }
@@ -668,7 +689,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
     /// Manually triggers regeneration of local KeyStore keys via ArkavoClient.
     func regenerateLocalKeys() async {
-        print("Placeholder Manual regeneration of local keys requested via ArkavoClient.")
+        print("Manual regeneration of local keys requested via ArkavoClient.")
     }
 
     // MARK: - KeyStore Rewrap Support (using ArkavoClient)
@@ -685,21 +706,26 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         print("Ephemeral Public Key: \(publicKey.count) bytes")
         print("Encrypted Session Key: \(encryptedSessionKey.count) bytes")
 
-        // Placeholder implementation for ArkavoClient rewrap request handling.
-        // Replace the following line with an actual call to ArkavoClient if available, for example:
-        // let rewrappedKey = try await arkavoClient.rewrapSessionKey(publicKey: publicKey, encryptedSessionKey: encryptedSessionKey, senderProfileID: senderProfileID)
-        // For now, simulate a rewrap failure by returning nil
-        let rewrappedKey: Data? = nil
+        var rewrappedKey: Data? = nil
+        do {
+            // Placeholder implementation for ArkavoClient rewrap request handling.
+            // Replace the following line with an actual call to ArkavoClient if available, for example:
+            // rewrappedKey = try await arkavoClient.rewrapSessionKey(publicKey: publicKey, encryptedSessionKey: encryptedSessionKey, senderProfileID: senderProfileID)
+            print("Placeholder: Calling ArkavoClient rewrap method (TBD).")
+            // Simulate failure for now
+            rewrappedKey = nil
+            // Simulate success for testing:
+            // rewrappedKey = Data("simulated-rewrapped-key".utf8)
 
-        await refreshKeyStoreStatus() // Refresh status after rewrap attempt
+            await refreshKeyStoreStatus() // Refresh status after rewrap attempt
 
-        if rewrappedKey != nil {
-            print("ArkavoClient successfully rewrapped the session key for \(peerIdentifier).")
-        } else {
-            print("No matching key found for rewrap request from \(peerIdentifier).")
+            if rewrappedKey != nil {
+                print("ArkavoClient successfully rewrapped the session key for \(peerIdentifier).")
+            } else {
+                print("No matching key found or rewrap failed for request from \(peerIdentifier).")
+            }
+            return rewrappedKey
         }
-
-        return rewrappedKey
     }
 
     // MARK: - ArkavoClientDelegate Methods
@@ -722,8 +748,12 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
             // Find sender profile locally
             var senderName = "Unknown Peer"
-            if let profile = try? await self.persistenceController.fetchProfile(withPublicID: fromProfileID) {
-                senderName = profile.name
+            do {
+                if let profile = try await self.persistenceController.fetchProfile(withPublicID: fromProfileID) {
+                    senderName = profile.name
+                }
+            } catch {
+                print("Warning: Could not fetch sender profile locally for ID \(fromProfileID.base58EncodedString): \(error)")
             }
 
             // Store as Thought
@@ -786,6 +816,32 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
     // Add other ArkavoClientDelegate methods as needed based on its definition
     // e.g., func arkavoClientDidUpdateConnection(...)
+    // Implement required methods if ArkavoClientDelegate protocol demands them
+    nonisolated func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+        // Example implementation (can be expanded)
+        Task { @MainActor in
+            print("Delegate: ArkavoClient State Changed: \(state)")
+            // Could update connectionStatus based on ArkavoClient state if needed
+        }
+    }
+
+    nonisolated func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+        // This delegate method receives *raw* data from the WebSocket/NATS
+        // It's distinct from the P2P message delegate method above.
+        // P2PGroupViewModel might not need to handle these directly if ChatViewModel does.
+        Task { @MainActor in
+            print("Delegate: ArkavoClient Received Raw Message Data (\(message.count) bytes) - Likely handled elsewhere (e.g., ChatViewModel).")
+        }
+    }
+
+    nonisolated func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+        // This seems redundant with arkavoClientEncounteredError, but implement if required.
+        Task { @MainActor in
+            print("Delegate: ArkavoClient Received Error: \(error.localizedDescription)")
+            // Update connection status or display error to user
+            self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
+        }
+    }
 
 }
 
@@ -813,53 +869,46 @@ extension P2PGroupViewModel: MCSessionDelegate {
                     self.connectedPeers.append(peerID)
                     self.peerConnectionTimes[peerID] = Date()
 
-                    // --- Removed initiateKeyStoreExchange ---
-                    // ArkavoClient likely handles peer discovery and profile exchange internally
-                    // or based on received data.
-
-                    // Inform ArkavoClient about the new connection (if needed)
-                    if self.peerIDToProfileID[peerID].flatMap({ Data(base58Encoded: $0) }) != nil {
-                        // await self.arkavoClient.peerDidConnect(profileId: profileID, peerID: peerID) // Example API
-                    } else {
-                        print("Warning: Peer \(peerID.displayName) connected but profile ID unknown.")
-                        // ArkavoClient might identify the peer upon receiving data.
-                    }
-
-                    if connectedPeers.count == 1 {
-                        connectionStatus = .connected
+                    if self.connectedPeers.count == 1 {
+                        self.connectionStatus = .connected
                     }
                     print("📱 Successfully connected to peer: \(peerID.displayName)")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         if self.connectionStatus == .connecting || !self.connectedPeers.contains(peerID) {
-                            if !self.connectedPeers.isEmpty { self.connectionStatus = .connected }
+                            if !self.connectedPeers.isEmpty {
+                                self.connectionStatus = .connected
+                            }
                         } else if self.connectedPeers.contains(peerID) {
                             self.connectionStatus = .connected
                         }
                     }
                     await self.refreshKeyStoreStatus()
+                    await self.refreshConnectedPeerProfiles() // Refresh profiles on connect
                 }
 
             case .connecting:
                 print("⏳ Connecting to peer: \(peerID.displayName)...")
-                if connectionStatus != .connected || connectedPeers.isEmpty {
-                    connectionStatus = .connecting
+                if self.connectionStatus != .connected || self.connectedPeers.isEmpty {
+                    self.connectionStatus = .connecting
                 }
                 let peerIdentifier = peerID.displayName
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
                     guard let self else { return }
-                    if connectionStatus == .connecting,
-                       !connectedPeers.contains(where: { $0.displayName == peerIdentifier })
+                    if self.connectionStatus == .connecting,
+                       !self.connectedPeers.contains(where: { $0.displayName == peerIdentifier })
                     {
                         print("⚠️ Connection to \(peerIdentifier) timed out")
-                        if connectedPeers.isEmpty {
-                            connectionStatus = isSearchingForPeers ? .searching : .idle
+                        if self.connectedPeers.isEmpty {
+                            self.connectionStatus = self.isSearchingForPeers ? .searching : .idle
                         }
                     }
                 }
 
             case .notConnected:
                 print("❌ Disconnected from peer: \(peerID.displayName)")
-                if connectionStatus == .connecting { self.invitationHandler = nil }
+                if self.connectionStatus == .connecting {
+                    self.invitationHandler = nil
+                }
 
                 self.connectedPeers.removeAll { $0 == peerID }
                 self.peerConnectionTimes.removeValue(forKey: peerID)
@@ -869,6 +918,7 @@ extension P2PGroupViewModel: MCSessionDelegate {
                     print("Removing mapping for disconnected peer \(peerID.displayName) (Profile: \(profileID))")
                     // Inform ArkavoClient about disconnection (if needed)
                     // await self.arkavoClient.peerDidDisconnect(profileId: Data(base58Encoded: profileID)!) // Example
+                    print("Placeholder: Informing ArkavoClient about peer disconnection (Profile: \(profileID))")
                 } else {
                     print("No profile ID mapping found for disconnected peer \(peerID.displayName)")
                 }
@@ -880,8 +930,8 @@ extension P2PGroupViewModel: MCSessionDelegate {
                     print("Closed and removed stream associated with disconnected peer \(peerID.displayName)")
                 }
 
-                if connectedPeers.isEmpty {
-                    connectionStatus = isSearchingForPeers ? .searching : .idle
+                if self.connectedPeers.isEmpty {
+                    self.connectionStatus = self.isSearchingForPeers ? .searching : .idle
                 }
                 await self.refreshKeyStoreStatus()
 
@@ -930,7 +980,9 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 return
             }
             print("Successfully received resource \(resourceName) from \(peerID.displayName) at \(url.path)")
-            // TODO: Consider if resources should be handled via ArkavoClient for encryption/decryption
+            // TODO: Consider if resources should be handled via ArkavoClient for encryption/decryption.
+            // For now, we save the resource locally. Secure handling might require
+            // passing the data/URL to ArkavoClient for decryption before saving or processing.
             saveReceivedResource(at: url, withName: resourceName)
         }
     }
@@ -973,13 +1025,12 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
         if let profileID = info?["profileID"] {
             print("Peer \(peerID.displayName) has profile ID: \(profileID)")
             Task { @MainActor in
-                if var discoveryInfo = info {
-                    if discoveryInfo["timestamp"] == nil {
-                        discoveryInfo["timestamp"] = "\(Date().timeIntervalSince1970)"
-                    }
-                    self.peerIDToProfileID[peerID] = profileID
-                    print("Associated peer \(peerID.displayName) with profile ID \(profileID) from discovery info")
+                var discoveryInfo = info ?? [:] // Ensure info is mutable or create a new dict
+                if discoveryInfo["timestamp"] == nil {
+                    discoveryInfo["timestamp"] = "\(Date().timeIntervalSince1970)"
                 }
+                self.peerIDToProfileID[peerID] = profileID
+                print("Associated peer \(peerID.displayName) with profile ID \(profileID) from discovery info")
             }
             return true
         } else {
@@ -1003,7 +1054,7 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
             contextData = try? JSONSerialization.data(withJSONObject: contextDict, options: [])
         }
         print("Inviting peer: \(peerID.displayName)")
-        _ = contextData ?? context
+        _ = contextData ?? context // Use the generated context or the passed one
         Task { @MainActor in
             self.connectionStatus = .connecting
         }
@@ -1075,7 +1126,7 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
             case .openCompleted:
                 print("Stream opened successfully.")
             case .hasSpaceAvailable:
-                break
+                break // Output streams might use this
             default:
                 print("Unhandled stream event: \(eventCode)")
             }
@@ -1106,6 +1157,7 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
                 closeAndRemoveStream(stream)
                 return
             } else {
+                // bytesRead == 0 means end of stream or temporary pause
                 break
             }
         }

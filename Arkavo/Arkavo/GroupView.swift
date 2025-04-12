@@ -213,7 +213,7 @@ final class GroupViewModel: ViewModel, ObservableObject {
             creatorPublicID: Data(creatorPublicId),
             profile: Profile(
                 name: streamName,
-                blurb: profile.blurb,
+                blurb: streamProfile.blurb ?? "", // Use blurb from streamProfile, not self.profile
                 interests: streamProfile.interests ?? "",
                 location: streamProfile.location ?? "",
                 hasHighEncryption: streamProfile.encryptionLevel == .el2,
@@ -334,9 +334,6 @@ final class GroupViewModel: ViewModel, ObservableObject {
 
         try await client.sendNATSEvent(data)
     }
-
-    // Removed shareVideo function as it was commented out and not implemented
-    // func shareVideo(_ video: Video, to stream: Stream) async { ... }
 
     nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
         Task { @MainActor in
@@ -486,6 +483,11 @@ struct GroupView: View {
     // Store notification observer token
     @State private var nonJsonObserver: NSObjectProtocol?
 
+    // Static constant for the base URL used in sharing
+    static let streamBaseURL = "https://app.arkavo.com/stream/"
+    // Static constant for "just now" string
+    static let justNowString = "just now"
+
     var body: some View {
         if sharedState.showCreateView {
             GroupCreateView(viewModel: viewModel)
@@ -556,7 +558,8 @@ struct GroupView: View {
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if let stream = viewModel.selectedStream {
-                let urlString = "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)"
+                // Use the static constant to build the URL
+                let urlString = "\(GroupView.streamBaseURL)\(stream.publicID.base58EncodedString)"
                 if let url = URL(string: urlString) {
                     ShareSheet(
                         activityItems: [url],
@@ -584,70 +587,10 @@ struct GroupView: View {
         // Refresh peer profiles when the view appears or peer list changes
         .onAppear {
             Task { await peerManager.refreshKeyStoreStatus() } // Also refreshes profiles
-
-            // Add notification observer for non-JSON data
-            // Store the token so we can remove it when the view disappears
-            // Debug print notification name to ensure it's correct
-            let notificationName = Notification.Name.nonJsonDataReceived
-            print("🔔 Setting up observer for notification: \(notificationName.rawValue)")
-
-            nonJsonObserver = NotificationCenter.default.addObserver(
-                forName: notificationName,
-                object: nil,
-                queue: .main
-            ) { notification in
-                print("🔥 NOTIFICATION RECEIVED in GroupView: nonJsonDataReceived")
-
-                guard let userInfo = notification.userInfo else {
-                    print("❌ Notification has no userInfo")
-                    return
-                }
-
-                print("📄 Notification userInfo: \(userInfo)")
-
-                guard let base64Data = userInfo["data"] as? String else {
-                    print("❌ No base64Data in notification")
-                    return
-                }
-
-                guard let dataSize = userInfo["dataSize"] as? Int else {
-                    print("❌ No dataSize in notification")
-                    return
-                }
-
-                guard let peerName = userInfo["peerName"] as? String else {
-                    print("❌ No peerName in notification")
-                    return
-                }
-
-                print("✅ Received non-JSON data notification: \(dataSize) bytes from \(peerName)")
-
-                // Update on main thread to ensure UI updates properly
-                DispatchQueue.main.async { [self] in
-                    print("🔄 Updating UI state for popup")
-                    nonJsonBase64Data = base64Data
-                    nonJsonDataSize = dataSize
-                    nonJsonPeerName = peerName
-                    showNonJsonDataPopup = true
-                    print("🎯 showNonJsonDataPopup set to true")
-
-                    // Auto-hide after 10 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                        print("⏱️ Auto-hiding popup after 10 seconds")
-                        showNonJsonDataPopup = false
-                    }
-                }
-            }
-
-            print("Added non-JSON data notification observer")
+            setupNonJsonDataObserver()
         }
         .onDisappear {
-            // Remove observer when view disappears
-            if let observer = nonJsonObserver {
-                NotificationCenter.default.removeObserver(observer)
-                nonJsonObserver = nil
-                print("Removed non-JSON data notification observer")
-            }
+            removeNonJsonDataObserver()
         }
         .onChange(of: peerManager.connectedPeers) { _, _ in
             Task { await peerManager.refreshKeyStoreStatus() } // Refresh profiles when peers change
@@ -1108,7 +1051,7 @@ struct GroupView: View {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
 
-        if timeInterval < 60 { return "just now" }
+        if timeInterval < 60 { return GroupView.justNowString } // Use constant
         if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
         if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
 
@@ -1155,6 +1098,71 @@ struct GroupView: View {
             }
         }
     }
+
+    // Setup non-JSON data observer
+    private func setupNonJsonDataObserver() {
+        // Add notification observer for non-JSON data
+        let notificationName = Notification.Name.nonJsonDataReceived
+        print("🔔 Setting up observer for notification: \(notificationName.rawValue)")
+
+        nonJsonObserver = NotificationCenter.default.addObserver(
+            forName: notificationName,
+            object: nil,
+            queue: .main
+        ) { [self] notification in // Explicitly capture self
+            print("🔥 NOTIFICATION RECEIVED in GroupView: nonJsonDataReceived")
+
+            guard let userInfo = notification.userInfo else {
+                print("❌ Notification has no userInfo")
+                return
+            }
+
+            print("📄 Notification userInfo: \(userInfo)")
+
+            guard let base64Data = userInfo["data"] as? String else {
+                print("❌ No base64Data in notification")
+                return
+            }
+
+            guard let dataSize = userInfo["dataSize"] as? Int else {
+                print("❌ No dataSize in notification")
+                return
+            }
+
+            guard let peerName = userInfo["peerName"] as? String else {
+                print("❌ No peerName in notification")
+                return
+            }
+
+            print("✅ Received non-JSON data notification: \(dataSize) bytes from \(peerName)")
+
+            // Update on main thread to ensure UI updates properly
+            DispatchQueue.main.async { [self] in // Explicitly capture self
+                print("🔄 Updating UI state for popup")
+                self.nonJsonBase64Data = base64Data
+                self.nonJsonDataSize = dataSize
+                self.nonJsonPeerName = peerName
+                self.showNonJsonDataPopup = true
+                print("🎯 showNonJsonDataPopup set to true")
+
+                // Auto-hide after 10 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    print("⏱️ Auto-hiding popup after 10 seconds")
+                    self.showNonJsonDataPopup = false
+                }
+            }
+        }
+        print("Added non-JSON data notification observer")
+    }
+
+    // Remove non-JSON data observer
+    private func removeNonJsonDataObserver() {
+        if let observer = nonJsonObserver {
+            NotificationCenter.default.removeObserver(observer)
+            nonJsonObserver = nil
+            print("Removed non-JSON data notification observer")
+        }
+    }
 }
 
 // MARK: - InnerCircle Member Views
@@ -1169,6 +1177,7 @@ struct InnerCircleView: View {
     @State private var innerCircleProfiles: [Profile] = [] // All profiles belonging to this InnerCircle
     @State private var showStatusMessage = false
     @State private var statusMessage = ""
+    @State private var refreshObserver: NSObjectProtocol? // Observer token
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1184,30 +1193,55 @@ struct InnerCircleView: View {
             membersScrollView
         }
         .onAppear {
+            setupView() // Call setup function
+            setupNotificationObservers() // Setup observers
+        }
+        .onDisappear {
+            removeNotificationObservers() // Remove observers
+        }
+        .overlay(statusMessageOverlay)
+    }
+
+    // MARK: - Setup and Teardown
+
+    // Initial setup when the view appears
+    private func setupView() {
+        Task {
+            await loadInnerCircleProfiles()
+        }
+        checkForStatusMessage()
+    }
+
+    // Setup notification observers
+    private func setupNotificationObservers() {
+        // Listen for notifications to refresh the member list
+        refreshObserver = NotificationCenter.default.addObserver(
+            forName: .refreshInnerCircleMembers,
+            object: nil,
+            queue: .main
+        ) { _ in
             Task {
                 await loadInnerCircleProfiles()
             }
-
-            // Listen for notifications to refresh the member list
-            NotificationCenter.default.addObserver(
-                forName: .refreshInnerCircleMembers,
-                object: nil,
-                queue: .main
-            ) { _ in
-                Task {
-                    await loadInnerCircleProfiles()
-                }
-            }
-
-            // Check for status messages
-            if let message = sharedState.getState(forKey: "statusMessage") as? String {
-                statusMessage = message
-                showStatusMessage = true
-                // Clear the message after display
-                sharedState.setState("", forKey: "statusMessage")
-            }
         }
-        .overlay(statusMessageOverlay)
+    }
+
+    // Remove notification observers
+    private func removeNotificationObservers() {
+        if let observer = refreshObserver {
+            NotificationCenter.default.removeObserver(observer)
+            refreshObserver = nil
+        }
+    }
+
+    // Check for and display any pending status messages
+    private func checkForStatusMessage() {
+        if let message = sharedState.getState(forKey: "statusMessage") as? String, !message.isEmpty {
+            statusMessage = message
+            showStatusMessage = true
+            // Clear the message after retrieving it
+            sharedState.setState("", forKey: "statusMessage")
+        }
     }
 
     // MARK: - Computed Properties (Refactored for Simplicity)
@@ -1261,18 +1295,18 @@ struct InnerCircleView: View {
     private func loadInnerCircleProfiles() async {
         do {
             // Fetch all profiles that belong to the InnerCircle stream
-            // This would ideally use a relationship query in the real implementation
-            // For now, assume 'innerCircleProfiles' holds the relevant members
-            // We might need a way to fetch profiles specifically associated with 'stream'
+            // TODO: This fetches *all* profiles and filters locally.
+            // Ideally, this should use a relationship query or fetch based on stream membership
+            // if the data model supports it, for better performance.
             let allProfiles = try await PersistenceController.shared.fetchAllProfiles()
 
             // Filter to include only profiles that have been added to InnerCircle
-            // In real implementation, this would use a proper relationship query
-            // For now, just filter out the current user
+            // Assuming filtering out the current user is the intended logic for now.
+            // A more robust approach would check stream.innerCircleMembers or similar.
             let currentUserID = ViewModelFactory.shared.getCurrentProfile()?.id
             innerCircleProfiles = allProfiles.filter { profile in
                 profile.id != currentUserID
-                // Add logic here if 'stream' has a list of member IDs/profiles
+                // Example: Add logic here if 'stream' has a list of member IDs/profiles
                 // e.g., stream.memberIDs.contains(profile.id)
             }
 
@@ -1473,7 +1507,8 @@ struct InnerCircleMemberRow: View {
     var stream: Stream
     let peerManager: PeerDiscoveryManager // Added peerManager property
     @State private var showRemoveConfirmation = false
-    @Environment(\.modelContext) private var modelContext
+    // Removed unused modelContext
+    // @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack {
@@ -1619,7 +1654,7 @@ struct InnerCircleMemberRow: View {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
 
-        if timeInterval < 60 { return "just now" }
+        if timeInterval < 60 { return GroupView.justNowString } // Use constant
         if timeInterval < 3600 {
             let minutes = Int(timeInterval / 60)
             return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
@@ -1755,7 +1790,7 @@ struct PeerProfileView: View {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
 
-        if timeInterval < 60 { return "just now" }
+        if timeInterval < 60 { return GroupView.justNowString } // Use constant
         if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
         if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
 
@@ -1903,10 +1938,14 @@ struct GroupCardView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $isShareSheetPresented) {
-            ShareSheet(
-                activityItems: [URL(string: "https://app.arkavo.com/stream/\(stream.publicID.base58EncodedString)")!],
-                isPresented: $isShareSheetPresented
-            )
+            // Use the static constant from GroupView to build the URL
+            let urlString = "\(GroupView.streamBaseURL)\(stream.publicID.base58EncodedString)"
+            if let url = URL(string: urlString) {
+                ShareSheet(
+                    activityItems: [url],
+                    isPresented: $isShareSheetPresented
+                )
+            }
         }
     }
 

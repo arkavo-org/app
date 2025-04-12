@@ -61,7 +61,9 @@ struct AccountView: View {
                 }
                 .disabled(isResettingProfile)
                 .alert("Reset Profile", isPresented: $showingDeleteProfileAlert) {
-                    Button("Cancel", role: .cancel) {}
+                    Button("Cancel", role: .cancel) {
+                        // Empty closure: Default behavior is to dismiss the alert.
+                    }
                     Button("Reset", role: .destructive) {
                         resetProfile()
                     }
@@ -120,7 +122,9 @@ struct AccountView: View {
         }
         .navigationTitle("Account")
         .alert("Location Permission", isPresented: $showingLocationPermissionAlert) {
-            Button("OK") {}
+            Button("OK") {
+                // Empty closure: Default behavior is to dismiss the alert.
+            }
         } message: {
             Text("Please grant location permission in Settings to use this feature.")
         }
@@ -267,9 +271,10 @@ struct AccountView: View {
                 .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
                     IDCardScannerView(
                         onCapture: { _ in
+                            // TODO: Process captured ID card data
                             ageVerificationManager.showingScanner = false
                             ageVerificationManager.isVerifying = false
-                            ageVerificationManager.verificationStatus = .verified
+                            ageVerificationManager.verificationStatus = .verified // Placeholder: Assume success for now
                         },
                         onCancel: {
                             ageVerificationManager.showingScanner = false
@@ -286,6 +291,7 @@ struct AccountView: View {
 
 struct ClassificationView: View {
     var body: some View {
+        // TODO: Implement classification settings UI
         Text("Classification settings go here")
             .navigationTitle("Classification")
     }

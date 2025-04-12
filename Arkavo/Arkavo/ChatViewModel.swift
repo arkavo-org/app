@@ -24,11 +24,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         ViewModelFactory.shared.getPeerDiscoveryManager()
     }
 
-    // Removed P2PClient property
-    // private var p2pClient: P2PClient? {
-    //     ViewModelFactory.shared.getP2PClient()
-    // }
-
     init(client: ArkavoClient, account: Account, profile: Profile, streamPublicID: Data) {
         self.client = client
         self.account = account
@@ -43,9 +38,6 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         // Load existing thoughts for this stream
         Task {
             await loadExistingMessages()
-
-            // Removed P2PClient delegate setup
-            // if let p2pClient = self.p2pClient { ... }
         }
     }
 
@@ -65,17 +57,17 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
                 // Each 'thought' contains encrypted 'nano' data in NanoTDF format.
                 // Based on the ArkavoMessageRouter implementation, decryption happens through
                 // a multi-step process involving rewrap requests and key exchange.
-                
+
                 // After analyzing ArkavoClient and ArkavoMessageRouter, we found that:
                 // 1. There's no public direct decrypt method in ArkavoClient
                 // 2. ArkavoMessageRouter handles decryption and posts .messageDecrypted notifications
                 // 3. The original pattern was to send nano data to client.sendMessage()
-                
+
                 // Try the original approach which may trigger ArkavoMessageRouter's processing path
                 // This will either work if ArkavoMessageRouter handles it, or do nothing if it doesn't
                 print("ChatViewModel: Attempting to process stored NanoTDF for thought \(thought.publicID.base58EncodedString)")
                 try? await client.sendMessage(thought.nano)
-                
+
                 // NOTE TO DEVELOPER: This approach needs verification.
                 // If existing messages don't appear, ArkavoClient may need an additional
                 // method to initiate decryption for local NanoTDF data without sending to server.
@@ -118,7 +110,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
                     await self?.handleDecryptedThought(payload: data, policy: policy)
                 }
             } else {
-//                 print("ChatViewModel: Ignoring decrypted message for different stream.")
+                // Message is for a different stream, ignore.
             }
         }
         notificationObservers.append(messageObserver)
@@ -151,15 +143,16 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             }
 
             let displayContent = processContent(thoughtModel.content, mediaType: thoughtModel.mediaType)
-            // TODO: Extract timestamp from policy/metadata if available
-            let timestamp = Date() // Use current time as placeholder
+
+            // Extract timestamp directly from the deserialized thought model
+            let timestamp = thoughtModel.createdAt
 
             let message = ChatMessage(
                 id: thoughtModel.publicID.base58EncodedString, // Use thought public ID
                 userId: thoughtModel.creatorPublicID.base58EncodedString,
                 username: await formatUsername(publicID: thoughtModel.creatorPublicID), // Fetch username async
                 content: displayContent,
-                timestamp: timestamp,
+                timestamp: timestamp, // Use timestamp from the model
                 attachments: [],
                 reactions: [],
                 isPinned: false,
@@ -210,11 +203,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         case noProfile
         case serializationError
         case encryptionError(Error)
-        // case decryptionError(Error) // Decryption errors handled internally by client?
         case persistenceError(Error)
-        // case peerSendError(Error) // Replaced by general client error
-        // case missingPeerID // Less relevant if using profile IDs
-        // case missingTDFClient // Replaced by missing ArkavoClient state
         case missingPublicID
         case clientError(Error) // General ArkavoClient error
         case invalidPolicy(String)
@@ -251,17 +240,20 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
     /// Encrypts and sends the message using ArkavoClient, saves locally.
     private func sendEncryptedMessage(content: String, policyData: Data) async {
         let messageData = content.data(using: .utf8) ?? Data()
-        let newThoughtPublicID = UUID().uuidStringData // Generate unique ID
+        let creationDate = Date() // Capture creation time
 
         do {
             // Create thought service model
-            var thoughtModel = ThoughtServiceModel(
+            let thoughtModel = ThoughtServiceModel(
                 creatorPublicID: profile.publicID,
                 streamPublicID: streamPublicID,
                 mediaType: .say,
+                createdAt: creationDate, // Set the creation timestamp
                 content: messageData
             )
-            thoughtModel.publicID = newThoughtPublicID // Assign generated ID
+            // Decide if the service model's publicID should be the UUID-based one or content-based one.
+            // Using the content-based one generated by the init for now.
+            // If UUID-based is preferred: thoughtModel.publicID = newThoughtPublicID
 
             // Serialize payload
             let payload = try thoughtModel.serialize()
@@ -275,13 +267,15 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             print("ChatViewModel: Encrypted and sent payload via ArkavoClient.")
 
             // Create and save the Thought locally
+            // Use the *same* publicID and timestamp as the service model for consistency
             let thought = try await createAndSaveThought(
                 nanoData: nanoData, // Save the *encrypted* data
                 thoughtModel: thoughtModel,
-                publicID: newThoughtPublicID
+                publicID: thoughtModel.publicID // Use the ID from the service model
             )
 
             // Add message to local UI immediately
+            // Use the timestamp from the locally created Thought's metadata (which came from thoughtModel)
             addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
 
         } catch {
@@ -329,7 +323,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             userId: profile.publicID.base58EncodedString,
             username: "Me", // Simplified username for local messages
             content: content,
-            timestamp: timestamp,
+            timestamp: timestamp, // Use provided timestamp (from saved Thought)
             attachments: [],
             reactions: [],
             isPinned: false,
@@ -354,14 +348,16 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
 
     /// Creates a ThoughtMetadata object (part of Thought model)
     private func createThoughtMetadata(from model: ThoughtServiceModel) -> Thought.Metadata {
+        // Use the timestamp directly from the model
         Thought.Metadata(
             creatorPublicID: model.creatorPublicID,
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
-            createdAt: Date(),
+            createdAt: model.createdAt, // Use timestamp from service model
             contributors: []
         )
     }
+
 
     /// Creates and saves a Thought object to persistence.
     @discardableResult
@@ -372,7 +368,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             nano: nanoData, // Store the encrypted NanoTDF data
             metadata: thoughtMetadata
         )
-        thought.publicID = publicID // Explicitly set the publicID
+        // Ensure the Thought's publicID matches the one used/generated for the service model
+        thought.publicID = publicID
 
         do {
             let saved = try await PersistenceController.shared.saveThought(thought)
@@ -421,9 +418,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         guard let policyData = policyJson.data(using: .utf8) else {
             throw ChatError.invalidPolicy("Failed to encode stream policy JSON")
         }
-        // TODO: Validate if this policy structure is correct for ArkavoClient/OpenTDFKit embedded policies.
-        // This creates an *embedded plaintext* policy. ArkavoClient might need a specific format.
-        // The `encryptAndSendPayload` in ArkavoClient creates an embedded policy body. This seems compatible.
+        // This creates an *embedded plaintext* policy as Data.
+        // ArkavoClient.encryptAndSendPayload is expected to handle embedding this correctly.
         return policyData
     }
 
@@ -442,7 +438,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         guard let policyData = policyJson.data(using: .utf8) else {
             throw ChatError.invalidPolicy("Failed to encode direct message policy JSON")
         }
-        // TODO: Validate if this policy structure is correct.
+        // This creates an *embedded plaintext* policy as Data.
+        // ArkavoClient.encryptAndSendPayload is expected to handle embedding this correctly.
         return policyData
     }
 
@@ -460,17 +457,16 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             switch state {
             case .connected:
                 // Enable input, show connected status
-                break
+                () // Use empty tuple or other placeholder if needed
             case .disconnected:
                 // Disable input, show disconnected
-                break
+                print("ChatViewModel: Client disconnected")
             case .connecting, .authenticating:
                 // Show connecting status
-                break
+                print("ChatViewModel: Client connecting or authenticating")
             case .error(let error):
                 // Show error message
                 print("ChatViewModel: ArkavoClient error state: \(error)")
-                break
             }
         }
     }
@@ -520,14 +516,16 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
 // Extension for Thought convenience initializer (Keep as is)
 extension Thought {
     convenience init(from model: ThoughtServiceModel, nano: Data) {
+        // Use timestamp from model when creating Metadata
         let metadata = Metadata(
             creatorPublicID: model.creatorPublicID,
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
-            createdAt: Date(),
+            createdAt: model.createdAt, // Use timestamp from service model
             contributors: []
         )
         self.init(nano: nano, metadata: metadata)
+        // Ensure the publicID matches the service model's ID
         if !model.publicID.isEmpty {
             publicID = model.publicID
         }

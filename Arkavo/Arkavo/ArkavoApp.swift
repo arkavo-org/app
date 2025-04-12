@@ -771,7 +771,6 @@ enum DeepLinkDestination: Hashable {
 extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
-    static let p2pMessageReceived = Notification.Name("P2PMessageReceived")
 }
 
 @MainActor

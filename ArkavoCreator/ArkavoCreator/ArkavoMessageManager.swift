@@ -127,7 +127,9 @@ class ArkavoMessageManager: ObservableObject {
                 // replayNextMessage is @MainActor isolated, call directly
                 await replayNextMessage()
                 // Check for cancellation before sleeping
-                if Task.isCancelled { break }
+                if Task.isCancelled {
+                    break
+                }
                 do {
                     try await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
                 } catch {
@@ -325,17 +327,17 @@ struct ArkavoMessage: Codable, Identifiable {
 
         var icon: String {
             switch self {
-            case .pending: "clock"
-            case .replayed: "checkmark.circle"
-            case .failed: "exclamationmark.triangle"
+            case .pending: return "clock"
+            case .replayed: return "checkmark.circle"
+            case .failed: return "exclamationmark.triangle"
             }
         }
 
         var color: Color {
             switch self {
-            case .pending: .yellow
-            case .replayed: .green
-            case .failed: .red
+            case .pending: return .yellow
+            case .replayed: return .green
+            case .failed: return .red
             }
         }
     }

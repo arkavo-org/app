@@ -33,7 +33,7 @@ final class Thought: Identifiable { // Removed Codable conformance
             creatorPublicID: Data(),
             streamPublicID: Data(),
             mediaType: .text,
-            createdAt: Date(),
+            createdAt: Date(), // Default creation time
             contributors: []
         )
         // Update publicID after all properties are initialized
@@ -48,8 +48,6 @@ final class Thought: Identifiable { // Removed Codable conformance
         self.metadata = metadata
         self.nano = nano
     }
-
-    // Removed explicit Codable conformance (CodingKeys, init(from:), encode(to:))
 
     private static func generatePublicID(from uuid: UUID) -> Data {
         withUnsafeBytes(of: uuid) { buffer in
@@ -72,8 +70,6 @@ extension Thought {
         publicID.base58EncodedString
     }
 }
-
-// Removed the separate Serialization extension for Thought
 
 // MARK: - Contributor
 
@@ -110,17 +106,25 @@ struct ThoughtServiceModel: Codable {
     var creatorPublicID: Data
     var streamPublicID: Data
     var mediaType: MediaType
+    var createdAt: Date // Added timestamp field
     var content: Data // This is the payload for NanoTDF
 
     // Original initializer (if needed for creating directly)
-    init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, content: Data) {
+    init(creatorPublicID: Data, streamPublicID: Data, mediaType: MediaType, createdAt: Date = Date(), content: Data) {
         self.creatorPublicID = creatorPublicID
         self.streamPublicID = streamPublicID
         self.mediaType = mediaType
+        self.createdAt = createdAt // Store timestamp
         self.content = content
         // Calculate publicID based on content hash if required by service definition
-        let hashData = creatorPublicID + streamPublicID + content
+        // Using a more robust hash including timestamp to ensure uniqueness if needed
+        // Note: Using createdAt in the hash makes the publicID dependent on the exact creation time,
+        // which might be problematic if clocks aren't perfectly synced or if regeneration is needed.
+        // Consider if a UUID-based ID or a hash of more stable content is better.
+        let hashData = creatorPublicID + streamPublicID + createdAt.timeIntervalSince1970.description.data(using: .utf8)! + content
         publicID = SHA256.hash(data: hashData).withUnsafeBytes { Data($0) }
+        // Note: Consider if publicID should be based on UUID like the main Thought model instead.
+        // The current implementation generates a publicID based on content and metadata.
     }
 
     // Note: The publicID calculation above might differ from the Thought's publicID (which is based on UUID).
@@ -156,6 +160,7 @@ extension ThoughtServiceModel {
         creatorPublicID = thought.metadata.creatorPublicID
         streamPublicID = thought.metadata.streamPublicID
         mediaType = thought.metadata.mediaType
+        createdAt = thought.metadata.createdAt // Copy timestamp
         content = thought.nano // Map 'nano' to 'content' for the service model
     }
 }
@@ -173,7 +178,7 @@ extension Thought {
             creatorPublicID: model.creatorPublicID,
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
-            createdAt: Date(), // Might need timestamp from service model if available
+            createdAt: model.createdAt, // Use timestamp from service model
             contributors: [contributor]
         )
 
@@ -182,44 +187,16 @@ extension Thought {
         // Create the Thought instance. The publicID will be regenerated based on UUID.
         // If you need the publicID to match the service model exactly,
         // you might need a different init or assignment strategy.
-        return Thought(nano: nano, metadata: metadata)
+        let thought = Thought(nano: nano, metadata: metadata)
+        // If the service model's publicID should override the UUID-based one:
+        if !model.publicID.isEmpty {
+             thought.publicID = model.publicID
+        }
+        return thought
     }
 
     // Original 'from' method might be deprecated or adapted if Arkavo_Metadata is still used elsewhere
     // static func from(_ model: ThoughtServiceModel, arkavoMetadata: Arkavo_Metadata) throws -> Thought { ... }
 }
-
-// Keep Metadata conversion if needed elsewhere, but it's not used by Thought directly for Codable now
-// If Arkavo_Metadata is defined elsewhere (e.g., EntityServiceModel.swift), this extension might need to be moved or adapted.
-/*
- extension Thought.Metadata {
-     // Assuming Arkavo_Metadata is a separate Protobuf or similar structure
-     static func from(_ arkavoMetadata: Arkavo_Metadata) throws -> Thought.Metadata {
-         let createdAt = Date(timeIntervalSince1970: TimeInterval(arkavoMetadata.created))
-
-         // Map Arkavo_MediaType to MediaType
-         let mediaType: MediaType = if let arkavoMediaType = arkavoMetadata.content?.mediaType {
-             switch arkavoMediaType {
-             case .video: .video
-             case .audio: .audio
-             case .image: .image
-             default: .text
-             }
-         } else {
-             .text // Default to text if no media type is provided
-         }
-
-         let contributor = Contributor(profilePublicID: Data(arkavoMetadata.creator), role: "creator")
-
-         return Thought.Metadata(
-             creatorPublicID: Data(arkavoMetadata.creator),
-             streamPublicID: Data(arkavoMetadata.related),
-             mediaType: mediaType,
-             createdAt: createdAt,
-             contributors: [contributor]
-         )
-     }
- }
- */
 
 // Removed placeholder definitions for Arkavo_Metadata, Arkavo_ContentMetadata, Arkavo_MediaType

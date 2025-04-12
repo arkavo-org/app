@@ -144,7 +144,7 @@ final class InnerCircleMemberTests: XCTestCase {
 
     // MARK: - Test Cases
 
-    @MainActor func testRemoveMember_DeletesKeyStoreData() async throws {
+    @MainActor func testRemoveMemberDeletesKeyStoreData() async throws {
         // Arrange: Ensure the profile exists in the mock controller
         mockPersistenceController.addMockProfile(testProfile)
         XCTAssertNotNil(testProfile.keyStoreData, "Precondition: Profile should have keyStoreData before removal.")
@@ -164,7 +164,7 @@ final class InnerCircleMemberTests: XCTestCase {
          print("Test Assertion: Verified keyStoreData is nil for profile ID \(testProfile.publicID) in mock store.")
     }
 
-    @MainActor func testRemoveMember_DisconnectsPeer() {
+    @MainActor func testRemoveMemberDisconnectsPeer() {
         // Arrange (Setup is sufficient)
 
         // Act: Simulate the action that triggers peer disconnection.
@@ -177,7 +177,7 @@ final class InnerCircleMemberTests: XCTestCase {
          print("Test Assertion: Verified disconnectPeer was called for peer \(testPeerID.displayName).")
     }
 
-    func testRemoveMember_PostsNotification() {
+    func testRemoveMemberPostsNotification() {
         // Arrange
         let notificationName = Notification.Name.refreshInnerCircleMembers
         let expectation = XCTNSNotificationExpectation(name: notificationName)
@@ -196,7 +196,7 @@ final class InnerCircleMemberTests: XCTestCase {
     }
 
     // Example of testing error handling in deleteKeyStoreDataFor
-    @MainActor func testRemoveMember_HandlesPersistenceError() async {
+    @MainActor func testRemoveMemberHandlesPersistenceError() async {
         // Arrange
         mockPersistenceController.shouldThrowError = true
         let expectedError = mockPersistenceController.mockError
