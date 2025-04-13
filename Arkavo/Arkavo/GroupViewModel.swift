@@ -1,6 +1,6 @@
 import ArkavoSocial
 @preconcurrency import MultipeerConnectivity
-import OpenTDFKit // Keep OpenTDFKit import if ArkavoClient APIs require it
+import OpenTDFKit // Keep OpenTDFKit import for KeyStore usage
 import SwiftData
 import SwiftUI
 import UIKit
@@ -329,7 +329,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case persistenceError(String)
         case noConnectedPeers
         // case keyRemovalFailed(String) // Handled by ArkavoClient
-        // case keyGenerationFailed(String) // Handled by ArkavoClient
+        case keyGenerationFailed(String) // UPDATED: For OpenTDFKit key generation errors
         // case keySerializationError(String) // Handled by ArkavoClient
         case arkavoClientError(String) // General ArkavoClient error
         case policyCreationFailed(String) // Added for policy errors
@@ -339,6 +339,9 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case peerNotConnected(String) // Added for operations requiring a connected peer
         case invalidStateForAction(String) // Added for key exchange state machine errors
         case missingNonce // Added for key exchange errors
+        case keyStoreDataNotFound(String) // Added for missing KeyStoreData (now used for profile.keyStorePrivate)
+        case keyStoreDeserializationFailed(String) // Added for KeyStore deserialization errors
+        case keyStoreSerializationFailed(String) // Added for KeyStore serialization errors
 
 
         var errorDescription: String? {
@@ -361,7 +364,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             case .noConnectedPeers:
                 "No connected peers available"
             // case let .keyRemovalFailed(reason): "Failed to remove used key: \(reason)"
-            // case let .keyGenerationFailed(reason): "Failed to generate KeyStore keys: \(reason)"
+            case let .keyGenerationFailed(reason): // UPDATED
+                "Failed to regenerate keys using OpenTDFKit: \(reason)" // Updated description
             // case let .keySerializationError(reason): "Failed to serialize KeyStore public/private data: \(reason)"
             case let .arkavoClientError(reason):
                 "ArkavoClient error: \(reason)"
@@ -379,6 +383,12 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "Invalid state for the requested action: \(reason)"
             case .missingNonce:
                 "Nonce required for key exchange operation is missing."
+            case let .keyStoreDataNotFound(reason): // Updated description slightly
+                "KeyStore data not found in profile: \(reason)"
+            case let .keyStoreDeserializationFailed(reason):
+                "Failed to deserialize KeyStore: \(reason)"
+            case let .keyStoreSerializationFailed(reason):
+                "Failed to serialize KeyStore: \(reason)"
             }
         }
     }
@@ -999,25 +1009,82 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         print("Finished refreshing connected peer profiles. Found \(updatedProfiles.count) profiles locally.")
     }
 
-    /// Manually triggers regeneration of local KeyStore keys via ArkavoClient.
+    /// Manually triggers regeneration of local KeyStore keys directly manipulating Profile data.
     func regenerateLocalKeys() async {
-        print("Manual regeneration of local keys requested via ArkavoClient.")
+        print("Manual regeneration of local keys requested (direct Profile manipulation).")
         isRegeneratingKeys = true // Optimistically set regenerating status
         localKeyStoreInfo = nil // Clear info while regenerating
+
+        var originalKeyStoreData: Data? = nil // To potentially revert on save failure
+
         do {
-            // *** PLACEHOLDER: Replace with actual ArkavoClient API call ***
-            try await arkavoClient.regenerateLocalKeys()
-            print("✅ Triggered key regeneration via ArkavoClient.")
-            // Refresh status after triggering (ArkavoClient might also push an update via delegate)
-            await refreshKeyStoreStatus()
+            // 1. Get current profile
+            guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                throw P2PError.profileNotAvailable
+            }
+            let profileIDString = myProfile.publicID.base58EncodedString
+            print("   Regenerating keys for profile: \(profileIDString)")
+
+            // 2. Get serialized KeyStore data directly from the profile
+            guard let currentKeyStoreData = myProfile.keyStorePrivate else {
+                throw P2PError.keyStoreDataNotFound("No keyStorePrivate data found for profile \(profileIDString)")
+            }
+            originalKeyStoreData = currentKeyStoreData // Store for potential revert
+            print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
+
+            // 3. Deserialize KeyStore from profile data
+            let keyStore: KeyStore
+            do {
+                keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
+                print("   Successfully deserialized local KeyStore from profile data.")
+            } catch {
+                throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
+            }
+
+            // 4. Call OpenTDFKit to regenerate keys locally
+            do {
+                // Use the same method as in performKeyGenerationAndSave
+                try await keyStore.generateAndStoreKeyPairs(count: 8192)
+                print("   OpenTDFKit `generateAndStoreKeyPairs()` call successful.")
+            } catch {
+                throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
+            }
+
+            // 5. Serialize the updated KeyStore
+            let updatedSerializedData: Data
+            do {
+                updatedSerializedData = await keyStore.serialize()
+                print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
+            }
+
+            // 6. Update the Profile's keyStorePrivate property
+            myProfile.keyStorePrivate = updatedSerializedData
+            print("   Updated profile.keyStorePrivate with new data.")
+
+            // 7. Save changes to the Profile via PersistenceController
+            do {
+                try await persistenceController.saveChanges()
+                print("✅ Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
+            } catch {
+                // Attempt to revert the in-memory change if save fails
+                print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
+                myProfile.keyStorePrivate = originalKeyStoreData
+                throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
+            }
+
+            // 8. Refresh status after successful generation and save
+            await refreshKeyStoreStatus() // This will update isRegeneratingKeys based on ArkavoClient's view
+
         } catch {
-            print("❌ Failed to trigger key regeneration via ArkavoClient: \(error)")
-            isRegeneratingKeys = false // Revert status on failure
-            // Optionally show error to user
+            print("❌ Failed during manual key regeneration: \(error)")
+            // Ensure regenerating status is reset on any failure
+            isRegeneratingKeys = false
             // Refresh status even on failure to get the current state
             await refreshKeyStoreStatus()
+            // Optionally show error to user
         }
     }
+
 
     // MARK: - KeyStore Rewrap Support (using ArkavoClient)
 
@@ -1144,7 +1211,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
                 // 3. Check current state (allow processing only from idle or failed)
                 let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
-                guard currentState == .idle || (currentState.nonce == nil) else {
+                guard currentState == .idle || (currentState.nonce == nil) else { // Check if failed or idle
                      print("KeyExchange: Ignoring request from \(peer.displayName), already in state \(currentState)")
                      // Maybe send a busy/error response? For now, just ignore.
                      return
@@ -1213,27 +1280,29 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 updatePeerExchangeState(for: peer, newState: .ackSent(nonce: initiatorNonce))
 
                 // --- Initiator's Key Generation Trigger ---
-                // At this point, the initiator (us) has both nonces:
-                // - Our nonce: initiatorNonce
-                // - Peer's nonce: offer.nonce
-                // We can now trigger the key generation.
+                // At this point, the initiator (us) has received the peer's nonce (offer.nonce)
+                // and sent our acknowledgement containing our nonce (initiatorNonce).
+                // The protocol requires waiting for the Commit message before completing,
+                // but we can trigger the local key regeneration now.
                 guard let peerProfileIDData = Data(base58Encoded: offer.responderProfileID) else {
                      throw P2PError.keyExchangeError("Invalid peer profile ID in offer: \(offer.responderProfileID)")
                 }
-                print("KeyExchange (Initiator): Triggering shared key generation with peer \(offer.responderProfileID)")
-                // *** PLACEHOLDER: Call ArkavoClient to generate keys ***
-                try await arkavoClient.generateSharedKeys(
-                    initiatorNonce: initiatorNonce,
-                    responderNonce: offer.nonce,
-                    peerProfileID: peerProfileIDData
+                print("KeyExchange (Initiator): Triggering local key regeneration after sending Ack for peer \(offer.responderProfileID)")
+
+                // *** Use OpenTDFKit regenerateKeys ***
+                try await performKeyGenerationAndSave(
+                    peerProfileIDData: peerProfileIDData,
+                    peer: peer // Pass peer for state update on failure
                 )
-                print("KeyExchange (Initiator): ArkavoClient key generation triggered successfully.")
+                print("KeyExchange (Initiator): OpenTDFKit key regeneration and save successful.")
                 // Note: We don't transition to 'completed' yet, we wait for the Commit message
-                // from the responder as final confirmation.
+                // from the responder as final confirmation that they also regenerated.
 
             } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationOffer from \(peer.displayName): \(error)")
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing offer: \(error.localizedDescription)"))
+                print("❌ KeyExchange: Error handling KeyRegenerationOffer or regenerating keys (Initiator) for \(peer.displayName): \(error)")
+                // Update state to failed, including specific error if possible
+                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing offer/regenerating keys: \(errorMessage)"))
             }
         }
     }
@@ -1275,26 +1344,26 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 updatePeerExchangeState(for: peer, newState: .commitSent(nonce: responderNonce)) // Final state for responder
 
                 // --- Responder's Key Generation Trigger ---
-                // At this point, the responder (us) has both nonces:
-                // - Our nonce: responderNonce
-                // - Peer's nonce: ack.nonce
-                // We can now trigger the key generation.
+                // At this point, the responder (us) has received the initiator's nonce (ack.nonce)
+                // and sent our commit message. We can now trigger local key regeneration.
                 guard let peerProfileIDData = Data(base58Encoded: ack.initiatorProfileID) else {
                      throw P2PError.keyExchangeError("Invalid peer profile ID in acknowledgement: \(ack.initiatorProfileID)")
                 }
-                print("KeyExchange (Responder): Triggering shared key generation with peer \(ack.initiatorProfileID)")
-                // *** PLACEHOLDER: Call ArkavoClient to generate keys ***
-                try await arkavoClient.generateSharedKeys(
-                    initiatorNonce: ack.nonce, // Peer's nonce is initiator's
-                    responderNonce: responderNonce, // Our nonce is responder's
-                    peerProfileID: peerProfileIDData
+                print("KeyExchange (Responder): Triggering local key regeneration after sending Commit for peer \(ack.initiatorProfileID)")
+
+                // *** Use OpenTDFKit regenerateKeys ***
+                try await performKeyGenerationAndSave(
+                    peerProfileIDData: peerProfileIDData,
+                    peer: peer // Pass peer for state update on failure
                 )
-                print("KeyExchange (Responder): ArkavoClient key generation triggered successfully.")
+                print("KeyExchange (Responder): OpenTDFKit key regeneration and save successful.")
                 // CommitSent is the final state for the responder.
 
             } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationAcknowledgement from \(peer.displayName): \(error)")
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing acknowledgement: \(error.localizedDescription)"))
+                print("❌ KeyExchange: Error handling KeyRegenerationAcknowledgement or regenerating keys (Responder) for \(peer.displayName): \(error)")
+                // Update state to failed, including specific error if possible
+                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing ack/regenerating keys: \(errorMessage)"))
             }
         }
     }
@@ -1320,8 +1389,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 print("KeyExchange: Protocol completed successfully with \(peer.displayName) (ReqID: \(commit.requestID))")
                 updatePeerExchangeState(for: peer, newState: .completed(nonce: initiatorNonce)) // Final state for initiator
 
-                // Key generation was already triggered by the initiator when handling the Offer.
-                // This commit message serves as the final confirmation from the responder.
+                // Key regeneration was already triggered by the initiator when handling the Offer.
+                // This commit message serves as the final confirmation from the responder that they also regenerated.
 
                 // Optional: Refresh local key store status now that keys should be generated/stored
                 await refreshKeyStoreStatus()
@@ -1331,6 +1400,82 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 updatePeerExchangeState(for: peer, newState: .failed("Error processing commit: \(error.localizedDescription)"))
             }
         }
+    }
+
+    /// Performs the local key regeneration using OpenTDFKit and persists the updated KeyStore directly to the Profile.
+    /// This is called by both the initiator and responder sides of the protocol after successful nonce exchange.
+    /// - Parameters:
+    ///   - peerProfileIDData: The profile ID of the peer involved in the exchange (for logging/context).
+    ///   - peer: The MCPeerID of the peer (for updating state on failure).
+    private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws {
+        print("KeyExchange: Performing OpenTDFKit local key regeneration and save (using Profile.keyStorePrivate)...")
+        print("   Context: Key exchange with peer \(peerProfileIDData.base58EncodedString)")
+
+        var originalKeyStoreData: Data? = nil // To potentially revert on save failure
+
+        // 1. Get current profile
+        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+            // Update peer state to failed if profile is missing during exchange
+            updatePeerExchangeState(for: peer, newState: .failed("Local profile not available"))
+            throw P2PError.profileNotAvailable
+        }
+
+        // 2. Get serialized KeyStore data directly from the profile
+        guard let currentKeyStoreData = myProfile.keyStorePrivate else {
+            // Update peer state to failed if KeyStore data is missing
+            updatePeerExchangeState(for: peer, newState: .failed("Local KeyStore data not found"))
+            throw P2PError.keyStoreDataNotFound("No keyStorePrivate data found for profile \(myProfile.publicID.base58EncodedString)")
+        }
+        originalKeyStoreData = currentKeyStoreData // Store for potential revert
+        print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
+
+        // 3. Deserialize KeyStore from profile data
+        let keyStore: KeyStore
+        do {
+            keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
+            print("   Successfully deserialized local KeyStore from profile data.")
+        } catch {
+            // Update peer state to failed on deserialization error
+            updatePeerExchangeState(for: peer, newState: .failed("KeyStore deserialization failed: \(error.localizedDescription)"))
+            throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
+        }
+
+        // 4. Call OpenTDFKit to regenerate keys locally
+        do {
+            try await keyStore.generateAndStoreKeyPairs(count: 8192)
+            print("   OpenTDFKit `generateAndStoreKeyPairs()` call successful.")
+        } catch {
+            // Update peer state to failed on key generation error
+            updatePeerExchangeState(for: peer, newState: .failed("Key generation failed: \(error.localizedDescription)"))
+            throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
+        }
+
+        // 5. Serialize the updated KeyStore
+        let updatedSerializedData: Data
+        do {
+            updatedSerializedData = await keyStore.serialize()
+            print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
+        } // No specific error handling needed here as serialize() is assumed not to throw
+
+        // 6. Update the Profile's keyStorePrivate property
+        myProfile.keyStorePrivate = updatedSerializedData
+        print("   Updated profile.keyStorePrivate with new data.")
+
+        // 7. Save changes to the Profile via PersistenceController
+        do {
+            try await persistenceController.saveChanges()
+            print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
+        } catch {
+            // Attempt to revert the in-memory change if save fails
+            print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
+            myProfile.keyStorePrivate = originalKeyStoreData // Revert
+            // Update peer state to failed on persistence error
+            updatePeerExchangeState(for: peer, newState: .failed("Persistence save failed: \(error.localizedDescription)"))
+            throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
+        }
+
+        // 8. Refresh KeyStore status in UI after successful generation and save
+        await refreshKeyStoreStatus()
     }
 
 
@@ -1894,9 +2039,9 @@ extension ArkavoClient {
         return (validCount, expiredCount, capacity, isRegenerating)
     }
 
-    // Placeholder for triggering key regeneration
+    // Placeholder for triggering key regeneration (NO LONGER USED by regenerateLocalKeys)
     func regenerateLocalKeys() async throws {
-        print("⚠️ WARNING: Using placeholder ArkavoClient.regenerateLocalKeys()")
+        print("⚠️ WARNING: Using placeholder ArkavoClient.regenerateLocalKeys() - THIS SHOULD NOT BE CALLED BY P2PGroupViewModel.regenerateLocalKeys() ANYMORE")
         // Simulate triggering regeneration
         try await Task.sleep(nanoseconds: 50_000_000) // Simulate call delay
         // Simulate potential error
@@ -1930,16 +2075,30 @@ extension ArkavoClient {
         return encryptedData
     }
 
-    // Placeholder for generating shared keys based on the key exchange protocol
-    func generateSharedKeys(initiatorNonce: Data, responderNonce: Data, peerProfileID: Data) async throws {
-        print("⚠️ WARNING: Using placeholder ArkavoClient.generateSharedKeys()")
-        print("   Initiator Nonce: \(initiatorNonce.count) bytes")
-        print("   Responder Nonce: \(responderNonce.count) bytes")
-        print("   Peer Profile ID: \(peerProfileID.base58EncodedString)")
-        // Simulate key generation work
-        try await Task.sleep(nanoseconds: 300_000_000) // Simulate significant work
-        // Simulate potential error
-        // if Bool.random() { throw P2PGroupViewModel.P2PError.arkavoClientError("Simulated shared key generation error") }
-        print("✅ Placeholder: Shared key generation simulation complete for peer \(peerProfileID.base58EncodedString).")
+    // *** REMOVED PLACEHOLDER for generateSharedKeys ***
+    // func generateSharedKeys(initiatorNonce: Data, responderNonce: Data, peerProfileID: Data) async throws { ... }
+}
+
+// *** ADDED PLACEHOLDER EXTENSION for KeyStore deserialization ***
+// This is needed because the original deserialization was in KeyStoreData.
+// Replace this with the actual method from OpenTDFKit.
+extension KeyStore {
+    /// **PLACEHOLDER:** Deserializes a KeyStore from Data. Replace with actual OpenTDFKit implementation.
+    static func deserialize(from data: Data) async throws -> KeyStore {
+        print("⚠️ WARNING: Using placeholder KeyStore.deserialize(from: Data)")
+        // Simulate deserialization. This needs the actual OpenTDFKit logic.
+        // It might involve specific curve types or other parameters stored elsewhere.
+        // For now, we'll just return a dummy KeyStore instance if possible,
+        // or throw an error indicating it's a placeholder.
+        // Assuming a hypothetical initializer or static method exists:
+        // return try KeyStore(serializedData: data)
+        throw P2PGroupViewModel.P2PError.keyStoreDeserializationFailed("Placeholder implementation - Actual OpenTDFKit deserialization needed.")
+        // If a default/empty init exists and is useful for placeholder:
+        // return KeyStore()
     }
 }
+
+
+// *** REMOVED PLACEHOLDER EXTENSION for KeyStore.generatePeerKeys ***
+// The placeholder extension for KeyStore.generatePeerKeys has been removed
+// as we are now using the existing KeyStore.regenerateKeys() method.
