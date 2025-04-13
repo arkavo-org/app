@@ -4,8 +4,17 @@ import MultipeerConnectivity
 import OpenTDFKit
 import SwiftUI
 import UIKit
+import Combine // Import Combine for Timer
 
 // MARK: - Models
+
+// Placeholder for the detailed info expected from PeerDiscoveryManager
+// Moved definition to GroupViewModel.swift for better organization
+// struct LocalKeyStoreInfo {
+//     let validKeyCount: Int
+//     let expiredKeyCount: Int
+//     let capacity: Int // Keep capacity if available, otherwise use constant
+// }
 
 @MainActor
 final class GroupViewModel: ViewModel, ObservableObject {
@@ -766,9 +775,9 @@ struct GroupView: View {
                     // Always show OT-TDF views when search is active
                     Divider().padding(.horizontal)
 
+                    // Pass the refresh action from peerManager
                     KeyStoreStatusView(
-                        localInfo: peerManager.localKeyStoreInfo,
-                        isRegenerating: peerManager.isRegeneratingKeys,
+                        peerManager: peerManager, // Pass the manager
                         regenerateAction: {
                             Task {
                                 await peerManager.regenerateLocalKeys()
@@ -786,7 +795,7 @@ struct GroupView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive) // Animate the whole section
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
-        .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo?.count) // Animate key count changes
+        .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo) // Animate key info changes
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles) // Animate profile changes
     }
 
@@ -885,7 +894,8 @@ struct GroupView: View {
                     // Use peerManager.connectedPeerProfiles which holds the Profile data
                     ForEach(peerManager.connectedPeers, id: \.self) { peer in
                         // Pass the peer and the profile (if available) to peerRow
-                        peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer])
+                        // Also pass the peerManager to handle actions like key exchange
+                        peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer], peerManager: peerManager)
                     }
                 }
 
@@ -1020,8 +1030,8 @@ struct GroupView: View {
         }
     }
 
-    // Individual peer row - Updated to accept Profile
-    private func peerRow(peer: MCPeerID, profile: Profile?) -> some View {
+    // Individual peer row - Updated to accept Profile and PeerManager
+    private func peerRow(peer: MCPeerID, profile: Profile?, peerManager: PeerDiscoveryManager) -> some View {
         HStack {
             // Use PeerProfileView if profile exists, otherwise fallback
             if let profile {
@@ -1037,6 +1047,25 @@ struct GroupView: View {
                     Spacer()
                     ProgressView().scaleEffect(0.5) // Indicate loading state
                 }
+            }
+
+            // Placeholder Button for Mutual Key Exchange Initiation
+            // The actual implementation will depend on PeerDiscoveryManager's state
+            // and might involve showing progress, verification codes, etc.
+            if profile != nil { // Only show if profile is loaded
+                Button {
+                    // TODO: Initiate mutual key exchange with this peer
+                    // This would likely call a method on peerManager, e.g.:
+                    // Task { await peerManager.initiateMutualKeyExchange(with: peer) }
+                    print("Initiate Mutual Key Exchange with \(peer.displayName)")
+                } label: {
+                    Image(systemName: "key.radiowaves.forward") // Example icon
+                        .font(.caption) // Smaller icon
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small) // Smaller button
+                .disabled(peerManager.isExchangingKeys(with: peer)) // Disable if already exchanging
             }
         }
         .padding(.horizontal)
@@ -1170,7 +1199,7 @@ struct GroupView: View {
 // Main view for displaying all InnerCircle members
 struct InnerCircleView: View {
     let stream: Stream
-    let peerManager: PeerDiscoveryManager
+    @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @EnvironmentObject var sharedState: SharedState
     @State private var showOfflineMembers: Bool = true
     @State private var searchText: String = ""
@@ -1496,7 +1525,7 @@ struct InnerCircleMemberRow: View {
     // var lastSeen: Date? = nil
     @EnvironmentObject var sharedState: SharedState
     var stream: Stream
-    let peerManager: PeerDiscoveryManager // Added peerManager property
+    @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
     // Removed unused modelContext
     // @Environment(\.modelContext) private var modelContext
@@ -1552,6 +1581,26 @@ struct InnerCircleMemberRow: View {
             }
             .buttonStyle(.plain)
             .disabled(!isOnline)
+
+            // Placeholder Button for Mutual Key Exchange Initiation
+            // Only show for online peers
+            if isOnline {
+                Button {
+                    // TODO: Initiate mutual key exchange with this peer's profile
+                    // This would likely call a method on peerManager, e.g.:
+                    // Task { await peerManager.initiateMutualKeyExchange(with: profile) }
+                    print("Initiate Mutual Key Exchange with \(profile.name)")
+                } label: {
+                    Image(systemName: "key.radiowaves.forward") // Example icon
+                        .font(.subheadline) // Match message icon size
+                        .foregroundColor(.blue)
+                        .padding(8)
+                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .disabled(peerManager.isExchangingKeys(with: profile)) // Disable if already exchanging with this profile
+            }
+
 
             // Remove member button
             Button(action: {
@@ -1796,21 +1845,81 @@ struct PeerProfileView: View {
 
 // View for displaying local KeyStore status
 struct KeyStoreStatusView: View {
-    let localInfo: (count: Int, capacity: Int)?
-    let isRegenerating: Bool
+    // Use @ObservedObject to react to changes in PeerDiscoveryManager
+    @ObservedObject var peerManager: PeerDiscoveryManager
     let regenerateAction: () -> Void
 
+    // State for confirmation alert
+    @State private var showRegenerateConfirm = false
+    // State for timer
+    @State private var timer = Timer.publish(every: 300, on: .main, in: .common).autoconnect() // Refresh every 5 minutes (300s)
+
+    // Constants
+    // Removed hardcoded capacity, will use value from LocalKeyStoreInfo
+    // let keyCapacity = 8192
+    let lowKeyThreshold = 0.10 // 10%
+
+    // Computed properties based on peerManager.localKeyStoreInfo (now LocalKeyStoreInfo?)
+    private var keyStoreInfo: LocalKeyStoreInfo? {
+        peerManager.localKeyStoreInfo
+    }
+
+    private var validKeyCount: Int {
+        keyStoreInfo?.validKeyCount ?? 0
+    }
+
+    private var expiredKeyCount: Int {
+        keyStoreInfo?.expiredKeyCount ?? 0
+    }
+
+    // Use capacity from the info struct, default to 0 if unavailable
+    private var keyCapacity: Int {
+        keyStoreInfo?.capacity ?? 0
+    }
+
+    private var totalKeysInStore: Int {
+        // Consider both valid and expired keys if info is available
+        if let info = keyStoreInfo {
+            return info.validKeyCount + info.expiredKeyCount
+        }
+        return 0 // No keys if info is nil
+    }
+
     private var percentage: Double {
-        guard let info = localInfo else { return 0 }
-        // Use hardcoded capacity of 8192
-        return Double(info.count) / 8192.0
+        guard keyCapacity > 0 else { return 0 } // Use dynamic capacity
+        return Double(validKeyCount) / Double(keyCapacity)
+    }
+
+    private var isLowOnKeys: Bool {
+        percentage < lowKeyThreshold
+    }
+
+    private var hasExpiredKeys: Bool {
+        expiredKeyCount > 0
     }
 
     private var gaugeColor: Color {
-        switch percentage {
-        case let p where p < 0.1: .red
-        case let p where p < 0.5: .orange
-        default: .green
+        if isLowOnKeys { return .red }
+        if hasExpiredKeys { return .orange } // Show orange if expired keys exist but not low
+        if percentage < 0.5 { return .orange } // General warning below 50%
+        return .green
+    }
+
+    private var buttonLabel: String {
+        // Check if info exists and total keys > 0
+        if let info = keyStoreInfo, (info.validKeyCount + info.expiredKeyCount) > 0 {
+            return "Regenerate KeyStore"
+        } else {
+            return "Create KeyStore" // Or "Initialize KeyStore"
+        }
+    }
+
+    private var buttonIcon: String {
+        // Check if info exists and total keys > 0
+        if let info = keyStoreInfo, (info.validKeyCount + info.expiredKeyCount) > 0 {
+            return "arrow.clockwise.circle.fill"
+        } else {
+            return "plus.circle.fill"
         }
     }
 
@@ -1822,51 +1931,116 @@ struct KeyStoreStatusView: View {
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
                 Spacer()
-                if isRegenerating {
+                if peerManager.isRegeneratingKeys {
                     ProgressView().scaleEffect(0.7)
                 }
             }
 
-            if let info = localInfo {
+            if let info = keyStoreInfo {
+                // Key Counts Display - Use info struct fields
                 HStack {
-                    Text("Keys:")
+                    Text("Valid Keys:")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    // Use hardcoded capacity of 8192
-                    Text("\(info.count) / 8192")
+                    Text("\(info.validKeyCount) / \(info.capacity)") // Use info.capacity
                         .font(.caption2.bold())
                         .foregroundColor(.primary)
                     Spacer()
                     Text(String(format: "%.0f%%", percentage * 100))
-                        .font(.caption2)
+                        .font(.caption2.bold())
                         .foregroundColor(gaugeColor)
                 }
 
+                // Progress Bar
                 ProgressView(value: percentage)
                     .progressViewStyle(LinearProgressViewStyle(tint: gaugeColor))
                     .animation(.easeInOut, value: percentage)
 
-                Button(action: regenerateAction) {
+                // Expired Keys Info (if any) - Use info struct field
+                if hasExpiredKeys {
                     HStack {
-                        Image(systemName: "arrow.clockwise.circle")
-                        Text("Regenerate Keys")
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("\(info.expiredKeyCount) expired key\(info.expiredKeyCount == 1 ? "" : "s") present.")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.top, 2)
+                }
+
+                // Low Key Warning (if applicable)
+                if isLowOnKeys && !hasExpiredKeys { // Show only if not already showing expired warning
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text("Key count is low (< \(Int(lowKeyThreshold * 100))%). Regeneration recommended.")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
+                    .padding(.top, 2)
+                }
+
+                // Create/Regenerate Button
+                Button {
+                    // Use totalKeysInStore computed property
+                    if totalKeysInStore > 0 {
+                        // Show confirmation only if keys exist
+                        showRegenerateConfirm = true
+                    } else {
+                        // Directly create if no keys exist
+                        regenerateAction()
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: buttonIcon)
+                        Text(buttonLabel)
                     }
                     .font(.caption)
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .disabled(isRegenerating)
+                .tint(totalKeysInStore > 0 ? .orange : .blue) // Use totalKeysInStore
+                .disabled(peerManager.isRegeneratingKeys)
                 .padding(.top, 4)
+                .alert("Confirm Regeneration", isPresented: $showRegenerateConfirm) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Regenerate", role: .destructive) {
+                        regenerateAction() // Call the action on confirmation
+                    }
+                } message: {
+                    Text("Regenerating the KeyStore will replace all existing keys. This cannot be undone. Are you sure you want to proceed?")
+                }
 
             } else {
-                Text("KeyStore information not available.")
+                // State when KeyStore info is unavailable
+                Text("KeyStore information loading...")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                ProgressView() // Show a loading indicator
+                    .padding(.top, 4)
             }
         }
         .padding(.vertical, 8) // Add vertical padding
+        .onReceive(timer) { _ in
+            // Trigger refresh periodically
+            print("KeyStoreStatusView: Timer fired, refreshing status...")
+            Task {
+                await peerManager.refreshKeyStoreStatus()
+            }
+        }
+        .onAppear {
+             // Initial refresh when the view appears
+             Task {
+                 await peerManager.refreshKeyStoreStatus()
+             }
+        }
+        .onDisappear {
+            // Stop the timer when the view disappears
+            timer.upstream.connect().cancel()
+        }
     }
 }
+
 
 // MARK: - Server Card
 
@@ -2008,4 +2182,66 @@ struct ThoughtRow: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
+}
+
+// MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
+// These should be replaced by actual implementations in PeerDiscoveryManager
+
+// Add a placeholder property to PeerDiscoveryManager if it doesn't exist
+// This is just for compilation and assumes the real manager will publish this.
+extension PeerDiscoveryManager {
+    // Placeholder - Replace with actual published property
+    // @Published var localKeyStoreInfo: LocalKeyStoreInfo? = nil // Type already updated
+    // @Published var isRegeneratingKeys: Bool = false // Already exists
+
+    // Placeholder function - Replace with actual implementation
+    func isExchangingKeys(with peer: MCPeerID) -> Bool {
+        // Return true if key exchange is in progress with this peer
+        return false // Default to false
+    }
+    // Placeholder function - Replace with actual implementation
+    func isExchangingKeys(with profile: Profile) -> Bool {
+        // Return true if key exchange is in progress with this profile
+        return false // Default to false
+    }
+
+    // Placeholder function - Replace with actual implementation
+//    @MainActor
+//    func refreshKeyStoreStatus() async {
+//        // Simulate fetching key store status
+//        print("PeerDiscoveryManager: Simulating refreshKeyStoreStatus...")
+//        isRegeneratingKeys = true // Simulate starting
+//        try? await Task.sleep(nanoseconds: 1_000_000_000) // Simulate delay
+//        // Simulate different states for testing
+//        let randomState = Int.random(in: 0...4)
+//        switch randomState {
+//        case 0: // Healthy
+//             self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 6000, expiredKeyCount: 0, capacity: 8192)
+//        case 1: // Low keys
+//             self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 500, expiredKeyCount: 0, capacity: 8192)
+//        case 2: // Expired keys
+//             self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 7000, expiredKeyCount: 150, capacity: 8192)
+//        case 3: // Low and Expired keys
+//             self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 300, expiredKeyCount: 50, capacity: 8192)
+//        case 4: // Empty
+//             self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 0, expiredKeyCount: 0, capacity: 8192)
+//        default:
+//             self.localKeyStoreInfo = nil // Simulate loading error
+//        }
+//        isRegeneratingKeys = false // Simulate finishing
+//        print("PeerDiscoveryManager: Simulated refresh complete. Info: \(String(describing: self.localKeyStoreInfo))")
+//    }
+
+    // Placeholder function - Replace with actual implementation
+//    @MainActor
+//    func regenerateLocalKeys() async {
+//        print("PeerDiscoveryManager: Simulating regenerateLocalKeys...")
+//        isRegeneratingKeys = true
+//        localKeyStoreInfo = nil // Simulate clearing while regenerating
+//        try? await Task.sleep(nanoseconds: 3_000_000_000) // Simulate long delay
+//        // Simulate successful regeneration
+//        self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: 8192, expiredKeyCount: 0, capacity: 8192)
+//        isRegeneratingKeys = false
+//        print("PeerDiscoveryManager: Simulated regeneration complete.")
+//    }
 }

@@ -14,6 +14,14 @@ extension Notification.Name {
     static let p2pMessageReceived = Notification.Name("p2pMessageReceivedNotification")
 }
 
+// Define the struct for detailed KeyStore info (based on GroupView summary)
+// Ensure this struct is accessible where needed (e.g., here or a shared Models file)
+struct LocalKeyStoreInfo: Equatable {
+    let validKeyCount: Int
+    let expiredKeyCount: Int
+    let capacity: Int
+}
+
 // Public interface for peer discovery
 @MainActor
 class PeerDiscoveryManager: ObservableObject {
@@ -22,8 +30,8 @@ class PeerDiscoveryManager: ObservableObject {
     @Published var selectedStream: Stream?
     @Published var connectionStatus: ConnectionStatus = .idle
     @Published var peerConnectionTimes: [MCPeerID: Date] = [:]
-    // KeyStore status properties - now driven by ArkavoClient via P2PGroupViewModel
-    @Published var localKeyStoreInfo: (count: Int, capacity: Int)?
+    // KeyStore status properties - now uses LocalKeyStoreInfo
+    @Published var localKeyStoreInfo: LocalKeyStoreInfo? // UPDATED TYPE
     @Published var isRegeneratingKeys: Bool = false
     // Expose peer profiles fetched from persistence
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:]
@@ -44,8 +52,8 @@ class PeerDiscoveryManager: ObservableObject {
         implementation.$selectedStream.assign(to: &$selectedStream)
         implementation.$connectionStatus.assign(to: &$connectionStatus)
         implementation.$peerConnectionTimes.assign(to: &$peerConnectionTimes)
-        // Forward KeyStore status properties
-        implementation.$localKeyStoreInfo.assign(to: &$localKeyStoreInfo)
+        // Forward KeyStore status properties (UPDATED TYPE)
+        implementation.$localKeyStoreInfo.assign(to: &$localKeyStoreInfo) // Assignment remains the same, type is forwarded
         implementation.$isRegeneratingKeys.assign(to: &$isRegeneratingKeys)
         // Forward peer profiles
         implementation.$connectedPeerProfiles.assign(to: &$connectedPeerProfiles)
@@ -180,8 +188,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     @Published var selectedStream: Stream?
     @Published var connectionStatus: ConnectionStatus = .idle
     @Published var peerConnectionTimes: [MCPeerID: Date] = [:]
-    // KeyStore status properties - now driven by ArkavoClient
-    @Published var localKeyStoreInfo: (count: Int, capacity: Int)?
+    // KeyStore status properties - now uses LocalKeyStoreInfo
+    @Published var localKeyStoreInfo: LocalKeyStoreInfo? // UPDATED TYPE
     @Published var isRegeneratingKeys: Bool = false
     // Store fetched peer profiles
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:]
@@ -208,6 +216,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case arkavoClientError(String) // General ArkavoClient error
         case policyCreationFailed(String) // Added for policy errors
         case peerNotFoundForDisconnection(String) // Added for disconnect errors
+        case keyStoreInfoUnavailable(String) // Added for errors fetching KeyStore details
 
         var errorDescription: String? {
             switch self {
@@ -237,6 +246,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "Failed to create policy: \(reason)"
             case let .peerNotFoundForDisconnection(reason):
                 "Peer not found for disconnection: \(reason)"
+            case let .keyStoreInfoUnavailable(reason):
+                "Could not retrieve KeyStore information: \(reason)"
             }
         }
     }
@@ -720,11 +731,30 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     /// Updates the published properties related to the *local* KeyStore status via ArkavoClient.
     func refreshKeyStoreStatus() async {
         print("Refreshing local KeyStore status via ArkavoClient...")
-        // Ask ArkavoClient for the status
-        // Example: let status = await arkavoClient.getLocalKeyStoreStatus()
-        // self.localKeyStoreInfo = (count: status.count, capacity: status.capacity)
-        // self.isRegeneratingKeys = status.isRegenerating
-        print("Placeholder: Fetching KeyStore status from ArkavoClient (TBD).")
+        do {
+            // Ask ArkavoClient for the detailed status
+            // *** PLACEHOLDER: Replace with actual ArkavoClient API call ***
+            // This assumes ArkavoClient has a method like `getLocalKeyStoreDetails()`
+            // that returns valid, expired, capacity, and regeneration status.
+            let (validCount, expiredCount, capacity, isRegen) = try await arkavoClient.getLocalKeyStoreDetails() // Example API call
+
+            // Update published properties with detailed info
+            self.localKeyStoreInfo = LocalKeyStoreInfo(
+                validKeyCount: validCount,
+                expiredKeyCount: expiredCount,
+                capacity: capacity
+            )
+            self.isRegeneratingKeys = isRegen
+            print("✅ Refreshed KeyStore Status: Valid=\(validCount), Expired=\(expiredCount), Capacity=\(capacity), Regenerating=\(isRegen)")
+
+        } catch {
+            print("❌ Failed to refresh KeyStore status from ArkavoClient: \(error)")
+            // Optionally set status to nil or keep the old value
+            // self.localKeyStoreInfo = nil
+            // self.isRegeneratingKeys = false
+            // Consider propagating the error if needed
+            // self.connectionStatus = .failed(P2PError.keyStoreInfoUnavailable(error.localizedDescription))
+        }
 
         // Also refresh connected peer profiles from persistence
         await refreshConnectedPeerProfiles()
@@ -771,10 +801,21 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     /// Manually triggers regeneration of local KeyStore keys via ArkavoClient.
     func regenerateLocalKeys() async {
         print("Manual regeneration of local keys requested via ArkavoClient.")
-        // Example: await arkavoClient.regenerateLocalKeys()
-        print("Placeholder: Triggering key regeneration via ArkavoClient (TBD).")
-        // Update status after triggering
-        await refreshKeyStoreStatus()
+        isRegeneratingKeys = true // Optimistically set regenerating status
+        localKeyStoreInfo = nil // Clear info while regenerating
+        do {
+            // *** PLACEHOLDER: Replace with actual ArkavoClient API call ***
+            try await arkavoClient.regenerateLocalKeys()
+            print("✅ Triggered key regeneration via ArkavoClient.")
+            // Refresh status after triggering (ArkavoClient might also push an update via delegate)
+            await refreshKeyStoreStatus()
+        } catch {
+            print("❌ Failed to trigger key regeneration via ArkavoClient: \(error)")
+            isRegeneratingKeys = false // Revert status on failure
+            // Optionally show error to user
+            // Refresh status even on failure to get the current state
+            await refreshKeyStoreStatus()
+        }
     }
 
     // MARK: - KeyStore Rewrap Support (using ArkavoClient)
@@ -793,9 +834,13 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         var rewrappedKey: Data? = nil
         do {
-            // Placeholder implementation for ArkavoClient rewrap request handling.
-            // Replace the following line with an actual call to ArkavoClient if available, for example:
-            // rewrappedKey = try await arkavoClient.rewrapSessionKey(publicKey: publicKey, encryptedSessionKey: encryptedSessionKey, senderProfileID: senderProfileID)
+            // *** PLACEHOLDER: Replace with actual ArkavoClient API call ***
+            // Example:
+            // rewrappedKey = try await arkavoClient.rewrapSessionKey(
+            //     publicKey: publicKey,
+            //     encryptedSessionKey: encryptedSessionKey,
+            //     senderProfileID: senderProfileID
+            // )
             print("Placeholder: Calling ArkavoClient rewrap method (TBD).")
             // Simulate failure for now
             rewrappedKey = nil
@@ -815,11 +860,16 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
     // MARK: - ArkavoClientDelegate Methods
 
+    // UPDATED Delegate Method - Triggers full refresh
     nonisolated func arkavoClientDidUpdateKeyStatus(_: ArkavoClient, keyCount: Int, capacity: Int, isRegenerating: Bool) {
         Task { @MainActor in
-            print("Delegate: ArkavoClient Key Status Update - Keys: \(keyCount)/\(capacity), Regenerating: \(isRegenerating)")
-            self.localKeyStoreInfo = (count: keyCount, capacity: capacity)
+            // This delegate provides potentially incomplete info (missing expired count).
+            // Trigger a full refresh to get accurate LocalKeyStoreInfo.
+            print("Delegate: ArkavoClient Key Status Update Received (Valid: \(keyCount), Capacity: \(capacity), Regen: \(isRegenerating)). Triggering full status refresh.")
+            // Optionally update isRegenerating immediately for responsiveness
             self.isRegeneratingKeys = isRegenerating
+            // Trigger the full refresh
+            await self.refreshKeyStoreStatus()
         }
     }
 
@@ -1340,5 +1390,62 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
             // This case should ideally not happen if called from stream delegate, but good for safety
             print("StreamDelegate: Closed and removed an untracked stream.")
         }
+    }
+}
+
+// *** PLACEHOLDER EXTENSION: Replace with actual ArkavoClient methods ***
+// This extension provides placeholder implementations for the methods
+// we assume ArkavoClient might have, allowing the code to compile.
+// These need to be replaced with the real ArkavoClient API calls.
+extension ArkavoClient {
+    // Placeholder for fetching detailed KeyStore status
+    func getLocalKeyStoreDetails() async throws -> (validCount: Int, expiredCount: Int, capacity: Int, isRegenerating: Bool) {
+        print("⚠️ WARNING: Using placeholder ArkavoClient.getLocalKeyStoreDetails()")
+        // Simulate fetching data - replace with actual implementation
+        // For testing, return some dummy values
+        let capacity = 8192
+        let validCount = Int.random(in: 6000...7000)
+        let expiredCount = Int.random(in: 500...1000)
+        let isRegenerating = false // Or toggle this for testing
+        try await Task.sleep(nanoseconds: 100_000_000) // Simulate network delay
+        // Simulate potential error
+        // if Bool.random() { throw P2PGroupViewModel.P2PError.keyStoreInfoUnavailable("Simulated fetch error") }
+        return (validCount, expiredCount, capacity, isRegenerating)
+    }
+
+    // Placeholder for triggering key regeneration
+    func regenerateLocalKeys() async throws {
+        print("⚠️ WARNING: Using placeholder ArkavoClient.regenerateLocalKeys()")
+        // Simulate triggering regeneration
+        try await Task.sleep(nanoseconds: 50_000_000) // Simulate call delay
+        // Simulate potential error
+        // if Bool.random() { throw P2PGroupViewModel.P2PError.arkavoClientError("Simulated regeneration trigger error") }
+    }
+
+    // Placeholder for rewrap method (already partially existed in P2PGroupViewModel)
+    // func rewrapSessionKey(publicKey: Data, encryptedSessionKey: Data, senderProfileID: String?) async throws -> Data? {
+    //     print("⚠️ WARNING: Using placeholder ArkavoClient.rewrapSessionKey()")
+    //     try await Task.sleep(nanoseconds: 150_000_000) // Simulate work
+    //     // Simulate success/failure
+    //     if Bool.random() {
+    //         return Data("simulated-rewrapped-key-\(UUID().uuidString)".utf8)
+    //     } else {
+    //         return nil // Simulate no key found
+    //     }
+    //     // Simulate error
+    //     // throw P2PGroupViewModel.P2PError.arkavoClientError("Simulated rewrap error")
+    // }
+
+    // Placeholder for encrypting and sending P2P payload
+    // Assumes this method handles the MCSession sending internally or via delegate callback
+    func encryptAndSendPayload(payload: Data, policyData: Data) async throws -> Data {
+        print("⚠️ WARNING: Using placeholder ArkavoClient.encryptAndSendPayload()")
+        // Simulate encryption
+        let encryptedData = Data("encrypted-\(payload.count)-bytes-with-policy".utf8)
+        try await Task.sleep(nanoseconds: 20_000_000) // Simulate encryption time
+        // This placeholder *returns* the encrypted data, assuming the caller (P2PGroupViewModel)
+        // will send it via MCSession. If ArkavoClient handles sending directly,
+        // this method might return Void or some confirmation.
+        return encryptedData
     }
 }

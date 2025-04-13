@@ -46,8 +46,15 @@
         }
       }
     },
-    "%lld / 8192" : {
-
+    "%lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
     },
     "%lld %@" : {
       "localizations" : {
@@ -55,6 +62,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld expired key%@ present." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld expired key%2$@ present."
           }
         }
       }
@@ -279,6 +296,9 @@
     "Comments" : {
 
     },
+    "Confirm Regeneration" : {
+
+    },
     "Connected" : {
 
     },
@@ -462,10 +482,10 @@
     "Invite Friends" : {
 
     },
-    "Keys:" : {
+    "Key count is low (< %lld%%). Regeneration recommended." : {
 
     },
-    "KeyStore information not available." : {
+    "KeyStore information loading..." : {
 
     },
     "Last known location: %lf, %lf" : {
@@ -720,7 +740,10 @@
     "Refine Interests" : {
 
     },
-    "Regenerate Keys" : {
+    "Regenerate" : {
+
+    },
+    "Regenerating the KeyStore will replace all existing keys. This cannot be undone. Are you sure you want to proceed?" : {
 
     },
     "Register" : {
@@ -1025,6 +1048,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Valid Keys:" : {
 
     },
     "Video" : {
