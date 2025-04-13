@@ -229,7 +229,7 @@ struct DetailedStreamProfileView: View {
         var wasConnected = false
 
         // 1. Check connection status and disconnect if necessary
-        if let peerToDisconnect = await peerDiscoveryManager.findPeer(byProfileID: profileIDData) {
+        if let peerToDisconnect = peerDiscoveryManager.findPeer(byProfileID: profileIDData) {
             print("RevokeTrust: Profile \(profileName) is currently connected as peer \(peerToDisconnect.displayName). Initiating disconnection.")
             wasConnected = true
             peerDiscoveryManager.disconnectPeer(peerToDisconnect)

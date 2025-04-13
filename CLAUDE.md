@@ -20,6 +20,42 @@
 - **Files**: One main type per file, grouped by feature
 - **Refactoring**: Keep changes focused and to a minimum - modify only what's needed for the task
 
+## UI Style
+- **HIG Compliance**: Follow Apple's Human Interface Guidelines where applicable, but expect custom components and interactions.
+- **Layout & Spacing**:
+    - Utilize a base `systemMargin` (e.g., 16pt) often applied via `.padding()` or used in multiples (e.g., `systemMargin * 2`, `systemMargin * 8`).
+    - Specific padding values (e.g., 40pt) are also used contextually.
+    - Respect safe areas, sometimes using `.ignoresSafeArea()` for full-screen experiences.
+- **Navigation**:
+    - Employs custom navigation patterns. Examples include:
+        - State-driven view switching controlled by variables (e.g., `selectedView` in `ArkavoView`).
+        - Menu overlays for accessing different sections.
+        - Full-screen, vertically swipeable cards for content feeds (e.g., `PostFeedView`).
+- **Typography**:
+    - Primarily uses specific font sizes and weights via `.font(.system(size: ..., weight: ...))`. Examples: `size: 24, weight: .heavy`, `size: 14, weight: .bold`, `.headline`.
+    - Dynamic Type styles (`.largeTitle`, `.body`, etc.) do not appear to be in common use; test scaling.
+- **Colors**:
+    - Uses a mix of explicit colors (e.g., `Color.black`, `.white`, `.blue`, `.gray`) and opacity (`.opacity(...)`).
+    - Some system colors like `Color(.systemBackground)` are used, indicating partial support for light/dark mode adaptability.
+    - Ensure color contrast is sufficient, especially with custom color combinations.
+- **Components**:
+    - Buttons: Styled using modifiers like `.padding`, `.background(Color...)`, `.foregroundColor`, `.cornerRadius()`. Style varies by context.
+    - Cards: Custom views like `ImmersiveThoughtCard` serve as containers, often taking up the full screen or large portions.
+    - Input fields: `TextEditor` is used for multi-line input, styled for the specific context (e.g., clear background, placeholder text).
+    - Custom components: Reusable views like `ClusterAnnotationView`, `GroupChatIconList`, `ContributorsView` are created for specific UI needs.
+- **Gestures & Feedback**:
+    - Standard gestures like `DragGesture` (for swiping) are implemented.
+    - Visual feedback is provided for interactions (e.g., button state changes, animations).
+    - Ensure minimum touch targets (44x44pt recommended) are met, especially for smaller interactive elements.
+- **Accessibility**:
+    - Dynamic Type support needs verification due to the use of fixed font sizes.
+    - Review and add explicit VoiceOver labels for controls and content where necessary.
+    - Test using Accessibility Inspector to identify issues.
+- **Animations**:
+    - Uses SwiftUI animations (`.animation()`, `withAnimation`). Examples include `.spring()` and `.easeInOut`.
+    - Transitions like `.move(edge: .bottom)` are used for view presentation.
+    - Aim for purposeful and performant animations.
+
 ## Key Features
 
 ### One-time TDF
@@ -95,7 +131,7 @@ If acknowledgements aren't received within the timeout, assume failure, potentia
 2.  **Secure P2P Communication (Enabled by Trust):**
     *   **Leverage KeyStore:** Utilize the established trusted P2P connection and `OpenTDFKit.KeyStore` for cryptographic operations (`Profile.keyStorePrivate`, `Profile.keyStorePublic`).
     *   **Secure Session Maintenance (Key Renewal):** Implement the detailed key renewal workflow, managed by `P2PGroupViewModel` and `ArkavoClient`, *after* trust has been verified for the operation:
-        *   Detect low key counts (`lowKeyThreshold`).
+        *   Detect low-key counts (`lowKeyThreshold`).
         *   Trigger user-initiated renewal with a selected, verified peer.
         *   Perform mutual verification (as part of trust establishment, see point 1).
         *   Generate new key pairs locally (`keyStore.regenerateKeys()`).

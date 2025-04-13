@@ -604,6 +604,11 @@ struct GroupView: View {
         .onChange(of: peerManager.connectedPeers) { _, _ in
             Task { await peerManager.refreshKeyStoreStatus() } // Refresh profiles when peers change
         }
+        // Refresh UI when key exchange states change
+        .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
+            // This ensures the UI updates when a state changes for any peer
+            print("GroupView: Detected change in peerKeyExchangeStates")
+        }
     }
 
     // Stream list or loading view
@@ -797,6 +802,7 @@ struct GroupView: View {
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
         .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo) // Animate key info changes
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles) // Animate profile changes
+        .animation(.easeInOut(duration: 0.3), value: peerManager.peerKeyExchangeStates) // Animate key exchange state changes
     }
 
     // Toggle peer search state
@@ -1031,41 +1037,82 @@ struct GroupView: View {
     }
 
     // Individual peer row - Updated to accept Profile and PeerManager
+    // --- MODIFIED peerRow ---
     private func peerRow(peer: MCPeerID, profile: Profile?, peerManager: PeerDiscoveryManager) -> some View {
-        HStack {
-            // Use PeerProfileView if profile exists, otherwise fallback
+        // Get key exchange state for this specific peer
+        let keyState = peerManager.peerKeyExchangeStates[peer]?.state ?? .idle
+        let (_, statusIcon, statusColor) = displayInfo(for: keyState) // Use helper
+        let isButtonDisabled: Bool = {
+            switch keyState {
+            case .idle, .failed: return false // Enable for idle or failed (retry)
+            default: return true // Disable during active exchange or completion
+            }
+        }()
+
+        return HStack {
+            // Profile View or Fallback
             if let profile {
                 PeerProfileView(profile: profile, connectionTime: peerManager.peerConnectionTimes[peer])
             } else {
                 // Fallback view when profile is not yet available
                 HStack {
-                    Image(systemName: "person.circle.fill").foregroundColor(.gray).font(.title3) // Placeholder avatar
+                    Image(systemName: "person.circle.fill").foregroundColor(.gray).font(.title3)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(peer.displayName).font(.subheadline).fontWeight(.medium).foregroundColor(.secondary) // Indicate loading/fallback
+                        Text(peer.displayName).font(.subheadline).fontWeight(.medium).foregroundColor(.secondary)
                         Text("Connecting...").font(.caption2).foregroundColor(.secondary)
                     }
                     Spacer()
-                    ProgressView().scaleEffect(0.5) // Indicate loading state
+                    ProgressView().scaleEffect(0.5)
                 }
             }
 
-            // Placeholder Button for Mutual Key Exchange Initiation
-            // The actual implementation will depend on PeerDiscoveryManager's state
-            // and might involve showing progress, verification codes, etc.
-            if profile != nil { // Only show if profile is loaded
-                Button {
-                    // TODO: Initiate mutual key exchange with this peer
-                    // This would likely call a method on peerManager, e.g.:
-                    // Task { await peerManager.initiateMutualKeyExchange(with: peer) }
-                    print("Initiate Mutual Key Exchange with \(peer.displayName)")
-                } label: {
-                    Image(systemName: "key.radiowaves.forward") // Example icon
-                        .font(.caption) // Smaller icon
-                        .foregroundColor(.blue)
+            Spacer() // Pushes button to the right
+
+            // Key Exchange Status and Button (only if profile is loaded)
+            if profile != nil {
+                HStack(spacing: 5) {
+                    // Status Icon (optional)
+                    if let iconName = statusIcon {
+                        Image(systemName: iconName)
+                            .font(.caption)
+                            .foregroundColor(statusColor)
+                    }
+
+                    // Button
+                    Button {
+                        Task {
+                            do {
+                                print("UI (peerRow): Initiating key regeneration with peer \(peer.displayName)")
+                                try await peerManager.initiateKeyRegeneration(with: peer)
+                                print("UI (peerRow): Key regeneration initiated successfully for \(peer.displayName)")
+                            } catch {
+                                print("❌ UI (peerRow): Failed to initiate key regeneration for \(peer.displayName): \(error)")
+                                // Optionally show an error to the user
+                            }
+                        }
+                    } label: {
+                        Group {
+                            switch keyState {
+                            case .idle:
+                                Image(systemName: "key.radiowaves.forward")
+                            case .failed:
+                                Image(systemName: "arrow.clockwise") // Retry icon
+                            case .completed:
+                                Image(systemName: "checkmark.shield")
+                            default: // In progress states
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 12, height: 12) // Consistent size
+                            }
+                        }
+                        .font(.caption) // Smaller icon/progress
+                        .foregroundColor(statusColor) // Use status color for button content
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small) // Smaller button
+                    .tint(statusColor) // Tint the border/background
+                    .disabled(isButtonDisabled)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small) // Smaller button
-                .disabled(peerManager.isExchangingKeys(with: peer)) // Disable if already exchanging
             }
         }
         .padding(.horizontal)
@@ -1074,6 +1121,35 @@ struct GroupView: View {
         .cornerRadius(8)
         .padding(.horizontal, 4) // Add horizontal padding for spacing between rows
     }
+    // --- END MODIFIED peerRow ---
+
+    // Helper function to get display info (copied from InnerCircleMemberRow for use in peerRow)
+    private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
+        switch state {
+        case .idle:
+            return ("Ready to Exchange", "key.radiowaves.forward", .blue)
+        case .requestSent:
+            return ("Request Sent", "paperplane", .orange)
+        case .requestReceived:
+            return ("Request Received", "envelope.badge", .orange)
+        case .offerSent:
+            return ("Offer Sent", "paperplane.fill", .orange)
+        case .offerReceived:
+            return ("Offer Received", "envelope.open.badge.clock", .orange)
+        case .ackSent:
+            return ("Ack Sent", "checkmark.message", .orange)
+        case .ackReceived:
+            return ("Ack Received", "checkmark.message.fill", .orange)
+        case .commitSent:
+            return ("Commit Sent", "lock.shield", .orange) // Using lock.shield temporarily
+        case .completed:
+            return ("Keys Exchanged", "checkmark.shield.fill", .green)
+        case .failed(let reason):
+            let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
+            return ("Failed: \(shortReason)", "exclamationmark.triangle.fill", .red)
+        }
+    }
+
 
     // Format the connection time
     private func connectionTimeString(_ date: Date) -> String {
@@ -1229,6 +1305,11 @@ struct InnerCircleView: View {
             removeNotificationObservers() // Remove observers
         }
         .overlay(statusMessageOverlay)
+        // Refresh UI when key exchange states change
+        .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
+            // This ensures the UI updates when a state changes for any peer
+            print("InnerCircleView: Detected change in peerKeyExchangeStates")
+        }
     }
 
     // MARK: - Setup and Teardown
@@ -1530,6 +1611,28 @@ struct InnerCircleMemberRow: View {
     // Removed unused modelContext
     // @Environment(\.modelContext) private var modelContext
 
+    // Computed property to get the current key exchange state for this profile (if online)
+    private var keyExchangeState: KeyExchangeState? {
+        guard isOnline, let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
+            return nil
+        }
+        return peerManager.peerKeyExchangeStates[peer]?.state
+    }
+
+    // Computed property to determine if the key exchange button should be disabled
+    private var isKeyExchangeButtonDisabled: Bool {
+        guard isOnline, let state = keyExchangeState else {
+            return true // Disable if offline or no state found
+        }
+        // Disable unless idle or failed (allow retry from failed)
+        switch state {
+        case .idle, .failed:
+            return false
+        default:
+            return true
+        }
+    }
+
     var body: some View {
         HStack {
             // Avatar
@@ -1553,6 +1656,11 @@ struct InnerCircleMemberRow: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    // Display Key Exchange Status if online
+                    keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW
+                        .font(.caption2) // Smaller font for status
+                        .padding(.top, 1)
+
                 } else {
                     // Removed lastSeen display
                     Text("Offline") // Simple offline indicator
@@ -1563,7 +1671,7 @@ struct InnerCircleMemberRow: View {
 
             Spacer()
 
-            // Status indicator
+            // Status indicator (Online/Offline dot)
             statusIndicator
 
             // Message button - Only enabled for online peers
@@ -1582,23 +1690,9 @@ struct InnerCircleMemberRow: View {
             .buttonStyle(.plain)
             .disabled(!isOnline)
 
-            // Placeholder Button for Mutual Key Exchange Initiation
-            // Only show for online peers
+            // Key Exchange Button - Only show for online peers
             if isOnline {
-                Button {
-                    // TODO: Initiate mutual key exchange with this peer's profile
-                    // This would likely call a method on peerManager, e.g.:
-                    // Task { await peerManager.initiateMutualKeyExchange(with: profile) }
-                    print("Initiate Mutual Key Exchange with \(profile.name)")
-                } label: {
-                    Image(systemName: "key.radiowaves.forward") // Example icon
-                        .font(.subheadline) // Match message icon size
-                        .foregroundColor(.blue)
-                        .padding(8)
-                        .background(Circle().fill(Color.blue.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-                .disabled(peerManager.isExchangingKeys(with: profile)) // Disable if already exchanging with this profile
+                keyExchangeButton() // <-- INTEGRATED KEY EXCHANGE BUTTON
             }
 
 
@@ -1758,7 +1852,133 @@ struct InnerCircleMemberRow: View {
             }
         }
     }
+
+    // MARK: - Key Exchange UI Helpers
+
+    // View to display the current key exchange status text and icon
+    @ViewBuilder
+    private func keyExchangeStatusView() -> some View {
+        if let state = keyExchangeState {
+            let (text, icon, color) = displayInfo(for: state)
+            HStack(spacing: 3) {
+                if let iconName = icon {
+                    Image(systemName: iconName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 10, height: 10) // Smaller icon
+                        .foregroundColor(color)
+                }
+                Text(text)
+                    .foregroundColor(color)
+            }
+            // Add animation for state changes
+            .animation(.easeInOut(duration: 0.3), value: state)
+        } else {
+            // Default view if no state (or offline) - Indicate keys are ready/default state
+             HStack(spacing: 3) {
+                 Image(systemName: "lock.shield") // Use a neutral icon
+                     .resizable()
+                     .aspectRatio(contentMode: .fit)
+                     .frame(width: 10, height: 10)
+                     .foregroundColor(.gray) // Neutral color
+                 Text("Secure") // Neutral text
+                     .foregroundColor(.gray)
+             }
+        }
+    }
+
+    // Button for initiating or retrying key exchange
+    @ViewBuilder
+    private func keyExchangeButton() -> some View {
+    let keyState: KeyExchangeState = keyExchangeState ?? .idle // Default to idle if nil
+    let isFailed: Bool = {
+        if case KeyExchangeState.failed(_) = keyState { return true } else { return false }
+    }()
+    let (text, _, color) = displayInfo(for: keyState) // Get text and color
+        let isDisabled = isKeyExchangeButtonDisabled
+
+        Button {
+            // Find the peer and initiate regeneration
+            if let peer = peerManager.findPeer(byProfileID: profile.publicID) {
+                Task {
+                    do {
+                        print("UI: Initiating key regeneration with peer \(peer.displayName) for profile \(profile.name)")
+                        try await peerManager.initiateKeyRegeneration(with: peer)
+                        print("UI: Key regeneration initiated successfully for \(profile.name)")
+                    } catch {
+                        print("❌ UI: Failed to initiate key regeneration for \(profile.name): \(error)")
+                        // Optionally show an error to the user (e.g., using an alert or status message)
+                        sharedState.setState("Key exchange failed: \(error.localizedDescription)", forKey: "errorMessage") // Example error handling
+                    }
+                }
+            } else {
+                print("❌ UI: Could not find MCPeerID for profile \(profile.name) to initiate key exchange.")
+            }
+        } label: {
+            Group {
+            switch keyState {
+            case .idle:
+                Image(systemName: "key.radiowaves.forward")
+                    .foregroundColor(.blue)
+            case KeyExchangeState.failed(_):
+                Image(systemName: "arrow.clockwise") // Retry icon
+                    .foregroundColor(.orange)
+            case .completed:
+                Image(systemName: "checkmark.shield")
+                    .foregroundColor(.green)
+            case .requestSent, .requestReceived, .offerSent, .offerReceived, .ackSent, .ackReceived, .commitSent:
+                ProgressView() // Show spinner while in progress
+                    .scaleEffect(0.6) // Smaller spinner
+                    .frame(width: 16, height: 16) // Ensure consistent size
+                    .tint(.orange) // Tint spinner orange during progress
+            }
+            }
+            .font(.subheadline) // Match message icon size
+            .padding(8)
+            // Use clear background when disabled or completed, otherwise use tinted background
+            .background(Circle().fill( (isDisabled && !isFailed) ? Color.clear : color.opacity(0.1) ))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        // Add tooltip/help text
+        .help(isDisabled ? text : (isFailed ? "Retry Key Exchange" : "Initiate Key Exchange"))
+        // Add animation for state changes
+        .animation(.easeInOut(duration: 0.3), value: keyState)
+    }
+
+
+    // Helper to get display info based on KeyExchangeState
+    private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
+        switch state {
+        case .idle:
+            return ("Ready to Exchange", "key.radiowaves.forward", .blue)
+        case .requestSent:
+            return ("Request Sent", "paperplane", .orange)
+        case .requestReceived:
+            return ("Request Received", "envelope.badge", .orange)
+        case .offerSent:
+            return ("Offer Sent", "paperplane.fill", .orange)
+        case .offerReceived:
+            return ("Offer Received", "envelope.open.badge.clock", .orange)
+        case .ackSent:
+            return ("Ack Sent", "checkmark.message", .orange)
+        case .ackReceived:
+            return ("Ack Received", "checkmark.message.fill", .orange)
+        case .commitSent:
+            // Using a more indicative icon for the final step before completion
+            return ("Committing Keys", "lock.shield.fill", .orange)
+        case .completed:
+            return ("Keys Exchanged", "checkmark.shield.fill", .green)
+        case .failed(let reason):
+            // Keep reason short for UI
+            let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
+            // Provide a more user-friendly default if reason is empty
+            let displayText = reason.isEmpty ? "Failed" : "Failed: \(shortReason)"
+            return (displayText, "exclamationmark.triangle.fill", .red)
+        }
+    }
 }
+
 
 // MARK: - Peer Profile View
 
@@ -2194,16 +2414,31 @@ extension PeerDiscoveryManager {
     // @Published var localKeyStoreInfo: LocalKeyStoreInfo? = nil // Type already updated
     // @Published var isRegeneratingKeys: Bool = false // Already exists
 
-    // Placeholder function - Replace with actual implementation
+    // Check if key exchange is actively in progress with a specific peer
     func isExchangingKeys(with peer: MCPeerID) -> Bool {
-        // Return true if key exchange is in progress with this peer
-        return false // Default to false
+        guard let state = peerKeyExchangeStates[peer]?.state else {
+            return false // No state tracked for this peer
+        }
+        // Return true if state is anything other than idle, completed, or failed
+        switch state {
+        case .idle, .completed, .failed:
+            return false
+        default:
+            return true
+        }
     }
-    // Placeholder function - Replace with actual implementation
+
+    // Check if key exchange is actively in progress with a specific profile
     func isExchangingKeys(with profile: Profile) -> Bool {
-        // Return true if key exchange is in progress with this profile
-        return false // Default to false
+        // Find the MCPeerID associated with this profile among connected peers
+        guard let peer = findPeer(byProfileID: profile.publicID) else {
+            // Profile not found among connected peers
+            return false
+        }
+        // Check the state for the found peer
+        return isExchangingKeys(with: peer)
     }
+
 
     // Placeholder function - Replace with actual implementation
 //    @MainActor
