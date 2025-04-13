@@ -1291,32 +1291,23 @@ struct InnerCircleView: View {
         peerManager.connectedPeerProfiles.values.contains { $0.id == profile.id }
     }
 
-    // Load all InnerCircle profiles from persistence
+    // Load all InnerCircle profiles from the stream relationship
     private func loadInnerCircleProfiles() async {
-        do {
-            // Fetch all profiles that belong to the InnerCircle stream
-            // TODO: This fetches *all* profiles and filters locally.
-            // Ideally, this should use a relationship query or fetch based on stream membership
-            // if the data model supports it, for better performance.
-            let allProfiles = try await PersistenceController.shared.fetchAllProfiles()
+        // Directly access the stream's innerCircleProfiles relationship
+        // This assumes the 'stream' object passed to InnerCircleView is up-to-date
+        // and its relationships are loaded by SwiftData.
+        // No need for manual fetching or filtering.
+        innerCircleProfiles = stream.innerCircleProfiles
+        print("Loaded \(innerCircleProfiles.count) InnerCircle profiles directly from stream relationship.")
 
-            // Filter to include only profiles that have been added to InnerCircle
-            // Assuming filtering out the current user is the intended logic for now.
-            // A more robust approach would check stream.innerCircleMembers or similar.
-            let currentUserID = ViewModelFactory.shared.getCurrentProfile()?.id
-            innerCircleProfiles = allProfiles.filter { profile in
-                profile.id != currentUserID
-                // Example: Add logic here if 'stream' has a list of member IDs/profiles
-                // e.g., stream.memberIDs.contains(profile.id)
-            }
-
-            // Save updated lastSeen times (if applicable, though lastSeen was removed)
-            // try await PersistenceController.shared.saveChanges()
-
-        } catch {
-            print("Error loading InnerCircle profiles: \(error)")
-            innerCircleProfiles = []
-        }
+        // Note: If 'stream' might be stale or relationships aren't automatically loaded,
+        // you might need to re-fetch the stream first:
+        // if let freshStream = try? await PersistenceController.shared.fetchStream(withID: stream.id) {
+        //     self.innerCircleProfiles = freshStream.innerCircleProfiles
+        // } else {
+        //     print("Error refreshing stream for InnerCircle profiles")
+        //     self.innerCircleProfiles = []
+        // }
     }
 
     // Get connection time for an online profile

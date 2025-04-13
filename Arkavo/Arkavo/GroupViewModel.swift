@@ -27,6 +27,10 @@ class PeerDiscoveryManager: ObservableObject {
     @Published var isRegeneratingKeys: Bool = false
     // Expose peer profiles fetched from persistence
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:]
+    // Expose peerID to ProfileID mapping
+    var peerIDToProfileIDMap: [MCPeerID: String] {
+        implementation.peerIDToProfileID
+    }
 
     private var implementation: P2PGroupViewModel
 
@@ -122,6 +126,13 @@ class PeerDiscoveryManager: ObservableObject {
     func disconnectPeer(_ peer: MCPeerID) {
         implementation.disconnectPeer(peer)
     }
+
+    /// Finds a connected peer by their Profile ID.
+    /// - Parameter profileID: The public profile ID (Data) of the peer to find.
+    /// - Returns: The `MCPeerID` of the connected peer, or `nil` if not found.
+    func findPeer(byProfileID profileID: Data) async -> MCPeerID? {
+        implementation.findPeer(byProfileID: profileID)
+    }
 }
 
 // Connection status enum for UI feedback
@@ -196,6 +207,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // case keySerializationError(String) // Handled by ArkavoClient
         case arkavoClientError(String) // General ArkavoClient error
         case policyCreationFailed(String) // Added for policy errors
+        case peerNotFoundForDisconnection(String) // Added for disconnect errors
 
         var errorDescription: String? {
             switch self {
@@ -223,6 +235,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "ArkavoClient error: \(reason)"
             case let .policyCreationFailed(reason):
                 "Failed to create policy: \(reason)"
+            case let .peerNotFoundForDisconnection(reason):
+                "Peer not found for disconnection: \(reason)"
             }
         }
     }
@@ -239,7 +253,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     // private var ephemeralPublicKeys: [Data: String] = [:]
 
     // Map MCPeerID to ProfileID for easier lookup when fetching/saving profiles
-    private var peerIDToProfileID: [MCPeerID: String] = [:]
+    // Make internal for access by PeerDiscoveryManager wrapper
+    var peerIDToProfileID: [MCPeerID: String] = [:]
 
     // Access to PersistenceController
     private let persistenceController = PersistenceController.shared
@@ -396,35 +411,92 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // await arkavoClient.stop() // Example: Check ArkavoClient API
     }
 
+    /// Finds a connected peer by their Profile ID.
+    /// - Parameter profileID: The public profile ID (Data) of the peer to find.
+    /// - Returns: The `MCPeerID` of the connected peer, or `nil` if not found.
+    func findPeer(byProfileID profileID: Data) -> MCPeerID? {
+        let profileIDString = profileID.base58EncodedString
+        print("FindPeer: Searching for peer with Profile ID: \(profileIDString)")
+        print("FindPeer: Current peerIDToProfileID map: \(peerIDToProfileID)")
+        print("FindPeer: Current connectedPeers list: \(connectedPeers.map { "\($0.displayName) (\($0.hashValue))" })")
+
+        // Find the MCPeerID in the map that corresponds to the profileIDString
+        guard let foundPeerID = peerIDToProfileID.first(where: { $0.value == profileIDString })?.key else {
+            print("FindPeer: Profile ID \(profileIDString) not found in peerIDToProfileID map.")
+            return nil
+        }
+
+        print("FindPeer: Found MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) in map for Profile ID \(profileIDString).")
+
+        // Verify that this MCPeerID is actually in the connectedPeers list
+        if connectedPeers.contains(where: { $0.hashValue == foundPeerID.hashValue }) {
+            print("FindPeer: MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) is present in connectedPeers list.")
+            return foundPeerID
+        } else {
+            print("FindPeer: Warning - MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) found in map but NOT in connectedPeers list. State might be inconsistent.")
+            // Clean up the inconsistent map entry?
+            // peerIDToProfileID.removeValue(forKey: foundPeerID)
+            return nil
+        }
+    }
+
     /// Disconnects a specific peer
     /// - Parameter peer: The MCPeerID of the peer to disconnect
     func disconnectPeer(_ peer: MCPeerID) {
-        guard let session = mcSession, connectedPeers.contains(peer) else {
-            print("Cannot disconnect peer: Peer not found or session not active")
+        let profileID = peerIDToProfileID[peer] ?? "Unknown Profile ID"
+        print("DisconnectPeer: Attempting to disconnect peer: \(peer.displayName) (Hash: \(peer.hashValue)), Profile ID: \(profileID)")
+        print("DisconnectPeer: Current connectedPeers: \(connectedPeers.map { "\($0.displayName) (\($0.hashValue))" })")
+
+        guard let session = mcSession else {
+            print("DisconnectPeer Error: Cannot disconnect peer \(peer.displayName) - Session not active.")
             return
         }
 
-        print("Disconnecting peer: \(peer.displayName)")
-        // Cancel any connections with this peer
+        // Check if the *exact* MCPeerID instance is in the connectedPeers list
+        let isPeerConnected = connectedPeers.contains { $0.hashValue == peer.hashValue }
+        print("DisconnectPeer: Is peer \(peer.displayName) (Hash: \(peer.hashValue)) contained in connectedPeers list? \(isPeerConnected)")
+
+        guard isPeerConnected else {
+            print("DisconnectPeer Warning: Peer \(peer.displayName) (Hash: \(peer.hashValue)) not found in connectedPeers list. Disconnection skipped. Profile ID: \(profileID)")
+            // Even if not found, try to clean up any lingering map/profile data just in case
+            if peerIDToProfileID[peer] != nil {
+                print("DisconnectPeer Info: Removing lingering map entry for \(peer.displayName)")
+                peerIDToProfileID.removeValue(forKey: peer)
+            }
+            if connectedPeerProfiles[peer] != nil {
+                print("DisconnectPeer Info: Removing lingering profile cache for \(peer.displayName)")
+                connectedPeerProfiles.removeValue(forKey: peer)
+            }
+            // Remove from connection times if present
+            peerConnectionTimes.removeValue(forKey: peer)
+            return
+        }
+
+        print("DisconnectPeer: Proceeding with disconnection for peer: \(peer.displayName)")
+        // Cancel any connections with this peer using the MCSession method
         session.cancelConnectPeer(peer)
+        print("DisconnectPeer: Called session.cancelConnectPeer for \(peer.displayName)")
 
-        // Remove from mapping and cached data
-        if let profileID = peerIDToProfileID[peer] {
-            print("Removing cached data for profile ID: \(profileID)")
-            peerIDToProfileID.removeValue(forKey: peer)
-            // Inform ArkavoClient about the disconnected peer (if needed)
-            // await arkavoClient.peerDidDisconnect(profileId: profileID) // Example
-        }
+        // --- Immediate Cleanup ---
+        // It's generally better to let the MCSessionDelegate handle the state change to .notConnected
+        // for removing the peer from lists and maps, as `cancelConnectPeer` is asynchronous.
+        // However, performing *some* cleanup immediately can prevent race conditions if the
+        // delegate callback is delayed or doesn't fire for some reason (e.g., during app termination).
+        // We will primarily rely on the delegate, but log that we initiated the disconnect here.
 
-        // Update connection status if no peers left
-        if connectedPeers.isEmpty {
-            connectionStatus = isSearchingForPeers ? .searching : .idle
-        }
+        // Optional: Immediately remove from connection times to prevent UI issues
+        // peerConnectionTimes.removeValue(forKey: peer)
 
-        // Refresh KeyStore status to update UI
-        Task {
-            await refreshKeyStoreStatus()
-        }
+        // The primary removal from connectedPeers, peerIDToProfileID, connectedPeerProfiles,
+        // and stream closing should happen in the session(_:peer:didChange:to:) delegate method
+        // when the state becomes .notConnected.
+
+        print("DisconnectPeer: Disconnection initiated for \(peer.displayName). Waiting for delegate callback for final cleanup.")
+
+        // Refresh KeyStore status (might be too early, consider moving to delegate .notConnected state)
+        // Task {
+        //     await refreshKeyStoreStatus()
+        // }
     }
 
     /// Returns the browser view controller for manual peer selection
@@ -584,7 +656,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     ///   - data: The received message data
     ///   - peer: The peer that sent the message
     private func handleIncomingData(_ data: Data, from peer: MCPeerID) {
-        print("Received \(data.count) bytes from \(peer.displayName).")
+        print("Received \(data.count) bytes from \(peer.displayName). Passing to ArkavoClient.")
+        // ArkavoClient should handle decryption and further processing via its delegate methods
+        // Example: arkavoClient.processReceivedP2PData(data, from: peer)
+        // Assuming ArkavoClient handles this internally or via its own delegate calls
     }
 
     // --- Removed JSON Message Handling ---
@@ -645,6 +720,12 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     /// Updates the published properties related to the *local* KeyStore status via ArkavoClient.
     func refreshKeyStoreStatus() async {
         print("Refreshing local KeyStore status via ArkavoClient...")
+        // Ask ArkavoClient for the status
+        // Example: let status = await arkavoClient.getLocalKeyStoreStatus()
+        // self.localKeyStoreInfo = (count: status.count, capacity: status.capacity)
+        // self.isRegeneratingKeys = status.isRegenerating
+        print("Placeholder: Fetching KeyStore status from ArkavoClient (TBD).")
+
         // Also refresh connected peer profiles from persistence
         await refreshConnectedPeerProfiles()
     }
@@ -690,6 +771,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     /// Manually triggers regeneration of local KeyStore keys via ArkavoClient.
     func regenerateLocalKeys() async {
         print("Manual regeneration of local keys requested via ArkavoClient.")
+        // Example: await arkavoClient.regenerateLocalKeys()
+        print("Placeholder: Triggering key regeneration via ArkavoClient (TBD).")
+        // Update status after triggering
+        await refreshKeyStoreStatus()
     }
 
     // MARK: - KeyStore Rewrap Support (using ArkavoClient)
@@ -831,6 +916,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // P2PGroupViewModel might not need to handle these directly if ChatViewModel does.
         Task { @MainActor in
             print("Delegate: ArkavoClient Received Raw Message Data (\(message.count) bytes) - Likely handled elsewhere (e.g., ChatViewModel).")
+            // Potentially pass to internal ArkavoClient handler if needed for P2P context
+            // self.handleIncomingData(message, from: <#Determine Peer somehow if possible#>)
         }
     }
 
@@ -858,45 +945,55 @@ extension P2PGroupViewModel: MCSessionDelegate {
             }
         }()
 
-        print("Peer \(peerID.displayName) changed state to: \(stateStr)")
+        print("MCSessionDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) changed state to: \(stateStr)")
 
         Task { @MainActor in
             switch state {
             case .connected:
                 self.invitationHandler = nil
-                if !self.connectedPeers.contains(peerID) {
+                // Use hashValue for reliable comparison
+                if !self.connectedPeers.contains(where: { $0.hashValue == peerID.hashValue }) {
                     self.connectedPeers.append(peerID)
                     self.peerConnectionTimes[peerID] = Date()
 
                     if self.connectedPeers.count == 1 {
                         self.connectionStatus = .connected
                     }
-                    print("📱 Successfully connected to peer: \(peerID.displayName)")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if self.connectionStatus == .connecting || !self.connectedPeers.contains(peerID) {
-                            if !self.connectedPeers.isEmpty {
-                                self.connectionStatus = .connected
-                            }
-                        } else if self.connectedPeers.contains(peerID) {
-                            self.connectionStatus = .connected
+                    print("📱 MCSessionDelegate: Successfully connected to peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
+
+                    // Ensure connection status reflects reality after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self else { return }
+                        // Check if the peer is still considered connected
+                        if connectedPeers.contains(where: { $0.hashValue == peerID.hashValue }) {
+                            connectionStatus = .connected
+                        } else if connectedPeers.isEmpty {
+                            // If the peer disconnected very quickly, update status accordingly
+                            connectionStatus = isSearchingForPeers ? .searching : .idle
                         }
                     }
-                    await self.refreshKeyStoreStatus()
-                    await self.refreshConnectedPeerProfiles() // Refresh profiles on connect
+                    // Refresh status and profiles AFTER connection is fully established
+                    await self.refreshKeyStoreStatus() // Includes profile refresh
+                } else {
+                    print("📱 MCSessionDelegate: Received connected state for already known peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
                 }
 
             case .connecting:
-                print("⏳ Connecting to peer: \(peerID.displayName)...")
+                print("⏳ MCSessionDelegate: Connecting to peer: \(peerID.displayName) (Hash: \(peerID.hashValue))...")
                 if self.connectionStatus != .connected || self.connectedPeers.isEmpty {
                     self.connectionStatus = .connecting
                 }
+                // Timeout logic (seems reasonable)
                 let peerIdentifier = peerID.displayName
+                let peerHash = peerID.hashValue
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
                     guard let self else { return }
+                    // Check if still connecting and if this specific peer hasn't connected
                     if connectionStatus == .connecting,
-                       !connectedPeers.contains(where: { $0.displayName == peerIdentifier })
+                       !connectedPeers.contains(where: { $0.hashValue == peerHash })
                     {
-                        print("⚠️ Connection to \(peerIdentifier) timed out")
+                        print("⚠️ MCSessionDelegate: Connection to \(peerIdentifier) (Hash: \(peerHash)) timed out")
+                        // Only change status if no other peers are connected
                         if connectedPeers.isEmpty {
                             connectionStatus = isSearchingForPeers ? .searching : .idle
                         }
@@ -904,38 +1001,59 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 }
 
             case .notConnected:
-                print("❌ Disconnected from peer: \(peerID.displayName)")
+                print("❌ MCSessionDelegate: Disconnected from peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
                 if self.connectionStatus == .connecting {
+                    // If we were in the middle of connecting, clear the handler
                     self.invitationHandler = nil
                 }
 
-                self.connectedPeers.removeAll { $0 == peerID }
-                self.peerConnectionTimes.removeValue(forKey: peerID)
-                self.connectedPeerProfiles.removeValue(forKey: peerID)
+                // --- Reliable Cleanup on Disconnect ---
+                // This is the primary place to clean up peer state.
+                let profileID = self.peerIDToProfileID[peerID] // Get profile ID *before* removing from map
 
-                if let profileID = self.peerIDToProfileID.removeValue(forKey: peerID) {
-                    print("Removing mapping for disconnected peer \(peerID.displayName) (Profile: \(profileID))")
+                // Remove from all tracking collections using hashValue for safety
+                let initialPeerCount = self.connectedPeers.count
+                self.connectedPeers.removeAll { $0.hashValue == peerID.hashValue }
+                let removedFromList = self.connectedPeers.count < initialPeerCount
+
+                let removedFromMap = self.peerIDToProfileID.removeValue(forKey: peerID) != nil
+                let removedProfile = self.connectedPeerProfiles.removeValue(forKey: peerID) != nil
+                let removedTime = self.peerConnectionTimes.removeValue(forKey: peerID) != nil
+
+                print("MCSessionDelegate: Cleanup for \(peerID.displayName) (Hash: \(peerID.hashValue)) - Removed from list: \(removedFromList), map: \(removedFromMap), profile cache: \(removedProfile), time cache: \(removedTime)")
+
+                if let profileIDString = profileID {
+                    print("MCSessionDelegate: Disconnected peer Profile ID was: \(profileIDString)")
                     // Inform ArkavoClient about disconnection (if needed)
-                    // await self.arkavoClient.peerDidDisconnect(profileId: Data(base58Encoded: profileID)!) // Example
-                    print("Placeholder: Informing ArkavoClient about peer disconnection (Profile: \(profileID))")
+                    // Task { await self.arkavoClient.peerDidDisconnect(profileId: Data(base58Encoded: profileIDString)!) } // Example
+                    print("Placeholder: Informing ArkavoClient about peer disconnection (Profile: \(profileIDString))")
                 } else {
-                    print("No profile ID mapping found for disconnected peer \(peerID.displayName)")
+                    print("MCSessionDelegate: No profile ID mapping found for disconnected peer \(peerID.displayName) (Hash: \(peerID.hashValue)) during cleanup.")
                 }
 
-                let streamsToRemove = self.activeInputStreams.filter { $1 == peerID }.keys
-                for stream in streamsToRemove {
-                    stream.close()
-                    self.activeInputStreams.removeValue(forKey: stream)
-                    print("Closed and removed stream associated with disconnected peer \(peerID.displayName)")
+                // Close and remove associated input streams
+                let streamsToRemove = self.activeInputStreams.filter { $1.hashValue == peerID.hashValue }.keys
+                if !streamsToRemove.isEmpty {
+                    print("MCSessionDelegate: Closing \(streamsToRemove.count) input stream(s) for disconnected peer \(peerID.displayName)")
+                    for stream in streamsToRemove {
+                        self.closeAndRemoveStream(stream) // Use the helper function
+                    }
                 }
 
+                // Update overall connection status
                 if self.connectedPeers.isEmpty {
+                    print("MCSessionDelegate: No connected peers remaining.")
                     self.connectionStatus = self.isSearchingForPeers ? .searching : .idle
+                } else {
+                    print("MCSessionDelegate: \(self.connectedPeers.count) peers still connected.")
+                    self.connectionStatus = .connected // Still connected to others
                 }
+
+                // Refresh status (e.g., update peer count display)
                 await self.refreshKeyStoreStatus()
 
             @unknown default:
-                print("Unknown peer state: \(state)")
+                print("MCSessionDelegate: Unknown peer state received: \(state) for peer \(peerID.displayName)")
             }
         }
     }
@@ -1020,22 +1138,34 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
     }
 
     nonisolated func browserViewController(_: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) -> Bool {
-        print("Found nearby peer: \(peerID.displayName) with info: \(info ?? [:])")
-        if let profileID = info?["profileID"] {
-            print("Peer \(peerID.displayName) has profile ID: \(profileID)")
-            Task { @MainActor in
+        print("MCBrowserDelegate: Found nearby peer: \(peerID.displayName) (Hash: \(peerID.hashValue)) with info: \(info ?? [:])")
+        // Use Task to update MainActor-isolated properties
+        Task { @MainActor in
+            if let profileID = info?["profileID"] {
+                print("MCBrowserDelegate: Peer \(peerID.displayName) has profile ID: \(profileID)")
                 var discoveryInfo = info ?? [:] // Ensure info is mutable or create a new dict
                 if discoveryInfo["timestamp"] == nil {
                     discoveryInfo["timestamp"] = "\(Date().timeIntervalSince1970)"
                 }
-                self.peerIDToProfileID[peerID] = profileID
-                print("Associated peer \(peerID.displayName) with profile ID \(profileID) from discovery info")
+                // Store mapping immediately when peer is discovered
+                // Check if already mapped to avoid overwriting unnecessarily
+                if self.peerIDToProfileID[peerID] == nil {
+                    self.peerIDToProfileID[peerID] = profileID
+                    print("MCBrowserDelegate: Associated peer \(peerID.displayName) (Hash: \(peerID.hashValue)) with profile ID \(profileID) from discovery info")
+                } else if self.peerIDToProfileID[peerID] != profileID {
+                    print("MCBrowserDelegate: Warning - Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already mapped to a DIFFERENT profile ID (\(self.peerIDToProfileID[peerID]!)). Updating map.")
+                    self.peerIDToProfileID[peerID] = profileID
+                } else {
+                    print("MCBrowserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already correctly mapped to profile ID \(profileID).")
+                }
+                // Optionally fetch profile immediately
+                // await self.refreshConnectedPeerProfiles() // Or fetch just this one
+            } else {
+                print("MCBrowserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) did not provide profileID in discovery info. Allowing connection.")
             }
-            return true
-        } else {
-            print("Peer \(peerID.displayName) did not provide profileID in discovery info. Allowing connection.")
-            return true
         }
+        // Always return true to allow the browser to display the peer
+        return true
     }
 
     // Keep invitePeer method structure, but note it relies on browser selection
@@ -1065,42 +1195,65 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
 
 extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        print("Received invitation from peer: \(peerID.displayName)")
+        print("MCAdvertiserDelegate: Received invitation from peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
+        // Use Task to interact with MainActor properties
         Task { @MainActor in
+            // Store the invitation handler associated with this specific peer invitation
+            // Note: This assumes only one invitation is handled at a time. If multiple can arrive concurrently,
+            // this needs a dictionary mapping peerID to handler. For simplicity, we assume one for now.
             self.invitationHandler = invitationHandler
-        }
-        var peerInfo = [String: String]()
-        var peerProfileID: String? = nil
-        if let context {
-            if let contextDict = try? JSONSerialization.jsonObject(with: context, options: []) as? [String: String] {
-                peerInfo = contextDict
-                print("Invitation context: \(peerInfo)")
-                peerProfileID = peerInfo["profileID"]
-            }
-        }
-        Task { @MainActor in
-            if let profileID = peerProfileID, self.peerIDToProfileID[peerID] == nil {
-                self.peerIDToProfileID[peerID] = profileID
-                print("Associated peer \(peerID.displayName) with profile ID \(profileID) from invitation context")
-            } else if let existingProfileID = self.peerIDToProfileID[peerID] {
-                print("Peer \(peerID.displayName) already associated with profile ID \(existingProfileID)")
+
+            var peerInfo = [String: String]()
+            var peerProfileID: String? = nil
+            if let contextData = context {
+                if let contextDict = try? JSONSerialization.jsonObject(with: contextData, options: []) as? [String: String] {
+                    peerInfo = contextDict
+                    print("MCAdvertiserDelegate: Invitation context: \(peerInfo)")
+                    peerProfileID = peerInfo["profileID"]
+                } else {
+                    print("MCAdvertiserDelegate: Warning - Could not deserialize invitation context data.")
+                }
             } else {
-                print("No profile ID found in invitation context for \(peerID.displayName)")
+                print("MCAdvertiserDelegate: Invitation received with no context data.")
             }
+
+            // Update peerID -> profileID map if necessary
+            if let profileID = peerProfileID {
+                if self.peerIDToProfileID[peerID] == nil {
+                    self.peerIDToProfileID[peerID] = profileID
+                    print("MCAdvertiserDelegate: Associated peer \(peerID.displayName) (Hash: \(peerID.hashValue)) with profile ID \(profileID) from invitation context")
+                } else if self.peerIDToProfileID[peerID] != profileID {
+                    print("MCAdvertiserDelegate: Warning - Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already mapped to a DIFFERENT profile ID (\(self.peerIDToProfileID[peerID]!)). Updating map.")
+                    self.peerIDToProfileID[peerID] = profileID
+                } else {
+                    print("MCAdvertiserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already correctly mapped to profile ID \(profileID).")
+                }
+            } else {
+                print("MCAdvertiserDelegate: No profile ID found in invitation context for \(peerID.displayName) (Hash: \(peerID.hashValue))")
+            }
+
+            // Decision logic: Auto-accept if in a valid InnerCircle stream
             guard let selectedStream = self.selectedStream, selectedStream.isInnerCircleStream else {
-                print("No InnerCircle stream selected, declining invitation")
+                print("MCAdvertiserDelegate: No InnerCircle stream selected or stream invalid, declining invitation from \(peerID.displayName)")
                 invitationHandler(false, nil)
+                // Clear the handler as we've used it
                 self.invitationHandler = nil
                 return
             }
-            print("Auto-accepting invitation from \(peerID.displayName)")
+
+            print("MCAdvertiserDelegate: Auto-accepting invitation from \(peerID.displayName) for stream \(selectedStream.profile.name)")
             let sessionToUse = self.mcSession
+            // Accept the invitation
             invitationHandler(true, sessionToUse)
+            // It's generally recommended to clear the handler *after* the connection state changes (.connected or .notConnected)
+            // in the MCSessionDelegate, but clearing it here is also common practice if assuming success.
+            // Let's keep it here for now, but be aware of potential edge cases if the connection fails immediately.
+            // self.invitationHandler = nil // Let delegate handle clearing
         }
     }
 
     nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("Failed to start advertising: \(error.localizedDescription)")
+        print("MCAdvertiserDelegate: Failed to start advertising: \(error.localizedDescription)")
         Task { @MainActor in
             self.connectionStatus = .failed(error)
         }
@@ -1112,22 +1265,29 @@ extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
 extension P2PGroupViewModel: Foundation.StreamDelegate {
     nonisolated func stream(_ aStream: Foundation.Stream, handle eventCode: Foundation.Stream.Event) {
         guard let inputStream = aStream as? InputStream else { return }
+        // Use Task to interact with MainActor properties/methods
         Task { @MainActor in
+            // Find the peer associated with this stream *before* potential removal
+            let peerID = self.activeInputStreams[inputStream]
+            let peerDesc = peerID != nil ? "\(peerID!.displayName) (Hash: \(peerID!.hashValue))" : "Unknown Peer"
+
             switch eventCode {
             case .hasBytesAvailable:
+                print("StreamDelegate: HasBytesAvailable for stream from \(peerDesc)")
                 self.readInputStream(inputStream) // Reads data and passes to handleIncomingData -> ArkavoClient
             case .endEncountered:
-                print("Stream ended")
+                print("StreamDelegate: EndEncountered for stream from \(peerDesc)")
                 self.closeAndRemoveStream(inputStream)
             case .errorOccurred:
-                print("Stream error: \(aStream.streamError?.localizedDescription ?? "unknown error")")
+                print("StreamDelegate: ErrorOccurred for stream from \(peerDesc): \(aStream.streamError?.localizedDescription ?? "unknown error")")
                 self.closeAndRemoveStream(inputStream)
             case .openCompleted:
-                print("Stream opened successfully.")
+                print("StreamDelegate: OpenCompleted for stream from \(peerDesc)")
             case .hasSpaceAvailable:
-                break // Output streams might use this
+                // Typically relevant for OutputStream
+                print("StreamDelegate: HasSpaceAvailable for stream from \(peerDesc)")
             default:
-                print("Unhandled stream event: \(eventCode)")
+                print("StreamDelegate: Unhandled stream event: \(eventCode) for stream from \(peerDesc)")
             }
         }
     }
@@ -1135,8 +1295,8 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
     // Read stream and pass data to ArkavoClient
     private func readInputStream(_ stream: InputStream) {
         guard let peerID = activeInputStreams[stream] else {
-            print("Error: Received data from untracked stream.")
-            closeAndRemoveStream(stream)
+            print("StreamDelegate Error: Received data from untracked stream. Closing.")
+            closeAndRemoveStream(stream) // Close the unknown stream
             return
         }
         let bufferSize = 1024
@@ -1148,33 +1308,37 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
             if bytesRead > 0 {
                 data.append(buffer, count: bytesRead)
             } else if bytesRead < 0 {
-                if let error = stream.streamError {
-                    print("Error reading from stream for peer \(peerID.displayName): \(error)")
-                } else {
-                    print("Unknown error reading from stream for peer \(peerID.displayName)")
-                }
-                closeAndRemoveStream(stream)
+                // Error reading
+                let errorDesc = stream.streamError?.localizedDescription ?? "unknown error"
+                print("StreamDelegate Error: Error reading from stream for peer \(peerID.displayName): \(errorDesc)")
+                closeAndRemoveStream(stream) // Close stream on error
                 return
             } else {
-                // bytesRead == 0 means end of stream or temporary pause
+                // bytesRead == 0 usually means end of stream, but loop condition handles this.
+                // Can also mean temporary pause, so just break the inner loop.
                 break
             }
         }
         if !data.isEmpty {
-            print("Read \(data.count) bytes from stream associated with peer \(peerID.displayName)")
-            // Pass stream data to ArkavoClient
+            print("StreamDelegate: Read \(data.count) bytes from stream associated with peer \(peerID.displayName)")
+            // Pass stream data to ArkavoClient via handleIncomingData
             handleIncomingData(data, from: peerID)
+        } else {
+            print("StreamDelegate: Read 0 bytes from stream associated with peer \(peerID.displayName) despite .hasBytesAvailable (might be temporary)")
         }
     }
 
     // Close and remove stream tracking
     private func closeAndRemoveStream(_ stream: InputStream) {
+        // Ensure stream operations are done before removing from map
         stream.remove(from: .main, forMode: .default)
         stream.close()
+        // Remove the stream from tracking
         if let peerID = activeInputStreams.removeValue(forKey: stream) {
-            print("Closed and removed stream tracking for peer \(peerID.displayName)")
+            print("StreamDelegate: Closed and removed stream tracking for peer \(peerID.displayName) (Hash: \(peerID.hashValue))")
         } else {
-            print("Closed and removed untracked stream.")
+            // This case should ideally not happen if called from stream delegate, but good for safety
+            print("StreamDelegate: Closed and removed an untracked stream.")
         }
     }
 }

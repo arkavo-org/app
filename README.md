@@ -40,6 +40,47 @@ One-Time TDF combines the trusted data format with a one‑time pad encryption s
 
 ## Development
 
+### Testing
+
+#### Testing Trust Revocation
+
+To manually test the trust revocation feature, follow these steps:
+
+1. **Setup two devices:**
+   - Install the app on two different iOS devices
+   - Create accounts on both devices
+
+2. **Create an Inner Circle stream:**
+   - On device 1, create a new Stream with the InnerCircle property enabled
+   - Start searching for peers
+
+3. **Connect the devices:**
+   - On device 2, join the stream created by device 1
+   - Verify both devices show they're connected to each other
+
+4. **Exchange some messages:**
+   - Send a few test messages between devices to confirm secure communication is working
+
+5. **Test trust revocation:**
+   - On device 1, navigate to the Stream profile view
+   - Find the Inner Circle section showing the connected peer (device 2)
+   - Tap the "Revoke Trust" button next to the peer
+   - Confirm the revocation in the alert dialog
+
+6. **Verify results:**
+   - The connection should be terminated immediately
+   - Device 2 should no longer appear in the connected peers list
+   - Try to send a message from device 1 to device 2 - it should fail
+   - Check logs to confirm the KeyStore data was deleted
+
+7. **Test reconnection:**
+   - Try to reconnect device 2 to device 1
+   - Since keys were deleted, a new trust relationship must be established
+   - Verify that a new secure connection can be made after reestablishing trust
+
+8. **Verify notification handling:**
+   - If you've implemented any UI that responds to the `peerTrustRevoked` notification, verify it updates correctly
+
 ### WebSocket NanoTDF Decryption Process
 
 A WebSocket receives a binary message. The `ArkavoMessageRouter` consults the `ArkavoClient` for necessary context (like user session or routing details). The router then checks if the message is a NanoTDF by identifying its magic number (`0x4C314C`). If it is, the NanoTDF data is routed to the appropriate `ChatViewModel`. The `ChatViewModel` utilizes the `P2PClient` to decrypt the NanoTDF payload. The resulting decrypted data is then deserialized into a `ThoughtServiceModel`. If the message type is `.say` (indicating a chat message), the content is extracted and displayed in the `ChatView`.

@@ -793,6 +793,20 @@ enum ArkavoError: Error {
     case invalidEvent(String)
     case profileError(String)
     case profileNotFound(String)
+    case streamError(String)
+    case keyStoreError(String)
+    var errorDescription: String? {
+        switch self {
+        case let .profileError(message):
+            "Profile Error: \(message)"
+        case let .streamError(message):
+            "Stream Error: \(message)"
+        case let .keyStoreError(message):
+            "KeyStore Error: \(message)"
+        default:
+            nil
+        }
+    }
 }
 
 class SharedState: ObservableObject {

@@ -17,6 +17,12 @@
     "(%lld)" : {
 
     },
+    "(Connected)" : {
+
+    },
+    "(Offline)" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -368,6 +374,9 @@
         }
       }
     },
+    "Error Revoking Trust" : {
+
+    },
     "Error: %@" : {
 
     },
@@ -381,6 +390,9 @@
 
     },
     "Failed to load image" : {
+
+    },
+    "Failed to revoke trust: %@" : {
 
     },
     "Features" : {
@@ -420,6 +432,9 @@
 
     },
     "Inner Circle enables direct peer-to-peer communication with nearby devices" : {
+
+    },
+    "Inner Circle Members (%lld)" : {
 
     },
     "InnerCircle" : {
@@ -509,6 +524,9 @@
     "Loading profile..." : {
 
     },
+    "Loading stream details..." : {
+
+    },
     "Local KeyStore Status" : {
 
     },
@@ -575,6 +593,9 @@
 
     },
     "Next" : {
+
+    },
+    "No members added to the Inner Circle yet." : {
 
     },
     "No Members Found" : {
@@ -737,6 +758,18 @@
     "Retry" : {
 
     },
+    "Revoke" : {
+
+    },
+    "Revoke Trust" : {
+
+    },
+    "Revoke Trust?" : {
+
+    },
+    "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
+
+    },
     "Save" : {
       "localizations" : {
         "es-US" : {
@@ -882,6 +915,9 @@
         }
       }
     },
+    "Stream Details" : {
+
+    },
     "Stream ID" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -955,6 +991,9 @@
 
     },
     "Trust Level: %@" : {
+
+    },
+    "Trust Revoked" : {
 
     },
     "Type a message..." : {
