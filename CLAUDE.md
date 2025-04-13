@@ -151,7 +151,7 @@ If acknowledgements aren't received within the timeout, assume failure, potentia
 5.  **Technical Foundation:**
     *   **P2P Framework:** Build upon `MCSession` (or similar) for discovery, connection, and data transmission.
     *   **ViewModel Integration:** Use `P2PGroupViewModel` (or similar) to manage the state and logic of P2P trust establishment, verification, and subsequent secure operations like key renewal.
-    *   **Data Persistence:** Use `PersistenceController` for storing own keys (`Profile.keyStorePrivate`) and trusted peer public keys (`Profile.keyStorePublic`).
+    *   **Data Persistence:** Use `PersistenceController` for storing own keys (`Profile.keyStorePrivate`) and trusted peer public keys (`Profile.keyStorePublic`). The initial `Profile.keyStorePrivate` is created and saved during the first successful P2P key exchange.
     *   **Offline Capability:** Leverage the inherent offline capabilities of P2P frameworks.
 
 **Potential Future Enhancements (Not detailed in current CLAUDE.md):**

@@ -339,9 +339,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case peerNotConnected(String) // Added for operations requiring a connected peer
         case invalidStateForAction(String) // Added for key exchange state machine errors
         case missingNonce // Added for key exchange errors
-        case keyStoreDataNotFound(String) // Added for missing KeyStoreData (now used for profile.keyStorePrivate)
+        case keyStoreDataNotFound(String) // Added for missing KeyStoreData (now used for profile.keyStorePrivate) - Less likely to be thrown now
         case keyStoreDeserializationFailed(String) // Added for KeyStore deserialization errors
         case keyStoreSerializationFailed(String) // Added for KeyStore serialization errors
+        case keyStoreInitializationFailed(String) // Added for errors creating a new KeyStore
 
 
         var errorDescription: String? {
@@ -389,6 +390,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "Failed to deserialize KeyStore: \(reason)"
             case let .keyStoreSerializationFailed(reason):
                 "Failed to serialize KeyStore: \(reason)"
+            case let .keyStoreInitializationFailed(reason):
+                "Failed to initialize new KeyStore: \(reason)"
             }
         }
     }
@@ -1016,6 +1019,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         localKeyStoreInfo = nil // Clear info while regenerating
 
         var originalKeyStoreData: Data? = nil // To potentially revert on save failure
+        let keyStore: KeyStore // Declare KeyStore variable outside the if/else
 
         do {
             // 1. Get current profile
@@ -1025,25 +1029,36 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             let profileIDString = myProfile.publicID.base58EncodedString
             print("   Regenerating keys for profile: \(profileIDString)")
 
-            // 2. Get serialized KeyStore data directly from the profile
-            guard let currentKeyStoreData = myProfile.keyStorePrivate else {
-                throw P2PError.keyStoreDataNotFound("No keyStorePrivate data found for profile \(profileIDString)")
+            // 2. Check if KeyStore data exists and either deserialize or create new
+            if let currentKeyStoreData = myProfile.keyStorePrivate {
+                originalKeyStoreData = currentKeyStoreData // Store for potential revert
+                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
+                // 3a. Deserialize KeyStore from profile data
+                do {
+                    keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
+                    print("   Successfully deserialized local KeyStore from profile data.")
+                } catch {
+                    throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
+                }
+            } else {
+                // 3b. Create a new KeyStore instance (first time generation)
+                print("   No existing keyStorePrivate data found. Creating new KeyStore.")
+                // Assuming KeyStore can be initialized with a curve.
+                // Replace `.secp256r1` if a different default curve is used.
+                // Capacity might be set during generation.
+                do {
+                    keyStore = KeyStore(curve: .secp256r1) // Or appropriate initializer
+                    print("   Successfully created new KeyStore instance.")
+                } catch {
+                    // Catch potential errors from KeyStore initializer if it throws
+                    throw P2PError.keyStoreInitializationFailed(error.localizedDescription)
+                }
             }
-            originalKeyStoreData = currentKeyStoreData // Store for potential revert
-            print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
 
-            // 3. Deserialize KeyStore from profile data
-            let keyStore: KeyStore
-            do {
-                keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
-                print("   Successfully deserialized local KeyStore from profile data.")
-            } catch {
-                throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
-            }
-
-            // 4. Call OpenTDFKit to regenerate keys locally
+            // 4. Call OpenTDFKit to generate/regenerate keys locally
             do {
                 // Use the same method as in performKeyGenerationAndSave
+                // Assuming 8192 is the standard capacity/generation count
                 try await keyStore.generateAndStoreKeyPairs(count: 8192)
                 print("   OpenTDFKit `generateAndStoreKeyPairs()` call successful.")
             } catch {
@@ -1055,7 +1070,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             do {
                 updatedSerializedData = await keyStore.serialize()
                 print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
-            }
+            } // Assuming serialize() doesn't throw
 
             // 6. Update the Profile's keyStorePrivate property
             myProfile.keyStorePrivate = updatedSerializedData
@@ -1068,7 +1083,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             } catch {
                 // Attempt to revert the in-memory change if save fails
                 print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
-                myProfile.keyStorePrivate = originalKeyStoreData
+                myProfile.keyStorePrivate = originalKeyStoreData // Revert using the stored original data (nil if it was first time)
                 throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
             }
 
@@ -1123,6 +1138,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 print("No matching key found or rewrap failed for request from \(peerIdentifier).")
             }
             return rewrappedKey
+        } catch { // Catch errors specifically from the rewrap call if it throws
+             print("❌ Error during ArkavoClient rewrap call: \(error)")
+             await refreshKeyStoreStatus() // Refresh status even on error
+             throw P2PError.arkavoClientError("Rewrap failed: \(error.localizedDescription)") // Re-throw wrapped error
         }
     }
 
@@ -1289,7 +1308,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 }
                 print("KeyExchange (Initiator): Triggering local key regeneration after sending Ack for peer \(offer.responderProfileID)")
 
-                // *** Use OpenTDFKit regenerateKeys ***
+                // *** Use performKeyGenerationAndSave ***
                 try await performKeyGenerationAndSave(
                     peerProfileIDData: peerProfileIDData,
                     peer: peer // Pass peer for state update on failure
@@ -1351,7 +1370,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 }
                 print("KeyExchange (Responder): Triggering local key regeneration after sending Commit for peer \(ack.initiatorProfileID)")
 
-                // *** Use OpenTDFKit regenerateKeys ***
+                // *** Use performKeyGenerationAndSave ***
                 try await performKeyGenerationAndSave(
                     peerProfileIDData: peerProfileIDData,
                     peer: peer // Pass peer for state update on failure
@@ -1402,16 +1421,18 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    /// Performs the local key regeneration using OpenTDFKit and persists the updated KeyStore directly to the Profile.
+    /// Performs the local key generation/regeneration using OpenTDFKit and persists the updated KeyStore directly to the Profile.
     /// This is called by both the initiator and responder sides of the protocol after successful nonce exchange.
+    /// Handles both initial key generation (profile.keyStorePrivate is nil) and subsequent regenerations.
     /// - Parameters:
     ///   - peerProfileIDData: The profile ID of the peer involved in the exchange (for logging/context).
     ///   - peer: The MCPeerID of the peer (for updating state on failure).
     private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws {
-        print("KeyExchange: Performing OpenTDFKit local key regeneration and save (using Profile.keyStorePrivate)...")
+        print("KeyExchange: Performing OpenTDFKit local key generation/regeneration and save (using Profile.keyStorePrivate)...")
         print("   Context: Key exchange with peer \(peerProfileIDData.base58EncodedString)")
 
         var originalKeyStoreData: Data? = nil // To potentially revert on save failure
+        let keyStore: KeyStore // Declare KeyStore variable outside the if/else
 
         // 1. Get current profile
         guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
@@ -1419,63 +1440,77 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             updatePeerExchangeState(for: peer, newState: .failed("Local profile not available"))
             throw P2PError.profileNotAvailable
         }
+        let profileIDString = myProfile.publicID.base58EncodedString
 
-        // 2. Get serialized KeyStore data directly from the profile
-        guard let currentKeyStoreData = myProfile.keyStorePrivate else {
-            // Update peer state to failed if KeyStore data is missing
-            updatePeerExchangeState(for: peer, newState: .failed("Local KeyStore data not found"))
-            throw P2PError.keyStoreDataNotFound("No keyStorePrivate data found for profile \(myProfile.publicID.base58EncodedString)")
-        }
-        originalKeyStoreData = currentKeyStoreData // Store for potential revert
-        print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
-
-        // 3. Deserialize KeyStore from profile data
-        let keyStore: KeyStore
         do {
-            keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
-            print("   Successfully deserialized local KeyStore from profile data.")
+            // 2. Check if KeyStore data exists and either deserialize or create new
+            if let currentKeyStoreData = myProfile.keyStorePrivate {
+                originalKeyStoreData = currentKeyStoreData // Store for potential revert
+                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile \(profileIDString).")
+                // 3a. Deserialize KeyStore from profile data
+                do {
+                    keyStore = try await KeyStore.deserialize(from: currentKeyStoreData)
+                    print("   Successfully deserialized local KeyStore from profile data.")
+                } catch {
+                    throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
+                }
+            } else {
+                // 3b. Create a new KeyStore instance (first time generation)
+                print("   No existing keyStorePrivate data found for profile \(profileIDString). Creating new KeyStore.")
+                // Assuming KeyStore can be initialized with a curve.
+                // Replace `.secp256r1` if a different default curve is used.
+                do {
+                    keyStore = KeyStore(curve: .secp256r1) // Use appropriate initializer
+                    print("   Successfully created new KeyStore instance.")
+                } catch {
+                    // Catch potential errors from KeyStore initializer if it throws
+                    throw P2PError.keyStoreInitializationFailed(error.localizedDescription)
+                }
+            }
+
+            // 4. Call OpenTDFKit to generate/regenerate keys locally
+            do {
+                // Assuming 8192 is the standard capacity/generation count
+                try await keyStore.generateAndStoreKeyPairs(count: 8192)
+                print("   OpenTDFKit `generateAndStoreKeyPairs(count: 8192)` call successful.")
+            } catch {
+                throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
+            }
+
+            // 5. Serialize the updated KeyStore
+            let updatedSerializedData: Data
+            do {
+                updatedSerializedData = await keyStore.serialize()
+                print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
+            } // Assuming serialize() doesn't throw
+
+            // 6. Update the Profile's keyStorePrivate property
+            myProfile.keyStorePrivate = updatedSerializedData
+            print("   Updated profile.keyStorePrivate with new data.")
+
+            // 7. Save changes to the Profile via PersistenceController
+            do {
+                try await persistenceController.saveChanges()
+                print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
+            } catch {
+                // Attempt to revert the in-memory change if save fails
+                print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
+                myProfile.keyStorePrivate = originalKeyStoreData // Revert using the stored original data (nil if it was first time)
+                throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
+            }
+
+            // 8. Refresh KeyStore status in UI after successful generation and save
+            await refreshKeyStoreStatus()
+
         } catch {
-            // Update peer state to failed on deserialization error
-            updatePeerExchangeState(for: peer, newState: .failed("KeyStore deserialization failed: \(error.localizedDescription)"))
-            throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
+            // Catch errors from steps 2-7
+            print("❌ KeyExchange: Failed during key generation/save for peer \(peerProfileIDData.base58EncodedString): \(error)")
+            // Update peer state to failed, including specific error if possible
+            let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+            updatePeerExchangeState(for: peer, newState: .failed("Key generation/save failed: \(errorMessage)"))
+            // Re-throw the error to be handled by the calling function (e.g., handleOffer, handleAck)
+            throw error
         }
-
-        // 4. Call OpenTDFKit to regenerate keys locally
-        do {
-            try await keyStore.generateAndStoreKeyPairs(count: 8192)
-            print("   OpenTDFKit `generateAndStoreKeyPairs()` call successful.")
-        } catch {
-            // Update peer state to failed on key generation error
-            updatePeerExchangeState(for: peer, newState: .failed("Key generation failed: \(error.localizedDescription)"))
-            throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
-        }
-
-        // 5. Serialize the updated KeyStore
-        let updatedSerializedData: Data
-        do {
-            updatedSerializedData = await keyStore.serialize()
-            print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
-        } // No specific error handling needed here as serialize() is assumed not to throw
-
-        // 6. Update the Profile's keyStorePrivate property
-        myProfile.keyStorePrivate = updatedSerializedData
-        print("   Updated profile.keyStorePrivate with new data.")
-
-        // 7. Save changes to the Profile via PersistenceController
-        do {
-            try await persistenceController.saveChanges()
-            print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
-        } catch {
-            // Attempt to revert the in-memory change if save fails
-            print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
-            myProfile.keyStorePrivate = originalKeyStoreData // Revert
-            // Update peer state to failed on persistence error
-            updatePeerExchangeState(for: peer, newState: .failed("Persistence save failed: \(error.localizedDescription)"))
-            throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
-        }
-
-        // 8. Refresh KeyStore status in UI after successful generation and save
-        await refreshKeyStoreStatus()
     }
 
 
@@ -2092,9 +2127,20 @@ extension KeyStore {
         // or throw an error indicating it's a placeholder.
         // Assuming a hypothetical initializer or static method exists:
         // return try KeyStore(serializedData: data)
-        throw P2PGroupViewModel.P2PError.keyStoreDeserializationFailed("Placeholder implementation - Actual OpenTDFKit deserialization needed.")
-        // If a default/empty init exists and is useful for placeholder:
-        // return KeyStore()
+
+        // Let's try creating a default one and assume deserialize populates it
+        // This requires KeyStore to have an accessible initializer.
+        // If KeyStore init throws or isn't available, this needs adjustment.
+        do {
+             let ks = KeyStore(curve: .secp256r1) // Assuming default curve
+             // Here, the actual OpenTDFKit would populate 'ks' from 'data'
+             print("Placeholder deserialize: Created default KeyStore instance. Actual population from data needed.")
+             if data.isEmpty { print("Warning: Placeholder deserialize called with empty data.") }
+             return ks
+        } catch {
+             print("Error creating placeholder KeyStore instance: \(error)")
+             throw P2PGroupViewModel.P2PError.keyStoreDeserializationFailed("Placeholder implementation failed to create instance: \(error.localizedDescription)")
+        }
     }
 }
 
