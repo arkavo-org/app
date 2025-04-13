@@ -77,3 +77,51 @@ If the P2P connection drops, update UI state to "Failed - Connection Lost", allo
 If visual verification fails (user taps "Cancel"), abort the process.
 If any step involving ArkavoClient or PersistenceController throws an error, update UI state to "Failed", show the error, and allow retry.
 If acknowledgements aren't received within the timeout, assume failure, potentially requiring a full retry.
+
+### InnerCircle: Trusted P2P Network
+
+**Core Concept:** The InnerCircle utilizes direct Peer-to-Peer (P2P) communication, typically via frameworks like Multipeer Connectivity (`MCSession`), with the **primary goal of establishing verified trust between users**. This trusted P2P channel then serves the **secondary, crucial function of enabling secure exchanges**, such as the renewal of KeyStores for ongoing communication security. This approach emphasizes direct, user-controlled trust and secure operations, distinct from server-mediated interactions.
+
+**Key Requirements Based on Current Implementation & Goals:**
+
+1.  **P2P Trust Establishment & Verification:**
+    *   **Connection Initiation:** Users can discover and initiate direct connections with nearby peers (likely using `MCSession`).
+    *   **Mutual Verification (for Sensitive Operations):** Implement robust verification processes, like the visual code matching described for key renewal, to confirm the identity of the peer before proceeding with sensitive actions. This includes:
+        *   Generating and displaying a short code on both devices.
+        *   Transmitting the code via an unencrypted P2P message (`KeyRenewalVerificationCode`).
+        *   Require explicit confirmation (`KeyRenewalConfirmation`) from *both* users after visual matching.
+    *   **Trust Indicators:** Visual cues in the UI indicating P2P connection status (`connectedPeers`) and the health/status of the secure channel (e.g., `P2PGroupViewModel` states like `isKeyStoreLow`).
+
+2.  **Secure P2P Communication (Enabled by Trust):**
+    *   **Leverage KeyStore:** Utilize the established trusted P2P connection and `OpenTDFKit.KeyStore` for cryptographic operations (`Profile.keyStorePrivate`, `Profile.keyStorePublic`).
+    *   **Secure Session Maintenance (Key Renewal):** Implement the detailed key renewal workflow, managed by `P2PGroupViewModel` and `ArkavoClient`, *after* trust has been verified for the operation:
+        *   Detect low key counts (`lowKeyThreshold`).
+        *   Trigger user-initiated renewal with a selected, verified peer.
+        *   Perform mutual verification (as part of trust establishment, see point 1).
+        *   Generate new key pairs locally (`keyStore.regenerateKeys()`).
+        *   Securely exchange new public KeyStore data (`NewPublicKeyStoreData`) over the established P2P TDF channel.
+        *   Receive and store the peer's new public KeyStore data (`PersistenceController.savePeerProfile`).
+        *   Confirm successful exchange via acknowledgements (`KeyRenewalAcknowledgement`).
+    *   **Transparent Security:** Provide clear status updates during sensitive operations like key renewal (e.g., "Awaiting Peer Selection", "Verifying Peer...", "Exchanging Keys", "Success", "Failed").
+
+3.  **User Experience:**
+    *   **Intentional Connection & Trust:** Design interactions that emphasize deliberate P2P connection and trust verification.
+    *   **Clear Status:** Users should easily understand their connection status with peers and the security state of their communication channels.
+
+4.  **Privacy & Control:**
+    *   **Direct Communication:** Emphasize that InnerCircle communication is primarily P2P, reinforcing user control and minimizing server reliance.
+    *   **Revocation Workflow:** Define a clear process initiated when a peer's trust is compromised or reduced, leading to the disconnection of the P2P session, deletion of the peer's stored public key data (`Profile.keyStorePublic` via `PersistenceController`), and removal of the peer from the user's InnerCircle list.
+
+5.  **Technical Foundation:**
+    *   **P2P Framework:** Build upon `MCSession` (or similar) for discovery, connection, and data transmission.
+    *   **ViewModel Integration:** Use `P2PGroupViewModel` (or similar) to manage the state and logic of P2P trust establishment, verification, and subsequent secure operations like key renewal.
+    *   **Data Persistence:** Use `PersistenceController` for storing own keys (`Profile.keyStorePrivate`) and trusted peer public keys (`Profile.keyStorePublic`).
+    *   **Offline Capability:** Leverage the inherent offline capabilities of P2P frameworks.
+
+**Potential Future Enhancements (Not detailed in current CLAUDE.md):**
+
+*   **Graduated Trust Levels:** Introduce formal tiers of trust.
+*   **Connection Context:** Allow users to add notes about connections/trust.
+*   **Alternative Verification Methods:** Support QR codes, etc., for initial trust.
+*   **Granular Permissions:** Control data sharing based on established trust.
+*   **Circle Management Tools:** UI for reviewing/managing trusted peers.
