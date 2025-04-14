@@ -143,6 +143,24 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             }
         }
         notificationObservers.append(profileSavedObserver)
+
+        // NEW: Observer for shared KeyStores saved locally
+        let keyStoreSavedObserver = NotificationCenter.default.addObserver(
+            forName: .keyStoreSharedAndSaved,
+            object: nil,
+            queue: .main // Ensure handler runs on main thread
+        ) { [weak self] notification in
+            guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
+                print("❌ KeyStoreShare: Received .keyStoreSharedAndSaved notification without profilePublicID.")
+                return
+            }
+            Task { @MainActor [weak self] in
+                // Optionally handle this notification, e.g., update UI to show peer has KeyStore
+                print("GroupViewModel: Handling .keyStoreSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
+                // Example: Refresh peer list or specific peer row UI
+            }
+        }
+        notificationObservers.append(keyStoreSavedObserver)
     }
 
     deinit {
@@ -1046,6 +1064,7 @@ struct GroupView: View {
                                 } catch {
                                     print("❌ UI (peerRow): Failed to initiate key regeneration for \(peer.displayName): \(error)")
                                     // Optionally show an error to the user
+                                    sharedState.setState("Key exchange failed: \(error.localizedDescription)", forKey: "errorMessage")
                                 }
                             }
                         } label: {
@@ -1086,9 +1105,9 @@ struct GroupView: View {
                     .disabled(!isProfileLoaded) // Disable if profile not loaded
                     .help("Share Profile")
 
-                    // Share KeyStore Button (Placeholder)
+                    // Share KeyStore Button (IMPLEMENTED)
                     Button {
-                        sharePeerKeyStore(peer: peer)
+                        sharePeerKeyStore(peer: peer) // Call the implemented function
                     } label: {
                         Image(systemName: "key.fill")
                             .font(.caption)
@@ -1151,30 +1170,50 @@ struct GroupView: View {
         }
     }
 
-    /// Placeholder action for sharing a peer's public KeyStore.
+    /// Action for sharing the local user's public KeyStore with a peer.
     private func sharePeerKeyStore(peer: MCPeerID) {
-        print("Attempting to share KeyStore for peer: \(peer.displayName)")
-        // TODO: Implement KeyStore sharing logic
-        // 1. Get the Profile object associated with the peer ID.
-        // 2. Access the *public* KeyStore data from the Profile (e.g., profile.keyStorePublic).
-        // 3. Ensure public KeyStore data exists.
-        // 4. Prepare the public KeyStore data for sharing.
-        // 5. Present the share sheet or send the data.
-        guard let profile = peerManager.connectedPeerProfiles[peer] else {
-            print("Error: Could not find profile for peer \(peer.displayName)")
-            sharedState.setState("Error: Could not find profile for \(peer.displayName).", forKey: "errorMessage")
-            return
+        print("KeyStoreShare: Attempting to share local public KeyStore with peer: \(peer.displayName)")
+
+        // Get the recipient's profile name for feedback messages
+        let recipientName = peerManager.connectedPeerProfiles[peer]?.name ?? peer.displayName
+
+        Task {
+            do {
+                // 1. Get the local user's profile (needed for sender ID)
+                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                    throw P2PGroupViewModel.P2PError.profileNotAvailable
+                }
+
+                // 2. Get or Create the local KeyStore and extract its public data
+                // This helper handles creation, key generation, saving private data, and returning public data.
+                let publicKeyStoreData = try await peerManager.getOrCreateLocalPublicKeystoreData()
+                print("   Obtained public KeyStore data (\(publicKeyStoreData.count) bytes) for local user \(myProfile.name).")
+
+                // 3. Create the P2P message payload
+                let payload = KeyStoreSharePayload(
+                    senderProfileID: myProfile.publicID.base58EncodedString,
+                    keyStorePublicData: publicKeyStoreData,
+                    timestamp: Date()
+                )
+                print("   Created KeyStoreSharePayload.")
+
+                // 4. Send the P2P message using PeerDiscoveryManager
+                try await peerManager.sendP2PMessage(type: .keyStoreShare, payload: payload, toPeers: [peer])
+                print("✅ Successfully sent public KeyStore share message to \(peer.displayName)")
+
+                // 5. Provide user feedback
+                sharedState.setState("Public KeyStore sent to \(recipientName).", forKey: "statusMessage")
+
+            } catch let error as P2PGroupViewModel.P2PError {
+                print("❌ KeyStoreShare: P2PError sharing KeyStore with \(peer.displayName): \(error)")
+                sharedState.setState("Error sharing KeyStore with \(recipientName): \(error.localizedDescription)", forKey: "errorMessage")
+            } catch {
+                print("❌ KeyStoreShare: Unexpected error sharing KeyStore with \(peer.displayName): \(error)")
+                sharedState.setState("Error sharing KeyStore with \(recipientName).", forKey: "errorMessage")
+            }
         }
-        guard let keyStorePublicData = profile.keyStorePublic else {
-            print("Error: No public KeyStore data found for profile \(profile.name)")
-            sharedState.setState("No public KeyStore data available to share for \(profile.name).", forKey: "errorMessage")
-            return
-        }
-        print("Sharing public KeyStore (\(keyStorePublicData.count) bytes) for profile: \(profile.name)")
-        // Example: Trigger share sheet (implementation needed)
-        // presentShareSheet(for: keyStorePublicData, filename: "\(profile.name)_public_keystore.bin")
-        sharedState.setState("KeyStore sharing not yet implemented.", forKey: "statusMessage") // Placeholder feedback
     }
+
 
     // --- END: Implemented/Modified Methods ---
 

@@ -15,6 +15,8 @@ extension Notification.Name {
     static let p2pMessageReceived = Notification.Name("p2pMessageReceivedNotification")
     // Define notification name for when a shared profile is saved locally
     static let profileSharedAndSaved = Notification.Name("profileSharedAndSavedNotification")
+    // Define notification name for when a shared public KeyStore is saved locally
+    static let keyStoreSharedAndSaved = Notification.Name("keyStoreSharedAndSavedNotification") // NEW
 }
 
 // Define the struct for detailed KeyStore info (based on GroupView summary)
@@ -65,7 +67,8 @@ enum P2PMessageType: String, Codable {
     case keyRegenerationOffer
     case keyRegenerationAcknowledgement
     case keyRegenerationCommit
-    case profileShare // NEW: For sharing a profile directly
+    case profileShare // For sharing a profile directly
+    case keyStoreShare // NEW: For sharing a public KeyStore directly
     // Add other direct P2P message types here if needed
     // Note: Secure text messages are handled via ArkavoClient encryption/decryption delegates
 }
@@ -132,6 +135,16 @@ struct ProfileSharePayload: Codable {
     let profileData: Data // Serialized Profile object (using Profile.toData())
     // No target stream ID needed here; receiver adds to their own InnerCircle
 }
+
+// --- KeyStore Sharing Payload (NEW) ---
+
+/// Payload for the `.keyStoreShare` P2P message.
+struct KeyStoreSharePayload: Codable {
+    let senderProfileID: String // Base58 encoded public ID of the sender
+    let keyStorePublicData: Data // Serialized PUBLIC components of the sender's KeyStore
+    let timestamp: Date
+}
+
 
 // MARK: - PeerDiscoveryManager
 
@@ -270,6 +283,15 @@ class PeerDiscoveryManager: ObservableObject {
     func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
         try await implementation.sendP2PMessage(type: type, payload: payload, toPeers: peers)
     }
+
+    // NEW: Helper to get or create the local KeyStore and return its public data
+    /// Gets the public data of the local user's KeyStore.
+    /// If the KeyStore doesn't exist, it creates one, generates keys, saves the private part, and returns the public part.
+    /// - Returns: The serialized public KeyStore data.
+    /// - Throws: `P2PError` if profile is unavailable, or KeyStore operations fail.
+    func getOrCreateLocalPublicKeystoreData() async throws -> Data {
+        try await implementation.getOrCreateLocalPublicKeystoreData()
+    }
 }
 
 // Connection status enum for UI feedback
@@ -357,6 +379,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case keyStoreSerializationFailed(String) // Added for KeyStore serialization errors
         case keyStoreInitializationFailed(String) // Added for errors creating a new KeyStore
         case profileSharingError(String) // NEW: For profile sharing specific errors
+        case keyStoreSharingError(String) // NEW: For KeyStore sharing specific errors
+        case keyStorePublicDataExtractionFailed(String) // NEW: For errors getting public data
 
         var errorDescription: String? {
             switch self {
@@ -407,6 +431,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "Failed to initialize new KeyStore: \(reason)"
             case let .profileSharingError(reason): // NEW
                 "Profile sharing error: \(reason)"
+            case let .keyStoreSharingError(reason): // NEW
+                "KeyStore sharing error: \(reason)"
+            case let .keyStorePublicDataExtractionFailed(reason): // NEW
+                "Failed to extract public KeyStore data: \(reason)"
             }
         }
     }
@@ -868,8 +896,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 handleKeyRegenerationAcknowledgement(from: peer, data: p2pMessage.payload)
             case .keyRegenerationCommit:
                 handleKeyRegenerationCommit(from: peer, data: p2pMessage.payload)
-            case .profileShare: // NEW: Handle profile share
+            case .profileShare:
                 handleProfileShare(from: peer, data: p2pMessage.payload)
+            case .keyStoreShare: // NEW: Handle KeyStore share
+                handleKeyStoreShare(from: peer, data: p2pMessage.payload)
                 // Add cases for other P2P message types here
             }
         } catch {
@@ -938,7 +968,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         return thought
     }
 
-    // MARK: - Profile Sharing Handling (NEW)
+    // MARK: - Profile Sharing Handling
 
     /// Handles an incoming ProfileShare message.
     /// Saves the profile locally and notifies the GroupViewModel to add it to the InnerCircle.
@@ -976,6 +1006,62 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             }
         }
     }
+
+    // MARK: - KeyStore Sharing Handling (NEW)
+
+    /// Handles an incoming KeyStoreShare message.
+    /// Saves the received public KeyStore data to the sender's profile locally.
+    private func handleKeyStoreShare(from peer: MCPeerID, data: Data) {
+        print("KeyStoreShare: Received KeyStoreShare message from \(peer.displayName)")
+        Task {
+            do {
+                // 1. Decode the payload
+                let payload: KeyStoreSharePayload = try P2PMessage(messageType: .keyStoreShare, payload: data).decodePayload(KeyStoreSharePayload.self)
+                let senderProfileIDString = payload.senderProfileID
+                let receivedPublicData = payload.keyStorePublicData
+                print("KeyStoreShare: Decoded KeyStoreSharePayload from \(senderProfileIDString). Public data size: \(receivedPublicData.count) bytes.")
+
+                // 2. Validate sender profile ID
+                guard let senderProfileID = Data(base58Encoded: senderProfileIDString) else {
+                    throw P2PError.keyStoreSharingError("Invalid sender profile ID format: \(senderProfileIDString)")
+                }
+
+                // 3. Fetch the sender's profile from local persistence
+                guard let senderProfile = try await persistenceController.fetchProfile(withPublicID: senderProfileID) else {
+                    // If the profile doesn't exist locally, we cannot store the KeyStore data.
+                    // This might happen if the profile share message hasn't arrived or been processed yet.
+                    // Option 1: Log and discard.
+                    // Option 2: Store temporarily and try again later? (More complex)
+                    print("❌ KeyStoreShare: Sender profile \(senderProfileIDString) not found locally. Cannot save public KeyStore data.")
+                    // Optionally notify the sender?
+                    return
+                    // throw P2PError.keyStoreSharingError("Sender profile \(senderProfileIDString) not found locally.")
+                }
+                print("KeyStoreShare: Found local profile for sender: \(senderProfile.name)")
+
+                // 4. Save/Update the sender's profile with the received public KeyStore data
+                // Use savePeerProfile, which handles both inserts and updates, and specifically updates keyStorePublic.
+                // We pass the existing profile object to ensure we're updating, not creating a duplicate.
+                // Note: savePeerProfile internally fetches the profile again, which is slightly redundant but safe.
+                try await persistenceController.savePeerProfile(senderProfile, keyStorePublicData: receivedPublicData)
+                print("✅ KeyStoreShare: Saved/Updated public KeyStore data for profile \(senderProfile.name) (\(senderProfileIDString)) in local persistence.")
+
+                // 5. Post notification (optional) - e.g., to update UI if it shows KeyStore availability
+                NotificationCenter.default.post(
+                    name: .keyStoreSharedAndSaved,
+                    object: nil,
+                    userInfo: ["profilePublicID": senderProfileID] // Send public ID
+                )
+                print("KeyStoreShare: Posted .keyStoreSharedAndSaved notification for \(senderProfileIDString)")
+
+            } catch let error as P2PError {
+                print("❌ KeyStoreShare: P2PError handling KeyStoreShare message from \(peer.displayName): \(error)")
+            } catch {
+                print("❌ KeyStoreShare: Unexpected error handling KeyStoreShare message from \(peer.displayName): \(error)")
+            }
+        }
+    }
+
 
     // MARK: - KeyStore Status Management (using ArkavoClient)
 
@@ -1021,6 +1107,9 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     func regenerateLocalKeys() async {
         print("Manual regeneration of local keys requested (direct Profile manipulation).")
         isRegeneratingKeys = true // Optimistically set regenerating status
+        defer {
+            isRegeneratingKeys = false
+        }
         localKeyStoreInfo = nil // Clear info while regenerating
 
         let keyStore = KeyStore(curve: .secp256r1) // Declare KeyStore variable outside the if/else
@@ -1036,6 +1125,9 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             // 2. Check if KeyStore data exists and either deserialize or create new
             if let currentKeyStoreData = myProfile.keyStorePrivate {
                 print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
+                // Deserialize into the existing store
+                try await keyStore.deserialize(from: currentKeyStoreData)
+                print("   Successfully deserialized existing KeyStore.")
             } else {
                 // 3b. Create a new KeyStore instance (first time generation)
                 print("   No existing keyStorePrivate data found. Creating new KeyStore.")
@@ -1074,8 +1166,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 try await persistenceController.saveChanges()
                 print("✅ Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
             } catch {
-                // Attempt to revert the in-memory change if save fails
-                print("   Save failed. Attempting to revert profile.keyStorePrivate in memory.")
+                // Attempt to revert the in-memory change if save fails? Difficult with async.
+                print("   Save failed. Profile's keyStorePrivate might be inconsistent in memory vs persistence.")
                 throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
             }
 
@@ -1481,6 +1573,64 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
+    // MARK: - Local KeyStore Management (NEW HELPER)
+
+    /// Gets the public data of the local user's KeyStore.
+    /// If the KeyStore doesn't exist, it creates one, generates keys, saves the private part, and returns the public part.
+    /// - Returns: The serialized public KeyStore data.
+    /// - Throws: `P2PError` if profile is unavailable, or KeyStore operations fail.
+    func getOrCreateLocalPublicKeystoreData() async throws -> Data {
+        print("KeyStoreShare: Getting or creating local KeyStore...")
+
+        // 1. Get current profile
+        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+            throw P2PError.profileNotAvailable
+        }
+        let profileIDString = myProfile.publicID.base58EncodedString
+        let keyStore = KeyStore(curve: .secp256r1) // Use default curve
+
+        do {
+            // 2. Check if KeyStore private data exists
+            if let currentKeyStoreData = myProfile.keyStorePrivate {
+                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) for profile \(profileIDString).")
+                // Deserialize to ensure it's valid and to extract public data
+                try await keyStore.deserialize(from: currentKeyStoreData)
+                print("   Successfully deserialized existing KeyStore.")
+            } else {
+                // 3. Create and generate keys if it doesn't exist
+                print("   No existing keyStorePrivate data found for profile \(profileIDString). Creating and generating new KeyStore.")
+                // Generate keys (e.g., 8192 keys)
+                try await keyStore.generateAndStoreKeyPairs(count: 8192)
+                print("   Successfully generated keys for new KeyStore.")
+
+                // Serialize the *private* data
+                let privateData = await keyStore.serialize()
+                print("   Successfully serialized new private KeyStore (\(privateData.count) bytes)")
+
+                // Save the private data to the profile
+                myProfile.keyStorePrivate = privateData
+                print("   Updated profile.keyStorePrivate with new data.")
+
+                // Save changes to the Profile via PersistenceController
+                try await persistenceController.saveChanges()
+                print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
+            }
+
+            // 4. Extract and return the public data
+            let publicKeyStore = await keyStore.exportPublicKeyStore()
+            print("   Successfully extracted public KeyStore data (\(await publicKeyStore.publicKeys.count) bytes).")
+            return await publicKeyStore.serialize()
+
+        } catch let error as P2PError {
+            print("❌ KeyStoreShare: P2PError getting/creating KeyStore: \(error)")
+            throw error // Re-throw specific P2P errors
+        } catch {
+            print("❌ KeyStoreShare: Unexpected error getting/creating KeyStore: \(error)")
+            throw P2PError.keyStoreInitializationFailed("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+
+
     // MARK: - ArkavoClientDelegate Methods
 
     // UPDATED Delegate Method - Triggers full refresh
@@ -1491,6 +1641,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             print("Delegate: ArkavoClient Key Status Update Received (Valid: \(keyCount), Capacity: \(capacity), Regen: \(isRegenerating)). Triggering full status refresh.")
             // Optionally update isRegenerating immediately for responsiveness
             self.isRegeneratingKeys = isRegenerating
+            // TODO: Implement a full refresh method if needed, or rely on KeyStoreStatusView timer
+            // await self.refreshKeyStoreStatus()
         }
     }
 
@@ -1734,9 +1886,6 @@ extension P2PGroupViewModel: MCSessionDelegate {
 
                 if let profileIDString = profileID {
                     print("MCSessionDelegate: Disconnected peer Profile ID was: \(profileIDString)")
-                    // Inform ArkavoClient about disconnection (if needed)
-                    // Task { await self.arkavoClient.peerDidDisconnect(profileId: Data(base58Encoded: profileIDString)!) } // Example
-                    print("Placeholder: Informing ArkavoClient about peer disconnection (Profile: \(profileIDString))")
                 } else {
                     print("MCSessionDelegate: No profile ID mapping found for disconnected peer \(peerID.displayName) (Hash: \(peerID.hashValue)) during cleanup.")
                 }
