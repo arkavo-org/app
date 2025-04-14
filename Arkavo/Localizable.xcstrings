@@ -466,6 +466,9 @@
     "Inner Circle enables direct peer-to-peer communication with nearby devices" : {
 
     },
+    "Inner Circle Members" : {
+
+    },
     "Inner Circle Members (%lld)" : {
 
     },
@@ -637,6 +640,9 @@
 
     },
     "No members added to the Inner Circle yet." : {
+
+    },
+    "No members added yet." : {
 
     },
     "No Members Found" : {
@@ -870,6 +876,12 @@
           }
         }
       }
+    },
+    "Share KeyStore" : {
+
+    },
+    "Share Profile" : {
+
     },
     "Share Text" : {
       "localizations" : {

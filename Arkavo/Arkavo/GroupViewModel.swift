@@ -13,6 +13,8 @@ extension Notification.Name {
     static let nonJsonDataReceived = Notification.Name("nonJsonDataReceivedNotification")
     // Define notification name for P2P message received (used by ArkavoClient delegate)
     static let p2pMessageReceived = Notification.Name("p2pMessageReceivedNotification")
+    // Define notification name for when a shared profile is saved locally
+    static let profileSharedAndSaved = Notification.Name("profileSharedAndSavedNotification")
 }
 
 // Define the struct for detailed KeyStore info (based on GroupView summary)
@@ -63,7 +65,8 @@ enum P2PMessageType: String, Codable {
     case keyRegenerationOffer
     case keyRegenerationAcknowledgement
     case keyRegenerationCommit
-    // Add other direct P2P message types here if needed (e.g., profile exchange)
+    case profileShare // NEW: For sharing a profile directly
+    // Add other direct P2P message types here if needed
     // Note: Secure text messages are handled via ArkavoClient encryption/decryption delegates
 }
 
@@ -120,6 +123,14 @@ struct KeyRegenerationCommit: Codable {
     let responderProfileID: String // Base58 encoded public ID
     let timestamp: Date
     // No nonce needed here, implicitly uses the one from the Offer
+}
+
+// --- Profile Sharing Payload ---
+
+/// Payload for the `.profileShare` P2P message.
+struct ProfileSharePayload: Codable {
+    let profileData: Data // Serialized Profile object (using Profile.toData())
+    // No target stream ID needed here; receiver adds to their own InnerCircle
 }
 
 // MARK: - PeerDiscoveryManager
@@ -249,6 +260,16 @@ class PeerDiscoveryManager: ObservableObject {
     func initiateKeyRegeneration(with peer: MCPeerID) async throws {
         try await implementation.initiateKeyRegeneration(with: peer)
     }
+
+    /// Sends a specific P2P message (like profile share) to designated peers.
+    /// - Parameters:
+    ///   - type: The `P2PMessageType` of the message.
+    ///   - payload: The `Codable` payload object for the message.
+    ///   - peers: The list of `MCPeerID`s to send the message to.
+    /// - Throws: `P2PError` if encoding or sending fails.
+    func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
+        try await implementation.sendP2PMessage(type: type, payload: payload, toPeers: peers)
+    }
 }
 
 // Connection status enum for UI feedback
@@ -335,6 +356,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         case keyStoreDeserializationFailed(String) // Added for KeyStore deserialization errors
         case keyStoreSerializationFailed(String) // Added for KeyStore serialization errors
         case keyStoreInitializationFailed(String) // Added for errors creating a new KeyStore
+        case profileSharingError(String) // NEW: For profile sharing specific errors
 
         var errorDescription: String? {
             switch self {
@@ -383,6 +405,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 "Failed to serialize KeyStore: \(reason)"
             case let .keyStoreInitializationFailed(reason):
                 "Failed to initialize new KeyStore: \(reason)"
+            case let .profileSharingError(reason): // NEW
+                "Profile sharing error: \(reason)"
             }
         }
     }
@@ -676,13 +700,13 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         try mcSession.send(data, toPeers: targetPeersToSend, with: .reliable)
     }
 
-    /// Encodes and sends a P2P message structure to specific peers.
+    /// Encodes and sends a P2P message structure to specific peers. (Made public for PeerDiscoveryManager)
     /// - Parameters:
     ///   - messageType: The type of the message.
     ///   - payload: The `Codable` payload object for the message.
     ///   - peers: The list of `MCPeerID`s to send the message to.
     /// - Throws: `P2PError` if encoding or sending fails.
-    private func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
+    func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
         print("Encoding P2P message of type \(type) for peers: \(peers.map(\.displayName))")
         do {
             let dataToSend = try P2PMessage.encode(type: type, payload: payload)
@@ -844,6 +868,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 handleKeyRegenerationAcknowledgement(from: peer, data: p2pMessage.payload)
             case .keyRegenerationCommit:
                 handleKeyRegenerationCommit(from: peer, data: p2pMessage.payload)
+            case .profileShare: // NEW: Handle profile share
+                handleProfileShare(from: peer, data: p2pMessage.payload)
                 // Add cases for other P2P message types here
             }
         } catch {
@@ -910,6 +936,45 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         print("✅ P2P message stored as Thought for stream: \(stream.publicID.base58EncodedString)")
 
         return thought
+    }
+
+    // MARK: - Profile Sharing Handling (NEW)
+
+    /// Handles an incoming ProfileShare message.
+    /// Saves the profile locally and notifies the GroupViewModel to add it to the InnerCircle.
+    private func handleProfileShare(from peer: MCPeerID, data: Data) {
+        print("ProfileShare: Received ProfileShare message from \(peer.displayName)")
+        Task {
+            do {
+                // 1. Decode the payload
+                let payload: ProfileSharePayload = try P2PMessage(messageType: .profileShare, payload: data).decodePayload(ProfileSharePayload.self)
+                print("ProfileShare: Decoded ProfileSharePayload.")
+
+                // 2. Deserialize the Profile
+                let sharedProfile = try Profile.fromData(payload.profileData)
+                let profileIDString = sharedProfile.publicID.base58EncodedString
+                print("ProfileShare: Deserialized Profile: \(sharedProfile.name) (\(profileIDString))")
+
+                // 3. Save the profile using PersistenceController (as a peer profile)
+                // This ensures the profile exists locally before adding to InnerCircle.
+                // It also handles updates if the profile was already known.
+                // We don't pass keyStorePublicData here as it's not part of the share payload.
+                try await persistenceController.savePeerProfile(sharedProfile, keyStorePublicData: nil)
+                print("ProfileShare: Saved/Updated shared profile \(sharedProfile.name) in local persistence.")
+
+                // 4. Post notification so GroupViewModel can add it to the InnerCircle stream
+                NotificationCenter.default.post(
+                    name: .profileSharedAndSaved,
+                    object: nil,
+                    userInfo: ["profilePublicID": sharedProfile.publicID] // Send public ID
+                )
+                print("ProfileShare: Posted .profileSharedAndSaved notification for \(profileIDString)")
+
+            } catch {
+                print("❌ ProfileShare: Error handling ProfileShare message from \(peer.displayName): \(error)")
+                // Optionally notify the sender of the failure?
+            }
+        }
     }
 
     // MARK: - KeyStore Status Management (using ArkavoClient)
@@ -1569,6 +1634,27 @@ extension P2PGroupViewModel: MCSessionDelegate {
                     }
                     print("📱 MCSessionDelegate: Successfully connected to peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
 
+                    // --- START: Fetch and store profile for connected peer ---
+                    if let profileIDString = self.peerIDToProfileID[peerID],
+                       let profileIDData = Data(base58Encoded: profileIDString)
+                    {
+                        print("   Attempting to fetch profile \(profileIDString) for connected peer \(peerID.displayName)...")
+                        do {
+                            if let profile = try await self.persistenceController.fetchProfile(withPublicID: profileIDData) {
+                                self.connectedPeerProfiles[peerID] = profile
+                                print("   ✅ Successfully fetched and stored profile for \(peerID.displayName) in connectedPeerProfiles.")
+                            } else {
+                                print("   ⚠️ Profile \(profileIDString) not found in persistence for peer \(peerID.displayName).")
+                                // Optionally: Initiate a profile request P2P message?
+                            }
+                        } catch {
+                            print("   ❌ Error fetching profile \(profileIDString) for peer \(peerID.displayName): \(error)")
+                        }
+                    } else {
+                        print("   ⚠️ Could not find profile ID mapping for connected peer \(peerID.displayName). Cannot fetch profile.")
+                    }
+                    // --- END: Fetch and store profile ---
+
                     // Ensure connection status reflects reality after a short delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                         guard let self else { return }
@@ -1582,6 +1668,23 @@ extension P2PGroupViewModel: MCSessionDelegate {
                     }
                 } else {
                     print("📱 MCSessionDelegate: Received connected state for already known peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
+                    // Optionally re-fetch profile here in case it was missed or updated
+                    if self.connectedPeerProfiles[peerID] == nil,
+                       let profileIDString = self.peerIDToProfileID[peerID],
+                       let profileIDData = Data(base58Encoded: profileIDString)
+                    {
+                        print("   Re-attempting profile fetch for already connected peer \(peerID.displayName)...")
+                        do {
+                            if let profile = try await self.persistenceController.fetchProfile(withPublicID: profileIDData) {
+                                self.connectedPeerProfiles[peerID] = profile
+                                print("   ✅ Successfully fetched and stored profile for \(peerID.displayName) on re-check.")
+                            } else {
+                                print("   ⚠️ Profile \(profileIDString) still not found for peer \(peerID.displayName).")
+                            }
+                        } catch {
+                            print("   ❌ Error re-fetching profile \(profileIDString) for peer \(peerID.displayName): \(error)")
+                        }
+                    }
                 }
 
             case .connecting:
@@ -1623,7 +1726,7 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 let removedFromList = self.connectedPeers.count < initialPeerCount
 
                 let removedFromMap = self.peerIDToProfileID.removeValue(forKey: peerID) != nil
-                let removedProfile = self.connectedPeerProfiles.removeValue(forKey: peerID) != nil
+                let removedProfile = self.connectedPeerProfiles.removeValue(forKey: peerID) != nil // REMOVE PROFILE ON DISCONNECT
                 let removedTime = self.peerConnectionTimes.removeValue(forKey: peerID) != nil
                 let removedKeyState = self.peerKeyExchangeStates.removeValue(forKey: peerID) != nil // Clean up key exchange state
 

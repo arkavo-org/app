@@ -17,7 +17,7 @@ import UIKit
 // }
 
 @MainActor
-final class GroupViewModel: ViewModel, ObservableObject {
+final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClientDelegate conformance
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -43,7 +43,7 @@ final class GroupViewModel: ViewModel, ObservableObject {
         setupNotifications()
         await loadStreams()
         print("GroupViewModel initialized:")
-        print("- Client delegate set: \(client.delegate != nil)")
+        print("- Client delegate set: \(client.delegate != nil)") // Delegate is set on P2PGroupViewModel
         print("- Account streams count: \(account.streams.count)")
         print("- Profile name: \(profile.name)")
     }
@@ -66,6 +66,7 @@ final class GroupViewModel: ViewModel, ObservableObject {
         notificationObservers.removeAll()
 
         // Add observers
+        // Note: .arkavoClientStateChanged might be redundant if connectionState is driven by PeerDiscoveryManager
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
@@ -73,12 +74,14 @@ final class GroupViewModel: ViewModel, ObservableObject {
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
+                // Consider if this should be driven by PeerDiscoveryManager.connectionStatus instead
                 self?.connectionState = state
             }
         }
         notificationObservers.append(stateObserver)
 
-        // Observer for decrypted messages
+        // Observer for decrypted messages (likely handled by P2PGroupViewModel now)
+        // Keep this for now in case GroupViewModel needs to react to specific decrypted data types
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted,
             object: nil,
@@ -93,21 +96,24 @@ final class GroupViewModel: ViewModel, ObservableObject {
 
             Task { @MainActor [weak self] in
                 do {
+                    // Example: Handle specific policy types relevant to GroupViewModel
                     if policy.type == .streamProfile {
                         print("\n=== GroupViewModel Processing Decrypted Stream Data ===")
                         print("Data size: \(data.count)")
                         print("Policy type: \(policy.type)")
                         try await self?.handleStreamData(data)
                     }
+                    // Add other policy type handling if needed by GroupViewModel
                 } catch {
-                    print("❌ Error processing stream data: \(error)")
+                    print("❌ Error processing stream data in GroupViewModel: \(error)")
                     print("Error details: \(String(describing: error))")
                 }
             }
         }
         notificationObservers.append(messageObserver)
 
-        // Observer for NATS messages
+        // Observer for NATS messages (potentially handled by P2PGroupViewModel or ChatViewModel)
+        // Keep this for now in case GroupViewModel needs to react directly to NATS messages
         let natsObserver = NotificationCenter.default.addObserver(
             forName: .natsMessageReceived,
             object: nil,
@@ -115,11 +121,28 @@ final class GroupViewModel: ViewModel, ObservableObject {
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data else { return }
             Task { @MainActor [weak self] in
-                print("\n=== Handling NATS Message ===")
-                await self?.handleNATSMessage(data)
+                print("\n=== GroupViewModel Handling NATS Message ===")
+                // Decide if GroupViewModel needs to handle this or if it's delegated elsewhere
+                await self?.handleNATSMessage(data) // Keep handler for now
             }
         }
         notificationObservers.append(natsObserver)
+
+        // NEW: Observer for shared profiles saved locally
+        let profileSavedObserver = NotificationCenter.default.addObserver(
+            forName: .profileSharedAndSaved,
+            object: nil,
+            queue: .main // Ensure handler runs on main thread
+        ) { [weak self] notification in
+            guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
+                print("❌ ProfileShare: Received .profileSharedAndSaved notification without profilePublicID.")
+                return
+            }
+            Task { @MainActor [weak self] in
+                await self?.handleProfileSharedAndSaved(profilePublicID: profilePublicID)
+            }
+        }
+        notificationObservers.append(profileSavedObserver)
     }
 
     deinit {
@@ -229,9 +252,9 @@ final class GroupViewModel: ViewModel, ObservableObject {
                 hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2
             ),
             policies: Policies(
-                admission: .open,
-                interaction: .open,
-                age: .forAll
+                admission: .open, // Default policy, adjust as needed
+                interaction: .open, // Default policy, adjust as needed
+                age: .forAll // Default policy, adjust as needed
             )
         )
 
@@ -344,44 +367,11 @@ final class GroupViewModel: ViewModel, ObservableObject {
         try await client.sendNATSEvent(data)
     }
 
-    nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) {
-        Task { @MainActor in
-            self.connectionState = state
-        }
-    }
-
-    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        print("\n=== clientDidReceiveMessage ===")
-        guard let messageType = message.first else {
-            print("No message type byte found")
-            return
-        }
-        print("Message type: 0x\(String(format: "%02X", messageType))")
-
-        let messageData = message.dropFirst()
-
-        Task {
-            switch messageType {
-            case 0x04: // Rewrapped key
-                await handleRewrappedKeyMessage(messageData)
-
-            case 0x05: // NATS message NanoTDF
-                await handleNATSMessage(messageData)
-
-            default:
-                print("Unknown message type: 0x\(String(format: "%02X", messageType))")
-            }
-        }
-    }
-
-    nonisolated func clientDidReceiveError(_: ArkavoSocial.ArkavoClient, error: any Error) {
-        Task { @MainActor in
-            print("Arkavo client error: \(error)")
-            // You might want to update UI state here
-            // self.errorMessage = error.localizedDescription
-            // self.showError = true
-        }
-    }
+    // --- REMOVED ArkavoClientDelegate Methods ---
+    // nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) { ... }
+    // nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) { ... }
+    // nonisolated func clientDidReceiveError(_: ArkavoSocial.ArkavoClient, error: any Error) { ... }
+    // --- END REMOVED ArkavoClientDelegate Methods ---
 
     private func handleNATSMessage(_ data: Data) async {
         do {
@@ -453,6 +443,50 @@ final class GroupViewModel: ViewModel, ObservableObject {
 
         } catch {
             print("❌ Error processing rewrapped key: \(error)")
+        }
+    }
+
+    // NEW: Handle the notification that a shared profile was saved
+    private func handleProfileSharedAndSaved(profilePublicID: Data) async {
+        print("GroupViewModel: Handling .profileSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
+        do {
+            // 1. Find the local user's "InnerCircle" stream
+            // This assumes the user has exactly one stream named "InnerCircle".
+            // A more robust implementation might involve selecting the target stream.
+            guard let innerCircleStream = account.streams.first(where: { $0.isInnerCircleStream }) else {
+                print("❌ ProfileShare: Could not find local 'InnerCircle' stream to add shared profile.")
+                // Optionally inform the user
+                return
+            }
+            print("   Found InnerCircle stream: \(innerCircleStream.profile.name)")
+
+            // 2. Fetch the newly saved Profile from persistence
+            guard let sharedProfile = try await PersistenceController.shared.fetchProfile(withPublicID: profilePublicID) else {
+                print("❌ ProfileShare: Could not fetch the shared profile (\(profilePublicID.base58EncodedString)) from persistence after notification.")
+                return
+            }
+            print("   Fetched shared profile: \(sharedProfile.name)")
+
+            // 3. Add the profile to the stream's innerCircleProfiles (if not already present)
+            if !innerCircleStream.isInInnerCircle(sharedProfile) {
+                innerCircleStream.addToInnerCircle(sharedProfile)
+                print("   Added profile \(sharedProfile.name) to InnerCircle stream members.")
+
+                // 4. Save the changes to the stream
+                try await PersistenceController.shared.saveChanges()
+                print("   Saved changes to InnerCircle stream.")
+
+                // 5. Post notification to refresh the UI
+                NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
+                print("   Posted .refreshInnerCircleMembers notification.")
+
+            } else {
+                print("   Profile \(sharedProfile.name) is already in the InnerCircle stream. No changes needed.")
+            }
+
+        } catch {
+            print("❌ ProfileShare: Error handling saved profile notification: \(error)")
+            // Optionally inform the user
         }
     }
 }
@@ -547,8 +581,10 @@ struct GroupView: View {
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: 16) {
+                // --- Peers Section (P2P Connections) ---
                 VStack(spacing: 0) {
-                     HStack {
+                    // Header for the P2P section
+                    HStack {
                         Image(systemName: "person.2.fill")
                             .foregroundColor(.blue)
 
@@ -570,11 +606,16 @@ struct GroupView: View {
                     .padding(.vertical, 12)
                     .padding(.horizontal, 16)
                     .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(10, corners: [.topLeft, .topRight]) // Round top corners
 
-                    // Peer discovery UI
+                    // Peer discovery UI and connected peers list
                     innerCirclePeerDiscoveryUI()
+                        .background(Color(.secondarySystemGroupedBackground)) // Background for this section
+                        .cornerRadius(10, corners: [.bottomLeft, .bottomRight]) // Round bottom corners
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 10)) // Clip the whole Vstack
+
+                // --- Streams Section ---
                 ForEach(viewModel.streams) { stream in
                     streamRow(stream: stream)
                 }
@@ -589,7 +630,7 @@ struct GroupView: View {
     // Individual stream row with InnerCircle UI if applicable
     private func streamRow(stream: Stream) -> some View {
         VStack(spacing: 0) {
-            // Main card view
+            // Main card view for the stream
             GroupCardView(
                 stream: stream,
                 onSelect: {
@@ -598,13 +639,61 @@ struct GroupView: View {
                     sharedState.showChatOverlay = true
                 }
             )
+
+            // --- START: Inner Circle Members List ---
+            // Display members only if it's an InnerCircle stream
+            if stream.isInnerCircleStream {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Header for the members list
+                    Text("Inner Circle Members")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                        .padding(.horizontal) // Add horizontal padding
+
+                    // Display message if no members
+                    if stream.innerCircleProfiles.isEmpty {
+                        Text("No members added yet.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    } else {
+                        // List the members (sorted by name)
+                        // Use LazyVStack for potentially long lists
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(stream.innerCircleProfiles.sorted { $0.name < $1.name }, id: \.id) { profile in
+                                HStack {
+                                    // Simple display: just the name
+                                    Text("• \(profile.name)") // Add bullet point
+                                        .font(.caption)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    // Optional: Add online/offline status indicator here later
+                                    // You would need to check peerManager.connectedPeerProfiles
+                                    // based on profile.publicID
+                                }
+                                .padding(.horizontal) // Add horizontal padding
+                            }
+                        }
+                        .padding(.bottom, 8) // Add padding below the list
+                    }
+                }
+                // Use the secondary grouped background for this section
+                .background(Color(.secondarySystemGroupedBackground))
+                // Round bottom corners to match the card above if it's the last element
+                .cornerRadius(10, corners: [.bottomLeft, .bottomRight])
+            }
+            // --- END: Inner Circle Members List ---
         }
+        // Apply corner radius to the entire VStack containing the card and members list
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    // Inner Circle peer discovery UI
+    // Inner Circle peer discovery UI (P2P related)
     private func innerCirclePeerDiscoveryUI() -> some View {
-        VStack(spacing: 0) {
-            // Search toggle button with improved visual design
+        VStack(spacing: 8) { // Added spacing between elements
+            // Search toggle button
             HStack {
                 Button(action: {
                     Task {
@@ -612,7 +701,6 @@ struct GroupView: View {
                     }
                 }) {
                     HStack {
-                        // Icon with dynamic appearance
                         ZStack {
                             Circle()
                                 .fill(isPeerSearchActive ? Color.red.opacity(0.15) : Color.blue.opacity(0.15))
@@ -623,7 +711,6 @@ struct GroupView: View {
                                 .foregroundColor(isPeerSearchActive ? .red : .blue)
                         }
 
-                        // Text label with more detail
                         VStack(alignment: .leading, spacing: 2) {
                             Text(isPeerSearchActive ? "Stop Searching" : "Search for Nearby Devices")
                                 .font(.subheadline)
@@ -637,9 +724,7 @@ struct GroupView: View {
 
                         Spacer()
 
-                        // Indicator for active state
                         if isPeerSearchActive {
-                            // Pulsing dot when active
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 8, height: 8)
@@ -648,25 +733,34 @@ struct GroupView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 8) // Reduced vertical padding
                     .padding(.horizontal, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.secondarySystemBackground))
-                    )
+                    // Removed background here, parent VStack has it
                 }
-                .buttonStyle(PlainButtonStyle()) // Use plain button style for custom appearance
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemGroupedBackground))
-            .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
+            .padding(.horizontal) // Padding for the button Hstack
+            .padding(.top, 8) // Padding above the button
+
+            // Connected peers list view
+            connectedPeersView // Display the list of connected peers
+
+            // KeyStore Status View
+            KeyStoreStatusView(peerManager: peerManager) {
+                Task {
+                    await peerManager.regenerateLocalKeys()
+                }
+            }
+            .padding(.horizontal) // Padding for KeyStore view
+            .padding(.bottom, 8) // Padding below KeyStore view
+
         }
-        .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive) // Animate the whole section
-        .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
-        .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo) // Animate key info changes
-        .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles) // Animate profile changes
-        .animation(.easeInOut(duration: 0.3), value: peerManager.peerKeyExchangeStates) // Animate key exchange state changes
+        // Removed animation modifiers from here, apply to specific elements if needed
+        // .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive)
+        // .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers)
+        // .animation(.easeInOut(duration: 0.3), value: peerManager.localKeyStoreInfo)
+        // .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeerProfiles)
+        // .animation(.easeInOut(duration: 0.3), value: peerManager.peerKeyExchangeStates)
     }
 
     // Toggle peer search state
@@ -905,10 +999,11 @@ struct GroupView: View {
         // Get key exchange state for this specific peer
         let keyState = peerManager.peerKeyExchangeStates[peer]?.state ?? .idle
         let (_, statusIcon, statusColor) = displayInfo(for: keyState) // Use helper
-        let isButtonDisabled = switch keyState {
+        let isKeyExchangeButtonDisabled = switch keyState {
         case .idle, .failed: false // Enable for idle or failed (retry)
         default: true // Disable during active exchange or completion
         }
+        let isProfileLoaded = profile != nil
 
         return HStack {
             // Profile View or Fallback
@@ -927,52 +1022,82 @@ struct GroupView: View {
                 }
             }
 
-            Spacer() // Pushes button to the right
+            Spacer() // Pushes buttons to the right
 
-            // Key Exchange Status and Button (only if profile is loaded)
-            if profile != nil {
-                HStack(spacing: 5) {
-                    // Status Icon (optional)
-                    if let iconName = statusIcon {
-                        Image(systemName: iconName)
-                            .font(.caption)
-                            .foregroundColor(statusColor)
+            // Action Buttons (only if profile is loaded)
+            if isProfileLoaded {
+                HStack(spacing: 5) { // Group buttons together
+                    // Key Exchange Status and Button
+                    HStack(spacing: 5) {
+                        // Status Icon (optional)
+                        if let iconName = statusIcon {
+                            Image(systemName: iconName)
+                                .font(.caption)
+                                .foregroundColor(statusColor)
+                        }
+
+                        // Key Exchange Button
+                        Button {
+                            Task {
+                                do {
+                                    print("UI (peerRow): Initiating key regeneration with peer \(peer.displayName)")
+                                    try await peerManager.initiateKeyRegeneration(with: peer)
+                                    print("UI (peerRow): Key regeneration initiated successfully for \(peer.displayName)")
+                                } catch {
+                                    print("❌ UI (peerRow): Failed to initiate key regeneration for \(peer.displayName): \(error)")
+                                    // Optionally show an error to the user
+                                }
+                            }
+                        } label: {
+                            Group {
+                                switch keyState {
+                                case .idle:
+                                    Image(systemName: "key.radiowaves.forward")
+                                case .failed:
+                                    Image(systemName: "arrow.clockwise") // Retry icon
+                                case .completed:
+                                    Image(systemName: "checkmark.shield")
+                                default: // In progress states
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 12, height: 12) // Consistent size
+                                }
+                            }
+                            .font(.caption) // Smaller icon/progress
+                            .foregroundColor(statusColor) // Use status color for button content
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small) // Smaller button
+                        .tint(statusColor) // Tint the border/background
+                        .disabled(isKeyExchangeButtonDisabled)
                     }
 
-                    // Button
+                    // Share Profile Button (IMPLEMENTED)
                     Button {
-                        Task {
-                            do {
-                                print("UI (peerRow): Initiating key regeneration with peer \(peer.displayName)")
-                                try await peerManager.initiateKeyRegeneration(with: peer)
-                                print("UI (peerRow): Key regeneration initiated successfully for \(peer.displayName)")
-                            } catch {
-                                print("❌ UI (peerRow): Failed to initiate key regeneration for \(peer.displayName): \(error)")
-                                // Optionally show an error to the user
-                            }
-                        }
+                        // Call the implemented sharePeerProfile function
+                        sharePeerProfile(peer: peer)
                     } label: {
-                        Group {
-                            switch keyState {
-                            case .idle:
-                                Image(systemName: "key.radiowaves.forward")
-                            case .failed:
-                                Image(systemName: "arrow.clockwise") // Retry icon
-                            case .completed:
-                                Image(systemName: "checkmark.shield")
-                            default: // In progress states
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .frame(width: 12, height: 12) // Consistent size
-                            }
-                        }
-                        .font(.caption) // Smaller icon/progress
-                        .foregroundColor(statusColor) // Use status color for button content
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.caption)
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.small) // Smaller button
-                    .tint(statusColor) // Tint the border/background
-                    .disabled(isButtonDisabled)
+                    .controlSize(.small)
+                    .tint(.blue) // Consistent tint for share actions
+                    .disabled(!isProfileLoaded) // Disable if profile not loaded
+                    .help("Share Profile")
+
+                    // Share KeyStore Button (Placeholder)
+                    Button {
+                        sharePeerKeyStore(peer: peer)
+                    } label: {
+                        Image(systemName: "key.fill")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.blue) // Consistent tint for share actions
+                    .disabled(!isProfileLoaded) // Disable if profile not loaded
+                    .help("Share KeyStore")
                 }
             }
         }
@@ -984,6 +1109,74 @@ struct GroupView: View {
     }
 
     // --- END MODIFIED peerRow ---
+
+    // --- START: Implemented/Modified Methods ---
+
+    /// Action for sharing a peer's profile via P2P message.
+    private func sharePeerProfile(peer: MCPeerID) {
+        print("Attempting to share profile for peer: \(peer.displayName)")
+
+        // 1. Get the Profile object associated with the peer ID
+        guard let profileToShare = peerManager.connectedPeerProfiles[peer] else {
+            print("❌ Error: Could not find profile for peer \(peer.displayName) to share.")
+            sharedState.setState("Error: Could not find profile for \(peer.displayName).", forKey: "errorMessage")
+            return
+        }
+
+        // 2. Serialize the Profile data (using Profile.toData which excludes sensitive keys)
+        let profileData: Data
+        do {
+            profileData = try profileToShare.toData()
+            print("   Serialized profile \(profileToShare.name) (\(profileData.count) bytes)")
+        } catch {
+            print("❌ Error: Failed to serialize profile \(profileToShare.name): \(error)")
+            sharedState.setState("Error: Failed to prepare profile data for sharing.", forKey: "errorMessage")
+            return
+        }
+
+        // 3. Create the P2P message payload
+        let payload = ProfileSharePayload(profileData: profileData)
+
+        // 4. Send the P2P message using PeerDiscoveryManager
+        Task {
+            do {
+                try await peerManager.sendP2PMessage(type: .profileShare, payload: payload, toPeers: [peer])
+                print("✅ Successfully sent profile share message for \(profileToShare.name) to \(peer.displayName)")
+                // Provide user feedback
+                sharedState.setState("Profile for \(profileToShare.name) sent to \(peer.displayName).", forKey: "statusMessage")
+            } catch {
+                print("❌ Error: Failed to send profile share message to \(peer.displayName): \(error)")
+                sharedState.setState("Error: Failed to send profile to \(peer.displayName).", forKey: "errorMessage")
+            }
+        }
+    }
+
+    /// Placeholder action for sharing a peer's public KeyStore.
+    private func sharePeerKeyStore(peer: MCPeerID) {
+        print("Attempting to share KeyStore for peer: \(peer.displayName)")
+        // TODO: Implement KeyStore sharing logic
+        // 1. Get the Profile object associated with the peer ID.
+        // 2. Access the *public* KeyStore data from the Profile (e.g., profile.keyStorePublic).
+        // 3. Ensure public KeyStore data exists.
+        // 4. Prepare the public KeyStore data for sharing.
+        // 5. Present the share sheet or send the data.
+        guard let profile = peerManager.connectedPeerProfiles[peer] else {
+            print("Error: Could not find profile for peer \(peer.displayName)")
+            sharedState.setState("Error: Could not find profile for \(peer.displayName).", forKey: "errorMessage")
+            return
+        }
+        guard let keyStorePublicData = profile.keyStorePublic else {
+            print("Error: No public KeyStore data found for profile \(profile.name)")
+            sharedState.setState("No public KeyStore data available to share for \(profile.name).", forKey: "errorMessage")
+            return
+        }
+        print("Sharing public KeyStore (\(keyStorePublicData.count) bytes) for profile: \(profile.name)")
+        // Example: Trigger share sheet (implementation needed)
+        // presentShareSheet(for: keyStorePublicData, filename: "\(profile.name)_public_keystore.bin")
+        sharedState.setState("KeyStore sharing not yet implemented.", forKey: "statusMessage") // Placeholder feedback
+    }
+
+    // --- END: Implemented/Modified Methods ---
 
     // Helper function to get display info (copied from InnerCircleMemberRow for use in peerRow)
     private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
@@ -2093,8 +2286,11 @@ struct GroupCardView: View {
             }
             .padding()
             .background(Color(.secondarySystemGroupedBackground))
+            // Apply corner radius based on whether it's an InnerCircle stream (members shown below)
+            .cornerRadius(10, corners: stream.isInnerCircleStream ? [.topLeft, .topRight] : .allCorners)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        // Removed clipShape here, applied conditionally above and to the parent VStack in streamRow
+        // .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $isShareSheetPresented) {
             // Use the static constant from GroupView to build the URL
             let urlString = "\(GroupView.streamBaseURL)\(stream.publicID.base58EncodedString)"
@@ -2129,6 +2325,24 @@ struct GroupCardView: View {
         return iconNames[iconIndex]
     }
 }
+
+// Helper for applying corner radius to specific corners
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
+    }
+}
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
 
 struct PolicyRow: View {
     let icon: String
