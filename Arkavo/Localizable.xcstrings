@@ -147,6 +147,9 @@
         }
       }
     },
+    "Actions" : {
+
+    },
     "Activity Level: %@" : {
 
     },
@@ -179,6 +182,9 @@
 
     },
     "Age Verification" : {
+
+    },
+    "ago" : {
 
     },
     "Are you sure you want to delete this post? This action cannot be undone." : {
@@ -221,9 +227,6 @@
 
     },
     "Back" : {
-
-    },
-    "Base64 Data:" : {
 
     },
     "Become a Supporter" : {
@@ -305,6 +308,9 @@
     "Connected %@" : {
 
     },
+    "Connected Since" : {
+
+    },
     "Connecting..." : {
 
     },
@@ -353,7 +359,13 @@
     "Delete Video" : {
 
     },
+    "Disconnect Peer" : {
+
+    },
     "Disconnected" : {
+
+    },
+    "Display Name" : {
 
     },
     "Done" : {
@@ -415,6 +427,9 @@
     "Failed to revoke trust: %@" : {
 
     },
+    "Failed:" : {
+
+    },
     "Features" : {
 
     },
@@ -425,9 +440,6 @@
 
     },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
-
-    },
-    "From: %@" : {
 
     },
     "Granularity" : {
@@ -460,9 +472,6 @@
     "InnerCircle" : {
 
     },
-    "InnerCircle Members" : {
-
-    },
     "Interaction" : {
       "localizations" : {
         "es-US" : {
@@ -483,6 +492,12 @@
 
     },
     "Key count is low (< %lld%%). Regeneration recommended." : {
+
+    },
+    "Key Exchange History" : {
+
+    },
+    "Key Exchange Status" : {
 
     },
     "KeyStore information loading..." : {
@@ -573,6 +588,9 @@
         }
       }
     },
+    "MCPeerID Hash" : {
+
+    },
     "Media" : {
 
     },
@@ -615,6 +633,9 @@
     "Next" : {
 
     },
+    "No key exchange history available" : {
+
+    },
     "No members added to the Inner Circle yet." : {
 
     },
@@ -624,13 +645,13 @@
     "No members match your search." : {
 
     },
-    "Non-JSON Data Received" : {
-
-    },
     "Not available" : {
 
     },
     "Not available on macOS" : {
+
+    },
+    "Not Connected" : {
 
     },
     "Not Searching" : {
@@ -653,6 +674,12 @@
 
     },
     "Owner:" : {
+
+    },
+    "Peer Details" : {
+
+    },
+    "Peers" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
@@ -692,6 +719,9 @@
           }
         }
       }
+    },
+    "Profile ID" : {
+
     },
     "Profile Information" : {
       "localizations" : {
@@ -741,6 +771,9 @@
 
     },
     "Regenerate" : {
+
+    },
+    "Regenerate Keys with Peer" : {
 
     },
     "Regenerating the KeyStore will replace all existing keys. This cannot be undone. Are you sure you want to proceed?" : {
@@ -818,6 +851,9 @@
     "Secure" : {
 
     },
+    "Secure Connection" : {
+
+    },
     "Send" : {
 
     },
@@ -883,9 +919,6 @@
         }
       }
     },
-    "Size: %lld bytes" : {
-
-    },
     "Special Groups" : {
 
     },
@@ -915,6 +948,9 @@
 
     },
     "Start Verification" : {
+
+    },
+    "Status" : {
 
     },
     "Stop" : {

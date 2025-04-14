@@ -1,10 +1,10 @@
 import ArkavoSocial
+import Combine // Import Combine for Timer
 import FlatBuffers
 import MultipeerConnectivity
 import OpenTDFKit
 import SwiftUI
 import UIKit
-import Combine // Import Combine for Timer
 
 // MARK: - Models
 
@@ -464,15 +464,6 @@ extension Notification.Name {
     static let refreshInnerCircleMembers = Notification.Name("refreshInnerCircleMembers")
 }
 
-// Add showMembersList property to SharedState
-extension SharedState {
-    // This property is used to control the display of the InnerCircle members list
-    var showMembersList: Bool {
-        get { getState(forKey: "showMembersList") as? Bool ?? false }
-        set { setState(newValue, forKey: "showMembersList") }
-    }
-}
-
 // MARK: - Main View
 
 struct GroupView: View {
@@ -483,14 +474,6 @@ struct GroupView: View {
     @State private var isShareSheetPresented = false
     @State private var isPeerSearchActive = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    // For non-JSON data popup
-    @State private var nonJsonBase64Data: String = ""
-    @State private var nonJsonDataSize: Int = 0
-    @State private var nonJsonPeerName: String = ""
-    @State private var showNonJsonDataPopup: Bool = false
-    // Store notification observer token
-    @State private var nonJsonObserver: NSObjectProtocol?
 
     // Static constant for the base URL used in sharing
     static let streamBaseURL = "https://app.arkavo.com/stream/"
@@ -515,55 +498,6 @@ struct GroupView: View {
                 // Chat overlay
                 chatOverlayView
             }
-            .overlay(
-                Group {
-                    if showNonJsonDataPopup {
-                        VStack {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Non-JSON Data Received")
-                                        .font(.headline)
-                                    Spacer()
-                                    Button(action: { showNonJsonDataPopup = false }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.gray)
-                                    }
-                                }
-
-                                Text("From: \(nonJsonPeerName)")
-                                    .font(.subheadline)
-
-                                Text("Size: \(nonJsonDataSize) bytes")
-                                    .font(.subheadline)
-
-                                Text("Base64 Data:")
-                                    .font(.subheadline)
-
-                                ScrollView {
-                                    Text(nonJsonBase64Data)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .padding(8)
-                                        .background(Color(.systemGray6))
-                                        .cornerRadius(4)
-                                }
-                                .frame(maxHeight: 200)
-                            }
-                            .padding()
-                            .background(Color(.systemBackground))
-                            .cornerRadius(12)
-                            .shadow(radius: 5)
-                            .padding()
-
-                            Spacer()
-                        }
-                        .background(Color.black.opacity(0.3).edgesIgnoringSafeArea(.all))
-                        .onTapGesture {
-                            // Dismiss when tapping background
-                            showNonJsonDataPopup = false
-                        }
-                    }
-                }
-            )
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if let stream = viewModel.selectedStream {
@@ -576,33 +510,6 @@ struct GroupView: View {
                     )
                 }
             }
-        }
-        .sheet(isPresented: $sharedState.showMembersList) {
-            if let stream = viewModel.selectedStream {
-                NavigationView {
-                    InnerCircleView(stream: stream, peerManager: peerManager)
-                        .navigationTitle("InnerCircle Members")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("Done") {
-                                    sharedState.showMembersList = false
-                                }
-                            }
-                        }
-                }
-            }
-        }
-        // Refresh peer profiles when the view appears or peer list changes
-        .onAppear {
-            Task { await peerManager.refreshKeyStoreStatus() } // Also refreshes profiles
-            setupNonJsonDataObserver()
-        }
-        .onDisappear {
-            removeNonJsonDataObserver()
-        }
-        .onChange(of: peerManager.connectedPeers) { _, _ in
-            Task { await peerManager.refreshKeyStoreStatus() } // Refresh profiles when peers change
         }
         // Refresh UI when key exchange states change
         .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
@@ -640,6 +547,34 @@ struct GroupView: View {
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: 16) {
+                VStack(spacing: 0) {
+                     HStack {
+                        Image(systemName: "person.2.fill")
+                            .foregroundColor(.blue)
+
+                        Text("Peers")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+
+                        Spacer()
+
+                        // Member count badge
+                        let onlineCount = peerManager.connectedPeers.count
+                        Text("\(onlineCount)")
+                            .font(.caption2.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.blue))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(10)
+
+                    // Peer discovery UI
+                    innerCirclePeerDiscoveryUI()
+                }
                 ForEach(viewModel.streams) { stream in
                     streamRow(stream: stream)
                 }
@@ -663,62 +598,17 @@ struct GroupView: View {
                     sharedState.showChatOverlay = true
                 }
             )
-
-            // InnerCircle UI if applicable
-            if stream.isInnerCircleStream {
-                VStack(spacing: 0) {
-                    // Members button
-                    Button(action: {
-                        viewModel.selectedStream = stream
-                        sharedState.showMembersList = true
-                    }) {
-                        HStack {
-                            Image(systemName: "person.2.fill")
-                                .foregroundColor(.blue)
-
-                            Text("InnerCircle Members")
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
-
-                            Spacer()
-
-                            // Member count badge
-                            let onlineCount = peerManager.connectedPeers.count
-                            Text("\(onlineCount)")
-                                .font(.caption2.bold())
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.blue))
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-
-                    // Peer discovery UI
-                    innerCirclePeerDiscoveryUI(for: stream)
-                }
-            }
         }
     }
 
     // Inner Circle peer discovery UI
-    private func innerCirclePeerDiscoveryUI(for stream: Stream) -> some View {
+    private func innerCirclePeerDiscoveryUI() -> some View {
         VStack(spacing: 0) {
             // Search toggle button with improved visual design
             HStack {
                 Button(action: {
                     Task {
-                        await togglePeerSearch(for: stream)
+                        await togglePeerSearch()
                     }
                 }) {
                     HStack {
@@ -771,32 +661,6 @@ struct GroupView: View {
             .padding(.vertical, 8)
             .background(Color(.secondarySystemGroupedBackground))
             .animation(.easeInOut(duration: 0.2), value: isPeerSearchActive)
-
-            // Connected peers list and OT-TDF views when active
-            if isPeerSearchActive, viewModel.selectedStream == stream {
-                VStack(spacing: 12) {
-                    connectedPeersView
-
-                    // Always show OT-TDF views when search is active
-                    Divider().padding(.horizontal)
-
-                    // Pass the refresh action from peerManager
-                    KeyStoreStatusView(
-                        peerManager: peerManager, // Pass the manager
-                        regenerateAction: {
-                            Task {
-                                await peerManager.regenerateLocalKeys()
-                            }
-                        }
-                    )
-                    .padding(.horizontal)
-
-                    Divider().padding(.horizontal)
-                }
-                .padding(.bottom, 8)
-                .background(Color(.secondarySystemGroupedBackground))
-                .transition(.opacity.combined(with: .move(edge: .top))) // Add transition
-            }
         }
         .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive) // Animate the whole section
         .animation(.easeInOut(duration: 0.3), value: peerManager.connectedPeers) // Animate peer list changes
@@ -806,14 +670,13 @@ struct GroupView: View {
     }
 
     // Toggle peer search state
-    private func togglePeerSearch(for stream: Stream) async {
+    private func togglePeerSearch() async {
         isPeerSearchActive.toggle()
 
         if isPeerSearchActive {
             do {
                 // Select this stream and start searching
-                peerManager.selectedStream = stream
-                try await peerManager.setupMultipeerConnectivity(for: stream)
+                try await peerManager.setupMultipeerConnectivity()
                 try peerManager.startSearchingForPeers()
 
                 // Automatically present the browser controller for manual peer selection
@@ -992,7 +855,7 @@ struct GroupView: View {
             Text("Not Searching").font(.callout).foregroundColor(.secondary)
             Text("Toggle the search button to find nearby devices.").font(.caption2).foregroundColor(.secondary.opacity(0.8)).multilineTextAlignment(.center).padding(.horizontal)
             Button(action: {
-                if let stream = viewModel.selectedStream { Task { await togglePeerSearch(for: stream) } }
+                Task { await togglePeerSearch() }
             }) { Text("Start Searching").padding(.horizontal, 16).padding(.vertical, 8) }
                 .buttonStyle(.bordered).padding(.top, 8)
             Spacer().frame(height: 20)
@@ -1042,12 +905,10 @@ struct GroupView: View {
         // Get key exchange state for this specific peer
         let keyState = peerManager.peerKeyExchangeStates[peer]?.state ?? .idle
         let (_, statusIcon, statusColor) = displayInfo(for: keyState) // Use helper
-        let isButtonDisabled: Bool = {
-            switch keyState {
-            case .idle, .failed: return false // Enable for idle or failed (retry)
-            default: return true // Disable during active exchange or completion
-            }
-        }()
+        let isButtonDisabled = switch keyState {
+        case .idle, .failed: false // Enable for idle or failed (retry)
+        default: true // Disable during active exchange or completion
+        }
 
         return HStack {
             // Profile View or Fallback
@@ -1121,6 +982,7 @@ struct GroupView: View {
         .cornerRadius(8)
         .padding(.horizontal, 4) // Add horizontal padding for spacing between rows
     }
+
     // --- END MODIFIED peerRow ---
 
     // Helper function to get display info (copied from InnerCircleMemberRow for use in peerRow)
@@ -1144,12 +1006,11 @@ struct GroupView: View {
             return ("Commit Sent", "lock.shield", .orange) // Using lock.shield temporarily
         case .completed:
             return ("Keys Exchanged", "checkmark.shield.fill", .green)
-        case .failed(let reason):
+        case let .failed(reason):
             let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
             return ("Failed: \(shortReason)", "exclamationmark.triangle.fill", .red)
         }
     }
-
 
     // Format the connection time
     private func connectionTimeString(_ date: Date) -> String {
@@ -1201,71 +1062,6 @@ struct GroupView: View {
             {
                 ChatOverlay(streamPublicID: streamPublicID)
             }
-        }
-    }
-
-    // Setup non-JSON data observer
-    private func setupNonJsonDataObserver() {
-        // Add notification observer for non-JSON data
-        let notificationName = Notification.Name.nonJsonDataReceived
-        print("🔔 Setting up observer for notification: \(notificationName.rawValue)")
-
-        nonJsonObserver = NotificationCenter.default.addObserver(
-            forName: notificationName,
-            object: nil,
-            queue: .main
-        ) { [self] notification in // Explicitly capture self
-            print("🔥 NOTIFICATION RECEIVED in GroupView: nonJsonDataReceived")
-
-            guard let userInfo = notification.userInfo else {
-                print("❌ Notification has no userInfo")
-                return
-            }
-
-            print("📄 Notification userInfo: \(userInfo)")
-
-            guard let base64Data = userInfo["data"] as? String else {
-                print("❌ No base64Data in notification")
-                return
-            }
-
-            guard let dataSize = userInfo["dataSize"] as? Int else {
-                print("❌ No dataSize in notification")
-                return
-            }
-
-            guard let peerName = userInfo["peerName"] as? String else {
-                print("❌ No peerName in notification")
-                return
-            }
-
-            print("✅ Received non-JSON data notification: \(dataSize) bytes from \(peerName)")
-
-            // Update on main thread to ensure UI updates properly
-            DispatchQueue.main.async { [self] in // Explicitly capture self
-                print("🔄 Updating UI state for popup")
-                nonJsonBase64Data = base64Data
-                nonJsonDataSize = dataSize
-                nonJsonPeerName = peerName
-                showNonJsonDataPopup = true
-                print("🎯 showNonJsonDataPopup set to true")
-
-                // Auto-hide after 10 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    print("⏱️ Auto-hiding popup after 10 seconds")
-                    showNonJsonDataPopup = false
-                }
-            }
-        }
-        print("Added non-JSON data notification observer")
-    }
-
-    // Remove non-JSON data observer
-    private func removeNonJsonDataObserver() {
-        if let observer = nonJsonObserver {
-            NotificationCenter.default.removeObserver(observer)
-            nonJsonObserver = nil
-            print("Removed non-JSON data notification observer")
         }
     }
 }
@@ -1471,7 +1267,6 @@ struct InnerCircleView: View {
             Button(action: {
                 Task {
                     await loadInnerCircleProfiles()
-                    await peerManager.refreshKeyStoreStatus()
                 }
             }) {
                 Image(systemName: "arrow.clockwise")
@@ -1695,7 +1490,6 @@ struct InnerCircleMemberRow: View {
                 keyExchangeButton() // <-- INTEGRATED KEY EXCHANGE BUTTON
             }
 
-
             // Remove member button
             Button(action: {
                 showRemoveConfirmation = true
@@ -1726,9 +1520,6 @@ struct InnerCircleMemberRow: View {
     private func openDirectChat() {
         // Set the InnerCircle stream as selected
         sharedState.selectedStreamPublicID = stream.publicID
-
-        // Close members list
-        sharedState.showMembersList = false
 
         // Show chat overlay
         sharedState.showChatOverlay = true
@@ -1875,26 +1666,24 @@ struct InnerCircleMemberRow: View {
             .animation(.easeInOut(duration: 0.3), value: state)
         } else {
             // Default view if no state (or offline) - Indicate keys are ready/default state
-             HStack(spacing: 3) {
-                 Image(systemName: "lock.shield") // Use a neutral icon
-                     .resizable()
-                     .aspectRatio(contentMode: .fit)
-                     .frame(width: 10, height: 10)
-                     .foregroundColor(.gray) // Neutral color
-                 Text("Secure") // Neutral text
-                     .foregroundColor(.gray)
-             }
+            HStack(spacing: 3) {
+                Image(systemName: "lock.shield") // Use a neutral icon
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 10, height: 10)
+                    .foregroundColor(.gray) // Neutral color
+                Text("Secure") // Neutral text
+                    .foregroundColor(.gray)
+            }
         }
     }
 
     // Button for initiating or retrying key exchange
     @ViewBuilder
     private func keyExchangeButton() -> some View {
-    let keyState: KeyExchangeState = keyExchangeState ?? .idle // Default to idle if nil
-    let isFailed: Bool = {
-        if case KeyExchangeState.failed(_) = keyState { return true } else { return false }
-    }()
-    let (text, _, color) = displayInfo(for: keyState) // Get text and color
+        let keyState: KeyExchangeState = keyExchangeState ?? .idle // Default to idle if nil
+        let isFailed = if case KeyExchangeState.failed = keyState { true } else { false }
+        let (text, _, color) = displayInfo(for: keyState) // Get text and color
         let isDisabled = isKeyExchangeButtonDisabled
 
         Button {
@@ -1916,27 +1705,27 @@ struct InnerCircleMemberRow: View {
             }
         } label: {
             Group {
-            switch keyState {
-            case .idle:
-                Image(systemName: "key.radiowaves.forward")
-                    .foregroundColor(.blue)
-            case KeyExchangeState.failed(_):
-                Image(systemName: "arrow.clockwise") // Retry icon
-                    .foregroundColor(.orange)
-            case .completed:
-                Image(systemName: "checkmark.shield")
-                    .foregroundColor(.green)
-            case .requestSent, .requestReceived, .offerSent, .offerReceived, .ackSent, .ackReceived, .commitSent:
-                ProgressView() // Show spinner while in progress
-                    .scaleEffect(0.6) // Smaller spinner
-                    .frame(width: 16, height: 16) // Ensure consistent size
-                    .tint(.orange) // Tint spinner orange during progress
-            }
+                switch keyState {
+                case .idle:
+                    Image(systemName: "key.radiowaves.forward")
+                        .foregroundColor(.blue)
+                case KeyExchangeState.failed:
+                    Image(systemName: "arrow.clockwise") // Retry icon
+                        .foregroundColor(.orange)
+                case .completed:
+                    Image(systemName: "checkmark.shield")
+                        .foregroundColor(.green)
+                case .requestSent, .requestReceived, .offerSent, .offerReceived, .ackSent, .ackReceived, .commitSent:
+                    ProgressView() // Show spinner while in progress
+                        .scaleEffect(0.6) // Smaller spinner
+                        .frame(width: 16, height: 16) // Ensure consistent size
+                        .tint(.orange) // Tint spinner orange during progress
+                }
             }
             .font(.subheadline) // Match message icon size
             .padding(8)
             // Use clear background when disabled or completed, otherwise use tinted background
-            .background(Circle().fill( (isDisabled && !isFailed) ? Color.clear : color.opacity(0.1) ))
+            .background(Circle().fill((isDisabled && !isFailed) ? Color.clear : color.opacity(0.1)))
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
@@ -1945,7 +1734,6 @@ struct InnerCircleMemberRow: View {
         // Add animation for state changes
         .animation(.easeInOut(duration: 0.3), value: keyState)
     }
-
 
     // Helper to get display info based on KeyExchangeState
     private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
@@ -1969,7 +1757,7 @@ struct InnerCircleMemberRow: View {
             return ("Committing Keys", "lock.shield.fill", .orange)
         case .completed:
             return ("Keys Exchanged", "checkmark.shield.fill", .green)
-        case .failed(let reason):
+        case let .failed(reason):
             // Keep reason short for UI
             let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
             // Provide a more user-friendly default if reason is empty
@@ -1978,7 +1766,6 @@ struct InnerCircleMemberRow: View {
         }
     }
 }
-
 
 // MARK: - Peer Profile View
 
@@ -2128,18 +1915,18 @@ struct KeyStoreStatusView: View {
     private var buttonLabel: String {
         // Check if info exists and total keys > 0
         if let info = keyStoreInfo, (info.validKeyCount + info.expiredKeyCount) > 0 {
-            return "Regenerate KeyStore"
+            "Regenerate KeyStore"
         } else {
-            return "Create KeyStore" // Or "Initialize KeyStore"
+            "Create KeyStore" // Or "Initialize KeyStore"
         }
     }
 
     private var buttonIcon: String {
         // Check if info exists and total keys > 0
         if let info = keyStoreInfo, (info.validKeyCount + info.expiredKeyCount) > 0 {
-            return "arrow.clockwise.circle.fill"
+            "arrow.clockwise.circle.fill"
         } else {
-            return "plus.circle.fill"
+            "plus.circle.fill"
         }
     }
 
@@ -2189,7 +1976,7 @@ struct KeyStoreStatusView: View {
                 }
 
                 // Low Key Warning (if applicable)
-                if isLowOnKeys && !hasExpiredKeys { // Show only if not already showing expired warning
+                if isLowOnKeys, !hasExpiredKeys { // Show only if not already showing expired warning
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.red)
@@ -2241,26 +2028,12 @@ struct KeyStoreStatusView: View {
             }
         }
         .padding(.vertical, 8) // Add vertical padding
-        .onReceive(timer) { _ in
-            // Trigger refresh periodically
-            print("KeyStoreStatusView: Timer fired, refreshing status...")
-            Task {
-                await peerManager.refreshKeyStoreStatus()
-            }
-        }
-        .onAppear {
-             // Initial refresh when the view appears
-             Task {
-                 await peerManager.refreshKeyStoreStatus()
-             }
-        }
         .onDisappear {
             // Stop the timer when the view disappears
             timer.upstream.connect().cancel()
         }
     }
 }
-
 
 // MARK: - Server Card
 
@@ -2405,6 +2178,7 @@ struct ThoughtRow: View {
 }
 
 // MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
+
 // These should be replaced by actual implementations in PeerDiscoveryManager
 
 // Add a placeholder property to PeerDiscoveryManager if it doesn't exist
@@ -2438,7 +2212,6 @@ extension PeerDiscoveryManager {
         // Check the state for the found peer
         return isExchangingKeys(with: peer)
     }
-
 
     // Placeholder function - Replace with actual implementation
 //    @MainActor
