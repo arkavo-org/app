@@ -663,15 +663,24 @@ struct GroupView: View {
         .onDisappear { sharedState.isAwaiting = false }
     }
 
-    // Scrollable stream list - Refactored Structure
+    // Scrollable stream list - Restructured based on UI Critique
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
-            LazyVStack(spacing: InnerCircleConstants.systemMargin) { // Use constant
-                // --- InnerCircle Section (P2P) ---
-                innerCircleSection()
-                    .padding(.horizontal, InnerCircleConstants.systemMargin) // Add horizontal padding to section
+            LazyVStack(spacing: InnerCircleConstants.doubleMargin) { // Increased spacing between major sections
 
-                // --- Regular Streams Section ---
+                // --- 1. Connection Status & KeyStore Section ---
+                connectionAndKeyStoreSection()
+                    .padding(.horizontal, InnerCircleConstants.systemMargin)
+
+                // --- 2. InnerCircle Members Section ---
+                innerCircleMembersSection()
+                    .padding(.horizontal, InnerCircleConstants.systemMargin)
+
+                // --- 3. Peer Discovery Tools Section ---
+                peerDiscoverySection()
+                    .padding(.horizontal, InnerCircleConstants.systemMargin)
+
+                // --- 4. Other Streams Section ---
                 // Only show if there are non-InnerCircle streams
                 let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
                 if !regularStreams.isEmpty {
@@ -865,13 +874,15 @@ struct GroupView: View {
         }
     }
 
-    // Connected peers list view
-    private var connectedPeersView: some View {
-        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
-            let peerCount = peerManager.connectedPeers.count
-            let connectionStatus = peerManager.connectionStatus
+    // Renamed and Refactored: Shows discovered/connecting peers
+    private var discoveredPeersView: some View {
+        VStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+            let peerCount = peerManager.connectedPeers.count // Still relevant for count
+            let connectionStatus = peerManager.connectionStatus // Still relevant for status
 
-            // Status bar with improved connection status display
+            // Removed old status bar - handled in innerCircleStatusHeader now
+
+            // Show search status banner when active (Simplified)
             HStack {
                 connectionStatusIndicator(status: connectionStatus)
                 Spacer()
@@ -884,25 +895,16 @@ struct GroupView: View {
                         .foregroundColor(peerCount > 0 ? .blue : .secondary)
                 }
             }
-            .padding(.top, systemMargin * 0.375) // Use systemMargin multiple (~6pt)
-            .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
-
-            // Show search status banner when active
+            // Show search status banner when active (Simplified)
             if case .searching = connectionStatus {
-                HStack {
-                    Text("Broadcasting and listening...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    ProgressView().scaleEffect(0.7)
-                }
-                .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
-                .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
-                .background(Color(.secondarySystemBackground).opacity(0.5))
-                .cornerRadius(6)
+                Text("Scanning for nearby devices...")
+                    .font(InnerCircleConstants.captionFont) // Use constant
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, InnerCircleConstants.halfMargin) // Use constant
             }
 
-            // Show error message if there's an error
+            // Show error message if there's an error (Keep existing logic)
             if case let .failed(error) = connectionStatus {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
@@ -915,22 +917,22 @@ struct GroupView: View {
                 .cornerRadius(6)
             }
 
-            // Divider if we have peers or specific states
-            if peerCount > 0 || connectionStatus == .searching || connectionStatus == .connecting {
-                Divider().padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
+            // Divider only needed if peers are shown
+            if peerCount > 0 {
+                Divider().padding(.vertical, InnerCircleConstants.halfMargin) // Use constant
             }
 
             if peerCount > 0 {
-                // Title for peers section
-                Text("Nearby Devices")
-                    .font(.caption)
+                // Title for peers section (Adjust if showing "Discovered" vs "Connected")
+                Text("Discovered Devices (\(peerCount))") // Updated title
+                    .font(InnerCircleConstants.secondaryTextFont) // Use constant
                     .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
-                    .padding(.bottom, systemMargin / 8) // Use systemMargin multiple (2pt)
+                    .padding(.bottom, InnerCircleConstants.halfMargin / 2) // Use constant
 
-                // Show list of connected peers using the refactored peerRow
+                // Show list of discovered/connected peers using the refactored peerRow
+                // Note: peerRow needs further updates for "Verify Trust" button based on actual state
                 LazyVStack(spacing: InnerCircleConstants.halfMargin) { // Use LazyVStack and constant
                     // Use peerManager.connectedPeerProfiles which holds the Profile data
                     ForEach(peerManager.connectedPeers, id: \.self) { peer in
@@ -956,19 +958,18 @@ struct GroupView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
                 }
-                .buttonStyle(.bordered)
-                .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+                // Removed "Find More Peers" button - discovery is initiated by main button
 
-            } else if case .idle = connectionStatus {
-                emptyStateView() // Not searching and no peers
             } else if isPeerSearchActive {
-                searchingStateView() // Searching or connecting but no peers yet
+                // Show searching state only if no peers found yet
+                searchingStateView()
+            } else {
+                // Show empty state if idle and no peers
+                emptyStateView()
             }
         }
-        .padding(.horizontal, systemMargin) // Use systemMargin
-        // Removed bottom padding to let parent control spacing
-        // Removed background to let parent control background
-        // .background(Color(.secondarySystemGroupedBackground))
+        // Removed horizontal padding - handled by parent section
+        // Removed background - handled by parent section
     }
 
     // Connection status indicator
@@ -1030,18 +1031,25 @@ struct GroupView: View {
     private func emptyStateView() -> some View {
         VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
             Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
-            Image(systemName: "person.2.slash").font(.largeTitle).foregroundColor(.secondary.opacity(0.5))
-            Text("Not Searching").font(.callout).foregroundColor(.secondary)
-            // Updated text to guide user to the main toggle button
-            Text("Tap 'Search for Nearby Devices' above to find peers.")
-                .font(.caption) // Slightly larger caption
-                .foregroundColor(.secondary)
+            // Updated empty state based on critique
+            Image(systemName: "person.2.slash")
+                .font(.system(size: 36)) // Use guide size
+                .foregroundColor(.gray) // Use guide color
+
+            Text("No Peers Discovered") // Updated title
+                .font(InnerCircleConstants.headerFont.weight(.medium)) // Use constant font, adjust weight
+                .foregroundColor(InnerCircleConstants.primaryTextColor) // Use constant
+
+            Text("Tap 'Discover Peers' to find nearby devices. Once found, you can verify trust and add them to your InnerCircle.") // Updated text
+                .font(InnerCircleConstants.secondaryTextFont) // Use constant
+                .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, systemMargin) // Use systemMargin
+                .padding(.horizontal, InnerCircleConstants.systemMargin) // Use constant
             // Removed the redundant "Start Searching" button
-            Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
         }
+        .padding(.vertical, InnerCircleConstants.doubleMargin) // Use constant for vertical padding
         .frame(maxWidth: .infinity)
+        // Removed background/corner radius - let parent section handle card appearance
         .background(Color(.secondarySystemBackground).opacity(0.3))
         .cornerRadius(8)
         .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
@@ -1146,23 +1154,27 @@ struct GroupView: View {
                     .disabled(keyStorePercentage >= 0.1) // Example disable logic
                 }
 
-                // Example: Connect/View Details Button
+                // Example: Verify Trust / View Details Button
                 Button {
-                    // TODO: Implement Connect or View Details action
-                    if profile == nil {
-                        print("Attempt connection to \(peer.displayName)")
-                        // peerManager.invitePeer(peer) // Example action
-                    } else {
-                        print("View details for \(profile!.name)")
+                    // TODO: Implement Verify Trust or View Details action
+                    if trustStatus == .pending || trustStatus == .unknown {
+                        print("Initiate Trust Verification with \(peer.displayName)")
+                        // Show verification modal/flow
+                    } else if trustStatus == .trusted || trustStatus == .verified {
+                        print("View details for \(profile?.name ?? peer.displayName)")
                         // Navigate to detail view or show modal
+                    } else {
+                        // Handle other states (e.g., compromised)
                     }
                 } label: {
-                    Image(systemName: profile == nil ? "link.badge.plus" : "info.circle") // Different icons based on state
+                    // Icon changes based on trust status
+                    let iconName = (trustStatus == .pending || trustStatus == .unknown) ? "lock.open.shield.fill" : "info.circle"
+                    Image(systemName: iconName)
                         .font(.system(size: 18, weight: .semibold)) // Use guide size
                         .foregroundColor(InnerCircleConstants.primaryActionColor) // Use constant
                         .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget) // Ensure touch target
                 }
-                .accessibilityLabel(Text(profile == nil ? "Connect with \(peer.displayName)" : "View details for \(profile!.name)"))
+                .accessibilityLabel(Text((trustStatus == .pending || trustStatus == .unknown) ? "Verify trust with \(profile?.name ?? peer.displayName)" : "View details for \(profile?.name ?? peer.displayName)"))
             }
         }
         .padding(InnerCircleConstants.systemMargin) // Use constant
