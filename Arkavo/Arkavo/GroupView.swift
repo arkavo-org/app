@@ -2096,7 +2096,7 @@ struct KeyStoreStatusView: View {
 
     // Constants
     let lowKeyThreshold = 0.10 // 10%
-    // Removed local systemMargin definition, use the one from GroupView
+    // systemMargin is defined in the parent GroupView
 
     // Computed properties based on peerManager.localKeyStoreInfo (now LocalKeyStoreInfo?)
     private var keyStoreInfo: LocalKeyStoreInfo? {
