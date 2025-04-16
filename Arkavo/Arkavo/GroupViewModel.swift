@@ -145,7 +145,6 @@ struct KeyStoreSharePayload: Codable {
     let timestamp: Date
 }
 
-
 // MARK: - PeerDiscoveryManager
 
 // Public interface for peer discovery
@@ -1035,7 +1034,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                     print("❌ KeyStoreShare: Sender profile \(senderProfileIDString) not found locally. Cannot save public KeyStore data.")
                     // Optionally notify the sender?
                     return
-                    // throw P2PError.keyStoreSharingError("Sender profile \(senderProfileIDString) not found locally.")
+                        // throw P2PError.keyStoreSharingError("Sender profile \(senderProfileIDString) not found locally.")
                 }
                 print("KeyStoreShare: Found local profile for sender: \(senderProfile.name)")
 
@@ -1061,7 +1060,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             }
         }
     }
-
 
     // MARK: - KeyStore Status Management (using ArkavoClient)
 
@@ -1618,7 +1616,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
             // 4. Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
-            print("   Successfully extracted public KeyStore data (\(await publicKeyStore.publicKeys.count) bytes).")
+            await print("   Successfully extracted public KeyStore data (\(publicKeyStore.publicKeys.count) bytes).")
             return await publicKeyStore.serialize()
 
         } catch let error as P2PError {
@@ -1629,7 +1627,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             throw P2PError.keyStoreInitializationFailed("Unexpected error: \(error.localizedDescription)")
         }
     }
-
 
     // MARK: - ArkavoClientDelegate Methods
 

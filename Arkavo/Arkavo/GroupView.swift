@@ -512,7 +512,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 // MARK: - InnerCircle UI Constants and Enums
 
 // Constants for consistent styling within InnerCircle related views
-struct InnerCircleConstants {
+enum InnerCircleConstants {
     static let systemMargin: CGFloat = 16
     static let halfMargin: CGFloat = systemMargin / 2
     static let doubleMargin: CGFloat = systemMargin * 2
@@ -531,11 +531,11 @@ struct InnerCircleConstants {
 
     // Colors (Examples based on guide)
     static let primaryActionColor: Color = .blue // #007AFF
-    static let trustGreen: Color = Color(red: 52/255, green: 199/255, blue: 89/255) // #34C759
-    static let trustYellow: Color = Color(red: 255/255, green: 204/255, blue: 0/255) // #FFCC00
-    static let trustRed: Color = Color(red: 255/255, green: 59/255, blue: 48/255) // #FF3B30
+    static let trustGreen: Color = .init(red: 52 / 255, green: 199 / 255, blue: 89 / 255) // #34C759
+    static let trustYellow: Color = .init(red: 255 / 255, green: 204 / 255, blue: 0 / 255) // #FFCC00
+    static let trustRed: Color = .init(red: 255 / 255, green: 59 / 255, blue: 48 / 255) // #FF3B30
     static let backgroundColor: Color = .black // #000000 (Assuming dark mode focus)
-    static let cardBackgroundColor: Color = Color(.systemGray6) // #1C1C1E (Example dark mode card bg)
+    static let cardBackgroundColor: Color = .init(.systemGray6) // #1C1C1E (Example dark mode card bg)
     static let primaryTextColor: Color = .white
     static let secondaryTextColor: Color = .gray
 }
@@ -574,7 +574,6 @@ enum TrustStatus {
         }
     }
 }
-
 
 // MARK: - Extensions
 
@@ -668,7 +667,6 @@ struct GroupView: View {
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: InnerCircleConstants.systemMargin) { // Use constant
-
                 // --- InnerCircle Section (P2P) ---
                 innerCircleSection()
                     .padding(.horizontal, InnerCircleConstants.systemMargin) // Add horizontal padding to section
@@ -705,12 +703,10 @@ struct GroupView: View {
             // 1. Status Header (Connection + KeyStore)
             innerCircleStatusHeader()
                 .background(InnerCircleConstants.cardBackgroundColor) // Use constant
-                .cornerRadius(InnerCircleConstants.cornerRadius, corners: [.topLeft, .topRight]) // Use constant
 
             // 2. Peer Discovery Controls & List
             innerCirclePeerDiscoveryUI()
                 .background(InnerCircleConstants.cardBackgroundColor) // Use constant
-                .cornerRadius(InnerCircleConstants.cornerRadius, corners: [.bottomLeft, .bottomRight]) // Use constant
 
             // 3. InnerCircle Member List (if stream exists)
             // This part is now handled by InnerCircleView, which should be presented differently,
@@ -735,7 +731,6 @@ struct GroupView: View {
 
             // Local KeyStore Status Indicator (Simplified)
             KeyStoreStatusIndicator(peerManager: peerManager)
-
         }
         .padding(InnerCircleConstants.systemMargin) // Use constant
     }
@@ -806,7 +801,6 @@ struct GroupView: View {
     // Inner Circle peer discovery UI (P2P related) - Refactored
     private func innerCirclePeerDiscoveryUI() -> some View {
         VStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
-
             // --- NEW: Prominent Search CTA ---
             Button {
                 Task { await togglePeerSearch() }
@@ -943,13 +937,13 @@ struct GroupView: View {
                         // Pass the peer and the profile (if available) to peerRow
                         // Also pass the peerManager to handle actions
                         peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer], peerManager: peerManager)
-                            // Add haptic feedback example on tap (if making row tappable)
-                            // .onTapGesture {
-                            //     // Trigger haptic feedback
-                            //     let haptic = UIImpactFeedbackGenerator(style: .light)
-                            //     haptic.impactOccurred()
-                            //     // Handle tap action (e.g., navigate to details)
-                            // }
+                        // Add haptic feedback example on tap (if making row tappable)
+                        // .onTapGesture {
+                        //     // Trigger haptic feedback
+                        //     let haptic = UIImpactFeedbackGenerator(style: .light)
+                        //     haptic.impactOccurred()
+                        //     // Handle tap action (e.g., navigate to details)
+                        // }
                     }
                 }
 
@@ -1083,136 +1077,15 @@ struct GroupView: View {
         }
     }
 
-    // Individual peer row - Updated to accept Profile and PeerManager
-    // --- MODIFIED peerRow ---
-    private func peerRow(peer: MCPeerID, profile: Profile?, peerManager: PeerDiscoveryManager) -> some View {
-        // Get key exchange state for this specific peer
-        let keyState = peerManager.peerKeyExchangeStates[peer]?.state ?? .idle
-        let (_, statusIcon, statusColor) = displayInfo(for: keyState) // Use helper
-        let isKeyExchangeButtonDisabled = switch keyState {
-        case .idle, .failed: false // Enable for idle or failed (retry)
-        default: true // Disable during active exchange or completion
-        }
-        let isProfileLoaded = profile != nil
-
-        return HStack {
-            // Profile View or Fallback
-            if let profile {
-                PeerProfileView(profile: profile, connectionTime: peerManager.peerConnectionTimes[peer])
-            } else {
-                // Fallback view when profile is not yet available
-                HStack {
-                    Image(systemName: "person.circle.fill").foregroundColor(.gray).font(.title3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(peer.displayName).font(.subheadline).fontWeight(.medium).foregroundColor(.secondary)
-                        Text("Connecting...").font(.caption2).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    ProgressView().scaleEffect(0.5)
-                }
-            }
-
-            Spacer() // Pushes buttons to the right
-
-            // Action Buttons (only if profile is loaded)
-            if isProfileLoaded {
-                HStack(spacing: 5) { // Group buttons together
-                    // Key Exchange Status and Button
-                    HStack(spacing: 5) {
-                        // Status Icon (optional)
-                        if let iconName = statusIcon {
-                            Image(systemName: iconName)
-                                .font(.caption)
-                                .foregroundColor(statusColor)
-                        }
-
-                        // Key Exchange Button
-                        Button {
-                            Task {
-                                do {
-                                    print("UI (peerRow): Initiating key regeneration with peer \(peer.displayName)")
-                                    try await peerManager.initiateKeyRegeneration(with: peer)
-                                    print("UI (peerRow): Key regeneration initiated successfully for \(peer.displayName)")
-                                } catch {
-                                    print("❌ UI (peerRow): Failed to initiate key regeneration for \(peer.displayName): \(error)")
-                                    // Optionally show an error to the user
-                                    sharedState.setState("Key exchange failed: \(error.localizedDescription)", forKey: "errorMessage")
-                                }
-                            }
-                        } label: {
-                            Group {
-                                switch keyState {
-                                case .idle:
-                                    Image(systemName: "key.radiowaves.forward")
-                                case .failed:
-                                    Image(systemName: "arrow.clockwise") // Retry icon
-                                case .completed:
-                                    Image(systemName: "checkmark.shield")
-                                default: // In progress states
-                                    ProgressView()
-                                        .scaleEffect(0.6)
-                                        .frame(width: 12, height: 12) // Consistent size
-                                }
-                            }
-                            .font(.caption) // Smaller icon/progress
-                            .foregroundColor(statusColor) // Use status color for button content
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small) // Smaller button
-                        .tint(statusColor) // Tint the border/background
-                        .disabled(isKeyExchangeButtonDisabled)
-                    }
-
-                    // Share Profile Button (IMPLEMENTED)
-                    Button {
-                        // Call the implemented sharePeerProfile function
-                        sharePeerProfile(peer: peer)
-                    } label: {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(.blue) // Consistent tint for share actions
-                    .disabled(!isProfileLoaded) // Disable if profile not loaded
-                    .help("Share Profile")
-
-                    // Share KeyStore Button (IMPLEMENTED)
-                    Button {
-                        sharePeerKeyStore(peer: peer) // Call the implemented function
-                    } label: {
-                        Image(systemName: "key.fill")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(.blue) // Consistent tint for share actions
-                    .disabled(!isProfileLoaded) // Disable if profile not loaded
-                    .help("Share KeyStore")
-                }
-            }
-        }
-        .padding(.horizontal, systemMargin) // Use systemMargin
-        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(8)
-        .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt) for spacing between rows
-    }
-
-    // --- REFACTORED peerRow towards PeerCardView ---
     private func peerRow(peer: MCPeerID, profile: Profile?, peerManager: PeerDiscoveryManager) -> some View {
         // Determine trust status (Placeholder - needs real logic)
         let trustStatus: TrustStatus = profile != nil ? .verified : .pending // Example logic
         // KeyStore Percentage - Placeholder: This needs data about the *peer's* keystore or local status in context
-        let keyStorePercentage: Double = 0.85 // Placeholder value
+        let keyStorePercentage = 0.85 // Placeholder value
 
         return HStack(spacing: InnerCircleConstants.systemMargin) { // Use constant
             // Avatar with trust indicator
             ZStack(alignment: .bottomTrailing) {
-                // Use PeerProfileView's avatar logic or similar
-                PeerProfileView.avatarView(profile: profile, peerId: peer) // Pass peerId for fallback color
-                    .frame(width: 50, height: 50)
-
                 // Trust indicator badge
                 Circle()
                     .fill(trustStatus.color)
@@ -1238,14 +1111,14 @@ struct GroupView: View {
 
                 // Connection Time (if available and connected)
                 if let time = peerManager.peerConnectionTimes[peer] {
-                     Text("Connected \(connectionTimeString(time))")
-                         .font(InnerCircleConstants.captionFont) // Use constant
-                         .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
-                 } else if profile == nil {
-                     Text("Connecting...") // Show connecting if profile not loaded
-                         .font(InnerCircleConstants.captionFont)
-                         .foregroundColor(InnerCircleConstants.secondaryTextColor)
-                 }
+                    Text("Connected \(connectionTimeString(time))")
+                        .font(InnerCircleConstants.captionFont) // Use constant
+                        .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+                } else if profile == nil {
+                    Text("Connecting...") // Show connecting if profile not loaded
+                        .font(InnerCircleConstants.captionFont)
+                        .foregroundColor(InnerCircleConstants.secondaryTextColor)
+                }
 
                 // Key status indicator (Placeholder - Needs real data)
                 // if trustStatus == .trusted {
@@ -1300,7 +1173,6 @@ struct GroupView: View {
     }
 
     // --- END REFACTORED peerRow ---
-
 
     // --- START: Implemented/Modified Methods ---
 
@@ -1386,7 +1258,6 @@ struct GroupView: View {
             }
         }
     }
-
 
     // --- END: Implemented/Modified Methods ---
 
@@ -1486,7 +1357,7 @@ struct InnerCircleView: View {
     @State private var refreshObserver: NSObjectProtocol? // Observer token
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Search and filter bar
@@ -2179,20 +2050,16 @@ struct InnerCircleMemberRow: View {
 struct PeerProfileView: View {
     let profile: Profile
     let connectionTime: Date?
-    
+
     var body: some View {
         HStack {
-            // Generated Avatar
-            avatarView
-                .frame(width: 32, height: 32) // Consistent size
-            
             // Profile Info
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.name)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.primary) // Use primary color for name
-                
+
                 if let time = connectionTime {
                     Text("Connected \(connectionTimeString(time))")
                         .font(.caption2)
@@ -2203,9 +2070,9 @@ struct PeerProfileView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             // Connection Status Indicator (Green dot)
             ZStack {
                 Circle().fill(Color.green.opacity(0.2)).frame(width: 16, height: 16)
@@ -2213,299 +2080,270 @@ struct PeerProfileView: View {
             }
         }
     }
-    
-    // Static avatar view generator for use in PeerRow and potentially elsewhere
-    static func avatarView(profile: Profile?, peerId: MCPeerID? = nil) -> some View {
-        let name = profile?.name ?? peerId?.displayName ?? "?"
-        let idData = profile?.publicID ?? Data(peerId?.displayName.utf8 ?? Data()) // Use name for color if no profile ID
-        let initials = name.prefix(2).uppercased()
-        let color = avatarColor(for: idData) // Use publicID or name hash for consistent color
-        
-        return ZStack {
-            Circle()
-                .fill(color)
-            Text(initials)
-                .font(.caption.bold())
-                .foregroundColor(.white)
-        }
-    }
-    
-    // Static color generator
-    static func avatarColor(for data: Data) -> Color {
-        // Simple hash-based color generation
-        var hash = 0
-        for byte in data {
-            hash = hash &* 31 &+ Int(byte) // Basic hash combining
-        }
-        let hue = Double(abs(hash) % 360) / 360.0
-        return Color(hue: hue, saturation: 0.7, brightness: 0.8)
-    }
-    
+
     // Format the connection time (copied from GroupView for encapsulation)
     private func connectionTimeString(_ date: Date) -> String {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
-        
+
         if timeInterval < 60 { return GroupView.justNowString } // Use constant
         if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
         if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
-        
+
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
-        // MARK: - Server Card (Now used for non-InnerCircle streams)
-        
-        struct GroupCardView: View {
-            let stream: Stream
-            let onSelect: () -> Void
-            @State private var isShareSheetPresented = false
-            // Standard system margin from HIG
-            private let systemMargin: CGFloat = 16
-            
-            var body: some View {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        // Group Icon
-                        Button(action: onSelect) {
-                            HStack {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.blue.opacity(0.1))
-                                        .frame(width: 40, height: 40)
-                                    
-                                    Image(systemName: iconForStream(stream))
-                                        .font(.title3)
-                                        .foregroundStyle(.blue)
-                                }
-                                
-                                // Group Info
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(stream.profile.name)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                    // Add InnerCircle badge if applicable
-                                    if stream.isInnerCircleStream {
-                                        Text("InnerCircle")
-                                            .font(.caption2)
-                                            .fontWeight(.medium)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.blue.opacity(0.15))
-                                            .foregroundColor(.blue)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                                
-                                Spacer()
+    }
+}
+
+// MARK: - Server Card (Now used for non-InnerCircle streams)
+
+struct GroupCardView: View {
+    let stream: Stream
+    let onSelect: () -> Void
+    @State private var isShareSheetPresented = false
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // Group Icon
+                Button(action: onSelect) {
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                                .frame(width: 40, height: 40)
+
+                            Image(systemName: iconForStream(stream))
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                        }
+
+                        // Group Info
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(stream.profile.name)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            // Add InnerCircle badge if applicable
+                            if stream.isInnerCircleStream {
+                                Text("InnerCircle")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.15))
+                                    .foregroundColor(.blue)
+                                    .cornerRadius(8)
                             }
                         }
-                        .buttonStyle(.plain)
-                        
-                        // Share Button
-                        Button(action: {
-                            isShareSheetPresented = true
-                        }) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.trailing, systemMargin / 4) // Use systemMargin multiple (4pt)
-                    }
-                    .padding(systemMargin) // Use systemMargin
-                    .background(Color(.secondarySystemGroupedBackground))
-                    // Apply corner radius based on whether it's an InnerCircle stream (members shown below)
-                    .cornerRadius(10, corners: stream.isInnerCircleStream ? [.topLeft, .topRight] : .allCorners)
-                }
-                // Removed clipShape here, applied conditionally above and to the parent VStack in streamRow
-                // .clipShape(RoundedRectangle(cornerRadius: 12))
-                .sheet(isPresented: $isShareSheetPresented) {
-                    // Use the static constant from GroupView to build the URL
-                    let urlString = "\(GroupView.streamBaseURL)\(stream.publicID.base58EncodedString)"
-                    if let url = URL(string: urlString) {
-                        ShareSheet(
-                            activityItems: [url],
-                            isPresented: $isShareSheetPresented
-                        )
-                    }
-                }
-            }
-            
-            private func iconForStream(_ stream: Stream) -> String {
-                // Use specific icon for InnerCircle
-                if stream.isInnerCircleStream {
-                    return "network" // Or "wifi", "shared.with.you" etc.
-                }
-                
-                // Fallback to hash-based icon for regular streams
-                let hashValue = stream.publicID.hashValue
-                let iconIndex = abs(hashValue) % 32
-                let iconNames = [
-                    "person.fill", "figure.child", "figure.wave", "person.3.fill",
-                    "star.fill", "heart.fill", "flag.fill", "book.fill",
-                    "house.fill", "car.fill", "bicycle", "airplane",
-                    "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
-                    "leaf.fill", "flame.fill", "drop.fill", "snowflake",
-                    "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
-                    "camera.fill", "phone.fill", "envelope.fill", "message.fill",
-                    "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
-                ]
-                return iconNames[iconIndex]
-            }
-        }
-        
-        // Helper for applying corner radius to specific corners
-        struct RoundedCorner: Shape {
-            var radius: CGFloat = .infinity
-            var corners: UIRectCorner = .allCorners
-            
-            func path(in rect: CGRect) -> Path {
-                let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
-                return Path(path.cgPath)
-            }
-        }
-        
-        extension View {
-            func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-                clipShape(RoundedCorner(radius: radius, corners: corners))
-            }
-        }
-        
-        
-        struct PolicyRow: View {
-            let icon: String
-            let title: String
-            let value: String
-            
-            var body: some View {
-                HStack(spacing: 12) {
-                    Image(systemName: icon)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
-                    
-                    Text(title)
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    Text(value)
-                        .foregroundStyle(.primary)
-                }
-            }
-        }
-        
-        struct ThoughtRow: View {
-            let thought: Thought
-            
-            var body: some View {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(thought.nano.hexEncodedString()) // Consider showing something more user-friendly
-                            .font(.headline)
-                            .lineLimit(1) // Limit display if hex is too long
+
                         Spacer()
-                        Text(thought.metadata.createdAt, style: .relative)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
-                    
-                    Text(thought.metadata.createdAt.formatted())
-                        .font(.subheadline)
+                }
+                .buttonStyle(.plain)
+
+                // Share Button
+                Button(action: {
+                    isShareSheetPresented = true
+                }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
                         .foregroundStyle(.secondary)
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.trailing, systemMargin / 4) // Use systemMargin multiple (4pt)
+            }
+            .padding(systemMargin) // Use systemMargin
+            .background(Color(.secondarySystemGroupedBackground))
+        }
+        // Removed clipShape here, applied conditionally above and to the parent VStack in streamRow
+        // .clipShape(RoundedRectangle(cornerRadius: 12))
+        .sheet(isPresented: $isShareSheetPresented) {
+            // Use the static constant from GroupView to build the URL
+            let urlString = "\(GroupView.streamBaseURL)\(stream.publicID.base58EncodedString)"
+            if let url = URL(string: urlString) {
+                ShareSheet(
+                    activityItems: [url],
+                    isPresented: $isShareSheetPresented
+                )
             }
         }
-        
-        // MARK: - KeyStore Status Indicator (Simplified for Header)
-        
-        struct KeyStoreStatusIndicator: View {
-            @ObservedObject var peerManager: PeerDiscoveryManager
-            // Constants from InnerCircleConstants could be used here too if needed
-            
-            private var keyStoreInfo: LocalKeyStoreInfo? { peerManager.localKeyStoreInfo }
-            private var percentage: Double {
-                guard let info = keyStoreInfo, info.capacity > 0 else { return 0 }
-                return Double(info.validKeyCount) / Double(info.capacity)
+    }
+
+    private func iconForStream(_ stream: Stream) -> String {
+        // Use specific icon for InnerCircle
+        if stream.isInnerCircleStream {
+            return "network" // Or "wifi", "shared.with.you" etc.
+        }
+
+        // Fallback to hash-based icon for regular streams
+        let hashValue = stream.publicID.hashValue
+        let iconIndex = abs(hashValue) % 32
+        let iconNames = [
+            "person.fill", "figure.child", "figure.wave", "person.3.fill",
+            "star.fill", "heart.fill", "flag.fill", "book.fill",
+            "house.fill", "car.fill", "bicycle", "airplane",
+            "tram.fill", "bus.fill", "ferry.fill", "train.side.front.car",
+            "leaf.fill", "flame.fill", "drop.fill", "snowflake",
+            "cloud.fill", "sun.max.fill", "moon.fill", "sparkles",
+            "camera.fill", "phone.fill", "envelope.fill", "message.fill",
+            "bell.fill", "tag.fill", "cart.fill", "creditcard.fill",
+        ]
+        return iconNames[iconIndex]
+    }
+}
+
+// Helper for applying corner radius to specific corners
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
+    }
+}
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct PolicyRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
+struct ThoughtRow: View {
+    let thought: Thought
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(thought.nano.hexEncodedString()) // Consider showing something more user-friendly
+                    .font(.headline)
+                    .lineLimit(1) // Limit display if hex is too long
+                Spacer()
+                Text(thought.metadata.createdAt, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            private var isLowOnKeys: Bool { percentage < 0.10 } // Example threshold
-            private var hasExpiredKeys: Bool { (keyStoreInfo?.expiredKeyCount ?? 0) > 0 }
-            
-            private var indicatorColor: Color {
-                if isLowOnKeys { return InnerCircleConstants.trustRed }
-                if hasExpiredKeys { return InnerCircleConstants.trustYellow }
-                if percentage < 0.5 { return InnerCircleConstants.trustYellow }
-                return InnerCircleConstants.trustGreen
-            }
-            
-            private var iconName: String {
-                if isLowOnKeys || hasExpiredKeys { return "exclamationmark.shield.fill" }
-                return "lock.shield.fill"
-            }
-            
-            var body: some View {
-                HStack(spacing: 4) {
-                    if peerManager.isRegeneratingKeys {
-                        ProgressView().scaleEffect(0.6)
-                    } else if keyStoreInfo != nil {
-                        Image(systemName: iconName)
-                            .font(.system(size: 12)) // Smaller icon for header
-                            .foregroundColor(indicatorColor)
-                        Text(String(format: "%.0f%%", percentage * 100))
-                            .font(InnerCircleConstants.statusIndicatorFont) // Use constant
-                            .foregroundColor(indicatorColor)
-                    } else {
-                        // Loading state
-                        ProgressView().scaleEffect(0.6)
-                        Text("Loading...")
-                            .font(InnerCircleConstants.captionFont) // Use constant
-                            .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
-                    }
-                }
-                .animation(.easeInOut, value: peerManager.localKeyStoreInfo)
-                .animation(.easeInOut, value: peerManager.isRegeneratingKeys)
-                // Add accessibility later
+
+            Text(thought.metadata.createdAt.formatted())
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - KeyStore Status Indicator (Simplified for Header)
+
+struct KeyStoreStatusIndicator: View {
+    @ObservedObject var peerManager: PeerDiscoveryManager
+    // Constants from InnerCircleConstants could be used here too if needed
+
+    private var keyStoreInfo: LocalKeyStoreInfo? { peerManager.localKeyStoreInfo }
+    private var percentage: Double {
+        guard let info = keyStoreInfo, info.capacity > 0 else { return 0 }
+        return Double(info.validKeyCount) / Double(info.capacity)
+    }
+
+    private var isLowOnKeys: Bool { percentage < 0.10 } // Example threshold
+    private var hasExpiredKeys: Bool { (keyStoreInfo?.expiredKeyCount ?? 0) > 0 }
+
+    private var indicatorColor: Color {
+        if isLowOnKeys { return InnerCircleConstants.trustRed }
+        if hasExpiredKeys { return InnerCircleConstants.trustYellow }
+        if percentage < 0.5 { return InnerCircleConstants.trustYellow }
+        return InnerCircleConstants.trustGreen
+    }
+
+    private var iconName: String {
+        if isLowOnKeys || hasExpiredKeys { return "exclamationmark.shield.fill" }
+        return "lock.shield.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if peerManager.isRegeneratingKeys {
+                ProgressView().scaleEffect(0.6)
+            } else if keyStoreInfo != nil {
+                Image(systemName: iconName)
+                    .font(.system(size: 12)) // Smaller icon for header
+                    .foregroundColor(indicatorColor)
+                Text(String(format: "%.0f%%", percentage * 100))
+                    .font(InnerCircleConstants.statusIndicatorFont) // Use constant
+                    .foregroundColor(indicatorColor)
+            } else {
+                // Loading state
+                ProgressView().scaleEffect(0.6)
+                Text("Loading...")
+                    .font(InnerCircleConstants.captionFont) // Use constant
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
             }
         }
-        
-        
-        // MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
-        
-        // These should be replaced by actual implementations in PeerDiscoveryManager
-        
-        // Add a placeholder property to PeerDiscoveryManager if it doesn't exist
-        // This is just for compilation and assumes the real manager will publish this.
-        extension PeerDiscoveryManager {
-            // Placeholder - Replace with actual published property
-            // @Published var localKeyStoreInfo: LocalKeyStoreInfo? = nil // Type already updated
-            // @Published var isRegeneratingKeys: Bool = false // Already exists
-            
-            // Check if key exchange is actively in progress with a specific peer
-            func isExchangingKeys(with peer: MCPeerID) -> Bool {
-                guard let state = peerKeyExchangeStates[peer]?.state else {
-                    return false // No state tracked for this peer
-                }
-                // Return true if state is anything other than idle, completed, or failed
-                switch state {
-                case .idle, .completed, .failed:
-                    return false
-                default:
-                    return true
-                }
-            }
-            
-            // Check if key exchange is actively in progress with a specific profile
-            func isExchangingKeys(with profile: Profile) -> Bool {
-                // Find the MCPeerID associated with this profile among connected peers
-                guard let peer = findPeer(byProfileID: profile.publicID) else {
-                    // Profile not found among connected peers
-                    return false
-                }
-                // Check the state for the found peer
-                return isExchangingKeys(with: peer)
-            }
+        .animation(.easeInOut, value: peerManager.localKeyStoreInfo)
+        .animation(.easeInOut, value: peerManager.isRegeneratingKeys)
+        // Add accessibility later
+    }
+}
+
+// MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
+
+// These should be replaced by actual implementations in PeerDiscoveryManager
+
+// Add a placeholder property to PeerDiscoveryManager if it doesn't exist
+// This is just for compilation and assumes the real manager will publish this.
+extension PeerDiscoveryManager {
+    // Placeholder - Replace with actual published property
+    // @Published var localKeyStoreInfo: LocalKeyStoreInfo? = nil // Type already updated
+    // @Published var isRegeneratingKeys: Bool = false // Already exists
+
+    // Check if key exchange is actively in progress with a specific peer
+    func isExchangingKeys(with peer: MCPeerID) -> Bool {
+        guard let state = peerKeyExchangeStates[peer]?.state else {
+            return false // No state tracked for this peer
         }
+        // Return true if state is anything other than idle, completed, or failed
+        switch state {
+        case .idle, .completed, .failed:
+            return false
+        default:
+            return true
+        }
+    }
+
+    // Check if key exchange is actively in progress with a specific profile
+    func isExchangingKeys(with profile: Profile) -> Bool {
+        // Find the MCPeerID associated with this profile among connected peers
+        guard let peer = findPeer(byProfileID: profile.publicID) else {
+            // Profile not found among connected peers
+            return false
+        }
+        // Check the state for the found peer
+        return isExchangingKeys(with: peer)
     }
 }
