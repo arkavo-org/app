@@ -1312,7 +1312,9 @@ struct InnerCircleView: View {
     @State private var showStatusMessage = false
     @State private var statusMessage = ""
     @State private var refreshObserver: NSObjectProtocol? // Observer token
-
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
+    
     var body: some View {
         VStack(spacing: 0) {
             // Search and filter bar
@@ -1636,8 +1638,8 @@ struct InnerCircleMemberRow: View {
     var stream: Stream
     @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
-    // Removed unused modelContext
-    // @Environment(\.modelContext) private var modelContext
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
 
     // Computed property to get the current key exchange state for this profile (if online)
     private var keyExchangeState: KeyExchangeState? {
@@ -2088,6 +2090,8 @@ struct KeyStoreStatusView: View {
     // Use @ObservedObject to react to changes in PeerDiscoveryManager
     @ObservedObject var peerManager: PeerDiscoveryManager
     let regenerateAction: () -> Void
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
 
     // State for confirmation alert
     @State private var showRegenerateConfirm = false
@@ -2273,6 +2277,8 @@ struct GroupCardView: View {
     let stream: Stream
     let onSelect: () -> Void
     @State private var isShareSheetPresented = false
+    // Standard system margin from HIG
+    private let systemMargin: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
