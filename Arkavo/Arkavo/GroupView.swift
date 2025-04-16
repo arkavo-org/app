@@ -966,11 +966,13 @@ struct GroupView: View {
             Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
             Image(systemName: "person.2.slash").font(.largeTitle).foregroundColor(.secondary.opacity(0.5))
             Text("Not Searching").font(.callout).foregroundColor(.secondary)
-            Text("Toggle the search button to find nearby devices.").font(.caption2).foregroundColor(.secondary.opacity(0.8)).multilineTextAlignment(.center).padding(.horizontal, systemMargin) // Use systemMargin
-            Button(action: {
-                Task { await togglePeerSearch() }
-            }) { Text("Start Searching").padding(.horizontal, systemMargin).padding(.vertical, systemMargin / 2) } // Use systemMargin (16pt), systemMargin/2 (8pt)
-                .buttonStyle(.bordered).padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+            // Updated text to guide user to the main toggle button
+            Text("Tap 'Search for Nearby Devices' above to find peers.")
+                .font(.caption) // Slightly larger caption
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, systemMargin) // Use systemMargin
+            // Removed the redundant "Start Searching" button
             Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
         }
         .frame(maxWidth: .infinity)
