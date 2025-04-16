@@ -621,8 +621,8 @@ struct GroupView: View {
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.blue))
                     }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
+                    .padding(.vertical, systemMargin * 0.75) // Use systemMargin multiple (12pt)
+                    .padding(.horizontal, systemMargin) // Use systemMargin (16pt)
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(10, corners: [.topLeft, .topRight]) // Round top corners
 
@@ -2320,9 +2320,9 @@ struct GroupCardView: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.trailing, 4)
+                .padding(.trailing, systemMargin / 4) // Use systemMargin multiple (4pt)
             }
-            .padding()
+            .padding(systemMargin) // Use systemMargin
             .background(Color(.secondarySystemGroupedBackground))
             // Apply corner radius based on whether it's an InnerCircle stream (members shown below)
             .cornerRadius(10, corners: stream.isInnerCircleStream ? [.topLeft, .topRight] : .allCorners)
