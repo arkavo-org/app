@@ -765,15 +765,7 @@ struct GroupView: View {
             // Connected peers list view
             connectedPeersView // Display the list of connected peers
 
-            // KeyStore Status View
-            KeyStoreStatusView(peerManager: peerManager) {
-                Task {
-                    await peerManager.regenerateLocalKeys()
-                }
-            }
-            .padding(.horizontal, systemMargin) // Padding for KeyStore view
-            .padding(.bottom, systemMargin / 2) // Padding below KeyStore view
-
+            // Removed KeyStore Status View
         }
         // Removed animation modifiers from here, apply to specific elements if needed
         // .animation(.easeInOut(duration: 0.3), value: isPeerSearchActive)
@@ -988,10 +980,7 @@ struct GroupView: View {
             SignalPulseView().frame(width: 50, height: 50)
             Text("Scanning for Devices...").font(.callout).foregroundColor(.secondary)
             Text("Ensure other devices are also searching.").font(.caption2).foregroundColor(.secondary.opacity(0.8))
-            Button(action: { presentBrowserController() }) {
-                Text("Browse Manually").padding(.horizontal, systemMargin).padding(.vertical, systemMargin / 2) // Use systemMargin (16pt), systemMargin/2 (8pt)
-            }
-            .buttonStyle(.bordered).padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+            // Removed "Browse Manually" button
             Spacer().frame(height: systemMargin * 0.625) // Use systemMargin multiple (10pt)
         }
         .frame(maxWidth: .infinity)
