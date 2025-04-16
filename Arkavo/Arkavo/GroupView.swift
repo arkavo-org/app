@@ -2092,8 +2092,6 @@ struct KeyStoreStatusView: View {
     // Use @ObservedObject to react to changes in PeerDiscoveryManager
     @ObservedObject var peerManager: PeerDiscoveryManager
     let regenerateAction: () -> Void
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
 
     // State for confirmation alert
     @State private var showRegenerateConfirm = false
