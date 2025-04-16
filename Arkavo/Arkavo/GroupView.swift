@@ -931,7 +931,7 @@ struct GroupView: View {
 
     // Inner Circle peer discovery UI (P2P related) - Refactored
     private func innerCirclePeerDiscoveryUI() -> some View {
-        VStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+        VStack(spacing: InnerCircleConstants.systemMargin) { // Use constant for spacing within this section
             // --- NEW: Prominent Search CTA ---
             Button {
                 Task { await togglePeerSearch() }
