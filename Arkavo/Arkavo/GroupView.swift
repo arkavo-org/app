@@ -526,6 +526,8 @@ struct GroupView: View {
     @State private var isShareSheetPresented = false
     @State private var isPeerSearchActive = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    // Define systemMargin at the GroupView level
+    private let systemMargin: CGFloat = 16
 
     // Static constant for the base URL used in sharing
     static let streamBaseURL = "https://app.arkavo.com/stream/"
@@ -2094,8 +2096,7 @@ struct KeyStoreStatusView: View {
 
     // Constants
     let lowKeyThreshold = 0.10 // 10%
-    // Define systemMargin locally if not accessible from GroupView context
-    private let systemMargin: CGFloat = 16
+    // Removed local systemMargin definition, use the one from GroupView
 
     // Computed properties based on peerManager.localKeyStoreInfo (now LocalKeyStoreInfo?)
     private var keyStoreInfo: LocalKeyStoreInfo? {
