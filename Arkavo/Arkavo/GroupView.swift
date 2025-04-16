@@ -638,10 +638,10 @@ struct GroupView: View {
                     streamRow(stream: stream)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 16)
+            .padding(.horizontal, systemMargin) // Use systemMargin
+            .padding(.vertical, systemMargin) // Use systemMargin
         }
-        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width for regular size class
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
 
@@ -666,16 +666,16 @@ struct GroupView: View {
                     Text("Inner Circle Members")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .padding(.top, 8)
-                        .padding(.horizontal) // Add horizontal padding
+                        .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+                        .padding(.horizontal, systemMargin) // Use systemMargin
 
                     // Display message if no members
                     if stream.innerCircleProfiles.isEmpty {
                         Text("No members added yet.")
                             .font(.caption)
                             .foregroundColor(.gray)
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
+                            .padding(.horizontal, systemMargin) // Use systemMargin
+                            .padding(.bottom, systemMargin / 2) // Use systemMargin multiple (8pt)
                     } else {
                         // List the members (sorted by name)
                         // Use LazyVStack for potentially long lists
@@ -691,10 +691,10 @@ struct GroupView: View {
                                     // You would need to check peerManager.connectedPeerProfiles
                                     // based on profile.publicID
                                 }
-                                .padding(.horizontal) // Add horizontal padding
+                                .padding(.horizontal, systemMargin) // Use systemMargin
                             }
                         }
-                        .padding(.bottom, 8) // Add padding below the list
+                        .padding(.bottom, systemMargin / 2) // Use systemMargin multiple (8pt)
                     }
                 }
                 // Use the secondary grouped background for this section
@@ -710,7 +710,7 @@ struct GroupView: View {
 
     // Inner Circle peer discovery UI (P2P related)
     private func innerCirclePeerDiscoveryUI() -> some View {
-        VStack(spacing: 8) { // Added spacing between elements
+        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
             // Search toggle button
             HStack {
                 Button(action: {
@@ -751,14 +751,14 @@ struct GroupView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8) // Reduced vertical padding
-                    .padding(.horizontal, 16)
+                    .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
+                    .padding(.horizontal, systemMargin) // Use systemMargin (16pt)
                     // Removed background here, parent VStack has it
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal) // Padding for the button Hstack
-            .padding(.top, 8) // Padding above the button
+            .padding(.horizontal, systemMargin) // Padding for the button Hstack
+            .padding(.top, systemMargin / 2) // Padding above the button
 
             // Connected peers list view
             connectedPeersView // Display the list of connected peers
@@ -769,8 +769,8 @@ struct GroupView: View {
                     await peerManager.regenerateLocalKeys()
                 }
             }
-            .padding(.horizontal) // Padding for KeyStore view
-            .padding(.bottom, 8) // Padding below KeyStore view
+            .padding(.horizontal, systemMargin) // Padding for KeyStore view
+            .padding(.bottom, systemMargin / 2) // Padding below KeyStore view
 
         }
         // Removed animation modifiers from here, apply to specific elements if needed
@@ -807,7 +807,7 @@ struct GroupView: View {
 
     // Connected peers list view
     private var connectedPeersView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
             let peerCount = peerManager.connectedPeers.count
             let connectionStatus = peerManager.connectionStatus
 
@@ -824,8 +824,8 @@ struct GroupView: View {
                         .foregroundColor(peerCount > 0 ? .blue : .secondary)
                 }
             }
-            .padding(.top, 6)
-            .padding(.horizontal, 4)
+            .padding(.top, systemMargin * 0.375) // Use systemMargin multiple (~6pt)
+            .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
 
             // Show search status banner when active
             if case .searching = connectionStatus {
@@ -836,8 +836,8 @@ struct GroupView: View {
                     Spacer()
                     ProgressView().scaleEffect(0.7)
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 4)
+                .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
+                .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
                 .background(Color(.secondarySystemBackground).opacity(0.5))
                 .cornerRadius(6)
             }
@@ -849,15 +849,15 @@ struct GroupView: View {
                     Text(error.localizedDescription).font(.caption).foregroundColor(.red)
                     Spacer()
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 4)
+                .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
+                .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
                 .background(Color.red.opacity(0.1))
                 .cornerRadius(6)
             }
 
             // Divider if we have peers or specific states
             if peerCount > 0 || connectionStatus == .searching || connectionStatus == .connecting {
-                Divider().padding(.vertical, 4)
+                Divider().padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
             }
 
             if peerCount > 0 {
@@ -867,8 +867,8 @@ struct GroupView: View {
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 2)
+                    .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
+                    .padding(.bottom, systemMargin / 8) // Use systemMargin multiple (2pt)
 
                 // Show list of connected peers with spacing between them
                 VStack(spacing: 6) {
@@ -887,10 +887,10 @@ struct GroupView: View {
                         Text("Find More Peers")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
                 }
                 .buttonStyle(.bordered)
-                .padding(.top, 8)
+                .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
 
             } else if case .idle = connectionStatus {
                 emptyStateView() // Not searching and no peers
@@ -898,9 +898,8 @@ struct GroupView: View {
                 searchingStateView() // Searching or connecting but no peers yet
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, systemMargin) // Use systemMargin
         // Removed bottom padding to let parent control spacing
-        // .padding(.bottom, 8)
         // Removed background to let parent control background
         // .background(Color(.secondarySystemGroupedBackground))
     }
@@ -961,40 +960,40 @@ struct GroupView: View {
 
     // Empty state view when no search is active
     private func emptyStateView() -> some View {
-        VStack(spacing: 8) {
-            Spacer().frame(height: 20)
+        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
+            Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
             Image(systemName: "person.2.slash").font(.largeTitle).foregroundColor(.secondary.opacity(0.5))
             Text("Not Searching").font(.callout).foregroundColor(.secondary)
-            Text("Toggle the search button to find nearby devices.").font(.caption2).foregroundColor(.secondary.opacity(0.8)).multilineTextAlignment(.center).padding(.horizontal)
+            Text("Toggle the search button to find nearby devices.").font(.caption2).foregroundColor(.secondary.opacity(0.8)).multilineTextAlignment(.center).padding(.horizontal, systemMargin) // Use systemMargin
             Button(action: {
                 Task { await togglePeerSearch() }
-            }) { Text("Start Searching").padding(.horizontal, 16).padding(.vertical, 8) }
-                .buttonStyle(.bordered).padding(.top, 8)
-            Spacer().frame(height: 20)
+            }) { Text("Start Searching").padding(.horizontal, systemMargin).padding(.vertical, systemMargin / 2) } // Use systemMargin (16pt), systemMargin/2 (8pt)
+                .buttonStyle(.bordered).padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+            Spacer().frame(height: systemMargin * 1.25) // Use systemMargin multiple (20pt)
         }
         .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground).opacity(0.3))
         .cornerRadius(8)
-        .padding(.top, 8)
+        .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
     }
 
     // Searching state view when actively looking for peers
     private func searchingStateView() -> some View {
-        VStack(spacing: 8) {
-            Spacer().frame(height: 10)
+        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
+            Spacer().frame(height: systemMargin * 0.625) // Use systemMargin multiple (10pt)
             SignalPulseView().frame(width: 50, height: 50)
             Text("Scanning for Devices...").font(.callout).foregroundColor(.secondary)
             Text("Ensure other devices are also searching.").font(.caption2).foregroundColor(.secondary.opacity(0.8))
             Button(action: { presentBrowserController() }) {
-                Text("Browse Manually").padding(.horizontal, 16).padding(.vertical, 8)
+                Text("Browse Manually").padding(.horizontal, systemMargin).padding(.vertical, systemMargin / 2) // Use systemMargin (16pt), systemMargin/2 (8pt)
             }
-            .buttonStyle(.bordered).padding(.top, 8)
-            Spacer().frame(height: 10)
+            .buttonStyle(.bordered).padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
+            Spacer().frame(height: systemMargin * 0.625) // Use systemMargin multiple (10pt)
         }
         .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground).opacity(0.3))
         .cornerRadius(8)
-        .padding(.top, 8)
+        .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
     }
 
     // Present the browser controller manually
@@ -1120,11 +1119,11 @@ struct GroupView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, systemMargin) // Use systemMargin
+        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(8)
-        .padding(.horizontal, 4) // Add horizontal padding for spacing between rows
+        .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt) for spacing between rows
     }
 
     // --- END MODIFIED peerRow ---
@@ -1478,8 +1477,8 @@ struct InnerCircleView: View {
             .labelsHidden()
             .scaleEffect(0.8)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, systemMargin) // Use systemMargin
+        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
         .background(Color(.secondarySystemBackground))
     }
 
@@ -1505,8 +1504,8 @@ struct InnerCircleView: View {
                     .font(.caption)
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, systemMargin) // Use systemMargin
+        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
     }
 
     private var membersScrollView: some View {
@@ -1525,8 +1524,8 @@ struct InnerCircleView: View {
                             stream: stream,
                             peerManager: peerManager // Pass peerManager
                         )
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, systemMargin) // Use systemMargin
+                        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
                         .environmentObject(sharedState)
                     }
                 }
@@ -1544,8 +1543,8 @@ struct InnerCircleView: View {
                             stream: stream,
                             peerManager: peerManager // Pass peerManager
                         )
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, systemMargin) // Use systemMargin
+                        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
                         .environmentObject(sharedState)
                     }
                 }
@@ -1555,7 +1554,7 @@ struct InnerCircleView: View {
                     emptyStateView
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
         }
     }
 
@@ -1573,8 +1572,8 @@ struct InnerCircleView: View {
 
             Spacer()
         }
-        .padding(.horizontal)
-        .padding(.vertical, 4)
+        .padding(.horizontal, systemMargin) // Use systemMargin
+        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
         .background(Color(.systemGroupedBackground))
     }
 
@@ -1595,10 +1594,10 @@ struct InnerCircleView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                .padding(.horizontal, systemMargin) // Use systemMargin
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, systemMargin * 2.5) // Use systemMargin multiple (40pt)
     }
 
     // Status message overlay
@@ -1608,10 +1607,10 @@ struct InnerCircleView: View {
             VStack {
                 Text(statusMessage)
                     .foregroundColor(.white)
-                    .padding()
+                    .padding(systemMargin) // Use systemMargin
                     .background(Color.green.opacity(0.8))
                     .cornerRadius(10)
-                    .padding()
+                    .padding(systemMargin) // Use systemMargin
                     .onAppear {
                         // Auto-dismiss after a few seconds
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -1711,7 +1710,7 @@ struct InnerCircleMemberRow: View {
                 Image(systemName: "message")
                     .font(.subheadline)
                     .foregroundColor(isOnline ? .blue : .gray)
-                    .padding(8)
+                    .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
                     .background(Circle().fill(isOnline ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1)))
             }
             .buttonStyle(.plain)
@@ -1729,7 +1728,7 @@ struct InnerCircleMemberRow: View {
                 Image(systemName: "person.fill.xmark")
                     .font(.subheadline)
                     .foregroundColor(.red)
-                    .padding(8)
+                    .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
                     .background(Circle().fill(Color.red.opacity(0.1)))
             }
             .buttonStyle(.plain)
@@ -1742,8 +1741,8 @@ struct InnerCircleMemberRow: View {
                 Text("Are you sure you want to remove \(profile.name) from your InnerCircle? They will no longer be able to communicate directly with you.")
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
+        .padding(.horizontal, systemMargin * 0.75) // Use systemMargin multiple (12pt)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(10)
     }
@@ -1955,7 +1954,7 @@ struct InnerCircleMemberRow: View {
                 }
             }
             .font(.subheadline) // Match message icon size
-            .padding(8)
+            .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
             // Use clear background when disabled or completed, otherwise use tinted background
             .background(Circle().fill((isDisabled && !isFailed) ? Color.clear : color.opacity(0.1)))
         }
@@ -2094,9 +2093,9 @@ struct KeyStoreStatusView: View {
     @State private var timer = Timer.publish(every: 300, on: .main, in: .common).autoconnect() // Refresh every 5 minutes (300s)
 
     // Constants
-    // Removed hardcoded capacity, will use value from LocalKeyStoreInfo
-    // let keyCapacity = 8192
     let lowKeyThreshold = 0.10 // 10%
+    // Define systemMargin locally if not accessible from GroupView context
+    private let systemMargin: CGFloat = 16
 
     // Computed properties based on peerManager.localKeyStoreInfo (now LocalKeyStoreInfo?)
     private var keyStoreInfo: LocalKeyStoreInfo? {
@@ -2163,7 +2162,7 @@ struct KeyStoreStatusView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
             HStack {
                 Text("Local KeyStore Status")
                     .font(.caption)
@@ -2204,7 +2203,7 @@ struct KeyStoreStatusView: View {
                             .font(.caption2)
                             .foregroundColor(.orange)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, systemMargin / 8) // Use systemMargin multiple (2pt)
                 }
 
                 // Low Key Warning (if applicable)
@@ -2216,7 +2215,7 @@ struct KeyStoreStatusView: View {
                             .font(.caption2)
                             .foregroundColor(.red)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, systemMargin / 8) // Use systemMargin multiple (2pt)
                 }
 
                 // Create/Regenerate Button
@@ -2240,7 +2239,7 @@ struct KeyStoreStatusView: View {
                 .buttonStyle(.bordered)
                 .tint(totalKeysInStore > 0 ? .orange : .blue) // Use totalKeysInStore
                 .disabled(peerManager.isRegeneratingKeys)
-                .padding(.top, 4)
+                .padding(.top, systemMargin / 4) // Use systemMargin multiple (4pt)
                 .alert("Confirm Regeneration", isPresented: $showRegenerateConfirm) {
                     Button("Cancel", role: .cancel) {}
                     Button("Regenerate", role: .destructive) {
@@ -2256,10 +2255,10 @@ struct KeyStoreStatusView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 ProgressView() // Show a loading indicator
-                    .padding(.top, 4)
+                    .padding(.top, systemMargin / 4) // Use systemMargin multiple (4pt)
             }
         }
-        .padding(.vertical, 8) // Add vertical padding
+        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
         .onDisappear {
             // Stop the timer when the view disappears
             timer.upstream.connect().cancel()
