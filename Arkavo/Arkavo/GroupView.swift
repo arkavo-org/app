@@ -509,6 +509,73 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     }
 }
 
+// MARK: - InnerCircle UI Constants and Enums
+
+// Constants for consistent styling within InnerCircle related views
+struct InnerCircleConstants {
+    static let systemMargin: CGFloat = 16
+    static let halfMargin: CGFloat = systemMargin / 2
+    static let doubleMargin: CGFloat = systemMargin * 2
+
+    static let cornerRadius: CGFloat = 12
+    static let smallCornerRadius: CGFloat = 8
+
+    static let minimumTouchTarget: CGFloat = 44
+
+    // Typography
+    static let headerFont: Font = .system(size: 20, weight: .bold)
+    static let primaryTextFont: Font = .system(size: 17, weight: .regular)
+    static let secondaryTextFont: Font = .system(size: 15, weight: .regular)
+    static let statusIndicatorFont: Font = .system(size: 13, weight: .semibold)
+    static let captionFont: Font = .system(size: 12, weight: .regular) // Example caption size
+
+    // Colors (Examples based on guide)
+    static let primaryActionColor: Color = .blue // #007AFF
+    static let trustGreen: Color = Color(red: 52/255, green: 199/255, blue: 89/255) // #34C759
+    static let trustYellow: Color = Color(red: 255/255, green: 204/255, blue: 0/255) // #FFCC00
+    static let trustRed: Color = Color(red: 255/255, green: 59/255, blue: 48/255) // #FF3B30
+    static let backgroundColor: Color = .black // #000000 (Assuming dark mode focus)
+    static let cardBackgroundColor: Color = Color(.systemGray6) // #1C1C1E (Example dark mode card bg)
+    static let primaryTextColor: Color = .white
+    static let secondaryTextColor: Color = .gray
+}
+
+// Example Trust Status Enum (Needs actual implementation based on data model)
+enum TrustStatus {
+    case unknown, pending, verified, trusted, compromised
+
+    var description: String {
+        switch self {
+        case .unknown: "Unknown"
+        case .pending: "Verification Pending"
+        case .verified: "Verified"
+        case .trusted: "Trusted"
+        case .compromised: "Compromised"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .unknown: InnerCircleConstants.secondaryTextColor
+        case .pending: InnerCircleConstants.trustYellow
+        case .verified: InnerCircleConstants.primaryActionColor
+        case .trusted: InnerCircleConstants.trustGreen
+        case .compromised: InnerCircleConstants.trustRed
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .unknown: "questionmark.circle"
+        case .pending: "hourglass"
+        case .verified: "checkmark.seal.fill"
+        case .trusted: "lock.shield.fill"
+        case .compromised: "exclamationmark.shield.fill"
+        }
+    }
+}
+
+
 // MARK: - Extensions
 
 // Add notification name for refreshing InnerCircle members
@@ -597,54 +664,80 @@ struct GroupView: View {
         .onDisappear { sharedState.isAwaiting = false }
     }
 
-    // Scrollable stream list
+    // Scrollable stream list - Refactored Structure
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
-                // --- Peers Section (P2P Connections) ---
-                VStack(spacing: 0) {
-                    // Header for the P2P section
-                    HStack {
-                        Image(systemName: "person.2.fill")
-                            .foregroundColor(.blue)
+            LazyVStack(spacing: InnerCircleConstants.systemMargin) { // Use constant
 
-                        Text("Peers")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
+                // --- InnerCircle Section (P2P) ---
+                innerCircleSection()
+                    .padding(.horizontal, InnerCircleConstants.systemMargin) // Add horizontal padding to section
 
-                        Spacer()
-
-                        // Member count badge
-                        let onlineCount = peerManager.connectedPeers.count
-                        Text("\(onlineCount)")
-                            .font(.caption2.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.blue))
+                // --- Regular Streams Section ---
+                // Only show if there are non-InnerCircle streams
+                let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
+                if !regularStreams.isEmpty {
+                    Section {
+                        ForEach(regularStreams) { stream in
+                            streamRow(stream: stream) // Keep existing streamRow for non-InnerCircle
+                        }
+                    } header: {
+                        Text("Other Streams") // Example header for separation
+                            .font(InnerCircleConstants.headerFont)
+                            .foregroundColor(InnerCircleConstants.primaryTextColor)
+                            .padding(.top, InnerCircleConstants.systemMargin)
+                            .padding(.horizontal, InnerCircleConstants.systemMargin)
                     }
-                    .padding(.vertical, systemMargin * 0.75) // Use systemMargin multiple (12pt)
-                    .padding(.horizontal, systemMargin) // Use systemMargin (16pt)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10, corners: [.topLeft, .topRight]) // Round top corners
-
-                    // Peer discovery UI and connected peers list
-                    innerCirclePeerDiscoveryUI()
-                        .background(Color(.secondarySystemGroupedBackground)) // Background for this section
-                        .cornerRadius(10, corners: [.bottomLeft, .bottomRight]) // Round bottom corners
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10)) // Clip the whole Vstack
-
-                // --- Streams Section ---
-                ForEach(viewModel.streams) { stream in
-                    streamRow(stream: stream)
                 }
             }
-            .padding(.horizontal, systemMargin) // Use systemMargin
-            .padding(.vertical, systemMargin) // Use systemMargin
+            .padding(.vertical, InnerCircleConstants.systemMargin) // Use constant
         }
-        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width for regular size class
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
+        .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
+    }
+
+    // --- NEW: InnerCircle Section View ---
+    private func innerCircleSection() -> some View {
+        // Find the InnerCircle stream (assuming one exists)
+        let innerCircleStream = viewModel.streams.first { $0.isInnerCircleStream }
+
+        return VStack(spacing: 0) {
+            // 1. Status Header (Connection + KeyStore)
+            innerCircleStatusHeader()
+                .background(InnerCircleConstants.cardBackgroundColor) // Use constant
+                .cornerRadius(InnerCircleConstants.cornerRadius, corners: [.topLeft, .topRight]) // Use constant
+
+            // 2. Peer Discovery Controls & List
+            innerCirclePeerDiscoveryUI()
+                .background(InnerCircleConstants.cardBackgroundColor) // Use constant
+                .cornerRadius(InnerCircleConstants.cornerRadius, corners: [.bottomLeft, .bottomRight]) // Use constant
+
+            // 3. InnerCircle Member List (if stream exists)
+            // This part is now handled by InnerCircleView, which should be presented differently,
+            // perhaps as a navigation destination or separate tab.
+            // For now, we remove the direct member listing from here.
+            // if let stream = innerCircleStream {
+            //     InnerCircleView(stream: stream, peerManager: peerManager)
+            //         .environmentObject(sharedState)
+            //         .padding(.top, InnerCircleConstants.halfMargin) // Add space if needed
+            // }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: InnerCircleConstants.cornerRadius)) // Clip the whole Vstack
+    }
+
+    // --- NEW: InnerCircle Status Header View ---
+    private func innerCircleStatusHeader() -> some View {
+        HStack {
+            // Connection Status Indicator (from existing helper)
+            connectionStatusIndicator(status: peerManager.connectionStatus)
+
+            Spacer()
+
+            // Local KeyStore Status Indicator (Simplified)
+            KeyStoreStatusIndicator(peerManager: peerManager)
+
+        }
+        .padding(InnerCircleConstants.systemMargin) // Use constant
     }
 
     // Individual stream row with InnerCircle UI if applicable
@@ -710,60 +803,39 @@ struct GroupView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    // Inner Circle peer discovery UI (P2P related)
+    // Inner Circle peer discovery UI (P2P related) - Refactored
     private func innerCirclePeerDiscoveryUI() -> some View {
-        VStack(spacing: systemMargin / 2) { // Use systemMargin multiple (8pt)
-            // Search toggle button
-            HStack {
-                Button(action: {
-                    Task {
-                        await togglePeerSearch()
+        VStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+
+            // --- NEW: Prominent Search CTA ---
+            Button {
+                Task { await togglePeerSearch() }
+            } label: {
+                HStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+                    Image(systemName: isPeerSearchActive ? "stop.circle.fill" : "antenna.radiowaves.left.and.right.circle.fill")
+                        .font(.system(size: 22)) // Use guide size
+                    Text(isPeerSearchActive ? "Stop Discovery" : "Discover Peers")
+                        .font(InnerCircleConstants.primaryTextFont) // Use constant font
+                        .fontWeight(.semibold) // Make text slightly bolder
+                    if isPeerSearchActive {
+                        Spacer() // Push pulse to right only when active
+                        ProgressView().scaleEffect(0.8) // Simple pulse/activity indicator
+                            .tint(InnerCircleConstants.primaryActionColor)
                     }
-                }) {
-                    HStack {
-                        ZStack {
-                            Circle()
-                                .fill(isPeerSearchActive ? Color.red.opacity(0.15) : Color.blue.opacity(0.15))
-                                .frame(width: 36, height: 36)
-
-                            Image(systemName: isPeerSearchActive ? "antenna.radiowaves.left.and.right.slash" : "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isPeerSearchActive ? .red : .blue)
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(isPeerSearchActive ? "Stop Searching" : "Search for Nearby Devices")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(isPeerSearchActive ? .red : .blue)
-
-                            Text(isPeerSearchActive ? "Broadcasting your presence" : "Find other devices nearby")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if isPeerSearchActive {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 8, height: 8)
-                                .opacity(isPeerSearchActive ? 1.0 : 0.0)
-                                .scaleEffect(isPeerSearchActive ? 1.0 : 0.5)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-                    .padding(.horizontal, systemMargin) // Use systemMargin (16pt)
-                    // Removed background here, parent VStack has it
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.vertical, InnerCircleConstants.halfMargin) // Use constant
+                .padding(.horizontal, InnerCircleConstants.systemMargin) // Use constant
+                .frame(maxWidth: .infinity)
+                .background(isPeerSearchActive ? InnerCircleConstants.trustRed.opacity(0.15) : InnerCircleConstants.primaryActionColor.opacity(0.15)) // Use constant colors
+                .foregroundColor(isPeerSearchActive ? InnerCircleConstants.trustRed : InnerCircleConstants.primaryActionColor) // Use constant colors
+                .cornerRadius(InnerCircleConstants.cornerRadius) // Use constant
             }
-            .padding(.horizontal, systemMargin) // Padding for the button Hstack
-            .padding(.top, systemMargin / 2) // Padding above the button
+            .buttonStyle(.plain) // Remove default button chrome
+            .padding(.horizontal, InnerCircleConstants.systemMargin) // Padding for the button
+            .padding(.vertical, InnerCircleConstants.halfMargin) // Padding around button
 
-            // Connected peers list view
-            connectedPeersView // Display the list of connected peers
+            // Connected peers list view (or available devices)
+            connectedPeersView // Display the list of connected/available peers
 
             // Removed KeyStore Status View
         }
@@ -864,13 +936,20 @@ struct GroupView: View {
                     .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt)
                     .padding(.bottom, systemMargin / 8) // Use systemMargin multiple (2pt)
 
-                // Show list of connected peers with spacing between them
-                VStack(spacing: 6) {
+                // Show list of connected peers using the refactored peerRow
+                LazyVStack(spacing: InnerCircleConstants.halfMargin) { // Use LazyVStack and constant
                     // Use peerManager.connectedPeerProfiles which holds the Profile data
                     ForEach(peerManager.connectedPeers, id: \.self) { peer in
                         // Pass the peer and the profile (if available) to peerRow
-                        // Also pass the peerManager to handle actions like key exchange
+                        // Also pass the peerManager to handle actions
                         peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer], peerManager: peerManager)
+                            // Add haptic feedback example on tap (if making row tappable)
+                            // .onTapGesture {
+                            //     // Trigger haptic feedback
+                            //     let haptic = UIImpactFeedbackGenerator(style: .light)
+                            //     haptic.impactOccurred()
+                            //     // Handle tap action (e.g., navigate to details)
+                            // }
                     }
                 }
 
@@ -920,12 +999,13 @@ struct GroupView: View {
                     Circle().fill(Color.red)
                 }
             }
-            .frame(width: 8, height: 8)
+            .frame(width: 10, height: 10) // Slightly larger indicator
 
             Text(statusText(for: status))
-                .font(.caption)
+                .font(InnerCircleConstants.statusIndicatorFont) // Use constant
                 .foregroundColor(statusColor(for: status))
         }
+        .padding(.vertical, InnerCircleConstants.halfMargin / 2) // Add small vertical padding
         .onAppear { pulsate = true } // Start pulsation on appear
         .onDisappear { pulsate = false } // Stop pulsation on disappear
     }
@@ -1119,7 +1199,108 @@ struct GroupView: View {
         .padding(.horizontal, systemMargin / 4) // Use systemMargin multiple (4pt) for spacing between rows
     }
 
-    // --- END MODIFIED peerRow ---
+    // --- REFACTORED peerRow towards PeerCardView ---
+    private func peerRow(peer: MCPeerID, profile: Profile?, peerManager: PeerDiscoveryManager) -> some View {
+        // Determine trust status (Placeholder - needs real logic)
+        let trustStatus: TrustStatus = profile != nil ? .verified : .pending // Example logic
+        // KeyStore Percentage - Placeholder: This needs data about the *peer's* keystore or local status in context
+        let keyStorePercentage: Double = 0.85 // Placeholder value
+
+        return HStack(spacing: InnerCircleConstants.systemMargin) { // Use constant
+            // Avatar with trust indicator
+            ZStack(alignment: .bottomTrailing) {
+                // Use PeerProfileView's avatar logic or similar
+                PeerProfileView.avatarView(profile: profile, peerId: peer) // Pass peerId for fallback color
+                    .frame(width: 50, height: 50)
+
+                // Trust indicator badge
+                Circle()
+                    .fill(trustStatus.color)
+                    .frame(width: 18, height: 18)
+                    .overlay(
+                        Image(systemName: trustStatus.icon)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white) // Ensure contrast
+                    )
+                    .accessibilityLabel(Text("Trust status: \(trustStatus.description)"))
+            }
+
+            // Peer Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile?.name ?? peer.displayName)
+                    .font(InnerCircleConstants.primaryTextFont) // Use constant
+                    .fontWeight(.semibold)
+                    .foregroundColor(InnerCircleConstants.primaryTextColor) // Use constant
+
+                Text(trustStatus.description)
+                    .font(InnerCircleConstants.statusIndicatorFont) // Use constant
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+
+                // Connection Time (if available and connected)
+                if let time = peerManager.peerConnectionTimes[peer] {
+                     Text("Connected \(connectionTimeString(time))")
+                         .font(InnerCircleConstants.captionFont) // Use constant
+                         .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+                 } else if profile == nil {
+                     Text("Connecting...") // Show connecting if profile not loaded
+                         .font(InnerCircleConstants.captionFont)
+                         .foregroundColor(InnerCircleConstants.secondaryTextColor)
+                 }
+
+                // Key status indicator (Placeholder - Needs real data)
+                // if trustStatus == .trusted {
+                //     KeyStoreIndicator(percentage: keyStorePercentage) // Needs data source
+                // }
+            }
+
+            Spacer()
+
+            // Action Buttons (Example - refine based on actual state logic)
+            HStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+                // Example: Key Renewal Button (Placeholder Logic)
+                if trustStatus == .trusted { // Only show for trusted peers
+                    Button {
+                        // TODO: Implement Key Renewal Initiation
+                        print("Initiate Key Renewal with \(peer.displayName)")
+                        // Example: Show peer selection sheet or confirmation
+                    } label: {
+                        Image(systemName: "key.fill") // Icon for renewal
+                            .font(.system(size: 18, weight: .semibold)) // Use guide size
+                            .foregroundColor(keyStorePercentage < 0.1 ? InnerCircleConstants.trustYellow : InnerCircleConstants.secondaryTextColor) // Highlight if low
+                            .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget) // Ensure touch target
+                    }
+                    .accessibilityLabel(Text("Renew keys with \(profile?.name ?? peer.displayName)"))
+                    .disabled(keyStorePercentage >= 0.1) // Example disable logic
+                }
+
+                // Example: Connect/View Details Button
+                Button {
+                    // TODO: Implement Connect or View Details action
+                    if profile == nil {
+                        print("Attempt connection to \(peer.displayName)")
+                        // peerManager.invitePeer(peer) // Example action
+                    } else {
+                        print("View details for \(profile!.name)")
+                        // Navigate to detail view or show modal
+                    }
+                } label: {
+                    Image(systemName: profile == nil ? "link.badge.plus" : "info.circle") // Different icons based on state
+                        .font(.system(size: 18, weight: .semibold)) // Use guide size
+                        .foregroundColor(InnerCircleConstants.primaryActionColor) // Use constant
+                        .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget) // Ensure touch target
+                }
+                .accessibilityLabel(Text(profile == nil ? "Connect with \(peer.displayName)" : "View details for \(profile!.name)"))
+            }
+        }
+        .padding(InnerCircleConstants.systemMargin) // Use constant
+        .background(InnerCircleConstants.cardBackgroundColor) // Use constant
+        .cornerRadius(InnerCircleConstants.cornerRadius) // Use constant
+        .contentShape(Rectangle()) // Make entire card tappable if needed for navigation
+        .padding(.horizontal, InnerCircleConstants.halfMargin) // Spacing between cards
+    }
+
+    // --- END REFACTORED peerRow ---
+
 
     // --- START: Implemented/Modified Methods ---
 
@@ -2033,10 +2214,12 @@ struct PeerProfileView: View {
         }
     }
 
-    // Generates a simple avatar based on the profile name
-    private var avatarView: some View {
-        let initials = profile.name.prefix(2).uppercased()
-        let color = avatarColor(for: profile.publicID) // Use publicID for consistent color
+    // Static avatar view generator for use in PeerRow and potentially elsewhere
+    static func avatarView(profile: Profile?, peerId: MCPeerID? = nil) -> some View {
+        let name = profile?.name ?? peerId?.displayName ?? "?"
+        let idData = profile?.publicID ?? Data(peerId?.displayName.utf8 ?? Data()) // Use name for color if no profile ID
+        let initials = name.prefix(2).uppercased()
+        let color = avatarColor(for: idData) // Use publicID or name hash for consistent color
 
         return ZStack {
             Circle()
@@ -2047,8 +2230,8 @@ struct PeerProfileView: View {
         }
     }
 
-    // Generates a consistent color based on profile data (e.g., publicID)
-    private func avatarColor(for data: Data) -> Color {
+    // Static color generator
+    static func avatarColor(for data: Data) -> Color {
         // Simple hash-based color generation
         var hash = 0
         for byte in data {
@@ -2425,6 +2608,58 @@ struct ThoughtRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
+
+// MARK: - KeyStore Status Indicator (Simplified for Header)
+
+struct KeyStoreStatusIndicator: View {
+    @ObservedObject var peerManager: PeerDiscoveryManager
+    // Constants from InnerCircleConstants could be used here too if needed
+
+    private var keyStoreInfo: LocalKeyStoreInfo? { peerManager.localKeyStoreInfo }
+    private var percentage: Double {
+        guard let info = keyStoreInfo, info.capacity > 0 else { return 0 }
+        return Double(info.validKeyCount) / Double(info.capacity)
+    }
+    private var isLowOnKeys: Bool { percentage < 0.10 } // Example threshold
+    private var hasExpiredKeys: Bool { (keyStoreInfo?.expiredKeyCount ?? 0) > 0 }
+
+    private var indicatorColor: Color {
+        if isLowOnKeys { return InnerCircleConstants.trustRed }
+        if hasExpiredKeys { return InnerCircleConstants.trustYellow }
+        if percentage < 0.5 { return InnerCircleConstants.trustYellow }
+        return InnerCircleConstants.trustGreen
+    }
+
+    private var iconName: String {
+        if isLowOnKeys || hasExpiredKeys { return "exclamationmark.shield.fill" }
+        return "lock.shield.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if peerManager.isRegeneratingKeys {
+                ProgressView().scaleEffect(0.6)
+            } else if keyStoreInfo != nil {
+                Image(systemName: iconName)
+                    .font(.system(size: 12)) // Smaller icon for header
+                    .foregroundColor(indicatorColor)
+                Text(String(format: "%.0f%%", percentage * 100))
+                    .font(InnerCircleConstants.statusIndicatorFont) // Use constant
+                    .foregroundColor(indicatorColor)
+            } else {
+                // Loading state
+                ProgressView().scaleEffect(0.6)
+                Text("Loading...")
+                    .font(InnerCircleConstants.captionFont) // Use constant
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+            }
+        }
+        .animation(.easeInOut, value: peerManager.localKeyStoreInfo)
+        .animation(.easeInOut, value: peerManager.isRegeneratingKeys)
+        // Add accessibility later
+    }
+}
+
 
 // MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
 
