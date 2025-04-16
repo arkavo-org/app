@@ -703,31 +703,153 @@ struct GroupView: View {
         .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
     }
 
-    // --- NEW: InnerCircle Section View ---
-    private func innerCircleSection() -> some View {
-        // Find the InnerCircle stream (assuming one exists)
-        let innerCircleStream = viewModel.streams.first { $0.isInnerCircleStream }
 
-        return VStack(spacing: 0) {
-            // 1. Status Header (Connection + KeyStore)
-            innerCircleStatusHeader()
-                .background(InnerCircleConstants.cardBackgroundColor) // Use constant
+    // --- NEW: 1. Connection Status & KeyStore Section ---
+    private func connectionAndKeyStoreSection() -> some View {
+        VStack(spacing: InnerCircleConstants.halfMargin) {
+            // Header
+            HStack {
+                Text("Status")
+                    .font(InnerCircleConstants.headerFont)
+                    .foregroundColor(InnerCircleConstants.primaryTextColor)
+                Spacer()
+            }
 
-            // 2. Peer Discovery Controls & List
-            innerCirclePeerDiscoveryUI()
-                .background(InnerCircleConstants.cardBackgroundColor) // Use constant
-
-            // 3. InnerCircle Member List (if stream exists)
-            // This part is now handled by InnerCircleView, which should be presented differently,
-            // perhaps as a navigation destination or separate tab.
-            // For now, we remove the direct member listing from here.
-            // if let stream = innerCircleStream {
-            //     InnerCircleView(stream: stream, peerManager: peerManager)
-            //         .environmentObject(sharedState)
-            //         .padding(.top, InnerCircleConstants.halfMargin) // Add space if needed
-            // }
+            // Card containing status indicators
+            VStack(spacing: InnerCircleConstants.halfMargin) {
+                innerCircleStatusHeader() // Connection Status
+                Divider()
+                keyStoreStatusRow() // KeyStore Status & Renewal
+            }
+            .padding(InnerCircleConstants.systemMargin)
+            .background(InnerCircleConstants.cardBackgroundColor)
+            .cornerRadius(InnerCircleConstants.cornerRadius)
         }
-        .clipShape(RoundedRectangle(cornerRadius: InnerCircleConstants.cornerRadius)) // Clip the whole Vstack
+    }
+
+    // --- NEW: 2. InnerCircle Members Section ---
+    private func innerCircleMembersSection() -> some View {
+        // Find the InnerCircle stream
+        guard let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) else {
+            // Return an empty view or placeholder if the stream doesn't exist
+            return AnyView(EmptyView())
+        }
+
+        // Use the existing InnerCircleView, but embed it here
+        // Note: This might need further refinement based on how navigation/detail views are handled
+        return AnyView(
+            VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
+                HStack {
+                    Text("InnerCircle Members")
+                        .font(InnerCircleConstants.headerFont)
+                        .foregroundColor(InnerCircleConstants.primaryTextColor)
+                    Spacer()
+                    // Optional: Add count badge or refresh button here
+                }
+                // Embed the existing view that lists members
+                InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
+                    .environmentObject(sharedState)
+                    // Apply background and corner radius if needed, or let InnerCircleView handle it
+                    .background(InnerCircleConstants.cardBackgroundColor)
+                    .cornerRadius(InnerCircleConstants.cornerRadius)
+            }
+        )
+    }
+
+    // --- NEW: 3. Peer Discovery Tools Section ---
+    private func peerDiscoverySection() -> some View {
+        VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
+            HStack {
+                Text("Discover & Connect")
+                    .font(InnerCircleConstants.headerFont)
+                    .foregroundColor(InnerCircleConstants.primaryTextColor)
+                Spacer()
+            }
+            // Contains the Discover button and the list of discovered/connecting peers
+            innerCirclePeerDiscoveryUI()
+                .background(InnerCircleConstants.cardBackgroundColor)
+                .cornerRadius(InnerCircleConstants.cornerRadius)
+        }
+    }
+
+
+    // --- OLD: InnerCircle Section View (Combined Status/Discovery) - To be removed ---
+    // private func innerCircleSection() -> some View { ... }
+
+
+    // --- MODIFIED: InnerCircle Status Header View (Connection Only) ---
+    private func innerCircleStatusHeader() -> some View {
+        // Updated based on critique
+        HStack {
+            Label {
+                Text("Connection Status")
+                    .font(InnerCircleConstants.secondaryTextFont) // Use constant
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
+            } icon: {
+                // Use connectionStatusIndicator logic for color/pulsing
+                connectionStatusIndicatorIcon(status: peerManager.connectionStatus)
+            }
+            Spacer()
+            Text(statusText(for: peerManager.connectionStatus)) // Keep text label
+                .font(InnerCircleConstants.statusIndicatorFont) // Use constant
+                .foregroundColor(statusColor(for: peerManager.connectionStatus)) // Keep color coding
+        }
+        // Removed KeyStore indicator - moved to its own row
+    }
+
+    // --- NEW: Helper for Status Indicator Icon ---
+    private func connectionStatusIndicatorIcon(status: ConnectionStatus) -> some View {
+        let color = statusColor(for: status)
+        let isActive = status == .searching || status == .connecting || status == .connected
+
+        return Group {
+            if status == .searching {
+                Circle()
+                    .fill(color)
+                    .opacity(0.8)
+                    .scaleEffect(pulsate ? 1.2 : 0.8) // Add pulsation
+                    .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulsate)
+            } else {
+                Circle().fill(color)
+            }
+        }
+        .frame(width: 10, height: 10) // Consistent size
+    }
+
+
+    // --- NEW: KeyStore Status Row ---
+    private func keyStoreStatusRow() -> some View {
+        HStack {
+            Label {
+                Text("Local KeyStore")
+                    .font(InnerCircleConstants.secondaryTextFont)
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor)
+            } icon: {
+                Image(systemName: "key.fill") // Example icon
+                    .foregroundColor(InnerCircleConstants.secondaryTextColor)
+            }
+
+            Spacer()
+
+            // Re-integrate the simplified indicator
+            KeyStoreStatusIndicator(peerManager: peerManager)
+
+            // Placeholder Renew Button (Logic needs implementation)
+            // Only show if keys exist and potentially low
+            if let keyInfo = peerManager.localKeyStoreInfo, keyInfo.validKeyCount > 0 {
+                let isLow = (Double(keyInfo.validKeyCount) / Double(keyInfo.capacity)) < 0.10
+                Button("Renew Keys") {
+                    // TODO: Implement Key Renewal Initiation Flow
+                    print("Initiate Key Renewal Flow...")
+                    // Example: Show peer selection sheet
+                }
+                .font(InnerCircleConstants.statusIndicatorFont)
+                .foregroundColor(isLow ? InnerCircleConstants.trustYellow : InnerCircleConstants.primaryActionColor)
+                .disabled(!isLow) // Example: Enable only when low
+                .padding(.leading, InnerCircleConstants.halfMargin)
+                .accessibilityLabel("Renew one-time keys")
+            }
+        }
     }
 
     // --- NEW: InnerCircle Status Header View ---
@@ -834,11 +956,10 @@ struct GroupView: View {
                 .cornerRadius(InnerCircleConstants.cornerRadius) // Use constant
             }
             .buttonStyle(.plain) // Remove default button chrome
-            .padding(.horizontal, InnerCircleConstants.systemMargin) // Padding for the button
-            .padding(.vertical, InnerCircleConstants.halfMargin) // Padding around button
+            // Removed vertical padding here, handled by VStack spacing
 
-            // Connected peers list view (or available devices)
-            connectedPeersView // Display the list of connected/available peers
+            // Discovered peers list view (or empty state)
+            discoveredPeersView() // Renamed for clarity
 
             // Removed KeyStore Status View
         }
