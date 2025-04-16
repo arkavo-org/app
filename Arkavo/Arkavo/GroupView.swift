@@ -149,12 +149,12 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             forName: .keyStoreSharedAndSaved,
             object: nil,
             queue: .main // Ensure handler runs on main thread
-        ) { [weak self] notification in
+        ) { notification in
             guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
                 print("❌ KeyStoreShare: Received .keyStoreSharedAndSaved notification without profilePublicID.")
                 return
             }
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 // Optionally handle this notification, e.g., update UI to show peer has KeyStore
                 print("GroupViewModel: Handling .keyStoreSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
                 // Example: Refresh peer list or specific peer row UI
