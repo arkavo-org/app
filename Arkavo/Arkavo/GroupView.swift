@@ -1314,8 +1314,7 @@ struct InnerCircleView: View {
     @State private var showStatusMessage = false
     @State private var statusMessage = ""
     @State private var refreshObserver: NSObjectProtocol? // Observer token
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
+    // systemMargin is defined in the parent GroupView
     
     var body: some View {
         VStack(spacing: 0) {
@@ -1640,8 +1639,7 @@ struct InnerCircleMemberRow: View {
     var stream: Stream
     @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
+    // systemMargin is defined in the parent GroupView
 
     // Computed property to get the current key exchange state for this profile (if online)
     private var keyExchangeState: KeyExchangeState? {
@@ -2279,8 +2277,7 @@ struct GroupCardView: View {
     let stream: Stream
     let onSelect: () -> Void
     @State private var isShareSheetPresented = false
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
+    // systemMargin is defined in the parent GroupView
 
     var body: some View {
         VStack(spacing: 0) {
