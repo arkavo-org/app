@@ -800,7 +800,6 @@ struct GroupView: View {
     // --- NEW: Helper for Status Indicator Icon ---
     private func connectionStatusIndicatorIcon(status: ConnectionStatus) -> some View {
         let color = statusColor(for: status)
-        let isActive = status == .searching || status == .connecting || status == .connected
 
         return Group {
             if status == .searching {
@@ -850,20 +849,6 @@ struct GroupView: View {
                 .accessibilityLabel("Renew one-time keys")
             }
         }
-    }
-
-    // --- NEW: InnerCircle Status Header View ---
-    private func innerCircleStatusHeader() -> some View {
-        HStack {
-            // Connection Status Indicator (from existing helper)
-            connectionStatusIndicator(status: peerManager.connectionStatus)
-
-            Spacer()
-
-            // Local KeyStore Status Indicator (Simplified)
-            KeyStoreStatusIndicator(peerManager: peerManager)
-        }
-        .padding(InnerCircleConstants.systemMargin) // Use constant
     }
 
     // Individual stream row with InnerCircle UI if applicable
@@ -959,7 +944,7 @@ struct GroupView: View {
             // Removed vertical padding here, handled by VStack spacing
 
             // Discovered peers list view (or empty state)
-            discoveredPeersView() // Renamed for clarity
+            discoveredPeersView // Renamed for clarity
 
             // Removed KeyStore Status View
         }

@@ -233,9 +233,6 @@
     "Broadcast" : {
 
     },
-    "Broadcasting and listening..." : {
-
-    },
     "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App." : {
 
     },
@@ -267,9 +264,6 @@
     "Comments" : {
 
     },
-    "Connect with %@" : {
-
-    },
     "Connected" : {
 
     },
@@ -280,6 +274,9 @@
 
     },
     "Connection Failed" : {
+
+    },
+    "Connection Status" : {
 
     },
     "Contributors" : {
@@ -327,7 +324,13 @@
     "Disconnected" : {
 
     },
+    "Discover & Connect" : {
+
+    },
     "Discover Peers" : {
+
+    },
+    "Discovered Devices (%lld)" : {
 
     },
     "Done" : {
@@ -431,6 +434,9 @@
     "InnerCircle" : {
 
     },
+    "InnerCircle Members" : {
+
+    },
     "Interaction" : {
       "localizations" : {
         "es-US" : {
@@ -512,6 +518,9 @@
     "Loading..." : {
 
     },
+    "Local KeyStore" : {
+
+    },
     "Location" : {
 
     },
@@ -571,9 +580,6 @@
         }
       }
     },
-    "Nearby Devices" : {
-
-    },
     "Next" : {
 
     },
@@ -589,6 +595,9 @@
     "No members match your search." : {
 
     },
+    "No Peers Discovered" : {
+
+    },
     "Not available" : {
 
     },
@@ -596,9 +605,6 @@
 
     },
     "Not Connected" : {
-
-    },
-    "Not Searching" : {
 
     },
     "Offline" : {
@@ -728,7 +734,13 @@
     "Remove Member" : {
 
     },
+    "Renew Keys" : {
+
+    },
     "Renew keys with %@" : {
+
+    },
+    "Renew one-time keys" : {
 
     },
     "Report Content" : {
@@ -772,6 +784,9 @@
       }
     },
     "Scanning for Devices..." : {
+
+    },
+    "Scanning for nearby devices..." : {
 
     },
     "Search members" : {
@@ -876,6 +891,9 @@
     "Start Verification" : {
 
     },
+    "Status" : {
+
+    },
     "Stop" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -940,7 +958,7 @@
     "Support Tiers" : {
 
     },
-    "Tap 'Search for Nearby Devices' above to find peers." : {
+    "Tap 'Discover Peers' to find nearby devices. Once found, you can verify trust and add them to your InnerCircle." : {
 
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
@@ -1013,6 +1031,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Verify trust with %@" : {
 
     },
     "Video" : {

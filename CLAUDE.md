@@ -2,9 +2,9 @@
 
 ## Build/Test Commands
 - Open workspace: `open Arkavo.xcworkspace`
-- Build main app: `xcodebuild -scheme Arkavo -quiet -sdk iphoneos -destination 'generic/platform=iOS,name=Any iOS Device' build`
-- Test all: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 15'`
-- Test single class: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 15' -only-testing:ArkavoTests/ArkavoTests`
+- Build main app: `xcodebuild -workspace Arkavo.xcworkspace -scheme Arkavo -destination "platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64" -quiet build`
+- Test all: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64'`
+- Test single class: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64' -only-testing:ArkavoTests/ArkavoTests`
 - Format code: `swiftformat --swiftversion 6.0 .`
 - Package tests: `cd ArkavoSocial && swift test`
 
