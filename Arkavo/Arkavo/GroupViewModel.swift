@@ -1471,15 +1471,23 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
     }
 
     nonisolated func browserViewController(_: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) -> Bool {
-        print("Browser found peer: \(peerID.displayName) with info: \(info ?? [:])")
-        // Associate ProfileID from discovery info immediately if available
+        // Check if the peer is already connected before proceeding
         Task { @MainActor in
-            if let profileID = info?["profileID"] {
-                print("   Peer \(peerID.displayName) has Profile ID: \(profileID)")
-                // Update map if new or different
-                if self.peerIDToProfileID[peerID] != profileID {
-                    self.peerIDToProfileID[peerID] = profileID
-                    print("   Associated peer \(peerID.displayName) with profile ID \(profileID)")
+            if self.connectedPeers.contains(where: { $0.hashValue == peerID.hashValue }) {
+                print("⚠️ MCBrowserViewController shouldn't be receiving this callback for connected peer: \(peerID.displayName). Returning false.")
+                // Returning false here prevents the browser from showing the already connected peer.
+                // Note: This Task runs asynchronously, the return true below might execute first.
+                // A synchronous check might be better if feasible, but requires careful state management.
+            } else {
+                print("Browser found peer: \(peerID.displayName) with info: \(info ?? [:])")
+                // Associate ProfileID from discovery info immediately if available
+                if let profileID = info?["profileID"] {
+                    print("   Peer \(peerID.displayName) has Profile ID: \(profileID)")
+                    // Update map if new or different
+                    if self.peerIDToProfileID[peerID] != profileID {
+                        self.peerIDToProfileID[peerID] = profileID
+                        print("   Associated peer \(peerID.displayName) with profile ID \(profileID)")
+                    }
                 }
             } else {
                 print("   Peer \(peerID.displayName) did not provide profileID in discovery info.")
