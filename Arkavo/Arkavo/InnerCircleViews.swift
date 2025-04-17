@@ -407,6 +407,7 @@ struct InnerCircleMemberRow: View {
     var stream: Stream
     @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
+    @State private var showDisconnectConfirmation = false // State for disconnect confirmation
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
@@ -492,9 +493,12 @@ struct InnerCircleMemberRow: View {
             // Key Exchange Button - Only show for online peers
             if isOnline {
                 keyExchangeButton() // <-- INTEGRATED KEY EXCHANGE BUTTON
+
+                // Disconnect Button - Only show for online peers
+                disconnectButton() // <-- NEW DISCONNECT BUTTON
             }
 
-            // Remove member button
+            // Remove member button (Keep this for removing from InnerCircle entirely)
             Button(action: {
                 showRemoveConfirmation = true
             }) {
@@ -518,6 +522,15 @@ struct InnerCircleMemberRow: View {
         .padding(.horizontal, systemMargin * 0.75) // Use systemMargin multiple (12pt)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(10)
+        // Add alert for disconnect confirmation
+        .alert("Disconnect Peer", isPresented: $showDisconnectConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Disconnect", role: .destructive) {
+                disconnectPeer()
+            }
+        } message: {
+            Text("Are you sure you want to disconnect from \(profile.name)? This will end your current secure connection. You can reconnect later if needed.")
+        }
     }
 
     // Open direct chat with this member
@@ -649,6 +662,21 @@ struct InnerCircleMemberRow: View {
         }
     }
 
+    // MARK: - Disconnect Action
+
+    // Disconnect from the peer
+    private func disconnectPeer() {
+        guard let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
+            print("❌ Disconnect Error: Could not find MCPeerID for profile \(profile.name) to disconnect.")
+            // Optionally show an error to the user
+            sharedState.setState("Could not find peer to disconnect.", forKey: "errorMessage")
+            return
+        }
+        print("Disconnecting from peer: \(peer.displayName)")
+        peerManager.disconnectPeer(peer)
+        // UI should update automatically based on peerManager's published changes
+    }
+
     // MARK: - Key Exchange UI Helpers
 
     // View to display the current key exchange status text and icon
@@ -739,6 +767,29 @@ struct InnerCircleMemberRow: View {
         // Add animation for state changes
         .animation(.easeInOut(duration: 0.3), value: keyState)
     }
+
+    // MARK: - Disconnect Button UI
+
+    // Button for disconnecting from an online peer
+    @ViewBuilder
+    private func disconnectButton() -> some View {
+        Button {
+            showDisconnectConfirmation = true
+        } label: {
+            Image(systemName: "link.slash") // Use link.slash icon
+                .font(.subheadline) // Match other action button icon size
+                .foregroundColor(InnerCircleConstants.trustRed) // Use specified red color
+                .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
+                .background(Circle().fill(InnerCircleConstants.trustRed.opacity(0.1))) // Red tinted background
+        }
+        .buttonStyle(.plain)
+        .disabled(!isOnline) // Disable if not online
+        .opacity(isOnline ? 1.0 : 0.4) // Apply opacity when disabled
+        .help("Disconnect from \(profile.name)") // Accessibility hint
+        .accessibilityLabel("Disconnect from \(profile.name)") // Accessibility label
+    }
+
+    // MARK: - Key Exchange Display Info Helper
 
     // Helper to get display info based on KeyExchangeState
     private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
