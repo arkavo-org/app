@@ -603,10 +603,6 @@ struct GroupView: View {
         ScrollView {
             LazyVStack(spacing: InnerCircleConstants.doubleMargin) { // Increased spacing between major sections
 
-                // --- 1. Connection Status & KeyStore Section ---
-                connectionAndKeyStoreSection()
-                    .padding(.horizontal, InnerCircleConstants.systemMargin)
-
                 // --- 2. InnerCircle Members Section ---
                 innerCircleMembersSection()
                     .padding(.horizontal, InnerCircleConstants.systemMargin)
@@ -638,29 +634,6 @@ struct GroupView: View {
         .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
     }
 
-    // --- NEW: 1. Connection Status & KeyStore Section ---
-    private func connectionAndKeyStoreSection() -> some View {
-        VStack(spacing: InnerCircleConstants.halfMargin) {
-            // Header
-            HStack {
-                Text("Status")
-                    .font(InnerCircleConstants.headerFont)
-                    .foregroundColor(InnerCircleConstants.primaryTextColor)
-                Spacer()
-            }
-
-            // Card containing status indicators
-            VStack(spacing: InnerCircleConstants.halfMargin) {
-                innerCircleStatusHeader() // Connection Status
-                Divider()
-                keyStoreStatusRow() // KeyStore Status & Renewal
-            }
-            .padding(InnerCircleConstants.systemMargin)
-            .background(InnerCircleConstants.cardBackgroundColor)
-            .cornerRadius(InnerCircleConstants.cornerRadius)
-        }
-    }
-
     // --- NEW: 2. InnerCircle Members Section ---
     private func innerCircleMembersSection() -> some View {
         // Find the InnerCircle stream
@@ -672,13 +645,7 @@ struct GroupView: View {
         // Use the InnerCircleView (now defined in InnerCircleViews.swift)
         return AnyView(
             VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
-                HStack {
-                    Text("InnerCircle Members")
-                        .font(InnerCircleConstants.headerFont)
-                        .foregroundColor(InnerCircleConstants.primaryTextColor)
-                    Spacer()
-                    // Optional: Add count badge or refresh button here
-                }
+                Spacer()
                 // Embed the view from the other file
                 InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
                     .environmentObject(sharedState)

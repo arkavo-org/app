@@ -237,18 +237,8 @@ struct InnerCircleView: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
-            TextField("Search members", text: $searchText)
+            TextField("Search", text: $searchText)
                 .font(.subheadline)
-
-            Spacer()
-
-            Toggle(isOn: $showOfflineMembers) {
-                Text("Show Offline")
-                    .font(.caption)
-            }
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .scaleEffect(0.8)
         }
         .padding(.horizontal, systemMargin) // Use systemMargin
         .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
@@ -257,10 +247,6 @@ struct InnerCircleView: View {
 
     private var memberCountHeader: some View {
         HStack {
-            Text("Members")
-                .font(.subheadline)
-                .fontWeight(.medium)
-
             // Use the computed properties for counts
             Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
                 .font(.caption)

@@ -321,6 +321,15 @@
     "Delete Video" : {
 
     },
+    "Disconnect" : {
+
+    },
+    "Disconnect from %@" : {
+
+    },
+    "Disconnect P2P with %@?" : {
+
+    },
     "Disconnected" : {
 
     },
@@ -429,9 +438,6 @@
 
     },
     "InnerCircle" : {
-
-    },
-    "InnerCircle Members" : {
 
     },
     "Interaction" : {
@@ -545,9 +551,6 @@
 
     },
     "Member since: %@" : {
-
-    },
-    "Members" : {
 
     },
     "Members:" : {
@@ -783,7 +786,7 @@
     "Scanning for nearby devices..." : {
 
     },
-    "Search members" : {
+    "Search" : {
 
     },
     "Section" : {
@@ -830,9 +833,6 @@
       }
     },
     "Share your thought..." : {
-
-    },
-    "Show Offline" : {
 
     },
     "Sign In" : {
@@ -883,9 +883,6 @@
       }
     },
     "Start Verification" : {
-
-    },
-    "Status" : {
 
     },
     "Stop" : {
@@ -968,6 +965,9 @@
 
     },
     "This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone." : {
+
+    },
+    "This will end your direct peer-to-peer connection. %@ will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting." : {
 
     },
     "Thought service is unavailable" : {
