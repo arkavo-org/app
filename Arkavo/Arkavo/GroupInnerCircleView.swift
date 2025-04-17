@@ -716,6 +716,11 @@ struct InnerCircleMemberRow: View {
                         .scaleEffect(0.6) // Smaller spinner
                         .frame(width: 16, height: 16) // Ensure consistent size
                         .tint(.orange) // Tint spinner orange during progress
+                case .commitReceivedWaitingForKeys:
+                    ProgressView() // Show spinner while waiting for peer keys
+                        .scaleEffect(0.6)
+                        .frame(width: 16, height: 16)
+                        .tint(.orange)
                 }
             }
             .font(.subheadline) // Match message icon size
@@ -772,8 +777,9 @@ struct InnerCircleMemberRow: View {
         case .ackReceived:
             return ("Ack Received", "checkmark.message.fill", .orange)
         case .commitSent:
-            // Using a more indicative icon for the final step before completion
-            return ("Committing Keys", "lock.shield.fill", .orange)
+            return ("Sharing Keys", "paperplane.fill", .orange) // Changed text/icon
+        case .commitReceivedWaitingForKeys:
+            return ("Receiving Keys", "envelope.open.badge.clock", .orange) // New state display
         case .completed:
             return ("Keys Exchanged", "checkmark.shield.fill", .green)
         case let .failed(reason):

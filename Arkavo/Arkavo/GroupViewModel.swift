@@ -37,6 +37,7 @@ enum KeyExchangeState: Codable, Equatable {
     case ackSent(nonce: Data)
     case ackReceived(nonce: Data)
     case commitSent(nonce: Data)
+    case commitReceivedWaitingForKeys(nonce: Data) // New state: Initiator received commit, waiting for peer keys
     case completed(nonce: Data)
     case failed(String)
 
@@ -44,7 +45,7 @@ enum KeyExchangeState: Codable, Equatable {
         switch self {
         case let .requestSent(n), let .requestReceived(n), let .offerSent(n),
              let .offerReceived(n), let .ackSent(n), let .ackReceived(n),
-             let .commitSent(n), let .completed(n):
+             let .commitSent(n), let .commitReceivedWaitingForKeys(n), let .completed(n):
             n
         case .idle, .failed:
             nil
@@ -764,16 +765,45 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 try await persistenceController.savePeerProfile(senderProfile, keyStorePublicData: receivedPublicData)
                 print("✅ Saved/Updated public KeyStore data for profile \(senderProfile.name) (\(senderProfileIDString)).")
 
-                // Notify relevant views
+                // Notify relevant views (e.g., InnerCircleView might update UI based on this)
                 NotificationCenter.default.post(
                     name: .keyStoreSharedAndSaved,
                     object: nil,
                     userInfo: ["profilePublicID": senderProfileID]
                 )
+
+                // --- Check Key Exchange State and Complete Protocol ---
+                if let currentStateInfo = peerKeyExchangeStates[peer] {
+                    let currentState = currentStateInfo.state
+                    print("KeyExchange: Received KeyStoreShare from \(peer.displayName). Current state: \(currentState)")
+
+                    switch currentState {
+                    case .commitSent(let nonce): // Responder was waiting for keys
+                        print("KeyExchange (Responder): Received keys from Initiator. Completing protocol.")
+                        updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
+                    case .commitReceivedWaitingForKeys(let nonce): // Initiator was waiting for keys
+                        print("KeyExchange (Initiator): Received keys from Responder. Completing protocol.")
+                        updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
+                    default:
+                        print("KeyExchange: Received KeyStoreShare in unexpected state (\(currentState)). No state transition.")
+                    }
+                } else {
+                    print("KeyExchange: Received KeyStoreShare, but no key exchange state found for peer \(peer.displayName).")
+                }
+                // --- End Key Exchange State Check ---
+
             } catch let error as P2PError {
                 print("❌ KeyStoreShare: P2PError handling message from \(peer.displayName): \(error)")
+                // Optionally update key exchange state to failed if appropriate
+                if peerKeyExchangeStates[peer] != nil {
+                    updatePeerExchangeState(for: peer, newState: .failed("Error processing KeyStoreShare: \(error.localizedDescription)"))
+                }
             } catch {
                 print("❌ KeyStoreShare: Unexpected error handling message from \(peer.displayName): \(error)")
+                // Optionally update key exchange state to failed if appropriate
+                if peerKeyExchangeStates[peer] != nil {
+                    updatePeerExchangeState(for: peer, newState: .failed("Unexpected error processing KeyStoreShare: \(error.localizedDescription)"))
+                }
             }
         }
     }
@@ -1060,19 +1090,26 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 // Transition state after successful send
                 updatePeerExchangeState(for: peer, newState: .ackSent(nonce: initiatorNonce))
 
-                // --- Initiator's Key Generation Trigger ---
-                // Initiator now has both nonces (own: initiatorNonce, peer's: offer.nonce) implicitly
-                // Regenerate local keys now.
+                // --- Initiator's Key Generation & Share Trigger ---
                 guard let peerProfileIDData = Data(base58Encoded: offer.responderProfileID) else {
                     throw P2PError.keyExchangeError("Invalid peer profile ID in offer")
                 }
                 print("KeyExchange (Initiator): Triggering local key regeneration for peer \(offer.responderProfileID)")
-                try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
-                print("KeyExchange (Initiator): Local key regeneration successful.")
-                // Still waiting for Commit from responder to finalize the protocol state.
+                let localPublicKeyStoreData = try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
+                print("KeyExchange (Initiator): Local key regeneration successful. Sharing public keys...")
+
+                // Send own public KeyStore data to the peer
+                let keySharePayload = KeyStoreSharePayload(
+                    senderProfileID: myProfile.publicID.base58EncodedString,
+                    keyStorePublicData: localPublicKeyStoreData,
+                    timestamp: Date()
+                )
+                try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
+                print("KeyExchange (Initiator): Sent KeyStoreShare to \(peer.displayName)")
+                // State remains ackSent, waiting for Commit and peer's KeyStoreShare
 
             } catch {
-                print("❌ KeyExchange: Error handling Offer or regenerating keys (Initiator) for \(peer.displayName): \(error)")
+                print("❌ KeyExchange: Error handling Offer, regenerating/sharing keys (Initiator) for \(peer.displayName): \(error)")
                 let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
                 updatePeerExchangeState(for: peer, newState: .failed("Error processing offer/regenerating: \(errorMessage)"))
             }
@@ -1110,19 +1147,26 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 // Transition state after successful send
                 updatePeerExchangeState(for: peer, newState: .commitSent(nonce: responderNonce)) // Final state for responder
 
-                // --- Responder's Key Generation Trigger ---
-                // Responder now has both nonces (own: responderNonce, peer's: ack.nonce) implicitly
-                // Regenerate local keys now.
+                // --- Responder's Key Generation & Share Trigger ---
                 guard let peerProfileIDData = Data(base58Encoded: ack.initiatorProfileID) else {
                     throw P2PError.keyExchangeError("Invalid peer profile ID in ack")
                 }
                 print("KeyExchange (Responder): Triggering local key regeneration for peer \(ack.initiatorProfileID)")
-                try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
-                print("KeyExchange (Responder): Local key regeneration successful.")
-                // Responder's protocol completes here.
+                let localPublicKeyStoreData = try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
+                print("KeyExchange (Responder): Local key regeneration successful. Sharing public keys...")
+
+                // Send own public KeyStore data to the peer
+                let keySharePayload = KeyStoreSharePayload(
+                    senderProfileID: myProfile.publicID.base58EncodedString,
+                    keyStorePublicData: localPublicKeyStoreData,
+                    timestamp: Date()
+                )
+                try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
+                print("KeyExchange (Responder): Sent KeyStoreShare to \(peer.displayName)")
+                // State remains commitSent, waiting for peer's KeyStoreShare
 
             } catch {
-                print("❌ KeyExchange: Error handling Ack or regenerating keys (Responder) for \(peer.displayName): \(error)")
+                print("❌ KeyExchange: Error handling Ack, regenerating/sharing keys (Responder) for \(peer.displayName): \(error)")
                 let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
                 updatePeerExchangeState(for: peer, newState: .failed("Error processing ack/regenerating: \(errorMessage)"))
             }
@@ -1139,23 +1183,26 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 guard let currentStateInfo = peerKeyExchangeStates[peer],
                       case let .ackSent(initiatorNonce) = currentStateInfo.state
                 else {
-                    print("KeyExchange: Ignoring Commit from \(peer.displayName), not in AckSent state.")
+                    print("KeyExchange: Ignoring Commit from \(peer.displayName), not in AckSent state (current: \(currentStateInfo.state)).")
                     return
                 }
 
-                // Protocol completed successfully for Initiator
-                print("KeyExchange: Protocol completed successfully with \(peer.displayName) (ReqID: \(commit.requestID))")
-                updatePeerExchangeState(for: peer, newState: .completed(nonce: initiatorNonce)) // Final state for initiator
+                // Received Commit, now waiting for peer's KeyStoreShare
+                print("KeyExchange (Initiator): Received Commit from \(peer.displayName) (ReqID: \(commit.requestID)). Waiting for peer keys.")
+                updatePeerExchangeState(for: peer, newState: .commitReceivedWaitingForKeys(nonce: initiatorNonce))
 
             } catch {
                 print("❌ KeyExchange: Error handling Commit from \(peer.displayName): \(error)")
+                // Keep the state as ackSent or move to failed? Let's move to failed for clarity.
                 updatePeerExchangeState(for: peer, newState: .failed("Error processing commit: \(error.localizedDescription)"))
             }
         }
     }
 
-    /// Performs local key generation/regeneration using OpenTDFKit and saves the updated private KeyStore to the Profile.
-    private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws {
+    /// Performs local key generation/regeneration using OpenTDFKit, saves the updated private KeyStore to the Profile,
+    /// and returns the corresponding public KeyStore data.
+    /// - Returns: The serialized public KeyStore data.
+    private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws -> Data {
         print("KeyExchange: Performing OpenTDFKit key generation/save (Profile.keyStorePrivate)... Peer: \(peerProfileIDData.base58EncodedString)")
 
         let keyStore = KeyStore(curve: .secp256r1)
@@ -1188,8 +1235,14 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             try await persistenceController.saveChanges()
             print("   Successfully saved updated profile.")
 
+            // Extract and return the public data
+            let publicKeyStore = await keyStore.exportPublicKeyStore()
+            let publicData = await publicKeyStore.serialize()
+            print("   Extracted public KeyStore data (\(publicKeyStore.publicKeys.count) keys, \(publicData.count) bytes).")
+            return publicData
+
         } catch {
-            // Catch errors from deserialization, generation, serialization, or save
+            // Catch errors from deserialization, generation, serialization, save, or public key extraction
             print("❌ KeyExchange: Failed during key generation/save: \(error)")
             let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
             updatePeerExchangeState(for: peer, newState: .failed("Key generation/save failed: \(errorMessage)"))
