@@ -419,12 +419,48 @@ struct GroupCreateView: View {
                 if let verifiedProfile = profile {
                     let isSelected = selectedInnerCircleProfiles.contains { $0.id == verifiedProfile.id }
                     Button {
-                        if !isSelected {
-                            selectedInnerCircleProfiles.append(verifiedProfile)
-                            print("Added \(verifiedProfile.name) to selected profiles.")
-                        } else {
-                            selectedInnerCircleProfiles.removeAll { $0.id == verifiedProfile.id }
-                            print("Removed \(verifiedProfile.name) from selected profiles.")
+                        Task {
+                            do {
+                                // Find the InnerCircle stream
+                                guard let innerCircleStream = viewModel.account.streams.first(where: { $0.isInnerCircleStream }) else {
+                                    print("❌ Error: InnerCircle stream not found.")
+                                    errorMessage = "InnerCircle stream not found."
+                                    showError = true
+                                    return
+                                }
+
+                                if !isSelected {
+                                    // Add to local state
+                                    selectedInnerCircleProfiles.append(verifiedProfile)
+                                    print("Added \(verifiedProfile.name) to selected profiles.")
+                                    // Add to stream model
+                                    innerCircleStream.addToInnerCircle(verifiedProfile)
+                                    print("Added \(verifiedProfile.name) to InnerCircle stream members.")
+                                } else {
+                                    // Remove from local state
+                                    selectedInnerCircleProfiles.removeAll { $0.id == verifiedProfile.id }
+                                    print("Removed \(verifiedProfile.name) from selected profiles.")
+                                    // Remove from stream model
+                                    innerCircleStream.removeFromInnerCircle(verifiedProfile)
+                                    print("Removed \(verifiedProfile.name) from InnerCircle stream members.")
+                                }
+                                // Persist changes
+                                try await PersistenceController.shared.saveChanges()
+                                print("Saved changes to InnerCircle stream.")
+                                // Optionally notify InnerCircleView to refresh if needed immediately
+                                // NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
+                            } catch {
+                                print("❌ Error updating InnerCircle stream members: \(error)")
+                                errorMessage = "Failed to update group members: \(error.localizedDescription)"
+                                showError = true
+                                // Optionally revert local state change on error
+                                if !isSelected {
+                                    selectedInnerCircleProfiles.removeAll { $0.id == verifiedProfile.id }
+                                } else {
+                                    // Re-adding might be complex if the object reference changed,
+                                    // consider just logging or showing error.
+                                }
+                            }
                         }
                     } label: {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle.fill")
