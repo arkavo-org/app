@@ -509,75 +509,10 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     }
 }
 
-// MARK: - InnerCircle UI Constants and Enums
-
-// Constants for consistent styling within InnerCircle related views
-enum InnerCircleConstants {
-    static let systemMargin: CGFloat = 16
-    static let halfMargin: CGFloat = systemMargin / 2
-    static let doubleMargin: CGFloat = systemMargin * 2
-
-    static let cornerRadius: CGFloat = 12
-    static let smallCornerRadius: CGFloat = 8
-
-    static let minimumTouchTarget: CGFloat = 44
-
-    // Typography
-    static let headerFont: Font = .system(size: 20, weight: .bold)
-    static let primaryTextFont: Font = .system(size: 17, weight: .regular)
-    static let secondaryTextFont: Font = .system(size: 15, weight: .regular)
-    static let statusIndicatorFont: Font = .system(size: 13, weight: .semibold)
-    static let captionFont: Font = .system(size: 12, weight: .regular) // Example caption size
-
-    // Colors (Examples based on guide)
-    static let primaryActionColor: Color = .blue // #007AFF
-    static let trustGreen: Color = .init(red: 52 / 255, green: 199 / 255, blue: 89 / 255) // #34C759
-    static let trustYellow: Color = .init(red: 255 / 255, green: 204 / 255, blue: 0 / 255) // #FFCC00
-    static let trustRed: Color = .init(red: 255 / 255, green: 59 / 255, blue: 48 / 255) // #FF3B30
-    static let backgroundColor: Color = .black // #000000 (Assuming dark mode focus)
-    static let cardBackgroundColor: Color = .init(.systemGray6) // #1C1C1E (Example dark mode card bg)
-    static let primaryTextColor: Color = .white
-    static let secondaryTextColor: Color = .gray
-}
-
-// Example Trust Status Enum (Needs actual implementation based on data model)
-enum TrustStatus {
-    case unknown, pending, verified, trusted, compromised
-
-    var description: String {
-        switch self {
-        case .unknown: "Unknown"
-        case .pending: "Verification Pending"
-        case .verified: "Verified"
-        case .trusted: "Trusted"
-        case .compromised: "Compromised"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .unknown: InnerCircleConstants.secondaryTextColor
-        case .pending: InnerCircleConstants.trustYellow
-        case .verified: InnerCircleConstants.primaryActionColor
-        case .trusted: InnerCircleConstants.trustGreen
-        case .compromised: InnerCircleConstants.trustRed
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .unknown: "questionmark.circle"
-        case .pending: "hourglass"
-        case .verified: "checkmark.seal.fill"
-        case .trusted: "lock.shield.fill"
-        case .compromised: "exclamationmark.shield.fill"
-        }
-    }
-}
-
 // MARK: - Extensions
 
 // Add notification name for refreshing InnerCircle members
+// Kept here as GroupViewModel posts it. InnerCircleView observes it.
 extension Notification.Name {
     static let refreshInnerCircleMembers = Notification.Name("refreshInnerCircleMembers")
 }
@@ -703,7 +638,6 @@ struct GroupView: View {
         .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
     }
 
-
     // --- NEW: 1. Connection Status & KeyStore Section ---
     private func connectionAndKeyStoreSection() -> some View {
         VStack(spacing: InnerCircleConstants.halfMargin) {
@@ -735,8 +669,7 @@ struct GroupView: View {
             return AnyView(EmptyView())
         }
 
-        // Use the existing InnerCircleView, but embed it here
-        // Note: This might need further refinement based on how navigation/detail views are handled
+        // Use the InnerCircleView (now defined in InnerCircleViews.swift)
         return AnyView(
             VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
                 HStack {
@@ -746,10 +679,9 @@ struct GroupView: View {
                     Spacer()
                     // Optional: Add count badge or refresh button here
                 }
-                // Embed the existing view that lists members
+                // Embed the view from the other file
                 InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
                     .environmentObject(sharedState)
-                    // Apply background and corner radius if needed, or let InnerCircleView handle it
                     .background(InnerCircleConstants.cardBackgroundColor)
                     .cornerRadius(InnerCircleConstants.cornerRadius)
             }
@@ -772,21 +704,14 @@ struct GroupView: View {
         }
     }
 
-
-    // --- OLD: InnerCircle Section View (Combined Status/Discovery) - To be removed ---
-    // private func innerCircleSection() -> some View { ... }
-
-
     // --- MODIFIED: InnerCircle Status Header View (Connection Only) ---
     private func innerCircleStatusHeader() -> some View {
-        // Updated based on critique
         HStack {
             Label {
                 Text("Connection Status")
                     .font(InnerCircleConstants.secondaryTextFont) // Use constant
                     .foregroundColor(InnerCircleConstants.secondaryTextColor) // Use constant
             } icon: {
-                // Use connectionStatusIndicator logic for color/pulsing
                 connectionStatusIndicatorIcon(status: peerManager.connectionStatus)
             }
             Spacer()
@@ -794,7 +719,6 @@ struct GroupView: View {
                 .font(InnerCircleConstants.statusIndicatorFont) // Use constant
                 .foregroundColor(statusColor(for: peerManager.connectionStatus)) // Keep color coding
         }
-        // Removed KeyStore indicator - moved to its own row
     }
 
     // --- NEW: Helper for Status Indicator Icon ---
@@ -815,7 +739,6 @@ struct GroupView: View {
         .frame(width: 10, height: 10) // Consistent size
     }
 
-
     // --- NEW: KeyStore Status Row ---
     private func keyStoreStatusRow() -> some View {
         HStack {
@@ -834,13 +757,11 @@ struct GroupView: View {
             KeyStoreStatusIndicator(peerManager: peerManager)
 
             // Placeholder Renew Button (Logic needs implementation)
-            // Only show if keys exist and potentially low
             if let keyInfo = peerManager.localKeyStoreInfo, keyInfo.validKeyCount > 0 {
                 let isLow = (Double(keyInfo.validKeyCount) / Double(keyInfo.capacity)) < 0.10
                 Button("Renew Keys") {
                     // TODO: Implement Key Renewal Initiation Flow
                     print("Initiate Key Renewal Flow...")
-                    // Example: Show peer selection sheet
                 }
                 .font(InnerCircleConstants.statusIndicatorFont)
                 .foregroundColor(isLow ? InnerCircleConstants.trustYellow : InnerCircleConstants.primaryActionColor)
@@ -851,10 +772,18 @@ struct GroupView: View {
         }
     }
 
-    // Individual stream row with InnerCircle UI if applicable
+    // Individual stream row (now only uses GroupCardView)
     private func streamRow(stream: Stream) -> some View {
-        VStack(spacing: 0) {
-            // Main card view for the stream
+        // Only show GroupCardView for non-InnerCircle streams
+        // InnerCircle streams are handled by innerCircleMembersSection
+        if !stream.isInnerCircleStream {
+            GroupCardView(
+                stream: stream,
+                onSelect: {
+                    viewModel.selectedStream = stream
+                    sharedState.selectedStreamPublicID = stream.publicID
+                    sharedState.showChatOverlay = true
+                }
             GroupCardView(
                 stream: stream,
                 onSelect: {
@@ -863,55 +792,8 @@ struct GroupView: View {
                     sharedState.showChatOverlay = true
                 }
             )
-
-            // --- START: Inner Circle Members List ---
-            // Display members only if it's an InnerCircle stream
-            if stream.isInnerCircleStream {
-                VStack(alignment: .leading, spacing: 4) {
-                    // Header for the members list
-                    Text("Inner Circle Members")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, systemMargin / 2) // Use systemMargin multiple (8pt)
-                        .padding(.horizontal, systemMargin) // Use systemMargin
-
-                    // Display message if no members
-                    if stream.innerCircleProfiles.isEmpty {
-                        Text("No members added yet.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .padding(.horizontal, systemMargin) // Use systemMargin
-                            .padding(.bottom, systemMargin / 2) // Use systemMargin multiple (8pt)
-                    } else {
-                        // List the members (sorted by name)
-                        // Use LazyVStack for potentially long lists
-                        LazyVStack(alignment: .leading, spacing: 4) {
-                            ForEach(stream.innerCircleProfiles.sorted { $0.name < $1.name }, id: \.id) { profile in
-                                HStack {
-                                    // Simple display: just the name
-                                    Text("• \(profile.name)") // Add bullet point
-                                        .font(.caption)
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    // Optional: Add online/offline status indicator here later
-                                    // You would need to check peerManager.connectedPeerProfiles
-                                    // based on profile.publicID
-                                }
-                                .padding(.horizontal, systemMargin) // Use systemMargin
-                            }
-                        }
-                        .padding(.bottom, systemMargin / 2) // Use systemMargin multiple (8pt)
-                    }
-                }
-                // Use the secondary grouped background for this section
-                .background(Color(.secondarySystemGroupedBackground))
-                // Round bottom corners to match the card above if it's the last element
-                .cornerRadius(10, corners: [.bottomLeft, .bottomRight])
-            }
-            // --- END: Inner Circle Members List ---
+            .clipShape(RoundedRectangle(cornerRadius: 10)) // Apply corner radius here
         }
-        // Apply corner radius to the entire VStack containing the card and members list
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // Inner Circle peer discovery UI (P2P related) - Refactored
@@ -1283,10 +1165,6 @@ struct GroupView: View {
                 .accessibilityLabel(Text((trustStatus == .pending || trustStatus == .unknown) ? "Verify trust with \(profile?.name ?? peer.displayName)" : "View details for \(profile?.name ?? peer.displayName)"))
             }
         }
-        .padding(InnerCircleConstants.systemMargin) // Use constant
-        .background(InnerCircleConstants.cardBackgroundColor) // Use constant
-        .cornerRadius(InnerCircleConstants.cornerRadius) // Use constant
-        .contentShape(Rectangle()) // Make entire card tappable if needed for navigation
         .padding(.horizontal, InnerCircleConstants.halfMargin) // Spacing between cards
     }
 
@@ -1460,761 +1338,6 @@ struct GroupView: View {
     }
 }
 
-// MARK: - InnerCircle Member Views
-
-// Main view for displaying all InnerCircle members
-struct InnerCircleView: View {
-    let stream: Stream
-    @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
-    @EnvironmentObject var sharedState: SharedState
-    @State private var showOfflineMembers: Bool = true
-    @State private var searchText: String = ""
-    @State private var innerCircleProfiles: [Profile] = [] // All profiles belonging to this InnerCircle
-    @State private var showStatusMessage = false
-    @State private var statusMessage = ""
-    @State private var refreshObserver: NSObjectProtocol? // Observer token
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Search and filter bar
-            searchAndFilterBar
-
-            // Member count header
-            memberCountHeader
-
-            Divider()
-
-            // Members list
-            membersScrollView
-        }
-        .onAppear {
-            setupView() // Call setup function
-            setupNotificationObservers() // Setup observers
-        }
-        .onDisappear {
-            removeNotificationObservers() // Remove observers
-        }
-        .overlay(statusMessageOverlay)
-        // Refresh UI when key exchange states change
-        .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
-            // This ensures the UI updates when a state changes for any peer
-            print("InnerCircleView: Detected change in peerKeyExchangeStates")
-        }
-    }
-
-    // MARK: - Setup and Teardown
-
-    // Initial setup when the view appears
-    private func setupView() {
-        Task {
-            await loadInnerCircleProfiles()
-        }
-        checkForStatusMessage()
-    }
-
-    // Setup notification observers
-    private func setupNotificationObservers() {
-        // Listen for notifications to refresh the member list
-        refreshObserver = NotificationCenter.default.addObserver(
-            forName: .refreshInnerCircleMembers,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task {
-                await loadInnerCircleProfiles()
-            }
-        }
-    }
-
-    // Remove notification observers
-    private func removeNotificationObservers() {
-        if let observer = refreshObserver {
-            NotificationCenter.default.removeObserver(observer)
-            refreshObserver = nil
-        }
-    }
-
-    // Check for and display any pending status messages
-    private func checkForStatusMessage() {
-        if let message = sharedState.getState(forKey: "statusMessage") as? String, !message.isEmpty {
-            statusMessage = message
-            showStatusMessage = true
-            // Clear the message after retrieving it
-            sharedState.setState("", forKey: "statusMessage")
-        }
-    }
-
-    // MARK: - Computed Properties (Refactored for Simplicity)
-
-    // All currently connected online profiles from peer manager
-    private var onlineProfiles: [Profile] {
-        Array(peerManager.connectedPeerProfiles.values)
-    }
-
-    // All offline profiles (in InnerCircle but not currently connected)
-    private var offlineProfiles: [Profile] {
-        // Get IDs of online profiles for efficient lookup
-        let onlineProfileIDs = Set(onlineProfiles.map(\.id))
-        // Filter the full list of InnerCircle members
-        return innerCircleProfiles.filter { profile in
-            !onlineProfileIDs.contains(profile.id)
-        }
-    }
-
-    // Filtered online profiles based on search text
-    private var filteredOnlineProfiles: [Profile] {
-        let profiles = onlineProfiles // Start with online profiles
-        if searchText.isEmpty {
-            return profiles // No filter needed
-        } else {
-            // Apply search filter
-            return profiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
-    }
-
-    // Filtered offline profiles based on search text
-    private var filteredOfflineProfiles: [Profile] {
-        let profiles = offlineProfiles // Start with offline profiles
-        if searchText.isEmpty {
-            return profiles // No filter needed
-        } else {
-            // Apply search filter
-            return profiles.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
-    }
-
-    // MARK: - Helper Functions
-
-    // Check if a profile is currently online via P2P
-    private func isProfileOnline(_ profile: Profile) -> Bool {
-        // Check if any profile in the connectedPeerProfiles dictionary has the same ID
-        peerManager.connectedPeerProfiles.values.contains { $0.id == profile.id }
-    }
-
-    // Load all InnerCircle profiles from the stream relationship
-    private func loadInnerCircleProfiles() async {
-        // Directly access the stream's innerCircleProfiles relationship
-        // This assumes the 'stream' object passed to InnerCircleView is up-to-date
-        // and its relationships are loaded by SwiftData.
-        // No need for manual fetching or filtering.
-        innerCircleProfiles = stream.innerCircleProfiles
-        print("Loaded \(innerCircleProfiles.count) InnerCircle profiles directly from stream relationship.")
-
-        // Note: If 'stream' might be stale or relationships aren't automatically loaded,
-        // you might need to re-fetch the stream first:
-        // if let freshStream = try? await PersistenceController.shared.fetchStream(withID: stream.id) {
-        //     self.innerCircleProfiles = freshStream.innerCircleProfiles
-        // } else {
-        //     print("Error refreshing stream for InnerCircle profiles")
-        //     self.innerCircleProfiles = []
-        // }
-    }
-
-    // Get connection time for an online profile
-    private func getConnectionTime(for profile: Profile) -> Date? {
-        // Find the MCPeerID for this profile
-        for (peer, peerProfile) in peerManager.connectedPeerProfiles {
-            if peerProfile.id == profile.id {
-                return peerManager.peerConnectionTimes[peer]
-            }
-        }
-        return nil
-    }
-
-    // MARK: - Subviews
-
-    private var searchAndFilterBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
-            TextField("Search members", text: $searchText)
-                .font(.subheadline)
-
-            Spacer()
-
-            Toggle(isOn: $showOfflineMembers) {
-                Text("Show Offline")
-                    .font(.caption)
-            }
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .scaleEffect(0.8)
-        }
-        .padding(.horizontal, systemMargin) // Use systemMargin
-        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-        .background(Color(.secondarySystemBackground))
-    }
-
-    private var memberCountHeader: some View {
-        HStack {
-            Text("Members")
-                .font(.subheadline)
-                .fontWeight(.medium)
-
-            // Use the computed properties for counts
-            Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            Button(action: {
-                Task {
-                    await loadInnerCircleProfiles()
-                }
-            }) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
-            }
-        }
-        .padding(.horizontal, systemMargin) // Use systemMargin
-        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-    }
-
-    private var membersScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                // Online members section
-                let onlineToShow = filteredOnlineProfiles
-                if !onlineToShow.isEmpty {
-                    sectionHeader(title: "Online", count: onlineToShow.count)
-
-                    ForEach(onlineToShow) { profile in
-                        InnerCircleMemberRow(
-                            profile: profile,
-                            isOnline: true,
-                            connectionTime: getConnectionTime(for: profile),
-                            stream: stream,
-                            peerManager: peerManager // Pass peerManager
-                        )
-                        .padding(.horizontal, systemMargin) // Use systemMargin
-                        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
-                        .environmentObject(sharedState)
-                    }
-                }
-
-                // Offline members section
-                let offlineToShow = filteredOfflineProfiles
-                if showOfflineMembers, !offlineToShow.isEmpty {
-                    sectionHeader(title: "Offline", count: offlineToShow.count)
-
-                    ForEach(offlineToShow) { profile in
-                        InnerCircleMemberRow(
-                            profile: profile,
-                            isOnline: false,
-                            // lastSeen removed
-                            stream: stream,
-                            peerManager: peerManager // Pass peerManager
-                        )
-                        .padding(.horizontal, systemMargin) // Use systemMargin
-                        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
-                        .environmentObject(sharedState)
-                    }
-                }
-
-                // Empty state
-                if onlineToShow.isEmpty, offlineToShow.isEmpty || !showOfflineMembers {
-                    emptyStateView
-                }
-            }
-            .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-        }
-    }
-
-    // Section header view
-    private func sectionHeader(title: String, count: Int) -> some View {
-        HStack {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .textCase(.uppercase)
-
-            Text("(\(count))")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Spacer()
-        }
-        .padding(.horizontal, systemMargin) // Use systemMargin
-        .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
-        .background(Color(.systemGroupedBackground))
-    }
-
-    // Empty state view
-    private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.2.slash")
-                .font(.largeTitle)
-                .foregroundColor(.secondary.opacity(0.5))
-
-            Text("No Members Found")
-                .font(.headline)
-                .foregroundColor(.secondary)
-
-            Text(searchText.isEmpty ?
-                "There are no members to display." :
-                "No members match your search.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, systemMargin) // Use systemMargin
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, systemMargin * 2.5) // Use systemMargin multiple (40pt)
-    }
-
-    // Status message overlay
-    @ViewBuilder
-    private var statusMessageOverlay: some View {
-        if showStatusMessage {
-            VStack {
-                Text(statusMessage)
-                    .foregroundColor(.white)
-                    .padding(systemMargin) // Use systemMargin
-                    .background(Color.green.opacity(0.8))
-                    .cornerRadius(10)
-                    .padding(systemMargin) // Use systemMargin
-                    .onAppear {
-                        // Auto-dismiss after a few seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            showStatusMessage = false
-                        }
-                    }
-                Spacer()
-            }
-        }
-    }
-}
-
-// Row view for individual InnerCircle members
-struct InnerCircleMemberRow: View {
-    let profile: Profile
-    let isOnline: Bool
-    var connectionTime: Date? = nil
-    // Removed lastSeen property as it's no longer in Profile
-    // var lastSeen: Date? = nil
-    @EnvironmentObject var sharedState: SharedState
-    var stream: Stream
-    @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
-    @State private var showRemoveConfirmation = false
-    // Standard system margin from HIG
-    private let systemMargin: CGFloat = 16
-
-    // Computed property to get the current key exchange state for this profile (if online)
-    private var keyExchangeState: KeyExchangeState? {
-        guard isOnline, let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
-            return nil
-        }
-        return peerManager.peerKeyExchangeStates[peer]?.state
-    }
-
-    // Computed property to determine if the key exchange button should be disabled
-    private var isKeyExchangeButtonDisabled: Bool {
-        guard isOnline, let state = keyExchangeState else {
-            return true // Disable if offline or no state found
-        }
-        // Disable unless idle or failed (allow retry from failed)
-        switch state {
-        case .idle, .failed:
-            return false
-        default:
-            return true
-        }
-    }
-
-    var body: some View {
-        HStack {
-            // Avatar
-            avatarView
-                .frame(width: 40, height: 40)
-
-            // Profile info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-
-                if isOnline {
-                    if let time = connectionTime {
-                        Text("Connected \(timeAgoString(time))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("Online")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    // Display Key Exchange Status if online
-                    keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW
-                        .font(.caption2) // Smaller font for status
-                        .padding(.top, 1)
-
-                } else {
-                    // Removed lastSeen display
-                    Text("Offline") // Simple offline indicator
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Spacer()
-
-            // Status indicator (Online/Offline dot)
-            statusIndicator
-
-            // Message button - Only enabled for online peers
-            Button(action: {
-                // Open chat with this member
-                if isOnline {
-                    openDirectChat()
-                }
-            }) {
-                Image(systemName: "message")
-                    .font(.subheadline)
-                    .foregroundColor(isOnline ? .blue : .gray)
-                    .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
-                    .background(Circle().fill(isOnline ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1)))
-            }
-            .buttonStyle(.plain)
-            .disabled(!isOnline)
-
-            // Key Exchange Button - Only show for online peers
-            if isOnline {
-                keyExchangeButton() // <-- INTEGRATED KEY EXCHANGE BUTTON
-            }
-
-            // Remove member button
-            Button(action: {
-                showRemoveConfirmation = true
-            }) {
-                Image(systemName: "person.fill.xmark")
-                    .font(.subheadline)
-                    .foregroundColor(.red)
-                    .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
-                    .background(Circle().fill(Color.red.opacity(0.1)))
-            }
-            .buttonStyle(.plain)
-            .alert("Remove Member", isPresented: $showRemoveConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Remove", role: .destructive) {
-                    removeFromInnerCircle()
-                }
-            } message: {
-                Text("Are you sure you want to remove \(profile.name) from your InnerCircle? They will no longer be able to communicate directly with you.")
-            }
-        }
-        .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-        .padding(.horizontal, systemMargin * 0.75) // Use systemMargin multiple (12pt)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(10)
-    }
-
-    // Open direct chat with this member
-    private func openDirectChat() {
-        // Set the InnerCircle stream as selected
-        sharedState.selectedStreamPublicID = stream.publicID
-
-        // Show chat overlay
-        sharedState.showChatOverlay = true
-
-        // Store the selected profile for direct messaging
-        sharedState.setState(profile, forKey: "selectedDirectMessageProfile")
-    }
-
-    // Avatar view
-    private var avatarView: some View {
-        let initials = profile.name.prefix(2).uppercased()
-        let color = avatarColor(for: profile.publicID)
-
-        return ZStack {
-            Circle()
-                .fill(color)
-            Text(initials)
-                .font(.subheadline.bold())
-                .foregroundColor(.white)
-        }
-    }
-
-    // Status indicator
-    private var statusIndicator: some View {
-        Group {
-            if isOnline {
-                // Online indicator
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.2))
-                        .frame(width: 16, height: 16)
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
-                }
-            } else {
-                // Offline indicator
-                Circle()
-                    .stroke(Color.gray.opacity(0.5), lineWidth: 1.5)
-                    .frame(width: 12, height: 12)
-            }
-        }
-    }
-
-    // Generate avatar color from profile ID
-    private func avatarColor(for data: Data) -> Color {
-        var hash = 0
-        for byte in data {
-            hash = hash &* 31 &+ Int(byte)
-        }
-        let hue = Double(abs(hash) % 360) / 360.0
-        return Color(hue: hue, saturation: 0.7, brightness: 0.8)
-    }
-
-    // Format time ago string
-    private func timeAgoString(_ date: Date) -> String {
-        let now = Date()
-        let timeInterval = now.timeIntervalSince(date)
-
-        if timeInterval < 60 { return GroupView.justNowString } // Use constant
-        if timeInterval < 3600 {
-            let minutes = Int(timeInterval / 60)
-            return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
-        }
-        if timeInterval < 86400 {
-            let hours = Int(timeInterval / 3600)
-            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
-        }
-        if timeInterval < 604_800 { // 7 days
-            let days = Int(timeInterval / 86400)
-            return "\(days) day\(days == 1 ? "" : "s") ago"
-        }
-
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
-    }
-
-    // Remove member from InnerCircle
-    private func removeFromInnerCircle() {
-        Task { @MainActor in // Ensure execution on main actor
-            do {
-                // 1. Find the MCPeerID associated with the profile being removed
-                var peerToDisconnect: MCPeerID?
-                for (peer, connectedProfile) in peerManager.connectedPeerProfiles {
-                    if connectedProfile.id == profile.id {
-                        peerToDisconnect = peer
-                        break
-                    }
-                }
-
-                // 2. Remove KeyStore data for this profile
-                try await PersistenceController.shared.deleteKeyStoreDataFor(profile: profile)
-
-                // 3. Remove the profile from this stream's members list
-                stream.removeFromInnerCircle(profile)
-                try await PersistenceController.shared.saveChanges() // Save changes after modifying stream
-
-                // 4. Disconnect the peer if they are currently connected
-                if let peer = peerToDisconnect {
-                    print("Disconnecting peer \(peer.displayName) associated with removed profile \(profile.name)")
-                    peerManager.disconnectPeer(peer) // Use the existing method
-                } else {
-                    print("Peer for profile \(profile.name) was not connected, no disconnection needed.")
-                }
-
-                // 5. Update the UI to reflect the member is removed
-                // The list should refresh when InnerCircleView's loadInnerCircleProfiles is called
-
-                // 6. Show an optional toast/banner notifying that the member was removed
-                sharedState.setState("Successfully removed \(profile.name) from your InnerCircle", forKey: "statusMessage")
-
-                // 7. Trigger a refresh of the members list
-                NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
-
-            } catch {
-                print("Error removing member from InnerCircle: \(error)")
-                // Show error message
-                sharedState.setState("Failed to remove \(profile.name): \(error.localizedDescription)", forKey: "errorMessage")
-            }
-        }
-    }
-
-    // MARK: - Key Exchange UI Helpers
-
-    // View to display the current key exchange status text and icon
-    @ViewBuilder
-    private func keyExchangeStatusView() -> some View {
-        if let state = keyExchangeState {
-            let (text, icon, color) = displayInfo(for: state)
-            HStack(spacing: 3) {
-                if let iconName = icon {
-                    Image(systemName: iconName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 10, height: 10) // Smaller icon
-                        .foregroundColor(color)
-                }
-                Text(text)
-                    .foregroundColor(color)
-            }
-            // Add animation for state changes
-            .animation(.easeInOut(duration: 0.3), value: state)
-        } else {
-            // Default view if no state (or offline) - Indicate keys are ready/default state
-            HStack(spacing: 3) {
-                Image(systemName: "lock.shield") // Use a neutral icon
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 10, height: 10)
-                    .foregroundColor(.gray) // Neutral color
-                Text("Secure") // Neutral text
-                    .foregroundColor(.gray)
-            }
-        }
-    }
-
-    // Button for initiating or retrying key exchange
-    @ViewBuilder
-    private func keyExchangeButton() -> some View {
-        let keyState: KeyExchangeState = keyExchangeState ?? .idle // Default to idle if nil
-        let isFailed = if case KeyExchangeState.failed = keyState { true } else { false }
-        let (text, _, color) = displayInfo(for: keyState) // Get text and color
-        let isDisabled = isKeyExchangeButtonDisabled
-
-        Button {
-            // Find the peer and initiate regeneration
-            if let peer = peerManager.findPeer(byProfileID: profile.publicID) {
-                Task {
-                    do {
-                        print("UI: Initiating key regeneration with peer \(peer.displayName) for profile \(profile.name)")
-                        try await peerManager.initiateKeyRegeneration(with: peer)
-                        print("UI: Key regeneration initiated successfully for \(profile.name)")
-                    } catch {
-                        print("❌ UI: Failed to initiate key regeneration for \(profile.name): \(error)")
-                        // Optionally show an error to the user (e.g., using an alert or status message)
-                        sharedState.setState("Key exchange failed: \(error.localizedDescription)", forKey: "errorMessage") // Example error handling
-                    }
-                }
-            } else {
-                print("❌ UI: Could not find MCPeerID for profile \(profile.name) to initiate key exchange.")
-            }
-        } label: {
-            Group {
-                switch keyState {
-                case .idle:
-                    Image(systemName: "key.radiowaves.forward")
-                        .foregroundColor(.blue)
-                case KeyExchangeState.failed:
-                    Image(systemName: "arrow.clockwise") // Retry icon
-                        .foregroundColor(.orange)
-                case .completed:
-                    Image(systemName: "checkmark.shield")
-                        .foregroundColor(.green)
-                case .requestSent, .requestReceived, .offerSent, .offerReceived, .ackSent, .ackReceived, .commitSent:
-                    ProgressView() // Show spinner while in progress
-                        .scaleEffect(0.6) // Smaller spinner
-                        .frame(width: 16, height: 16) // Ensure consistent size
-                        .tint(.orange) // Tint spinner orange during progress
-                }
-            }
-            .font(.subheadline) // Match message icon size
-            .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
-            // Use clear background when disabled or completed, otherwise use tinted background
-            .background(Circle().fill((isDisabled && !isFailed) ? Color.clear : color.opacity(0.1)))
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        // Add tooltip/help text
-        .help(isDisabled ? text : (isFailed ? "Retry Key Exchange" : "Initiate Key Exchange"))
-        // Add animation for state changes
-        .animation(.easeInOut(duration: 0.3), value: keyState)
-    }
-
-    // Helper to get display info based on KeyExchangeState
-    private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
-        switch state {
-        case .idle:
-            return ("Ready to Exchange", "key.radiowaves.forward", .blue)
-        case .requestSent:
-            return ("Request Sent", "paperplane", .orange)
-        case .requestReceived:
-            return ("Request Received", "envelope.badge", .orange)
-        case .offerSent:
-            return ("Offer Sent", "paperplane.fill", .orange)
-        case .offerReceived:
-            return ("Offer Received", "envelope.open.badge.clock", .orange)
-        case .ackSent:
-            return ("Ack Sent", "checkmark.message", .orange)
-        case .ackReceived:
-            return ("Ack Received", "checkmark.message.fill", .orange)
-        case .commitSent:
-            // Using a more indicative icon for the final step before completion
-            return ("Committing Keys", "lock.shield.fill", .orange)
-        case .completed:
-            return ("Keys Exchanged", "checkmark.shield.fill", .green)
-        case let .failed(reason):
-            // Keep reason short for UI
-            let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
-            // Provide a more user-friendly default if reason is empty
-            let displayText = reason.isEmpty ? "Failed" : "Failed: \(shortReason)"
-            return (displayText, "exclamationmark.triangle.fill", .red)
-        }
-    }
-}
-
-// MARK: - Peer Profile View
-
-struct PeerProfileView: View {
-    let profile: Profile
-    let connectionTime: Date?
-
-    var body: some View {
-        HStack {
-            // Profile Info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary) // Use primary color for name
-
-                if let time = connectionTime {
-                    Text("Connected \(connectionTimeString(time))")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("Connected") // Fallback if time isn't available
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Spacer()
-
-            // Connection Status Indicator (Green dot)
-            ZStack {
-                Circle().fill(Color.green.opacity(0.2)).frame(width: 16, height: 16)
-                Circle().fill(Color.green).frame(width: 8, height: 8)
-            }
-        }
-    }
-
-    // Format the connection time (copied from GroupView for encapsulation)
-    private func connectionTimeString(_ date: Date) -> String {
-        let now = Date()
-        let timeInterval = now.timeIntervalSince(date)
-
-        if timeInterval < 60 { return GroupView.justNowString } // Use constant
-        if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
-        if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
-
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-}
-
 // MARK: - Server Card (Now used for non-InnerCircle streams)
 
 struct GroupCardView: View {
@@ -2313,70 +1436,6 @@ struct GroupCardView: View {
     }
 }
 
-// Helper for applying corner radius to specific corners
-struct RoundedCorner: Shape {
-    var radius: CGFloat = .infinity
-    var corners: UIRectCorner = .allCorners
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
-        return Path(path.cgPath)
-    }
-}
-
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct PolicyRow: View {
-    let icon: String
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-
-            Text(title)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            Text(value)
-                .foregroundStyle(.primary)
-        }
-    }
-}
-
-struct ThoughtRow: View {
-    let thought: Thought
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(thought.nano.hexEncodedString()) // Consider showing something more user-friendly
-                    .font(.headline)
-                    .lineLimit(1) // Limit display if hex is too long
-                Spacer()
-                Text(thought.metadata.createdAt, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(thought.metadata.createdAt.formatted())
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
 // MARK: - KeyStore Status Indicator (Simplified for Header)
 
 struct KeyStoreStatusIndicator: View {
@@ -2426,42 +1485,5 @@ struct KeyStoreStatusIndicator: View {
         .animation(.easeInOut, value: peerManager.localKeyStoreInfo)
         .animation(.easeInOut, value: peerManager.isRegeneratingKeys)
         // Add accessibility later
-    }
-}
-
-// MARK: - PeerDiscoveryManager Mock Extensions (for compilation)
-
-// These should be replaced by actual implementations in PeerDiscoveryManager
-
-// Add a placeholder property to PeerDiscoveryManager if it doesn't exist
-// This is just for compilation and assumes the real manager will publish this.
-extension PeerDiscoveryManager {
-    // Placeholder - Replace with actual published property
-    // @Published var localKeyStoreInfo: LocalKeyStoreInfo? = nil // Type already updated
-    // @Published var isRegeneratingKeys: Bool = false // Already exists
-
-    // Check if key exchange is actively in progress with a specific peer
-    func isExchangingKeys(with peer: MCPeerID) -> Bool {
-        guard let state = peerKeyExchangeStates[peer]?.state else {
-            return false // No state tracked for this peer
-        }
-        // Return true if state is anything other than idle, completed, or failed
-        switch state {
-        case .idle, .completed, .failed:
-            return false
-        default:
-            return true
-        }
-    }
-
-    // Check if key exchange is actively in progress with a specific profile
-    func isExchangingKeys(with profile: Profile) -> Bool {
-        // Find the MCPeerID associated with this profile among connected peers
-        guard let peer = findPeer(byProfileID: profile.publicID) else {
-            // Profile not found among connected peers
-            return false
-        }
-        // Check the state for the found peer
-        return isExchangingKeys(with: peer)
     }
 }
