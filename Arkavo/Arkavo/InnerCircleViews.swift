@@ -523,13 +523,14 @@ struct InnerCircleMemberRow: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(10)
         // Add alert for disconnect confirmation
-        .alert("Disconnect Peer", isPresented: $showDisconnectConfirmation) {
+        .alert("Disconnect P2P with \(profile.name)?", isPresented: $showDisconnectConfirmation) { // Updated Title
             Button("Cancel", role: .cancel) {}
-            Button("Disconnect", role: .destructive) {
+            Button("Disconnect") { // Removed destructive role
                 disconnectPeer()
             }
         } message: {
-            Text("Are you sure you want to disconnect from \(profile.name)? This will end your current secure connection. You can reconnect later if needed.")
+            // Updated Message
+            Text("This will end your direct peer-to-peer connection. \(profile.name) will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting.")
         }
     }
 
@@ -776,14 +777,14 @@ struct InnerCircleMemberRow: View {
         Button {
             showDisconnectConfirmation = true
         } label: {
-            Image(systemName: "link.slash") // Use link.slash icon
+            Image(systemName: "antenna.radiowaves.left.and.right.slash") // Updated SF Symbol
                 .font(.subheadline) // Match other action button icon size
-                .foregroundColor(InnerCircleConstants.trustRed) // Use specified red color
+                .foregroundColor(.blue) // Use blue color for network action
                 .padding(systemMargin / 2) // Use systemMargin multiple (8pt)
-                .background(Circle().fill(InnerCircleConstants.trustRed.opacity(0.1))) // Red tinted background
+                .background(Circle().fill(Color.blue.opacity(0.1))) // Blue tinted background
         }
         .buttonStyle(.plain)
-        .disabled(!isOnline) // Disable if not online
+        .disabled(!isOnline) // Disable if not P2P connected
         .opacity(isOnline ? 1.0 : 0.4) // Apply opacity when disabled
         .help("Disconnect from \(profile.name)") // Accessibility hint
         .accessibilityLabel("Disconnect from \(profile.name)") // Accessibility label
