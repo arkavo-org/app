@@ -602,7 +602,6 @@ struct GroupView: View {
     private func streamScrollView(geometry: GeometryProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: InnerCircleConstants.doubleMargin) { // Increased spacing between major sections
-
                 // --- 2. InnerCircle Members Section ---
                 innerCircleMembersSection()
                     .padding(.horizontal, InnerCircleConstants.systemMargin)
@@ -704,39 +703,6 @@ struct GroupView: View {
             }
         }
         .frame(width: 10, height: 10) // Consistent size
-    }
-
-    // --- NEW: KeyStore Status Row ---
-    private func keyStoreStatusRow() -> some View {
-        HStack {
-            Label {
-                Text("Local KeyStore")
-                    .font(InnerCircleConstants.secondaryTextFont)
-                    .foregroundColor(InnerCircleConstants.secondaryTextColor)
-            } icon: {
-                Image(systemName: "key.fill") // Example icon
-                    .foregroundColor(InnerCircleConstants.secondaryTextColor)
-            }
-
-            Spacer()
-
-            // Re-integrate the simplified indicator
-            KeyStoreStatusIndicator(peerManager: peerManager)
-
-            // Placeholder Renew Button (Logic needs implementation)
-            if let keyInfo = peerManager.localKeyStoreInfo, keyInfo.validKeyCount > 0 {
-                let isLow = (Double(keyInfo.validKeyCount) / Double(keyInfo.capacity)) < 0.10
-                Button("Renew Keys") {
-                    // TODO: Implement Key Renewal Initiation Flow
-                    print("Initiate Key Renewal Flow...")
-                }
-                .font(InnerCircleConstants.statusIndicatorFont)
-                .foregroundColor(isLow ? InnerCircleConstants.trustYellow : InnerCircleConstants.primaryActionColor)
-                .disabled(!isLow) // Example: Enable only when low
-                .padding(.leading, InnerCircleConstants.halfMargin)
-                .accessibilityLabel("Renew one-time keys")
-            }
-        }
     }
 
     // Individual stream row (now only uses GroupCardView)

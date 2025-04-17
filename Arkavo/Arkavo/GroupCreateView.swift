@@ -22,27 +22,6 @@ struct GroupCreateView: View {
             } footer: {
                 Text("This will be the name of your new group")
             }
-
-            Section {
-                Button(action: {
-                    Task {
-                        await createInnerCircleGroup()
-                        sharedState.showCreateView = false
-                        dismiss()
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .foregroundColor(.blue)
-                        Text("Create Inner Circle (Local P2P)")
-                            .foregroundColor(.primary)
-                    }
-                }
-            } header: {
-                Text("Special Groups")
-            } footer: {
-                Text("Inner Circle enables direct peer-to-peer communication with nearby devices")
-            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -98,44 +77,6 @@ struct GroupCreateView: View {
         } catch {
             await MainActor.run {
                 errorMessage = "Failed to create group: \(error.localizedDescription)"
-                showError = true
-            }
-        }
-    }
-
-    private func createInnerCircleGroup() async {
-        do {
-            let account = ViewModelFactory.shared.getCurrentAccount()!
-
-            // Check if InnerCircle already exists
-            if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
-                print("Using existing InnerCircle with ID: \(existingInnerCircle.id)")
-
-                await MainActor.run {
-                    sharedState.selectedStreamPublicID = existingInnerCircle.publicID
-                }
-                return
-            }
-
-            // Create a new InnerCircle if none exists
-            let groupProfile = Profile(name: "InnerCircle", blurb: "Local peer-to-peer communication")
-
-            let newStream = Stream(
-                creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
-                profile: groupProfile,
-                policies: Policies(admission: .openInvitation, interaction: .open, age: .forAll)
-            )
-
-            account.streams.append(newStream)
-
-            try await PersistenceController.shared.saveChanges()
-
-            await MainActor.run {
-                sharedState.selectedStreamPublicID = newStream.publicID
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = "Failed to create InnerCircle group: \(error.localizedDescription)"
                 showError = true
             }
         }

@@ -285,9 +285,6 @@
     "Create" : {
 
     },
-    "Create Inner Circle (Local P2P)" : {
-
-    },
     "Create Profile" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -431,9 +428,6 @@
     "Inactive" : {
 
     },
-    "Inner Circle enables direct peer-to-peer communication with nearby devices" : {
-
-    },
     "Inner Circle Members (%lld)" : {
 
     },
@@ -519,9 +513,6 @@
 
     },
     "Loading..." : {
-
-    },
-    "Local KeyStore" : {
 
     },
     "Location" : {
@@ -731,13 +722,7 @@
     "Remove Member" : {
 
     },
-    "Renew Keys" : {
-
-    },
     "Renew keys with %@" : {
-
-    },
-    "Renew one-time keys" : {
 
     },
     "Report Content" : {
@@ -856,9 +841,6 @@
           }
         }
       }
-    },
-    "Special Groups" : {
-
     },
     "Start" : {
       "extractionState" : "stale",

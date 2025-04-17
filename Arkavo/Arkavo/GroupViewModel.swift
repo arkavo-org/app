@@ -1,26 +1,24 @@
 import ArkavoSocial
-import CryptoKit // Import for nonce generation
+import CryptoKit
 @preconcurrency import MultipeerConnectivity
-import OpenTDFKit // Keep OpenTDFKit import for KeyStore usage
+import OpenTDFKit
 import SwiftData
 import SwiftUI
 import UIKit
 
-// Define custom notification names
+// MARK: - Notifications
+
 extension Notification.Name {
     static let chatMessagesUpdated = Notification.Name("chatMessagesUpdatedNotification")
-    // Add notification name for non-JSON data received
     static let nonJsonDataReceived = Notification.Name("nonJsonDataReceivedNotification")
-    // Define notification name for P2P message received (used by ArkavoClient delegate)
     static let p2pMessageReceived = Notification.Name("p2pMessageReceivedNotification")
-    // Define notification name for when a shared profile is saved locally
     static let profileSharedAndSaved = Notification.Name("profileSharedAndSavedNotification")
-    // Define notification name for when a shared public KeyStore is saved locally
-    static let keyStoreSharedAndSaved = Notification.Name("keyStoreSharedAndSavedNotification") // NEW
+    static let keyStoreSharedAndSaved = Notification.Name("keyStoreSharedAndSavedNotification")
 }
 
-// Define the struct for detailed KeyStore info (based on GroupView summary)
-// Ensure this struct is accessible where needed (e.g., here or a shared Models file)
+// MARK: - Data Structures
+
+/// Basic info about the local KeyStore status.
 struct LocalKeyStoreInfo: Equatable {
     let validKeyCount: Int
     let expiredKeyCount: Int
@@ -32,17 +30,16 @@ struct LocalKeyStoreInfo: Equatable {
 /// Represents the state of the secure key regeneration exchange with a specific peer.
 enum KeyExchangeState: Codable, Equatable {
     case idle
-    case requestSent(nonce: Data) // Initiator state
-    case requestReceived(nonce: Data) // Responder state
-    case offerSent(nonce: Data) // Responder state
-    case offerReceived(nonce: Data) // Initiator state
-    case ackSent(nonce: Data) // Initiator state
-    case ackReceived(nonce: Data) // Responder state
-    case commitSent(nonce: Data) // Responder state (final state for responder)
-    case completed(nonce: Data) // Initiator state (final state for initiator)
+    case requestSent(nonce: Data)
+    case requestReceived(nonce: Data)
+    case offerSent(nonce: Data)
+    case offerReceived(nonce: Data)
+    case ackSent(nonce: Data)
+    case ackReceived(nonce: Data)
+    case commitSent(nonce: Data)
+    case completed(nonce: Data)
     case failed(String)
 
-    // Helper to get the nonce, regardless of state
     var nonce: Data? {
         switch self {
         case let .requestSent(n), let .requestReceived(n), let .offerSent(n),
@@ -58,7 +55,7 @@ enum KeyExchangeState: Codable, Equatable {
 /// Stores the tracking information for a key exchange with a peer.
 struct KeyExchangeTrackingInfo: Codable, Equatable {
     var state: KeyExchangeState = .idle
-    var lastActivity: Date = .init() // For potential timeout logic
+    var lastActivity: Date = .init()
 }
 
 /// Enum defining the types of P2P messages exchanged directly between peers.
@@ -67,18 +64,16 @@ enum P2PMessageType: String, Codable {
     case keyRegenerationOffer
     case keyRegenerationAcknowledgement
     case keyRegenerationCommit
-    case profileShare // For sharing a profile directly
-    case keyStoreShare // NEW: For sharing a public KeyStore directly
-    // Add other direct P2P message types here if needed
-    // Note: Secure text messages are handled via ArkavoClient encryption/decryption delegates
+    case profileShare
+    case keyStoreShare
 }
 
 /// Wrapper for all direct P2P messages.
 struct P2PMessage: Codable {
     let messageType: P2PMessageType
-    let payload: Data // Encoded data of the specific message struct (e.g., KeyRegenerationRequest)
+    let payload: Data // Encoded data of the specific message struct
 
-    // Helper to encode a specific message payload
+    /// Encode a specific message payload into a P2PMessage Data object.
     static func encode(type: P2PMessageType, payload: some Codable) throws -> Data {
         let encoder = JSONEncoder()
         let payloadData = try encoder.encode(payload)
@@ -86,68 +81,62 @@ struct P2PMessage: Codable {
         return try encoder.encode(message)
     }
 
-    // Helper to decode the outer message
+    /// Decode the outer P2PMessage structure.
     static func decode(from data: Data) throws -> P2PMessage {
         let decoder = JSONDecoder()
         return try decoder.decode(P2PMessage.self, from: data)
     }
 
-    // Helper to decode the specific inner payload
+    /// Decode the specific inner payload from a P2PMessage.
     func decodePayload<T: Codable>(_ type: T.Type) throws -> T {
         let decoder = JSONDecoder()
         return try decoder.decode(type, from: payload)
     }
 }
 
-// --- Key Exchange Message Payloads ---
+// MARK: - P2P Message Payloads
 
 struct KeyRegenerationRequest: Codable {
-    let requestID: UUID // Unique ID for this request instance
+    let requestID: UUID
     let initiatorProfileID: String // Base58 encoded public ID
     let timestamp: Date
 }
 
 struct KeyRegenerationOffer: Codable {
-    let requestID: UUID // Corresponds to the request
+    let requestID: UUID
     let responderProfileID: String // Base58 encoded public ID
-    let nonce: Data // Responder's nonce for the shared key generation
+    let nonce: Data // Responder's nonce
     let timestamp: Date
 }
 
 struct KeyRegenerationAcknowledgement: Codable {
-    let requestID: UUID // Corresponds to the request
+    let requestID: UUID
     let initiatorProfileID: String // Base58 encoded public ID
-    let nonce: Data // Initiator's nonce (matches the one sent in requestSent state)
+    let nonce: Data // Initiator's original nonce
     let timestamp: Date
 }
 
 struct KeyRegenerationCommit: Codable {
-    let requestID: UUID // Corresponds to the request
-    let responderProfileID: String // Base58 encoded public ID
+    let requestID: UUID
+    let responderProfileID: String
     let timestamp: Date
-    // No nonce needed here, implicitly uses the one from the Offer
 }
-
-// --- Profile Sharing Payload ---
 
 /// Payload for the `.profileShare` P2P message.
 struct ProfileSharePayload: Codable {
-    let profileData: Data // Serialized Profile object (using Profile.toData())
-    // No target stream ID needed here; receiver adds to their own InnerCircle
+    let profileData: Data
 }
-
-// --- KeyStore Sharing Payload (NEW) ---
 
 /// Payload for the `.keyStoreShare` P2P message.
 struct KeyStoreSharePayload: Codable {
-    let senderProfileID: String // Base58 encoded public ID of the sender
-    let keyStorePublicData: Data // Serialized PUBLIC components of the sender's KeyStore
+    let senderProfileID: String
+    let keyStorePublicData: Data
     let timestamp: Date
 }
 
-// MARK: - PeerDiscoveryManager
+// MARK: - PeerDiscoveryManager Facade
 
-// Public interface for peer discovery
+/// Provides a simplified interface for peer discovery and P2P communication using MultipeerConnectivity and ArkavoClient.
 @MainActor
 class PeerDiscoveryManager: ObservableObject {
     @Published var connectedPeers: [MCPeerID] = []
@@ -155,145 +144,99 @@ class PeerDiscoveryManager: ObservableObject {
     @Published var selectedStream: Stream?
     @Published var connectionStatus: ConnectionStatus = .idle
     @Published var peerConnectionTimes: [MCPeerID: Date] = [:]
-    // KeyStore status properties - now uses LocalKeyStoreInfo
-    @Published var localKeyStoreInfo: LocalKeyStoreInfo? // UPDATED TYPE
+    @Published var localKeyStoreInfo: LocalKeyStoreInfo?
     @Published var isRegeneratingKeys: Bool = false
-    // Expose peer profiles fetched from persistence
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:]
-    // Expose peerID to ProfileID mapping
+
+    /// Map of connected MCPeerID to their Base58 encoded Profile Public ID string.
     var peerIDToProfileIDMap: [MCPeerID: String] {
         implementation.peerIDToProfileID
     }
 
-    // Expose key exchange status
+    /// Exposes the current key exchange state with each connected peer.
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:]
 
     private var implementation: P2PGroupViewModel
 
-    // Inject ArkavoClient instance
     init(arkavoClient: ArkavoClient) {
         implementation = P2PGroupViewModel(arkavoClient: arkavoClient)
 
-        // Forward published properties
+        // Bind published properties from implementation to facade
         implementation.$connectedPeers.assign(to: &$connectedPeers)
         implementation.$isSearchingForPeers.assign(to: &$isSearchingForPeers)
         implementation.$selectedStream.assign(to: &$selectedStream)
         implementation.$connectionStatus.assign(to: &$connectionStatus)
         implementation.$peerConnectionTimes.assign(to: &$peerConnectionTimes)
-        // Forward KeyStore status properties (UPDATED TYPE)
-        implementation.$localKeyStoreInfo.assign(to: &$localKeyStoreInfo) // Assignment remains the same, type is forwarded
+        implementation.$localKeyStoreInfo.assign(to: &$localKeyStoreInfo)
         implementation.$isRegeneratingKeys.assign(to: &$isRegeneratingKeys)
-        // Forward peer profiles
         implementation.$connectedPeerProfiles.assign(to: &$connectedPeerProfiles)
-        // Forward key exchange states
         implementation.$peerKeyExchangeStates.assign(to: &$peerKeyExchangeStates)
 
-        // Set the delegate for ArkavoClient to receive events
         arkavoClient.delegate = implementation
     }
 
+    /// Sets up the Multipeer Connectivity session and advertiser/browser.
     func setupMultipeerConnectivity() async throws {
         try await implementation.setupMultipeerConnectivity()
     }
 
+    /// Starts advertising and browsing for nearby peers.
     func startSearchingForPeers() throws {
         try implementation.startSearchingForPeers()
     }
 
+    /// Stops advertising and browsing.
     func stopSearchingForPeers() {
         implementation.stopSearchingForPeers()
     }
 
-    // Text message sending is now handled by ArkavoClient via P2PGroupViewModel
-    // func sendTextMessage(_ message: String, in stream: Stream) throws {
-    //     try implementation.sendTextMessage(message, in: stream)
-    // }
-
+    /// Returns the standard Multipeer Connectivity browser view controller.
     func getPeerBrowser() -> MCBrowserViewController? {
         implementation.getBrowser()
     }
 
-    /// Handle a rewrap request for encrypted communication (delegated to ArkavoClient)
-    /// - Parameters:
-    ///   - publicKey: The ephemeral public key from the rewrap request
-    ///   - encryptedSessionKey: The encrypted session key that needs to be rewrapped
-    ///   - senderProfileID: Optional profile ID of the sender (used for tracking/logging)
-    /// - Returns: Rewrapped key data or nil if no matching key found
-    func handleRewrapRequest(publicKey: Data, encryptedSessionKey: Data, senderProfileID: String? = nil) async throws -> Data? {
-        try await implementation.handleRewrapRequest(
-            publicKey: publicKey,
-            encryptedSessionKey: encryptedSessionKey,
-            senderProfileID: senderProfileID
-        )
-    }
-
-    /// Manually triggers the regeneration of keys in the local KeyStore.
-    func regenerateLocalKeys() async {
-        await implementation.regenerateLocalKeys()
-    }
-
-    /// Fetches the Profile associated with a given MCPeerID.
+    /// Fetches the locally stored Profile associated with a given MCPeerID.
     func getProfile(for peerID: MCPeerID) -> Profile? {
         implementation.connectedPeerProfiles[peerID]
     }
 
-    /// Sends data securely using ArkavoClient
-    /// - Parameters:
-    ///   - data: The raw data to encrypt and send
-    ///   - peers: Optional specific peers to send to (defaults to all connected peers)
-    ///   - stream: The stream context for the data
-    ///   - policy: The TDF policy to apply (as a JSON string)
-    /// - Throws: Errors if encryption or sending fails
+    /// Encrypts data using ArkavoClient and sends it via MCSession.
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
         try await implementation.sendSecureData(data, policy: policy, toPeers: peers, in: stream)
     }
 
-    /// Sends a secure text message using ArkavoClient
+    /// Encrypts a text message using ArkavoClient and sends it.
     func sendSecureTextMessage(_ message: String, in stream: Stream) async throws {
         try await implementation.sendSecureTextMessage(message, in: stream)
     }
 
     /// Disconnects a specific peer from the session.
-    /// - Parameter peer: The MCPeerID of the peer to disconnect.
     func disconnectPeer(_ peer: MCPeerID) {
         implementation.disconnectPeer(peer)
     }
 
-    /// Finds a connected peer by their Profile ID.
-    /// - Parameter profileID: The public profile ID (Data) of the peer to find.
-    /// - Returns: The `MCPeerID` of the connected peer, or `nil` if not found.
+    /// Finds a connected peer by their Profile Public ID.
     func findPeer(byProfileID profileID: Data) -> MCPeerID? {
         implementation.findPeer(byProfileID: profileID)
     }
 
-    /// Initiates the secure key regeneration process with a specific peer.
-    /// - Parameter peer: The `MCPeerID` of the peer to regenerate keys with.
-    /// - Throws: `P2PError` if the process cannot be initiated.
+    /// Initiates the secure key regeneration protocol with a specific peer.
     func initiateKeyRegeneration(with peer: MCPeerID) async throws {
         try await implementation.initiateKeyRegeneration(with: peer)
     }
 
-    /// Sends a specific P2P message (like profile share) to designated peers.
-    /// - Parameters:
-    ///   - type: The `P2PMessageType` of the message.
-    ///   - payload: The `Codable` payload object for the message.
-    ///   - peers: The list of `MCPeerID`s to send the message to.
-    /// - Throws: `P2PError` if encoding or sending fails.
+    /// Sends a direct P2P message (e.g., profile share, key exchange) to designated peers.
     func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
         try await implementation.sendP2PMessage(type: type, payload: payload, toPeers: peers)
     }
 
-    // NEW: Helper to get or create the local KeyStore and return its public data
-    /// Gets the public data of the local user's KeyStore.
-    /// If the KeyStore doesn't exist, it creates one, generates keys, saves the private part, and returns the public part.
-    /// - Returns: The serialized public KeyStore data.
-    /// - Throws: `P2PError` if profile is unavailable, or KeyStore operations fail.
+    /// Gets the public data of the local user's KeyStore. Creates and saves if needed.
     func getOrCreateLocalPublicKeystoreData() async throws -> Data {
         try await implementation.getOrCreateLocalPublicKeystoreData()
     }
 }
 
-// Connection status enum for UI feedback
+/// Represents the current state of the Multipeer Connectivity connection.
 enum ConnectionStatus: Equatable {
     case idle
     case searching
@@ -307,6 +250,7 @@ enum ConnectionStatus: Equatable {
              (.connecting, .connecting), (.connected, .connected):
             true
         case let (.failed(lhsError), .failed(rhsError)):
+            // Compare based on localized description for simplicity
             lhsError.localizedDescription == rhsError.localizedDescription
         default:
             false
@@ -314,151 +258,100 @@ enum ConnectionStatus: Equatable {
     }
 }
 
-// Implementation class for MultipeerConnectivity, integrating ArkavoClient
+// MARK: - P2PGroupViewModel Implementation
+
+/// Handles the underlying MultipeerConnectivity logic, ArkavoClient integration, and P2P protocols.
 @MainActor
 class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
-    // Conform to ArkavoClientDelegate - Implementations are further down
-    // Removed empty delegate methods:
-    // - clientDidChangeState
-    // - clientDidReceiveMessage(Data)
-    // - clientDidReceiveError(any Error)
-
-    // MultipeerConnectivity properties
+    // MultipeerConnectivity components
     private var mcSession: MCSession?
     private var mcPeerID: MCPeerID?
     private var mcAdvertiser: MCNearbyServiceAdvertiser?
     private var mcBrowser: MCBrowserViewController?
     private var invitationHandler: ((Bool, MCSession?) -> Void)?
 
-    // Arkavo Client for secure communication
-    private let arkavoClient: ArkavoClient // Inject ArkavoClient
+    private let arkavoClient: ArkavoClient
 
+    // Published properties (mirrored by PeerDiscoveryManager)
     @Published var connectedPeers: [MCPeerID] = []
     @Published var isSearchingForPeers: Bool = false
     @Published var selectedStream: Stream?
     @Published var connectionStatus: ConnectionStatus = .idle
     @Published var peerConnectionTimes: [MCPeerID: Date] = [:]
-    // KeyStore status properties - now uses LocalKeyStoreInfo
-    @Published var localKeyStoreInfo: LocalKeyStoreInfo? // UPDATED TYPE
+    @Published var localKeyStoreInfo: LocalKeyStoreInfo?
     @Published var isRegeneratingKeys: Bool = false
-    // Store fetched peer profiles
-    @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:]
-    // Track key exchange state per peer
-    @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:]
+    @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:] // Cache of fetched peer profiles
+    @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:] // Tracks key exchange state per peer
 
-    // For tracking resources
+    // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
-    // For tracking streams
-    private var activeInputStreams: [InputStream: MCPeerID] = [:] // Track streams by peer
+    private var activeInputStreams: [InputStream: MCPeerID] = [:] // Tracks open streams by peer
 
-    // Error types (Keep relevant ones, remove KeyStore stub related errors)
+    /// Specific errors related to P2P operations.
     enum P2PError: Error, LocalizedError {
         case sessionNotInitialized
-        case invalidStream
+        case invalidStream // Attempted operation on non-InnerCircle stream
         case browserNotInitialized
-        // case keyStoreNotInitialized // Replaced by ArkavoClient errors
         case profileNotAvailable
         case serializationFailed(String)
         case deserializationFailed(String)
         case persistenceError(String)
         case noConnectedPeers
-        // case keyRemovalFailed(String) // Handled by ArkavoClient
-        case keyGenerationFailed(String) // UPDATED: For OpenTDFKit key generation errors
-        // case keySerializationError(String) // Handled by ArkavoClient
+        case keyGenerationFailed(String) // OpenTDFKit key generation error
         case arkavoClientError(String) // General ArkavoClient error
-        case policyCreationFailed(String) // Added for policy errors
-        case peerNotFoundForDisconnection(String) // Added for disconnect errors
-        case keyStoreInfoUnavailable(String) // Added for errors fetching KeyStore details
-        case keyExchangeError(String) // Added for key exchange protocol errors
-        case peerNotConnected(String) // Added for operations requiring a connected peer
-        case invalidStateForAction(String) // Added for key exchange state machine errors
-        case missingNonce // Added for key exchange errors
-        case keyStoreDataNotFound(String) // Added for missing KeyStoreData (now used for profile.keyStorePrivate) - Less likely to be thrown now
-        case keyStoreDeserializationFailed(String) // Added for KeyStore deserialization errors
-        case keyStoreSerializationFailed(String) // Added for KeyStore serialization errors
-        case keyStoreInitializationFailed(String) // Added for errors creating a new KeyStore
-        case profileSharingError(String) // NEW: For profile sharing specific errors
-        case keyStoreSharingError(String) // NEW: For KeyStore sharing specific errors
-        case keyStorePublicDataExtractionFailed(String) // NEW: For errors getting public data
+        case policyCreationFailed(String)
+        case peerNotFoundForDisconnection(String)
+        case keyStoreInfoUnavailable(String) // Error fetching KeyStore details
+        case keyExchangeError(String) // Key exchange protocol error
+        case peerNotConnected(String) // Operation requires a connected peer
+        case invalidStateForAction(String) // Key exchange state machine error
+        case missingNonce // Key exchange error
+        case keyStoreDataNotFound(String) // Missing KeyStore data in profile
+        case keyStoreDeserializationFailed(String)
+        case keyStoreSerializationFailed(String)
+        case keyStoreInitializationFailed(String) // Error creating new KeyStore
+        case profileSharingError(String) // Profile sharing specific error
+        case keyStoreSharingError(String) // KeyStore sharing specific error
+        case keyStorePublicDataExtractionFailed(String) // Error getting public KeyStore data
 
         var errorDescription: String? {
+            // Concise descriptions for each case
             switch self {
-            case .sessionNotInitialized:
-                "Peer-to-peer session not initialized"
-            case .invalidStream:
-                "Not a valid InnerCircle stream"
-            case .browserNotInitialized:
-                "Browser controller not initialized"
-            // case .keyStoreNotInitialized: "KeyStore not initialized"
-            case .profileNotAvailable:
-                "User profile not available"
-            case let .serializationFailed(context):
-                "Failed to serialize message data: \(context)"
-            case let .deserializationFailed(context):
-                "Failed to deserialize message data: \(context)"
-            case let .persistenceError(context):
-                "Persistence error: \(context)"
-            case .noConnectedPeers:
-                "No connected peers available"
-            // case let .keyRemovalFailed(reason): "Failed to remove used key: \(reason)"
-            case let .keyGenerationFailed(reason): // UPDATED
-                "Failed to regenerate keys using OpenTDFKit: \(reason)" // Updated description
-            // case let .keySerializationError(reason): "Failed to serialize KeyStore public/private data: \(reason)"
-            case let .arkavoClientError(reason):
-                "ArkavoClient error: \(reason)"
-            case let .policyCreationFailed(reason):
-                "Failed to create policy: \(reason)"
-            case let .peerNotFoundForDisconnection(reason):
-                "Peer not found for disconnection: \(reason)"
-            case let .keyStoreInfoUnavailable(reason):
-                "Could not retrieve KeyStore information: \(reason)"
-            case let .keyExchangeError(reason):
-                "Key exchange protocol error: \(reason)"
-            case let .peerNotConnected(reason):
-                "Peer is not connected: \(reason)"
-            case let .invalidStateForAction(reason):
-                "Invalid state for the requested action: \(reason)"
-            case .missingNonce:
-                "Nonce required for key exchange operation is missing."
-            case let .keyStoreDataNotFound(reason): // Updated description slightly
-                "KeyStore data not found in profile: \(reason)"
-            case let .keyStoreDeserializationFailed(reason):
-                "Failed to deserialize KeyStore: \(reason)"
-            case let .keyStoreSerializationFailed(reason):
-                "Failed to serialize KeyStore: \(reason)"
-            case let .keyStoreInitializationFailed(reason):
-                "Failed to initialize new KeyStore: \(reason)"
-            case let .profileSharingError(reason): // NEW
-                "Profile sharing error: \(reason)"
-            case let .keyStoreSharingError(reason): // NEW
-                "KeyStore sharing error: \(reason)"
-            case let .keyStorePublicDataExtractionFailed(reason): // NEW
-                "Failed to extract public KeyStore data: \(reason)"
+            case .sessionNotInitialized: "P2P session not initialized"
+            case .invalidStream: "Not a valid InnerCircle stream"
+            case .browserNotInitialized: "Browser controller not initialized"
+            case .profileNotAvailable: "User profile not available"
+            case let .serializationFailed(context): "Serialization failed: \(context)"
+            case let .deserializationFailed(context): "Deserialization failed: \(context)"
+            case let .persistenceError(context): "Persistence error: \(context)"
+            case .noConnectedPeers: "No connected peers"
+            case let .keyGenerationFailed(reason): "Key generation failed: \(reason)"
+            case let .arkavoClientError(reason): "ArkavoClient error: \(reason)"
+            case let .policyCreationFailed(reason): "Policy creation failed: \(reason)"
+            case let .peerNotFoundForDisconnection(reason): "Peer not found for disconnection: \(reason)"
+            case let .keyStoreInfoUnavailable(reason): "KeyStore info unavailable: \(reason)"
+            case let .keyExchangeError(reason): "Key exchange error: \(reason)"
+            case let .peerNotConnected(reason): "Peer not connected: \(reason)"
+            case let .invalidStateForAction(reason): "Invalid state for action: \(reason)"
+            case .missingNonce: "Nonce missing for key exchange"
+            case let .keyStoreDataNotFound(reason): "KeyStore data not found: \(reason)"
+            case let .keyStoreDeserializationFailed(reason): "KeyStore deserialization failed: \(reason)"
+            case let .keyStoreSerializationFailed(reason): "KeyStore serialization failed: \(reason)"
+            case let .keyStoreInitializationFailed(reason): "KeyStore initialization failed: \(reason)"
+            case let .profileSharingError(reason): "Profile sharing error: \(reason)"
+            case let .keyStoreSharingError(reason): "KeyStore sharing error: \(reason)"
+            case let .keyStorePublicDataExtractionFailed(reason): "Public KeyStore data extraction failed: \(reason)"
             }
         }
     }
 
-    // --- Removed KeyStore Stub Properties ---
-    // private var keyStore: KeyStore?
-    // private let keyStoreCapacity = 8192
-    // private var peerKeyStores: [String: KeyStore] = [:]
-    // private var sentKeyStoreToPeers: Set<String> = []
-    // @Published var usedKeyPairs: [String: Set<UUID>] = [:]
-    // private let minKeyThresholdPercentage = 0.1
-    // private let targetKeyPercentage = 0.8
-    // private let keyRegenerationBatchSize = 2000
-    // private var ephemeralPublicKeys: [Data: String] = [:]
-
-    // Map MCPeerID to ProfileID for easier lookup when fetching/saving profiles
-    // Make internal for access by PeerDiscoveryManager wrapper
+    /// Map MCPeerID to ProfileID (Base58 String) for lookups. Accessible by PeerDiscoveryManager.
     var peerIDToProfileID: [MCPeerID: String] = [:]
 
-    // Access to PersistenceController
     private let persistenceController = PersistenceController.shared
 
     // MARK: - Initialization and Cleanup
 
-    // Inject ArkavoClient
     init(arkavoClient: ArkavoClient) {
         self.arkavoClient = arkavoClient
         super.init()
@@ -468,7 +361,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     deinit {
         // Need to use Task for actor-isolated methods in deinit
         _ = Task { @MainActor [weak self] in
-            self?.cancelAsyncTasks()
             self?.cleanup()
         }
     }
@@ -477,245 +369,154 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         stopSearchingForPeers()
         mcSession?.disconnect()
         invitationHandler = nil
-        // sentKeyStoreToPeers.removeAll() // Removed
-        // usedKeyPairs.removeAll() // Removed
         peerIDToProfileID.removeAll()
-        // peerKeyStores.removeAll() // Removed
-        connectedPeerProfiles.removeAll() // Clear profiles
-        peerKeyExchangeStates.removeAll() // Clear key exchange states
-        // Close and remove tracked streams
+        connectedPeerProfiles.removeAll()
+        peerKeyExchangeStates.removeAll()
         activeInputStreams.keys.forEach { $0.close() }
         activeInputStreams.removeAll()
-        // Reset status properties
+        resourceProgress.removeAll()
         localKeyStoreInfo = nil
         isRegeneratingKeys = false
-        // Disconnect ArkavoClient? Check ArkavoClient API for cleanup needs.
-        // arkavoClient.disconnect() // Example
-    }
-
-    // --- Removed KeyStore Stub Management Methods ---
-    // private func checkAndRegenerateKeys(forceRegeneration: Bool = false) async { ... }
-    // private func persistLocalKeyStore() async throws { ... }
-    // private func removeUsedKey(keyStore: KeyStore, keyID: UUID) async { ... }
-    // private func markKeyAsUsed(keyID: UUID, peerIdentifier: String) { ... }
-
-    // Cancel reference cycles to avoid memory leaks
-    func cancelAsyncTasks() {
-        // No async tasks to cancel yet, but this can be used in the future
+        connectedPeers = []
+        connectionStatus = .idle
+        print("P2PGroupViewModel cleaned up.")
     }
 
     // MARK: - MultipeerConnectivity Setup
 
-    /// Sets up MultipeerConnectivity for the given stream
-    /// - Parameter stream: The stream to use for peer discovery
-    /// - Throws: P2PError if initialization fails
     func setupMultipeerConnectivity() async throws {
-        // Cleanup previous session if any
-        cleanup()
+        cleanup() // Ensure clean state
 
-        // Create a unique ID for this device using the profile name or a default
         guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
             connectionStatus = .failed(P2PError.profileNotAvailable)
             throw P2PError.profileNotAvailable
         }
 
-        let displayName = profile.name // Use profile name for MCPeerID
-        mcPeerID = MCPeerID(displayName: displayName)
+        mcPeerID = MCPeerID(displayName: profile.name)
+        guard let mcPeerID else { return } // Should always succeed
 
-        // --- Removed KeyStore Initialization ---
-        // KeyStore management is now handled by ArkavoClient
-
-        // Create the session with encryption
-        mcSession = MCSession(peer: mcPeerID!, securityIdentity: nil, encryptionPreference: .required)
+        mcSession = MCSession(peer: mcPeerID, securityIdentity: nil, encryptionPreference: .required)
         mcSession?.delegate = self
 
-        // Set up service type for InnerCircle
         let serviceType = "arkavo-circle"
 
-        // Include profile info in discovery info - helps with authentication
+        // Include essential info for discovery and identification
         let discoveryInfo: [String: String] = [
-            "profileID": profile.publicID.base58EncodedString, // Send publicID for identification
+            "profileID": profile.publicID.base58EncodedString,
             "deviceID": UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString,
             "timestamp": "\(Date().timeIntervalSince1970)",
-            "name": profile.name, // Send name for display in browser
+            "name": profile.name,
         ]
 
-        // Create the advertiser with our own delegate implementation
         mcAdvertiser = MCNearbyServiceAdvertiser(
-            peer: mcPeerID!,
+            peer: mcPeerID,
             discoveryInfo: discoveryInfo,
             serviceType: serviceType
         )
         mcAdvertiser?.delegate = self
 
-        // Set up the browser controller
         mcBrowser = MCBrowserViewController(serviceType: serviceType, session: mcSession!)
         mcBrowser?.delegate = self
 
         connectionStatus = .idle
-        print("MultipeerConnectivity setup complete")
-
-        // Inform ArkavoClient about the current profile (if needed)
-        // await arkavoClient.setCurrentProfile(profile) // Example: Check ArkavoClient API
+        print("MultipeerConnectivity setup complete for \(profile.name)")
     }
 
-    /// Starts the peer discovery process
-    /// - Throws: P2PError if peer discovery cannot be started
     func startSearchingForPeers() throws {
         guard mcSession != nil else {
             connectionStatus = .failed(P2PError.sessionNotInitialized)
             throw P2PError.sessionNotInitialized
         }
-
-        // Start advertising our presence
         mcAdvertiser?.startAdvertisingPeer()
         isSearchingForPeers = true
         connectionStatus = .searching
-
-        print("Started advertising presence for peer discovery")
-        // Inform ArkavoClient that we are searching (if needed)
-        // await arkavoClient.start() // Example: Check ArkavoClient API
+        print("Started advertising and searching for peers.")
     }
 
-    /// Stops the peer discovery process
     func stopSearchingForPeers() {
         mcAdvertiser?.stopAdvertisingPeer()
         isSearchingForPeers = false
-
-        // If we still have connected peers, keep status as connected
-        // Otherwise revert to idle
         if connectedPeers.isEmpty {
             connectionStatus = .idle
         } else {
-            connectionStatus = .connected
+            connectionStatus = .connected // Remain connected if peers exist
         }
-        // Inform ArkavoClient that we stopped searching (if needed)
-        // await arkavoClient.stop() // Example: Check ArkavoClient API
+        print("Stopped advertising and searching.")
     }
 
-    /// Finds a connected peer by their Profile ID.
-    /// - Parameter profileID: The public profile ID (Data) of the peer to find.
-    /// - Returns: The `MCPeerID` of the connected peer, or `nil` if not found.
+    /// Finds a connected peer by their Profile Public ID (Data).
     func findPeer(byProfileID profileID: Data) -> MCPeerID? {
         let profileIDString = profileID.base58EncodedString
-        print("FindPeer: Searching for peer with Profile ID: \(profileIDString)")
-        print("FindPeer: Current peerIDToProfileID map: \(peerIDToProfileID)")
-        print("FindPeer: Current connectedPeers list: \(connectedPeers.map { "\($0.displayName) (\($0.hashValue))" })")
-
-        // Find the MCPeerID in the map that corresponds to the profileIDString
         guard let foundPeerID = peerIDToProfileID.first(where: { $0.value == profileIDString })?.key else {
-            print("FindPeer: Profile ID \(profileIDString) not found in peerIDToProfileID map.")
+            print("FindPeer: Profile ID \(profileIDString) not found in map.")
             return nil
         }
-
-        print("FindPeer: Found MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) in map for Profile ID \(profileIDString).")
-
-        // Verify that this MCPeerID is actually in the connectedPeers list
+        // Verify the found peer is actually connected
         if connectedPeers.contains(where: { $0.hashValue == foundPeerID.hashValue }) {
-            print("FindPeer: MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) is present in connectedPeers list.")
             return foundPeerID
         } else {
-            print("FindPeer: Warning - MCPeerID \(foundPeerID.displayName) (Hash: \(foundPeerID.hashValue)) found in map but NOT in connectedPeers list. State might be inconsistent.")
-            // Clean up the inconsistent map entry?
+            print("FindPeer: Warning - MCPeerID \(foundPeerID.displayName) found in map but not in connectedPeers list.")
+            // Optionally clean up inconsistent map entry here
             // peerIDToProfileID.removeValue(forKey: foundPeerID)
             return nil
         }
     }
 
-    /// Disconnects a specific peer
-    /// - Parameter peer: The MCPeerID of the peer to disconnect
+    /// Disconnects a specific peer from the MCSession.
     func disconnectPeer(_ peer: MCPeerID) {
-        let profileID = peerIDToProfileID[peer] ?? "Unknown Profile ID"
-        print("DisconnectPeer: Attempting to disconnect peer: \(peer.displayName) (Hash: \(peer.hashValue)), Profile ID: \(profileID)")
-        print("DisconnectPeer: Current connectedPeers: \(connectedPeers.map { "\($0.displayName) (\($0.hashValue))" })")
+        let profileID = peerIDToProfileID[peer] ?? "Unknown"
+        print("DisconnectPeer: Attempting disconnection for \(peer.displayName) (Profile: \(profileID))")
 
         guard let session = mcSession else {
-            print("DisconnectPeer Error: Cannot disconnect peer \(peer.displayName) - Session not active.")
+            print("DisconnectPeer Error: Session not active.")
             return
         }
 
-        // Check if the *exact* MCPeerID instance is in the connectedPeers list
+        // Check if the peer (by hash value) is in the connected list
         let isPeerConnected = connectedPeers.contains { $0.hashValue == peer.hashValue }
-        print("DisconnectPeer: Is peer \(peer.displayName) (Hash: \(peer.hashValue)) contained in connectedPeers list? \(isPeerConnected)")
 
         guard isPeerConnected else {
-            print("DisconnectPeer Warning: Peer \(peer.displayName) (Hash: \(peer.hashValue)) not found in connectedPeers list. Disconnection skipped. Profile ID: \(profileID)")
-            // Even if not found, try to clean up any lingering map/profile data just in case
-            if peerIDToProfileID[peer] != nil {
-                print("DisconnectPeer Info: Removing lingering map entry for \(peer.displayName)")
-                peerIDToProfileID.removeValue(forKey: peer)
-            }
-            if connectedPeerProfiles[peer] != nil {
-                print("DisconnectPeer Info: Removing lingering profile cache for \(peer.displayName)")
-                connectedPeerProfiles.removeValue(forKey: peer)
-            }
-            // Remove from connection times if present
+            print("DisconnectPeer Warning: Peer \(peer.displayName) not found in connectedPeers list. Cleanup might be needed.")
+            // Clean up lingering data just in case state is inconsistent
+            if peerIDToProfileID[peer] != nil { peerIDToProfileID.removeValue(forKey: peer) }
+            if connectedPeerProfiles[peer] != nil { connectedPeerProfiles.removeValue(forKey: peer) }
             peerConnectionTimes.removeValue(forKey: peer)
-            // Remove from key exchange state
             peerKeyExchangeStates.removeValue(forKey: peer)
             return
         }
 
-        print("DisconnectPeer: Proceeding with disconnection for peer: \(peer.displayName)")
-        // Cancel any connections with this peer using the MCSession method
-        session.cancelConnectPeer(peer)
-        print("DisconnectPeer: Called session.cancelConnectPeer for \(peer.displayName)")
+        print("DisconnectPeer: Proceeding with session disconnect for \(peer.displayName)")
+        session.cancelConnectPeer(peer) // Request disconnection
 
-        // --- Immediate Cleanup ---
-        // It's generally better to let the MCSessionDelegate handle the state change to .notConnected
-        // for removing the peer from lists and maps, as `cancelConnectPeer` is asynchronous.
-        // However, performing *some* cleanup immediately can prevent race conditions if the
-        // delegate callback is delayed or doesn't fire for some reason (e.g., during app termination).
-        // We will primarily rely on the delegate, but log that we initiated the disconnect here.
-
-        // Optional: Immediately remove from connection times to prevent UI issues
-        // peerConnectionTimes.removeValue(forKey: peer)
-        // Optional: Immediately remove key exchange state
-        // peerKeyExchangeStates.removeValue(forKey: peer)
-
-        // The primary removal from connectedPeers, peerIDToProfileID, connectedPeerProfiles,
-        // and stream closing should happen in the session(_:peer:didChange:to:) delegate method
-        // when the state becomes .notConnected.
-
-        print("DisconnectPeer: Disconnection initiated for \(peer.displayName). Waiting for delegate callback for final cleanup.")
-
-        // Refresh KeyStore status (might be too early, consider moving to delegate .notConnected state)
-        // Task {
-        //     await refreshKeyStoreStatus()
-        // }
+        // Rely on the MCSessionDelegate's `didChange state: .notConnected` callback
+        // for the primary cleanup (removing from lists, closing streams etc.)
+        // This avoids race conditions if the delegate callback is delayed.
+        print("DisconnectPeer: Disconnection initiated for \(peer.displayName). Waiting for delegate callback.")
     }
 
-    /// Returns the browser view controller for manual peer selection
-    /// - Returns: MCBrowserViewController instance or nil if not available
+    /// Returns the MCBrowserViewController for presentation.
     func getBrowser() -> MCBrowserViewController? {
         mcBrowser
     }
 
-    // MARK: - Data Transmission (using ArkavoClient and P2P Messages)
+    // MARK: - Data Transmission
 
-    /// Sends raw data via MCSession (used internally for P2P messages and by ArkavoClient)
-    /// - Parameters:
-    ///   - data: The data to send
-    ///   - peers: Specific peers to send to
-    /// - Throws: P2PError or session errors if sending fails
+    /// Sends raw data via MCSession (used for P2P messages and by ArkavoClient).
     private func sendRawData(_ data: Data, toPeers peers: [MCPeerID]) throws {
-        guard let mcSession else {
-            throw P2PError.sessionNotInitialized
-        }
+        guard let mcSession else { throw P2PError.sessionNotInitialized }
         guard !peers.isEmpty else {
-            // This shouldn't happen if called correctly, but good to check
             print("Warning: sendRawData called with empty peer list.")
             return
         }
 
-        // Ensure all target peers are currently connected
+        // Ensure peers are currently connected before sending
         let connectedPeerHashes = Set(mcSession.connectedPeers.map(\.hashValue))
         let targetPeersToSend = peers.filter { connectedPeerHashes.contains($0.hashValue) }
 
         guard !targetPeersToSend.isEmpty else {
             let targetNames = peers.map(\.displayName).joined(separator: ", ")
             print("Error: None of the target peers (\(targetNames)) are currently connected.")
-            throw P2PError.peerNotConnected("Target peers [\(targetNames)] not found in connected list.")
+            throw P2PError.peerNotConnected("Target peers [\(targetNames)] not connected.")
         }
 
         if targetPeersToSend.count < peers.count {
@@ -727,48 +528,31 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         try mcSession.send(data, toPeers: targetPeersToSend, with: .reliable)
     }
 
-    /// Encodes and sends a P2P message structure to specific peers. (Made public for PeerDiscoveryManager)
-    /// - Parameters:
-    ///   - messageType: The type of the message.
-    ///   - payload: The `Codable` payload object for the message.
-    ///   - peers: The list of `MCPeerID`s to send the message to.
-    /// - Throws: `P2PError` if encoding or sending fails.
+    /// Encodes and sends a structured P2P message.
     func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
-        print("Encoding P2P message of type \(type) for peers: \(peers.map(\.displayName))")
+        print("Encoding P2P message type \(type) for peers: \(peers.map(\.displayName))")
         do {
             let dataToSend = try P2PMessage.encode(type: type, payload: payload)
             try sendRawData(dataToSend, toPeers: peers)
-            print("Successfully sent P2P message of type \(type)")
+            print("Successfully sent P2P message type \(type)")
         } catch let error as P2PError {
-            print("❌ P2PError sending message type \(type): \(error)")
-            throw error // Re-throw P2PError
+            print("❌ P2PError sending \(type): \(error)")
+            throw error
         } catch {
-            print("❌ Error encoding or sending P2P message type \(type): \(error)")
+            print("❌ Error encoding/sending P2P message \(type): \(error)")
             throw P2PError.serializationFailed("Encoding/Sending \(type): \(error.localizedDescription)")
         }
     }
 
-    /// Sends data securely using ArkavoClient
-    /// - Parameters:
-    ///   - data: The raw data to encrypt and send
-    ///   - policy: The TDF policy to apply (as a JSON string)
-    ///   - peers: Optional specific peers to send to (defaults to all connected peers)
-    ///   - stream: The stream context for the data
-    /// - Throws: Errors if encryption or sending fails
+    /// Encrypts data using ArkavoClient
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
-        guard stream.isInnerCircleStream else {
-            throw P2PError.invalidStream
-        }
-        guard let mcSession, !mcSession.connectedPeers.isEmpty else {
-            throw P2PError.noConnectedPeers
-        }
+        guard stream.isInnerCircleStream else { throw P2PError.invalidStream }
+        guard let mcSession, !mcSession.connectedPeers.isEmpty else { throw P2PError.noConnectedPeers }
 
         let targetPeers = peers ?? mcSession.connectedPeers
-        guard !targetPeers.isEmpty else {
-            throw P2PError.noConnectedPeers
-        }
+        guard !targetPeers.isEmpty else { throw P2PError.noConnectedPeers }
 
-        // Map MCPeerIDs to Profile IDs if sending to specific peers
+        // Map MCPeerIDs to Profile IDs if sending to specific peers (ArkavoClient might need this)
         var targetProfileIDs: [Data]? = nil
         if let specificPeers = peers {
             targetProfileIDs = specificPeers.compactMap { peerID in
@@ -778,48 +562,45 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 print("Warning: No profile ID found for target peer \(peerID.displayName)")
                 return nil
             }
+            // Ensure we have valid profile IDs if specific peers were requested
             guard let unwrappedTargetProfileIDs = targetProfileIDs, !unwrappedTargetProfileIDs.isEmpty else {
-                print("Error: Could not map any target MCPeerIDs to Profile IDs.")
-                throw P2PError.profileNotAvailable // Or a more specific error
+                throw P2PError.profileNotAvailable // Or more specific error like "Cannot Map Peers to Profile IDs"
             }
         }
 
         print("Sending secure data (\(data.count) bytes) with policy to \(targetPeers.count) peers in stream \(stream.profile.name)")
 
         guard let policyData = policy.data(using: .utf8) else {
-            throw P2PError.policyCreationFailed("Failed to encode policy JSON string to Data")
+            throw P2PError.policyCreationFailed("Failed to encode policy JSON string")
         }
 
         do {
-            // Ask ArkavoClient to encrypt the data
-            // ArkavoClient might need target profile IDs if not sending to all
-            // Check ArkavoClient API for exact method signature
-            // Example: let encryptedData = try await arkavoClient.encryptP2PPayload(payload: data, policyData: policyData, recipientProfileIDs: targetProfileIDs)
-            let encryptedData = try await arkavoClient.encryptAndSendPayload(payload: data, policyData: policyData) // Assuming this handles P2P via delegate/internal logic
+            // Ask ArkavoClient to encrypt the data.
+            // The exact method may vary depending on ArkavoClient's API.
+            // It might handle sending internally or return encrypted data.
+            // Assuming encryptAndSendPayload handles P2P sending via its delegate or internal logic.
+            let _ = try await arkavoClient.encryptAndSendPayload(payload: data, policyData: policyData)
 
-            // Send the encrypted data via MCSession using sendRawData helper
-            try sendRawData(encryptedData, toPeers: targetPeers)
-            print("Secure data sent successfully via MCSession.")
+            // If encryptAndSendPayload doesn't send automatically, uncomment the sendRawData call:
+            // try sendRawData(encryptedData, toPeers: targetPeers)
+            print("Secure data encryption/send initiated via ArkavoClient.")
 
         } catch {
-            print("❌ Error sending secure data: \(error)")
-            // Re-throw or wrap the error
-            throw P2PError.arkavoClientError("Failed during secure data sending: \(error.localizedDescription)")
+            print("❌ Error sending secure data via ArkavoClient: \(error)")
+            throw P2PError.arkavoClientError("Secure data send failed: \(error.localizedDescription)")
         }
     }
 
-    /// Sends a secure text message using ArkavoClient
+    /// Encrypts and sends a text message securely.
     func sendSecureTextMessage(_ message: String, in stream: Stream) async throws {
         guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
             throw P2PError.profileNotAvailable
         }
         let streamID = stream.publicID
-
         let messageData = Data(message.utf8)
 
-        // Create a simple policy for the stream using only dataAttributes.
-        // This grants access based on having an attribute matching the stream ID.
-        // Assumes recipients get this attribute via KAS or other means.
+        // Simple policy granting access based on a stream-specific attribute.
+        // Assumes recipients acquire this attribute through other means (e.g., KAS).
         let policyJson = """
         {
           "uuid": "\(UUID().uuidString)",
@@ -829,32 +610,25 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
           }
         }
         """
-        // Note: ArkavoClient's encryptAndSendPayload likely expects the policyData
-        // to be the *body* of the policy, not the full structure including "uuid".
-        // However, the current implementation in ChatViewModel passes the full JSON.
-        // We'll keep it consistent for now, but this might need adjustment based on
-        // how ArkavoClient actually processes the policyData parameter.
-        // If only the body is needed, extract the "body" part of the JSON.
-
+        // Note: ArkavoClient might expect only the policy *body* as `policyData`.
+        // Adjust if necessary based on ArkavoClient's API documentation.
         print("Using policy for secure text message: \(policyJson)")
 
-        // Use sendSecureData to encrypt and send
+        // Use the generic secure data sending method
         try await sendSecureData(messageData, policy: policyJson, in: stream)
 
-        // Optionally, save the *unencrypted* message locally as a Thought?
-        // Or does ArkavoClient handle local persistence after sending? Check API.
-        // If we save locally, use the original messageData, not the encrypted one.
+        // Persist the original (unencrypted) message locally as a Thought
         Task {
             do {
                 let thought = try await storeP2PMessageAsThought(
-                    content: message, // Original content
+                    content: message,
                     sender: profile.name,
                     senderProfileID: profile.publicID.base58EncodedString,
                     timestamp: Date(),
                     stream: stream,
-                    nanoData: nil // Indicate it's not pre-encrypted
+                    nanoData: nil // Indicate it's unencrypted content
                 )
-                print("✅ Local text message stored successfully as Thought with ID: \(thought.id)")
+                print("✅ Local text message stored as Thought ID: \(thought.id)")
                 await MainActor.run {
                     NotificationCenter.default.post(name: .chatMessagesUpdated, object: nil)
                 }
@@ -864,66 +638,41 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    // --- Removed Profile/KeyStore Exchange Methods ---
-    // func initiateKeyStoreExchange(with peer: MCPeerID) { ... }
-    // private func sendProfileAndPublicKeyStore(to peer: MCPeerID) async throws { ... }
-    // These responsibilities likely move to ArkavoClient or are handled differently.
+    // MARK: - Message Handling
 
-    // --- Removed sendTextMessage (replaced by sendSecureTextMessage) ---
-    // func sendTextMessage(_ message: String, in stream: Stream) throws { ... }
-
-    // MARK: - Message Handling (P2P and ArkavoClient)
-
-    /// Handles general incoming data (routes P2P messages, passes others to ArkavoClient)
-    /// - Parameters:
-    ///   - data: The received message data
-    ///   - peer: The peer that sent the message
+    /// Routes incoming data: P2P messages or encrypted data for ArkavoClient.
     private func handleIncomingData(_ data: Data, from peer: MCPeerID) {
-        print("Received \(data.count) bytes from \(peer.displayName). Attempting to decode as P2PMessage.")
-
-        // Try decoding as a P2PMessage first
+        // Try decoding as a standard P2PMessage first
         do {
             let p2pMessage = try P2PMessage.decode(from: data)
-            print("Successfully decoded P2PMessage of type: \(p2pMessage.messageType)")
-            // Route based on P2P message type
+            print("Received P2PMessage type: \(p2pMessage.messageType) from \(peer.displayName)")
+            // Handle known P2P message types
             switch p2pMessage.messageType {
-            case .keyRegenerationRequest:
-                handleKeyRegenerationRequest(from: peer, data: p2pMessage.payload)
-            case .keyRegenerationOffer:
-                handleKeyRegenerationOffer(from: peer, data: p2pMessage.payload)
-            case .keyRegenerationAcknowledgement:
-                handleKeyRegenerationAcknowledgement(from: peer, data: p2pMessage.payload)
-            case .keyRegenerationCommit:
-                handleKeyRegenerationCommit(from: peer, data: p2pMessage.payload)
-            case .profileShare:
-                handleProfileShare(from: peer, data: p2pMessage.payload)
-            case .keyStoreShare: // NEW: Handle KeyStore share
-                handleKeyStoreShare(from: peer, data: p2pMessage.payload)
-                // Add cases for other P2P message types here
+            case .keyRegenerationRequest: handleKeyRegenerationRequest(from: peer, data: p2pMessage.payload)
+            case .keyRegenerationOffer: handleKeyRegenerationOffer(from: peer, data: p2pMessage.payload)
+            case .keyRegenerationAcknowledgement: handleKeyRegenerationAcknowledgement(from: peer, data: p2pMessage.payload)
+            case .keyRegenerationCommit: handleKeyRegenerationCommit(from: peer, data: p2pMessage.payload)
+            case .profileShare: handleProfileShare(from: peer, data: p2pMessage.payload)
+            case .keyStoreShare: handleKeyStoreShare(from: peer, data: p2pMessage.payload)
             }
         } catch {
-            // If decoding as P2PMessage fails, assume it's encrypted data for ArkavoClient
-            print("Data from \(peer.displayName) is not a standard P2PMessage (Error: \(error.localizedDescription)). Passing to ArkavoClient for potential decryption.")
-            // ArkavoClient should handle decryption and further processing via its delegate methods
-            // Example: arkavoClient.processReceivedP2PData(data, from: peer)
-            // Assuming ArkavoClient handles this internally or via its own delegate calls
-            // Post a notification or directly call ArkavoClient if needed
-            // NotificationCenter.default.post(name: .nonJsonDataReceived, object: nil, userInfo: ["data": data, "peer": peer])
-            // OR
-            // Task { await arkavoClient.processReceivedP2PData(data, fromPeerID: peer) } // Check ArkavoClient API
+            // If not a standard P2PMessage, assume it's encrypted data for ArkavoClient
+            print("Data from \(peer.displayName) not a P2PMessage. Passing to ArkavoClient.")
+            // ArkavoClient needs to process this data, potentially via a specific method
+            // or internal handling linked to its delegate calls.
+            // Example: Task { await arkavoClient.processReceivedP2PData(data, fromPeerID: peer) }
+            // Post notification if ArkavoClient doesn't handle directly
+            NotificationCenter.default.post(
+                name: .nonJsonDataReceived,
+                object: nil,
+                userInfo: ["data": data, "peer": peer]
+            )
         }
     }
 
-    // --- Removed JSON Message Handling ---
-    // handleIncomingMessage, handleJSONMessage, handleProfileWithPublicKeyStoreMessage,
-    // handleProfileWithPublicKeyStoreAcknowledgement, handleTextMessage, handleMessageAcknowledgement
-    // ArkavoClient is now responsible for parsing and interpreting the data.
-
-    /// Store a P2P message as a Thought for persistence
-    /// - Returns: The created Thought object
+    /// Stores a received P2P message (usually decrypted text) as a Thought.
     private func storeP2PMessageAsThought(content: String, sender _: String, senderProfileID: String, timestamp: Date, stream: Stream, nanoData: Data?) async throws -> Thought {
         guard let senderPublicID = Data(base58Encoded: senderProfileID) else {
-            print("Error: Could not decode sender profile ID \(senderProfileID)")
             throw P2PError.deserializationFailed("Invalid sender profile ID")
         }
 
@@ -935,652 +684,180 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             contributors: []
         )
 
-        // Use provided nanoData if available (e.g., for locally sent encrypted messages if needed)
-        // Otherwise, convert the String content to Data for the 'nano' property (for received decrypted messages)
+        // Use provided nanoData (e.g., encrypted) or convert content string (decrypted)
         let dataToStore = nanoData ?? Data(content.utf8)
 
-        let thought = Thought(
-            nano: dataToStore, // Store relevant data (encrypted or decrypted)
-            metadata: thoughtMetadata
-        )
-
-        // Ensure the stream is associated before saving
-        thought.stream = stream
+        let thought = Thought(nano: dataToStore, metadata: thoughtMetadata)
+        thought.stream = stream // Associate with the stream
 
         _ = try await PersistenceController.shared.saveThought(thought)
 
-        // Use addThought instead of addToThoughts (assuming Stream model has this)
-        // stream.addThought(thought) // This might cause issues if stream is not the managed instance
-        // Fetch the managed stream instance to be safe
+        // Ensure relationship is established in the managed context
         if let managedStream = try await persistenceController.fetchStream(withPublicID: stream.publicID) {
-            // Check if thought is already associated to prevent duplicates if saveThought handles it
             if !(managedStream.thoughts.contains { $0.persistentModelID == thought.persistentModelID }) {
-                managedStream.addThought(thought) // Assuming addThought exists and handles relationships
+                managedStream.addThought(thought) // Assuming Stream has `addThought` helper
             }
         } else {
-            print("Warning: Could not find managed stream instance to associate thought.")
+            print("Warning: Could not find managed stream to associate thought.")
         }
-
-        try await PersistenceController.shared.saveChanges()
+        try await PersistenceController.shared.saveChanges() // Save relationship change
         print("✅ P2P message stored as Thought for stream: \(stream.publicID.base58EncodedString)")
-
         return thought
     }
 
-    // MARK: - Profile Sharing Handling
+    // MARK: - Profile & KeyStore Sharing Handling
 
-    /// Handles an incoming ProfileShare message.
-    /// Saves the profile locally and notifies the GroupViewModel to add it to the InnerCircle.
+    /// Handles incoming ProfileShare P2P messages.
     private func handleProfileShare(from peer: MCPeerID, data: Data) {
-        print("ProfileShare: Received ProfileShare message from \(peer.displayName)")
+        print("Received ProfileShare from \(peer.displayName)")
         Task {
             do {
-                // 1. Decode the payload
                 let payload: ProfileSharePayload = try P2PMessage(messageType: .profileShare, payload: data).decodePayload(ProfileSharePayload.self)
-                print("ProfileShare: Decoded ProfileSharePayload.")
-
-                // 2. Deserialize the Profile
                 let sharedProfile = try Profile.fromData(payload.profileData)
                 let profileIDString = sharedProfile.publicID.base58EncodedString
-                print("ProfileShare: Deserialized Profile: \(sharedProfile.name) (\(profileIDString))")
+                print("Deserialized Profile: \(sharedProfile.name) (\(profileIDString))")
 
-                // 3. Save the profile using PersistenceController (as a peer profile)
-                // This ensures the profile exists locally before adding to InnerCircle.
-                // It also handles updates if the profile was already known.
-                // We don't pass keyStorePublicData here as it's not part of the share payload.
+                // Save/Update the peer profile locally
                 try await persistenceController.savePeerProfile(sharedProfile, keyStorePublicData: nil)
-                print("ProfileShare: Saved/Updated shared profile \(sharedProfile.name) in local persistence.")
+                print("Saved/Updated shared profile \(sharedProfile.name) locally.")
 
-                // 4. Post notification so GroupViewModel can add it to the InnerCircle stream
+                // Notify relevant views (e.g., GroupViewModel) to update
                 NotificationCenter.default.post(
                     name: .profileSharedAndSaved,
                     object: nil,
                     userInfo: ["profilePublicID": sharedProfile.publicID] // Send public ID
                 )
-                print("ProfileShare: Posted .profileSharedAndSaved notification for \(profileIDString)")
-
             } catch {
-                print("❌ ProfileShare: Error handling ProfileShare message from \(peer.displayName): \(error)")
-                // Optionally notify the sender of the failure?
+                print("❌ Error handling ProfileShare from \(peer.displayName): \(error)")
             }
         }
     }
 
-    // MARK: - KeyStore Sharing Handling (NEW)
-
-    /// Handles an incoming KeyStoreShare message.
-    /// Saves the received public KeyStore data to the sender's profile locally.
+    /// Handles incoming KeyStoreShare P2P messages.
     private func handleKeyStoreShare(from peer: MCPeerID, data: Data) {
-        print("KeyStoreShare: Received KeyStoreShare message from \(peer.displayName)")
+        print("Received KeyStoreShare from \(peer.displayName)")
         Task {
             do {
-                // 1. Decode the payload
                 let payload: KeyStoreSharePayload = try P2PMessage(messageType: .keyStoreShare, payload: data).decodePayload(KeyStoreSharePayload.self)
                 let senderProfileIDString = payload.senderProfileID
                 let receivedPublicData = payload.keyStorePublicData
-                print("KeyStoreShare: Decoded KeyStoreSharePayload from \(senderProfileIDString). Public data size: \(receivedPublicData.count) bytes.")
+                print("Decoded KeyStoreSharePayload from \(senderProfileIDString). Public data: \(receivedPublicData.count) bytes.")
 
-                // 2. Validate sender profile ID
                 guard let senderProfileID = Data(base58Encoded: senderProfileIDString) else {
-                    throw P2PError.keyStoreSharingError("Invalid sender profile ID format: \(senderProfileIDString)")
+                    throw P2PError.keyStoreSharingError("Invalid sender profile ID format")
                 }
 
-                // 3. Fetch the sender's profile from local persistence
+                // Fetch the sender's profile locally to attach the KeyStore data
                 guard let senderProfile = try await persistenceController.fetchProfile(withPublicID: senderProfileID) else {
-                    // If the profile doesn't exist locally, we cannot store the KeyStore data.
-                    // This might happen if the profile share message hasn't arrived or been processed yet.
-                    // Option 1: Log and discard.
-                    // Option 2: Store temporarily and try again later? (More complex)
-                    print("❌ KeyStoreShare: Sender profile \(senderProfileIDString) not found locally. Cannot save public KeyStore data.")
-                    // Optionally notify the sender?
+                    // Profile must exist locally first (likely from a ProfileShare message)
+                    print("❌ KeyStoreShare Error: Sender profile \(senderProfileIDString) not found locally. Cannot save public KeyStore.")
                     return
-                        // throw P2PError.keyStoreSharingError("Sender profile \(senderProfileIDString) not found locally.")
                 }
-                print("KeyStoreShare: Found local profile for sender: \(senderProfile.name)")
+                print("Found local profile for sender: \(senderProfile.name)")
 
-                // 4. Save/Update the sender's profile with the received public KeyStore data
-                // Use savePeerProfile, which handles both inserts and updates, and specifically updates keyStorePublic.
-                // We pass the existing profile object to ensure we're updating, not creating a duplicate.
-                // Note: savePeerProfile internally fetches the profile again, which is slightly redundant but safe.
+                // Save/Update the profile with the received public KeyStore data
                 try await persistenceController.savePeerProfile(senderProfile, keyStorePublicData: receivedPublicData)
-                print("✅ KeyStoreShare: Saved/Updated public KeyStore data for profile \(senderProfile.name) (\(senderProfileIDString)) in local persistence.")
+                print("✅ Saved/Updated public KeyStore data for profile \(senderProfile.name) (\(senderProfileIDString)).")
 
-                // 5. Post notification (optional) - e.g., to update UI if it shows KeyStore availability
+                // Notify relevant views
                 NotificationCenter.default.post(
                     name: .keyStoreSharedAndSaved,
                     object: nil,
-                    userInfo: ["profilePublicID": senderProfileID] // Send public ID
+                    userInfo: ["profilePublicID": senderProfileID]
                 )
-                print("KeyStoreShare: Posted .keyStoreSharedAndSaved notification for \(senderProfileIDString)")
-
             } catch let error as P2PError {
-                print("❌ KeyStoreShare: P2PError handling KeyStoreShare message from \(peer.displayName): \(error)")
+                print("❌ KeyStoreShare: P2PError handling message from \(peer.displayName): \(error)")
             } catch {
-                print("❌ KeyStoreShare: Unexpected error handling KeyStoreShare message from \(peer.displayName): \(error)")
+                print("❌ KeyStoreShare: Unexpected error handling message from \(peer.displayName): \(error)")
             }
         }
     }
 
-    // MARK: - KeyStore Status Management (using ArkavoClient)
+    // MARK: - Local Profile & KeyStore Management
 
-    /// Fetches profiles for currently connected peers from persistence.
+    /// Fetches Profiles for currently connected peers from persistence.
     private func refreshConnectedPeerProfiles() async {
-        print("Refreshing connected peer profiles from persistence...")
+        print("Refreshing connected peer profiles cache...")
         var updatedProfiles: [MCPeerID: Profile] = [:]
         let currentPeers = connectedPeers // Capture current list
 
         for peer in currentPeers {
-            // Try getting profile ID from ArkavoClient first, then fallback to local map
-            var profileIDString: String? = nil
-            // Example: profileIDString = await arkavoClient.getProfileID(for: peer)
-            if profileIDString == nil {
-                profileIDString = peerIDToProfileID[peer]
+            // Get profile ID from the map
+            guard let profileIDString = peerIDToProfileID[peer],
+                  let profileIDData = Data(base58Encoded: profileIDString)
+            else {
+                print("No profile ID mapped for peer \(peer.displayName), cannot fetch profile.")
+                continue
             }
 
-            if let idString = profileIDString, let profileIDData = Data(base58Encoded: idString) {
-                do {
-                    if let profile = try await persistenceController.fetchProfile(withPublicID: profileIDData) {
-                        updatedProfiles[peer] = profile
-                        print("Fetched profile for \(peer.displayName) (\(idString))")
-                        // Ensure local map is updated
-                        if peerIDToProfileID[peer] == nil {
-                            peerIDToProfileID[peer] = idString
-                        }
-                    } else {
-                        print("Profile for \(peer.displayName) (\(idString)) not found locally yet.")
-                    }
-                } catch {
-                    print("❌ Error fetching profile \(idString) for peer \(peer.displayName): \(error)")
+            do {
+                if let profile = try await persistenceController.fetchProfile(withPublicID: profileIDData) {
+                    updatedProfiles[peer] = profile
+                } else {
+                    print("Profile \(profileIDString) for peer \(peer.displayName) not found locally.")
                 }
-            } else {
-                print("No profile ID mapped or available for peer \(peer.displayName), cannot fetch profile.")
+            } catch {
+                print("❌ Error fetching profile \(profileIDString) for peer \(peer.displayName): \(error)")
             }
         }
 
         connectedPeerProfiles = updatedProfiles
-        print("Finished refreshing connected peer profiles. Found \(updatedProfiles.count) profiles locally.")
+        print("Finished refreshing peer profiles. Found \(updatedProfiles.count) profiles locally.")
     }
 
-    /// Manually triggers regeneration of local KeyStore keys directly manipulating Profile data.
+    /// Manually triggers local key regeneration using OpenTDFKit and saves to Profile.
     func regenerateLocalKeys() async {
-        print("Manual regeneration of local keys requested (direct Profile manipulation).")
-        isRegeneratingKeys = true // Optimistically set regenerating status
-        defer {
-            isRegeneratingKeys = false
-        }
-        localKeyStoreInfo = nil // Clear info while regenerating
+        print("Manual local key regeneration requested...")
+        isRegeneratingKeys = true
+        defer { isRegeneratingKeys = false }
+        localKeyStoreInfo = nil // Clear info during regeneration
 
-        let keyStore = KeyStore(curve: .secp256r1) // Declare KeyStore variable outside the if/else
+        let keyStore = KeyStore(curve: .secp256r1) // Use default curve
 
         do {
-            // 1. Get current profile
             guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
                 throw P2PError.profileNotAvailable
             }
             let profileIDString = myProfile.publicID.base58EncodedString
-            print("   Regenerating keys for profile: \(profileIDString)")
+            print("Regenerating keys for profile: \(profileIDString)")
 
-            // 2. Check if KeyStore data exists and either deserialize or create new
+            // Check if KeyStore data exists in profile, deserialize if so
             if let currentKeyStoreData = myProfile.keyStorePrivate {
-                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile.")
-                // Deserialize into the existing store
+                print("Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes). Deserializing...")
                 try await keyStore.deserialize(from: currentKeyStoreData)
-                print("   Successfully deserialized existing KeyStore.")
             } else {
-                // 3b. Create a new KeyStore instance (first time generation)
-                print("   No existing keyStorePrivate data found. Creating new KeyStore.")
-                // Assuming KeyStore can be initialized with a curve.
-                // Replace `.secp256r1` if a different default curve is used.
-                // Capacity might be set during generation.
-                do {
-                    // Or appropriate initializer
-                    print("   Successfully created new KeyStore instance.")
-                }
+                print("No existing keyStorePrivate data found. Will create new.")
+                // KeyStore is already initialized above, ready for generation
             }
 
-            // 4. Call OpenTDFKit to generate/regenerate keys locally
-            do {
-                // Use the same method as in performKeyGenerationAndSave
-                // Assuming 8192 is the standard capacity/generation count
-                try await keyStore.generateAndStoreKeyPairs(count: 8192)
-                print("   OpenTDFKit `generateAndStoreKeyPairs()` call successful.")
-            } catch {
-                throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
-            }
+            // Generate/Regenerate keys locally using OpenTDFKit
+            // Assuming 8192 is the standard capacity/generation count
+            print("Generating/regenerating 8192 key pairs using OpenTDFKit...")
+            try await keyStore.generateAndStoreKeyPairs(count: 8192)
+            print("Key generation successful.")
 
-            // 5. Serialize the updated KeyStore
-            let updatedSerializedData: Data
-            do {
-                updatedSerializedData = await keyStore.serialize()
-                print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
-            } // Assuming serialize() doesn't throw
+            // Serialize the updated private KeyStore
+            let updatedSerializedData = await keyStore.serialize()
+            print("Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
 
-            // 6. Update the Profile's keyStorePrivate property
+            // Update the Profile's keyStorePrivate property
             myProfile.keyStorePrivate = updatedSerializedData
-            print("   Updated profile.keyStorePrivate with new data.")
+            print("Updated profile.keyStorePrivate.")
 
-            // 7. Save changes to the Profile via PersistenceController
-            do {
-                try await persistenceController.saveChanges()
-                print("✅ Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
-            } catch {
-                // Attempt to revert the in-memory change if save fails? Difficult with async.
-                print("   Save failed. Profile's keyStorePrivate might be inconsistent in memory vs persistence.")
-                throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
-            }
+            // Save changes to the Profile
+            try await persistenceController.saveChanges()
+            print("✅ Successfully saved updated Profile with new keyStorePrivate.")
 
         } catch {
             print("❌ Failed during manual key regeneration: \(error)")
-            // Ensure regenerating status is reset on any failure
+            // Ensure status is reset on failure
             isRegeneratingKeys = false
         }
     }
 
-    // MARK: - KeyStore Rewrap Support (using ArkavoClient)
-
-    /// Handle a rewrap request using ArkavoClient
-    /// - Parameters:
-    ///   - publicKey: The ephemeral public key from the request
-    ///   - encryptedSessionKey: The encrypted session key that needs rewrapping
-    ///   - senderProfileID: Optional profile ID of the sender (used for logging/tracking)
-    /// - Returns: Rewrapped key data or nil if no matching key found
-    func handleRewrapRequest(publicKey: Data, encryptedSessionKey: Data, senderProfileID: String? = nil) async throws -> Data? {
-        let peerIdentifier = senderProfileID ?? "unknown-peer"
-        print("Handling rewrap request from \(peerIdentifier) via ArkavoClient...")
-        print("Ephemeral Public Key: \(publicKey.count) bytes")
-        print("Encrypted Session Key: \(encryptedSessionKey.count) bytes")
-
-        var rewrappedKey: Data? = nil
-        do {
-            // *** PLACEHOLDER: Replace with actual ArkavoClient API call ***
-            // Example:
-            // rewrappedKey = try await arkavoClient.rewrapSessionKey(
-            //     publicKey: publicKey,
-            //     encryptedSessionKey: encryptedSessionKey,
-            //     senderProfileID: senderProfileID
-            // )
-            print("Placeholder: Calling ArkavoClient rewrap method (TBD).")
-            // Simulate failure for now
-            rewrappedKey = nil
-            // Simulate success for testing:
-            // rewrappedKey = Data("simulated-rewrapped-key".utf8)
-
-            if rewrappedKey != nil {
-                print("ArkavoClient successfully rewrapped the session key for \(peerIdentifier).")
-            } else {
-                print("No matching key found or rewrap failed for request from \(peerIdentifier).")
-            }
-            return rewrappedKey
-        }
-    }
-
-    // MARK: - Secure Key Regeneration Protocol
-
-    /// Generates a cryptographically secure nonce.
-    private func generateNonce(size: Int = 32) -> Data {
-        var keyData = Data(count: size)
-        let result = keyData.withUnsafeMutableBytes {
-            SecRandomCopyBytes(kSecRandomDefault, size, $0.baseAddress!)
-        }
-        if result == errSecSuccess {
-            return keyData
-        } else {
-            // Fallback for safety, though SecRandomCopyBytes should generally succeed
-            print("Warning: SecRandomCopyBytes failed. Using fallback nonce generation.")
-            return Data((0 ..< size).map { _ in UInt8.random(in: .min ... .max) })
-        }
-    }
-
-    /// Updates the key exchange state for a peer.
-    private func updatePeerExchangeState(for peer: MCPeerID, newState: KeyExchangeState) {
-        var info = peerKeyExchangeStates[peer] ?? KeyExchangeTrackingInfo()
-        info.state = newState
-        info.lastActivity = Date()
-        peerKeyExchangeStates[peer] = info
-        print("KeyExchange: Updated state for \(peer.displayName) to \(newState)")
-    }
-
-    /// Initiates the secure key regeneration process with a specific peer.
-    /// - Parameter peer: The `MCPeerID` of the peer to regenerate keys with.
-    /// - Throws: `P2PError` if the process cannot be initiated.
-    func initiateKeyRegeneration(with peer: MCPeerID) async throws {
-        print("KeyExchange: Initiating key regeneration with \(peer.displayName)")
-
-        // 1. Check prerequisites
-        guard let session = mcSession, session.connectedPeers.contains(peer) else {
-            throw P2PError.peerNotConnected("Peer \(peer.displayName) is not connected.")
-        }
-        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-            throw P2PError.profileNotAvailable
-        }
-
-        // 2. Check current state (allow initiation only from idle or failed)
-        let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
-        guard currentState == .idle || (currentState.nonce == nil) else { // Check if failed or idle
-            throw P2PError.invalidStateForAction("Cannot initiate key exchange with \(peer.displayName), current state is \(currentState)")
-        }
-
-        // 3. Generate nonce and create request message
-        let nonce = generateNonce()
-        let request = KeyRegenerationRequest(
-            requestID: UUID(),
-            initiatorProfileID: myProfile.publicID.base58EncodedString,
-            timestamp: Date()
-        )
-
-        // 4. Update local state *before* sending
-        updatePeerExchangeState(for: peer, newState: .requestSent(nonce: nonce))
-
-        // 5. Send the request message
-        do {
-            try await sendP2PMessage(type: .keyRegenerationRequest, payload: request, toPeers: [peer])
-            print("KeyExchange: Sent KeyRegenerationRequest to \(peer.displayName) (ReqID: \(request.requestID))")
-        } catch {
-            // Rollback state on send failure
-            updatePeerExchangeState(for: peer, newState: .failed("Failed to send request: \(error.localizedDescription)"))
-            throw error // Re-throw the error
-        }
-    }
-
-    /// Handles an incoming KeyRegenerationRequest message.
-    private func handleKeyRegenerationRequest(from peer: MCPeerID, data: Data) {
-        print("KeyExchange: Received KeyRegenerationRequest from \(peer.displayName)")
-        Task {
-            do {
-                // 1. Decode the request
-                let request: KeyRegenerationRequest = try P2PMessage(messageType: .keyRegenerationRequest, payload: data).decodePayload(KeyRegenerationRequest.self)
-                print("KeyExchange: Decoded request (ReqID: \(request.requestID)) from \(request.initiatorProfileID)")
-
-                // 2. Check prerequisites
-                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-                    throw P2PError.profileNotAvailable
-                }
-                // Optional: Verify initiatorProfileID matches the mapped ID for the peer? Maybe not necessary if map is trusted.
-
-                // 3. Check current state (allow processing only from idle or failed)
-                let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
-                guard currentState == .idle || (currentState.nonce == nil) else { // Check if failed or idle
-                    print("KeyExchange: Ignoring request from \(peer.displayName), already in state \(currentState)")
-                    // Maybe send a busy/error response? For now, just ignore.
-                    return
-                }
-
-                // 4. Generate nonce and create offer message
-                let nonce = generateNonce()
-                let offer = KeyRegenerationOffer(
-                    requestID: request.requestID,
-                    responderProfileID: myProfile.publicID.base58EncodedString,
-                    nonce: nonce, // Our nonce
-                    timestamp: Date()
-                )
-
-                // 5. Update local state *before* sending
-                updatePeerExchangeState(for: peer, newState: .requestReceived(nonce: nonce)) // Store *our* nonce
-
-                // 6. Send the offer message
-                try await sendP2PMessage(type: .keyRegenerationOffer, payload: offer, toPeers: [peer])
-                print("KeyExchange: Sent KeyRegenerationOffer to \(peer.displayName) (ReqID: \(request.requestID))")
-                // Transition state after successful send
-                updatePeerExchangeState(for: peer, newState: .offerSent(nonce: nonce))
-
-            } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationRequest from \(peer.displayName): \(error)")
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing request: \(error.localizedDescription)"))
-            }
-        }
-    }
-
-    /// Handles an incoming KeyRegenerationOffer message.
-    private func handleKeyRegenerationOffer(from peer: MCPeerID, data: Data) {
-        print("KeyExchange: Received KeyRegenerationOffer from \(peer.displayName)")
-        Task {
-            do {
-                // 1. Decode the offer
-                let offer: KeyRegenerationOffer = try P2PMessage(messageType: .keyRegenerationOffer, payload: data).decodePayload(KeyRegenerationOffer.self)
-                print("KeyExchange: Decoded offer (ReqID: \(offer.requestID)) from \(offer.responderProfileID)")
-
-                // 2. Check prerequisites
-                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-                    throw P2PError.profileNotAvailable
-                }
-                guard let currentStateInfo = peerKeyExchangeStates[peer],
-                      case let .requestSent(initiatorNonce) = currentStateInfo.state
-                else {
-                    print("KeyExchange: Ignoring offer from \(peer.displayName), not in RequestSent state.")
-                    // Could be a duplicate or out-of-order message.
-                    return
-                }
-
-                // 3. Create acknowledgement message (using our original nonce)
-                let ack = KeyRegenerationAcknowledgement(
-                    requestID: offer.requestID,
-                    initiatorProfileID: myProfile.publicID.base58EncodedString,
-                    nonce: initiatorNonce, // Our original nonce
-                    timestamp: Date()
-                )
-
-                // 4. Update local state *before* sending
-                updatePeerExchangeState(for: peer, newState: .offerReceived(nonce: initiatorNonce)) // Still using our nonce
-
-                // 5. Send the acknowledgement message
-                try await sendP2PMessage(type: .keyRegenerationAcknowledgement, payload: ack, toPeers: [peer])
-                print("KeyExchange: Sent KeyRegenerationAcknowledgement to \(peer.displayName) (ReqID: \(offer.requestID))")
-                // Transition state after successful send
-                updatePeerExchangeState(for: peer, newState: .ackSent(nonce: initiatorNonce))
-
-                // --- Initiator's Key Generation Trigger ---
-                // At this point, the initiator (us) has received the peer's nonce (offer.nonce)
-                // and sent our acknowledgement containing our nonce (initiatorNonce).
-                // The protocol requires waiting for the Commit message before completing,
-                // but we can trigger the local key regeneration now.
-                guard let peerProfileIDData = Data(base58Encoded: offer.responderProfileID) else {
-                    throw P2PError.keyExchangeError("Invalid peer profile ID in offer: \(offer.responderProfileID)")
-                }
-                print("KeyExchange (Initiator): Triggering local key regeneration after sending Ack for peer \(offer.responderProfileID)")
-
-                // *** Use performKeyGenerationAndSave ***
-                try await performKeyGenerationAndSave(
-                    peerProfileIDData: peerProfileIDData,
-                    peer: peer // Pass peer for state update on failure
-                )
-                print("KeyExchange (Initiator): OpenTDFKit key regeneration and save successful.")
-                // Note: We don't transition to 'completed' yet, we wait for the Commit message
-                // from the responder as final confirmation that they also regenerated.
-
-            } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationOffer or regenerating keys (Initiator) for \(peer.displayName): \(error)")
-                // Update state to failed, including specific error if possible
-                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing offer/regenerating keys: \(errorMessage)"))
-            }
-        }
-    }
-
-    /// Handles an incoming KeyRegenerationAcknowledgement message.
-    private func handleKeyRegenerationAcknowledgement(from peer: MCPeerID, data: Data) {
-        print("KeyExchange: Received KeyRegenerationAcknowledgement from \(peer.displayName)")
-        Task {
-            do {
-                // 1. Decode the acknowledgement
-                let ack: KeyRegenerationAcknowledgement = try P2PMessage(messageType: .keyRegenerationAcknowledgement, payload: data).decodePayload(KeyRegenerationAcknowledgement.self)
-                print("KeyExchange: Decoded acknowledgement (ReqID: \(ack.requestID)) from \(ack.initiatorProfileID)")
-
-                // 2. Check prerequisites
-                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-                    throw P2PError.profileNotAvailable
-                }
-                guard let currentStateInfo = peerKeyExchangeStates[peer],
-                      case let .offerSent(responderNonce) = currentStateInfo.state
-                else {
-                    print("KeyExchange: Ignoring acknowledgement from \(peer.displayName), not in OfferSent state.")
-                    return
-                }
-                // Optional: Verify ack.requestID matches expectation?
-
-                // 3. Create commit message
-                let commit = KeyRegenerationCommit(
-                    requestID: ack.requestID,
-                    responderProfileID: myProfile.publicID.base58EncodedString,
-                    timestamp: Date()
-                )
-
-                // 4. Update local state *before* sending
-                updatePeerExchangeState(for: peer, newState: .ackReceived(nonce: responderNonce)) // Still using our (responder's) nonce
-
-                // 5. Send the commit message
-                try await sendP2PMessage(type: .keyRegenerationCommit, payload: commit, toPeers: [peer])
-                print("KeyExchange: Sent KeyRegenerationCommit to \(peer.displayName) (ReqID: \(ack.requestID))")
-                // Transition state after successful send
-                updatePeerExchangeState(for: peer, newState: .commitSent(nonce: responderNonce)) // Final state for responder
-
-                // --- Responder's Key Generation Trigger ---
-                // At this point, the responder (us) has received the initiator's nonce (ack.nonce)
-                // and sent our commit message. We can now trigger local key regeneration.
-                guard let peerProfileIDData = Data(base58Encoded: ack.initiatorProfileID) else {
-                    throw P2PError.keyExchangeError("Invalid peer profile ID in acknowledgement: \(ack.initiatorProfileID)")
-                }
-                print("KeyExchange (Responder): Triggering local key regeneration after sending Commit for peer \(ack.initiatorProfileID)")
-
-                // *** Use performKeyGenerationAndSave ***
-                try await performKeyGenerationAndSave(
-                    peerProfileIDData: peerProfileIDData,
-                    peer: peer // Pass peer for state update on failure
-                )
-                print("KeyExchange (Responder): OpenTDFKit key regeneration and save successful.")
-                // CommitSent is the final state for the responder.
-
-            } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationAcknowledgement or regenerating keys (Responder) for \(peer.displayName): \(error)")
-                // Update state to failed, including specific error if possible
-                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing ack/regenerating keys: \(errorMessage)"))
-            }
-        }
-    }
-
-    /// Handles an incoming KeyRegenerationCommit message.
-    private func handleKeyRegenerationCommit(from peer: MCPeerID, data: Data) {
-        print("KeyExchange: Received KeyRegenerationCommit from \(peer.displayName)")
-        Task {
-            do {
-                // 1. Decode the commit message
-                let commit: KeyRegenerationCommit = try P2PMessage(messageType: .keyRegenerationCommit, payload: data).decodePayload(KeyRegenerationCommit.self)
-                print("KeyExchange: Decoded commit (ReqID: \(commit.requestID)) from \(commit.responderProfileID)")
-
-                // 2. Check prerequisites
-                guard let currentStateInfo = peerKeyExchangeStates[peer],
-                      case let .ackSent(initiatorNonce) = currentStateInfo.state
-                else {
-                    print("KeyExchange: Ignoring commit from \(peer.displayName), not in AckSent state.")
-                    return
-                }
-                // Optional: Verify commit.requestID matches expectation?
-
-                // 3. Update local state to completed
-                print("KeyExchange: Protocol completed successfully with \(peer.displayName) (ReqID: \(commit.requestID))")
-                updatePeerExchangeState(for: peer, newState: .completed(nonce: initiatorNonce)) // Final state for initiator
-
-            } catch {
-                print("❌ KeyExchange: Error handling KeyRegenerationCommit from \(peer.displayName): \(error)")
-                updatePeerExchangeState(for: peer, newState: .failed("Error processing commit: \(error.localizedDescription)"))
-            }
-        }
-    }
-
-    /// Performs the local key generation/regeneration using OpenTDFKit and persists the updated KeyStore directly to the Profile.
-    /// This is called by both the initiator and responder sides of the protocol after successful nonce exchange.
-    /// Handles both initial key generation (profile.keyStorePrivate is nil) and subsequent regenerations.
-    /// - Parameters:
-    ///   - peerProfileIDData: The profile ID of the peer involved in the exchange (for logging/context).
-    ///   - peer: The MCPeerID of the peer (for updating state on failure).
-    private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws {
-        print("KeyExchange: Performing OpenTDFKit local key generation/regeneration and save (using Profile.keyStorePrivate)...")
-        print("   Context: Key exchange with peer \(peerProfileIDData.base58EncodedString)")
-
-        var keyStore = KeyStore(curve: .secp256r1)
-
-        // 1. Get current profile
-        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-            // Update peer state to failed if profile is missing during exchange
-            updatePeerExchangeState(for: peer, newState: .failed("Local profile not available"))
-            throw P2PError.profileNotAvailable
-        }
-        let profileIDString = myProfile.publicID.base58EncodedString
-
-        do {
-            // 2. Check if KeyStore data exists and either deserialize or create new
-            if let currentKeyStoreData = myProfile.keyStorePrivate {
-                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) in profile \(profileIDString).")
-                // 3a. Deserialize KeyStore from profile data
-                do {
-                    // Deserialize into the new store
-                    try await keyStore.deserialize(from: currentKeyStoreData)
-                    print("   Successfully deserialized local KeyStore from profile data.")
-                } catch {
-                    throw P2PError.keyStoreDeserializationFailed(error.localizedDescription)
-                }
-            } else {
-                // 3b. Create a new KeyStore instance (first time generation)
-                print("   No existing keyStorePrivate data found for profile \(profileIDString). Creating new KeyStore.")
-                // Assuming KeyStore can be initialized with a curve.
-                // Replace `.secp256r1` if a different default curve is used.
-                do {
-                    keyStore = KeyStore(curve: .secp256r1) // Use appropriate initializer
-                    print("   Successfully created new KeyStore instance.")
-                }
-            }
-
-            // 4. Call OpenTDFKit to generate/regenerate keys locally
-            do {
-                // Assuming 8192 is the standard capacity/generation count
-                try await keyStore.generateAndStoreKeyPairs(count: 8192)
-                print("   OpenTDFKit `generateAndStoreKeyPairs(count: 8192)` call successful.")
-            } catch {
-                throw P2PError.keyGenerationFailed("OpenTDFKit generateAndStoreKeyPairs failed: \(error.localizedDescription)")
-            }
-
-            // 5. Serialize the updated KeyStore
-            let updatedSerializedData: Data
-            do {
-                updatedSerializedData = await keyStore.serialize()
-                print("   Successfully serialized updated KeyStore (\(updatedSerializedData.count) bytes)")
-            } // Assuming serialize() doesn't throw
-
-            // 6. Update the Profile's keyStorePrivate property
-            myProfile.keyStorePrivate = updatedSerializedData
-            print("   Updated profile.keyStorePrivate with new data.")
-
-            // 7. Save changes to the Profile via PersistenceController
-            do {
-                try await persistenceController.saveChanges()
-                print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
-            } catch {
-                // Attempt to revert the in-memory change if save fails
-                print("   Save failed.")
-                throw P2PError.persistenceError("Failed to save updated Profile: \(error.localizedDescription)")
-            }
-
-        } catch {
-            // Catch errors from steps 2-7
-            print("❌ KeyExchange: Failed during key generation/save for peer \(peerProfileIDData.base58EncodedString): \(error)")
-            // Update peer state to failed, including specific error if possible
-            let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
-            updatePeerExchangeState(for: peer, newState: .failed("Key generation/save failed: \(errorMessage)"))
-            // Re-throw the error to be handled by the calling function (e.g., handleOffer, handleAck)
-            throw error
-        }
-    }
-
-    // MARK: - Local KeyStore Management (NEW HELPER)
-
-    /// Gets the public data of the local user's KeyStore.
-    /// If the KeyStore doesn't exist, it creates one, generates keys, saves the private part, and returns the public part.
-    /// - Returns: The serialized public KeyStore data.
-    /// - Throws: `P2PError` if profile is unavailable, or KeyStore operations fail.
+    /// Gets the public data of the local KeyStore. Creates/generates/saves if it doesn't exist.
     func getOrCreateLocalPublicKeystoreData() async throws -> Data {
-        print("KeyStoreShare: Getting or creating local KeyStore...")
-
-        // 1. Get current profile
+        print("Getting or creating local public KeyStore data...")
         guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
             throw P2PError.profileNotAvailable
         }
@@ -1588,58 +865,317 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         let keyStore = KeyStore(curve: .secp256r1) // Use default curve
 
         do {
-            // 2. Check if KeyStore private data exists
             if let currentKeyStoreData = myProfile.keyStorePrivate {
-                print("   Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes) for profile \(profileIDString).")
-                // Deserialize to ensure it's valid and to extract public data
+                // KeyStore exists, deserialize to extract public part
+                print("Found existing keyStorePrivate (\(currentKeyStoreData.count) bytes) for \(profileIDString). Deserializing...")
                 try await keyStore.deserialize(from: currentKeyStoreData)
-                print("   Successfully deserialized existing KeyStore.")
             } else {
-                // 3. Create and generate keys if it doesn't exist
-                print("   No existing keyStorePrivate data found for profile \(profileIDString). Creating and generating new KeyStore.")
-                // Generate keys (e.g., 8192 keys)
-                try await keyStore.generateAndStoreKeyPairs(count: 8192)
-                print("   Successfully generated keys for new KeyStore.")
-
-                // Serialize the *private* data
-                let privateData = await keyStore.serialize()
-                print("   Successfully serialized new private KeyStore (\(privateData.count) bytes)")
-
-                // Save the private data to the profile
-                myProfile.keyStorePrivate = privateData
-                print("   Updated profile.keyStorePrivate with new data.")
-
-                // Save changes to the Profile via PersistenceController
-                try await persistenceController.saveChanges()
-                print("   Successfully saved updated Profile (with new keyStorePrivate) to persistence.")
+                // KeyStore doesn't exist, create, generate keys, save private part
+                print("No keyStorePrivate found for \(profileIDString). Creating new KeyStore...")
+                try await keyStore.generateAndStoreKeyPairs(count: 8192) // Generate keys
+                print("Generated keys for new KeyStore.")
+                let privateData = await keyStore.serialize() // Serialize private data
+                print("Serialized new private KeyStore (\(privateData.count) bytes).")
+                myProfile.keyStorePrivate = privateData // Update profile
+                try await persistenceController.saveChanges() // Save profile
+                print("Saved new private KeyStore data to profile \(profileIDString).")
             }
 
-            // 4. Extract and return the public data
+            // Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
-            await print("   Successfully extracted public KeyStore data (\(publicKeyStore.publicKeys.count) bytes).")
+            await print("Extracted public KeyStore data (\(publicKeyStore.publicKeys.count) keys).")
             return await publicKeyStore.serialize()
 
         } catch let error as P2PError {
-            print("❌ KeyStoreShare: P2PError getting/creating KeyStore: \(error)")
-            throw error // Re-throw specific P2P errors
+            print("❌ P2PError getting/creating KeyStore: \(error)")
+            throw error
         } catch {
-            print("❌ KeyStoreShare: Unexpected error getting/creating KeyStore: \(error)")
+            print("❌ Unexpected error getting/creating KeyStore: \(error)")
             throw P2PError.keyStoreInitializationFailed("Unexpected error: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Secure Key Regeneration Protocol Implementation
+
+    /// Generates a cryptographically secure nonce.
+    private func generateNonce(size: Int = 32) -> Data {
+        var keyData = Data(count: size)
+        let result = keyData.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, size, $0.baseAddress!)
+        }
+        guard result == errSecSuccess else {
+            print("Warning: SecRandomCopyBytes failed. Using fallback nonce.")
+            return Data((0 ..< size).map { _ in UInt8.random(in: .min ... .max) })
+        }
+        return keyData
+    }
+
+    /// Updates the key exchange state for a peer and logs the change.
+    private func updatePeerExchangeState(for peer: MCPeerID, newState: KeyExchangeState) {
+        var info = peerKeyExchangeStates[peer] ?? KeyExchangeTrackingInfo()
+        info.state = newState
+        info.lastActivity = Date()
+        peerKeyExchangeStates[peer] = info
+        print("KeyExchange State [\(peer.displayName)]: \(newState)")
+    }
+
+    /// Initiates the key regeneration protocol with a peer. (Step 1)
+    func initiateKeyRegeneration(with peer: MCPeerID) async throws {
+        print("KeyExchange: Initiating with \(peer.displayName)")
+        guard let session = mcSession, session.connectedPeers.contains(peer) else {
+            throw P2PError.peerNotConnected("Peer \(peer.displayName) not connected.")
+        }
+        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+            throw P2PError.profileNotAvailable
+        }
+
+        // Allow initiation only from idle or failed state
+        let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
+        guard currentState == .idle || currentState.nonce == nil else { // Check if failed or idle
+            throw P2PError.invalidStateForAction("Cannot initiate key exchange, state is \(currentState)")
+        }
+
+        let nonce = generateNonce()
+        let request = KeyRegenerationRequest(
+            requestID: UUID(),
+            initiatorProfileID: myProfile.publicID.base58EncodedString,
+            timestamp: Date()
+        )
+
+        // Update state *before* sending
+        updatePeerExchangeState(for: peer, newState: .requestSent(nonce: nonce))
+
+        do {
+            try await sendP2PMessage(type: .keyRegenerationRequest, payload: request, toPeers: [peer])
+            print("KeyExchange: Sent Request to \(peer.displayName)")
+        } catch {
+            // Rollback state on send failure
+            updatePeerExchangeState(for: peer, newState: .failed("Failed to send request: \(error.localizedDescription)"))
+            throw error
+        }
+    }
+
+    /// Handles incoming KeyRegenerationRequest. (Step 2: Responder)
+    private func handleKeyRegenerationRequest(from peer: MCPeerID, data: Data) {
+        print("KeyExchange: Received Request from \(peer.displayName)")
+        Task {
+            do {
+                let request: KeyRegenerationRequest = try P2PMessage(messageType: .keyRegenerationRequest, payload: data).decodePayload(KeyRegenerationRequest.self)
+                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                    throw P2PError.profileNotAvailable
+                }
+
+                // Allow processing only from idle or failed state
+                let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
+                guard currentState == .idle || currentState.nonce == nil else {
+                    print("KeyExchange: Ignoring Request from \(peer.displayName), already in state \(currentState)")
+                    return
+                }
+
+                let nonce = generateNonce() // Responder's nonce
+                let offer = KeyRegenerationOffer(
+                    requestID: request.requestID,
+                    responderProfileID: myProfile.publicID.base58EncodedString,
+                    nonce: nonce,
+                    timestamp: Date()
+                )
+
+                // Update state *before* sending
+                updatePeerExchangeState(for: peer, newState: .requestReceived(nonce: nonce)) // Store *our* (responder's) nonce
+
+                try await sendP2PMessage(type: .keyRegenerationOffer, payload: offer, toPeers: [peer])
+                print("KeyExchange: Sent Offer to \(peer.displayName)")
+                // Transition state after successful send
+                updatePeerExchangeState(for: peer, newState: .offerSent(nonce: nonce))
+
+            } catch {
+                print("❌ KeyExchange: Error handling Request from \(peer.displayName): \(error)")
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing request: \(error.localizedDescription)"))
+            }
+        }
+    }
+
+    /// Handles incoming KeyRegenerationOffer. (Step 3: Initiator)
+    private func handleKeyRegenerationOffer(from peer: MCPeerID, data: Data) {
+        print("KeyExchange: Received Offer from \(peer.displayName)")
+        Task {
+            do {
+                let offer: KeyRegenerationOffer = try P2PMessage(messageType: .keyRegenerationOffer, payload: data).decodePayload(KeyRegenerationOffer.self)
+                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                    throw P2PError.profileNotAvailable
+                }
+                // Must be in RequestSent state to process an Offer
+                guard let currentStateInfo = peerKeyExchangeStates[peer],
+                      case let .requestSent(initiatorNonce) = currentStateInfo.state
+                else {
+                    print("KeyExchange: Ignoring Offer from \(peer.displayName), not in RequestSent state.")
+                    return
+                }
+
+                let ack = KeyRegenerationAcknowledgement(
+                    requestID: offer.requestID,
+                    initiatorProfileID: myProfile.publicID.base58EncodedString,
+                    nonce: initiatorNonce, // Send back *our* original nonce
+                    timestamp: Date()
+                )
+
+                // Update state *before* sending
+                updatePeerExchangeState(for: peer, newState: .offerReceived(nonce: initiatorNonce))
+
+                try await sendP2PMessage(type: .keyRegenerationAcknowledgement, payload: ack, toPeers: [peer])
+                print("KeyExchange: Sent Acknowledgement to \(peer.displayName)")
+                // Transition state after successful send
+                updatePeerExchangeState(for: peer, newState: .ackSent(nonce: initiatorNonce))
+
+                // --- Initiator's Key Generation Trigger ---
+                // Initiator now has both nonces (own: initiatorNonce, peer's: offer.nonce) implicitly
+                // Regenerate local keys now.
+                guard let peerProfileIDData = Data(base58Encoded: offer.responderProfileID) else {
+                    throw P2PError.keyExchangeError("Invalid peer profile ID in offer")
+                }
+                print("KeyExchange (Initiator): Triggering local key regeneration for peer \(offer.responderProfileID)")
+                try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
+                print("KeyExchange (Initiator): Local key regeneration successful.")
+                // Still waiting for Commit from responder to finalize the protocol state.
+
+            } catch {
+                print("❌ KeyExchange: Error handling Offer or regenerating keys (Initiator) for \(peer.displayName): \(error)")
+                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing offer/regenerating: \(errorMessage)"))
+            }
+        }
+    }
+
+    /// Handles incoming KeyRegenerationAcknowledgement. (Step 4: Responder)
+    private func handleKeyRegenerationAcknowledgement(from peer: MCPeerID, data: Data) {
+        print("KeyExchange: Received Acknowledgement from \(peer.displayName)")
+        Task {
+            do {
+                let ack: KeyRegenerationAcknowledgement = try P2PMessage(messageType: .keyRegenerationAcknowledgement, payload: data).decodePayload(KeyRegenerationAcknowledgement.self)
+                guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                    throw P2PError.profileNotAvailable
+                }
+                // Must be in OfferSent state to process an Ack
+                guard let currentStateInfo = peerKeyExchangeStates[peer],
+                      case let .offerSent(responderNonce) = currentStateInfo.state
+                else {
+                    print("KeyExchange: Ignoring Ack from \(peer.displayName), not in OfferSent state.")
+                    return
+                }
+
+                let commit = KeyRegenerationCommit(
+                    requestID: ack.requestID,
+                    responderProfileID: myProfile.publicID.base58EncodedString,
+                    timestamp: Date()
+                )
+
+                // Update state *before* sending
+                updatePeerExchangeState(for: peer, newState: .ackReceived(nonce: responderNonce))
+
+                try await sendP2PMessage(type: .keyRegenerationCommit, payload: commit, toPeers: [peer])
+                print("KeyExchange: Sent Commit to \(peer.displayName)")
+                // Transition state after successful send
+                updatePeerExchangeState(for: peer, newState: .commitSent(nonce: responderNonce)) // Final state for responder
+
+                // --- Responder's Key Generation Trigger ---
+                // Responder now has both nonces (own: responderNonce, peer's: ack.nonce) implicitly
+                // Regenerate local keys now.
+                guard let peerProfileIDData = Data(base58Encoded: ack.initiatorProfileID) else {
+                    throw P2PError.keyExchangeError("Invalid peer profile ID in ack")
+                }
+                print("KeyExchange (Responder): Triggering local key regeneration for peer \(ack.initiatorProfileID)")
+                try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
+                print("KeyExchange (Responder): Local key regeneration successful.")
+                // Responder's protocol completes here.
+
+            } catch {
+                print("❌ KeyExchange: Error handling Ack or regenerating keys (Responder) for \(peer.displayName): \(error)")
+                let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing ack/regenerating: \(errorMessage)"))
+            }
+        }
+    }
+
+    /// Handles incoming KeyRegenerationCommit. (Step 5: Initiator)
+    private func handleKeyRegenerationCommit(from peer: MCPeerID, data: Data) {
+        print("KeyExchange: Received Commit from \(peer.displayName)")
+        Task {
+            do {
+                let commit: KeyRegenerationCommit = try P2PMessage(messageType: .keyRegenerationCommit, payload: data).decodePayload(KeyRegenerationCommit.self)
+                // Must be in AckSent state to process a Commit
+                guard let currentStateInfo = peerKeyExchangeStates[peer],
+                      case let .ackSent(initiatorNonce) = currentStateInfo.state
+                else {
+                    print("KeyExchange: Ignoring Commit from \(peer.displayName), not in AckSent state.")
+                    return
+                }
+
+                // Protocol completed successfully for Initiator
+                print("KeyExchange: Protocol completed successfully with \(peer.displayName) (ReqID: \(commit.requestID))")
+                updatePeerExchangeState(for: peer, newState: .completed(nonce: initiatorNonce)) // Final state for initiator
+
+            } catch {
+                print("❌ KeyExchange: Error handling Commit from \(peer.displayName): \(error)")
+                updatePeerExchangeState(for: peer, newState: .failed("Error processing commit: \(error.localizedDescription)"))
+            }
+        }
+    }
+
+    /// Performs local key generation/regeneration using OpenTDFKit and saves the updated private KeyStore to the Profile.
+    private func performKeyGenerationAndSave(peerProfileIDData: Data, peer: MCPeerID) async throws {
+        print("KeyExchange: Performing OpenTDFKit key generation/save (Profile.keyStorePrivate)... Peer: \(peerProfileIDData.base58EncodedString)")
+
+        let keyStore = KeyStore(curve: .secp256r1)
+
+        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+            updatePeerExchangeState(for: peer, newState: .failed("Local profile missing"))
+            throw P2PError.profileNotAvailable
+        }
+
+        do {
+            // Deserialize existing KeyStore if present
+            if let currentKeyStoreData = myProfile.keyStorePrivate {
+                print("   Deserializing existing KeyStore data...")
+                try await keyStore.deserialize(from: currentKeyStoreData)
+            } else {
+                print("   No existing KeyStore. Creating new.")
+            }
+
+            // Generate keys
+            print("   Generating 8192 key pairs...")
+            try await keyStore.generateAndStoreKeyPairs(count: 8192)
+
+            // Serialize updated private KeyStore
+            let updatedSerializedData = await keyStore.serialize()
+            print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
+
+            // Update profile and save
+            myProfile.keyStorePrivate = updatedSerializedData
+            print("   Updating profile.keyStorePrivate...")
+            try await persistenceController.saveChanges()
+            print("   Successfully saved updated profile.")
+
+        } catch {
+            // Catch errors from deserialization, generation, serialization, or save
+            print("❌ KeyExchange: Failed during key generation/save: \(error)")
+            let errorMessage = (error as? P2PError)?.localizedDescription ?? error.localizedDescription
+            updatePeerExchangeState(for: peer, newState: .failed("Key generation/save failed: \(errorMessage)"))
+            throw error // Re-throw to calling context
         }
     }
 
     // MARK: - ArkavoClientDelegate Methods
 
-    // UPDATED Delegate Method - Triggers full refresh
+    // Note: Some delegate methods might be primarily handled by other ViewModels (like ChatViewModel)
+    // Implementations here focus on P2P context.
+
     nonisolated func arkavoClientDidUpdateKeyStatus(_: ArkavoClient, keyCount: Int, capacity: Int, isRegenerating: Bool) {
         Task { @MainActor in
-            // This delegate provides potentially incomplete info (missing expired count).
-            // Trigger a full refresh to get accurate LocalKeyStoreInfo.
-            print("Delegate: ArkavoClient Key Status Update Received (Valid: \(keyCount), Capacity: \(capacity), Regen: \(isRegenerating)). Triggering full status refresh.")
-            // Optionally update isRegenerating immediately for responsiveness
+            print("Delegate: ArkavoClient Key Status Update (Valid: \(keyCount), Capacity: \(capacity), Regen: \(isRegenerating)).")
+            // Update local state based on delegate info
+            // Note: Expired count might not be available directly from this delegate method.
+            self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: keyCount, expiredKeyCount: -1 /* Indicate unknown */, capacity: capacity)
             self.isRegeneratingKeys = isRegenerating
-            // TODO: Implement a full refresh method if needed, or rely on KeyStoreStatusView timer
-            // await self.refreshKeyStoreStatus()
         }
     }
 
@@ -1647,49 +1183,38 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         Task { @MainActor in
             print("Delegate: ArkavoClient Received Secure Message from \(fromProfileID.base58EncodedString)")
             guard let currentStream = self.selectedStream, currentStream.publicID == streamID else {
-                print("Warning: Received secure message for stream \(streamID?.base58EncodedString ?? "nil") but current stream is \(self.selectedStream?.publicID.base58EncodedString ?? "nil"). Ignoring.")
+                print("Warning: Ignoring secure message for stream \(streamID?.base58EncodedString ?? "nil") (current: \(self.selectedStream?.publicID.base58EncodedString ?? "nil"))")
                 return
             }
 
-            // Find sender profile locally
+            // Find sender name locally
             var senderName = "Unknown Peer"
-            do {
-                if let profile = try await self.persistenceController.fetchProfile(withPublicID: fromProfileID) {
-                    senderName = profile.name
-                }
-            } catch {
-                print("Warning: Could not fetch sender profile locally for ID \(fromProfileID.base58EncodedString): \(error)")
+            if let profile = try? await self.persistenceController.fetchProfile(withPublicID: fromProfileID) {
+                senderName = profile.name
             }
 
-            // Store as Thought
+            // Store as Thought and notify UI
             do {
                 let thought = try await self.storeP2PMessageAsThought(
                     content: message,
                     sender: senderName,
                     senderProfileID: fromProfileID.base58EncodedString,
-                    timestamp: Date(), // Use current time for received message
+                    timestamp: Date(),
                     stream: currentStream,
-                    nanoData: nil // Decrypted message content
+                    nanoData: nil // Store decrypted content
                 )
                 print("✅ Stored secure message from \(senderName) as Thought ID: \(thought.id)")
 
-                // Post notification for UI update
+                // Notify chat view
+                NotificationCenter.default.post(name: .chatMessagesUpdated, object: nil)
+                // Optionally notify about specific P2P message arrival
                 NotificationCenter.default.post(
                     name: .p2pMessageReceived,
                     object: nil,
-                    userInfo: [
-                        "streamID": currentStream.publicID,
-                        "thoughtID": thought.id,
-                        "message": message,
-                        "sender": senderName,
-                        "timestamp": thought.metadata.createdAt, // Use timestamp from Thought
-                        "senderProfileID": fromProfileID.base58EncodedString,
-                    ]
+                    userInfo: ["thoughtID": thought.id]
                 )
-                NotificationCenter.default.post(name: .chatMessagesUpdated, object: nil)
-
             } catch {
-                print("❌ Failed to store received secure P2P message as Thought: \(error)")
+                print("❌ Failed to store received secure message as Thought: \(error)")
             }
         }
     }
@@ -1698,13 +1223,11 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         Task { @MainActor in
             print("Delegate: ArkavoClient Updated Peer Profile: \(profile.name) (\(profile.publicID.base58EncodedString))")
             do {
-                // Save the updated profile and potentially public KeyStore data
+                // Save updated profile and potentially KeyStore data
                 try await self.persistenceController.savePeerProfile(profile, keyStorePublicData: publicKeyStoreData)
                 print("Saved updated peer profile \(profile.name) from ArkavoClient.")
-
-                // Refresh the connected peer profiles list
+                // Refresh local cache
                 await self.refreshConnectedPeerProfiles()
-
             } catch {
                 print("❌ Failed to save updated peer profile from ArkavoClient: \(error)")
             }
@@ -1714,38 +1237,30 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     nonisolated func arkavoClientEncounteredError(_: ArkavoClient, error: Error) {
         Task { @MainActor in
             print("Delegate: ArkavoClient Encountered Error: \(error.localizedDescription)")
-            // Update connection status or display error to user
             self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
         }
     }
 
-    // Add other ArkavoClientDelegate methods as needed based on its definition
-    // e.g., func arkavoClientDidUpdateConnection(...)
-    // Implement required methods if ArkavoClientDelegate protocol demands them
+    // --- Other ArkavoClientDelegate methods (implement if required) ---
+
     nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
-        // Example implementation (can be expanded)
         Task { @MainActor in
             print("Delegate: ArkavoClient State Changed: \(state)")
-            // Could update connectionStatus based on ArkavoClient state if needed
+            // Optionally update connectionStatus based on ArkavoClient state
         }
     }
 
     nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        // This delegate method receives *raw* data from the WebSocket/NATS
-        // It's distinct from the P2P message delegate method above.
-        // P2PGroupViewModel might not need to handle these directly if ChatViewModel does.
+        // Handles raw data from WebSocket/NATS, likely processed elsewhere (e.g., ChatViewModel)
         Task { @MainActor in
-            print("Delegate: ArkavoClient Received Raw Message Data (\(message.count) bytes) - Likely handled elsewhere (e.g., ChatViewModel).")
-            // Potentially pass to internal ArkavoClient handler if needed for P2P context
-            // self.handleIncomingData(message, from: <#Determine Peer somehow if possible#>)
+            print("Delegate: ArkavoClient Received Raw Message Data (\(message.count) bytes) - Likely handled by specific feature ViewModel.")
         }
     }
 
     nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
-        // This seems redundant with arkavoClientEncounteredError, but implement if required.
+        // Similar to arkavoClientEncounteredError
         Task { @MainActor in
             print("Delegate: ArkavoClient Received Error: \(error.localizedDescription)")
-            // Update connection status or display error to user
             self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
         }
     }
@@ -1755,8 +1270,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
 extension P2PGroupViewModel: MCSessionDelegate {
     nonisolated func session(_: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        // Convert state to string here instead of calling the actor-isolated method
-        let stateStr = { () -> String in
+        // Determine state string outside actor context
+        let stateStr: String = {
             switch state {
             case .notConnected: return "Not Connected"
             case .connecting: return "Connecting"
@@ -1764,94 +1279,46 @@ extension P2PGroupViewModel: MCSessionDelegate {
             @unknown default: return "Unknown"
             }
         }()
-
-        print("MCSessionDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) changed state to: \(stateStr)")
+        print("MCSessionDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) -> \(stateStr)")
 
         Task { @MainActor in
             switch state {
             case .connected:
-                self.invitationHandler = nil
-                // Use hashValue for reliable comparison
+                self.invitationHandler = nil // Clear pending invitation
+                // Add peer if not already present (use hashValue for comparison)
                 if !self.connectedPeers.contains(where: { $0.hashValue == peerID.hashValue }) {
                     self.connectedPeers.append(peerID)
                     self.peerConnectionTimes[peerID] = Date()
-                    // Initialize key exchange state for the new peer
-                    self.peerKeyExchangeStates[peerID] = KeyExchangeTrackingInfo()
+                    self.peerKeyExchangeStates[peerID] = KeyExchangeTrackingInfo() // Initialize key exchange state
+                    self.connectionStatus = .connected
+                    print("✅ Connected to peer: \(peerID.displayName)")
 
-                    if self.connectedPeers.count == 1 {
-                        self.connectionStatus = .connected
-                    }
-                    print("📱 MCSessionDelegate: Successfully connected to peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
+                    // Fetch and cache profile for the newly connected peer
+                    await self.refreshConnectedPeerProfiles() // Refresh for all, including new one
 
-                    // --- START: Fetch and store profile for connected peer ---
-                    if let profileIDString = self.peerIDToProfileID[peerID],
-                       let profileIDData = Data(base58Encoded: profileIDString)
-                    {
-                        print("   Attempting to fetch profile \(profileIDString) for connected peer \(peerID.displayName)...")
-                        do {
-                            if let profile = try await self.persistenceController.fetchProfile(withPublicID: profileIDData) {
-                                self.connectedPeerProfiles[peerID] = profile
-                                print("   ✅ Successfully fetched and stored profile for \(peerID.displayName) in connectedPeerProfiles.")
-                            } else {
-                                print("   ⚠️ Profile \(profileIDString) not found in persistence for peer \(peerID.displayName).")
-                                // Optionally: Initiate a profile request P2P message?
-                            }
-                        } catch {
-                            print("   ❌ Error fetching profile \(profileIDString) for peer \(peerID.displayName): \(error)")
-                        }
-                    } else {
-                        print("   ⚠️ Could not find profile ID mapping for connected peer \(peerID.displayName). Cannot fetch profile.")
-                    }
-                    // --- END: Fetch and store profile ---
-
-                    // Ensure connection status reflects reality after a short delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        guard let self else { return }
-                        // Check if the peer is still considered connected
-                        if connectedPeers.contains(where: { $0.hashValue == peerID.hashValue }) {
-                            connectionStatus = .connected
-                        } else if connectedPeers.isEmpty {
-                            // If the peer disconnected very quickly, update status accordingly
-                            connectionStatus = isSearchingForPeers ? .searching : .idle
-                        }
-                    }
                 } else {
-                    print("📱 MCSessionDelegate: Received connected state for already known peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
-                    // Optionally re-fetch profile here in case it was missed or updated
-                    if self.connectedPeerProfiles[peerID] == nil,
-                       let profileIDString = self.peerIDToProfileID[peerID],
-                       let profileIDData = Data(base58Encoded: profileIDString)
-                    {
-                        print("   Re-attempting profile fetch for already connected peer \(peerID.displayName)...")
-                        do {
-                            if let profile = try await self.persistenceController.fetchProfile(withPublicID: profileIDData) {
-                                self.connectedPeerProfiles[peerID] = profile
-                                print("   ✅ Successfully fetched and stored profile for \(peerID.displayName) on re-check.")
-                            } else {
-                                print("   ⚠️ Profile \(profileIDString) still not found for peer \(peerID.displayName).")
-                            }
-                        } catch {
-                            print("   ❌ Error re-fetching profile \(profileIDString) for peer \(peerID.displayName): \(error)")
-                        }
+                    print("ℹ️ Received connected state for already known peer: \(peerID.displayName)")
+                    // Optionally re-fetch profile if needed
+                    if self.connectedPeerProfiles[peerID] == nil {
+                        await self.refreshConnectedPeerProfiles()
                     }
+                }
+                // Ensure status updates even if connection is brief
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                    self?.connectionStatus = (self?.connectedPeers.isEmpty ?? true) ? (self?.isSearchingForPeers ?? false ? .searching : .idle) : .connected
                 }
 
             case .connecting:
-                print("⏳ MCSessionDelegate: Connecting to peer: \(peerID.displayName) (Hash: \(peerID.hashValue))...")
-                if self.connectionStatus != .connected || self.connectedPeers.isEmpty {
+                print("⏳ Connecting to peer: \(peerID.displayName)...")
+                if self.connectionStatus != .connected { // Avoid overriding if already connected to others
                     self.connectionStatus = .connecting
                 }
-                // Timeout logic (seems reasonable)
-                let peerIdentifier = peerID.displayName
+                // Simple timeout logic
                 let peerHash = peerID.hashValue
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
                     guard let self else { return }
-                    // Check if still connecting and if this specific peer hasn't connected
-                    if connectionStatus == .connecting,
-                       !connectedPeers.contains(where: { $0.hashValue == peerHash })
-                    {
-                        print("⚠️ MCSessionDelegate: Connection to \(peerIdentifier) (Hash: \(peerHash)) timed out")
-                        // Only change status if no other peers are connected
+                    if connectionStatus == .connecting, !connectedPeers.contains(where: { $0.hashValue == peerHash }) {
+                        print("⚠️ Connection to \(peerID.displayName) timed out.")
                         if connectedPeers.isEmpty {
                             connectionStatus = isSearchingForPeers ? .searching : .idle
                         }
@@ -1859,82 +1326,67 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 }
 
             case .notConnected:
-                print("❌ MCSessionDelegate: Disconnected from peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
-                if self.connectionStatus == .connecting {
-                    // If we were in the middle of connecting, clear the handler
-                    self.invitationHandler = nil
-                }
+                print("❌ Disconnected from peer: \(peerID.displayName)")
+                if self.connectionStatus == .connecting { self.invitationHandler = nil }
 
-                // --- Reliable Cleanup on Disconnect ---
-                // This is the primary place to clean up peer state.
-                let profileID = self.peerIDToProfileID[peerID] // Get profile ID *before* removing from map
+                // --- Primary Cleanup Location ---
+                let profileID = self.peerIDToProfileID[peerID] // Get ID before removal
+                let peerHash = peerID.hashValue
 
-                // Remove from all tracking collections using hashValue for safety
-                let initialPeerCount = self.connectedPeers.count
-                self.connectedPeers.removeAll { $0.hashValue == peerID.hashValue }
-                let removedFromList = self.connectedPeers.count < initialPeerCount
+                // Remove from tracking collections
+                self.connectedPeers.removeAll { $0.hashValue == peerHash }
+                self.peerIDToProfileID.removeValue(forKey: peerID)
+                self.connectedPeerProfiles.removeValue(forKey: peerID) // Remove profile cache
+                self.peerConnectionTimes.removeValue(forKey: peerID)
+                self.peerKeyExchangeStates.removeValue(forKey: peerID) // Remove key exchange state
 
-                let removedFromMap = self.peerIDToProfileID.removeValue(forKey: peerID) != nil
-                let removedProfile = self.connectedPeerProfiles.removeValue(forKey: peerID) != nil // REMOVE PROFILE ON DISCONNECT
-                let removedTime = self.peerConnectionTimes.removeValue(forKey: peerID) != nil
-                let removedKeyState = self.peerKeyExchangeStates.removeValue(forKey: peerID) != nil // Clean up key exchange state
+                print("   Cleanup for \(peerID.displayName) (Profile: \(profileID ?? "N/A")) complete.")
 
-                print("MCSessionDelegate: Cleanup for \(peerID.displayName) (Hash: \(peerID.hashValue)) - Removed from list: \(removedFromList), map: \(removedFromMap), profile cache: \(removedProfile), time cache: \(removedTime), key state: \(removedKeyState)")
-
-                if let profileIDString = profileID {
-                    print("MCSessionDelegate: Disconnected peer Profile ID was: \(profileIDString)")
-                } else {
-                    print("MCSessionDelegate: No profile ID mapping found for disconnected peer \(peerID.displayName) (Hash: \(peerID.hashValue)) during cleanup.")
-                }
-
-                // Close and remove associated input streams
-                let streamsToRemove = self.activeInputStreams.filter { $1.hashValue == peerID.hashValue }.keys
+                // Close associated input streams
+                let streamsToRemove = self.activeInputStreams.filter { $1.hashValue == peerHash }.keys
                 if !streamsToRemove.isEmpty {
-                    print("MCSessionDelegate: Closing \(streamsToRemove.count) input stream(s) for disconnected peer \(peerID.displayName)")
-                    for stream in streamsToRemove {
-                        self.closeAndRemoveStream(stream) // Use the helper function
-                    }
+                    print("   Closing \(streamsToRemove.count) input stream(s) for \(peerID.displayName)")
+                    streamsToRemove.forEach { self.closeAndRemoveStream($0) }
                 }
 
                 // Update overall connection status
                 if self.connectedPeers.isEmpty {
-                    print("MCSessionDelegate: No connected peers remaining.")
+                    print("   No connected peers remaining.")
                     self.connectionStatus = self.isSearchingForPeers ? .searching : .idle
                 } else {
-                    print("MCSessionDelegate: \(self.connectedPeers.count) peers still connected.")
-                    self.connectionStatus = .connected // Still connected to others
+                    print("   \(self.connectedPeers.count) peers still connected.")
+                    self.connectionStatus = .connected
                 }
 
             @unknown default:
-                print("MCSessionDelegate: Unknown peer state received: \(state) for peer \(peerID.displayName)")
+                print(" MCSessionDelegate: Unknown state \(state) for \(peerID.displayName)")
             }
         }
     }
 
     nonisolated func session(_: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        // Pass received data to the main actor handler
+        // Route data to the main actor handler
         Task { @MainActor in
-            handleIncomingData(data, from: peerID) // Now routes P2P messages or passes to ArkavoClient
+            handleIncomingData(data, from: peerID)
         }
     }
 
     nonisolated func session(_: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
-        print("Received stream \(streamName) from peer \(peerID.displayName)")
-        // Stream handling remains the same for now, but data read should also go to ArkavoClient
+        print("Received stream '\(streamName)' from \(peerID.displayName)")
         Task { @MainActor in
             self.activeInputStreams[stream] = peerID
-            print("Tracking input stream from \(peerID.displayName)")
-            stream.delegate = self // Use nonisolated delegate
+            stream.delegate = self // Use nonisolated delegate reference
             stream.schedule(in: .main, forMode: .default)
             stream.open()
-            print("Opened input stream from \(peerID.displayName) for \(streamName)")
+            print("Opened and tracking input stream from \(peerID.displayName)")
         }
     }
 
     nonisolated func session(_: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
         Task { @MainActor in
-            print("Started receiving resource \(resourceName) from \(peerID.displayName): \(progress.fractionCompleted * 100)%")
+            print("Receiving resource '\(resourceName)' from \(peerID.displayName)...")
             resourceProgress[resourceName] = progress
+            // Optionally observe progress updates here
         }
     }
 
@@ -1942,33 +1394,32 @@ extension P2PGroupViewModel: MCSessionDelegate {
         Task { @MainActor in
             resourceProgress.removeValue(forKey: resourceName)
             if let error {
-                print("Error receiving resource \(resourceName) from \(peerID.displayName): \(error)")
+                print("Error receiving resource '\(resourceName)' from \(peerID.displayName): \(error)")
                 return
             }
             guard let url = localURL else {
-                print("No URL for received resource \(resourceName)")
+                print("No URL for received resource '\(resourceName)'")
                 return
             }
-            print("Successfully received resource \(resourceName) from \(peerID.displayName) at \(url.path)")
-            // TODO: Consider if resources should be handled via ArkavoClient for encryption/decryption.
-            // For now, we save the resource locally. Secure handling might require
-            // passing the data/URL to ArkavoClient for decryption before saving or processing.
-            saveReceivedResource(at: url, withName: resourceName)
+            print("Successfully received resource '\(resourceName)' at \(url.path)")
+            // TODO: Consider security implications. Resources likely need encryption/decryption via ArkavoClient.
+            saveReceivedResource(at: url, withName: resourceName) // Simple local save for now
         }
     }
 
-    // Keep saveReceivedResource helper method
+    /// Saves a received resource to the documents directory.
     private func saveReceivedResource(at url: URL, withName name: String) {
         do {
             let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let destinationURL = documentsURL.appendingPathComponent(name)
+            // Overwrite if exists
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.moveItem(at: url, to: destinationURL)
-            print("Saved resource to: \(destinationURL.path)")
+            print("Saved resource '\(name)' to: \(destinationURL.path)")
         } catch {
-            print("Error saving resource: \(error)")
+            print("Error saving resource '\(name)': \(error)")
         }
     }
 }
@@ -1977,70 +1428,31 @@ extension P2PGroupViewModel: MCSessionDelegate {
 
 extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
     nonisolated func browserViewControllerDidFinish(_ browserViewController: MCBrowserViewController) {
-        print("Browser view controller finished")
-        Task { @MainActor in
-            browserViewController.dismiss(animated: true)
-        }
+        print("Browser finished.")
+        Task { @MainActor in browserViewController.dismiss(animated: true) }
     }
 
     nonisolated func browserViewControllerWasCancelled(_ browserViewController: MCBrowserViewController) {
-        print("Browser view controller cancelled")
-        Task { @MainActor in
-            browserViewController.dismiss(animated: true)
-        }
+        print("Browser cancelled.")
+        Task { @MainActor in browserViewController.dismiss(animated: true) }
     }
 
     nonisolated func browserViewController(_: MCBrowserViewController, shouldPresentNearbyPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) -> Bool {
-        print("MCBrowserDelegate: Found nearby peer: \(peerID.displayName) (Hash: \(peerID.hashValue)) with info: \(info ?? [:])")
-        // Use Task to update MainActor-isolated properties
+        print("Browser found peer: \(peerID.displayName) with info: \(info ?? [:])")
+        // Associate ProfileID from discovery info immediately if available
         Task { @MainActor in
             if let profileID = info?["profileID"] {
-                print("MCBrowserDelegate: Peer \(peerID.displayName) has profile ID: \(profileID)")
-                var discoveryInfo = info ?? [:] // Ensure info is mutable or create a new dict
-                if discoveryInfo["timestamp"] == nil {
-                    discoveryInfo["timestamp"] = "\(Date().timeIntervalSince1970)"
-                }
-                // Store mapping immediately when peer is discovered
-                // Check if already mapped to avoid overwriting unnecessarily
-                if self.peerIDToProfileID[peerID] == nil {
+                print("   Peer \(peerID.displayName) has Profile ID: \(profileID)")
+                // Update map if new or different
+                if self.peerIDToProfileID[peerID] != profileID {
                     self.peerIDToProfileID[peerID] = profileID
-                    print("MCBrowserDelegate: Associated peer \(peerID.displayName) (Hash: \(peerID.hashValue)) with profile ID \(profileID) from discovery info")
-                } else if self.peerIDToProfileID[peerID] != profileID {
-                    print("MCBrowserDelegate: Warning - Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already mapped to a DIFFERENT profile ID (\(self.peerIDToProfileID[peerID]!)). Updating map.")
-                    self.peerIDToProfileID[peerID] = profileID
-                } else {
-                    print("MCBrowserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already correctly mapped to profile ID \(profileID).")
+                    print("   Associated peer \(peerID.displayName) with profile ID \(profileID)")
                 }
-                // Optionally fetch profile immediately
-                // await self.refreshConnectedPeerProfiles() // Or fetch just this one
             } else {
-                print("MCBrowserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) did not provide profileID in discovery info. Allowing connection.")
+                print("   Peer \(peerID.displayName) did not provide profileID in discovery info.")
             }
         }
-        // Always return true to allow the browser to display the peer
-        return true
-    }
-
-    // Keep invitePeer method structure, but note it relies on browser selection
-    func invitePeer(_ peerID: MCPeerID, context: Data? = nil) {
-        guard mcSession != nil else {
-            print("Error: No session available for invitation")
-            return
-        }
-        var contextData: Data? = nil
-        if let profile = ViewModelFactory.shared.getCurrentProfile() {
-            let contextDict: [String: String] = [
-                "profileID": profile.publicID.base58EncodedString,
-                "name": profile.name,
-            ]
-            contextData = try? JSONSerialization.data(withJSONObject: contextDict, options: [])
-        }
-        print("Inviting peer: \(peerID.displayName)")
-        _ = contextData ?? context // Use the generated context or the passed one
-        Task { @MainActor in
-            self.connectionStatus = .connecting
-        }
-        print("Programmatic invite function called for \(peerID.displayName). Relying on MCBrowserViewController selection for actual invite.")
+        return true // Always allow presentation in the browser
     }
 }
 
@@ -2048,141 +1460,113 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
 
 extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        print("MCAdvertiserDelegate: Received invitation from peer: \(peerID.displayName) (Hash: \(peerID.hashValue))")
-        // Use Task to interact with MainActor properties
+        print("Advertiser received invitation from: \(peerID.displayName)")
         Task { @MainActor in
-            // Store the invitation handler associated with this specific peer invitation
-            // Note: This assumes only one invitation is handled at a time. If multiple can arrive concurrently,
-            // this needs a dictionary mapping peerID to handler. For simplicity, we assume one for now.
-            self.invitationHandler = invitationHandler
+            self.invitationHandler = invitationHandler // Store handler for acceptance
 
-            var peerInfo = [String: String]()
+            // Extract ProfileID from context if provided
             var peerProfileID: String? = nil
-            if let contextData = context {
-                if let contextDict = try? JSONSerialization.jsonObject(with: contextData, options: []) as? [String: String] {
-                    peerInfo = contextDict
-                    print("MCAdvertiserDelegate: Invitation context: \(peerInfo)")
-                    peerProfileID = peerInfo["profileID"]
-                } else {
-                    print("MCAdvertiserDelegate: Warning - Could not deserialize invitation context data.")
-                }
-            } else {
-                print("MCAdvertiserDelegate: Invitation received with no context data.")
+            if let contextData = context,
+               let contextDict = try? JSONSerialization.jsonObject(with: contextData) as? [String: String]
+            {
+                print("   Invitation context: \(contextDict)")
+                peerProfileID = contextDict["profileID"]
             }
 
-            // Update peerID -> profileID map if necessary
+            // Update map with ProfileID from context
             if let profileID = peerProfileID {
-                if self.peerIDToProfileID[peerID] == nil {
+                if self.peerIDToProfileID[peerID] != profileID {
                     self.peerIDToProfileID[peerID] = profileID
-                    print("MCAdvertiserDelegate: Associated peer \(peerID.displayName) (Hash: \(peerID.hashValue)) with profile ID \(profileID) from invitation context")
-                } else if self.peerIDToProfileID[peerID] != profileID {
-                    print("MCAdvertiserDelegate: Warning - Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already mapped to a DIFFERENT profile ID (\(self.peerIDToProfileID[peerID]!)). Updating map.")
-                    self.peerIDToProfileID[peerID] = profileID
-                } else {
-                    print("MCAdvertiserDelegate: Peer \(peerID.displayName) (Hash: \(peerID.hashValue)) already correctly mapped to profile ID \(profileID).")
+                    print("   Associated peer \(peerID.displayName) with profile ID \(profileID) from context")
                 }
             } else {
-                print("MCAdvertiserDelegate: No profile ID found in invitation context for \(peerID.displayName) (Hash: \(peerID.hashValue))")
+                print("   No profile ID found in invitation context for \(peerID.displayName)")
             }
 
-            print("MCAdvertiserDelegate: Auto-accepting invitation from \(peerID.displayName)")
-            let sessionToUse = self.mcSession
-            // Accept the invitation
-            invitationHandler(true, sessionToUse)
-            // It's generally recommended to clear the handler *after* the connection state changes (.connected or .notConnected)
-            // in the MCSessionDelegate, but clearing it here is also common practice if assuming success.
-            // Let's keep it here for now, but be aware of potential edge cases if the connection fails immediately.
-            // self.invitationHandler = nil // Let delegate handle clearing
+            // Auto-accept invitation for simplicity in this example
+            print("   Auto-accepting invitation from \(peerID.displayName)")
+            invitationHandler(true, self.mcSession)
+            // Clear handler after use (could also be done in session delegate .connected/.notConnected)
+            // self.invitationHandler = nil // Let session delegate clear potentially
         }
     }
 
     nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("MCAdvertiserDelegate: Failed to start advertising: \(error.localizedDescription)")
-        Task { @MainActor in
-            self.connectionStatus = .failed(error)
-        }
+        print("Advertiser failed to start: \(error.localizedDescription)")
+        Task { @MainActor in self.connectionStatus = .failed(error) }
     }
 }
 
-// MARK: - StreamDelegate for handling input streams
+// MARK: - StreamDelegate
 
 extension P2PGroupViewModel: Foundation.StreamDelegate {
     nonisolated func stream(_ aStream: Foundation.Stream, handle eventCode: Foundation.Stream.Event) {
         guard let inputStream = aStream as? InputStream else { return }
-        // Use Task to interact with MainActor properties/methods
+
         Task { @MainActor in
-            // Find the peer associated with this stream *before* potential removal
+            // Find associated peer before potential stream removal
             let peerID = self.activeInputStreams[inputStream]
-            let peerDesc = peerID != nil ? "\(peerID!.displayName) (Hash: \(peerID!.hashValue))" : "Unknown Peer"
+            let peerDesc = peerID?.displayName ?? "Unknown Peer"
 
             switch eventCode {
             case .hasBytesAvailable:
-                print("StreamDelegate: HasBytesAvailable for stream from \(peerDesc)")
-                self.readInputStream(inputStream) // Reads data and passes to handleIncomingData -> ArkavoClient
+                // print("StreamDelegate: HasBytesAvailable from \(peerDesc)")
+                self.readInputStream(inputStream) // Read data -> handleIncomingData -> ArkavoClient
             case .endEncountered:
-                print("StreamDelegate: EndEncountered for stream from \(peerDesc)")
+                print("StreamDelegate: EndEncountered from \(peerDesc)")
                 self.closeAndRemoveStream(inputStream)
             case .errorOccurred:
-                print("StreamDelegate: ErrorOccurred for stream from \(peerDesc): \(aStream.streamError?.localizedDescription ?? "unknown error")")
+                print("StreamDelegate: ErrorOccurred from \(peerDesc): \(aStream.streamError?.localizedDescription ?? "N/A")")
                 self.closeAndRemoveStream(inputStream)
             case .openCompleted:
                 print("StreamDelegate: OpenCompleted for stream from \(peerDesc)")
-            case .hasSpaceAvailable:
-                // Typically relevant for OutputStream
-                print("StreamDelegate: HasSpaceAvailable for stream from \(peerDesc)")
+            case .hasSpaceAvailable: // Usually for OutputStream
+                break // print("StreamDelegate: HasSpaceAvailable for stream from \(peerDesc)")
             default:
-                print("StreamDelegate: Unhandled stream event: \(eventCode) for stream from \(peerDesc)")
+                print("StreamDelegate: Unhandled event \(eventCode) for stream from \(peerDesc)")
             }
         }
     }
 
-    // Read stream and pass data to handleIncomingData
+    /// Reads available data from an input stream and passes it to `handleIncomingData`.
     private func readInputStream(_ stream: InputStream) {
         guard let peerID = activeInputStreams[stream] else {
-            print("StreamDelegate Error: Received data from untracked stream. Closing.")
-            closeAndRemoveStream(stream) // Close the unknown stream
+            print("StreamDelegate Error: Data from untracked stream. Closing.")
+            closeAndRemoveStream(stream)
             return
         }
         let bufferSize = 1024
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         defer { buffer.deallocate() }
         var data = Data()
+
         while stream.hasBytesAvailable {
             let bytesRead = stream.read(buffer, maxLength: bufferSize)
             if bytesRead > 0 {
                 data.append(buffer, count: bytesRead)
             } else if bytesRead < 0 {
-                // Error reading
-                let errorDesc = stream.streamError?.localizedDescription ?? "unknown error"
-                print("StreamDelegate Error: Error reading from stream for peer \(peerID.displayName): \(errorDesc)")
-                closeAndRemoveStream(stream) // Close stream on error
+                print("StreamDelegate Error reading from \(peerID.displayName): \(stream.streamError?.localizedDescription ?? "N/A")")
+                closeAndRemoveStream(stream)
                 return
-            } else {
-                // bytesRead == 0 usually means end of stream, but loop condition handles this.
-                // Can also mean temporary pause, so just break the inner loop.
+            } else { // bytesRead == 0 usually means end of stream or temporary pause
                 break
             }
         }
+
         if !data.isEmpty {
-            print("StreamDelegate: Read \(data.count) bytes from stream associated with peer \(peerID.displayName)")
-            // Pass stream data to handleIncomingData
-            handleIncomingData(data, from: peerID)
-        } else {
-            print("StreamDelegate: Read 0 bytes from stream associated with peer \(peerID.displayName) despite .hasBytesAvailable (might be temporary)")
+            // print("StreamDelegate: Read \(data.count) bytes from \(peerID.displayName)")
+            handleIncomingData(data, from: peerID) // Route the data
         }
     }
 
-    // Close and remove stream tracking
+    /// Closes an input stream and removes it from tracking.
     private func closeAndRemoveStream(_ stream: InputStream) {
-        // Ensure stream operations are done before removing from map
         stream.remove(from: .main, forMode: .default)
         stream.close()
-        // Remove the stream from tracking
         if let peerID = activeInputStreams.removeValue(forKey: stream) {
-            print("StreamDelegate: Closed and removed stream tracking for peer \(peerID.displayName) (Hash: \(peerID.hashValue))")
+            print("StreamDelegate: Closed and removed stream for \(peerID.displayName)")
         } else {
-            // This case should ideally not happen if called from stream delegate, but good for safety
-            print("StreamDelegate: Closed and removed an untracked stream.")
+            print("StreamDelegate: Closed an untracked stream.")
         }
     }
 }
