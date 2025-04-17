@@ -166,33 +166,40 @@ struct InnerCircleView: View {
         peerManager.connectedPeerProfiles.values.contains { $0.id == profile.id }
     }
 
-    // Load all InnerCircle profiles from the stream relationship
+    // Load all InnerCircle profiles by fetching the stream from the context
+    @MainActor // Ensure context access is on the main thread
     private func loadInnerCircleProfiles() async {
-        // Directly access the stream's innerCircleProfiles relationship
-        // This assumes the 'stream' object passed to InnerCircleView is up-to-date
-        // and its relationships are loaded by SwiftData.
-        print("InnerCircleView: Attempting to load profiles from stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString)).")
-        print("InnerCircleView: Stream object has \(stream.innerCircleProfiles.count) profiles in its relationship.")
+        print("InnerCircleView: Attempting to fetch stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString)) from context.")
 
-        // Assign the profiles from the stream object to the @State variable.
-        // This assignment is what should trigger the UI update.
-        innerCircleProfiles = stream.innerCircleProfiles
+        let context = PersistenceController.shared.container.mainContext
+        let streamID = stream.persistentModelID // Get the persistent ID of the stream passed in
 
-        print("InnerCircleView: Assigned \(innerCircleProfiles.count) profiles to @State innerCircleProfiles.")
-        if innerCircleProfiles.isEmpty && !stream.innerCircleProfiles.isEmpty {
-             print("⚠️ InnerCircleView: Warning - @State innerCircleProfiles is empty even though stream object had profiles.")
-        } else if !innerCircleProfiles.isEmpty {
-            print("InnerCircleView: First loaded profile name: \(innerCircleProfiles.first?.name ?? "N/A")")
+        do {
+            // Fetch the stream using its persistent ID
+            guard let fetchedStream = context.model(for: streamID) as? Stream else {
+                print("❌ InnerCircleView: Failed to fetch stream with ID \(streamID) from context.")
+                innerCircleProfiles = [] // Clear profiles on failure
+                return
+            }
+
+            print("InnerCircleView: Successfully fetched stream '\(fetchedStream.profile.name)' from context.")
+            print("InnerCircleView: Fetched stream has \(fetchedStream.innerCircleProfiles.count) profiles in its relationship.")
+
+            // Assign the profiles from the *fetched* stream object to the @State variable.
+            // This assignment is what should trigger the UI update.
+            innerCircleProfiles = fetchedStream.innerCircleProfiles
+
+            print("InnerCircleView: Assigned \(innerCircleProfiles.count) profiles to @State innerCircleProfiles.")
+            if innerCircleProfiles.isEmpty && !fetchedStream.innerCircleProfiles.isEmpty {
+                 print("⚠️ InnerCircleView: Warning - @State innerCircleProfiles is empty even though fetched stream object had profiles.")
+            } else if !innerCircleProfiles.isEmpty {
+                print("InnerCircleView: First loaded profile name: \(innerCircleProfiles.first?.name ?? "N/A")")
+            }
+
+        } catch {
+            print("❌ InnerCircleView: Error fetching stream with ID \(streamID) from context: \(error)")
+            innerCircleProfiles = [] // Clear profiles on error
         }
-
-        // Note: If 'stream' might be stale or relationships aren't automatically loaded,
-        // you might need to re-fetch the stream first:
-        // if let freshStream = try? await PersistenceController.shared.fetchStream(withID: stream.id) {
-        //     self.innerCircleProfiles = freshStream.innerCircleProfiles
-        // } else {
-        //     print("Error refreshing stream for InnerCircle profiles")
-        //     self.innerCircleProfiles = []
-        // }
     }
 
     // Get connection time for an online profile
