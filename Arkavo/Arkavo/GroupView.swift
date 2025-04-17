@@ -671,30 +671,6 @@ struct GroupView: View {
             return AnyView(EmptyView())
     // --- END: Implemented/Modified Methods --- MOVED to InnerCircleView
 
-    // Helper function to get display info (copied from InnerCircleMemberRow for use in peerRow)
-    private func displayInfo(for state: KeyExchangeState) -> (text: String, icon: String?, color: Color) {
-        switch state {
-        case .idle:
-            return ("Ready to Exchange", "key.radiowaves.forward", .blue)
-        case .requestSent:
-            return ("Request Sent", "paperplane", .orange)
-        case .requestReceived:
-            return ("Request Received", "envelope.badge", .orange)
-        case .offerSent:
-            return ("Offer Sent", "paperplane.fill", .orange)
-        case .offerReceived:
-            return ("Offer Received", "envelope.open.badge.clock", .orange)
-        case .ackSent:
-            return ("Ack Sent", "checkmark.message", .orange)
-        case .ackReceived:
-            return ("Ack Received", "checkmark.message.fill", .orange)
-        case .commitSent:
-            return ("Commit Sent", "lock.shield", .orange) // Using lock.shield temporarily
-        case .completed:
-            return ("Keys Exchanged", "checkmark.shield.fill", .green)
-        case let .failed(reason):
-            let shortReason = reason.prefix(30) + (reason.count > 30 ? "..." : "")
-            return ("Failed: \(shortReason)", "exclamationmark.triangle.fill", .red)
     // Chat overlay view
     private var chatOverlayView: some View {
         Group {
