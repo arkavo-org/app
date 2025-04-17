@@ -171,9 +171,19 @@ struct InnerCircleView: View {
         // Directly access the stream's innerCircleProfiles relationship
         // This assumes the 'stream' object passed to InnerCircleView is up-to-date
         // and its relationships are loaded by SwiftData.
-        // No need for manual fetching or filtering.
+        print("InnerCircleView: Attempting to load profiles from stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString)).")
+        print("InnerCircleView: Stream object has \(stream.innerCircleProfiles.count) profiles in its relationship.")
+
+        // Assign the profiles from the stream object to the @State variable.
+        // This assignment is what should trigger the UI update.
         innerCircleProfiles = stream.innerCircleProfiles
-        print("Loaded \(innerCircleProfiles.count) InnerCircle profiles directly from stream relationship.")
+
+        print("InnerCircleView: Assigned \(innerCircleProfiles.count) profiles to @State innerCircleProfiles.")
+        if innerCircleProfiles.isEmpty && !stream.innerCircleProfiles.isEmpty {
+             print("⚠️ InnerCircleView: Warning - @State innerCircleProfiles is empty even though stream object had profiles.")
+        } else if !innerCircleProfiles.isEmpty {
+            print("InnerCircleView: First loaded profile name: \(innerCircleProfiles.first?.name ?? "N/A")")
+        }
 
         // Note: If 'stream' might be stale or relationships aren't automatically loaded,
         // you might need to re-fetch the stream first:
