@@ -697,11 +697,16 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             if !(managedStream.thoughts.contains { $0.persistentModelID == thought.persistentModelID }) {
                 managedStream.addThought(thought) // Assuming Stream has `addThought` helper
             }
+            // Save changes only if the stream was found and relationship potentially updated
+            try await PersistenceController.shared.saveChanges()
+            print("✅ P2P message stored as Thought for stream: \(stream.publicID.base58EncodedString)")
         } else {
-            print("Warning: Could not find managed stream to associate thought.")
+            print("Warning: Could not find managed stream to associate thought. Thought not saved with stream relationship.")
+            // Do not save changes if the stream wasn't found, as the relationship cannot be established.
+            // The thought object exists in memory but won't be persisted correctly without its stream.
+            // Consider throwing an error here or handling it differently based on requirements.
+            throw P2PError.persistenceError("Could not find stream \(stream.publicID.base58EncodedString) to associate thought.")
         }
-        try await PersistenceController.shared.saveChanges() // Save relationship change
-        print("✅ P2P message stored as Thought for stream: \(stream.publicID.base58EncodedString)")
         return thought
     }
 
