@@ -174,31 +174,25 @@ struct InnerCircleView: View {
         let context = PersistenceController.shared.container.mainContext
         let streamID = stream.persistentModelID // Get the persistent ID of the stream passed in
 
-        do {
-            // Fetch the stream using its persistent ID
-            guard let fetchedStream = context.model(for: streamID) as? Stream else {
-                print("❌ InnerCircleView: Failed to fetch stream with ID \(streamID) from context.")
-                innerCircleProfiles = [] // Clear profiles on failure
-                return
-            }
+        // Fetch the stream using its persistent ID
+        guard let fetchedStream = context.model(for: streamID) as? Stream else {
+            print("❌ InnerCircleView: Failed to fetch stream with ID \(streamID) from context.")
+            innerCircleProfiles = [] // Clear profiles on failure
+            return
+        }
 
-            print("InnerCircleView: Successfully fetched stream '\(fetchedStream.profile.name)' from context.")
-            print("InnerCircleView: Fetched stream has \(fetchedStream.innerCircleProfiles.count) profiles in its relationship.")
+        print("InnerCircleView: Successfully fetched stream '\(fetchedStream.profile.name)' from context.")
+        print("InnerCircleView: Fetched stream has \(fetchedStream.innerCircleProfiles.count) profiles in its relationship.")
 
-            // Assign the profiles from the *fetched* stream object to the @State variable.
-            // This assignment is what should trigger the UI update.
-            innerCircleProfiles = fetchedStream.innerCircleProfiles
+        // Assign the profiles from the *fetched* stream object to the @State variable.
+        // This assignment is what should trigger the UI update.
+        innerCircleProfiles = fetchedStream.innerCircleProfiles
 
-            print("InnerCircleView: Assigned \(innerCircleProfiles.count) profiles to @State innerCircleProfiles.")
-            if innerCircleProfiles.isEmpty && !fetchedStream.innerCircleProfiles.isEmpty {
-                 print("⚠️ InnerCircleView: Warning - @State innerCircleProfiles is empty even though fetched stream object had profiles.")
-            } else if !innerCircleProfiles.isEmpty {
-                print("InnerCircleView: First loaded profile name: \(innerCircleProfiles.first?.name ?? "N/A")")
-            }
-
-        } catch {
-            print("❌ InnerCircleView: Error fetching stream with ID \(streamID) from context: \(error)")
-            innerCircleProfiles = [] // Clear profiles on error
+        print("InnerCircleView: Assigned \(innerCircleProfiles.count) profiles to @State innerCircleProfiles.")
+        if innerCircleProfiles.isEmpty, !fetchedStream.innerCircleProfiles.isEmpty {
+            print("⚠️ InnerCircleView: Warning - @State innerCircleProfiles is empty even though fetched stream object had profiles.")
+        } else if !innerCircleProfiles.isEmpty {
+            print("InnerCircleView: First loaded profile name: \(innerCircleProfiles.first?.name ?? "N/A")")
         }
     }
 

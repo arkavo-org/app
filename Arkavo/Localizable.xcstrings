@@ -130,7 +130,13 @@
     "Activity Level: %@" : {
 
     },
+    "Add %@ to group" : {
+
+    },
     "Add a description..." : {
+
+    },
+    "Add to group" : {
 
     },
     "Admission" : {
@@ -714,6 +720,12 @@
       }
     },
     "Remove" : {
+
+    },
+    "Remove %@ from group" : {
+
+    },
+    "Remove from group" : {
 
     },
     "Remove Member" : {
