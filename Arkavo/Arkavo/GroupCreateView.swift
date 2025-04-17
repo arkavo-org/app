@@ -101,9 +101,10 @@ struct GroupCreateView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isNameFieldFocused = true
             }
+
+            // Add the moved peer discovery section here, inside the Form
+            peerDiscoverySection()
         }
-        // Add the moved peer discovery section here
-        peerDiscoverySection()
     }
 
     // --- START: Moved Peer Discovery Functions & Views from GroupView ---
