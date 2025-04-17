@@ -1,9 +1,11 @@
 import ArkavoSocial
 import Combine // Import Combine for Timer
 import FlatBuffers
+
 // import MultipeerConnectivity // No longer needed here
 import OpenTDFKit
 import SwiftUI
+
 // import UIKit // No longer needed here
 
 // MARK: - Models
@@ -607,10 +609,6 @@ struct GroupView: View {
                 innerCircleMembersSection()
                     .padding(.horizontal, InnerCircleConstants.systemMargin)
 
-                // --- 3. Peer Discovery Tools Section --- MOVED to GroupCreateView
-                // peerDiscoverySection()
-                //     .padding(.horizontal, InnerCircleConstants.systemMargin)
-
                 // --- 4. Other Streams Section ---
                 // Only show if there are non-InnerCircle streams
                 let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
@@ -634,6 +632,26 @@ struct GroupView: View {
         .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
     }
 
+    // Individual stream row (now only uses GroupCardView)
+    func streamRow(stream: Stream) -> some View {
+        if !stream.isInnerCircleStream {
+            return AnyView(
+                GroupCardView(
+                    stream: stream,
+                    onSelect: {
+                        viewModel.selectedStream = stream
+                        sharedState.selectedStreamPublicID = stream.publicID
+                        sharedState.showChatOverlay = true
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            )
+        } else {
+            return AnyView(EmptyView())
+            // --- END: Implemented/Modified Methods --- MOVED to InnerCircleView
+        }
+    }
+
     // --- NEW: 2. InnerCircle Members Section ---
     private func innerCircleMembersSection() -> some View {
         // Find the InnerCircle stream
@@ -653,26 +671,10 @@ struct GroupView: View {
                     .cornerRadius(InnerCircleConstants.cornerRadius)
             }
         )
-    // Individual stream row (now only uses GroupCardView)
-    private func streamRow(stream: Stream) -> some View {
-        if !stream.isInnerCircleStream {
-            return AnyView(
-                GroupCardView(
-                    stream: stream,
-                    onSelect: {
-                        viewModel.selectedStream = stream
-                        sharedState.selectedStreamPublicID = stream.publicID
-                        sharedState.showChatOverlay = true
-                    }
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            )
-        } else {
-            return AnyView(EmptyView())
-    // --- END: Implemented/Modified Methods --- MOVED to InnerCircleView
+    }
 
     // Chat overlay view
-    private var chatOverlayView: some View {
+    var chatOverlayView: some View {
         Group {
             if sharedState.showChatOverlay,
                let streamPublicID = sharedState.selectedStreamPublicID

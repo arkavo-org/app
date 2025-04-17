@@ -9,35 +9,34 @@ enum TrustStatus {
 
     var color: Color {
         switch self {
-        case .unknown: return .gray
-        case .pending: return .orange
-        case .verified: return .blue
-        case .trusted: return InnerCircleConstants.trustGreen // Use constant
-        case .compromised: return InnerCircleConstants.trustRed // Use constant
+        case .unknown: .gray
+        case .pending: .orange
+        case .verified: .blue
+        case .trusted: InnerCircleConstants.trustGreen // Use constant
+        case .compromised: InnerCircleConstants.trustRed // Use constant
         }
     }
 
     var icon: String {
         switch self {
-        case .unknown: return "questionmark.circle"
-        case .pending: return "hourglass"
-        case .verified: return "checkmark.seal"
-        case .trusted: return "lock.shield.fill" // Use constant icon name if available
-        case .compromised: return "exclamationmark.triangle.fill" // Use constant icon name if available
+        case .unknown: "questionmark.circle"
+        case .pending: "hourglass"
+        case .verified: "checkmark.seal"
+        case .trusted: "lock.shield.fill" // Use constant icon name if available
+        case .compromised: "exclamationmark.triangle.fill" // Use constant icon name if available
         }
     }
 
     var description: String {
         switch self {
-        case .unknown: return "Unknown"
-        case .pending: return "Verification Pending"
-        case .verified: return "Verified"
-        case .trusted: return "Trusted"
-        case .compromised: return "Compromised"
+        case .unknown: "Unknown"
+        case .pending: "Verification Pending"
+        case .verified: "Verified"
+        case .trusted: "Trusted"
+        case .compromised: "Compromised"
         }
     }
 }
-
 
 struct GroupCreateView: View {
     @Environment(\.dismiss) var dismiss
@@ -55,9 +54,6 @@ struct GroupCreateView: View {
 
     // Define constants needed by moved functions
     private let systemMargin: CGFloat = 16 // Define systemMargin
-    // Static constant for "just now" string (moved from GroupView)
-    static let justNowString = "just now"
-
 
     var body: some View {
         Form {
@@ -71,6 +67,7 @@ struct GroupCreateView: View {
             } footer: {
                 Text("This will be the name of your new group")
             }
+            peerDiscoverySection()
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -101,9 +98,6 @@ struct GroupCreateView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isNameFieldFocused = true
             }
-
-            // Add the moved peer discovery section here, inside the Form
-            peerDiscoverySection()
         }
     }
 
@@ -118,7 +112,7 @@ struct GroupCreateView: View {
             VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
                 // Contains the Discover button and the list of discovered/connecting peers
                 innerCirclePeerDiscoveryUI()
-                    // Removed background/cornerRadius - let Section handle styling
+                // Removed background/cornerRadius - let Section handle styling
             }
         }
     }
@@ -467,7 +461,7 @@ struct GroupCreateView: View {
         let timeInterval = now.timeIntervalSince(date)
 
         // Use the static constant defined in this struct
-        if timeInterval < 60 { return GroupCreateView.justNowString }
+        if timeInterval < 60 { return "just now" }
         if timeInterval < 3600 { let minutes = Int(timeInterval / 60); return "\(minutes) min\(minutes == 1 ? "" : "s") ago" }
         if timeInterval < 86400 { let hours = Int(timeInterval / 3600); return "\(hours) hour\(hours == 1 ? "" : "s") ago" }
 
@@ -498,18 +492,17 @@ struct GroupCreateView: View {
             }
             .onAppear {
                 // Use the local pulsate state for animation control
-                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { self.pulsate = true }
+                withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { pulsate = true }
                 withAnimation(Animation.linear(duration: 3).repeatForever(autoreverses: false)) { rotation = 360 }
                 withAnimation(Animation.easeInOut(duration: 2).repeatForever(autoreverses: true)) { scale = 1.1 }
             }
             .onDisappear {
-                self.pulsate = false // Stop animation on disappear if needed
+                pulsate = false // Stop animation on disappear if needed
             }
         }
     }
 
     // --- END: Moved Peer Discovery Functions & Views ---
-
 
     private func createGroup() async {
         do {

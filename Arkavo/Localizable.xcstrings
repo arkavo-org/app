@@ -264,6 +264,9 @@
     "Comments" : {
 
     },
+    "Connect to Peers (Optional)" : {
+
+    },
     "Connected" : {
 
     },
@@ -274,9 +277,6 @@
 
     },
     "Connection Failed" : {
-
-    },
-    "Connection Status" : {
 
     },
     "Contributors" : {
@@ -328,9 +328,6 @@
 
     },
     "Disconnected" : {
-
-    },
-    "Discover & Connect" : {
 
     },
     "Discover Peers" : {
@@ -931,7 +928,7 @@
     "Support Tiers" : {
 
     },
-    "Tap 'Discover Peers' to find nearby devices. Once found, you can verify trust and add them to your InnerCircle." : {
+    "Tap 'Discover Peers' to find nearby devices." : {
 
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {

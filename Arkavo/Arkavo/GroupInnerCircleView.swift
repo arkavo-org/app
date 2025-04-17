@@ -33,41 +33,6 @@ enum InnerCircleConstants {
     static let secondaryTextColor: Color = .gray
 }
 
-// Example Trust Status Enum (Needs actual implementation based on data model)
-enum TrustStatus {
-    case unknown, pending, verified, trusted, compromised
-
-    var description: String {
-        switch self {
-        case .unknown: "Unknown"
-        case .pending: "Verification Pending"
-        case .verified: "Verified"
-        case .trusted: "Trusted"
-        case .compromised: "Compromised"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .unknown: InnerCircleConstants.secondaryTextColor
-        case .pending: InnerCircleConstants.trustYellow
-        case .verified: InnerCircleConstants.primaryActionColor
-        case .trusted: InnerCircleConstants.trustGreen
-        case .compromised: InnerCircleConstants.trustRed
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .unknown: "questionmark.circle"
-        case .pending: "hourglass"
-        case .verified: "checkmark.seal.fill"
-        case .trusted: "lock.shield.fill"
-        case .compromised: "exclamationmark.shield.fill"
-        }
-    }
-}
-
 // MARK: - InnerCircle Member Views
 
 // Main view for displaying all InnerCircle members
@@ -583,7 +548,7 @@ struct InnerCircleMemberRow: View {
         let now = Date()
         let timeInterval = now.timeIntervalSince(date)
 
-        if timeInterval < 60 { return GroupView.justNowString } // Use constant from GroupView
+        if timeInterval < 60 { return "just now" }
         if timeInterval < 3600 {
             let minutes = Int(timeInterval / 60)
             return "\(minutes) min\(minutes == 1 ? "" : "s") ago"
