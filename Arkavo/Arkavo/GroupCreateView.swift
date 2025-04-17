@@ -47,6 +47,7 @@ struct GroupCreateView: View {
     @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager() // Add PeerManager
     @State private var isPeerSearchActive = false // Add state for search
     @State private var pulsate: Bool = false // Add state for pulsation animation
+    @State private var selectedInnerCircleProfiles: [Profile] = [] // Profiles selected for the new group
 
     @State private var showError = false
     @State private var errorMessage = ""
@@ -412,8 +413,29 @@ struct GroupCreateView: View {
 
             Spacer()
 
-            // Action Buttons (Example - refine based on actual state logic)
+            // Action Buttons
             HStack(spacing: InnerCircleConstants.halfMargin) { // Use constant
+                // Add Peer Button (Only for verified peers)
+                if let verifiedProfile = profile {
+                    let isSelected = selectedInnerCircleProfiles.contains { $0.id == verifiedProfile.id }
+                    Button {
+                        if !isSelected {
+                            selectedInnerCircleProfiles.append(verifiedProfile)
+                            print("Added \(verifiedProfile.name) to selected profiles.")
+                        } else {
+                            selectedInnerCircleProfiles.removeAll { $0.id == verifiedProfile.id }
+                            print("Removed \(verifiedProfile.name) from selected profiles.")
+                        }
+                    } label: {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(isSelected ? .green : InnerCircleConstants.primaryActionColor)
+                            .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget)
+                    }
+                    .accessibilityLabel(Text(isSelected ? "Remove \(verifiedProfile.name) from group" : "Add \(verifiedProfile.name) to group"))
+                    .help(isSelected ? "Remove from group" : "Add to group")
+                }
+
                 // Example: Key Renewal Button (Placeholder Logic)
                 if trustStatus == .trusted { // Only show for trusted peers
                     Button {
