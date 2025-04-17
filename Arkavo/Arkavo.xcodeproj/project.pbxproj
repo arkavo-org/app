@@ -15,6 +15,7 @@
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
 		DA132E212D7FCF7F0003F04D /* GroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */; };
+		DA136A022DB08EDB004F4FB9 /* InnerCircleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA136A012DB08EDB004F4FB9 /* InnerCircleViews.swift */; };
 		DA179AE62CA0DE8B0083EB99 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA179AE52CA0DE8B0083EB99 /* Extension.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
@@ -109,6 +110,7 @@
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
 		DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupViewModel.swift; sourceTree = "<group>"; };
+		DA136A012DB08EDB004F4FB9 /* InnerCircleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InnerCircleViews.swift; sourceTree = "<group>"; };
 		DA179AE52CA0DE8B0083EB99 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
@@ -232,6 +234,7 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA136A012DB08EDB004F4FB9 /* InnerCircleViews.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
@@ -511,6 +514,7 @@
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
+				DA136A022DB08EDB004F4FB9 /* InnerCircleViews.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,

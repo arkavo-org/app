@@ -790,10 +790,3 @@ extension View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
     }
 }
-
-// MARK: - Static String Helper (Moved from GroupView)
-// This is needed by InnerCircleMemberRow
-extension GroupView {
-    // Static constant for "just now" string
-    static let justNowString = "just now"
-}
