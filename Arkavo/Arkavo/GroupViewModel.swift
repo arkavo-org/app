@@ -803,6 +803,34 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         connectedPeerProfiles = updatedProfiles
         print("Finished refreshing peer profiles. Found \(updatedProfiles.count) profiles locally.")
+
+        // --- Add fetched profiles to the selected InnerCircle stream ---
+        if let currentStream = selectedStream, currentStream.isInnerCircleStream {
+            print("   InnerCircle stream selected. Attempting to add fetched profiles...")
+            var streamUpdated = false
+            for (_, profile) in updatedProfiles {
+                if !currentStream.isInInnerCircle(profile) {
+                    print("   Adding profile \(profile.name) (\(profile.publicID.base58EncodedString)) to stream \(currentStream.profile.name)")
+                    currentStream.addToInnerCircle(profile)
+                    streamUpdated = true
+                }
+            }
+            if streamUpdated {
+                do {
+                    try await persistenceController.saveChanges()
+                    print("   Saved updates to InnerCircle stream members.")
+                    // Optionally post a notification if InnerCircleView needs an explicit refresh trigger beyond @State changes
+                    // NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
+                } catch {
+                    print("❌ Error saving InnerCircle stream after adding profiles: \(error)")
+                }
+            } else {
+                print("   No new profiles to add to the InnerCircle stream.")
+            }
+        } else {
+            print("   No InnerCircle stream selected, skipping profile addition to stream.")
+        }
+        // --- End profile addition ---
     }
 
     /// Manually triggers local key regeneration using OpenTDFKit and saves to Profile.
