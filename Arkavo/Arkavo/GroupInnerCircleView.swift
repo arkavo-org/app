@@ -370,6 +370,7 @@ struct InnerCircleMemberRow: View {
     @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
     @State private var showDisconnectConfirmation = false // State for disconnect confirmation
+    @State private var keyCount: Int? = nil // State to hold the calculated key count
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
@@ -418,19 +419,21 @@ struct InnerCircleMemberRow: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    // Display Key Exchange Status and Count if online
+                    // Display Key Exchange Status (if online) and Key Count (always)
                     HStack(spacing: 6) { // Group status and count
-                        keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW
-                        peerKeyCountView() // <-- NEW: Display key count
+                        if isOnline {
+                            keyExchangeStatusView() // Show status only when online
+                        }
+                        peerKeyCountView() // Show key count regardless of online status
                     }
                     .font(.caption2) // Smaller font for status line
                     .padding(.top, 1)
 
                 } else {
-                    // Removed lastSeen display
-                    Text("Offline") // Simple offline indicator
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    // Offline: Show only the key count view
+                    peerKeyCountView()
+                        .font(.caption2)
+                        .padding(.top, 1)
                 }
             }
 
@@ -699,7 +702,30 @@ struct InnerCircleMemberRow: View {
             //     .foregroundColor(.gray.opacity(0.7))
             // EmptyView() // Implicitly empty if keyCount is nil
             }
-            // Implicitly EmptyView if peer is nil
+            // Implicitly EmptyView if profile has no key data
+        }
+        .task { // Use .task to calculate count asynchronously when view appears/profile changes
+            await calculateKeyCount()
+        }
+    }
+
+    // Helper function to calculate key count from profile data
+    private func calculateKeyCount() async {
+        guard let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty else {
+            // print("Profile \(profile.name) has no/empty public KeyStore data.")
+            await MainActor.run { keyCount = nil } // Set count to nil if no data
+            return
+        }
+
+        do {
+            let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
+            try await publicKeyStore.deserialize(from: publicKeyData)
+            let count = (await publicKeyStore.publicKeys).count
+            // print("Calculated key count for \(profile.name): \(count)")
+            await MainActor.run { keyCount = count } // Update state on main thread
+        } catch {
+            print("❌ Error calculating key count for \(profile.name): \(error)")
+            await MainActor.run { keyCount = nil } // Set count to nil on error
         }
     }
 

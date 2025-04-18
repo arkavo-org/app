@@ -25,10 +25,6 @@ struct LocalKeyStoreInfo: Equatable {
     let capacity: Int
 }
 
-/// Holds the current key count for a peer's PublicKeyStore.
-struct PeerKeyCount: Equatable {
-    let count: Int
-}
 
 // MARK: - Key Exchange Protocol Definitions
 
@@ -161,8 +157,7 @@ class PeerDiscoveryManager: ObservableObject {
 
     /// Exposes the current key exchange state with each connected peer.
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:]
-    /// Exposes the current public key count for each connected peer.
-    @Published var peerKeyCounts: [MCPeerID: PeerKeyCount] = [:]
+    // Removed peerKeyCounts tracking
 
     private var implementation: P2PGroupViewModel
 
@@ -179,7 +174,7 @@ class PeerDiscoveryManager: ObservableObject {
         implementation.$isRegeneratingKeys.assign(to: &$isRegeneratingKeys)
         implementation.$connectedPeerProfiles.assign(to: &$connectedPeerProfiles)
         implementation.$peerKeyExchangeStates.assign(to: &$peerKeyExchangeStates)
-        implementation.$peerKeyCounts.assign(to: &$peerKeyCounts) // Bind new property
+        // Removed peerKeyCounts binding
 
         arkavoClient.delegate = implementation
     }
@@ -291,7 +286,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     @Published var isRegeneratingKeys: Bool = false
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:] // Cache of fetched peer profiles
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:] // Tracks key exchange state per peer
-    @Published var peerKeyCounts: [MCPeerID: PeerKeyCount] = [:] // Tracks current public key count per peer
+    // Removed peerKeyCounts tracking
 
     // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
@@ -886,17 +881,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
         // --- End profile addition ---
 
-        // --- Calculate and update peer KeyStore counts ---
-        print("   Calculating KeyStore counts for fetched profiles...")
-        var updatedCounts: [MCPeerID: PeerKeyCount] = [:]
-        for (peerID, profile) in updatedProfiles { // Use the fetched profiles
-            if let keyCount = await getKeyCount(for: profile) {
-                updatedCounts[peerID] = keyCount
-            }
-        }
-        self.peerKeyCounts = updatedCounts // Update the published dictionary
-        print("Finished refreshing peer KeyStore counts. Calculated for \(updatedCounts.count) peers.")
-        // --- End KeyStore count calculation ---
+        // --- KeyStore count calculation removed ---
     }
 
     /// Manually triggers local key regeneration using OpenTDFKit and saves to Profile.
@@ -990,32 +975,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    /// Calculates the current key count from a Profile's public KeyStore data.
-    private func getKeyCount(for profile: Profile) async -> PeerKeyCount? {
-        guard let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty else {
-            // print("Profile \(profile.name) (\(profile.publicID.base58EncodedString)) has no/empty public KeyStore data.")
-            return nil // No data available is not an error, just lack of info
-        }
-
-        do {
-            // Initialize PublicKeyStore and deserialize the data into it
-            let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming secp256r1, adjust if needed
-            try await publicKeyStore.deserialize(from: publicKeyData)
-
-            // Get the count from the publicKeys array
-            let count = (await publicKeyStore.publicKeys).count
-            // print("Calculated KeyStore count for \(profile.name): \(count)")
-            return PeerKeyCount(count: count)
-
-        } catch let error as PublicKeyStoreError {
-            print("⚠️ PublicKeyStoreError processing PublicKeyStore for \(profile.name) (\(profile.publicID.base58EncodedString)): \(error)")
-            return nil // Treat deserialization error as no count available
-        } catch {
-            // Catch any other unexpected errors
-            print("❌ Unexpected error processing PublicKeyStore for \(profile.name) (\(profile.publicID.base58EncodedString)): \(error)")
-            return nil
-        }
-    }
+    // *** REMOVED getKeyCount function ***
 
     // MARK: - Secure Key Regeneration Protocol Implementation
 
@@ -1272,15 +1232,11 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
 
         do {
-            // Deserialize existing KeyStore if present
-            if let currentKeyStoreData = myProfile.keyStorePrivate {
-                print("   Deserializing existing KeyStore data...")
-                try await keyStore.deserialize(from: currentKeyStoreData)
-            } else {
-                print("   No existing KeyStore. Creating new.")
-            }
+            // Always start with a fresh KeyStore for regeneration during exchange
+            print("   Creating new KeyStore instance for key generation.")
+            // KeyStore is already initialized above as `let keyStore = KeyStore(...)`
 
-            // Generate keys
+            // Generate exactly 8192 keys into the new store
             print("   Generating 8192 key pairs...")
             try await keyStore.generateAndStoreKeyPairs(count: 8192)
 
