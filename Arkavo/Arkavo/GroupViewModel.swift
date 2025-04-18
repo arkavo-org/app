@@ -25,11 +25,6 @@ struct LocalKeyStoreInfo: Equatable {
     let capacity: Int
 }
 
-/// Holds the available and total key counts for a peer's PublicKeyStore.
-struct PeerKeyStoreCounts: Equatable {
-    let available: Int
-    let total: Int
-}
 
 // MARK: - Key Exchange Protocol Definitions
 
@@ -162,8 +157,7 @@ class PeerDiscoveryManager: ObservableObject {
 
     /// Exposes the current key exchange state with each connected peer.
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:]
-    /// Exposes the public key counts for each connected peer.
-    @Published var peerKeyStoreCounts: [MCPeerID: PeerKeyStoreCounts] = [:]
+    // Removed peerKeyStoreCounts
 
     private var implementation: P2PGroupViewModel
 
@@ -180,7 +174,7 @@ class PeerDiscoveryManager: ObservableObject {
         implementation.$isRegeneratingKeys.assign(to: &$isRegeneratingKeys)
         implementation.$connectedPeerProfiles.assign(to: &$connectedPeerProfiles)
         implementation.$peerKeyExchangeStates.assign(to: &$peerKeyExchangeStates)
-        implementation.$peerKeyStoreCounts.assign(to: &$peerKeyStoreCounts) // Bind new property
+        // Removed peerKeyStoreCounts binding
 
         arkavoClient.delegate = implementation
     }
@@ -292,7 +286,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
     @Published var isRegeneratingKeys: Bool = false
     @Published var connectedPeerProfiles: [MCPeerID: Profile] = [:] // Cache of fetched peer profiles
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:] // Tracks key exchange state per peer
-    @Published var peerKeyStoreCounts: [MCPeerID: PeerKeyStoreCounts] = [:] // Tracks public key counts per peer
+    // Removed peerKeyStoreCounts
 
     // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
@@ -887,17 +881,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
         // --- End profile addition ---
 
-        // --- Calculate and update peer KeyStore counts ---
-        print("   Calculating KeyStore counts for fetched profiles...")
-        var updatedCounts: [MCPeerID: PeerKeyStoreCounts] = [:]
-        for (peerID, profile) in updatedProfiles { // Use the fetched profiles
-            if let counts = await getKeyStoreCounts(for: profile) {
-                updatedCounts[peerID] = counts
-            }
-        }
-        self.peerKeyStoreCounts = updatedCounts // Update the published dictionary
-        print("Finished refreshing peer KeyStore counts. Calculated for \(updatedCounts.count) peers.")
-        // --- End KeyStore count calculation ---
+        // --- KeyStore count calculation removed ---
     }
 
     /// Manually triggers local key regeneration using OpenTDFKit and saves to Profile.
@@ -978,7 +962,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
             // Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
-            await print("Extracted public KeyStore data (\(publicKeyStore.publicKeys.count) keys).")
+            // Use await on the property access
+            await print("Extracted public KeyStore data (\((await publicKeyStore.publicKeys).count) keys).")
             return await publicKeyStore.serialize()
 
         } catch let error as P2PError {
@@ -1304,7 +1289,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             // Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
-            print("   Extracted public KeyStore data (\(await publicKeyStore.publicKeys.count) keys, \(publicData.count) bytes).")
+            // Use await on the property access
+            print("   Extracted public KeyStore data (\((await publicKeyStore.publicKeys).count) keys, \(publicData.count) bytes).")
             return publicData
 
         } catch {

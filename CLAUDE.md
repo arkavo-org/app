@@ -134,12 +134,12 @@ If acknowledgements aren't received within the timeout, assume failure, potentia
 2.  **Secure P2P Communication (Enabled by Trust):**
     *   **Leverage KeyStore:** Utilize the established trusted P2P connection and `OpenTDFKit.KeyStore` / `OpenTDFKit.PublicKeyStore` for cryptographic operations (`Profile.keyStorePrivate`, `Profile.keyStorePublic`).
     *   **Secure Session Maintenance (Key Renewal):** Implement the detailed key renewal workflow, managed by `P2PGroupViewModel` and `ArkavoClient`, *after* mutual confirmation has been established for the operation:
-        *   Detect low-key counts (`lowKeyThreshold`).
+        *   Detect low-key counts (`lowKeyThreshold`) - *Note: Current PublicKeyStore API doesn't expose counts directly; this detection needs alternative logic or API update.*
         *   Trigger user-initiated renewal with a selected peer.
         *   Perform mutual confirmation via UI and P2P messages (as described in point 1).
-        *   Generate new key pairs locally (`keyStore.regenerateKeys()`).
+        *   Generate new key pairs locally (`keyStore.generateAndStoreKeyPairs()`).
         *   Securely exchange new public KeyStore data (`NewPublicKeyStoreData`) over the established P2P TDF channel.
-        *   Receive the peer's new public KeyStore data. Retrieve the peer's `Profile`, access their `PublicKeyStore` object, and update it by deserializing the received data into the existing store object (`publicKeyStore.deserialize(from: receivedData)`), then save the updated profile via `PersistenceController`.
+        *   Receive the peer's new public KeyStore data (`receivedData`). Retrieve the peer's `Profile`. If the profile has existing `keyStorePublic` data, create a `PublicKeyStore` instance, deserialize `receivedData` into it (`publicKeyStore.deserialize(from: receivedData)`), serialize the updated store (`updatedData = await publicKeyStore.serialize()`), and save `updatedData` back to `Profile.keyStorePublic`. If no existing data, save `receivedData` directly to `Profile.keyStorePublic`. Save the updated profile via `PersistenceController`.
         *   Confirm successful exchange via acknowledgements (`KeyRenewalAcknowledgement`).
     *   **Transparent Security:** Provide clear status updates during sensitive operations like key renewal (e.g., "Awaiting Peer Selection", "Waiting for Peer Confirmation...", "Exchanging Keys", "Success", "Failed").
 
@@ -154,7 +154,7 @@ If acknowledgements aren't received within the timeout, assume failure, potentia
 5.  **Technical Foundation:**
     *   **P2P Framework:** Build upon `MCSession` (or similar) for discovery, connection, and data transmission.
     *   **ViewModel Integration:** Use `P2PGroupViewModel` (or similar) to manage the state and logic of P2P trust establishment, confirmation, and subsequent secure operations like key renewal.
-    *   **Data Persistence:** Use `PersistenceController` for storing own keys (`Profile.keyStorePrivate`) and managing trusted peer profiles which contain their public keys (`Profile.keyStorePublic` as a `PublicKeyStore` object). The initial `Profile.keyStorePrivate` is created and saved during the first successful P2P key exchange. Peer public keys are added/updated by deserializing received data into the peer's `PublicKeyStore` object.
+    *   **Data Persistence:** Use `PersistenceController` for storing own keys (`Profile.keyStorePrivate` as `Data?`) and managing trusted peer profiles which contain their public keys (`Profile.keyStorePublic` as `Data?`). The initial `Profile.keyStorePrivate` is created and saved during the first successful P2P key exchange. Peer public keys (`Profile.keyStorePublic`) are added/updated by saving the received serialized `Data`. When needed, this `Data` is used to initialize a `PublicKeyStore` instance (e.g., `let store = PublicKeyStore(curve: .secp256r1); try await store.deserialize(from: profile.keyStorePublic!)`).
     *   **Offline Capability:** Leverage the inherent offline capabilities of P2P frameworks.
 
 **Potential Future Enhancements (Not detailed in current CLAUDE.md):**

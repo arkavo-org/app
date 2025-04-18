@@ -224,7 +224,8 @@ erDiagram
         Boolean hasHighIdentityAssurance
         String did UK "nullable, unique"
         String handle "nullable"
-        Data keyStoreData "nullable, external storage"
+        Data keyStorePublic "nullable, external storage"
+        Data keyStorePrivate "nullable, external storage"
     }
 
     Stream {

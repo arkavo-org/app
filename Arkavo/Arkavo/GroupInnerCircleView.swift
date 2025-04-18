@@ -419,12 +419,9 @@ struct InnerCircleMemberRow: View {
                             .foregroundColor(.secondary)
                     }
                     // Display Key Exchange Status if online
-                    HStack(spacing: 6) { // Group status and counts
-                        keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW
-                        peerKeyStoreCountsView() // <-- NEW: Display key counts
-                    }
-                    .font(.caption2) // Smaller font for status line
-                    .padding(.top, 1)
+                    keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW (Counts view removed)
+                        .font(.caption2) // Smaller font for status line
+                        .padding(.top, 1)
 
                 } else {
                     // Removed lastSeen display
@@ -677,33 +674,7 @@ struct InnerCircleMemberRow: View {
         }
     }
 
-    // NEW: View to display peer's public key counts
-    @ViewBuilder
-    private func peerKeyStoreCountsView() -> some View {
-        // Find the peer ID first
-        guard let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
-            EmptyView() // Don't show if peer isn't connected/found
-            // Removed explicit return here; @ViewBuilder handles it.
-        }
-
-        // Get counts from the manager
-        if let counts = peerManager.peerKeyStoreCounts[peer] {
-            HStack(spacing: 3) {
-                Image(systemName: "key.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 10, height: 10)
-                Text("\(counts.available)/\(counts.total)")
-            }
-            .foregroundColor(.gray) // Use secondary color for counts
-            .help("Available / Total Public Keys")
-        } else {
-            // Optionally show a placeholder if counts are loading or unavailable
-            // Text("-/-")
-            //     .foregroundColor(.gray.opacity(0.7))
-            EmptyView() // Or hide if no counts available
-        }
-    }
+    // *** REMOVED peerKeyStoreCountsView function ***
 
     // Button for initiating or retrying key exchange
     @ViewBuilder
