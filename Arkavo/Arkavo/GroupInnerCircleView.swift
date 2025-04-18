@@ -714,12 +714,12 @@ struct InnerCircleMemberRow: View {
                             Text("\(count)")
                         }
                         .help("Available Private Keys: \(count)")
-                    } else {
-                        ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
                     } else if profile.keyStorePrivate != nil && !profile.keyStorePrivate!.isEmpty {
+                        // Show loading indicator *only if* data exists but count is not yet calculated
                         ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
                     } else {
-                        EmptyView() // No private data for local user (or error)
+                        // Show empty view if there's no private data at all
+                        EmptyView() // No private data for local user (or error calculating)
                     }
                 }
                 .foregroundColor(.orange) // Different color for private count
