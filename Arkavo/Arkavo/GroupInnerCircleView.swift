@@ -759,20 +759,26 @@ struct InnerCircleMemberRow: View {
              print("Profile \(profile.name) has no/empty public KeyStore data.")
         }
 
-        // Calculate Private Key Count
-        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
-            do {
-                let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
-                try await privateKeyStore.deserialize(from: privateKeyData)
+        // Calculate Private Key Count *only* if it's the local user
+        if isLocalUser {
+            if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
+                do {
+                    let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
+                    try await privateKeyStore.deserialize(from: privateKeyData)
                 let count = await privateKeyStore.getKeyCount()
                 // print("Calculated private key count for \(profile.name): \(count)")
-                await MainActor.run { privateKeyCount = count } // Update state
-            } catch {
-                print("❌ Error calculating private key count for \(profile.name): \(error)")
-                // Keep privateKeyCount as nil on error
+                    await MainActor.run { privateKeyCount = count } // Update state
+                } catch {
+                    print("❌ Error calculating private key count for local profile \(profile.name): \(error)")
+                    // Keep privateKeyCount as nil on error
+                }
+            } else {
+                 // This log is expected for the local user if keys haven't been generated/saved yet.
+                 print("Local profile \(profile.name) has no/empty private KeyStore data.")
             }
         } else {
-             print("Profile \(profile.name) has no/empty private KeyStore data.")
+            // Not the local user, privateKeyCount remains nil (correct behavior)
+            // No log needed here as it's expected for peers.
         }
     }
 
