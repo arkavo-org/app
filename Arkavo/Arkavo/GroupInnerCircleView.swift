@@ -683,7 +683,7 @@ struct InnerCircleMemberRow: View {
         // Find the peer ID first
         guard let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
             EmptyView() // Don't show if peer isn't connected/found
-            return
+            // Removed explicit return here; @ViewBuilder handles it.
         }
 
         // Get count from the manager
