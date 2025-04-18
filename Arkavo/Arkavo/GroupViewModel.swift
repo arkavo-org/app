@@ -1183,7 +1183,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                 guard let currentStateInfo = peerKeyExchangeStates[peer],
                       case let .ackSent(initiatorNonce) = currentStateInfo.state
                 else {
-                    print("KeyExchange: Ignoring Commit from \(peer.displayName), not in AckSent state (current: \(currentStateInfo.state)).")
+                    print("KeyExchange: Ignoring Commit from \(peer.displayName), not in AckSent state.")
                     return
                 }
 
@@ -1238,7 +1238,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             // Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
-            print("   Extracted public KeyStore data (\(publicKeyStore.publicKeys.count) keys, \(publicData.count) bytes).")
+            print("   Extracted public KeyStore data (\(await publicKeyStore.publicKeys.count) keys, \(publicData.count) bytes).")
             return publicData
 
         } catch {
@@ -1541,9 +1541,9 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
                         self.peerIDToProfileID[peerID] = profileID
                         print("   Associated peer \(peerID.displayName) with profile ID \(profileID)")
                     }
+                } else {
+                    print("   Peer \(peerID.displayName) did not provide profileID in discovery info.")
                 }
-            } else {
-                print("   Peer \(peerID.displayName) did not provide profileID in discovery info.")
             }
         }
         return true // Always allow presentation in the browser
