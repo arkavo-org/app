@@ -963,7 +963,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             // Extract and return the public data
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             // Use await on the property access
-            await print("Extracted public KeyStore data (\((await publicKeyStore.publicKeys).count) keys).")
+            await print("Extracted public KeyStore data (\((publicKeyStore.publicKeys).count) keys).")
             return await publicKeyStore.serialize()
 
         } catch let error as P2PError {
