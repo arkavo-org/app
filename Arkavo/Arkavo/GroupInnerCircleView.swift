@@ -680,29 +680,27 @@ struct InnerCircleMemberRow: View {
         }
     }
 
-    // NEW: View to display peer's public key count
+    // View to display peer's public key count (uses @State keyCount)
     @ViewBuilder
     private func peerKeyCountView() -> some View {
-        // Find the peer ID first using if let
-        if let peer = peerManager.findPeer(byProfileID: profile.publicID) {
-            // Get count from the manager only if peer is found
-            if let keyCount = peerManager.peerKeyCounts[peer] {
-                HStack(spacing: 3) {
-                    Image(systemName: "key.fill")
+        // Display count from state if available
+        if let count = keyCount {
+            HStack(spacing: 3) {
+                Image(systemName: "key.fill")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 10, height: 10)
-                Text("\(keyCount.count)") // Display the count
+                Text("\(count)") // Display the calculated count from state
             }
             .foregroundColor(.gray) // Use secondary color for count
-            .help("Available Public Keys")
+            .help("Available Public Keys: \(count)")
+        } else if profile.keyStorePublic != nil && !profile.keyStorePublic!.isEmpty {
+            // Show placeholder while loading if data exists but count not yet calculated
+            ProgressView().scaleEffect(0.5).frame(width: 10, height: 10)
         } else {
-            // Optionally show a placeholder if count is loading or unavailable
-            // Text("-")
-            //     .foregroundColor(.gray.opacity(0.7))
-            // EmptyView() // Implicitly empty if keyCount is nil
-            }
-            // Implicitly EmptyView if profile has no key data
+            // Show nothing or a dash if no public key data exists for the profile
+            // Text("-").foregroundColor(.gray.opacity(0.7))
+            EmptyView()
         }
         .task { // Use .task to calculate count asynchronously when view appears/profile changes
             await calculateKeyCount()
