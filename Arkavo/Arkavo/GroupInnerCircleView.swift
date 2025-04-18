@@ -1,7 +1,7 @@
 import MultipeerConnectivity // Needed for MCPeerID in InnerCircleMemberRow
+import OpenTDFKit
 import SwiftData // Needed for Profile in InnerCircleMemberRow
 import SwiftUI
-import OpenTDFKit
 
 // MARK: - InnerCircle UI Constants and Enums
 
@@ -497,6 +497,55 @@ struct InnerCircleMemberRow: View {
             // Updated Message
             Text("This will end your direct peer-to-peer connection. \(profile.name) will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting.")
         }
+        .onAppear {
+            Task {
+                await calculateKeyCounts()
+            }
+        }
+    }
+
+    // Helper function to calculate public and private key counts from profile data
+    private func calculateKeyCounts() async {
+        // Reset counts initially
+        await MainActor.run {
+            publicKeyCount = nil
+            privateKeyCount = nil
+        }
+
+        // Calculate Public Key Count
+        if let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty {
+            do {
+                let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
+                try await publicKeyStore.deserialize(from: publicKeyData)
+                let count = await (publicKeyStore.publicKeys).count
+                // print("Calculated public key count for \(profile.name): \(count)")
+                await MainActor.run { publicKeyCount = count } // Update state
+            } catch {
+                print("❌ Error calculating public key count for \(profile.name): \(error)")
+                // Keep publicKeyCount as nil on error
+            }
+        } else {
+            print("Profile \(profile.name) has no/empty public KeyStore data.")
+        }
+
+        // Calculate Private Key Count (if data exists)
+        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
+            do {
+                let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
+                try await privateKeyStore.deserialize(from: privateKeyData)
+                let count = await privateKeyStore.getKeyCount()
+                // print("Calculated private key count for \(profile.name): \(count)")
+                await MainActor.run { privateKeyCount = count } // Update state
+            } catch {
+                // Log error, including profile name for context
+                print("❌ Error calculating private key count for profile \(profile.name): \(error)")
+                // Keep privateKeyCount as nil on error
+            }
+        } else {
+            // This is expected for peers shown in this view.
+            // Log less verbosely or remove if too noisy.
+            // print("Profile \(profile.name) has no private KeyStore data (expected for peer).")
+        }
     }
 
     // Open direct chat with this member
@@ -690,7 +739,7 @@ struct InnerCircleMemberRow: View {
                         Text("\(count)")
                     }
                     .help("Available Public Keys: \(count)")
-                } else if profile.keyStorePublic != nil && !profile.keyStorePublic!.isEmpty {
+                } else if profile.keyStorePublic != nil, !profile.keyStorePublic!.isEmpty {
                     ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for public
                 } else {
                     EmptyView() // No public data
@@ -705,19 +754,19 @@ struct InnerCircleMemberRow: View {
             Group {
                 if let count = privateKeyCount { // This will likely never be true for peers
                     HStack(spacing: 3) {
-                            Image(systemName: "lock.keyhole") // Icon for private keys
-                                .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
-                            Text("\(count)")
-                        }
-                        .help("Available Private Keys: \(count)")
-                    } else if profile.keyStorePrivate != nil && !profile.keyStorePrivate!.isEmpty {
-                        // Show loading indicator *only if* data exists but count is not yet calculated
-                        ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
-                    } else {
-                        // Show empty view if there's no private data at all
-                        EmptyView() // No private data for local user (or error calculating)
+                        Image(systemName: "lock.keyhole") // Icon for private keys
+                            .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
+                        Text("\(count)")
                     }
+                    .help("Available Private Keys: \(count)")
+                } else if profile.keyStorePrivate != nil, !profile.keyStorePrivate!.isEmpty {
+                    // Show loading indicator *only if* data exists but count is not yet calculated
+                    ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
+                } else {
+                    // Show empty view if there's no private data at all
+                    EmptyView() // No private data for local user (or error calculating)
                 }
+            }
             .foregroundColor(.orange) // Different color for private count
             // End of Private Key Count Display section
         }

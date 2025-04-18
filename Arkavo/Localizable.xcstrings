@@ -206,6 +206,12 @@
     "Available" : {
 
     },
+    "Available Private Keys: %lld" : {
+
+    },
+    "Available Public Keys: %lld" : {
+
+    },
     "Back" : {
 
     },
@@ -513,9 +519,6 @@
 
     },
     "Loading stream details..." : {
-
-    },
-    "Loading..." : {
 
     },
     "Location" : {
