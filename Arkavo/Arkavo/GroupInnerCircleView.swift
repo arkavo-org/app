@@ -1,6 +1,7 @@
 import MultipeerConnectivity // Needed for MCPeerID in InnerCircleMemberRow
 import SwiftData // Needed for Profile in InnerCircleMemberRow
 import SwiftUI
+import OpenTDFKit
 
 // MARK: - InnerCircle UI Constants and Enums
 
