@@ -1006,7 +1006,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         do {
             // Assuming PublicKeyStore can be initialized or deserialized from Data
             // Use try? to handle potential initialization errors gracefully
-            guard let publicKeyStore = try? await OpenTDFKit.PublicKeyStore(data: publicKeyData) else {
+            guard let publicKeyStore = try? await OpenTDFKit.PublicKeyStore(curve: publicKeyData) else {
                 print("⚠️ Failed to initialize PublicKeyStore from data for \(profile.name) (\(profile.publicID.base58EncodedString)). Data size: \(publicKeyData.count)")
                 return nil // Treat initialization failure as no counts available
             }
