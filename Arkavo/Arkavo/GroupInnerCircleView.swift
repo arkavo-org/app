@@ -371,7 +371,8 @@ struct InnerCircleMemberRow: View {
     @ObservedObject var peerManager: PeerDiscoveryManager // Use @ObservedObject
     @State private var showRemoveConfirmation = false
     @State private var showDisconnectConfirmation = false // State for disconnect confirmation
-    @State private var keyCount: Int? = nil // State to hold the calculated key count
+    @State private var publicKeyCount: Int? = nil // State for public key count
+    @State private var privateKeyCount: Int? = nil // State for private key count
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
@@ -425,14 +426,14 @@ struct InnerCircleMemberRow: View {
                         if isOnline {
                             keyExchangeStatusView() // Show status only when online
                         }
-                        peerKeyCountView() // Show key count regardless of online status
+                        profileKeyCountView() // Renamed: Show key counts regardless of online status
                     }
                     .font(.caption2) // Smaller font for status line
                     .padding(.top, 1)
 
                 } else {
                     // Offline: Show only the key count view
-                    peerKeyCountView()
+                    profileKeyCountView() // Renamed
                         .font(.caption2)
                         .padding(.top, 1)
                 }
@@ -681,50 +682,87 @@ struct InnerCircleMemberRow: View {
         }
     }
 
-    // View to display peer's public key count (uses @State keyCount)
+    // Renamed: View to display profile's public/private key counts
     @ViewBuilder
-    private func peerKeyCountView() -> some View {
-        // Display count from state if available
-        if let count = keyCount {
-            HStack(spacing: 3) {
-                Image(systemName: "key.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 10, height: 10)
-                Text("\(count)") // Display the calculated count from state
+    private func profileKeyCountView() -> some View {
+        HStack(spacing: 8) { // Add spacing between public/private counts
+            // Public Key Count Display
+            Group {
+                if let count = publicKeyCount {
+                    HStack(spacing: 3) {
+                        Image(systemName: "key.fill") // Icon for public keys
+                            .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
+                        Text("\(count)")
+                    }
+                    .help("Available Public Keys: \(count)")
+                } else if profile.keyStorePublic != nil && !profile.keyStorePublic!.isEmpty {
+                    ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for public
+                } else {
+                    EmptyView() // No public data
+                }
             }
-            .foregroundColor(.gray) // Use secondary color for count
-            .help("Available Public Keys: \(count)")
-        } else if profile.keyStorePublic != nil && !profile.keyStorePublic!.isEmpty {
-            // Show placeholder while loading if data exists but count not yet calculated
-            ProgressView().scaleEffect(0.5).frame(width: 10, height: 10)
-        } else {
-            // Show nothing or a dash if no public key data exists for the profile
-            // Text("-").foregroundColor(.gray.opacity(0.7))
-            EmptyView()
+            .foregroundColor(.gray)
+
+            // Private Key Count Display (Only show if data exists)
+            if profile.keyStorePrivate != nil && !profile.keyStorePrivate!.isEmpty {
+                Group {
+                    if let count = privateKeyCount {
+                        HStack(spacing: 3) {
+                            Image(systemName: "lock.keyhole") // Icon for private keys
+                                .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
+                            Text("\(count)")
+                        }
+                        .help("Available Private Keys: \(count)")
+                    } else {
+                        ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
+                    }
+                }
+                .foregroundColor(.orange) // Different color for private count
+            }
         }
-        .task { // Use .task to calculate count asynchronously when view appears/profile changes
-            await calculateKeyCount()
+        .task { // Use .task to calculate counts asynchronously when view appears/profile changes
+            await calculateKeyCounts() // Call the renamed function
         }
     }
 
-    // Helper function to calculate key count from profile data
-    private func calculateKeyCount() async {
-        guard let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty else {
-            // print("Profile \(profile.name) has no/empty public KeyStore data.")
-            await MainActor.run { keyCount = nil } // Set count to nil if no data
-            return
+    // Helper function to calculate public and private key counts from profile data
+    private func calculateKeyCounts() async {
+        // Reset counts initially
+        await MainActor.run {
+            publicKeyCount = nil
+            privateKeyCount = nil
         }
 
-        do {
-            let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
-            try await publicKeyStore.deserialize(from: publicKeyData)
-            let count = (await publicKeyStore.publicKeys).count
-            // print("Calculated key count for \(profile.name): \(count)")
-            await MainActor.run { keyCount = count } // Update state on main thread
-        } catch {
-            print("❌ Error calculating key count for \(profile.name): \(error)")
-            await MainActor.run { keyCount = nil } // Set count to nil on error
+        // Calculate Public Key Count
+        if let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty {
+            do {
+                let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
+                try await publicKeyStore.deserialize(from: publicKeyData)
+                let count = (await publicKeyStore.publicKeys).count
+                // print("Calculated public key count for \(profile.name): \(count)")
+                await MainActor.run { publicKeyCount = count } // Update state
+            } catch {
+                print("❌ Error calculating public key count for \(profile.name): \(error)")
+                // Keep publicKeyCount as nil on error
+            }
+        } else {
+             print("Profile \(profile.name) has no/empty public KeyStore data.")
+        }
+
+        // Calculate Private Key Count
+        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
+            do {
+                let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
+                try await privateKeyStore.deserialize(from: privateKeyData)
+                let count = await privateKeyStore.getKeyCount()
+                // print("Calculated private key count for \(profile.name): \(count)")
+                await MainActor.run { privateKeyCount = count } // Update state
+            } catch {
+                print("❌ Error calculating private key count for \(profile.name): \(error)")
+                // Keep privateKeyCount as nil on error
+            }
+        } else {
+             print("Profile \(profile.name) has no/empty private KeyStore data.")
         }
     }
 
