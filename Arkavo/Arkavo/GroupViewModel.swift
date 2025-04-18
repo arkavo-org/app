@@ -698,26 +698,33 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // Use provided nanoData (e.g., encrypted) or convert content string (decrypted)
         let dataToStore = nanoData ?? Data(content.utf8)
 
+        // 1. Create Thought object in memory
         let thought = Thought(nano: dataToStore, metadata: thoughtMetadata)
-        thought.stream = stream // Associate with the stream
 
-        _ = try await PersistenceController.shared.saveThought(thought)
-
-        // Ensure relationship is established in the managed context
-        if let managedStream = try await persistenceController.fetchStream(withPublicID: stream.publicID) {
-            if !(managedStream.thoughts.contains { $0.persistentModelID == thought.persistentModelID }) {
-                managedStream.addThought(thought) // Assuming Stream has `addThought` helper
-            }
-            // Save changes only if the stream was found and relationship potentially updated
-            try await PersistenceController.shared.saveChanges()
-            print("✅ P2P message stored as Thought for stream: \(stream.publicID.base58EncodedString)")
-        } else {
-            print("Warning: Could not find managed stream to associate thought. Thought not saved with stream relationship.")
-            // Do not save changes if the stream wasn't found, as the relationship cannot be established.
-            // The thought object exists in memory but won't be persisted correctly without its stream.
-            // Consider throwing an error here or handling it differently based on requirements.
+        // 2. Fetch the associated Stream from the context
+        guard let managedStream = try await persistenceController.fetchStream(withPublicID: stream.publicID) else {
+            print("❌ Error: Could not find managed stream \(stream.publicID.base58EncodedString) to associate thought.")
+            // 4. Throw error if stream not found, do not save thought
             throw P2PError.persistenceError("Could not find stream \(stream.publicID.base58EncodedString) to associate thought.")
         }
+
+        // 3. Establish relationship and save Thought *only if* stream was found
+        print("   Found managed stream: \(managedStream.profile.name). Associating thought...")
+        thought.stream = managedStream // Associate with the managed stream object
+        managedStream.addThought(thought) // Add to the stream's collection
+
+        // Insert the new thought into the context *before* saving changes
+        // Note: SwiftData might handle insertion automatically when relationship is set,
+        // but explicit insertion ensures it's managed.
+        if thought.modelContext == nil {
+             persistenceController.mainContext.insert(thought)
+             print("   Inserted new thought into context.")
+        }
+
+        // Save changes to persist the new thought and the updated stream relationship
+        try await PersistenceController.shared.saveChanges()
+        print("✅ P2P message stored as Thought (\(thought.publicID.base58EncodedString)) and associated with stream \(managedStream.publicID.base58EncodedString).")
+
         return thought
     }
 
