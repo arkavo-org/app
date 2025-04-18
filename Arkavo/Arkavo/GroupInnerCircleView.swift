@@ -727,16 +727,13 @@ struct InnerCircleMemberRow: View {
             // No 'else' needed, peers simply won't show the private key section
         }
         .task(id: profile.id) { // Recalculate if profile changes
-            // Determine if this row represents the local user
-            let localProfileID = ViewModelFactory.shared.getCurrentProfile()?.publicID
-            let isLocal = (localProfileID != nil && profile.publicID == localProfileID)
-            await calculateKeyCounts(isLocalUser: isLocal) // Pass flag to calculation function
+            // Call the calculation function without the flag
+            await calculateKeyCounts()
         }
     }
 
     // Helper function to calculate public and private key counts from profile data
-    // Only calculates private count if isLocalUser is true.
-    private func calculateKeyCounts(isLocalUser: Bool) async {
+    private func calculateKeyCounts() async {
         // Reset counts initially
         await MainActor.run {
             publicKeyCount = nil
@@ -759,26 +756,29 @@ struct InnerCircleMemberRow: View {
              print("Profile \(profile.name) has no/empty public KeyStore data.")
         }
 
-        // Calculate Private Key Count *only* if it's the local user
-        if isLocalUser {
-            if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
-                do {
-                    let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
-                    try await privateKeyStore.deserialize(from: privateKeyData)
+        // Calculate Private Key Count (if data exists)
+        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
+            do {
+                let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
+                try await privateKeyStore.deserialize(from: privateKeyData)
                 let count = await privateKeyStore.getKeyCount()
                 // print("Calculated private key count for \(profile.name): \(count)")
-                    await MainActor.run { privateKeyCount = count } // Update state
-                } catch {
-                    print("❌ Error calculating private key count for local profile \(profile.name): \(error)")
-                    // Keep privateKeyCount as nil on error
-                }
-            } else {
-                 // This log is expected for the local user if keys haven't been generated/saved yet.
-                 print("Local profile \(profile.name) has no/empty private KeyStore data.")
+                await MainActor.run { privateKeyCount = count } // Update state
+            } catch {
+                // Log error, including profile name for context
+                print("❌ Error calculating private key count for profile \(profile.name): \(error)")
+                // Keep privateKeyCount as nil on error
             }
         } else {
-            // Not the local user, privateKeyCount remains nil (correct behavior)
-            // No log needed here as it's expected for peers.
+            // Log missing private data, differentiating local user vs peer
+            let isLocal = (ViewModelFactory.shared.getCurrentProfile()?.publicID == profile.publicID)
+            if isLocal {
+                // Log if missing for the local user (might indicate keys not generated yet)
+                print("Local profile \(profile.name) has no/empty private KeyStore data.")
+            } else {
+                // This is expected for peers, log less verbosely or not at all if desired
+                // print("Peer profile \(profile.name) has no private KeyStore data (expected).")
+            }
         }
     }
 
