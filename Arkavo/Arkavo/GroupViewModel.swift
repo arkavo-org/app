@@ -975,39 +975,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    /// Calculates the available and total key counts from a Profile's public KeyStore data.
-    private func getKeyStoreCounts(for profile: Profile) async -> PeerKeyStoreCounts? {
-        guard let publicKeyData = profile.keyStorePublic else {
-            // print("Profile \(profile.name) (\(profile.publicID.base58EncodedString)) has no public KeyStore data.")
-            return nil // No data available is not an error, just lack of info
-        }
-
-        // Ensure data is not empty before attempting deserialization
-        guard !publicKeyData.isEmpty else {
-            print("Profile \(profile.name) (\(profile.publicID.base58EncodedString)) has empty public KeyStore data.")
-            return nil
-        }
-
-        do {
-            // Assuming PublicKeyStore can be initialized or deserialized from Data
-            // Use try? to handle potential initialization errors gracefully
-            guard let publicKeyStore = try? await OpenTDFKit.PublicKeyStore(curve: publicKeyData) else {
-                print("⚠️ Failed to initialize PublicKeyStore from data for \(profile.name) (\(profile.publicID.base58EncodedString)). Data size: \(publicKeyData.count)")
-                return nil // Treat initialization failure as no counts available
-            }
-
-            // Assuming methods to get counts exist and are async
-            let available = await publicKeyStore.availableKeyCount()
-            let total = await publicKeyStore.totalKeyCount()
-
-            // print("Calculated KeyStore counts for \(profile.name): \(available)/\(total)")
-            return PeerKeyStoreCounts(available: available, total: total)
-        } catch {
-            // Catch any other unexpected errors during count retrieval
-            print("❌ Unexpected error processing PublicKeyStore for \(profile.name) (\(profile.publicID.base58EncodedString)): \(error)")
-            return nil // Error during processing
-        }
-    }
+    // *** REMOVED getKeyStoreCounts function ***
 
     // MARK: - Secure Key Regeneration Protocol Implementation
 
