@@ -316,10 +316,6 @@ struct InnerCircleView: View {
     // Empty state view
     private var emptyStateView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "person.2.slash")
-                .font(.largeTitle)
-                .foregroundColor(.secondary.opacity(0.5))
-
             Text("No Members Found")
                 .font(.headline)
                 .foregroundColor(.secondary)
@@ -423,9 +419,8 @@ struct InnerCircleMemberRow: View {
                     }
                     // Display Key Exchange Status (if online) and Key Count (always)
                     HStack(spacing: 6) { // Group status and count
-                        if isOnline {
-                            keyExchangeStatusView() // Show status only when online
-                        }
+                        // Removed redundant inner if isOnline check
+                        keyExchangeStatusView() // Show status only when online
                         profileKeyCountView() // Renamed: Show key counts regardless of online status
                     }
                     .font(.caption2) // Smaller font for status line
@@ -703,12 +698,13 @@ struct InnerCircleMemberRow: View {
             }
             .foregroundColor(.gray)
 
-            // Private Key Count Display (Only show if it's the local user AND data exists/was calculated)
-            let isLocal = (ViewModelFactory.shared.getCurrentProfile()?.publicID == profile.publicID)
-            if isLocal {
-                Group {
-                    if let count = privateKeyCount {
-                        HStack(spacing: 3) {
+            // Private Key Count Display (Removed isLocal check - this view only shows peers)
+            // This section will now effectively be hidden as privateKeyCount will always be nil for peers.
+            // We could remove it entirely, but keeping the structure allows for potential future changes.
+            // The calculation in calculateKeyCounts will handle not attempting to load private data for peers.
+            Group {
+                if let count = privateKeyCount { // This will likely never be true for peers
+                    HStack(spacing: 3) {
                             Image(systemName: "lock.keyhole") // Icon for private keys
                                 .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
                             Text("\(count)")
@@ -722,63 +718,8 @@ struct InnerCircleMemberRow: View {
                         EmptyView() // No private data for local user (or error calculating)
                     }
                 }
-                .foregroundColor(.orange) // Different color for private count
-            }
-            // No 'else' needed, peers simply won't show the private key section
-        }
-        .task(id: profile.id) { // Recalculate if profile changes
-            // Call the calculation function without the flag
-            await calculateKeyCounts()
-        }
-    }
-
-    // Helper function to calculate public and private key counts from profile data
-    private func calculateKeyCounts() async {
-        // Reset counts initially
-        await MainActor.run {
-            publicKeyCount = nil
-            privateKeyCount = nil
-        }
-
-        // Calculate Public Key Count
-        if let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty {
-            do {
-                let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
-                try await publicKeyStore.deserialize(from: publicKeyData)
-                let count = (await publicKeyStore.publicKeys).count
-                // print("Calculated public key count for \(profile.name): \(count)")
-                await MainActor.run { publicKeyCount = count } // Update state
-            } catch {
-                print("❌ Error calculating public key count for \(profile.name): \(error)")
-                // Keep publicKeyCount as nil on error
-            }
-        } else {
-             print("Profile \(profile.name) has no/empty public KeyStore data.")
-        }
-
-        // Calculate Private Key Count (if data exists)
-        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
-            do {
-                let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
-                try await privateKeyStore.deserialize(from: privateKeyData)
-                let count = await privateKeyStore.getKeyCount()
-                // print("Calculated private key count for \(profile.name): \(count)")
-                await MainActor.run { privateKeyCount = count } // Update state
-            } catch {
-                // Log error, including profile name for context
-                print("❌ Error calculating private key count for profile \(profile.name): \(error)")
-                // Keep privateKeyCount as nil on error
-            }
-        } else {
-            // Log missing private data, differentiating local user vs peer
-            let isLocal = (ViewModelFactory.shared.getCurrentProfile()?.publicID == profile.publicID)
-            if isLocal {
-                // Log if missing for the local user (might indicate keys not generated yet)
-                print("Local profile \(profile.name) has no/empty private KeyStore data.")
-            } else {
-                // This is expected for peers, log less verbosely or not at all if desired
-                // print("Peer profile \(profile.name) has no private KeyStore data (expected).")
-            }
+            .foregroundColor(.orange) // Different color for private count
+            // End of Private Key Count Display section
         }
     }
 
