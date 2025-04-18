@@ -703,8 +703,9 @@ struct InnerCircleMemberRow: View {
             }
             .foregroundColor(.gray)
 
-            // Private Key Count Display (Only show if data exists)
-            if profile.keyStorePrivate != nil && !profile.keyStorePrivate!.isEmpty {
+            // Private Key Count Display (Only show if it's the local user AND data exists/was calculated)
+            let isLocal = (ViewModelFactory.shared.getCurrentProfile()?.publicID == profile.publicID)
+            if isLocal {
                 Group {
                     if let count = privateKeyCount {
                         HStack(spacing: 3) {
@@ -715,18 +716,27 @@ struct InnerCircleMemberRow: View {
                         .help("Available Private Keys: \(count)")
                     } else {
                         ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
+                    } else if profile.keyStorePrivate != nil && !profile.keyStorePrivate!.isEmpty {
+                        ProgressView().scaleEffect(0.5).frame(width: 10, height: 10) // Loading for private
+                    } else {
+                        EmptyView() // No private data for local user (or error)
                     }
                 }
                 .foregroundColor(.orange) // Different color for private count
             }
+            // No 'else' needed, peers simply won't show the private key section
         }
-        .task { // Use .task to calculate counts asynchronously when view appears/profile changes
-            await calculateKeyCounts() // Call the renamed function
+        .task(id: profile.id) { // Recalculate if profile changes
+            // Determine if this row represents the local user
+            let localProfileID = ViewModelFactory.shared.getCurrentProfile()?.publicID
+            let isLocal = (localProfileID != nil && profile.publicID == localProfileID)
+            await calculateKeyCounts(isLocalUser: isLocal) // Pass flag to calculation function
         }
     }
 
     // Helper function to calculate public and private key counts from profile data
-    private func calculateKeyCounts() async {
+    // Only calculates private count if isLocalUser is true.
+    private func calculateKeyCounts(isLocalUser: Bool) async {
         // Reset counts initially
         await MainActor.run {
             publicKeyCount = nil
