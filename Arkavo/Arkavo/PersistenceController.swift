@@ -119,8 +119,6 @@ class PersistenceController {
                 existingProfile.keyStorePublic = publicData
                 print("PersistenceController: Updated public KeyStore data for peer profile \(existingProfile.publicID.base58EncodedString)")
             }
-            // Private KeyStore data is never stored for peers
-            existingProfile.keyStorePrivate = nil
         } else {
             // Insert new peer profile
             print("PersistenceController: Saving new peer profile: \(peerProfile.publicID.base58EncodedString)")
@@ -129,8 +127,6 @@ class PersistenceController {
                 peerProfile.keyStorePublic = publicData
                 print("PersistenceController: Added public KeyStore data for new peer profile \(peerProfile.publicID.base58EncodedString)")
             }
-            // Private KeyStore data is never stored for peers
-            peerProfile.keyStorePrivate = nil
             mainContext.insert(peerProfile)
         }
 
@@ -215,52 +211,6 @@ class PersistenceController {
         // Create a fetch descriptor for all profiles, sorted by name
         let descriptor = FetchDescriptor<Profile>(sortBy: [SortDescriptor(\.name)])
         return try mainContext.fetch(descriptor)
-    }
-
-    // MARK: - KeyStore Operations
-
-    /// Saves or updates the KeyStore data (public and private) associated with a given Profile.
-    /// This should typically only be used for the local user's profile.
-    /// - Parameters:
-    ///   - profile: The profile to associate the KeyStore data with.
-    ///   - publicData: The serialized public components of the KeyStore.
-    ///   - privateData: The serialized private components of the KeyStore.
-    func saveKeyStoreData(for profile: Profile, publicData: Data, privateData: Data) async throws {
-        // Ensure the profile is associated with the context
-        guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
-            print("PersistenceController Error: Profile \(profile.publicID.base58EncodedString) not found in context. Cannot save KeyStore data.")
-            throw ArkavoError.profileError("Profile not managed by context.")
-        }
-
-        // Update the profile with KeyStore data
-        print("PersistenceController: Updating KeyStore data for profile \(profileInContext.publicID.base58EncodedString)")
-        profileInContext.keyStorePublic = publicData
-        profileInContext.keyStorePrivate = privateData // Save the distinct private data
-
-        try await saveChanges()
-        print("PersistenceController: KeyStore data saved successfully for profile \(profileInContext.publicID.base58EncodedString)")
-    }
-
-    /// Gets KeyStore details (public and private data) for a specific Profile.
-    /// This is typically used to load the local user's KeyStore.
-    /// - Parameter profile: The profile whose KeyStore details are needed.
-    /// - Returns: A tuple containing the public and private KeyStore data, or nil if not available.
-    func getKeyStoreDetails(for profile: Profile) async throws -> (public: Data, private: Data)? {
-        // Ensure we are using the profile instance from the context if possible
-        guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
-            print("PersistenceController: Profile \(profile.publicID.base58EncodedString) not found. Cannot fetch KeyStore data.")
-            return nil
-        }
-
-        // Check if KeyStore data is available
-        if let keyStorePublic = profileInContext.keyStorePublic,
-           let keyStorePrivate = profileInContext.keyStorePrivate
-        {
-            return (public: keyStorePublic, private: keyStorePrivate)
-        }
-
-        print("PersistenceController: KeyStore public or private data not found for profile \(profileInContext.publicID.base58EncodedString).")
-        return nil
     }
 
     // MARK: - Stream Operations

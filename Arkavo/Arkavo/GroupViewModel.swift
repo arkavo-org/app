@@ -25,7 +25,6 @@ struct LocalKeyStoreInfo: Equatable {
     let capacity: Int
 }
 
-
 // MARK: - Key Exchange Protocol Definitions
 
 /// Represents the state of the secure key regeneration exchange with a specific peer.
@@ -232,11 +231,6 @@ class PeerDiscoveryManager: ObservableObject {
     /// Sends a direct P2P message (e.g., profile share, key exchange) to designated peers.
     func sendP2PMessage(type: P2PMessageType, payload: some Codable, toPeers peers: [MCPeerID]) async throws {
         try await implementation.sendP2PMessage(type: type, payload: payload, toPeers: peers)
-    }
-
-    /// Gets the public data of the local user's KeyStore. Creates and saves if needed.
-    func getOrCreateLocalPublicKeystoreData() async throws -> Data {
-        try await implementation.getOrCreateLocalPublicKeystoreData()
     }
 }
 
@@ -711,8 +705,8 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         // Note: SwiftData might handle insertion automatically when relationship is set,
         // but explicit insertion ensures it's managed.
         if thought.modelContext == nil {
-             persistenceController.mainContext.insert(thought)
-             print("   Inserted new thought into context.")
+            persistenceController.mainContext.insert(thought)
+            print("   Inserted new thought into context.")
         }
 
         // Save changes to persist the new thought and the updated stream relationship
@@ -789,10 +783,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                     print("KeyExchange: Received KeyStoreShare from \(peer.displayName). Current state: \(currentState)")
 
                     switch currentState {
-                    case .commitSent(let nonce): // Responder was waiting for keys
+                    case let .commitSent(nonce): // Responder was waiting for keys
                         print("KeyExchange (Responder): Received keys from Initiator. Completing protocol.")
                         updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
-                    case .commitReceivedWaitingForKeys(let nonce): // Initiator was waiting for keys
+                    case let .commitReceivedWaitingForKeys(nonce): // Initiator was waiting for keys
                         print("KeyExchange (Initiator): Received keys from Responder. Completing protocol.")
                         updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
                     default:
@@ -883,99 +877,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         // --- KeyStore count calculation removed ---
     }
-
-    /// Manually triggers local key regeneration using OpenTDFKit and saves to Profile.
-    func regenerateLocalKeys() async {
-        print("Manual local key regeneration requested...")
-        isRegeneratingKeys = true
-        defer { isRegeneratingKeys = false }
-        localKeyStoreInfo = nil // Clear info during regeneration
-
-        let keyStore = KeyStore(curve: .secp256r1) // Use default curve
-
-        do {
-            guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-                throw P2PError.profileNotAvailable
-            }
-            let profileIDString = myProfile.publicID.base58EncodedString
-            print("Regenerating keys for profile: \(profileIDString)")
-
-            // Check if KeyStore data exists in profile, deserialize if so
-            if let currentKeyStoreData = myProfile.keyStorePrivate {
-                print("Found existing keyStorePrivate data (\(currentKeyStoreData.count) bytes). Deserializing...")
-                try await keyStore.deserialize(from: currentKeyStoreData)
-            } else {
-                print("No existing keyStorePrivate data found. Will create new.")
-                // KeyStore is already initialized above, ready for generation
-            }
-
-            // Generate/Regenerate keys locally using OpenTDFKit
-            // Assuming 8192 is the standard capacity/generation count
-            print("Generating/regenerating 8192 key pairs using OpenTDFKit...")
-            try await keyStore.generateAndStoreKeyPairs(count: 8192)
-            print("Key generation successful.")
-
-            // Serialize the updated private KeyStore
-            let updatedSerializedData = await keyStore.serialize()
-            print("Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
-
-            // Update the Profile's keyStorePrivate property
-            myProfile.keyStorePrivate = updatedSerializedData
-            print("Updated profile.keyStorePrivate.")
-
-            // Save changes to the Profile
-            try await persistenceController.saveChanges()
-            print("✅ Successfully saved updated Profile with new keyStorePrivate.")
-
-        } catch {
-            print("❌ Failed during manual key regeneration: \(error)")
-            // Ensure status is reset on failure
-            isRegeneratingKeys = false
-        }
-    }
-
-    /// Gets the public data of the local KeyStore. Creates/generates/saves if it doesn't exist.
-    func getOrCreateLocalPublicKeystoreData() async throws -> Data {
-        print("Getting or creating local public KeyStore data...")
-        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-            throw P2PError.profileNotAvailable
-        }
-        let profileIDString = myProfile.publicID.base58EncodedString
-        let keyStore = KeyStore(curve: .secp256r1) // Use default curve
-
-        do {
-            if let currentKeyStoreData = myProfile.keyStorePrivate {
-                // KeyStore exists, deserialize to extract public part
-                print("Found existing keyStorePrivate (\(currentKeyStoreData.count) bytes) for \(profileIDString). Deserializing...")
-                try await keyStore.deserialize(from: currentKeyStoreData)
-            } else {
-                // KeyStore doesn't exist, create, generate keys, save private part
-                print("No keyStorePrivate found for \(profileIDString). Creating new KeyStore...")
-                try await keyStore.generateAndStoreKeyPairs(count: 8192) // Generate keys
-                print("Generated keys for new KeyStore.")
-                let privateData = await keyStore.serialize() // Serialize private data
-                print("Serialized new private KeyStore (\(privateData.count) bytes).")
-                myProfile.keyStorePrivate = privateData // Update profile
-                try await persistenceController.saveChanges() // Save profile
-                print("Saved new private KeyStore data to profile \(profileIDString).")
-            }
-
-            // Extract and return the public data
-            let publicKeyStore = await keyStore.exportPublicKeyStore()
-            // Use await on the property access
-            await print("Extracted public KeyStore data (\((publicKeyStore.publicKeys).count) keys).")
-            return await publicKeyStore.serialize()
-
-        } catch let error as P2PError {
-            print("❌ P2PError getting/creating KeyStore: \(error)")
-            throw error
-        } catch {
-            print("❌ Unexpected error getting/creating KeyStore: \(error)")
-            throw P2PError.keyStoreInitializationFailed("Unexpected error: \(error.localizedDescription)")
-        }
-    }
-
-    // *** REMOVED getKeyCount function ***
 
     // MARK: - Secure Key Regeneration Protocol Implementation
 
@@ -1232,10 +1133,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
 
         do {
-            // Always start with a fresh KeyStore for regeneration during exchange
-            print("   Creating new KeyStore instance for key generation.")
-            // KeyStore is already initialized above as `let keyStore = KeyStore(...)`
-
             // Generate exactly 8192 keys into the new store
             print("   Generating 8192 key pairs...")
             try await keyStore.generateAndStoreKeyPairs(count: 8192)
@@ -1245,6 +1142,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
 
             // Update profile and save
+            // FIXME: this should go on Stream.innerCircleProfiles[_].keyStorePrivate not getCurrentProfile()
             myProfile.keyStorePrivate = updatedSerializedData
             print("   Updating profile.keyStorePrivate...")
             try await persistenceController.saveChanges()
@@ -1254,7 +1152,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
             // Use await on the property access
-            print("   Extracted public KeyStore data (\((await publicKeyStore.publicKeys).count) keys, \(publicData.count) bytes).")
+            await print("   Extracted public KeyStore data (\((publicKeyStore.publicKeys).count) keys, \(publicData.count) bytes).")
             return publicData
 
         } catch {
