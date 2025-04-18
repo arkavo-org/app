@@ -418,10 +418,13 @@ struct InnerCircleMemberRow: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    // Display Key Exchange Status if online
-                    keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW (Counts view removed)
-                        .font(.caption2) // Smaller font for status line
-                        .padding(.top, 1)
+                    // Display Key Exchange Status and Count if online
+                    HStack(spacing: 6) { // Group status and count
+                        keyExchangeStatusView() // <-- INTEGRATED STATUS VIEW
+                        peerKeyCountView() // <-- NEW: Display key count
+                    }
+                    .font(.caption2) // Smaller font for status line
+                    .padding(.top, 1)
 
                 } else {
                     // Removed lastSeen display
@@ -674,7 +677,33 @@ struct InnerCircleMemberRow: View {
         }
     }
 
-    // *** REMOVED peerKeyStoreCountsView function ***
+    // NEW: View to display peer's public key count
+    @ViewBuilder
+    private func peerKeyCountView() -> some View {
+        // Find the peer ID first
+        guard let peer = peerManager.findPeer(byProfileID: profile.publicID) else {
+            EmptyView() // Don't show if peer isn't connected/found
+            return
+        }
+
+        // Get count from the manager
+        if let keyCount = peerManager.peerKeyCounts[peer] {
+            HStack(spacing: 3) {
+                Image(systemName: "key.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 10, height: 10)
+                Text("\(keyCount.count)") // Display the count
+            }
+            .foregroundColor(.gray) // Use secondary color for count
+            .help("Available Public Keys")
+        } else {
+            // Optionally show a placeholder if count is loading or unavailable
+            // Text("-")
+            //     .foregroundColor(.gray.opacity(0.7))
+            EmptyView() // Or hide if no count available
+        }
+    }
 
     // Button for initiating or retrying key exchange
     @ViewBuilder
