@@ -87,7 +87,8 @@ struct GroupCreateView: View {
                         dismiss()
                     }
                 }
-                .disabled(groupName.isEmpty)
+                // Enable button only if groupName is not empty (after trimming whitespace)
+                .disabled(groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .alert("Error", isPresented: $showError) {
