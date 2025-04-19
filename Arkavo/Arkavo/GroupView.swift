@@ -607,18 +607,7 @@ struct GroupView: View {
             print("GroupView: Detected change in peerKeyExchangeStates")
         }
     }
-
-    // Stream list or loading view
-    private func streamListView(geometry: GeometryProxy) -> some View {
-        Group {
-            if viewModel.streams.isEmpty {
-                emptyStreamView
-            } else {
-                streamScrollView(geometry: geometry)
-            }
-        }
-    }
-
+ 
     // Empty state view
     private var emptyStreamView: some View {
         VStack {
