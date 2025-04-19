@@ -633,35 +633,42 @@ struct GroupView: View {
         .onDisappear { sharedState.isAwaiting = false }
     }
 
-    // Scrollable stream list - Restructured based on UI Critique
-    private func streamScrollView(geometry: GeometryProxy) -> some View {
-        ScrollView {
-            LazyVStack(spacing: InnerCircleConstants.doubleMargin) { // Increased spacing between major sections
-                // --- 2. InnerCircle Members Section ---
+    // Stream list - Changed ScrollView/LazyVStack to List
+    private func streamListView(geometry: GeometryProxy) -> some View {
+        List {
+            // --- 2. InnerCircle Members Section ---
+            // Section wrapping InnerCircleView for List compatibility
+            Section {
                 innerCircleMembersSection()
-                    .padding(.horizontal, InnerCircleConstants.systemMargin)
-
-                // --- 4. Other Streams Section ---
-                // Only show if there are non-InnerCircle streams
-                let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
-                if !regularStreams.isEmpty {
-                    Section {
-                        // Add onDelete modifier here
-                        ForEach(regularStreams) { stream in
-                            streamRow(stream: stream) // Keep existing streamRow for non-InnerCircle
-                        }
-                        .onDelete(perform: deleteStream) // Call deleteStream function
-                    } header: {
-                        Text("Streams") // Example header for separation
-                            .font(InnerCircleConstants.headerFont)
-                            .foregroundColor(InnerCircleConstants.primaryTextColor)
-                            .padding(.top, InnerCircleConstants.systemMargin)
-                            .padding(.horizontal, InnerCircleConstants.systemMargin)
-                    }
-                }
+                    // Remove horizontal padding, List handles inset
+                    // .padding(.horizontal, InnerCircleConstants.systemMargin)
             }
-            .padding(.vertical, InnerCircleConstants.systemMargin) // Use constant
+            .listRowInsets(EdgeInsets()) // Remove default List row padding/insets
+            .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
+
+            // --- 4. Other Streams Section ---
+            let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
+            if !regularStreams.isEmpty {
+                Section {
+                    // Add onDelete modifier here
+                    ForEach(regularStreams) { stream in
+                        streamRow(stream: stream) // Keep existing streamRow for non-InnerCircle
+                            .listRowInsets(EdgeInsets(top: 5, leading: InnerCircleConstants.systemMargin, bottom: 5, trailing: InnerCircleConstants.systemMargin)) // Add padding within row
+                            .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
+                    }
+                    .onDelete(perform: deleteStream) // Call deleteStream function
+                } header: {
+                    Text("Streams") // Example header for separation
+                        .font(InnerCircleConstants.headerFont)
+                        .foregroundColor(InnerCircleConstants.primaryTextColor)
+                        // List handles section header styling, remove extra padding
+                        // .padding(.top, InnerCircleConstants.systemMargin)
+                        // .padding(.horizontal, InnerCircleConstants.systemMargin)
+                }
+                .listRowSeparator(.hidden) // Hide separators if desired
+            }
         }
+        .listStyle(.plain) // Use plain style to remove default List background/styling
         .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
         .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
     }
