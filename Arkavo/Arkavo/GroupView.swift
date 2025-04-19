@@ -652,7 +652,7 @@ struct GroupView: View {
                         }
                         .onDelete(perform: deleteStream) // Call deleteStream function
                     } header: {
-                        Text("Other Streams") // Example header for separation
+                        Text("Streams") // Example header for separation
                             .font(InnerCircleConstants.headerFont)
                             .foregroundColor(InnerCircleConstants.primaryTextColor)
                             .padding(.top, InnerCircleConstants.systemMargin)
