@@ -18,15 +18,14 @@ final class Profile: Identifiable, Codable {
     @Attribute(.unique) var did: String?
     var handle: String?
 
-    /// Stores the serialized public components of a *peer's* KeyStore.
-    /// The local user's public keys are managed elsewhere (e.g., ArkavoClient/Keychain).
-    /// Marked for external storage to optimize database performance for potentially large binary data.
+    /// Stores the serialized public components of the *peer's* KeyStore, received during P2P key exchange.
+    /// Used for operations requiring the peer's public keys (e.g., signature verification).
+    /// Marked for external storage.
     @Attribute(.externalStorage) var keyStorePublic: Data?
 
-    /// Stores the serialized private components of the *local user's* KeyStore.
-    /// **DEPRECATED for storage:** This field should **not** be used to store the local user's private keys in SwiftData.
-    /// Private keys must be managed securely elsewhere (e.g., ArkavoClient/Keychain).
-    /// This field remains for schema compatibility but should ideally be removed in a future migration.
+    /// Stores the serialized private components of the *local user's* KeyStore, generated specifically
+    /// for the P2P relationship with *this peer*. Used for operations requiring the local user's
+    /// private keys in the context of this peer relationship (e.g., decryption, signing).
     /// Marked for external storage. This data is highly sensitive.
     @Attribute(.externalStorage) var keyStorePrivate: Data?
 
@@ -100,8 +99,7 @@ final class Profile: Identifiable, Codable {
         case did
         case handle
         // Do not include keyStorePublic or keyStorePrivate in peer exchange encoding.
-        // keyStorePublic contains peer public keys (managed via KeyStoreShare messages).
-        // keyStorePrivate is deprecated for storage and managed locally.
+        // These fields store relationship-specific keys managed via P2P KeyStoreShare messages.
     }
 
     // Encoder

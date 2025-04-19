@@ -88,13 +88,15 @@ class PersistenceController {
         return profiles.first
     }
 
-    /// Saves or updates a profile received from a peer. Optionally updates the peer's public KeyStore data.
-    /// This method specifically handles *peer* profiles and their associated *public* keys.
-    /// It does **not** save the local user's profile or keys via this path.
+    /// Saves or updates a peer's profile record in the local database.
+    /// Optionally updates the peer's public KeyStore data (`keyStorePublic`) and/or
+    /// the local user's private KeyStore data generated for this peer relationship (`keyStorePrivate`).
+    /// This method specifically handles *peer* profiles.
     /// - Parameters:
-    ///   - peerProfile: The profile object received from the peer.
-    ///   - keyStorePublicData: Optional public KeyStore data received from the peer to store in `peerProfile.keyStorePublic`.
-    func savePeerProfile(_ peerProfile: Profile, keyStorePublicData: Data? = nil) async throws {
+    ///   - peerProfile: The profile object representing the peer.
+    ///   - keyStorePublicData: Optional: The peer's public KeyStore data to save/update in `peerProfile.keyStorePublic`.
+    ///   - keyStorePrivateData: Optional: The local user's private KeyStore data for this relationship to save/update in `peerProfile.keyStorePrivate`.
+    func savePeerProfile(_ peerProfile: Profile, keyStorePublicData: Data? = nil, keyStorePrivateData: Data? = nil) async throws {
         let userAccount = try await getOrCreateAccount()
 
         // Prevent overwriting the user's own profile through this method
@@ -118,7 +120,12 @@ class PersistenceController {
             // Update public KeyStore data if provided
             if let publicData = keyStorePublicData {
                 existingProfile.keyStorePublic = publicData
-                print("PersistenceController: Updated public KeyStore data for peer profile \(existingProfile.publicID.base58EncodedString)")
+                print("PersistenceController: Updated peer's public KeyStore data for profile \(existingProfile.publicID.base58EncodedString)")
+            }
+            // Update local private KeyStore data for this relationship if provided
+            if let privateData = keyStorePrivateData {
+                existingProfile.keyStorePrivate = privateData
+                print("PersistenceController: Updated local private KeyStore data for relationship with peer \(existingProfile.publicID.base58EncodedString)")
             }
         } else {
             // Insert new peer profile
@@ -126,7 +133,12 @@ class PersistenceController {
             // Set public KeyStore data if provided
             if let publicData = keyStorePublicData {
                 peerProfile.keyStorePublic = publicData
-                print("PersistenceController: Added public KeyStore data for new peer profile \(peerProfile.publicID.base58EncodedString)")
+                print("PersistenceController: Added peer's public KeyStore data for new profile \(peerProfile.publicID.base58EncodedString)")
+            }
+            // Set local private KeyStore data for this relationship if provided
+            if let privateData = keyStorePrivateData {
+                peerProfile.keyStorePrivate = privateData
+                print("PersistenceController: Added local private KeyStore data for relationship with new peer \(peerProfile.publicID.base58EncodedString)")
             }
             mainContext.insert(peerProfile)
         }
@@ -169,12 +181,13 @@ class PersistenceController {
         }
     }
 
-    /// Deletes only the stored public KeyStore data (`keyStorePublic`) for a given peer profile,
-    /// keeping the profile itself. Also clears the deprecated `keyStorePrivate` field for hygiene.
-    /// This is useful for removing a peer's keys when trust is revoked, without deleting their profile info.
-    /// This does **not** affect the local user's actual keys managed elsewhere.
+    /// Deletes the stored P2P relationship KeyStore data (both the peer's public keys in `keyStorePublic`
+    /// and the local user's private keys for this relationship in `keyStorePrivate`) for a given peer profile,
+    /// keeping the profile record itself.
+    /// This is used when trust is revoked or the P2P relationship ends.
+    /// This does **not** affect the local user's permanent keys managed elsewhere (e.g., Keychain).
     func deleteKeyStoreDataFor(profile: Profile) async throws {
-        print("PersistenceController: Deleting stored public KeyStore data for peer profile: \(profile.publicID.base58EncodedString)")
+        print("PersistenceController: Deleting P2P relationship KeyStore data for peer profile: \(profile.publicID.base58EncodedString)")
 
         // Ensure we are using the profile instance from the context if possible
         guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
@@ -182,14 +195,13 @@ class PersistenceController {
             throw ArkavoError.profileError("Profile not found in the database")
         }
 
-        // Clear the stored public KeyStore data for the peer
+        // Clear both the peer's public keys and the local private keys for this relationship
         profileInContext.keyStorePublic = nil
-        // Also clear the deprecated private field if it somehow had data
         profileInContext.keyStorePrivate = nil
 
         // Save changes
         try await saveChanges()
-        print("PersistenceController: Stored public KeyStore data successfully removed for peer profile \(profileInContext.publicID.base58EncodedString)")
+        print("PersistenceController: P2P relationship KeyStore data successfully removed for peer profile \(profileInContext.publicID.base58EncodedString)")
     }
 
     /// Fetches all profiles stored, excluding the main user's profile associated with the Account.

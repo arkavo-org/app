@@ -28,7 +28,7 @@ One-Time TDF combines the trusted data format with a one‑time pad encryption s
 - **P2P Discovery and Messaging**: Uses the MultipeerConnectivity framework for secure, nearby device discovery and direct messaging.
 - **PublicKeyStore Integration**: Implements a secure key exchange mechanism where only public keys are shared, and each message is encrypted using a one‑time key from the recipient’s key pool.
 - **One-Time Key Usage**: Each message uses a unique key from the key store. After encryption, the key is immediately removed (or flagged as “used”) to enforce one‑time use.
-- **Key Management**: A key management system monitors the key pool and alerts users when the number of available keys is running low. Key renewal requires an in-person meeting between peers to securely generate new keys using P2P connectivity.
+- **Key Management**: A key management system monitors the key pool for each P2P relationship. When the number of available keys is running low for a specific peer, renewal is required. Key renewal involves an in-person meeting (or secure P2P confirmation) to generate new keys and exchange public components.
 - **TDF Packaging**: The encrypted payload is wrapped in a TDF container (leveraging OpenTDFKit) that binds attribute‑based policies to the data, ensuring end‑to‑end security and auditability.
 
 #### Security Benefits

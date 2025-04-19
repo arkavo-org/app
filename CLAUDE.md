@@ -154,8 +154,14 @@ If acknowledgements aren't received within the timeout, assume failure, potentia
 5.  **Technical Foundation:**
     *   **P2P Framework:** Build upon `MCSession` (or similar) for discovery, connection, and data transmission.
     *   **ViewModel Integration:** Use `P2PGroupViewModel` (or similar) to manage the state and logic of P2P trust establishment, confirmation, and subsequent secure operations like key renewal.
-    *   **Data Persistence:** Use `PersistenceController` for managing trusted peer profiles (`Profile`) and their associated public keys (`Profile.keyStorePublic` as `Data?`). **Important:** The local user's own private (`keyStorePrivate`) and public (`keyStorePublic`) keys are **not** stored in the `Profile` model within SwiftData. Local keys are managed securely elsewhere (e.g., by `ArkavoClient` potentially using the Keychain). Peer public keys (`Profile.keyStorePublic`) are added/updated by saving the received serialized `Data` to the corresponding peer's `Profile` record. When needed for encryption, this `Data` is used to initialize a `PublicKeyStore` instance (e.g., `let store = PublicKeyStore(curve: .secp256r1); try await store.deserialize(from: profile.keyStorePublic!)`).
-    *   **Offline Capability:** Leverage the inherent offline capabilities of P2P frameworks.
+    *   **Data Persistence:** Uses `PersistenceController` and SwiftData.
+        *   **Permanent Keys:** The local user's permanent identity keys are managed securely, likely in the iOS Keychain via `ArkavoClient`, and are **not** stored in the `Profile` model.
+        *   **P2P Relationship Keys:** For each trusted P2P peer relationship (e.g., within the InnerCircle), long-lived (but not permanent) keys are generated and stored within the *peer's* `Profile` record in the local SwiftData store:
+            *   `peerProfile.keyStorePrivate` (`Data?`): Stores the **local user's private keys** generated specifically for encrypting messages *to this peer*.
+            *   `peerProfile.keyStorePublic` (`Data?`): Stores the **peer's public keys** received during the key exchange, used for verifying signatures or potentially decrypting messages *from this peer* (depending on the exact crypto protocol).
+        *   **Key Exchange:** The P2P key exchange protocol (`P2PGroupViewModel`) handles generating local keys, saving the private part to the peer's `keyStorePrivate`, sharing the public part, receiving the peer's public keys, and saving them to the peer's `keyStorePublic`.
+        *   **Usage:** Cryptographic operations utilize the keys stored in the relevant peer's `Profile` record (`keyStorePrivate` for local private keys related to the peer, `keyStorePublic` for the peer's public keys).
+    *   **Offline Capability:** Leverages the inherent offline capabilities of P2P frameworks.
 
 **Potential Future Enhancements (Not detailed in current CLAUDE.md):**
 

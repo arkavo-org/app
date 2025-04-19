@@ -764,13 +764,13 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
                     print("❌ KeyStoreShare Error: Sender profile \(senderProfileIDString) not found locally. Cannot save public KeyStore.")
                     return
                 }
-                print("Found local profile for sender: \(senderProfile.name)")
+                print("Found local profile for sender (peer): \(senderProfile.name)")
 
-                // Save/Update the profile with the received public KeyStore data
+                // Save/Update the *peer's* profile with their received *public* KeyStore data
                 try await persistenceController.savePeerProfile(senderProfile, keyStorePublicData: receivedPublicData)
-                print("✅ Saved/Updated public KeyStore data for profile \(senderProfile.name) (\(senderProfileIDString)).")
+                print("✅ Saved/Updated peer's public KeyStore data to profile \(senderProfile.name)'s keyStorePublic field.")
 
-                // Notify relevant views (e.g., InnerCircleView might update UI based on this)
+                // Notify relevant views
                 NotificationCenter.default.post(
                     name: .keyStoreSharedAndSaved,
                     object: nil,
@@ -1141,9 +1141,19 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             let updatedSerializedData = await keyStore.serialize()
             print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
 
-            // NOTE: The local user's private keys (`updatedSerializedData`) are NOT saved
-            // to the Profile model in SwiftData. They should be managed securely elsewhere,
-            // likely by ArkavoClient or Keychain.
+            // --- Save Local Private Keys to Peer's Profile ---
+            // Fetch the peer's profile from the context to save the local private keys generated for this relationship.
+            guard let peerProfile = try await persistenceController.fetchProfile(withPublicID: peerProfileIDData) else {
+                let errorMsg = "Peer profile \(peerProfileIDData.base58EncodedString) not found locally. Cannot save local private KeyStore for this relationship."
+                print("❌ KeyExchange: \(errorMsg)")
+                updatePeerExchangeState(for: peer, newState: .failed(errorMsg))
+                throw P2PError.keyStoreSharingError(errorMsg)
+            }
+            print("   Found peer profile \(peerProfile.name) to store local private keys.")
+            // Save the generated *private* keys to the *peer's* profile record.
+            try await persistenceController.savePeerProfile(peerProfile, keyStorePrivateData: updatedSerializedData)
+            print("   ✅ Saved local private KeyStore data to peer profile \(peerProfile.name)'s keyStorePrivate field.")
+            // --- End Save ---
 
             // Extract and return the public data for sharing with the peer
             let publicKeyStore = await keyStore.exportPublicKeyStore()
