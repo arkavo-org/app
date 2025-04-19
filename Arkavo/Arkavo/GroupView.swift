@@ -614,9 +614,11 @@ struct GroupView: View {
                 let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
                 if !regularStreams.isEmpty {
                     Section {
+                        // Add onDelete modifier here
                         ForEach(regularStreams) { stream in
                             streamRow(stream: stream) // Keep existing streamRow for non-InnerCircle
                         }
+                        .onDelete(perform: deleteStream) // Call deleteStream function
                     } header: {
                         Text("Other Streams") // Example header for separation
                             .font(InnerCircleConstants.headerFont)
