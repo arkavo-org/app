@@ -1127,11 +1127,6 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
 
         let keyStore = KeyStore(curve: .secp256r1)
 
-        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-            updatePeerExchangeState(for: peer, newState: .failed("Local profile missing"))
-            throw P2PError.profileNotAvailable
-        }
-
         do {
             // Generate exactly 8192 keys into the new store
             print("   Generating 8192 key pairs...")
