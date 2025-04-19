@@ -95,11 +95,6 @@ struct GroupCreateView: View {
         } message: {
             Text(errorMessage)
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                isNameFieldFocused = true
-            }
-        }
     }
 
     // --- START: Moved Peer Discovery Functions & Views from GroupView ---
@@ -239,17 +234,6 @@ struct GroupCreateView: View {
                         peerRow(peer: peer, profile: peerManager.connectedPeerProfiles[peer], peerManager: peerManager)
                     }
                 }
-
-                // Add a browse button for finding more peers
-                Button(action: { presentBrowserController() }) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                        Text("Find More Peers")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, systemMargin / 2) // Use systemMargin multiple (8pt)
-                }
-
             } else if isPeerSearchActive {
                 // Show searching state only if no peers found yet
                 searchingStateView()
@@ -453,28 +437,6 @@ struct GroupCreateView: View {
                     .accessibilityLabel(Text("Renew keys with \(profile?.name ?? peer.displayName)"))
                     .disabled(keyStorePercentage >= 0.1) // Example disable logic
                 }
-
-                // Example: Verify Trust / View Details Button
-                Button {
-                    // TODO: Implement Verify Trust or View Details action
-                    if trustStatus == .pending || trustStatus == .unknown {
-                        print("Initiate Trust Verification with \(peer.displayName)")
-                        // TODO: Implement actual verification flow trigger
-                    } else if trustStatus == .trusted || trustStatus == .verified {
-                        print("View details for \(profile?.name ?? peer.displayName)")
-                        // TODO: Implement navigation/modal presentation
-                    } else {
-                        // Handle other states (e.g., compromised)
-                    }
-                } label: {
-                    // Icon changes based on trust status
-                    let iconName = (trustStatus == .pending || trustStatus == .unknown) ? "lock.open.shield.fill" : "info.circle"
-                    Image(systemName: iconName)
-                        .font(.system(size: 18, weight: .semibold)) // Use guide size
-                        .foregroundColor(InnerCircleConstants.primaryActionColor) // Use constant
-                        .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget) // Ensure touch target
-                }
-                .accessibilityLabel(Text((trustStatus == .pending || trustStatus == .unknown) ? "Verify trust with \(profile?.name ?? peer.displayName)" : "View details for \(profile?.name ?? peer.displayName)"))
             }
         }
         .padding(.horizontal, InnerCircleConstants.halfMargin) // Spacing between cards
