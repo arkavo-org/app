@@ -1,22 +1,9 @@
 import ArkavoSocial
-import Combine // Import Combine for Timer
 import FlatBuffers
-
-// import MultipeerConnectivity // No longer needed here
 import OpenTDFKit
 import SwiftUI
 
-// import UIKit // No longer needed here
-
 // MARK: - Models
-
-// Placeholder for the detailed info expected from PeerDiscoveryManager
-// Moved definition to GroupViewModel.swift for better organization
-// struct LocalKeyStoreInfo {
-//     let validKeyCount: Int
-//     let expiredKeyCount: Int
-//     let capacity: Int // Keep capacity if available, otherwise use constant
-// }
 
 @MainActor
 final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClientDelegate conformance
@@ -465,16 +452,16 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             print("❌ Error processing rewrapped key: \(error)")
         }
     }
- 
+
     /// Deletes streams at the specified offsets from the filtered list of regular streams.
     func deleteStream(at offsets: IndexSet) async {
         // 1. Get the list of regular streams currently displayed
         // Ensure we filter based on the *current* state of viewModel.streams
         let regularStreams = await MainActor.run { streams.filter { !$0.isInnerCircleStream } }
- 
+
         // 2. Identify the actual Stream objects to delete based on the offsets
         let streamsToDelete = offsets.map { regularStreams[$0] }
- 
+
         // 3. Fetch and delete each identified stream directly from the context using its publicID
         var deletedCount = 0
         // Get the publicIDs to delete
@@ -533,13 +520,13 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             await loadStreams()
         }
     }
- 
+
     /// Reloads the streams list, typically called after a creation or deletion action.
     func reloadStreamsAfterCreation() async {
         print("GroupViewModel: Reloading streams after potential creation/modification...")
         await loadStreams()
     }
- 
+
     // NEW: Handle the notification that a shared profile was saved
     private func handleProfileSharedAndSaved(profilePublicID: Data) async {
         print("GroupViewModel: Handling .profileSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
@@ -611,7 +598,7 @@ struct GroupView: View {
     static let streamBaseURL = "https://app.arkavo.com/stream/"
     // Static constant for "just now" string - MOVED to GroupCreateView
     // static let justNowString = "just now"
- 
+
     var body: some View {
         // Use mainContent as the base view
         mainContent
@@ -627,7 +614,7 @@ struct GroupView: View {
                     .environmentObject(sharedState) // Ensure sheet has access to sharedState
             }
     }
- 
+
     // Breaking down the complex body into smaller views
     private var mainContent: some View {
         GeometryReader { geometry in
@@ -657,7 +644,7 @@ struct GroupView: View {
             print("GroupView: Detected change in peerKeyExchangeStates")
         }
     }
- 
+
     // Empty state view
     private var emptyStreamView: some View {
         VStack {
@@ -679,8 +666,8 @@ struct GroupView: View {
             // Section wrapping InnerCircleView for List compatibility
             Section {
                 innerCircleMembersSection()
-                    // Remove horizontal padding, List handles inset
-                    // .padding(.horizontal, InnerCircleConstants.systemMargin)
+                // Remove horizontal padding, List handles inset
+                // .padding(.horizontal, InnerCircleConstants.systemMargin)
             }
             .listRowInsets(EdgeInsets()) // Remove default List row padding/insets
             .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
@@ -700,9 +687,9 @@ struct GroupView: View {
                     Text("Streams") // Example header for separation
                         .font(InnerCircleConstants.headerFont)
                         .foregroundColor(InnerCircleConstants.primaryTextColor)
-                        // List handles section header styling, remove extra padding
-                        // .padding(.top, InnerCircleConstants.systemMargin)
-                        // .padding(.horizontal, InnerCircleConstants.systemMargin)
+                    // List handles section header styling, remove extra padding
+                    // .padding(.top, InnerCircleConstants.systemMargin)
+                    // .padding(.horizontal, InnerCircleConstants.systemMargin)
                 }
                 .listRowSeparator(.hidden) // Hide separators if desired
             }

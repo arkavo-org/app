@@ -33,6 +33,9 @@
         }
       }
     },
+    "%@ is in InnerCircle" : {
+
+    },
     "%@/month" : {
 
     },
@@ -130,13 +133,13 @@
     "Activity Level: %@" : {
 
     },
-    "Add %@ to group" : {
+    "Add %@ to InnerCircle" : {
 
     },
     "Add a description..." : {
 
     },
-    "Add to group" : {
+    "Add to InnerCircle" : {
 
     },
     "Admission" : {
@@ -165,6 +168,9 @@
 
     },
     "Age Verification" : {
+
+    },
+    "Already in InnerCircle" : {
 
     },
     "Are you sure you want to delete this post? This action cannot be undone." : {
@@ -410,9 +416,6 @@
     "Features" : {
 
     },
-    "Find More Peers" : {
-
-    },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
 
     },
@@ -617,9 +620,6 @@
     "Online" : {
 
     },
-    "Other Streams" : {
-
-    },
     "Owner:" : {
 
     },
@@ -723,12 +723,6 @@
       }
     },
     "Remove" : {
-
-    },
-    "Remove %@ from group" : {
-
-    },
-    "Remove from group" : {
 
     },
     "Remove Member" : {
@@ -918,7 +912,6 @@
       }
     },
     "Streams" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -1021,9 +1014,6 @@
     "Users found violating this EULA may face one or more of the following actions:" : {
 
     },
-    "Verify trust with %@" : {
-
-    },
     "Video" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1034,9 +1024,6 @@
           }
         }
       }
-    },
-    "View details for %@" : {
-
     },
     "View Secure Stream" : {
       "extractionState" : "stale",

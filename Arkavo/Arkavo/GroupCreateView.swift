@@ -47,7 +47,8 @@ struct GroupCreateView: View {
     @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager() // Add PeerManager
     @State private var isPeerSearchActive = false // Add state for search
     @State private var pulsate: Bool = false // Add state for pulsation animation
-    @State private var selectedInnerCircleProfiles: [Profile] = [] // Profiles selected for the new group
+    @State private var selectedInnerCircleProfiles: [Profile] = [] // DEPRECATED: No longer used for new group creation. Kept temporarily if needed elsewhere, but likely removable.
+    @State private var innerCircleMemberIDs: Set<Data> = [] // Store publicIDs of members in the main InnerCircle stream
 
     @State private var showError = false
     @State private var errorMessage = ""
@@ -90,15 +91,33 @@ struct GroupCreateView: View {
                 // Enable button if groupName is not empty OR at least one peer is selected
                 .disabled(
                     groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                    selectedInnerCircleProfiles.isEmpty
+                        selectedInnerCircleProfiles.isEmpty
                 )
             }
+        }
+        .task { // Use .task for async operations on appear
+            await loadInnerCircleMembers()
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
         }
+    }
+
+    // Load the publicIDs of members currently in the main InnerCircle stream
+    private func loadInnerCircleMembers() async {
+        guard let account = ViewModelFactory.shared.getCurrentAccount(),
+              let innerCircleStream = account.streams.first(where: { $0.isInnerCircleStream })
+        else {
+            print("GroupCreateView: Could not find InnerCircle stream to load members.")
+            return
+        }
+        // Ensure we fetch the stream from the context if needed, although accessing from account might be sufficient if relationships are loaded.
+        // Consider fetching fresh if staleness is a concern:
+        // guard let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: innerCircleStream.publicID) else { return }
+        innerCircleMemberIDs = Set(innerCircleStream.innerCircleProfiles.map(\.publicID))
+        print("GroupCreateView: Loaded \(innerCircleMemberIDs.count) members from InnerCircle stream.")
     }
 
     // --- START: Moved Peer Discovery Functions & Views from GroupView ---
@@ -415,19 +434,28 @@ struct GroupCreateView: View {
                             selectedInnerCircleProfiles.removeAll { $0.id == verifiedProfile.id }
                             print("Deselected \(verifiedProfile.name) for new group.")
                         }
-                        // NOTE: No changes are made to the actual InnerCircle stream model or persisted here.
-                        // This state is used only when the 'Create' button is tapped.
+                        // Action: Call addProfileToInnerCircle when tapped
+                        Task {
+                            await addProfileToInnerCircle(profile: verifiedProfile)
+                            // Refresh member list after adding
+                            await loadInnerCircleMembers()
+                        }
                     } label: {
+                        // Use the fetched innerCircleMemberIDs set to determine selection state
+                        let isSelected = innerCircleMemberIDs.contains(verifiedProfile.publicID)
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle.fill")
-                            .font(.system(size: 18, weight: .semibold)) // Keep icon size
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(isSelected ? .green : InnerCircleConstants.primaryActionColor)
                             .frame(minWidth: InnerCircleConstants.minimumTouchTarget, minHeight: InnerCircleConstants.minimumTouchTarget)
                     }
-                    .accessibilityLabel(Text(isSelected ? "Remove \(verifiedProfile.name) from group" : "Add \(verifiedProfile.name) to group"))
-                    .help(isSelected ? "Remove from group" : "Add to group")
+                    // Update accessibility based on the actual action
+                    .accessibilityLabel(Text(innerCircleMemberIDs.contains(verifiedProfile.publicID) ? "\(verifiedProfile.name) is in InnerCircle" : "Add \(verifiedProfile.name) to InnerCircle"))
+                    .help(innerCircleMemberIDs.contains(verifiedProfile.publicID) ? "Already in InnerCircle" : "Add to InnerCircle")
+                    // Disable button if already a member
+                    .disabled(innerCircleMemberIDs.contains(verifiedProfile.publicID))
                 }
 
-                // Example: Key Renewal Button (Placeholder Logic)
+                // Example: Key Renewal Button (Placeholder Logic) - Keep as is
                 if trustStatus == .trusted { // Only show for trusted peers
                     Button {
                         // TODO: Implement Key Renewal Initiation
@@ -506,19 +534,8 @@ struct GroupCreateView: View {
             )
             print("Creating new stream: \(newStream.profile.name) (\(newStream.publicID.base58EncodedString))")
 
-            // --- Add selected peers to the new stream's InnerCircle ---
-            // Fetch the profiles from the context to ensure they are managed instances
-            var managedSelectedProfiles: [Profile] = []
-            for selectedProfile in selectedInnerCircleProfiles {
-                if let managedProfile = try await PersistenceController.shared.fetchProfile(withPublicID: selectedProfile.publicID) {
-                    managedSelectedProfiles.append(managedProfile)
-                } else {
-                    print("⚠️ Warning: Could not fetch managed profile for \(selectedProfile.name) (\(selectedProfile.publicID.base58EncodedString)). Skipping addition to new stream.")
-                }
-            }
-            newStream.innerCircleProfiles = managedSelectedProfiles // Assign the managed profiles
-            print("   Added \(newStream.innerCircleProfiles.count) selected profiles to the new stream's InnerCircle.")
-            // --- END Add selected peers ---
+            // --- REMOVED: Adding selected peers to the new stream's InnerCircle ---
+            // The peer selection UI now adds peers to the main P2P InnerCircle stream.
 
             // Add the new stream to the account
             let account = ViewModelFactory.shared.getCurrentAccount()!
@@ -541,6 +558,55 @@ struct GroupCreateView: View {
                 errorMessage = "Failed to create group: \(error.localizedDescription)"
                 showError = true
             }
+        }
+    }
+
+    // Adds the given profile to the main "InnerCircle" stream
+    private func addProfileToInnerCircle(profile: Profile) async {
+        print("Attempting to add profile \(profile.name) (\(profile.publicID.base58EncodedString)) to InnerCircle stream.")
+        guard let account = ViewModelFactory.shared.getCurrentAccount(),
+              let innerCircleStream = account.streams.first(where: { $0.isInnerCircleStream })
+        else {
+            print("❌ Could not find the main InnerCircle stream.")
+            errorMessage = "Could not find your InnerCircle. Please ensure it exists."
+            showError = true
+            return
+        }
+
+        // Fetch the stream and profile from the context to ensure they are managed
+        guard let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: innerCircleStream.publicID),
+              let profileInContext = try? await PersistenceController.shared.fetchProfile(withPublicID: profile.publicID)
+        else {
+            print("❌ Could not fetch InnerCircle stream or profile from context.")
+            errorMessage = "Error accessing InnerCircle data."
+            showError = true
+            return
+        }
+
+        // Check if already a member
+        if streamInContext.isInInnerCircle(profileInContext) {
+            print("Profile \(profile.name) is already in the InnerCircle stream.")
+            // Optionally provide feedback:
+            // errorMessage = "\(profile.name) is already in your InnerCircle."
+            // showError = true
+            return
+        }
+
+        // Add the managed profile to the managed stream's members
+        streamInContext.addToInnerCircle(profileInContext)
+        print("Added \(profile.name) to InnerCircle stream members list.")
+
+        do {
+            try await PersistenceController.shared.saveChanges()
+            print("✅ Successfully saved changes after adding \(profile.name) to InnerCircle.")
+            // Update the local set for immediate UI feedback
+            innerCircleMemberIDs.insert(profile.publicID)
+        } catch {
+            print("❌ Failed to save changes after adding profile to InnerCircle: \(error)")
+            errorMessage = "Failed to add \(profile.name) to InnerCircle: \(error.localizedDescription)"
+            showError = true
+            // Optional: Revert the change in the model object if save fails?
+            // streamInContext.removeFromInnerCircle(profileInContext)
         }
     }
 }
