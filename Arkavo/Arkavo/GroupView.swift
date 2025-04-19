@@ -475,30 +475,36 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         // 2. Identify the actual Stream objects to delete based on the offsets
         let streamsToDelete = offsets.map { regularStreams[$0] }
  
-        // 3. Delete each identified stream directly from the context
+        // 3. Fetch and delete each identified stream directly from the context using its publicID
         var deletedCount = 0
-        for stream in streamsToDelete {
-            print("GroupViewModel: Attempting to delete stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString))")
-            // Check if the stream object is managed by the context before deleting
-            if stream.modelContext == PersistenceController.shared.mainContext {
-                PersistenceController.shared.mainContext.delete(stream)
-                print("   Marked stream for deletion in context.")
-                deletedCount += 1
-            } else {
-                // If not managed, try fetching and deleting as a fallback (indicates potential state issue)
-                print("   ⚠️ Stream object not directly managed by main context. Attempting fetch...")
-                if let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: stream.publicID) {
-                    PersistenceController.shared.mainContext.delete(streamInContext)
-                    print("   Fetched and marked stream for deletion in context.")
-                    deletedCount += 1
+        // Get the publicIDs to delete
+        let publicIDsToDelete = streamsToDelete.map(\.publicID)
+
+        for publicID in publicIDsToDelete {
+            let streamName = streamsToDelete.first { $0.publicID == publicID }?.profile.name ?? "Unknown" // Get name for logging
+            print("GroupViewModel: Attempting to fetch and delete stream '\(streamName)' (ID: \(publicID.base58EncodedString))")
+            do {
+                // Fetch the stream directly from the persistence controller
+                if let streamInContext = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
+                    // Ensure it's managed by the correct context before deleting
+                    if streamInContext.modelContext == PersistenceController.shared.mainContext {
+                        PersistenceController.shared.mainContext.delete(streamInContext)
+                        print("   Fetched and marked stream for deletion in context.")
+                        deletedCount += 1
+                    } else {
+                        // This case should ideally not happen if fetch works correctly
+                        print("   ❌ ERROR: Fetched stream is not managed by the main context. Deletion skipped.")
+                    }
                 } else {
                     // Log the error clearly if fetch fails
-                    print("   ❌ ERROR: Could not find stream \(stream.publicID.base58EncodedString) in context for deletion even after fetch.")
+                    print("   ❌ ERROR: Could not find stream \(publicID.base58EncodedString) in context for deletion.")
                 }
+            } catch {
+                print("   ❌ ERROR: Failed to fetch stream \(publicID.base58EncodedString) for deletion: \(error)")
             }
         }
- 
-        // 4. Save the changes only if deletions were marked
+
+        // 4. Save the changes only if deletions were successful
         if deletedCount > 0 {
             do {
                 try await PersistenceController.shared.saveChanges()
