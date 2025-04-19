@@ -87,8 +87,11 @@ struct GroupCreateView: View {
                         dismiss()
                     }
                 }
-                // Enable button only if groupName is not empty (after trimming whitespace)
-                .disabled(groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                // Enable button if groupName is not empty OR at least one peer is selected
+                .disabled(
+                    groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    selectedInnerCircleProfiles.isEmpty
+                )
             }
         }
         .alert("Error", isPresented: $showError) {
