@@ -670,12 +670,6 @@ struct InnerCircleMemberRow: View {
                     print("Peer for profile \(profile.name) was not connected, no disconnection needed.")
                 }
 
-                // 5. Update the UI to reflect the member is removed
-                // The list should refresh when InnerCircleView's loadInnerCircleProfiles is called
-
-                // 6. Show an optional toast/banner notifying that the member was removed
-                sharedState.setState("Successfully removed \(profile.name) from your InnerCircle", forKey: "statusMessage")
-
                 // 7. Trigger a refresh of the members list
                 NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
 
