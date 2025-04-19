@@ -519,11 +519,19 @@ struct InnerCircleMemberRow: View {
         // Reset counts initially
         await MainActor.run {
             publicKeyCount = nil
+            publicKeyCount = nil
             privateKeyCount = nil
         }
 
-        // Calculate Public Key Count
-        if let publicKeyData = profile.keyStorePublic, !publicKeyData.isEmpty {
+        // --- Re-fetch the profile to ensure we have the latest KeyStore data ---
+        guard let freshProfile = try? await PersistenceController.shared.fetchProfile(withPublicID: profile.publicID) else {
+            print("❌ Error calculating key counts: Could not re-fetch profile \(profile.name)")
+            return // Exit if profile cannot be fetched
+        }
+        // --- Use freshProfile data from now on ---
+
+        // Calculate Public Key Count using freshProfile
+        if let publicKeyData = freshProfile.keyStorePublic, !publicKeyData.isEmpty {
             do {
                 let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Assuming curve
                 try await publicKeyStore.deserialize(from: publicKeyData)
@@ -535,11 +543,12 @@ struct InnerCircleMemberRow: View {
                 // Keep publicKeyCount as nil on error
             }
         } else {
-            print("Profile \(profile.name) has no/empty public KeyStore data.")
+            // Use freshProfile for the check
+            print("Profile \(freshProfile.name) has no/empty public KeyStore data.")
         }
 
-        // Calculate Private Key Count (if data exists)
-        if let privateKeyData = profile.keyStorePrivate, !privateKeyData.isEmpty {
+        // Calculate Private Key Count (if data exists) using freshProfile
+        if let privateKeyData = freshProfile.keyStorePrivate, !privateKeyData.isEmpty {
             do {
                 let privateKeyStore = KeyStore(curve: .secp256r1) // Assuming curve
                 try await privateKeyStore.deserialize(from: privateKeyData)
@@ -548,13 +557,13 @@ struct InnerCircleMemberRow: View {
                 await MainActor.run { privateKeyCount = count } // Update state
             } catch {
                 // Log error, including profile name for context
-                print("❌ Error calculating private key count for profile \(profile.name): \(error)")
+                print("❌ Error calculating private key count for profile \(freshProfile.name): \(error)")
                 // Keep privateKeyCount as nil on error
             }
         } else {
             // This is expected for peers shown in this view.
             // Log less verbosely or remove if too noisy.
-            // print("Profile \(profile.name) has no private KeyStore data (expected for peer).")
+            // print("Profile \(freshProfile.name) has no private KeyStore data (expected for peer).")
         }
     }
 
