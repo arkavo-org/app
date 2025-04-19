@@ -707,6 +707,13 @@ struct GroupView: View {
         )
     }
 
+    // Function to handle stream deletion
+    private func deleteStream(at offsets: IndexSet) {
+        Task {
+            await viewModel.deleteStream(at: offsets)
+        }
+    }
+
     // Chat overlay view
     var chatOverlayView: some View {
         Group {
