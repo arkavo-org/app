@@ -534,6 +534,12 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         }
     }
  
+    /// Reloads the streams list, typically called after a creation or deletion action.
+    func reloadStreamsAfterCreation() async {
+        print("GroupViewModel: Reloading streams after potential creation/modification...")
+        await loadStreams()
+    }
+ 
     // NEW: Handle the notification that a shared profile was saved
     private func handleProfileSharedAndSaved(profilePublicID: Data) async {
         print("GroupViewModel: Handling .profileSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
@@ -605,15 +611,23 @@ struct GroupView: View {
     static let streamBaseURL = "https://app.arkavo.com/stream/"
     // Static constant for "just now" string - MOVED to GroupCreateView
     // static let justNowString = "just now"
-
+ 
     var body: some View {
-        if sharedState.showCreateView {
-            GroupCreateView(viewModel: viewModel)
-        } else {
-            mainContent
-        }
+        // Use mainContent as the base view
+        mainContent
+            // Present GroupCreateView as a sheet
+            .sheet(isPresented: $sharedState.showCreateView, onDismiss: {
+                // Reload streams when the sheet is dismissed
+                Task {
+                    await viewModel.reloadStreamsAfterCreation()
+                }
+            }) {
+                // Pass the necessary viewModel to the sheet content
+                GroupCreateView(viewModel: viewModel)
+                    .environmentObject(sharedState) // Ensure sheet has access to sharedState
+            }
     }
-
+ 
     // Breaking down the complex body into smaller views
     private var mainContent: some View {
         GeometryReader { geometry in
