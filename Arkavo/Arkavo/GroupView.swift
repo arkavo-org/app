@@ -506,14 +506,25 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 
         // 4. Save the changes only if deletions were successful
         if deletedCount > 0 {
+            // Keep track of IDs successfully marked for deletion
+            let successfullyDeletedIDs = Set(publicIDsToDelete.prefix(deletedCount)) // Assuming order is preserved or adjust logic if needed
+
             do {
                 try await PersistenceController.shared.saveChanges()
                 print("GroupViewModel: Successfully saved changes after deleting \(deletedCount) stream(s).")
-                // 5. Reload the streams list to reflect the changes in the UI
-                await loadStreams()
+
+                // 5. Update the @Published streams array directly to trigger UI refresh
+                await MainActor.run { // Ensure UI updates on main thread
+                    let initialCount = streams.count
+                    streams.removeAll { successfullyDeletedIDs.contains($0.publicID) }
+                    print("GroupViewModel: Updated @Published streams array. Removed \(initialCount - streams.count) stream(s).")
+                }
+                // No need to call loadStreams() anymore as we updated the array directly
+                // await loadStreams()
             } catch {
                 print("❌ GroupViewModel: Error saving changes after deleting streams: \(error)")
                 // Optionally show an error to the user
+                // Consider rolling back context changes if save fails? SwiftData might handle this.
                 // Consider rolling back context changes if save fails? SwiftData might handle this.
             }
         } else {
