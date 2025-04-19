@@ -475,26 +475,45 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         // 2. Identify the actual Stream objects to delete based on the offsets
         let streamsToDelete = offsets.map { regularStreams[$0] }
  
-        // 3. Delete each identified stream from the context
+        // 3. Delete each identified stream directly from the context
+        var deletedCount = 0
         for stream in streamsToDelete {
-            print("GroupViewModel: Deleting stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString))")
-            // Ensure we are deleting the object within the context
-            if let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: stream.publicID) {
-                PersistenceController.shared.mainContext.delete(streamInContext)
+            print("GroupViewModel: Attempting to delete stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString))")
+            // Check if the stream object is managed by the context before deleting
+            if stream.modelContext == PersistenceController.shared.mainContext {
+                PersistenceController.shared.mainContext.delete(stream)
+                print("   Marked stream for deletion in context.")
+                deletedCount += 1
             } else {
-                print("⚠️ Warning: Could not find stream \(stream.publicID.base58EncodedString) in context for deletion.")
+                // If not managed, try fetching and deleting as a fallback (indicates potential state issue)
+                print("   ⚠️ Stream object not directly managed by main context. Attempting fetch...")
+                if let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: stream.publicID) {
+                    PersistenceController.shared.mainContext.delete(streamInContext)
+                    print("   Fetched and marked stream for deletion in context.")
+                    deletedCount += 1
+                } else {
+                    // Log the error clearly if fetch fails
+                    print("   ❌ ERROR: Could not find stream \(stream.publicID.base58EncodedString) in context for deletion even after fetch.")
+                }
             }
         }
  
-        // 4. Save the changes
-        do {
-            try await PersistenceController.shared.saveChanges()
-            print("GroupViewModel: Successfully saved changes after deleting streams.")
-            // 5. Reload the streams list to reflect the changes in the UI
+        // 4. Save the changes only if deletions were marked
+        if deletedCount > 0 {
+            do {
+                try await PersistenceController.shared.saveChanges()
+                print("GroupViewModel: Successfully saved changes after deleting \(deletedCount) stream(s).")
+                // 5. Reload the streams list to reflect the changes in the UI
+                await loadStreams()
+            } catch {
+                print("❌ GroupViewModel: Error saving changes after deleting streams: \(error)")
+                // Optionally show an error to the user
+                // Consider rolling back context changes if save fails? SwiftData might handle this.
+            }
+        } else {
+            print("GroupViewModel: No streams were marked for deletion.")
+            // Still reload streams in case the state was inconsistent or fetch failed
             await loadStreams()
-        } catch {
-            print("❌ GroupViewModel: Error saving changes after deleting streams: \(error)")
-            // Optionally show an error to the user
         }
     }
  
