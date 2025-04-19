@@ -1142,7 +1142,7 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
 
             // Update profile and save
-            // FIXME: this should go on Stream.innerCircleProfiles[_].keyStorePrivate not getCurrentProfile()
+            // The local user's private keys are correctly saved to their own profile here.
             myProfile.keyStorePrivate = updatedSerializedData
             print("   Updating profile.keyStorePrivate...")
             try await persistenceController.saveChanges()
