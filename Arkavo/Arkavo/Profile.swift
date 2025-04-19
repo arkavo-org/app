@@ -18,13 +18,16 @@ final class Profile: Identifiable, Codable {
     @Attribute(.unique) var did: String?
     var handle: String?
 
-    /// Stores the serialized public components of the user's KeyStore.
+    /// Stores the serialized public components of a *peer's* KeyStore.
+    /// The local user's public keys are managed elsewhere (e.g., ArkavoClient/Keychain).
     /// Marked for external storage to optimize database performance for potentially large binary data.
     @Attribute(.externalStorage) var keyStorePublic: Data?
 
-    /// Stores the serialized private components of the user's KeyStore.
-    /// Marked for external storage to optimize database performance for potentially large binary data.
-    /// This data is highly sensitive and should be handled securely.
+    /// Stores the serialized private components of the *local user's* KeyStore.
+    /// **DEPRECATED for storage:** This field should **not** be used to store the local user's private keys in SwiftData.
+    /// Private keys must be managed securely elsewhere (e.g., ArkavoClient/Keychain).
+    /// This field remains for schema compatibility but should ideally be removed in a future migration.
+    /// Marked for external storage. This data is highly sensitive.
     @Attribute(.externalStorage) var keyStorePrivate: Data?
 
     // Default empty init required by SwiftData
@@ -96,8 +99,9 @@ final class Profile: Identifiable, Codable {
         case hasHighIdentityAssurance
         case did
         case handle
-        // Do not include these in peer exchange encoding:
-        // - keyStorePublic, keyStorePrivate (sensitive security data)
+        // Do not include keyStorePublic or keyStorePrivate in peer exchange encoding.
+        // keyStorePublic contains peer public keys (managed via KeyStoreShare messages).
+        // keyStorePrivate is deprecated for storage and managed locally.
     }
 
     // Encoder

@@ -88,11 +88,12 @@ class PersistenceController {
         return profiles.first
     }
 
-    /// Saves or updates a profile received from a peer, including their public KeyStore data.
-    /// Does not overwrite the main user's profile.
+    /// Saves or updates a profile received from a peer. Optionally updates the peer's public KeyStore data.
+    /// This method specifically handles *peer* profiles and their associated *public* keys.
+    /// It does **not** save the local user's profile or keys via this path.
     /// - Parameters:
     ///   - peerProfile: The profile object received from the peer.
-    ///   - keyStorePublicData: Optional public KeyStore data received from the peer.
+    ///   - keyStorePublicData: Optional public KeyStore data received from the peer to store in `peerProfile.keyStorePublic`.
     func savePeerProfile(_ peerProfile: Profile, keyStorePublicData: Data? = nil) async throws {
         let userAccount = try await getOrCreateAccount()
 
@@ -168,10 +169,12 @@ class PersistenceController {
         }
     }
 
-    /// Deletes only the KeyStore data (public and private) for a profile, keeping the profile itself.
-    /// This is useful for removing a peer from the InnerCircle without deleting their profile information.
+    /// Deletes only the stored public KeyStore data (`keyStorePublic`) for a given peer profile,
+    /// keeping the profile itself. Also clears the deprecated `keyStorePrivate` field for hygiene.
+    /// This is useful for removing a peer's keys when trust is revoked, without deleting their profile info.
+    /// This does **not** affect the local user's actual keys managed elsewhere.
     func deleteKeyStoreDataFor(profile: Profile) async throws {
-        print("PersistenceController: Deleting KeyStore data for profile: \(profile.publicID.base58EncodedString)")
+        print("PersistenceController: Deleting stored public KeyStore data for peer profile: \(profile.publicID.base58EncodedString)")
 
         // Ensure we are using the profile instance from the context if possible
         guard let profileInContext = try await fetchProfile(withPublicID: profile.publicID) else {
@@ -179,13 +182,14 @@ class PersistenceController {
             throw ArkavoError.profileError("Profile not found in the database")
         }
 
-        // Clear all KeyStore-related data
+        // Clear the stored public KeyStore data for the peer
         profileInContext.keyStorePublic = nil
+        // Also clear the deprecated private field if it somehow had data
         profileInContext.keyStorePrivate = nil
 
         // Save changes
         try await saveChanges()
-        print("PersistenceController: KeyStore data successfully removed for profile \(profileInContext.publicID.base58EncodedString)")
+        print("PersistenceController: Stored public KeyStore data successfully removed for peer profile \(profileInContext.publicID.base58EncodedString)")
     }
 
     /// Fetches all profiles stored, excluding the main user's profile associated with the Account.

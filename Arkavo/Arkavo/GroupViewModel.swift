@@ -1141,14 +1141,11 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
             let updatedSerializedData = await keyStore.serialize()
             print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
 
-            // Update profile and save
-            // The local user's private keys are correctly saved to their own profile here.
-            myProfile.keyStorePrivate = updatedSerializedData
-            print("   Updating profile.keyStorePrivate...")
-            try await persistenceController.saveChanges()
-            print("   Successfully saved updated profile.")
+            // NOTE: The local user's private keys (`updatedSerializedData`) are NOT saved
+            // to the Profile model in SwiftData. They should be managed securely elsewhere,
+            // likely by ArkavoClient or Keychain.
 
-            // Extract and return the public data
+            // Extract and return the public data for sharing with the peer
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
             // Use await on the property access
