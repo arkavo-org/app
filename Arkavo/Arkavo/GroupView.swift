@@ -465,7 +465,39 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             print("❌ Error processing rewrapped key: \(error)")
         }
     }
-
+ 
+    /// Deletes streams at the specified offsets from the filtered list of regular streams.
+    func deleteStream(at offsets: IndexSet) async {
+        // 1. Get the list of regular streams currently displayed
+        // Ensure we filter based on the *current* state of viewModel.streams
+        let regularStreams = await MainActor.run { streams.filter { !$0.isInnerCircleStream } }
+ 
+        // 2. Identify the actual Stream objects to delete based on the offsets
+        let streamsToDelete = offsets.map { regularStreams[$0] }
+ 
+        // 3. Delete each identified stream from the context
+        for stream in streamsToDelete {
+            print("GroupViewModel: Deleting stream '\(stream.profile.name)' (ID: \(stream.publicID.base58EncodedString))")
+            // Ensure we are deleting the object within the context
+            if let streamInContext = try? await PersistenceController.shared.fetchStream(withPublicID: stream.publicID) {
+                PersistenceController.shared.mainContext.delete(streamInContext)
+            } else {
+                print("⚠️ Warning: Could not find stream \(stream.publicID.base58EncodedString) in context for deletion.")
+            }
+        }
+ 
+        // 4. Save the changes
+        do {
+            try await PersistenceController.shared.saveChanges()
+            print("GroupViewModel: Successfully saved changes after deleting streams.")
+            // 5. Reload the streams list to reflect the changes in the UI
+            await loadStreams()
+        } catch {
+            print("❌ GroupViewModel: Error saving changes after deleting streams: \(error)")
+            // Optionally show an error to the user
+        }
+    }
+ 
     // NEW: Handle the notification that a shared profile was saved
     private func handleProfileSharedAndSaved(profilePublicID: Data) async {
         print("GroupViewModel: Handling .profileSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
