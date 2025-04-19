@@ -502,6 +502,16 @@ struct InnerCircleMemberRow: View {
                 await calculateKeyCounts()
             }
         }
+        // Add onChange to recalculate keys when the exchange state for this peer changes
+        .onChange(of: peerManager.peerKeyExchangeStates) { _, newStates in
+            guard isOnline, let peer = peerManager.findPeer(byProfileID: profile.publicID) else { return }
+            if let newStateInfo = newStates[peer] {
+                print("InnerCircleMemberRow (\(profile.name)): Detected state change to \(newStateInfo.state). Recalculating key counts.")
+                Task {
+                    await calculateKeyCounts()
+                }
+            }
+        }
     }
 
     // Helper function to calculate public and private key counts from profile data
@@ -754,7 +764,7 @@ struct InnerCircleMemberRow: View {
             Group {
                 if let count = privateKeyCount { // This will likely never be true for peers
                     HStack(spacing: 3) {
-                        Image(systemName: "lock.keyhole") // Icon for private keys
+                        Image(systemName: "lock.fill") // Icon for private keys (Changed from lock.keyhole)
                             .resizable().aspectRatio(contentMode: .fit).frame(width: 10, height: 10)
                         Text("\(count)")
                     }
