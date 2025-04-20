@@ -225,11 +225,24 @@ struct InnerCircleView: View {
     private var memberCountHeader: some View {
         HStack {
             // Use the computed properties for counts
-            Text("(\(onlineProfiles.count) online, \(offlineProfiles.count) offline)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            // Use the computed properties for counts
+            Text("Inner Circle") // Changed header text
+                .font(.headline) // Make it slightly larger
+                .foregroundColor(.primary)
 
             Spacer()
+
+            // Add Chat Button
+            Button {
+                // Action to open chat overlay for this InnerCircle stream
+                sharedState.selectedStreamPublicID = stream.publicID
+                sharedState.showChatOverlay = true
+            } label: {
+                Image(systemName: "message.fill")
+                    .font(.caption) // Match refresh icon size
+                    .foregroundColor(.blue) // Use action color
+            }
+            .padding(.trailing, 8) // Add some spacing before refresh
 
             Button(action: {
                 Task {
@@ -382,15 +395,24 @@ struct InnerCircleMemberRow: View {
 
     // Computed property to determine if the key exchange button should be disabled
     private var isKeyExchangeButtonDisabled: Bool {
-        guard isOnline, let state = keyExchangeState else {
-            return true // Disable if offline or no state found
-        }
-        // Disable unless idle or failed (allow retry from failed)
-        switch state {
-        case .idle, .failed:
-            return false
-        default:
+        // Reason 1: Peer must be online
+        guard isOnline else {
+            print("KeyExchangeButton Disabled: Peer \(profile.name) is offline.")
             return true
+        }
+        // Reason 2: Key exchange must be in idle or failed state
+        guard let state = keyExchangeState else {
+            print("KeyExchangeButton Disabled: No key exchange state found for peer \(profile.name).")
+            return true // Disable if no state found (shouldn't happen if online)
+        }
+        // Disable unless idle, failed, or completed
+        switch state {
+        case .idle, .failed, .completed: // Enable button also when completed
+            print("KeyExchangeButton Enabled: State is \(state) for peer \(profile.name).")
+            return false // Enable if idle, failed, or completed
+        default:
+            print("KeyExchangeButton Disabled: State is \(state) (in progress) for peer \(profile.name).")
+            return true // Disable if any other state (in progress)
         }
     }
 
@@ -791,6 +813,7 @@ struct InnerCircleMemberRow: View {
         let keyState: KeyExchangeState = keyExchangeState ?? .idle // Default to idle if nil
         let isFailed = if case KeyExchangeState.failed = keyState { true } else { false }
         let (text, _, color) = displayInfo(for: keyState) // Get text and color
+        // Use the computed property directly
         let isDisabled = isKeyExchangeButtonDisabled
 
         Button {
@@ -840,6 +863,7 @@ struct InnerCircleMemberRow: View {
             .background(Circle().fill((isDisabled && !isFailed) ? Color.clear : color.opacity(0.1)))
         }
         .buttonStyle(.plain)
+        // Apply the disabling condition here
         .disabled(isDisabled)
         // Add tooltip/help text
         .help(isDisabled ? text : (isFailed ? "Retry Key Exchange" : "Initiate Key Exchange"))

@@ -4,16 +4,6 @@
     "" : {
 
     },
-    "(%lld online, %lld offline)" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "(%1$lld online, %2$lld offline)"
-          }
-        }
-      }
-    },
     "(%lld)" : {
 
     },
@@ -438,6 +428,9 @@
 
     },
     "Inactive" : {
+
+    },
+    "Inner Circle" : {
 
     },
     "Inner Circle Members (%lld)" : {

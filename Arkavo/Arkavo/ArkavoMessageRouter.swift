@@ -31,7 +31,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("Invalid message: empty data")
             return
         }
-//        print("ArkavoMessageRouter.clientDidReceiveMessage")
+        print("ArkavoMessageRouter.clientDidReceiveMessage")
         Task {
             do {
                 try await processMessage(message)
@@ -54,6 +54,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         // if data is NanoTDF, decrypt it
         if data.count >= 3 {
             let magicNumberAndVersion = data.prefix(3)
+            print(magicNumberAndVersion.hexEncodedString())
             if magicNumberAndVersion == Data([0x4C, 0x31, 0x4C]) {
                 try await handleNATSMessage(data)
                 return
@@ -85,6 +86,52 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             object: nil,
             userInfo: ["error": error]
         )
+    }
+
+    /// Centralized function to handle the final decrypted plaintext.
+    private func processDecryptedMessage(plaintext: Data, header: Header) async {
+        print("Processing final decrypted message. Size: \(plaintext.count)")
+
+        // Check if creator is blocked
+        let arkavoPolicyMetadata = ArkavoPolicy(header.policy)
+        if let creatorPublicID = arkavoPolicyMetadata.metadata?.creator,
+           let messagePublicID = arkavoPolicyMetadata.metadata?.id
+        {
+            do {
+                let blocked = try await PersistenceController.shared.isBlockedProfile(Data(creatorPublicID))
+                if blocked {
+                    print("🚫 Blocked creator message dropped: Creator=\(Data(creatorPublicID).base58EncodedString), Message=\(Data(messagePublicID).base58EncodedString)")
+                    return // Do not post notification for blocked messages
+                }
+            } catch {
+                print("⚠️ Error checking if creator is blocked: \(error)")
+                // Decide whether to proceed or drop message on error
+            }
+        } else {
+            print("⚠️ Could not extract creator/message ID from policy metadata for block check.")
+        }
+
+        // Broadcast the decrypted message via NotificationCenter
+        NotificationCenter.default.post(
+            name: .messageDecrypted,
+            object: nil,
+            userInfo: [
+                "data": plaintext, // The final decrypted content
+                "header": header, // Pass the original header for context
+                "policy": ArkavoPolicy(header.policy), // Pass the parsed policy
+            ]
+        )
+        print("✅ Posted .messageDecrypted notification.")
+    }
+
+    // Define relevant error types if not already present
+    enum DecryptionError: Error {
+        case publicKeyNotFoundForDecryption
+        case privateKeyNotFound
+        case unsupportedCurve
+        case keyDerivationFailed
+        case decryptionFailed
+        // ... other crypto errors ...
     }
 
     // MARK: - Message Handling
@@ -161,8 +208,14 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         // Add your logic here to handle the RouteEvent
     }
 
+    /// Determines if the resource locator signals direct decryption.
+    private func isDirectDecryptionLocator(_ locator: ResourceLocator) -> Bool {
+        // TODO: fix
+        locator.body.starts(with: "arkavo-profile://")
+    }
+
     private func handleRewrapMessage(_ data: Data) async throws {
-//        print("Handling Rewrap message of size: \(data.count)")
+        print("Handling Rewrap message of size: \(data.count)")
 
         // Create a deep copy of the data
         let copiedData = Data(data)
@@ -192,7 +245,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     }
 
     private func handleNATSMessage(_ data: Data) async throws {
-//        print("Handling NATS message of size: \(data.count)")
+        print("Handling NATS message of size: \(data.count)")
 
         // Create a deep copy of the data
         let copiedData = Data(data)
@@ -202,22 +255,52 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
         let epk = header.ephemeralPublicKey
-//        print("Message components:")
-//        print("- Header size: \(header.toData().count)")
-//        print("- Payload size: \(payload.toData().count)")
-//        print("- Nano size: \(nano.toData().count)")
+        print("Message components:")
+        print("- Header size: \(header.toData().count)")
+        print("- Payload size: \(payload.toData().count)")
+        print("- Nano size: \(nano.toData().count)")
+
+        // TODO: if local KAS in locator then load keystore for this profile vie metadata, sender ID
+        // then use the private key from to get the rewrap key
 
         // Store message data with detailed logging
         pendingMessages[epk] = (header, payload, nano)
-//        print("Stored pending message with EPK: \(epk.hexEncodedString())")
+        print("Stored pending message with EPK: \(epk.hexEncodedString())")
 
         // Send rewrap message
         let rewrapMessage = RewrapMessage(header: header)
         try await client.sendMessage(rewrapMessage.toData())
     }
 
+    /// Performs decryption locally using the KeyStore.
+    private func performDirectDecryption(nanoTDF _: NanoTDF) async throws {
+        print("ℹ️ Placeholder Performing direct decryption...")
+    }
+
+    // Placeholder function to get the relevant public key for lookup based on locator
+    private func getMyPublicKeyDataForDecryption(locator: ResourceLocator) async -> Data? {
+        // Implement logic:
+        // 1. Parse locator.body (e.g., "arkavo-profile://<profile-id>")
+        // 2. Fetch the corresponding Profile using PersistenceController
+        // 3. Return the profile's public key data used for receiving messages (if stored)
+        // OR: If using a default key, return that.
+        // For now, return a placeholder or the default key from KeyStore
+        print("   DEBUG: Determining recipient public key for locator: \(locator.body)")
+        // Example: If locator body contains the base58 ID of the recipient profile
+        if locator.body.starts(with: "arkavo-profile://") {
+            let profileIDString = String(locator.body.dropFirst("arkavo-profile://".count))
+            if let profileIDData = Data(base58Encoded: profileIDString) {
+                // In a real scenario, you might fetch the profile and check its keys.
+                // For now, let's assume this ID corresponds to the default key.
+                print("   DEBUG: Locator indicates profile \(profileIDString). Assuming default key.")
+                return profileIDData
+            }
+        }
+        return nil
+    }
+
     private func handleRewrappedKey(_ data: Data) async throws {
-//        print("\nDecrypting rewrapped key:")
+        print("\nDecrypting rewrapped key:")
 
         let identifier = data.prefix(33)
 //        print("- EPK: \(identifier.hexEncodedString())")
@@ -241,7 +324,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 //        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
 //        print("- Auth tag: \(authTag.hexEncodedString())")
 
-        // Decrypt the key
+        // Decrypt the key using ArkavoClient's helper
         let symmetricKey = try client.decryptRewrappedKey(
             nonce: nonce,
             rewrappedKey: rewrappedKey,

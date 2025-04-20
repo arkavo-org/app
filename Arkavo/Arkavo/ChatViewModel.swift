@@ -6,7 +6,7 @@ import SwiftData
 import SwiftUI
 
 @MainActor
-class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to ArkavoClientDelegate
+class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conformance
     let client: ArkavoClient
     let account: Account
     let profile: Profile
@@ -25,8 +25,7 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         self.profile = profile
         self.streamPublicID = streamPublicID
 
-        // Set ArkavoClient delegate
-        self.client.delegate = self
+        // REMOVED: self.client.delegate = self
 
         setupNotifications()
 
@@ -39,6 +38,11 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
     deinit {
         notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
         // Consider setting client.delegate = nil if appropriate lifecycle management is needed
+    }
+
+    // Access the shared message router
+    private var messageRouter: ArkavoMessageRouter {
+        ViewModelFactory.shared.serviceLocator.resolve()
     }
 
     // MARK: - Message Loading and Handling
@@ -61,7 +65,9 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
                 // Try the original approach which may trigger ArkavoMessageRouter's processing path
                 // This will either work if ArkavoMessageRouter handles it, or do nothing if it doesn't
                 print("ChatViewModel: Attempting to process stored NanoTDF for thought \(thought.publicID.base58EncodedString)")
-                try? await client.sendMessage(thought.nano)
+
+                // Directly call the message router's processing method for local NanoTDF data
+                try? await messageRouter.processMessage(thought.nano, messageId: thought.id)
 
                 // NOTE TO DEVELOPER: This approach needs verification.
                 // If existing messages don't appear, ArkavoClient may need an additional
@@ -96,20 +102,28 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
                   let policy = notification.userInfo?["policy"] as? ArkavoPolicy else { return }
 
             // Check if the decrypted message belongs to this stream context
-            if let thoughtModel = try? ThoughtServiceModel.deserialize(from: data),
-               thoughtModel.streamPublicID == self.streamPublicID
+            print("ChatViewModel: Received .messageDecrypted notification.") // Log receipt
+            let incomingThoughtModel = try? ThoughtServiceModel.deserialize(from: data) // Deserialize once
+
+            if let thoughtModel = incomingThoughtModel, // Check if deserialization succeeded
+               thoughtModel.streamPublicID == self.streamPublicID // Check if stream IDs match
             {
+                print("   Stream ID MATCH: \(thoughtModel.streamPublicID.base58EncodedString). Handling message.") // Log match
                 print("ChatViewModel: Received decrypted message notification for this stream.")
                 Task { @MainActor [weak self] in
                     await self?.handleDecryptedThought(payload: data, policy: policy)
                 }
             } else {
                 // Message is for a different stream, ignore.
+                // Log the mismatch or failure for debugging
+                let incomingStreamID = incomingThoughtModel?.streamPublicID.base58EncodedString ?? "N/A"
+                let reason = incomingThoughtModel == nil ? "Deserialization Failed" : "Stream ID Mismatch"
+                print("   Ignoring message. Reason: \(reason).")
+                print("     ViewModel Stream ID: \(streamPublicID.base58EncodedString)")
+                print("     Incoming Stream ID: \(incomingStreamID)")
             }
         }
         notificationObservers.append(messageObserver)
-
-        // Removed P2P message observer (.p2pMessageReceived)
     }
 
     @MainActor
@@ -201,7 +215,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
         case missingPublicID
         case clientError(Error) // General ArkavoClient error
         case invalidPolicy(String)
-        case invalidState(String) // For ArkavoClient state issues
+        case invalidState(String)
+        case streamError(String)
     }
 
     // MARK: - Message Sending (Unified Approach)
@@ -209,33 +224,74 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
     func sendMessage(content: String) async throws {
         print("ChatViewModel: sendMessage called.")
         guard !content.isEmpty else { return }
+        let messageData = content.data(using: .utf8) ?? Data()
+        let creationDate = Date() // Capture creation time
+        var kasMetadata: KasMetadata? = nil
+
+        // Fetch the stream to check its type
+        guard let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID) else {
+            print("❌ ChatViewModel: Could not fetch stream \(streamPublicID.base58EncodedString) to send message.")
+            throw ChatError.streamError("Stream not found")
+        }
+
+        // --- Determine Send Method and Policy ---
+        if stream.isInnerCircleStream {
+            print("ChatViewModel: Sending message in InnerCircle stream...")
+            for profile in stream.innerCircleProfiles {
+                if let keyStorePublic = profile.keyStorePublic {
+                    let keystore = PublicKeyStore(curve: .secp256r1)
+                    try await keystore.deserialize(from: keyStorePublic)
+                    if let rl = ResourceLocator(
+                        protocolEnum: .sharedResourceDirectory,
+                        body: profile.publicID.base58EncodedString
+                    ) {
+                        kasMetadata = try await keystore.createKasMetadata(resourceLocator: rl)
+                        profile.keyStorePublic = await keystore.serialize()
+                        try PersistenceController.shared.saveStream(stream)
+                        break
+                    }
+                }
+            }
+            // Check P2P connection status
+            if !peerManager.connectedPeers.isEmpty {
+                print("   P2P Peers connected. Sending via PeerManager.")
+                // P2P Send Logic (using PeerManager)
+                do {
+                    // PeerManager handles encryption and policy internally for P2P
+                    try await peerManager.sendSecureTextMessage(content, in: stream)
+                    print("   InnerCircle P2P message sent successfully via PeerManager.")
+                    // Add local message immediately after successful P2P send
+                    // Note: P2P send doesn't return nanoData, so we need a way to get/generate the thought ID
+                    // Let's generate a temporary ID or use a placeholder for now.
+                    // A better approach might be for sendSecureTextMessage to return the Thought ID.
+                    let tempThoughtID = UUID().uuidString.data(using: .utf8)! // Placeholder ID
+                    addLocalChatMessage(content: content, thoughtPublicID: tempThoughtID, timestamp: creationDate)
+                    return // Exit after successful P2P send
+                } catch {
+                    print("❌ ChatViewModel: Failed to send InnerCircle message via P2P: \(error). Falling back to ArkavoClient.")
+                    // Fall through to ArkavoClient send if P2P fails
+                }
+            } else {
+                print("   No P2P Peers connected. Sending via ArkavoClient.")
+                // Fall through to ArkavoClient send
+            }
+        }
+
+        // --- ArkavoClient Send Logic (Used for non-InnerCircle or P2P fallback) ---
+        print("ChatViewModel: Sending message via ArkavoClient...")
         guard client.currentState == .connected else {
             throw ChatError.invalidState("ArkavoClient not connected")
         }
 
-        // Determine policy based on chat type (direct, stream, regular)
+        // Determine policy based on chat type (direct, stream)
         let policyData: Data
         if let directProfile = directMessageProfile {
-            print("ChatViewModel: Sending as direct message to \(directProfile.name)")
+            print("   Sending as direct message to \(directProfile.name)")
             policyData = try createPolicyDataForDirectMessage(recipientProfileID: directProfile.publicID)
-        } else if let stream = try? await PersistenceController.shared.fetchStream(withPublicID: streamPublicID),
-                  stream.isInnerCircleStream
-        {
-            print("ChatViewModel: Sending as P2P message in stream \(stream.publicID.base58EncodedString)")
-            policyData = try createPolicyDataForStream() // Assumes stream policy
         } else {
-            print("ChatViewModel: Sending as regular message via client.")
-            policyData = try createPolicyDataForStream() // Use stream policy for regular messages too? Or a different one?
+            print("   Sending as regular stream message (or InnerCircle fallback).")
+            policyData = try createPolicyDataForStream() // Use stream policy
         }
-
-        // Common sending logic
-        await sendEncryptedMessage(content: content, policyData: policyData)
-    }
-
-    /// Encrypts and sends the message using ArkavoClient, saves locally.
-    private func sendEncryptedMessage(content: String, policyData: Data) async {
-        let messageData = content.data(using: .utf8) ?? Data()
-        let creationDate = Date() // Capture creation time
 
         do {
             // Create thought service model
@@ -257,7 +313,8 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
             // This method handles encryption and sending via WebSocket (NATS msg type 0x05)
             let nanoData = try await client.encryptAndSendPayload(
                 payload: payload,
-                policyData: policyData
+                policyData: policyData,
+                kasMetadata: kasMetadata,
             )
             print("ChatViewModel: Encrypted and sent payload via ArkavoClient.")
 
@@ -442,68 +499,9 @@ class ChatViewModel: ObservableObject, ArkavoClientDelegate { // Conform to Arka
     // If FlatBuffer policies are strictly required by ArkavoClient, that method needs to be reinstated and adapted.
     // However, `ArkavoClient.encryptAndSendPayload` seems designed for embedded plaintext policies.
 
-    // MARK: - ArkavoClientDelegate Methods
+    // MARK: - REMOVED ArkavoClientDelegate Methods
 
-    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
-        Task { @MainActor in
-            print("ChatViewModel: ArkavoClient state changed to \(state)")
-            // Update UI based on state (e.g., show connection status)
-            switch state {
-            case .connected:
-                // Enable input, show connected status
-                () // Use empty tuple or other placeholder if needed
-            case .disconnected:
-                // Disable input, show disconnected
-                print("ChatViewModel: Client disconnected")
-            case .connecting, .authenticating:
-                // Show connecting status
-                print("ChatViewModel: Client connecting or authenticating")
-            case let .error(error):
-                // Show error message
-                print("ChatViewModel: ArkavoClient error state: \(error)")
-            }
-        }
-    }
-
-    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        // This delegate method receives *raw* data from the WebSocket for message types
-        // not handled by specific continuations (like PublicKey, KASKey responses).
-        // This includes NATS messages (0x05, 0x06) which likely contain NanoTDF payloads.
-        print("ChatViewModel: clientDidReceiveMessage raw data length: \(message.count)")
-
-        // We assume ArkavoClient needs to be explicitly told to decrypt this data.
-        // How? If there's no public decrypt method, this data might be undecryptable here.
-        // Revisit Hypothesis: Does ArkavoClient *internally* decrypt NATS messages (0x05)
-        // containing NanoTDFs and *then* post `.messageDecrypted`?
-        // If yes, this delegate method might only receive *other* kinds of messages,
-        // or NATS messages that *failed* internal decryption.
-
-        // Let's assume the `.messageDecrypted` notification is the correct path for now.
-        // This method could log unexpected message types.
-        if let typeByte = message.first {
-            print("ChatViewModel: Received unhandled message type 0x\(String(format: "%02X", typeByte)) via delegate.")
-            // Potentially handle specific non-chat message types if needed in the future.
-            // If ArkavoClient *doesn't* internally decrypt and post notifications for NATS messages,
-            // this is where we would need to call the hypothetical `client.decryptAndNotify(nanoData: message)`
-            // Task {
-            //     try? await client.decryptAndNotify(nanoData: message)
-            // }
-        }
-    }
-
-    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
-        Task { @MainActor in
-            print("❌ ChatViewModel: ArkavoClient received error: \(error)")
-            // Display error to user
-        }
-    }
-
-    // --- Removed ArkavoClientDelegate methods related to KeyStore/Peer Profile Updates ---
-    // These seemed specific to the GroupViewModel/Multipeer context in the reference file.
-    // Add them back if ChatViewModel needs to react to these events.
-    // nonisolated func arkavoClientDidUpdateKeyStatus(...)
-    // nonisolated func arkavoClientDidUpdatePeerProfile(...)
-    // nonisolated func arkavoClientEncounteredError(...) // Covered by clientDidReceiveError?
+    // ChatViewModel now relies on NotificationCenter for updates from the primary delegate (ArkavoMessageRouter).
 }
 
 // Extension for Thought convenience initializer (Keep as is)

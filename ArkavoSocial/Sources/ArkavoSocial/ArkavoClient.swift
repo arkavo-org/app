@@ -241,10 +241,10 @@ public final class ArkavoClient: NSObject {
                 throw ArkavoError.messageError("Outbound message type 0x06 exceeds maximum allowed size")
             }
         }
-//        print("Sending WebSocket message:")
-//        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
-//        print("Message length: \(data.count)")
-//        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
+        print("Sending WebSocket message:")
+        print("Message type: 0x\(String(format: "%02X", data.first ?? 0))")
+        print("Message length: \(data.count)")
+        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
         try await webSocket.send(.data(data))
     }
 
@@ -640,10 +640,10 @@ public final class ArkavoClient: NSObject {
             return
         }
 
-//        print("Received data message:")
-//        print("Length: \(data.count) bytes")
-//        print("Message type: 0x\(String(format: "%02X", messageType))")
-//        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
+        print("Received data message:")
+        print("Length: \(data.count) bytes")
+        print("Message type: 0x\(String(format: "%02X", messageType))")
+        print("Raw data (hex): \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
 
         // Validate message size for type 0x06
         if messageType == 0x06 {
@@ -951,17 +951,18 @@ public final class ArkavoClient: NSObject {
         return nanoTDF.toData()
     }
 
+    /// Encrypts a payload with a policy and sends it via a NATS message.
     public func encryptAndSendPayload(
         payload: Data,
-        policyData: Data
+        policyData: Data,
+        kasMetadata: KasMetadata? = nil
     ) async throws -> Data {
-        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
-        let kasMetadata = try KasMetadata(
-            resourceLocator: kasRL,
+        let kasMetadataDefault = try KasMetadata(
+            resourceLocator: ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!,
             publicKey: kasPublicKey as Any,
             curve: .secp256r1
         )
-
+        let kasMetadata = kasMetadata ?? kasMetadataDefault
         var policy = Policy(
             type: .embeddedPlaintext,
             body: EmbeddedPolicyBody(body: policyData),

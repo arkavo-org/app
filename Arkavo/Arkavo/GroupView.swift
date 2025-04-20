@@ -589,6 +589,8 @@ struct GroupView: View {
     // @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager()
     @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager() // Keep for InnerCircleView
     @State private var isShareSheetPresented = false
+    // @State private var innerCircleMessageText: String = "" // REMOVED: State for InnerCircle chat input
+    // @FocusState private var isInnerCircleInputFocused: Bool // REMOVED: Focus state for the input field
     // @State private var isPeerSearchActive = false // MOVED to GroupCreateView
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     // Define systemMargin at the GroupView level
@@ -662,29 +664,36 @@ struct GroupView: View {
     // Stream list - Changed ScrollView/LazyVStack to List
     private func streamListView(geometry: GeometryProxy) -> some View {
         List {
-            // --- 2. InnerCircle Members Section ---
-            // Section wrapping InnerCircleView for List compatibility
-            Section {
-                innerCircleMembersSection()
-                // Remove horizontal padding, List handles inset
-                // .padding(.horizontal, InnerCircleConstants.systemMargin)
+            // --- 1. InnerCircle Stream Section ---
+            // Find the InnerCircle stream
+            if let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) {
+                Section {
+                    // Use the dedicated view for InnerCircle members
+                    InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
+                        .environmentObject(sharedState)
+                        .background(InnerCircleConstants.cardBackgroundColor) // Match background
+                        .cornerRadius(InnerCircleConstants.cornerRadius) // Apply corner radius
+                    // --- REMOVED: InnerCircle Chat Input ---
+                }
+                .listRowInsets(EdgeInsets(top: systemMargin / 2, leading: systemMargin, bottom: systemMargin / 2, trailing: systemMargin)) // Add padding around the InnerCircleView
+                .listRowBackground(InnerCircleConstants.backgroundColor) // Match list background
+                .listRowSeparator(.hidden) // Hide separator for this section
             }
-            .listRowInsets(EdgeInsets()) // Remove default List row padding/insets
-            .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
 
-            // --- 4. Other Streams Section ---
+            // --- 2. Other Streams Section ---
             let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
             if !regularStreams.isEmpty {
                 Section {
-                    // Add onDelete modifier here
+                    // Iterate ONLY over regular streams
                     ForEach(regularStreams) { stream in
-                        streamRow(stream: stream) // Keep existing streamRow for non-InnerCircle
+                        streamRow(stream: stream) // Use existing streamRow for non-InnerCircle
                             .listRowInsets(EdgeInsets(top: 5, leading: InnerCircleConstants.systemMargin, bottom: 5, trailing: InnerCircleConstants.systemMargin)) // Add padding within row
                             .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
                     }
-                    .onDelete(perform: deleteStream) // Call deleteStream function
+                    // Apply onDelete ONLY to regular streams
+                    .onDelete(perform: deleteStream)
                 } header: {
-                    Text("Streams") // Example header for separation
+                    Text("Streams") // Header for regular streams
                         .font(InnerCircleConstants.headerFont)
                         .foregroundColor(InnerCircleConstants.primaryTextColor)
                     // List handles section header styling, remove extra padding
@@ -719,26 +728,10 @@ struct GroupView: View {
         }
     }
 
-    // --- NEW: 2. InnerCircle Members Section ---
-    private func innerCircleMembersSection() -> some View {
-        // Find the InnerCircle stream
-        guard let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) else {
-            // Return an empty view or placeholder if the stream doesn't exist
-            return AnyView(EmptyView())
-        }
+    // --- REMOVED: innerCircleMembersSection() ---
+    // The logic is now directly embedded within streamListView for clarity.
 
-        // Use the InnerCircleView (now defined in InnerCircleViews.swift)
-        return AnyView(
-            VStack(alignment: .leading, spacing: InnerCircleConstants.halfMargin) {
-                Spacer()
-                // Embed the view from the other file
-                InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
-                    .environmentObject(sharedState)
-                    .background(InnerCircleConstants.cardBackgroundColor)
-                    .cornerRadius(InnerCircleConstants.cornerRadius)
-            }
-        )
-    }
+    // --- REMOVED: Send InnerCircle Message Action ---
 
     // Function to handle stream deletion
     private func deleteStream(at offsets: IndexSet) {

@@ -175,7 +175,7 @@ class PeerDiscoveryManager: ObservableObject {
         implementation.$peerKeyExchangeStates.assign(to: &$peerKeyExchangeStates)
         // Removed peerKeyCounts binding
 
-        arkavoClient.delegate = implementation
+        // REMOVED: arkavoClient.delegate = implementation (ArkavoMessageRouter is the delegate)
     }
 
     /// Sets up the Multipeer Connectivity session and advertiser/browser.
@@ -260,7 +260,7 @@ enum ConnectionStatus: Equatable {
 
 /// Handles the underlying MultipeerConnectivity logic, ArkavoClient integration, and P2P protocols.
 @MainActor
-class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
+class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDelegate
     // MultipeerConnectivity components
     private var mcSession: MCSession?
     private var mcPeerID: MCPeerID?
@@ -1166,106 +1166,10 @@ class P2PGroupViewModel: NSObject, ObservableObject, ArkavoClientDelegate {
         }
     }
 
-    // MARK: - ArkavoClientDelegate Methods
+    // MARK: - REMOVED ArkavoClientDelegate Methods
 
-    // Note: Some delegate methods might be primarily handled by other ViewModels (like ChatViewModel)
-    // Implementations here focus on P2P context.
-
-    nonisolated func arkavoClientDidUpdateKeyStatus(_: ArkavoClient, keyCount: Int, capacity: Int, isRegenerating: Bool) {
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Key Status Update (Valid: \(keyCount), Capacity: \(capacity), Regen: \(isRegenerating)).")
-            // Update local state based on delegate info
-            // Note: Expired count might not be available directly from this delegate method.
-            self.localKeyStoreInfo = LocalKeyStoreInfo(validKeyCount: keyCount, expiredKeyCount: -1 /* Indicate unknown */, capacity: capacity)
-            self.isRegeneratingKeys = isRegenerating
-        }
-    }
-
-    nonisolated func arkavoClientDidReceiveMessage(_: ArkavoClient, message: String, fromProfileID: Data, streamID: Data?) {
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Received Secure Message from \(fromProfileID.base58EncodedString)")
-            guard let currentStream = self.selectedStream, currentStream.publicID == streamID else {
-                print("Warning: Ignoring secure message for stream \(streamID?.base58EncodedString ?? "nil") (current: \(self.selectedStream?.publicID.base58EncodedString ?? "nil"))")
-                return
-            }
-
-            // Find sender name locally
-            var senderName = "Unknown Peer"
-            if let profile = try? await self.persistenceController.fetchProfile(withPublicID: fromProfileID) {
-                senderName = profile.name
-            }
-
-            // Store as Thought and notify UI
-            do {
-                let thought = try await self.storeP2PMessageAsThought(
-                    content: message,
-                    sender: senderName,
-                    senderProfileID: fromProfileID.base58EncodedString,
-                    timestamp: Date(),
-                    stream: currentStream,
-                    nanoData: nil // Store decrypted content
-                )
-                print("✅ Stored secure message from \(senderName) as Thought ID: \(thought.id)")
-
-                // Notify chat view
-                NotificationCenter.default.post(name: .chatMessagesUpdated, object: nil)
-                // Optionally notify about specific P2P message arrival
-                NotificationCenter.default.post(
-                    name: .p2pMessageReceived,
-                    object: nil,
-                    userInfo: ["thoughtID": thought.id]
-                )
-            } catch {
-                print("❌ Failed to store received secure message as Thought: \(error)")
-            }
-        }
-    }
-
-    nonisolated func arkavoClientDidUpdatePeerProfile(_: ArkavoClient, profile: Profile, publicKeyStoreData: Data?) {
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Updated Peer Profile: \(profile.name) (\(profile.publicID.base58EncodedString))")
-            do {
-                // Save updated profile and potentially KeyStore data
-                try await self.persistenceController.savePeerProfile(profile, keyStorePublicData: publicKeyStoreData)
-                print("Saved updated peer profile \(profile.name) from ArkavoClient.")
-                // Refresh local cache
-                await self.refreshConnectedPeerProfiles()
-            } catch {
-                print("❌ Failed to save updated peer profile from ArkavoClient: \(error)")
-            }
-        }
-    }
-
-    nonisolated func arkavoClientEncounteredError(_: ArkavoClient, error: Error) {
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Encountered Error: \(error.localizedDescription)")
-            self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
-        }
-    }
-
-    // --- Other ArkavoClientDelegate methods (implement if required) ---
-
-    nonisolated func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
-        Task { @MainActor in
-            print("Delegate: ArkavoClient State Changed: \(state)")
-            // Optionally update connectionStatus based on ArkavoClient state
-        }
-    }
-
-    nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        // Handles raw data from WebSocket/NATS, likely processed elsewhere (e.g., ChatViewModel)
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Received Raw Message Data (\(message.count) bytes) - Likely handled by specific feature ViewModel.")
-        }
-    }
-
-    nonisolated func clientDidReceiveError(_: ArkavoClient, error: Error) {
-        // Similar to arkavoClientEncounteredError
-        Task { @MainActor in
-            print("Delegate: ArkavoClient Received Error: \(error.localizedDescription)")
-            self.connectionStatus = .failed(P2PError.arkavoClientError(error.localizedDescription))
-        }
-    }
+    // P2PGroupViewModel now relies on NotificationCenter for updates from the primary delegate (ArkavoMessageRouter).
+    // The delegate methods previously here have been removed as they are no longer called.
 }
 
 // MARK: - MCSessionDelegate
