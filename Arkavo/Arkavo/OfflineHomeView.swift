@@ -47,8 +47,8 @@ struct OfflineHomeView: View {
             Spacer()
             
             Button {
-                // Post notification to retry connection
-                NotificationCenter.default.post(name: .retryConnection, object: nil)
+                // Set flag to retry connection
+                Data.didPostRetryConnection = true
             } label: {
                 Text("Try to Reconnect")
                     .fontWeight(.semibold)

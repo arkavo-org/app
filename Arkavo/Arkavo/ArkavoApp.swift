@@ -138,15 +138,17 @@ struct ArkavoApp: App {
                     break
                 }
                 
-                // Set up notification observer for retrying connection
-                NotificationCenter.default.removeObserver(self, name: .retryConnection, object: nil)
-                NotificationCenter.default.addObserver(forName: .retryConnection, object: nil, queue: .main) { [weak self] _ in
-                    guard let self = self else { return }
-                    Task {
-                        // Reset offline mode flag
-                        self.sharedState.isOfflineMode = false
-                        // Attempt to reconnect
-                        await self.checkAccountStatus()
+                // Set up timer for handling retry connections
+                tokenCheckTimer?.invalidate()
+                tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                    if Data.didPostRetryConnection {
+                        Data.didPostRetryConnection = false
+                        Task { @MainActor [self] in
+                            // Reset offline mode flag
+                            sharedState.isOfflineMode = false
+                            // Attempt to reconnect
+                            await checkAccountStatus()
+                        }
                     }
                 }
                 
@@ -155,7 +157,7 @@ struct ArkavoApp: App {
                     await saveChanges()
                 }
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .retryConnection, object: nil)
+                // No need to remove observer for retry connection
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
             // BEGIN screenshots
