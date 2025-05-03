@@ -48,27 +48,31 @@ struct ContentView: View {
                 // Main Content
                 switch sharedState.selectedTab {
                 case .home:
-                    VideoContentView()
+                    if sharedState.isOfflineMode {
+                        // Show offline home view when in offline mode
+                        OfflineHomeView()
+                    } else {
+                        VideoContentView()
+                    }
                 case .communities:
+                    // Inner Circle is always available, even in offline mode
                     GroupView()
                         .onDisappear {
                             sharedState.selectedStreamPublicID = nil
                         }
                 case .social:
-                    PostFeedView()
-//                case .creators:
-//                    if sharedState.showCreateView, sharedState.selectedCreator != nil {
-//                        if let creator = sharedState.selectedCreator {
-//                            CreatorSupportView(creator: creator) {
-//                                sharedState.showCreateView = false
-//                                sharedState.selectedCreator = nil
-//                            }
-//                        }
-//                    } else {
-//                        CreatorView()
-//                    }
-//                case .protect:
-//                    ProtectorView(service: protectorService)
+                    if sharedState.isOfflineMode {
+                        // Redirect to offline home if they somehow get to this tab in offline mode
+                        OfflineHomeView()
+                            .onAppear {
+                                // Switch to home tab
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    sharedState.selectedTab = .home
+                                }
+                            }
+                    } else {
+                        PostFeedView()
+                    }
                 case .profile:
                     // Set selected creator to self when showing profile
                     CreatorView()

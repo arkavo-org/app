@@ -154,6 +154,14 @@ struct ArkavoApp: App {
                 break
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .retryConnection)) { _ in
+            Task {
+                // Reset offline mode flag
+                sharedState.isOfflineMode = false
+                // Attempt to reconnect
+                await checkAccountStatus()
+            }
+        }
     }
 
     @MainActor
@@ -567,138 +575,88 @@ struct ArkavoApp: App {
 
             try await persistenceController.saveChanges()
 
-            // If we're already connected, nothing to do
-            if case .connected = client.currentState {
-                print("Client already connected, no action needed")
-                selectedView = .main
-                return
-            }
-
-            // If we're in the process of connecting, wait for that to complete
-            if case .connecting = client.currentState {
-                print("Connection already in progress, waiting...")
-                return
-            }
-
-            // Try to connect with existing token if available
+            // Try to connect, but proceed to main view even if connection fails
             if KeychainManager.getAuthenticationToken() != nil {
                 do {
                     print("Attempting connection with existing token")
                     try await client.connect(accountName: profile.name)
-                    selectedView = .main
                     print("checkAccountStatus: Connected with existing token")
-                    return
                 } catch {
-                    print("Connection with existing token failed: \(error.localizedDescription)")
-                    KeychainManager.deleteAuthenticationToken()
-                    // Fall through to fresh connection attempt
+                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                    // Allow the app to function without network features
+                    sharedState.isOfflineMode = true
+                }
+            } else {
+                do {
+                    print("Attempting fresh connection")
+                    try await client.connect(accountName: profile.name) 
+                    print("checkAccountStatus: Connected with fresh connection")
+                } catch let error as ArkavoError {
+                    if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
+                        // User exists locally but not on server, go to registration
+                        print("User exists locally but not on server - routing to registration")
+
+                        // Clear the invalid account data
+                        KeychainManager.deleteAuthenticationToken()
+
+                        // Reset account state so registration can create a new one
+                        account.profile = nil
+                        try? await persistenceController.saveChanges()
+
+                        // Route to registration
+                        selectedView = .registration
+                        ViewModelFactory.shared.clearAccount()
+                        return
+                    } else {
+                        print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                        // Allow the app to function without network features
+                        sharedState.isOfflineMode = true
+                    }
+                } catch {
+                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                    // Allow the app to function without network features
+                    sharedState.isOfflineMode = true
                 }
             }
 
-            // Only reach here if no token, token connection failed, or we're disconnected
-            print("Attempting fresh connection")
-            do {
-                try await client.connect(accountName: profile.name)
-                selectedView = .main
-                print("checkAccountStatus: Connected with fresh connection")
-            } catch let error as ArkavoError {
-                if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
-                    // User exists locally but not on server, go to registration
-                    print("User exists locally but not on server - routing to registration")
-
-                    // Clear the invalid account data
-                    KeychainManager.deleteAuthenticationToken()
-
-                    // Reset account state so registration can create a new one
-                    account.profile = nil
-                    try? await persistenceController.saveChanges()
-
-                    // Route to registration
-                    selectedView = .registration
-                    ViewModelFactory.shared.clearAccount()
-                    return
-                } else {
-                    throw error // Re-throw if it's not the specific error we're looking for
-                }
-            }
-
-        } catch let error as ArkavoError {
-            switch error {
-            case .authenticationFailed:
-                connectionError = ConnectionError(
-                    title: "Authentication Failed",
-                    message: "We couldn't verify your identity. This can happen if you've signed in on another device. Please sign in again to continue.",
-                    action: "Sign In",
-                    isBlocking: true
-                )
-                selectedView = .main
-
-            case .connectionFailed:
-                connectionError = ConnectionError(
-                    title: "Connection Failed",
-                    message: "We're having trouble reaching Arkavo servers. Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-                if selectedView != .main {
-                    selectedView = .main
-                }
-
-            case .invalidResponse:
-                connectionError = ConnectionError(
-                    title: "Update Required",
-                    message: "This version of Arkavo is no longer supported. Please update to the latest version from the App Store to continue.",
-                    action: "Update App",
-                    isBlocking: true
-                )
-                selectedView = .main
-
-            default:
-                connectionError = ConnectionError(
-                    title: "Connection Error",
-                    message: "Something went wrong while connecting to Arkavo. Please try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-                selectedView = .main
-            }
-        } catch let error as URLError {
-            switch error.code {
-            case .notConnectedToInternet:
-                connectionError = ConnectionError(
-                    title: "No Internet Connection",
-                    message: "Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-
-            case .timedOut:
-                connectionError = ConnectionError(
-                    title: "Connection Timeout",
-                    message: "The connection to Arkavo is taking longer than expected. This might be due to a slow internet connection.",
-                    action: "Try Again",
-                    isBlocking: false
-                )
-
-            default:
-                connectionError = ConnectionError(
-                    title: "Network Error",
-                    message: "There was a problem connecting to Arkavo. Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-            }
-            if selectedView != .main {
-                selectedView = .main
-            }
-        } catch {
-            connectionError = ConnectionError(
-                title: "Unexpected Error",
-                message: "Something unexpected happened. Please try again or contact support if the problem persists.",
-                action: "Retry",
-                isBlocking: false
-            )
+            // Proceed to main view regardless of connection status
             selectedView = .main
+            
+            // Show a non-blocking alert about offline mode if needed
+            if sharedState.isOfflineMode {
+                connectionError = ConnectionError(
+                    title: "Offline Mode",
+                    message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",
+                    action: "Try to Connect",
+                    isBlocking: false
+                )
+            }
+
+        } catch {
+            print("Error checking account status: \(error.localizedDescription)")
+            
+            // Even if there's an error, we'll still try to load the account
+            do {
+                let account = try? await persistenceController.getOrCreateAccount()
+                if let account = account, let profile = account.profile {
+                    // We have a profile, so we can proceed in offline mode
+                    ViewModelFactory.shared.setAccount(account)
+                    selectedView = .main
+                    sharedState.isOfflineMode = true
+                    
+                    connectionError = ConnectionError(
+                        title: "Offline Mode",
+                        message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",
+                        action: "Try to Connect",
+                        isBlocking: false
+                    )
+                } else {
+                    // No profile, route to registration
+                    selectedView = .registration
+                }
+            } catch {
+                selectedView = .registration
+            }
         }
     }
 
@@ -818,6 +776,7 @@ class SharedState: ObservableObject {
     @Published var showCreateView: Bool = false
     @Published var showChatOverlay: Bool = false
     @Published var isAwaiting: Bool = false
+    @Published var isOfflineMode: Bool = false
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]
