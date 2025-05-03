@@ -51,6 +51,7 @@ struct ContentView: View {
                     if sharedState.isOfflineMode {
                         // Show offline home view when in offline mode
                         OfflineHomeView()
+                            .environmentObject(sharedState)
                     } else {
                         VideoContentView()
                     }
@@ -64,6 +65,7 @@ struct ContentView: View {
                     if sharedState.isOfflineMode {
                         // Redirect to offline home if they somehow get to this tab in offline mode
                         OfflineHomeView()
+                            .environmentObject(sharedState)
                             .onAppear {
                                 // Switch to home tab
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
