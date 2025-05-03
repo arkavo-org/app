@@ -387,6 +387,8 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             let parser = BinaryParser(data: copiedData)
             let header = try parser.parseHeader()
             print("\n=== Processing NATS Message ===")
+            // Log the KAS locator body
+            print("KAS Locator: \(header.kasLocator.body)")
             print("Checking content rating...")
             print("Message content rating: \(header.policy)")
             let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
