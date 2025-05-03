@@ -630,15 +630,8 @@ struct ArkavoApp: App {
             // Proceed to main view regardless of connection status
             selectedView = .main
             
-            // Show a non-blocking alert about offline mode if needed
-            if sharedState.isOfflineMode {
-                connectionError = ConnectionError(
-                    title: "Offline Mode",
-                    message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",
-                    action: "Try to Connect",
-                    isBlocking: false
-                )
-            }
+            // No need to show offline mode alert - OfflineHomeView provides sufficient information
+            // User can tap "Try to Reconnect" button in OfflineHomeView if needed
 
         } catch {
             print("Error checking account status: \(error.localizedDescription)")

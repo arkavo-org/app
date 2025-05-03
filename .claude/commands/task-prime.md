@@ -5,3 +5,7 @@ READ CLAUDE.md, README.md, THEN run git ls-files and eza --git-ignore --tree to 
 ## Coding
 
 For coding always use the aider-mcp-server and aider_ai_code tool.
+
+## Testing
+
+For UI testing always use mcp-ios-simulator and ios-simulator tool

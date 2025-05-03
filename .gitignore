@@ -95,6 +95,7 @@ iOSInjectionProject/
 /Arkavo/.fleet/
 .idea/app.iml
 .idea/vcs.xml
+OpenTDFKit/
 Arkavo/OpenTDFKit/
 Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /default.store
@@ -110,3 +111,5 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /ArkavoCreator/ArkavoCreator.xcodeproj/xcshareddata/xcschemes/ArkavoCreator.xcscheme
 /.mcp.json
 .aider*
+
+**/.claude/settings.local.json

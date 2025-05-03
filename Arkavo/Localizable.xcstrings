@@ -600,6 +600,9 @@
     "Offline" : {
 
     },
+    "Offline Mode" : {
+
+    },
     "OK" : {
       "localizations" : {
         "es-US" : {
@@ -976,6 +979,9 @@
     "Trust status: %@" : {
 
     },
+    "Try to Reconnect" : {
+
+    },
     "Type a message..." : {
       "localizations" : {
         "es-US" : {
@@ -1061,6 +1067,9 @@
       }
     },
     "What We are Discussing" : {
+
+    },
+    "You're currently using Arkavo in offline mode." : {
 
     },
     "Your handle must be unique within arkavo.social" : {
