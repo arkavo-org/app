@@ -106,9 +106,7 @@ struct FeatureStatusRow: View {
 }
 
 // Define notification name for retry connection if not already defined
-extension Notification.Name {
-    static let retryConnection = Notification.Name("RetryConnection")
-}
+// Define the notification name in the AppDelegate/main file instead
 
 #Preview {
     OfflineHomeView()

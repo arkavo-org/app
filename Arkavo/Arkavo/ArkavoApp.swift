@@ -137,11 +137,25 @@ struct ArkavoApp: App {
                 case .authenticating, .connected, .connecting:
                     break
                 }
+                
+                // Set up notification observer for retrying connection
+                NotificationCenter.default.removeObserver(self, name: .retryConnection, object: nil)
+                NotificationCenter.default.addObserver(forName: .retryConnection, object: nil, queue: .main) { [weak self] _ in
+                    guard let self = self else { return }
+                    Task {
+                        // Reset offline mode flag
+                        self.sharedState.isOfflineMode = false
+                        // Attempt to reconnect
+                        await self.checkAccountStatus()
+                    }
+                }
+                
             case .background:
                 Task {
                     await saveChanges()
                 }
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .retryConnection, object: nil)
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
             // BEGIN screenshots
@@ -152,14 +166,6 @@ struct ArkavoApp: App {
                 break
             @unknown default:
                 break
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .retryConnection)) { _ in
-            Task {
-                // Reset offline mode flag
-                sharedState.isOfflineMode = false
-                // Attempt to reconnect
-                await checkAccountStatus()
             }
         }
     }
@@ -638,7 +644,7 @@ struct ArkavoApp: App {
             // Even if there's an error, we'll still try to load the account
             do {
                 let account = try? await persistenceController.getOrCreateAccount()
-                if let account = account, let profile = account.profile {
+                if let account = account, let _ = account.profile {
                     // We have a profile, so we can proceed in offline mode
                     ViewModelFactory.shared.setAccount(account)
                     selectedView = .main
@@ -654,8 +660,6 @@ struct ArkavoApp: App {
                     // No profile, route to registration
                     selectedView = .registration
                 }
-            } catch {
-                selectedView = .registration
             }
         }
     }
@@ -729,6 +733,7 @@ enum DeepLinkDestination: Hashable {
 extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
+    static let retryConnection = Notification.Name("RetryConnection")
 }
 
 @MainActor
