@@ -753,6 +753,7 @@ enum ArkavoError: Error {
     case profileNotFound(String)
     case streamError(String)
     case keyStoreError(String)
+    case decryptionError(String)
     var errorDescription: String? {
         switch self {
         case let .profileError(message):

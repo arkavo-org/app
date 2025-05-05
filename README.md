@@ -16,9 +16,10 @@ brew install flatbuffers
 
 One-Time TDF combines the trusted data format with a one‑time pad encryption scheme to achieve perfect forward secrecy for each message. Key features include:
 
-- **Perfect Forward Secrecy**: Every message is encrypted with a unique, randomly generated key that is discarded after a single use.
+- **Perfect Forward Secrecy**: Every message is encrypted with a unique, randomly generated symmetric key that is discarded after a single use.
 - **Peer-to-Peer Communication**: Devices discover and communicate directly (using frameworks like MultipeerConnectivity) without relying on a central server.
 - **Secure Key Exchange**: Peers securely exchange public keys via a PublicKeyStore, enabling encrypted key sharing while keeping private keys secret.
+- **Key Access Service (KAS) Flexibility**: The system uses a default public key for the KAS to wrap the per-message symmetric keys. However, in specific contexts like `InnerCircle` streams, the public key from a participant's `PublicKeyStore` is used as the KAS key, ensuring the message can only be unwrapped by the intended recipient(s).
 - **Inner Circle Group**: Automatically creates a private communication group (an “inner circle”) for trusted contacts.
 - **Key Rotation and Renewal**: Keys are automatically marked as used when utilized. When the key store nears depletion, peers must meet in-person and use P2P connectivity to generate a new key store, which is an intensive manual process.
 - **Scalable Implementation**: Supports a large key pool (e.g., capacity of 8192 keys) to cover extended messaging needs over time.
@@ -29,12 +30,12 @@ One-Time TDF combines the trusted data format with a one‑time pad encryption s
 - **PublicKeyStore Integration**: Implements a secure key exchange mechanism where only public keys are shared, and each message is encrypted using a one‑time key from the recipient’s key pool.
 - **One-Time Key Usage**: Each message uses a unique key from the key store. After encryption, the key is immediately removed (or flagged as “used”) to enforce one‑time use.
 - **Key Management**: A key management system monitors the key pool for each P2P relationship. When the number of available keys is running low for a specific peer, renewal is required. Key renewal involves an in-person meeting (or secure P2P confirmation) to generate new keys and exchange public components.
-- **TDF Packaging**: The encrypted payload is wrapped in a TDF container (leveraging OpenTDFKit) that binds attribute‑based policies to the data, ensuring end‑to‑end security and auditability.
+- **TDF Packaging**: The encrypted payload is wrapped in a TDF container (leveraging OpenTDFKit) that binds attribute‑based policies to the data, ensuring end‑to‑end security and auditability. The symmetric key used for encryption is wrapped using the appropriate KAS public key (either the default or a participant's key).
 
 #### Security Benefits
 
 - **Robust Confidentiality**: Even if keys are later compromised, previously used one‑time keys leave past messages secure.
-- **Decentralized and Serverless**: Eliminates the need for a central key server, reducing single points of failure and attack.
+- **Decentralized and Serverless**: Eliminates the need for a central key server for most operations, reducing single points of failure and attack.
 - **End-to-End Protection**: Encrypts messages directly between peers without intermediaries, ensuring data integrity and confidentiality.
 - **Interoperability with TDF Infrastructure**: Seamlessly integrates with existing Trusted Data Format encryption systems, enabling enhanced policy enforcement and auditability.
 
@@ -83,7 +84,7 @@ To manually test the trust revocation feature, follow these steps:
 
 ### WebSocket NanoTDF Decryption Process
 
-A WebSocket receives a binary message. The `ArkavoMessageRouter` consults the `ArkavoClient` for necessary context (like user session or routing details). The router then checks if the message is a NanoTDF by identifying its magic number (`0x4C314C`). If it is, the NanoTDF data is routed to the appropriate `ChatViewModel`. The `ChatViewModel` utilizes the `P2PClient` to decrypt the NanoTDF payload. The resulting decrypted data is then deserialized into a `ThoughtServiceModel`. If the message type is `.say` (indicating a chat message), the content is extracted and displayed in the `ChatView`.
+A WebSocket receives a binary message. The `ArkavoMessageRouter` consults the `ArkavoClient` for necessary context (like user session or routing details). The router then checks if the message is a NanoTDF by identifying its magic number (`0x4C314C`). If it is, the NanoTDF data is routed to the appropriate `ChatViewModel`. The `ChatViewModel` utilizes the `P2PClient` (or potentially the `KeyStoreManager` if using profile-specific keys) to decrypt the NanoTDF payload. This involves unwrapping the symmetric key using the correct KAS private key (either the default or the participant's) and then decrypting the payload with the unwrapped symmetric key. The resulting decrypted data is then deserialized into a `ThoughtServiceModel`. If the message type is `.say` (indicating a chat message), the content is extracted and displayed in the `ChatView`.
 
 ```mermaid
 sequenceDiagram
@@ -91,7 +92,7 @@ sequenceDiagram
     participant Router as ArkavoMessageRouter
     participant AC as ArkavoClient
     participant CVM as ChatViewModel
-    participant P2P as P2PClient
+    participant KSM as KeyStoreManager/P2PClient
     participant UI as ChatView
 
     WS->>+Router: Receives Binary Message (Data)
@@ -100,8 +101,11 @@ sequenceDiagram
     Router->>Router: Check magic number (0x4C314C)
     alt Is NanoTDF
         Router->>+CVM: Route NanoTDF Data (based on context)
-        CVM->>+P2P: decryptMessage(nanoTDFData)
-        P2P-->>-CVM: Return Decrypted Payload (Data)
+        CVM->>+KSM: decryptMessage(nanoTDFData, context)
+        KSM->>KSM: Identify correct KAS private key (default or profile-specific)
+        KSM->>KSM: Unwrap symmetric key
+        KSM->>KSM: Decrypt payload with symmetric key
+        KSM-->>-CVM: Return Decrypted Payload (Data)
         CVM->>CVM: Deserialize Payload to ThoughtServiceModel
         alt mediaType == .say
             CVM->>CVM: Extract message content
@@ -172,7 +176,7 @@ cd Arkavo/Arkavo
 mv metadata_generated.swift MetadataServiceModel.swift
 ```
 
-### Dependencies 
+### Dependencies
 
 - OpenTDFKit https://github.com/arkavo-org/OpenTDFKit.git
 - Flatbuffers
@@ -205,63 +209,63 @@ xcodebuild -scheme ArkavoCreator -sdk iphoneos -configuration Release build
 
 ```mermaid
 erDiagram
-    Account {
-        Int id PK "unique"
-        String _identityAssuranceLevel
-        String _ageVerificationStatus
-        Profile profile FK "(0..1)"
-        Stream streams FK "(0..*)"
-    }
+   Account {
+      Int id PK "unique"
+      String _identityAssuranceLevel
+      String _ageVerificationStatus
+      Profile profile FK "(0..1)"
+      Stream streams FK "(0..*)"
+   }
 
-    Profile {
-        UUID id PK
-        Data publicID UK "unique"
-        String name
-        String blurb "nullable"
-        String interests
-        String location
-        Boolean hasHighEncryption
-        Boolean hasHighIdentityAssurance
-        String did UK "nullable, unique"
-        String handle "nullable"
-        Data keyStorePublic "nullable, external storage"
-        Data keyStorePrivate "nullable, external storage"
-    }
+   Profile {
+      UUID id PK
+      Data publicID UK "unique"
+      String name
+      String blurb "nullable"
+      String interests
+      String location
+      Boolean hasHighEncryption
+      Boolean hasHighIdentityAssurance
+      String did UK "nullable, unique"
+      String handle "nullable"
+      Data keyStorePublic "nullable, external storage"
+      Data keyStorePrivate "nullable, external storage"
+   }
 
-    Stream {
-        UUID id PK "unique"
-        Data publicID UK "unique"
-        Data creatorPublicID "Ref -> Profile.publicID"
-        Policies policies "nullable, Codable struct"
-        Profile profile FK "Stream's identity (1)"
-        Profile innerCircleProfiles FK "(0..*)"
-        Thought source FK "Source thought (0..1)"
-        Thought thoughts FK "(0..*), cascade delete"
-    }
+   Stream {
+      UUID id PK "unique"
+      Data publicID UK "unique"
+      Data creatorPublicID "Ref -> Profile.publicID"
+      Policies policies "nullable, Codable struct"
+      Profile profile FK "Stream's identity (1)"
+      Profile innerCircleProfiles FK "(0..*)"
+      Thought source FK "Source thought (0..1)"
+      Thought thoughts FK "(0..*), cascade delete"
+   }
 
-    Thought {
-        UUID id PK "unique"
-        Data publicID UK "unique"
-        Metadata metadata "Codable struct"
-        Data nano "external storage"
-        Stream stream FK "(0..1)"
-    }
+   Thought {
+      UUID id PK "unique"
+      Data publicID UK "unique"
+      Metadata metadata "Codable struct"
+      Data nano "external storage"
+      Stream stream FK "(0..1)"
+   }
 
-    BlockedProfile {
-        UUID id PK
-        Data blockedPublicID "Ref -> Profile.publicID"
-        Date reportTimestamp
-        Map_String_Int_ reportReasons
-    }
+   BlockedProfile {
+      UUID id PK
+      Data blockedPublicID "Ref -> Profile.publicID"
+      Date reportTimestamp
+      Map_String_Int_ reportReasons
+   }
 
-    Account ||--o{ Profile : "has profile"
-    Account ||--|{ Stream : "has streams"
-    Stream ||--|| Profile : "identified by"
-    Stream }o--o{ Profile : "inner circle member"
-    Stream ||--o| Thought : "sourced by"
-    Stream ||--|{ Thought : "contains thoughts"
-    Thought }o--|| Stream : "belongs to stream"
+   Account ||--o{ Profile : "has profile"
+   Account ||--|{ Stream : "has streams"
+   Stream ||--|| Profile : "identified by"
+   Stream }o--o{ Profile : "inner circle member"
+   Stream ||--o| Thought : "sourced by"
+   Stream ||--|{ Thought : "contains thoughts"
+   Thought }o--|| Stream : "belongs to stream"
 
-    %% BlockedProfile conceptually references Profile via blockedPublicID
-    %% BlockedProfile .. Profile : "blocks"
+%% BlockedProfile conceptually references Profile via blockedPublicID
+%% BlockedProfile .. Profile : "blocks"
 ```

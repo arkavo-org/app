@@ -374,21 +374,15 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         try await client.sendNATSEvent(data)
     }
 
-    // --- REMOVED ArkavoClientDelegate Methods ---
-    // nonisolated func clientDidChangeState(_: ArkavoSocial.ArkavoClient, state: ArkavoSocial.ArkavoClientState) { ... }
-    // nonisolated func clientDidReceiveMessage(_: ArkavoClient, message: Data) { ... }
-    // nonisolated func clientDidReceiveError(_: ArkavoSocial.ArkavoClient, error: any Error) { ... }
-    // --- END REMOVED ArkavoClientDelegate Methods ---
-
     private func handleNATSMessage(_ data: Data) async {
         do {
             // Create a deep copy of the data
             let copiedData = Data(data)
             let parser = BinaryParser(data: copiedData)
             let header = try parser.parseHeader()
-            print("\n=== Processing NATS Message ===")
+            print("\n=== Group View Processing NATS Message ===")
             // Log the KAS locator body
-            print("KAS Locator: \(header.kasLocator.body)")
+            print("KAS Locator: \(header.kas.body)")
             print("Checking content rating...")
             print("Message content rating: \(header.policy)")
             let payload = try parser.parsePayload(config: header.payloadSignatureConfig)

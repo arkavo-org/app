@@ -543,52 +543,96 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         }
     }
 
-    /// Encrypts data using ArkavoClient
+    /// Encrypts data using ArkavoClient and sends it via MCSession for InnerCircle streams.
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
-        guard stream.isInnerCircleStream else { throw P2PError.invalidStream }
-        guard let mcSession, !mcSession.connectedPeers.isEmpty else { throw P2PError.noConnectedPeers }
-
-        let targetPeers = peers ?? mcSession.connectedPeers
-        guard !targetPeers.isEmpty else { throw P2PError.noConnectedPeers }
-
-        // Map MCPeerIDs to Profile IDs if sending to specific peers (ArkavoClient might need this)
-        var targetProfileIDs: [Data]? = nil
-        if let specificPeers = peers {
-            targetProfileIDs = specificPeers.compactMap { peerID in
-                if let profileIDString = peerIDToProfileID[peerID] {
-                    return Data(base58Encoded: profileIDString)
-                }
-                print("Warning: No profile ID found for target peer \(peerID.displayName)")
-                return nil
-            }
-            // Ensure we have valid profile IDs if specific peers were requested
-            guard let unwrappedTargetProfileIDs = targetProfileIDs, !unwrappedTargetProfileIDs.isEmpty else {
-                throw P2PError.profileNotAvailable // Or more specific error like "Cannot Map Peers to Profile IDs"
-            }
+        // Ensure this function is only used for InnerCircle streams where P2P makes sense
+        guard stream.isInnerCircleStream else {
+            print("❌ Error: sendSecureData called on a non-InnerCircle stream. This function requires P2P context.")
+            throw P2PError.invalidStream
         }
+        guard let mcSession else { throw P2PError.sessionNotInitialized }
 
-        print("Sending secure data (\(data.count) bytes) with policy to \(targetPeers.count) peers in stream \(stream.profile.name)")
+        // Determine target peers (default to all connected if nil)
+        let targetPeers = peers ?? mcSession.connectedPeers
+        guard !targetPeers.isEmpty else {
+            print("Warning: sendSecureData called with no target peers.")
+            return // Or throw P2PError.noConnectedPeers
+        }
 
         guard let policyData = policy.data(using: .utf8) else {
             throw P2PError.policyCreationFailed("Failed to encode policy JSON string")
         }
 
-        do {
-            // Ask ArkavoClient to encrypt the data.
-            // The exact method may vary depending on ArkavoClient's API.
-            // It might handle sending internally or return encrypted data.
-            // Assuming encryptAndSendPayload handles P2P sending via its delegate or internal logic.
-            let _ = try await arkavoClient.encryptAndSendPayload(payload: data, policyData: policyData)
+        print("Processing secure data send for \(targetPeers.count) peer(s) in InnerCircle stream '\(stream.profile.name)'...")
 
-            // If encryptAndSendPayload doesn't send automatically, uncomment the sendRawData call:
-            // try sendRawData(encryptedData, toPeers: targetPeers)
-            print("Secure data encryption/send initiated via ArkavoClient.")
+        // Process each target peer individually to use their specific KAS key
+        for peer in targetPeers {
+            var peerKasMetadata: KasMetadata? = nil
+            do {
+                print("      Deserializing PublicKeyStore for \(peer.displayName)...")
 
-        } catch {
-            print("❌ Error sending secure data via ArkavoClient: \(error)")
-            throw P2PError.arkavoClientError("Secure data send failed: \(error.localizedDescription)")
+                // 1. Get Peer Profile
+                guard let peerProfile = connectedPeerProfiles[peer] else {
+                    print("      ❌ Error: Profile not found locally for peer \(peer.displayName). Cannot get PublicKeyStore. Skipping peer.")
+                    continue // Skip this peer
+                }
+
+                // 2. Get Peer's Public KeyStore Data
+                guard let keyStorePublicData = peerProfile.keyStorePublic, !keyStorePublicData.isEmpty else {
+                    print("      ❌ Error: Peer \(peer.displayName) profile (\(peerProfile.name)) does not have public KeyStore data. Skipping peer.")
+                    // Optional: Initiate key exchange if missing?
+                    continue // Skip this peer
+                }
+                
+                // 1. Create an instance of PublicKeyStore for the peer's curve
+                //    TODO: Determine the correct curve dynamically if necessary. Using p256 for now.
+                let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Create an instance
+
+                // 2. Deserialize *into* the existing instance
+                try await publicKeyStore.deserialize(from: keyStorePublicData) // Call instance method
+
+                print("      PublicKeyStore deserialized successfully.")
+
+                // 4. Create KasMetadata using the peer's KeyStore instance
+                // Use the peer's profile ID as the resource locator body for KAS identification
+                let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: peerProfile.publicID.base58EncodedString)!
+                // Now call createKasMetadata on the deserialized instance
+                peerKasMetadata = try await publicKeyStore.createKasMetadata(resourceLocator: kasRL)
+                print("      Created peer-specific KasMetadata for \(peer.displayName).")
+
+            }
+
+            // Ensure we actually created KasMetadata
+            guard let finalKasMetadata = peerKasMetadata else {
+                 print("      ❌ Error: Failed to create KasMetadata for peer \(peer.displayName) (internal logic error). Skipping peer.")
+                 continue // Skip this peer
+             }
+
+            // 5. Encrypt using ArkavoClient, providing the specific peer's KasMetadata
+            print("      Encrypting payload using ArkavoClient with peer's KasMetadata...")
+            do {
+                let nanoTDFData = try await arkavoClient.encryptAndSendPayload(
+                    payload: data,
+                    policyData: policyData,
+                    kasMetadata: finalKasMetadata // Provide the specific KAS metadata
+                )
+                print("      Encryption successful. NanoTDF size: \(nanoTDFData.count) bytes.")
+
+                // 6. Send the resulting NanoTDF data via P2P (MultipeerConnectivity)
+                print("      Sending encrypted NanoTDF via P2P to \(peer.displayName)...")
+                try sendRawData(nanoTDFData, toPeers: [peer]) // Send only to this specific peer
+                print("      ✅ Successfully sent secure data via P2P to \(peer.displayName).")
+
+            } catch let encryptOrSendError {
+                print("      ❌ Error encrypting payload or sending P2P data to \(peer.displayName): \(encryptOrSendError)")
+                // Decide if you want to stop processing other peers on error, or just continue
+                // For now, we continue with the next peer.
+            }
+
         }
+         print("Finished processing all target peers for secure data send.")
     }
+
 
     /// Encrypts and sends a text message securely.
     func sendSecureTextMessage(_ message: String, in stream: Stream) async throws {

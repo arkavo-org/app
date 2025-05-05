@@ -40,9 +40,9 @@
     - Ensure color contrast is sufficient, especially with custom color combinations.
 - **Components**:
     - Buttons: Styled using modifiers like `.padding`, `.background(Color...)`, `.foregroundColor`, `.cornerRadius()`. Style varies by context.
-    - Cards: Custom views like `ImmersiveThoughtCard` serve as containers, often taking up the full screen or large portions.
+    - Cards: Custom views like `ThoughtView` or components within `StreamCloudView` serve as containers.
     - Input fields: `TextEditor` is used for multi-line input, styled for the specific context (e.g., clear background, placeholder text).
-    - Custom components: Reusable views like `ClusterAnnotationView`, `GroupChatIconList`, `ContributorsView` are created for specific UI needs.
+    - Custom components: Reusable views like `ClusterAnnotationView`, `GroupChatIconList`, `AccountProfileBadge` are created for specific UI needs.
 - **Gestures & Feedback**:
     - Standard gestures like `DragGesture` (for swiping) are implemented.
     - Visual feedback is provided for interactions (e.g., button state changes, animations).
@@ -58,115 +58,94 @@
 
 ## Key Features
 
-### One-time TDF
-One-time TDF (Trusted Data Format) provides perfect forward secrecy communications:
+### One-time TDF Key Regeneration (P2P)
 
-This plan integrates the renewal workflow into the existing architecture (P2PGroupViewModel, ArkavoClient, Profile model, etc.).
+Securely regenerate `OpenTDFKit.KeyStore` keys between two directly connected peers using a P2P protocol managed by `P2PGroupViewModel`. This ensures ongoing secure communication even if previous keys are compromised (Perfect Forward Secrecy concept).
 
-1. Threshold Detection & Triggering:
+**Protocol Overview:**
 
-Mechanism: In P2PGroupViewModel, enhance the arkavoClientDidUpdateKeyStatus delegate method (or wherever refreshKeyStoreStatus gets its data).
-Logic: Compare keyCount against capacity (using the lowKeyThreshold percentage, e.g., 10%).
-State: Add a @Published var isKeyStoreLow: Bool property to P2PGroupViewModel/PeerDiscoveryManager. Update it based on the threshold check.
-UI Prompt: In GroupView (specifically KeyStoreStatusView), observe isKeyStoreLow. When true, display the warning text ("Your one-time keys...") and potentially change the "Regenerate Keys" button to "Initiate Key Renewal with Peer" or enable a dedicated button.
-2. Initiation & Peer Confirmation (Integrated into GroupView/P2PGroupViewModel):
+1.  **Initiation (Initiator):**
+    *   User triggers regeneration (e.g., via UI in `GroupView`) with a connected peer (`PeerDiscoveryManager.initiateKeyRegeneration`).
+    *   `P2PGroupViewModel` sends `KeyRegenerationRequest` P2P message to the selected peer. State: `.requestSent`.
+2.  **Offer (Responder):**
+    *   `P2PGroupViewModel` receives `KeyRegenerationRequest`.
+    *   Sends back `KeyRegenerationOffer` P2P message containing its own nonce. State: `.offerSent`.
+3.  **Acknowledgement & Initiator Key Gen (Initiator):**
+    *   `P2PGroupViewModel` receives `KeyRegenerationOffer`.
+    *   Sends `KeyRegenerationAcknowledgement` P2P message (with original nonce). State: `.ackSent`.
+    *   **Triggers Local Key Generation:** Calls `P2PGroupViewModel.performKeyGenerationAndSave()`:
+        *   Generates 8192 new key pairs using `OpenTDFKit.KeyStore`.
+        *   Serializes the *private* KeyStore data.
+        *   Fetches the *peer's* `Profile` from SwiftData.
+        *   Saves the serialized *local private* KeyStore data into the *peer's* `Profile.keyStorePrivate` field using `PersistenceController.savePeerProfile()`.
+        *   Exports the *public* KeyStore data from the newly generated keys.
+    *   Sends `KeyStoreShare` P2P message containing the *local public* KeyStore data to the peer.
+4.  **Commit & Responder Key Gen (Responder):**
+    *   `P2PGroupViewModel` receives `KeyRegenerationAcknowledgement`.
+    *   Sends `KeyRegenerationCommit` P2P message. State: `.commitSent`.
+    *   **Triggers Local Key Generation:** Calls `P2PGroupViewModel.performKeyGenerationAndSave()` (same logic as Initiator in Step 3, saving *local private* keys to the *peer's* Profile record).
+    *   Sends `KeyStoreShare` P2P message containing the *local public* KeyStore data to the peer.
+5.  **Key Store Share & Completion (Both):**
+    *   **(Initiator):** Receives `KeyRegenerationCommit`. State: `.commitReceivedWaitingForKeys`.
+    *   **(Both):** `P2PGroupViewModel.handleKeyStoreShare` receives the `KeyStoreShare` message from the peer:
+        *   Decodes the `KeyStoreSharePayload` containing the peer's public KeyStore data.
+        *   Fetches the *sender's (peer's)* `Profile` from SwiftData.
+        *   Saves the received *peer's public* KeyStore data into the *peer's* `Profile.keyStorePublic` field using `PersistenceController.savePeerProfile()`.
+        *   Checks current key exchange state (`peerKeyExchangeStates`). If state was `.commitSent` (Responder) or `.commitReceivedWaitingForKeys` (Initiator), transitions state to `.completed`.
+    *   Protocol finishes when both peers reach the `.completed` state after exchanging `KeyStoreShare` messages.
 
-User Action: User taps the "Initiate Key Renewal" button in KeyStoreStatusView.
-Precondition: Ensure the device is connected to at least one peer via the existing "InnerCircle" MCSession.
-UI: Present a modal sheet:
-List currently connected peers (from peerManager.connectedPeers/connectedPeerProfiles). Allow selection of one peer for renewal.
-Display prompt: "Ask [Peer Name] to confirm key renewal on their device."
-Include "Confirm Renewal" and "Cancel" buttons.
-Mutual Confirmation:
-Both users must tap "Confirm Renewal" on their respective devices.
-When a user taps "Confirm Renewal", send a simple P2P message to the selected peer (e.g., struct KeyRenewalConfirmation {}). Define this message handling in P2PGroupViewModel.
-State: Add state variables to P2PGroupViewModel to track the renewal state (e.g., AwaitingPeerSelection, AwaitingConfirmation, Generating, Exchanging, Failed, Success).
+**Key Implementation Details:**
 
-3. Mutual Key Generation (Triggered from P2PGroupViewModel, executed by ArkavoClient/OpenTDFKit):
-
-Action: When a device has both sent its *own* KeyRenewalConfirmation and *received* one from the peer, proceed.
-Backend Call: Each P2PGroupViewModel calls a new method on ArkavoClient, e.g., func generateAndPrepareNewKeyStore() async throws -> Data.
-ArkavoClient Logic:
-Calls OpenTDFKit's KeyStore generation function (e.g., keyStore.regenerateKeys()).
-Retrieves the newly serialized private KeyStore data.
-Uses PersistenceController to update the local user's Profile.keyStorePrivate field with this new private data.
-Retrieves the newly serialized public KeyStore data.
-Returns this public data.
-4. Mutual Public KeyStore Exchange (via P2PGroupViewModel and ArkavoClient):
-
-Sending: The P2PGroupViewModel takes the public KeyStore data returned by arkavoClient.generateAndPrepareNewKeyStore().
-Message: Create a new message type (e.g., struct NewPublicKeyStoreData: Codable { let publicKeyStore: Data }).
-Encryption & Sending: Encrypt this NewPublicKeyStoreData message using the standard P2P TDF mechanism (P2PGroupViewModel.sendSecureData or a similar method calling arkavoClient.encryptAndSendPayload) and send it to the verified peer over the existing MCSession.
-Receiving: In P2PGroupViewModel's message handling (e.g., arkavoClientDidReceiveMessage delegate or equivalent P2P data handler), detect the NewPublicKeyStoreData message type.
-Processing Received Data:
-Extract the received public KeyStore data (`receivedPublicKeyStoreData`).
-Use `PersistenceController` (or a relevant manager) to fetch the `Profile` associated with the sending peer's ID.
-Access the peer's `PublicKeyStore` object (likely stored in `Profile.keyStorePublic`).
-Update the *existing* peer `PublicKeyStore` object by calling its `deserialize(from: receivedPublicKeyStoreData)` method. This adds the newly received keys to the peer's store.
-Save the updated peer `Profile` back using `PersistenceController`.
-5. Verification & Confirmation (via P2PGroupViewModel):
-
-Acknowledgement: After successfully processing the received peer KeyStore data (Step 4), send a simple acknowledgement message (e.g., struct KeyRenewalAcknowledgement {}) back to the peer.
-Completion: When a P2PGroupViewModel has both successfully processed the received peer KeyStore and received the KeyRenewalAcknowledgement from the peer, the process is complete.
-UI Update: Update the UI state to "Success", display the confirmation message, dismiss the renewal modal, and trigger refreshKeyStoreStatus to show the updated key count.
-6. Error Handling (in P2PGroupViewModel and UI):
-
-Implement timeouts for receiving confirmations, public key data, and acknowledgements.
-If the P2P connection drops, update UI state to "Failed - Connection Lost", allow retry from the peer selection step.
-If confirmation fails (user taps "Cancel" or timeout), abort the process.
-If any step involving ArkavoClient, OpenTDFKit, or PersistenceController throws an error, update UI state to "Failed", show the error, and allow retry.
-If acknowledgements aren't received within the timeout, assume failure, potentially requiring a full retry.
+*   **State Management:** `P2PGroupViewModel.peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo]` tracks the `KeyExchangeState` enum for each peer.
+*   **P2P Messages:** Uses custom Codable structs (`KeyRegenerationRequest`, `KeyRegenerationOffer`, etc.) wrapped in a `P2PMessage` envelope, sent via `P2PGroupViewModel.sendP2PMessage` over `MCSession`.
+*   **Key Storage:**
+    *   The *local user's* newly generated *private* keys for the P2P relationship are stored in the *peer's* `Profile.keyStorePrivate` field in the local SwiftData store.
+    *   The *peer's* received *public* keys are stored in the *peer's* `Profile.keyStorePublic` field.
+*   **Error Handling:** `P2PError` enum covers failures; states transition to `.failed` on error.
+*   **Threshold Detection:** *Currently missing.* The `CLAUDE.md` previously mentioned detecting low key counts (`localKeyStoreInfo`, `lowKeyThreshold`), but the `P2PGroupViewModel` implementation removed `localKeyStoreInfo` and related threshold logic. UI/trigger logic needs update if this feature is desired.
 
 ### InnerCircle: Trusted P2P Network
 
-**Core Concept:** The InnerCircle utilizes direct Peer-to-Peer (P2P) communication, typically via frameworks like Multipeer Connectivity (`MCSession`), with the **primary goal of establishing verified trust between users**. This trusted P2P channel then serves the **secondary, crucial function of enabling secure exchanges**, such as the renewal of KeyStores for ongoing communication security. This approach emphasizes direct, user-controlled trust and secure operations, distinct from server-mediated interactions.
+**Core Concept:** The InnerCircle utilizes direct Peer-to-Peer (P2P) communication via Multipeer Connectivity (`MCSession`) managed by `P2PGroupViewModel` and exposed via `PeerDiscoveryManager`. The primary goal is establishing a trusted P2P channel for secure operations like Key Regeneration.
 
-**Key Requirements Based on Current Implementation & Goals:**
+**Key Requirements & Implementation:**
 
 1.  **P2P Trust Establishment & Verification:**
-    *   **Connection Initiation:** Users can discover and initiate direct connections with nearby peers (likely using `MCSession`).
-    *   **Mutual Confirmation (for Sensitive Operations):** Implement confirmation steps for sensitive actions like KeyStore renewal. This involves:
-        *   UI prompts on both devices indicating the proposed action and the involved peer.
-        *   Requiring explicit confirmation (e.g., tapping a "Confirm" button) from *both* users.
-        *   Exchange of simple confirmation messages (e.g., `KeyRenewalConfirmation`) over the P2P channel to ensure mutual agreement before proceeding.
-    *   **Trust Indicators:** Visual cues in the UI indicating P2P connection status (`connectedPeers`) and the health/status of the secure channel (e.g., `P2PGroupViewModel` states like `isKeyStoreLow`).
+    *   **Connection:** Uses `MCNearbyServiceAdvertiser`, `MCBrowserViewController`, and `MCSession` for discovery and connection. `PeerDiscoveryManager` provides UI access and manages state (`connectedPeers`, `connectionStatus`).
+    *   **Identification:** Peers exchange `profileID` (Base58 Public Key) during discovery (`discoveryInfo`) and invitation (`context`). `P2PGroupViewModel.peerIDToProfileID` maps `MCPeerID` to profile IDs.
+    *   **Profile Sharing (Optional):** Peers can explicitly share their `Profile` data via the `profileShare` P2P message, handled by `handleProfileShare`, which saves the peer's profile locally using `PersistenceController`.
+    *   **Secure Operation Confirmation (Key Regen):** The Key Regeneration protocol itself acts as mutual confirmation through its request/offer/ack/commit steps.
 
 2.  **Secure P2P Communication (Enabled by Trust):**
-    *   **Leverage KeyStore:** Utilize the established trusted P2P connection and `OpenTDFKit.KeyStore` / `OpenTDFKit.PublicKeyStore` for cryptographic operations (`Profile.keyStorePrivate`, `Profile.keyStorePublic`).
-    *   **Secure Session Maintenance (Key Renewal):** Implement the detailed key renewal workflow, managed by `P2PGroupViewModel` and `ArkavoClient`, *after* mutual confirmation has been established for the operation:
-        *   Detect low-key counts (`lowKeyThreshold`) - *Note: Current PublicKeyStore API doesn't expose counts directly; this detection needs alternative logic or API update.*
-        *   Trigger user-initiated renewal with a selected peer.
-        *   Perform mutual confirmation via UI and P2P messages (as described in point 1).
-        *   Generate new key pairs locally (`keyStore.generateAndStoreKeyPairs()`).
-        *   Securely exchange new public KeyStore data (`NewPublicKeyStoreData`) over the established P2P TDF channel.
-        *   Receive the peer's new public KeyStore data (`receivedData`). Retrieve the peer's `Profile`. If the profile has existing `keyStorePublic` data, create a `PublicKeyStore` instance, deserialize `receivedData` into it (`publicKeyStore.deserialize(from: receivedData)`), serialize the updated store (`updatedData = await publicKeyStore.serialize()`), and save `updatedData` back to `Profile.keyStorePublic`. If no existing data, save `receivedData` directly to `Profile.keyStorePublic`. Save the updated profile via `PersistenceController`.
-        *   Confirm successful exchange via acknowledgements (`KeyRenewalAcknowledgement`).
-    *   **Transparent Security:** Provide clear status updates during sensitive operations like key renewal (e.g., "Awaiting Peer Selection", "Waiting for Peer Confirmation...", "Exchanging Keys", "Success", "Failed").
+    *   **Key Regeneration:** The primary secure operation implemented is the Key Regeneration protocol described above.
+    *   **Secure Data/Text:** `PeerDiscoveryManager.sendSecureData` and `sendSecureTextMessage` leverage `ArkavoClient.encryptAndSendPayload` (details TBD based on `ArkavoClient` implementation) to send encrypted data over the P2P channel. Received encrypted data (not fitting `P2PMessage` format) is posted via `NotificationCenter.default.post(name: .nonJsonDataReceived, ...)` for handling (likely by `ArkavoMessageRouter`).
+    *   **Decrypted Text Storage:** Decrypted P2P text messages are stored locally as `Thought` objects associated with the relevant `Stream` using `P2PGroupViewModel.storeP2PMessageAsThought`.
 
 3.  **User Experience:**
-    *   **Intentional Connection & Trust:** Design interactions that emphasize deliberate P2P connection and confirmation for sensitive actions.
-    *   **Clear Status:** Users should easily understand their connection status with peers and the security state of their communication channels.
+    *   `GroupView` likely uses `PeerDiscoveryManager` to display connection status, connected peers (`connectedPeerProfiles`), and potentially initiate actions like key regeneration.
+    *   Key Regeneration state is tracked in `PeerDiscoveryManager.peerKeyExchangeStates`.
 
 4.  **Privacy & Control:**
-    *   **Direct Communication:** Emphasize that InnerCircle communication is primarily P2P, reinforcing user control and minimizing server reliance.
-    *   **Revocation Workflow:** Define a clear process initiated when a peer's trust is compromised or reduced, leading to the disconnection of the P2P session, deletion/clearing of the peer's stored public key data (e.g., via `PersistenceController` interacting with `Profile.keyStorePublic`), and removal of the peer from the user's InnerCircle list.
+    *   Communication is primarily P2P via `MCSession`.
+    *   Users explicitly connect and initiate sensitive operations like key regeneration.
+    *   **Revocation (Disconnection):** `PeerDiscoveryManager.disconnectPeer` calls `P2PGroupViewModel.disconnectPeer`, which cancels the `MCSession` connection. The `MCSessionDelegate` callback (`session(_:peer:didChange:.notConnected)`) handles cleanup: removing the peer from `connectedPeers`, clearing associated maps (`peerIDToProfileID`, `connectedPeerProfiles`, `peerKeyExchangeStates`), and closing active `InputStream`s. *Note: This does not automatically delete the peer's `Profile` or associated `KeyStore` data from SwiftData; that requires a separate manual action.*
 
 5.  **Technical Foundation:**
-    *   **P2P Framework:** Build upon `MCSession` (or similar) for discovery, connection, and data transmission.
-    *   **ViewModel Integration:** Use `P2PGroupViewModel` (or similar) to manage the state and logic of P2P trust establishment, confirmation, and subsequent secure operations like key renewal.
-    *   **Data Persistence:** Uses `PersistenceController` and SwiftData.
-        *   **Permanent Keys:** The local user's permanent identity keys are managed securely, likely in the iOS Keychain via `ArkavoClient`, and are **not** stored in the `Profile` model.
-        *   **P2P Relationship Keys:** For each trusted P2P peer relationship (e.g., within the InnerCircle), long-lived (but not permanent) keys are generated and stored within the *peer's* `Profile` record in the local SwiftData store:
-            *   `peerProfile.keyStorePrivate` (`Data?`): Stores the **local user's private keys** generated specifically for encrypting messages *to this peer*.
-            *   `peerProfile.keyStorePublic` (`Data?`): Stores the **peer's public keys** received during the key exchange, used for verifying signatures or potentially decrypting messages *from this peer* (depending on the exact crypto protocol).
-        *   **Key Exchange:** The P2P key exchange protocol (`P2PGroupViewModel`) handles generating local keys, saving the private part to the peer's `keyStorePrivate`, sharing the public part, receiving the peer's public keys, and saving them to the peer's `keyStorePublic`.
-        *   **Usage:** Cryptographic operations utilize the keys stored in the relevant peer's `Profile` record (`keyStorePrivate` for local private keys related to the peer, `keyStorePublic` for the peer's public keys).
-    *   **Offline Capability:** Leverages the inherent offline capabilities of P2P frameworks.
+    *   **P2P Framework:** `MultipeerConnectivity` (`MCSession`, `MCNearbyServiceAdvertiser`, `MCBrowserViewController`). Delegates (`MCSessionDelegate`, `MCNearbyServiceAdvertiserDelegate`, etc.) are implemented by `P2PGroupViewModel`.
+    *   **ViewModel:** `P2PGroupViewModel` (internal logic), `PeerDiscoveryManager` (facade for UI).
+    *   **Data Persistence:** `PersistenceController` (SwiftData).
+        *   **Permanent Identity Keys:** Assumed managed securely outside `Profile` (e.g., Keychain via `ArkavoClient`).
+        *   **P2P Relationship Keys (Generated during Key Regeneration):**
+            *   `peerProfile.keyStorePrivate` (`Data?`): Stores **local user's private keys** generated for encrypting *to this specific peer*.
+            *   `peerProfile.keyStorePublic` (`Data?`): Stores the **peer's public keys** received via `KeyStoreShare` message.
+        *   **Key Exchange Protocol:** Implemented within `P2PGroupViewModel` (`initiateKeyRegeneration`, `handleKeyRegenerationRequest`, etc.).
+    *   **Cryptography:** `OpenTDFKit.KeyStore` for key generation (`performKeyGenerationAndSave`), serialization/deserialization. `ArkavoClient` is used for general secure message encryption/decryption (implementation details assumed).
+    *   **Concurrency:** `@MainActor` used extensively for UI updates. `Task` used for background work and bridging `nonisolated` delegate methods.
 
 **Potential Future Enhancements (Not detailed in current CLAUDE.md):**
 
-*   **Graduated Trust Levels:** Introduce formal tiers of trust.
-*   **Connection Context:** Allow users to add notes about connections/trust.
-*   **Alternative Verification Methods:** Support QR codes, etc., for initial trust.
-*   **Granular Permissions:** Control data sharing based on established trust.
-*   **Circle Management Tools:** UI for reviewing/managing trusted peers.
+*   **Formal Trust Levels:** Introduce tiers beyond simple connection.
+*   **Alternative Verification:** QR codes, etc., for initial trust bootstrapping.
+*   **Granular Permissions:** Control data sharing based on trust.
+*   **UI for Peer Management:** Dedicated UI for reviewing/managing trusted peers and explicitly revoking trust (deleting associated Profile/KeyStore data).
+*   **Re-implement Key Store Threshold Detection:** Add back logic to monitor `KeyStore` counts (requires `OpenTDFKit` API support or alternative tracking) and trigger UI warnings/prompts for regeneration in `PeerDiscoveryManager` / `GroupView`.

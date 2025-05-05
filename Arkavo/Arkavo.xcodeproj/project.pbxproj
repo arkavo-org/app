@@ -72,13 +72,19 @@
 		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
 		DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9EC2C34DA7100499631 /* Assets.xcassets */; };
 		DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */; };
-		DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
 		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
 		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61E2CAF5D2C00A9060C /* AccountView.swift */; };
 		DAE94DD12DC5A5D200FB0EFE /* OfflineHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */; };
+		DAE94DD92DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */; };
+		DAE94DDA2DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */; };
+		DAE94DDB2DC5B56C00FB0EFE /* KeyRenewalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */; };
+		DAE94DDC2DC5B56C00FB0EFE /* KeyStoreDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */; };
+		DAE94DDD2DC5B56C00FB0EFE /* InnerCircleMemberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */; };
+		DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */; };
+		DAE94DDF2DC5B56C00FB0EFE /* KeyExchangeTestSuite.md in Resources */ = {isa = PBXBuildFile; fileRef = DAE94DD52DC5B56C00FB0EFE /* KeyExchangeTestSuite.md */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
 		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
@@ -167,7 +173,6 @@
 		DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Arkavo.entitlements; sourceTree = "<group>"; };
 		DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		DAC1F9F62C34DA7100499631 /* ArkavoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoTests.swift; sourceTree = "<group>"; };
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
@@ -175,6 +180,13 @@
 		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DACCD61E2CAF5D2C00A9060C /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineHomeView.swift; sourceTree = "<group>"; };
+		DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialKeyExchangeTests.swift; sourceTree = "<group>"; };
+		DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InnerCircleMemberTests.swift; sourceTree = "<group>"; };
+		DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyExchangeTests.swift; sourceTree = "<group>"; };
+		DAE94DD52DC5B56C00FB0EFE /* KeyExchangeTestSuite.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = KeyExchangeTestSuite.md; sourceTree = "<group>"; };
+		DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRenewalTests.swift; sourceTree = "<group>"; };
+		DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStoreDataTests.swift; sourceTree = "<group>"; };
+		DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileKeyStorePersistenceTests.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
@@ -319,7 +331,13 @@
 		DAC1F9F92C34DA7100499631 /* ArkavoTests */ = {
 			isa = PBXGroup;
 			children = (
-				DAC1F9FA2C34DA7100499631 /* ArkavoTests.swift */,
+				DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */,
+				DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */,
+				DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */,
+				DAE94DD52DC5B56C00FB0EFE /* KeyExchangeTestSuite.md */,
+				DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */,
+				DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */,
+				DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */,
 			);
 			path = ArkavoTests;
 			sourceTree = "<group>";
@@ -461,6 +479,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DAE94DDF2DC5B56C00FB0EFE /* KeyExchangeTestSuite.md in Resources */,
 				CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -576,7 +595,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DAC1F9FB2C34DA7100499631 /* ArkavoTests.swift in Sources */,
+				DAE94DD92DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift in Sources */,
+				DAE94DDA2DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift in Sources */,
+				DAE94DDB2DC5B56C00FB0EFE /* KeyRenewalTests.swift in Sources */,
+				DAE94DDC2DC5B56C00FB0EFE /* KeyStoreDataTests.swift in Sources */,
+				DAE94DDD2DC5B56C00FB0EFE /* InnerCircleMemberTests.swift in Sources */,
+				DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

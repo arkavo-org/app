@@ -131,7 +131,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         case unsupportedCurve
         case keyDerivationFailed
         case decryptionFailed
-        // ... other crypto errors ...
     }
 
     // MARK: - Message Handling
@@ -259,44 +258,94 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         print("- Header size: \(header.toData().count)")
         print("- Payload size: \(payload.toData().count)")
         print("- Nano size: \(nano.toData().count)")
+        print("- KAS Locator: \(header.kas.body)")
+        print("- EPK: \(epk.hexEncodedString())")
 
         // TODO: if local KAS in locator then load keystore for this profile vie metadata, sender ID
         // then use the private key from to get the rewrap key
+        let kasIdentifier = header.kas.body
+        print("   KAS Identifier from NATS message header: \(kasIdentifier)")
 
-        // Store message data with detailed logging
-        pendingMessages[epk] = (header, payload, nano)
-        print("Stored pending message with EPK: \(epk.hexEncodedString())")
+        if kasIdentifier == "kas.arkavo.net" {
+            // --- Path A: Use Central KAS (Request Rewrap) ---
+             print("   KAS matches default kas.arkavo.net. Requesting rewrap...")
+            // Store message data with detailed logging
+            pendingMessages[epk] = (header, payload, nano)
+            print("Stored pending message with EPK: \(epk.hexEncodedString())")
 
-        // Send rewrap message
-        let rewrapMessage = RewrapMessage(header: header)
-        try await client.sendMessage(rewrapMessage.toData())
-    }
+            // Send rewrap message
+            let rewrapMessage = RewrapMessage(header: header)
+            try await client.sendMessage(rewrapMessage.toData())
 
-    /// Performs decryption locally using the KeyStore.
-    private func performDirectDecryption(nanoTDF _: NanoTDF) async throws {
-        print("ℹ️ Placeholder Performing direct decryption...")
-    }
-
-    // Placeholder function to get the relevant public key for lookup based on locator
-    private func getMyPublicKeyDataForDecryption(locator: ResourceLocator) async -> Data? {
-        // Implement logic:
-        // 1. Parse locator.body (e.g., "arkavo-profile://<profile-id>")
-        // 2. Fetch the corresponding Profile using PersistenceController
-        // 3. Return the profile's public key data used for receiving messages (if stored)
-        // OR: If using a default key, return that.
-        // For now, return a placeholder or the default key from KeyStore
-        print("   DEBUG: Determining recipient public key for locator: \(locator.body)")
-        // Example: If locator body contains the base58 ID of the recipient profile
-        if locator.body.starts(with: "arkavo-profile://") {
-            let profileIDString = String(locator.body.dropFirst("arkavo-profile://".count))
-            if let profileIDData = Data(base58Encoded: profileIDString) {
-                // In a real scenario, you might fetch the profile and check its keys.
-                // For now, let's assume this ID corresponds to the default key.
-                print("   DEBUG: Locator indicates profile \(profileIDString). Assuming default key.")
-                return profileIDData
+        } else {
+            // --- Path B: Use Local KeyStore (Direct Decryption) ---
+            print("   KAS identifier (\(kasIdentifier)) indicates local decryption needed for NATS message.")
+            guard let accountProfile = try await PersistenceController.shared.getOrCreateAccount().profile else {
+                print("❌ Invalid account profile")
+                throw ArkavoError.profileNotFound("account")
             }
+            if accountProfile.publicID.base58EncodedString == kasIdentifier {
+                return
+            }
+            // Extract sender's Profile ID *from the KAS identifier itself*
+            guard let senderProfileID = Data(base58Encoded: kasIdentifier) else {
+                 print("❌ Invalid sender profile ID in KAS locator: \(kasIdentifier)")
+                 throw ArkavoError.profileNotFound(kasIdentifier)
+             }
+            // Call handleDirectDecryption with the sender's ID
+            try await handleDirectDecryption(nano: nano, senderProfileID: senderProfileID)
         }
-        return nil
+    }
+
+    /// Handles decryption using a local Private KeyStore based on sender profile ID.
+    /// Used for NATS messages where KAS locator points to a peer, and for P2P messages.
+    private func handleDirectDecryption(nano: NanoTDF, senderProfileID: Data) async throws {
+        print("Attempting direct decryption for sender: \(senderProfileID.base58EncodedString)...")
+
+        // 1. Load Private KeyStore for the sender (Function already takes Profile ID)
+        print("   Loading private KeyStore for sender...")
+        guard let privateKeyStore = await loadPrivateKeyStore(forPeer: senderProfileID) else {
+            print("❌ Failed to load private KeyStore for sender \(senderProfileID.base58EncodedString).")
+            throw ArkavoError.keyStoreError(senderProfileID.base58EncodedString)
+        }
+        print("   Private KeyStore loaded successfully.")
+
+        // 3. Decrypt the payload
+        print("   Decrypting payload using private KeyStore...")
+        let privateKey = await privateKeyStore.getPrivateKey(forPublicKey: nano.header.ephemeralPublicKey)
+        print("Private key \(privateKey?.hexEncodedString() ?? "not found")...")
+        let decryptedData = "FIXME: Implement actual decryption here!".data(using: .utf8)!
+
+        // 4. Process the decrypted message
+        await processDecryptedMessage(plaintext: decryptedData, header: nano.header)
+    }
+
+    /// Helper to load the private KeyStore associated with a given peer profile ID.
+    private func loadPrivateKeyStore(forPeer senderProfileID: Data) async -> KeyStore? {
+        do {
+            // Fetch the Profile object associated with the SENDER
+            guard let peerProfile = try await persistenceController.fetchProfile(withPublicID: senderProfileID) else {
+                print("   loadPrivateKeyStore: Profile not found for ID \(senderProfileID.base58EncodedString)")
+                return nil
+            }
+
+            // Get the PRIVATE KeyStore data stored FOR THIS PEER on the local device
+            guard let privateData = peerProfile.keyStorePrivate, !privateData.isEmpty else {
+                print("   loadPrivateKeyStore: No private KeyStore data found on profile \(peerProfile.name)")
+                return nil
+            }
+
+            // Deserialize the KeyStore
+            // TODO: Determine curve dynamically if needed. Assuming p256.
+            let keyStore = KeyStore(curve: .secp256r1)
+             try await keyStore.deserialize(from: privateData) // Deserialize into the instance
+             print("   loadPrivateKeyStore: Deserialized private KeyStore for \(peerProfile.name)")
+             return keyStore
+
+        } catch let error {
+            print("❌ Error loading/deserializing private KeyStore for \(senderProfileID.base58EncodedString): \(error)")
+            return nil
+        }
     }
 
     private func handleRewrappedKey(_ data: Data) async throws {

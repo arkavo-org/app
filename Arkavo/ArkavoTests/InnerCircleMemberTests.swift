@@ -2,44 +2,9 @@ import Combine
 import MultipeerConnectivity // Required for MCPeerID
 import SwiftData
 import XCTest
+@testable import Arkavo
 
-// Assuming Profile and related types are accessible for testing
-// If not, minimal stub versions might be needed here.
-// Example Stub Profile (adjust based on actual Profile definition if needed)
-@Model
-final class Profile: Identifiable, Codable {
-    @Attribute(.unique) var publicID: Data
-    var name: String
-    var keyStoreData: Data?
-    // Add other necessary properties if required by tests or mocks
-
-    init(publicID: Data = UUID().uuidString.data(using: .utf8)!, name: String = "Test User", keyStoreData: Data? = "dummyKeyData".data(using: .utf8)) {
-        self.publicID = publicID
-        self.name = name
-        self.keyStoreData = keyStoreData
-    }
-
-    // Add Codable conformance if needed by mocks/tests (though @Model provides it)
-    enum CodingKeys: String, CodingKey {
-        case publicID, name, keyStoreData // Add other properties if needed
-    }
-
-    required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        publicID = try container.decode(Data.self, forKey: .publicID)
-        name = try container.decode(String.self, forKey: .name)
-        keyStoreData = try container.decodeIfPresent(Data.self, forKey: .keyStoreData)
-        // Decode other properties if needed
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(publicID, forKey: .publicID)
-        try container.encode(name, forKey: .name)
-        try container.encodeIfPresent(keyStoreData, forKey: .keyStoreData)
-        // Encode other properties if needed
-    }
-}
+// Using the real Profile class from the app
 
 // Define the notification name used in the app
 extension Notification.Name {
@@ -68,9 +33,10 @@ class MockPersistenceController {
         lastProfileDeletedKeyStoreFor = profile.publicID
         // Simulate removing key data from the mock profile store if needed
         if var fetchedProfile = mockProfiles[profile.publicID] {
-            fetchedProfile.keyStoreData = nil
+            fetchedProfile.keyStorePrivate = nil
+            fetchedProfile.keyStorePublic = nil
             mockProfiles[profile.publicID] = fetchedProfile
-            print("MockPersistenceController: Simulated keyStoreData removal for profile ID: \(profile.publicID)")
+            print("MockPersistenceController: Simulated keyStore data removal for profile ID: \(profile.publicID)")
         } else {
             print("MockPersistenceController: Profile ID \(profile.publicID) not found in mock store for key removal simulation.")
         }
@@ -123,8 +89,10 @@ final class InnerCircleMemberTests: XCTestCase {
         mockPeerDiscoveryManager = MockPeerDiscoveryManager()
 
         // Create a sample profile for testing
-        testProfile = Profile(publicID: Data("testProfileID".utf8), name: "Test Member", keyStoreData: Data("initialKeyData".utf8))
+        testProfile = Profile(name: "Test Member")
+        testProfile.publicID = Data("testProfileID".utf8)
         // Add the profile to the mock controller's store so fetchProfile can find it if needed
+        // Since this is a test setup and we're using mocks, we can safely add directly
         mockPersistenceController.addMockProfile(testProfile)
 
         // Create a sample MCPeerID
@@ -137,15 +105,19 @@ final class InnerCircleMemberTests: XCTestCase {
         mockPeerDiscoveryManager = nil
         testProfile = nil
         testPeerID = nil
-        super.tearDownWithError()
+        try super.tearDownWithError()
     }
 
     // MARK: - Test Cases
 
     @MainActor func testRemoveMemberDeletesKeyStoreData() async throws {
         // Arrange: Ensure the profile exists in the mock controller
+        // Prepare profile with key store data
+        testProfile.keyStorePrivate = "privateData".data(using: .utf8)!
+        testProfile.keyStorePublic = "publicData".data(using: .utf8)!
         mockPersistenceController.addMockProfile(testProfile)
-        XCTAssertNotNil(testProfile.keyStoreData, "Precondition: Profile should have keyStoreData before removal.")
+        XCTAssertNotNil(testProfile.keyStorePrivate, "Precondition: Profile should have keyStorePrivate before removal.")
+        XCTAssertNotNil(testProfile.keyStorePublic, "Precondition: Profile should have keyStorePublic before removal.")
 
         // Act: Simulate the action that triggers key store data deletion
         // In a real scenario, this would be a call to a ViewModel or Service method.
@@ -158,8 +130,9 @@ final class InnerCircleMemberTests: XCTestCase {
 
         // Optional: Assert the key data was cleared in the mock store (if simulation is implemented)
         let updatedProfile = mockPersistenceController.mockProfiles[testProfile.publicID]
-        XCTAssertNil(updatedProfile?.keyStoreData, "keyStoreData should be nil in the mock store after deletion.")
-        print("Test Assertion: Verified keyStoreData is nil for profile ID \(testProfile.publicID) in mock store.")
+        XCTAssertNil(updatedProfile?.keyStorePrivate, "keyStorePrivate should be nil in the mock store after deletion.")
+        XCTAssertNil(updatedProfile?.keyStorePublic, "keyStorePublic should be nil in the mock store after deletion.")
+        print("Test Assertion: Verified keyStore data is nil for profile ID \(testProfile.publicID) in mock store.")
     }
 
     @MainActor func testRemoveMemberDisconnectsPeer() {
@@ -192,7 +165,7 @@ final class InnerCircleMemberTests: XCTestCase {
     }
 
     // Example of testing error handling in deleteKeyStoreDataFor
-    @MainActor func testRemoveMemberHandlesPersistenceError() async {
+    @MainActor func testRemoveMemberHandlesPersistenceError() async throws {
         // Arrange
         mockPersistenceController.shouldThrowError = true
         let expectedError = mockPersistenceController.mockError
