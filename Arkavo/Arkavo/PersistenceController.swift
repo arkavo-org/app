@@ -293,6 +293,12 @@ class PersistenceController {
         }
     }
 
+    func deleteThought(_ thought: Thought) async throws {
+        mainContext.delete(thought)
+        try await saveChanges()
+        print("PersistenceController: Thought deleted with publicID: \(thought.publicID.base58EncodedString)")
+    }
+
     func fetchThoughtsForStream(withPublicID streamPublicID: Data) async throws -> [Thought] {
         // Use SwiftData's native predicate syntax for nested properties
         let descriptor = FetchDescriptor<Thought>(

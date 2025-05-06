@@ -67,7 +67,11 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                 print("ChatViewModel: Attempting to process stored NanoTDF for thought \(thought.publicID.base58EncodedString)")
 
                 // Directly call the message router's processing method for local NanoTDF data
-                try? await messageRouter.processMessage(thought.nano, messageId: thought.id)
+                do {
+                    try await messageRouter.processMessage(thought.nano, messageId: thought.id)
+                } catch {
+                    try? await PersistenceController.shared.deleteThought(thought)
+                }
 
                 // NOTE TO DEVELOPER: This approach needs verification.
                 // If existing messages don't appear, ArkavoClient may need an additional
@@ -248,7 +252,15 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                         body: profile.publicID.base58EncodedString
                     ) {
                         kasMetadata = try await keystore.createKasMetadata(resourceLocator: rl)
-                        policyData = try createPolicyDataForDirectMessage(recipientProfileID: profile.publicID)
+                        // Create thought service model
+                        let thoughtModel = ThoughtServiceModel(
+                            creatorPublicID: account.profile!.publicID,
+                            streamPublicID: profile.publicID, // route to each individual, perhaps rename to targetPublicID
+                            mediaType: .say,
+                            createdAt: creationDate,
+                            content: messageData
+                        )
+                        policyData = try createFlatBuffersPolicy(for: thoughtModel)
                         profile.keyStorePublic = await keystore.serialize()
                         try PersistenceController.shared.saveStream(stream)
                         break
@@ -295,11 +307,11 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                 createdAt: creationDate, // Set the creation timestamp
                 content: messageData
             )
-
+            let isOneTime = policyData != nil
             if policyData == nil {
                 policyData = try createFlatBuffersPolicy(for: thoughtModel)
             }
-            
+
             // Serialize payload
             let payload = try thoughtModel.serialize()
 
@@ -312,18 +324,21 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             )
             print("ChatViewModel: Encrypted and sent payload via ArkavoClient.")
 
+            // do not save one-time thought
             // Create and save the Thought locally
             // Use the *same* publicID and timestamp as the service model for consistency
-            let thought = try await createAndSaveThought(
-                nanoData: nanoData, // Save the *encrypted* data
-                thoughtModel: thoughtModel,
-                publicID: thoughtModel.publicID // Use the ID from the service model
-            )
-
-            // Add message to local UI immediately
-            // Use the timestamp from the locally created Thought's metadata (which came from thoughtModel)
-            addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
-
+            if !isOneTime {
+                let thought = try await createAndSaveThought(
+                    nanoData: nanoData, // Save the *encrypted* data
+                    thoughtModel: thoughtModel,
+                    publicID: thoughtModel.publicID // Use the ID from the service model
+                )
+                addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
+            } else {
+                // Add message to local UI immediately
+                // Use the timestamp from the locally created Thought's metadata (which came from thoughtModel)
+                addLocalChatMessage(content: content, thoughtPublicID: thoughtModel.publicID, timestamp: creationDate)
+            }
         } catch {
             print("❌ ChatViewModel: Failed to send encrypted message: \(error)")
             // TODO: Notify user of failure
@@ -470,7 +485,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             count: Int(buffer.size)
         )
     }
-    
+
     // MARK: - Persistence Helpers
 
     /// Creates a ThoughtMetadata object (part of Thought model)
@@ -523,28 +538,6 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             print("❌ ChatViewModel: Error saving thought: \(error)")
             throw ChatError.persistenceError(error)
         }
-    }
-
-    // MARK: - FlatBuffer Policy Helpers (Adjusted for different scenarios)
-
-    // FIXME: no json Creates policy data for a direct message to a specific recipient.
-    private func createPolicyDataForDirectMessage(recipientProfileID: Data) throws -> Data {
-        // Policy grants access based on dissem list containing the recipient's profile ID.
-        let policyJson = """
-        {
-          "uuid": "\(UUID().uuidString)",
-          "body": {
-            "dataAttributes": [],
-            "dissem": ["\(recipientProfileID.base58EncodedString)"]
-          }
-        }
-        """
-        guard let policyData = policyJson.data(using: .utf8) else {
-            throw ChatError.invalidPolicy("Failed to encode direct message policy JSON")
-        }
-        // This creates an *embedded plaintext* policy as Data.
-        // ArkavoClient.encryptAndSendPayload is expected to handle embedding this correctly.
-        return policyData
     }
 }
 

@@ -137,7 +137,7 @@ struct ArkavoApp: App {
                 case .authenticating, .connected, .connecting:
                     break
                 }
-                
+
                 // Set up timer for handling retry connections
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -151,7 +151,6 @@ struct ArkavoApp: App {
                         }
                     }
                 }
-                
             case .background:
                 Task {
                     await saveChanges()
@@ -597,7 +596,7 @@ struct ArkavoApp: App {
             } else {
                 do {
                     print("Attempting fresh connection")
-                    try await client.connect(accountName: profile.name) 
+                    try await client.connect(accountName: profile.name)
                     print("checkAccountStatus: Connected with fresh connection")
                 } catch let error as ArkavoError {
                     if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
@@ -629,22 +628,22 @@ struct ArkavoApp: App {
 
             // Proceed to main view regardless of connection status
             selectedView = .main
-            
+
             // No need to show offline mode alert - OfflineHomeView provides sufficient information
             // User can tap "Try to Reconnect" button in OfflineHomeView if needed
 
         } catch {
             print("Error checking account status: \(error.localizedDescription)")
-            
+
             // Even if there's an error, we'll still try to load the account
             do {
                 let account = try? await persistenceController.getOrCreateAccount()
-                if let account = account, let _ = account.profile {
+                if let account, let _ = account.profile {
                     // We have a profile, so we can proceed in offline mode
                     ViewModelFactory.shared.setAccount(account)
                     selectedView = .main
                     sharedState.isOfflineMode = true
-                    
+
                     connectionError = ConnectionError(
                         title: "Offline Mode",
                         message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",

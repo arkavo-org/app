@@ -1,8 +1,8 @@
+@testable import Arkavo
 import Combine
 import MultipeerConnectivity // Required for MCPeerID
 import SwiftData
 import XCTest
-@testable import Arkavo
 
 // Using the real Profile class from the app
 

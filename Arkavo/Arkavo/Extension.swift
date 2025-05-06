@@ -21,7 +21,7 @@ extension Data {
         guard let bytes = Base58.decode(string) else { return nil }
         self = Data(bytes)
     }
-    
+
     static var didPostRetryConnection: Bool {
         get { UserDefaults.standard.bool(forKey: "notification_RetryConnection") }
         set { UserDefaults.standard.set(newValue, forKey: "notification_RetryConnection") }

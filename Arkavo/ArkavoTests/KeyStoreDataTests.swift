@@ -1,7 +1,7 @@
+@testable import Arkavo
 import OpenTDFKit
 import SwiftData
 import XCTest
-@testable import Arkavo
 
 // Existing Curve from OpenTDFKit, just defined for tests
 enum Curve: String {
@@ -20,12 +20,12 @@ class MockKeyStore {
     var serializeCalled = false
     var shouldThrowError = false
     var mockError = NSError(domain: "MockKeyStoreError", code: 1, userInfo: nil)
-    
+
     init(curve: Curve, capacity: Int) {
         self.curve = curve
         self.capacity = capacity
     }
-    
+
     func deserialize(from data: Data) async throws {
         print("MockKeyStore: deserialize called with \(data.count) bytes")
         deserializeCalled = true
@@ -34,7 +34,7 @@ class MockKeyStore {
         }
         serializedData = data
     }
-    
+
     func serialize() async -> Data {
         serializeCalled = true
         return serializedData ?? "defaultSerializedData".data(using: .utf8)!
@@ -53,22 +53,22 @@ class KeyStoreData {
     var updatedAt: Date
     var keyCurveRawValue: String
     var capacity: Int
-    
+
     var keyCurve: Curve {
         Curve(rawValue: keyCurveRawValue) ?? .secp256r1
     }
-    
+
     init(id: UUID = UUID(), profile: Profile? = nil, serializedData: Data, keyCurve: Curve, capacity: Int, createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
         self.profile = profile
-        self.profilePublicID = profile?.publicID
+        profilePublicID = profile?.publicID
         self.serializedData = serializedData
-        self.keyCurveRawValue = keyCurve.rawValue
+        keyCurveRawValue = keyCurve.rawValue
         self.capacity = capacity
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-    
+
     func deserializeKeyStore() async throws -> MockKeyStore {
         let keyStore = MockKeyStore(curve: keyCurve, capacity: capacity)
         try await keyStore.deserialize(from: serializedData)
@@ -81,16 +81,16 @@ class KeyStoreData {
 final class KeyStoreDataTests: XCTestCase {
     var keyStoreData: KeyStoreData!
     var mockProfile: Profile!
-    
+
     @MainActor override func setUpWithError() throws {
         try super.setUpWithError()
-        
+
         // Create a mock profile
         mockProfile = Profile(name: "TestUser")
-        
+
         // Create sample serialized data
         let sampleData = "sampleKeyStoreData".data(using: .utf8)!
-        
+
         // Create KeyStoreData instance
         keyStoreData = KeyStoreData(
             profile: mockProfile,
@@ -99,15 +99,15 @@ final class KeyStoreDataTests: XCTestCase {
             capacity: 8192
         )
     }
-    
+
     override func tearDownWithError() throws {
         keyStoreData = nil
         mockProfile = nil
         try super.tearDownWithError()
     }
-    
+
     // MARK: - Test Cases
-    
+
     func testKeyStoreDataInitialization() {
         // Verify properties are correctly set
         XCTAssertEqual(keyStoreData.profile?.id, mockProfile.id)
@@ -115,11 +115,11 @@ final class KeyStoreDataTests: XCTestCase {
         XCTAssertEqual(keyStoreData.serializedData, "sampleKeyStoreData".data(using: .utf8))
         XCTAssertEqual(keyStoreData.keyCurveRawValue, "secp256r1")
         XCTAssertEqual(keyStoreData.capacity, 8192)
-        
+
         // Verify computed property
         XCTAssertEqual(keyStoreData.keyCurve, .secp256r1)
     }
-    
+
     func testKeyStoreDataWithoutProfile() {
         // Create KeyStoreData without profile
         let noProfileKeyStoreData = KeyStoreData(
@@ -128,7 +128,7 @@ final class KeyStoreDataTests: XCTestCase {
             keyCurve: .secp384r1,
             capacity: 4096
         )
-        
+
         // Verify properties
         XCTAssertNil(noProfileKeyStoreData.profile)
         XCTAssertNil(noProfileKeyStoreData.profilePublicID)
@@ -137,19 +137,19 @@ final class KeyStoreDataTests: XCTestCase {
         XCTAssertEqual(noProfileKeyStoreData.capacity, 4096)
         XCTAssertEqual(noProfileKeyStoreData.keyCurve, .secp384r1)
     }
-    
+
     func testDeserializeKeyStore() async {
         // This test uses the real KeyStoreData but a mock KeyStore
         // In a real implementation, we'd inject the KeyStore creation
-        
+
         // Create mock KeyStore and its deserialization logic
         let mockKeyStore = MockKeyStore(curve: .secp256r1, capacity: 8192)
-        
+
         do {
             // TODO: In actual implementation, inject the mock KeyStore
             // For now, we're just verifying the mock works as expected
             try await mockKeyStore.deserialize(from: keyStoreData.serializedData)
-            
+
             // Verify deserialize was called
             XCTAssertTrue(mockKeyStore.deserializeCalled)
             XCTAssertEqual(mockKeyStore.serializedData, "sampleKeyStoreData".data(using: .utf8))
@@ -157,12 +157,12 @@ final class KeyStoreDataTests: XCTestCase {
             XCTFail("Deserialization should not throw: \(error)")
         }
     }
-    
+
     func testDeserializeKeyStoreError() async {
         // Create mock KeyStore with error
         let mockKeyStore = MockKeyStore(curve: .secp256r1, capacity: 8192)
         mockKeyStore.shouldThrowError = true
-        
+
         do {
             try await mockKeyStore.deserialize(from: keyStoreData.serializedData)
             XCTFail("Deserialization should throw an error")
@@ -172,7 +172,7 @@ final class KeyStoreDataTests: XCTestCase {
             XCTAssertEqual(error as NSError, mockKeyStore.mockError)
         }
     }
-    
+
     func testKeyStoreWithDefaultCurve() {
         // Create KeyStoreData with invalid curve string
         let invalidCurveData = KeyStoreData(
@@ -181,7 +181,7 @@ final class KeyStoreDataTests: XCTestCase {
             keyCurve: Curve(rawValue: "invalid")!, // This will be nil in real code
             capacity: 8192
         )
-        
+
         // Verify default curve is used
         XCTAssertEqual(invalidCurveData.keyCurve, .secp256r1)
     }

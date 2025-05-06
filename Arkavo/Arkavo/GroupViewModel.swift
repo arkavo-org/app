@@ -583,7 +583,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                     // Optional: Initiate key exchange if missing?
                     continue // Skip this peer
                 }
-                
+
                 // 1. Create an instance of PublicKeyStore for the peer's curve
                 //    TODO: Determine the correct curve dynamically if necessary. Using p256 for now.
                 let publicKeyStore = PublicKeyStore(curve: .secp256r1) // Create an instance
@@ -599,14 +599,13 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 // Now call createKasMetadata on the deserialized instance
                 peerKasMetadata = try await publicKeyStore.createKasMetadata(resourceLocator: kasRL)
                 print("      Created peer-specific KasMetadata for \(peer.displayName).")
-
             }
 
             // Ensure we actually created KasMetadata
             guard let finalKasMetadata = peerKasMetadata else {
-                 print("      ❌ Error: Failed to create KasMetadata for peer \(peer.displayName) (internal logic error). Skipping peer.")
-                 continue // Skip this peer
-             }
+                print("      ❌ Error: Failed to create KasMetadata for peer \(peer.displayName) (internal logic error). Skipping peer.")
+                continue // Skip this peer
+            }
 
             // 5. Encrypt using ArkavoClient, providing the specific peer's KasMetadata
             print("      Encrypting payload using ArkavoClient with peer's KasMetadata...")
@@ -628,11 +627,9 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 // Decide if you want to stop processing other peers on error, or just continue
                 // For now, we continue with the next peer.
             }
-
         }
-         print("Finished processing all target peers for secure data send.")
+        print("Finished processing all target peers for secure data send.")
     }
-
 
     /// Encrypts and sends a text message securely.
     func sendSecureTextMessage(_ message: String, in stream: Stream) async throws {

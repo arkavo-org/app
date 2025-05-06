@@ -250,6 +250,8 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let copiedData = Data(data)
         let parser = BinaryParser(data: copiedData)
         let header = try parser.parseHeader()
+        // test if valid
+        _ = try ArkavoPolicy.parseMetadata(from: header.policy.body!.body)
         let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
@@ -268,7 +270,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 
         if kasIdentifier == "kas.arkavo.net" {
             // --- Path A: Use Central KAS (Request Rewrap) ---
-             print("   KAS matches default kas.arkavo.net. Requesting rewrap...")
+            print("   KAS matches default kas.arkavo.net. Requesting rewrap...")
             // Store message data with detailed logging
             pendingMessages[epk] = (header, payload, nano)
             print("Stored pending message with EPK: \(epk.hexEncodedString())")
@@ -289,9 +291,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             }
             // Extract sender's Profile ID *from the KAS identifier itself*
             guard let senderProfileID = Data(base58Encoded: kasIdentifier) else {
-                 print("❌ Invalid sender profile ID in KAS locator: \(kasIdentifier)")
-                 throw ArkavoError.profileNotFound(kasIdentifier)
-             }
+                print("❌ Invalid sender profile ID in KAS locator: \(kasIdentifier)")
+                throw ArkavoError.profileNotFound(kasIdentifier)
+            }
             // Call handleDirectDecryption with the sender's ID
             try await handleDirectDecryption(nano: nano, senderProfileID: senderProfileID)
         }
@@ -338,11 +340,11 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             // Deserialize the KeyStore
             // TODO: Determine curve dynamically if needed. Assuming p256.
             let keyStore = KeyStore(curve: .secp256r1)
-             try await keyStore.deserialize(from: privateData) // Deserialize into the instance
-             print("   loadPrivateKeyStore: Deserialized private KeyStore for \(peerProfile.name)")
-             return keyStore
+            try await keyStore.deserialize(from: privateData) // Deserialize into the instance
+            print("   loadPrivateKeyStore: Deserialized private KeyStore for \(peerProfile.name)")
+            return keyStore
 
-        } catch let error {
+        } catch {
             print("❌ Error loading/deserializing private KeyStore for \(senderProfileID.base58EncodedString): \(error)")
             return nil
         }
