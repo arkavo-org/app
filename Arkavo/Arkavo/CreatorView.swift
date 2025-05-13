@@ -190,6 +190,13 @@ struct CreatorDetailView: View {
 
                 contentSection
                     .padding(.top)
+
+                // Display Profile Public ID
+                Text("Public ID: \(viewModel.profile.publicID.base58EncodedString)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, InnerCircleConstants.systemMargin) // Using existing constant for consistency
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
