@@ -109,8 +109,8 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             print("ChatViewModel: Received .messageDecrypted notification.") // Log receipt
             let incomingThoughtModel = try? ThoughtServiceModel.deserialize(from: data) // Deserialize once
 
-            if let thoughtModel = incomingThoughtModel, // Check if deserialization succeeded
-               thoughtModel.streamPublicID == self.streamPublicID // Check if stream IDs match
+            if let thoughtModel = incomingThoughtModel // Check if deserialization succeeded
+//               thoughtModel.streamPublicID == self.streamPublicID // FIXME: skip for now Check if stream IDs match
             {
                 print("   Stream ID MATCH: \(thoughtModel.streamPublicID.base58EncodedString). Handling message.") // Log match
                 print("ChatViewModel: Received decrypted message notification for this stream.")
@@ -137,10 +137,10 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             let thoughtModel = try ThoughtServiceModel.deserialize(from: payload)
 
             // Double-check if it belongs to this stream
-            guard thoughtModel.streamPublicID == streamPublicID else {
-                print("❌ ChatViewModel: Decrypted thought belongs to a different stream. Ignoring.")
-                return
-            }
+//            guard thoughtModel.streamPublicID == streamPublicID else {
+//                print("❌ ChatViewModel: Decrypted thought belongs to a different stream. Ignoring.")
+//                return
+//            }
 
             // Ensure it's a message type we display in chat
             guard thoughtModel.mediaType == .say else {

@@ -1,4 +1,5 @@
 import ArkavoSocial
+import CryptoKit
 import FlatBuffers
 import Foundation
 import OpenTDFKit
@@ -53,9 +54,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         }
         // if data is NanoTDF, decrypt it
         if data.count >= 3 {
-            let magicNumberAndVersion = data.prefix(3)
+            let magicNumberAndVersion = data.prefix(2)
             print(magicNumberAndVersion.hexEncodedString())
-            if magicNumberAndVersion == Data([0x4C, 0x31, 0x4C]) {
+            if magicNumberAndVersion == Data([0x4C, 0x31]) {
                 try await handleNATSMessage(data)
                 return
             }
@@ -74,7 +75,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             if data.count > 2000 {
                 throw ArkavoError.messageError("Message type 0x06 exceeds maximum allowed size")
             }
-            try await handleNATSEvent(messageData)
+            // FIXME: hack, not sure why I am getting 064c31
+//            try await handleNATSEvent(messageData)
+            try await handleNATSMessage(messageData)
         default:
             print("Unknown message type: 0x\(String(format: "%02X", messageType))")
         }
@@ -288,13 +291,12 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 print("skipping direct decryption: KAS locator does not match profile account")
                 return
             }
-            // Extract sender's Profile ID *from the KAS identifier itself*
-            guard let senderProfileID = Data(base58Encoded: kasIdentifier) else {
-                print("❌ Invalid sender profile ID in KAS locator: \(kasIdentifier)")
-                throw ArkavoError.profileNotFound(kasIdentifier)
-            }
+            // FIXME: remove !
+            let metadata = try ArkavoPolicy.parseMetadata(from: header.policy.body!.body)
+            let creator = Data(metadata.creator)
+            print(creator.base58EncodedString)
             // Call handleDirectDecryption with the sender's ID
-            try await handleDirectDecryption(nano: nano, senderProfileID: senderProfileID)
+            try await handleDirectDecryption(nano: nano, senderProfileID: creator)
         }
     }
 
@@ -312,13 +314,68 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         print("   Private KeyStore loaded successfully.")
 
         // 3. Decrypt the payload
-        print("   Decrypting payload using private KeyStore...")
-        let privateKey = await privateKeyStore.getPrivateKey(forPublicKey: nano.header.ephemeralPublicKey)
-        print("Private key \(privateKey?.hexEncodedString() ?? "not found")...")
-        let decryptedData = "FIXME: Implement actual decryption here!".data(using: .utf8)!
+        print("   Decrypting payload using private KeyStore with public key \(nano.header.ephemeralPublicKey.hexEncodedString())")
+        
+        // --- CRYPTOKIT SANITY CHECK FOR EPHEMERAL PUBLIC KEY ---
 
-        // 4. Process the decrypted message
-        await processDecryptedMessage(plaintext: decryptedData, header: nano.header)
+        let ephemeralPublicKeyBytes = nano.header.payloadKeyAccess.kasPublicKey
+        let policyECCMode = Curve.secp256r1
+        // 2. Attempt to initialize a CryptoKit PublicKey object.
+        // This will throw an error if the key data is invalid for the specified curve/format.
+        do {
+            switch policyECCMode {
+            case .secp256r1:
+                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
+                print("✅ Sanity Check (CryptoKit P256): Ephemeral Public Key is valid format.")
+            case .secp384r1:
+                _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
+                print("✅ Sanity Check (CryptoKit P384): Ephemeral Public Key is valid format.")
+            case .secp521r1:
+                _ = try P521.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
+                print("✅ Sanity Check (CryptoKit P521): Ephemeral Public Key is valid format.")
+            }
+        } catch let error as CryptoKitError { // Catch specific CryptoKit errors
+            print("❌ Sanity Check Failed (CryptoKit): Ephemeral Public Key is invalid or malformed for curve \(policyECCMode). Error: \(error)")
+        } catch { // Catch any other errors during initialization
+            print("❌ Sanity Check Failed (CryptoKit): An unexpected error occurred during public key initialization for curve \(policyECCMode). Error: \(error)")
+        }
+        let publicKS = await privateKeyStore.exportPublicKeyStore()
+        let tmpPublicKey = try await publicKS.getAndRemovePublicKey()
+//        let tmp = await privateKeyStore.generateKeyPair()
+        print("TEMP public key \(tmpPublicKey.hexEncodedString())")
+//        await privateKeyStore.store(keyPair: tmp)
+        let tmpprivatekey = await privateKeyStore.getPrivateKey(forPublicKey: tmpPublicKey)
+        print("TEMP private key \(tmpprivatekey?.hexEncodedString() ?? "not found")")
+        // --- END OF CRYPTOKIT SANITY CHECK ---
+        
+//        guard let privateKey = await privateKeyStore.getPrivateKey(forPublicKey: nano.header.payloadKeyAccess.kasPublicKey) else {
+//            print("❌ Failed to find a matching private key from sender.")
+//            return
+//        }
+        
+        let symmetricKeyBytes = try await privateKeyStore.derivePayloadSymmetricKey(
+            kasPublicKey: nano.header.payloadKeyAccess.kasPublicKey,
+            tdfEphemeralPublicKey: nano.header.ephemeralPublicKey
+        )
+        print("   Derived symmetric key successfully: \(symmetricKeyBytes.hexEncodedString())")
+        
+        // Use the derived symmetric key to decrypt the NanoTDF payload
+        do {
+            let symmetricKey = SymmetricKey(data: symmetricKeyBytes)
+            let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
+            print("✅ Payload decrypted successfully. Size: \(decryptedData.count)")
+            
+            // For debug purposes, try to show the beginning of the message if it's text
+            if let textPreview = String(data: decryptedData.prefix(min(100, decryptedData.count)), encoding: .utf8) {
+                print("   Preview of decrypted data: \(textPreview)")
+            }
+            
+            // 4. Process the decrypted message
+            await processDecryptedMessage(plaintext: decryptedData, header: nano.header)
+        } catch {
+            print("❌ Failed to decrypt payload. Error: \(error)")
+            return
+        }
     }
 
     /// Helper to load the private KeyStore associated with a given peer profile ID.
