@@ -15,7 +15,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/OpenTDFKit",
       "state" : {
-        "revision" : "8968e84add07beca741b16db0e8a9eadae35c0ec"
+        "revision" : "a1cf46bb12a7a48ef01a42edeb5583098483b4cd"
       }
     }
   ],

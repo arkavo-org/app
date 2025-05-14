@@ -263,8 +263,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         print("- KAS Locator: \(header.kas.body)")
         print("- EPK: \(epk.hexEncodedString())")
 
-        // TODO: if local KAS in locator then load keystore for this profile vie metadata, sender ID
-        // then use the private key from to get the rewrap key
         let kasIdentifier = header.kas.body
         print("   KAS Identifier from NATS message header: \(kasIdentifier)")
 
@@ -286,7 +284,8 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 print("❌ Invalid account profile")
                 throw ArkavoError.profileNotFound("account")
             }
-            if accountProfile.publicID.base58EncodedString == kasIdentifier {
+            if accountProfile.publicID.base58EncodedString != kasIdentifier {
+                print("skipping direct decryption: KAS locator does not match profile account")
                 return
             }
             // Extract sender's Profile ID *from the KAS identifier itself*

@@ -690,6 +690,9 @@
     "Public ID" : {
 
     },
+    "Public ID: %@" : {
+
+    },
     "Ready to join?" : {
       "extractionState" : "stale",
       "localizations" : {

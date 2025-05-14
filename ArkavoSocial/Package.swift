@@ -19,7 +19,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "8968e84add07beca741b16db0e8a9eadae35c0ec"),
+        .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "a1cf46bb12a7a48ef01a42edeb5583098483b4cd"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.

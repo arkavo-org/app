@@ -1,5 +1,5 @@
 {
-  "originHash" : "a1dbc3f33116d2e6c8b5dc32888dd6162e7c0775ea9822ec8111c1afcec50029",
+  "originHash" : "1d7d85b5955626a4b4643c689e065067131db749b1e86b8712bef643812823c6",
   "pins" : [
     {
       "identity" : "flatbuffers",
@@ -15,7 +15,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/OpenTDFKit",
       "state" : {
-        "revision" : "8968e84add07beca741b16db0e8a9eadae35c0ec"
+        "revision" : "a1cf46bb12a7a48ef01a42edeb5583098483b4cd"
       }
     }
   ],
