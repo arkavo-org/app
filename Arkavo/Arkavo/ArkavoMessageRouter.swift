@@ -32,7 +32,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             print("Invalid message: empty data")
             return
         }
-        print("ArkavoMessageRouter.clientDidReceiveMessage")
+        // Process received message
         Task {
             do {
                 try await processMessage(message)
@@ -55,7 +55,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         // if data is NanoTDF, decrypt it
         if data.count >= 3 {
             let magicNumberAndVersion = data.prefix(2)
-            print(magicNumberAndVersion.hexEncodedString())
+            // Check for NanoTDF magic number
             if magicNumberAndVersion == Data([0x4C, 0x31]) {
                 try await handleNATSMessage(data)
                 return
@@ -93,7 +93,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 
     /// Centralized function to handle the final decrypted plaintext.
     private func processDecryptedMessage(plaintext: Data, header: Header) async {
-        print("Processing final decrypted message. Size: \(plaintext.count)")
+        // Process the decrypted message
 
         // Check if creator is blocked
         let arkavoPolicyMetadata = ArkavoPolicy(header.policy)
@@ -124,7 +124,6 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "policy": ArkavoPolicy(header.policy), // Pass the parsed policy
             ]
         )
-        print("✅ Posted .messageDecrypted notification.")
     }
 
     // Define relevant error types if not already present
@@ -263,10 +262,10 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         print("- Header size: \(header.toData().count)")
         print("- Payload size: \(payload.toData().count)")
         print("- Nano size: \(nano.toData().count)")
-        print("- KAS Locator: \(header.kas.body)")
+        print("- KAS Locator: \(header.payloadKeyAccess.kasLocator.body)")
         print("- EPK: \(epk.hexEncodedString())")
 
-        let kasIdentifier = header.kas.body
+        let kasIdentifier = header.payloadKeyAccess.kasLocator.body
         print("   KAS Identifier from NATS message header: \(kasIdentifier)")
 
         if kasIdentifier == "kas.arkavo.net" {
@@ -303,77 +302,35 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
     /// Handles decryption using a local Private KeyStore based on sender profile ID.
     /// Used for NATS messages where KAS locator points to a peer, and for P2P messages.
     private func handleDirectDecryption(nano: NanoTDF, senderProfileID: Data) async throws {
-        print("Attempting direct decryption for sender: \(senderProfileID.base58EncodedString)...")
+        // Attempt direct decryption using one-time TDF
 
         // 1. Load Private KeyStore for the sender (Function already takes Profile ID)
-        print("   Loading private KeyStore for sender...")
         guard let privateKeyStore = await loadPrivateKeyStore(forPeer: senderProfileID) else {
             print("❌ Failed to load private KeyStore for sender \(senderProfileID.base58EncodedString).")
             throw ArkavoError.keyStoreError(senderProfileID.base58EncodedString)
         }
-        print("   Private KeyStore loaded successfully.")
 
         // 3. Decrypt the payload
-        print("   Decrypting payload using private KeyStore with public key \(nano.header.ephemeralPublicKey.hexEncodedString())")
-        
-        // --- CRYPTOKIT SANITY CHECK FOR EPHEMERAL PUBLIC KEY ---
-
-        let ephemeralPublicKeyBytes = nano.header.payloadKeyAccess.kasPublicKey
-        let policyECCMode = Curve.secp256r1
-        // 2. Attempt to initialize a CryptoKit PublicKey object.
-        // This will throw an error if the key data is invalid for the specified curve/format.
-        do {
-            switch policyECCMode {
-            case .secp256r1:
-                _ = try P256.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
-                print("✅ Sanity Check (CryptoKit P256): Ephemeral Public Key is valid format.")
-            case .secp384r1:
-                _ = try P384.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
-                print("✅ Sanity Check (CryptoKit P384): Ephemeral Public Key is valid format.")
-            case .secp521r1:
-                _ = try P521.KeyAgreement.PublicKey(compressedRepresentation: ephemeralPublicKeyBytes)
-                print("✅ Sanity Check (CryptoKit P521): Ephemeral Public Key is valid format.")
-            }
-        } catch let error as CryptoKitError { // Catch specific CryptoKit errors
-            print("❌ Sanity Check Failed (CryptoKit): Ephemeral Public Key is invalid or malformed for curve \(policyECCMode). Error: \(error)")
-        } catch { // Catch any other errors during initialization
-            print("❌ Sanity Check Failed (CryptoKit): An unexpected error occurred during public key initialization for curve \(policyECCMode). Error: \(error)")
-        }
-        let publicKS = await privateKeyStore.exportPublicKeyStore()
-        let tmpPublicKey = try await publicKS.getAndRemovePublicKey()
-//        let tmp = await privateKeyStore.generateKeyPair()
-        print("TEMP public key \(tmpPublicKey.hexEncodedString())")
-//        await privateKeyStore.store(keyPair: tmp)
-        let tmpprivatekey = await privateKeyStore.getPrivateKey(forPublicKey: tmpPublicKey)
-        print("TEMP private key \(tmpprivatekey?.hexEncodedString() ?? "not found")")
-        // --- END OF CRYPTOKIT SANITY CHECK ---
-        
-//        guard let privateKey = await privateKeyStore.getPrivateKey(forPublicKey: nano.header.payloadKeyAccess.kasPublicKey) else {
-//            print("❌ Failed to find a matching private key from sender.")
-//            return
-//        }
-        
-        let symmetricKeyBytes = try await privateKeyStore.derivePayloadSymmetricKey(
-            kasPublicKey: nano.header.payloadKeyAccess.kasPublicKey,
-            tdfEphemeralPublicKey: nano.header.ephemeralPublicKey
-        )
-        print("   Derived symmetric key successfully: \(symmetricKeyBytes.hexEncodedString())")
+        // Decrypt payload using private KeyStore
+        // Derive the symmetric key from the header using the private key store
+        let symmetricKey = try await privateKeyStore.derivePayloadSymmetricKey(header: nano.header)
         
         // Use the derived symmetric key to decrypt the NanoTDF payload
         do {
-            let symmetricKey = SymmetricKey(data: symmetricKeyBytes)
             let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
             print("✅ Payload decrypted successfully. Size: \(decryptedData.count)")
             
+            #if DEBUG
             // For debug purposes, try to show the beginning of the message if it's text
             if let textPreview = String(data: decryptedData.prefix(min(100, decryptedData.count)), encoding: .utf8) {
                 print("   Preview of decrypted data: \(textPreview)")
             }
+            #endif
             
             // 4. Process the decrypted message
             await processDecryptedMessage(plaintext: decryptedData, header: nano.header)
         } catch {
-            print("❌ Failed to decrypt payload. Error: \(error)")
+            print("Failed to decrypt payload: \(error.localizedDescription)")
             return
         }
     }
@@ -383,13 +340,13 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         do {
             // Fetch the Profile object associated with the SENDER
             guard let peerProfile = try await persistenceController.fetchProfile(withPublicID: senderProfileID) else {
-                print("   loadPrivateKeyStore: Profile not found for ID \(senderProfileID.base58EncodedString)")
+                print("Profile not found for ID \(senderProfileID.base58EncodedString)")
                 return nil
             }
 
             // Get the PRIVATE KeyStore data stored FOR THIS PEER on the local device
             guard let privateData = peerProfile.keyStorePrivate, !privateData.isEmpty else {
-                print("   loadPrivateKeyStore: No private KeyStore data found on profile \(peerProfile.name)")
+                print("No private KeyStore data found for profile \(peerProfile.name)")
                 return nil
             }
 
@@ -397,11 +354,11 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             // TODO: Determine curve dynamically if needed. Assuming p256.
             let keyStore = KeyStore(curve: .secp256r1)
             try await keyStore.deserialize(from: privateData) // Deserialize into the instance
-            print("   loadPrivateKeyStore: Deserialized private KeyStore for \(peerProfile.name)")
+            // Private KeyStore successfully loaded
             return keyStore
 
         } catch {
-            print("❌ Error loading/deserializing private KeyStore for \(senderProfileID.base58EncodedString): \(error)")
+            print("Error loading private KeyStore: \(error.localizedDescription)")
             return nil
         }
     }
