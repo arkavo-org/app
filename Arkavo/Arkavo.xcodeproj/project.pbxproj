@@ -990,8 +990,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
-				kind = revision;
-				revision = 6461b4056e77a6baefb8ea231faa4f9c31e77b4b;
+				branch = main;
+				kind = branch;
 			};
 		};
 		DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */ = {
