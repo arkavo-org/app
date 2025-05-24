@@ -62,6 +62,72 @@ class PersistenceController {
         }
     }
 
+    // MARK: - Data Integrity Methods
+
+    /// Validates streams by checking their type without accessing potentially invalid Thought references
+    /// Returns streams grouped by type
+    func validateStreamsWithoutAccessingThoughts() async throws -> (videoStream: Stream?, postStream: Stream?, innerCircleStream: Stream?) {
+        print("PersistenceController: Validating streams...")
+
+        // Fetch all streams
+        let streams = try mainContext.fetch(FetchDescriptor<Stream>())
+
+        var videoStream: Stream?
+        var postStream: Stream?
+        var innerCircleStream: Stream?
+
+        for stream in streams {
+            // Check for InnerCircle stream (doesn't depend on Thought)
+            if stream.isInnerCircleStream {
+                innerCircleStream = stream
+                print("PersistenceController: Found InnerCircle stream: \(stream.id)")
+                continue
+            }
+
+            // For other streams, we'll try to identify them by other characteristics
+            // or handle them as unknown streams that may need recreation
+            // We cannot safely access stream.source without risking a crash
+
+            // If we have profile information, we might infer the stream type
+            if stream.profile.name.lowercased().contains("video") {
+                videoStream = stream
+                print("PersistenceController: Found potential video stream by name: \(stream.id)")
+            } else if stream.profile.name.lowercased().contains("post") {
+                postStream = stream
+                print("PersistenceController: Found potential post stream by name: \(stream.id)")
+            }
+        }
+
+        return (videoStream, postStream, innerCircleStream)
+    }
+
+    /// Removes all streams that might have invalid Thought references
+    /// This is a more aggressive approach but ensures app stability
+    func removeStreamsWithPotentiallyInvalidThoughts() async throws {
+        print("PersistenceController: Removing streams with potential invalid thoughts...")
+
+        let account = try await getOrCreateAccount()
+        let streams = account.streams
+
+        // Keep only InnerCircle streams (which don't have source thoughts)
+        let safeStreams = streams.filter(\.isInnerCircleStream)
+        let removedCount = streams.count - safeStreams.count
+
+        if removedCount > 0 {
+            print("PersistenceController: Removing \(removedCount) streams that may have invalid thoughts")
+
+            // Remove non-InnerCircle streams
+            for stream in streams where !stream.isInnerCircleStream {
+                mainContext.delete(stream)
+            }
+
+            try await saveChanges()
+            print("PersistenceController: Successfully removed \(removedCount) streams")
+        } else {
+            print("PersistenceController: No streams need to be removed")
+        }
+    }
+
     // MARK: - Profile Operations
 
     /// Saves the primary user profile, typically during initial setup or significant updates.

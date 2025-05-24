@@ -612,12 +612,12 @@ struct RegistrationView: View {
                         Image(systemName: eulaAccepted ? "checkmark.square.fill" : "square")
                             .foregroundColor(eulaAccepted ? .accentColor : Color(UIColor.tertiaryLabel))
                             .font(.system(size: 22))
-                        
+
                         Text("I have read and agree to the End User License Agreement")
                             .font(.footnote)
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.leading)
-                        
+
                         Spacer()
                     }
                 }

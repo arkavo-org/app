@@ -555,29 +555,49 @@ struct ArkavoApp: App {
                 return
             }
 
-            // Validate that required streams exist
-            let videoStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .video
-            })
+            // First, try to validate streams safely without accessing Thoughts
+            do {
+                let (existingVideoStream, existingPostStream, existingInnerCircleStream) =
+                    try await persistenceController.validateStreamsWithoutAccessingThoughts()
 
-            if videoStream == nil {
-                print("⚠️ Video stream missing - attempting to create")
+                // If we can't identify stream types safely, remove potentially corrupted streams
+                if existingVideoStream == nil, existingPostStream == nil, !account.streams.isEmpty {
+                    print("⚠️ Cannot safely identify stream types - removing potentially corrupted streams")
+                    try await persistenceController.removeStreamsWithPotentiallyInvalidThoughts()
+                }
+
+                // Now recreate any missing streams
+                if existingVideoStream == nil {
+                    print("⚠️ Video stream missing - creating new one")
+                    let newVideoStream = try await createVideoStream(account: account, profile: profile)
+                    print("✅ Created new video stream: \(newVideoStream.id)")
+                }
+
+                if existingPostStream == nil {
+                    print("⚠️ Post stream missing - creating new one")
+                    let newPostStream = try await createPostStream(account: account, profile: profile)
+                    print("✅ Created new post stream: \(newPostStream.id)")
+                }
+
+                if existingInnerCircleStream == nil {
+                    print("⚠️ InnerCircle stream missing - creating new one")
+                    let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                    print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
+                }
+            } catch {
+                print("❌ Error validating streams: \(error.localizedDescription)")
+                // If validation fails completely, remove all streams and recreate
+                try await persistenceController.removeStreamsWithPotentiallyInvalidThoughts()
+
+                // Create fresh streams
                 let newVideoStream = try await createVideoStream(account: account, profile: profile)
-                print("✅ Created new video stream: \(newVideoStream.id)")
-            } else {
-                print("✅ Video stream exists: \(videoStream!.id)")
-            }
+                print("✅ Created new video stream after error: \(newVideoStream.id)")
 
-            let postStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .post
-            })
-
-            if postStream == nil {
-                print("⚠️ Post stream missing - attempting to create")
                 let newPostStream = try await createPostStream(account: account, profile: profile)
-                print("✅ Created new post stream: \(newPostStream.id)")
-            } else {
-                print("✅ Post stream exists: \(postStream!.id)")
+                print("✅ Created new post stream after error: \(newPostStream.id)")
+
+                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                print("✅ Created new InnerCircle stream after error: \(newInnerCircleStream.id)")
             }
 
             try await persistenceController.saveChanges()
