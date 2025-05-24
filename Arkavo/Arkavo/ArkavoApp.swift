@@ -810,6 +810,26 @@ class SharedState: ObservableObject {
         // Trigger objectWillChange if needed for UI updates
         objectWillChange.send()
     }
+    
+    func getCenterPrompt() -> String {
+        switch selectedTab {
+        case .home:        return "Capture"   // create a video
+        case .communities: return "Converse"  // start chatting
+        case .contacts:    return "Connect"   // invite someone new
+        case .social:      return "Publish"   // post to the feed
+        case .profile:     return "Express"   // personalize your profile
+        }
+    }
+    
+    func getTooltipText() -> String {
+        switch selectedTab {
+        case .home:        return "Capture video"
+        case .communities: return "Converse in chat"
+        case .contacts:    return "Connect with someone"
+        case .social:      return "Publish post"
+        case .profile:     return "Express yourself"
+        }
+    }
 }
 
 final class ServiceLocator {

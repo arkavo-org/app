@@ -13,6 +13,9 @@
     "(Offline)" : {
 
     },
+    "@%@" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -123,10 +126,19 @@
     "Activity Level: %@" : {
 
     },
+    "Add" : {
+
+    },
     "Add %@ to InnerCircle" : {
 
     },
     "Add a description..." : {
+
+    },
+    "Add contacts" : {
+
+    },
+    "Add New Contact" : {
 
     },
     "Add to InnerCircle" : {
@@ -275,6 +287,9 @@
     "Comments" : {
 
     },
+    "Connect" : {
+
+    },
     "Connect to Peers (Optional)" : {
 
     },
@@ -290,7 +305,16 @@
     "Connection Failed" : {
 
     },
+    "Contact Details" : {
+
+    },
+    "Contact ID or handle" : {
+
+    },
     "Contact Support" : {
+
+    },
+    "Contacts" : {
 
     },
     "Contributors" : {
@@ -375,6 +399,9 @@
     "Ensure other devices are also searching." : {
 
     },
+    "Enter Contact ID" : {
+
+    },
     "Enter handle" : {
 
     },
@@ -418,6 +445,9 @@
     "Features" : {
 
     },
+    "Find contacts using peer-to-peer" : {
+
+    },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
 
     },
@@ -433,6 +463,9 @@
     "Handle input field" : {
 
     },
+    "High Encryption" : {
+
+    },
     "Home" : {
 
     },
@@ -440,6 +473,9 @@
 
     },
     "Identity" : {
+
+    },
+    "Identity Verified" : {
 
     },
     "Inactive" : {
@@ -570,6 +606,9 @@
     "Military-grade encryption for your data" : {
 
     },
+    "More Options" : {
+
+    },
     "My Account" : {
 
     },
@@ -597,6 +636,9 @@
     "Next" : {
 
     },
+    "No contacts found" : {
+
+    },
     "No members added to the Inner Circle yet." : {
 
     },
@@ -613,6 +655,9 @@
 
     },
     "Not available on macOS" : {
+
+    },
+    "Not connected" : {
 
     },
     "Not Connected" : {
@@ -800,6 +845,12 @@
         }
       }
     },
+    "Scan a contact's QR code to connect" : {
+
+    },
+    "Scan QR Code" : {
+
+    },
     "Scanning for Devices..." : {
 
     },
@@ -809,6 +860,12 @@
     "Search" : {
 
     },
+    "Search contacts" : {
+
+    },
+    "Search Nearby" : {
+
+    },
     "Section" : {
 
     },
@@ -816,6 +873,9 @@
 
     },
     "Send" : {
+
+    },
+    "Send Message" : {
 
     },
     "Settings" : {
@@ -1013,6 +1073,9 @@
 
     },
     "Trust status: %@" : {
+
+    },
+    "Try a different search term" : {
 
     },
     "Try to Reconnect" : {

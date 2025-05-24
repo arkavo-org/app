@@ -17,9 +17,6 @@ struct CreatorView: View {
                 CreatorListView(viewModel: viewModel)
             }
         }
-        .onAppear {
-            sharedState.isAwaiting = viewModel.bio.isEmpty
-        }
         .onDisappear {
             sharedState.selectedCreatorPublicID = nil
         }
@@ -449,6 +446,9 @@ struct CreatorAboutSection: View {
                             .cornerRadius(8)
                     }
                     .disabled(isSubmitting)
+                } else if viewModel.bio.isEmpty {
+                    WaveEmptyStateView()
+                        .frame(height: 200) // Constrain height for bio section
                 } else {
                     Text(viewModel.bio)
                         .font(.body)

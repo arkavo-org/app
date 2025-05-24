@@ -39,6 +39,8 @@
 		DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D8842CF6E16F0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
+		DA57B9A92DE28A9D002D5C8F /* WaveEmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */; };
+		DA57B9AB2DE28AB6002D5C8F /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */; };
 		DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */; };
 		DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
@@ -139,6 +141,8 @@
 		DA44D8842CF6E16F0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveEmptyStateView.swift; sourceTree = "<group>"; };
+		DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotGenerator.swift; sourceTree = "<group>"; };
 		DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
@@ -246,6 +250,8 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */,
+				DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */,
 				DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
@@ -529,6 +535,7 @@
 				DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */,
 				DA2212302CB0D1D900C220B0 /* ActivityService.swift in Sources */,
 				DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */,
+				DA57B9AB2DE28AB6002D5C8F /* ContactsView.swift in Sources */,
 				DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */,
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
@@ -580,6 +587,7 @@
 				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,
 				DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */,
 				DA8A1F922CE1662800E1D7FC /* ProtectorRedditScanner.swift in Sources */,
+				DA57B9A92DE28A9D002D5C8F /* WaveEmptyStateView.swift in Sources */,
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */,
 				DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */,

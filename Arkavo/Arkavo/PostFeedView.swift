@@ -446,16 +446,7 @@ struct PostFeedView: View {
         GeometryReader { geometry in
             ZStack {
                 if viewModel.posts.isEmpty {
-                    VStack {
-                        Spacer()
-                        WaveLoadingView(message: "Awaiting")
-                            .frame(maxWidth: .infinity)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground))
-                    .onAppear { sharedState.isAwaiting = true }
-                    .onDisappear { sharedState.isAwaiting = false }
+                    WaveEmptyStateView()
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {

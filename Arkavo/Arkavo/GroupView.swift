@@ -643,65 +643,63 @@ struct GroupView: View {
         }
     }
 
-    // Empty state view
-    private var emptyStreamView: some View {
-        VStack {
-            Spacer()
-            WaveLoadingView(message: "Awaiting")
-                .frame(maxWidth: .infinity)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
-        .onAppear { sharedState.isAwaiting = true }
-        .onDisappear { sharedState.isAwaiting = false }
-    }
 
     // Stream list - Changed ScrollView/LazyVStack to List
     private func streamListView(geometry: GeometryProxy) -> some View {
-        List {
-            // --- 1. InnerCircle Stream Section ---
-            // Find the InnerCircle stream
-            if let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) {
-                Section {
-                    // Use the dedicated view for InnerCircle members
-                    InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
-                        .environmentObject(sharedState)
-                        .background(InnerCircleConstants.cardBackgroundColor) // Match background
-                        .cornerRadius(InnerCircleConstants.cornerRadius) // Apply corner radius
-                    // --- REMOVED: InnerCircle Chat Input ---
-                }
-                .listRowInsets(EdgeInsets(top: systemMargin / 2, leading: systemMargin, bottom: systemMargin / 2, trailing: systemMargin)) // Add padding around the InnerCircleView
-                .listRowBackground(InnerCircleConstants.backgroundColor) // Match list background
-                .listRowSeparator(.hidden) // Hide separator for this section
-            }
-
-            // --- 2. Other Streams Section ---
-            let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
-            if !regularStreams.isEmpty {
-                Section {
-                    // Iterate ONLY over regular streams
-                    ForEach(regularStreams) { stream in
-                        streamRow(stream: stream) // Use existing streamRow for non-InnerCircle
-                            .listRowInsets(EdgeInsets(top: 5, leading: InnerCircleConstants.systemMargin, bottom: 5, trailing: InnerCircleConstants.systemMargin)) // Add padding within row
-                            .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
-                    }
-                    // Apply onDelete ONLY to regular streams
-                    .onDelete(perform: deleteStream)
-                } header: {
-                    Text("Streams") // Header for regular streams
-                        .font(InnerCircleConstants.headerFont)
-                        .foregroundColor(InnerCircleConstants.primaryTextColor)
-                    // List handles section header styling, remove extra padding
-                    // .padding(.top, InnerCircleConstants.systemMargin)
-                    // .padding(.horizontal, InnerCircleConstants.systemMargin)
-                }
-                .listRowSeparator(.hidden) // Hide separators if desired
-            }
+        let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
+        
+        // Show WaveLoadingView if no regular streams exist
+        if regularStreams.isEmpty {
+            return AnyView(
+                WaveEmptyStateView()
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+            )
         }
-        .listStyle(.plain) // Use plain style to remove default List background/styling
-        .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
-        .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
+        
+        return AnyView(
+            List {
+                // --- 1. InnerCircle Stream Section ---
+                // Find the InnerCircle stream
+                if let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) {
+                    Section {
+                        // Use the dedicated view for InnerCircle members
+                        InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
+                            .environmentObject(sharedState)
+                            .background(InnerCircleConstants.cardBackgroundColor) // Match background
+                            .cornerRadius(InnerCircleConstants.cornerRadius) // Apply corner radius
+                        // --- REMOVED: InnerCircle Chat Input ---
+                    }
+                    .listRowInsets(EdgeInsets(top: systemMargin / 2, leading: systemMargin, bottom: systemMargin / 2, trailing: systemMargin)) // Add padding around the InnerCircleView
+                    .listRowBackground(InnerCircleConstants.backgroundColor) // Match list background
+                    .listRowSeparator(.hidden) // Hide separator for this section
+                }
+
+                // --- 2. Other Streams Section ---
+                if !regularStreams.isEmpty {
+                    Section {
+                        // Iterate ONLY over regular streams
+                        ForEach(regularStreams) { stream in
+                            streamRow(stream: stream) // Use existing streamRow for non-InnerCircle
+                                .listRowInsets(EdgeInsets(top: 5, leading: InnerCircleConstants.systemMargin, bottom: 5, trailing: InnerCircleConstants.systemMargin)) // Add padding within row
+                                .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
+                        }
+                        // Apply onDelete ONLY to regular streams
+                        .onDelete(perform: deleteStream)
+                    } header: {
+                        Text("Streams") // Header for regular streams
+                            .font(InnerCircleConstants.headerFont)
+                            .foregroundColor(InnerCircleConstants.primaryTextColor)
+                        // List handles section header styling, remove extra padding
+                        // .padding(.top, InnerCircleConstants.systemMargin)
+                        // .padding(.horizontal, InnerCircleConstants.systemMargin)
+                    }
+                    .listRowSeparator(.hidden) // Hide separators if desired
+                }
+            }
+            .listStyle(.plain) // Use plain style to remove default List background/styling
+            .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
+            .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
+        )
     }
 
     // Individual stream row (now only uses GroupCardView)
