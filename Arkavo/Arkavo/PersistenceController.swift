@@ -43,12 +43,10 @@ class PersistenceController {
         } else {
             print("PersistenceController: Creating new account.")
             let newAccount = Account()
-            // Create the initial user profile with placeholder name
-            let userProfile = Profile(name: "Me")
-            newAccount.profile = userProfile // Associate profile with account
-            mainContext.insert(newAccount) // Insert account (will also insert profile due to relationship)
+            // Do not create a default profile - let registration flow handle profile creation
+            mainContext.insert(newAccount)
             try mainContext.save()
-            print("PersistenceController: New account and initial profile created and saved.")
+            print("PersistenceController: New account created and saved (no profile).")
             return newAccount
         }
     }

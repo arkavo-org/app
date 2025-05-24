@@ -54,6 +54,7 @@ struct RegistrationView: View {
     @State private var isScreenNameAvailable = true
     @State private var screenNameCancellable: AnyCancellable?
     @State private var eulaAccepted = false
+    @FocusState private var isHandleFieldFocused: Bool
 
     private var debouncedScreenNamePublisher: Publishers.Debounce<NotificationCenter.Publisher, RunLoop> {
         NotificationCenter.default
@@ -253,7 +254,15 @@ struct RegistrationView: View {
                         .autocorrectionDisabled()
                         .padding()
                         .border(.secondary)
+                        .focused($isHandleFieldFocused)
+                        .accessibilityLabel("Handle input field")
+                        .accessibilityIdentifier("handleTextField")
+                        .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
+                            // Set focus after a small delay to ensure view is fully rendered
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                isHandleFieldFocused = true
+                            }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {
@@ -271,7 +280,15 @@ struct RegistrationView: View {
                         .autocorrectionDisabled()
                         .padding()
                         .border(.secondary)
+                        .focused($isHandleFieldFocused)
+                        .accessibilityLabel("Handle input field")
+                        .accessibilityIdentifier("handleTextField")
+                        .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
+                            // Set focus after a small delay to ensure view is fully rendered
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                isHandleFieldFocused = true
+                            }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {
@@ -587,15 +604,27 @@ struct RegistrationView: View {
             VStack(spacing: 16) {
                 Divider()
 
-                // Toggle with HIG-compliant styling
-                Toggle(isOn: $eulaAccepted) {
-                    Text("I have read and agree to the End User License Agreement")
-                        .font(.footnote)
+                // Custom checkbox button for better automation support
+                Button(action: {
+                    eulaAccepted.toggle()
+                }) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: eulaAccepted ? "checkmark.square.fill" : "square")
+                            .foregroundColor(eulaAccepted ? .accentColor : Color(UIColor.tertiaryLabel))
+                            .font(.system(size: 22))
+                        
+                        Text("I have read and agree to the End User License Agreement")
+                            .font(.footnote)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                        
+                        Spacer()
+                    }
                 }
-                .toggleStyle(SwitchToggleStyle(tint: .accentColor))
                 .padding(.horizontal)
-                .accessibilityLabel("EULA Agreement Toggle")
+                .accessibilityLabel("EULA Agreement Checkbox")
                 .accessibilityHint(eulaAccepted ? "Agreement accepted" : "Tap to accept agreement")
+                .accessibilityAddTraits(.isButton)
 
                 // Support links
                 HStack {

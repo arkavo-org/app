@@ -160,6 +160,9 @@
     "Age Verification" : {
 
     },
+    "Agreement accepted" : {
+
+    },
     "Already in InnerCircle" : {
 
     },
@@ -287,6 +290,9 @@
     "Connection Failed" : {
 
     },
+    "Contact Support" : {
+
+    },
     "Contributors" : {
 
     },
@@ -372,6 +378,9 @@
     "Enter handle" : {
 
     },
+    "Enter your unique handle for arkavo.social" : {
+
+    },
     "Error" : {
       "localizations" : {
         "es-US" : {
@@ -386,6 +395,9 @@
 
     },
     "Error: %@" : {
+
+    },
+    "EULA Agreement Checkbox" : {
 
     },
     "Expert Level: %@" : {
@@ -416,6 +428,9 @@
 
     },
     "Group Name" : {
+
+    },
+    "Handle input field" : {
 
     },
     "Home" : {
@@ -456,6 +471,9 @@
 
     },
     "Invite Friends" : {
+
+    },
+    "Key Points" : {
 
     },
     "Last known location: %lf, %lf" : {
@@ -549,6 +567,9 @@
     "Members:" : {
 
     },
+    "Military-grade encryption for your data" : {
+
+    },
     "My Account" : {
 
     },
@@ -628,6 +649,9 @@
     "Please provide a valid government-issued ID and a selfie to verify your age." : {
 
     },
+    "Please review and accept our terms" : {
+
+    },
     "Policies" : {
       "localizations" : {
         "es-US" : {
@@ -645,6 +669,12 @@
 
     },
     "Privacy" : {
+
+    },
+    "Privacy by design" : {
+
+    },
+    "Privacy Policy" : {
 
     },
     "Processing..." : {
@@ -938,6 +968,9 @@
     "Tap 'Discover Peers' to find nearby devices." : {
 
     },
+    "Tap to accept agreement" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
@@ -1072,10 +1105,16 @@
     "What We are Discussing" : {
 
     },
+    "You own your content" : {
+
+    },
     "You're currently using Arkavo in offline mode." : {
 
     },
     "Your handle must be unique within arkavo.social" : {
+
+    },
+    "Zero-tolerance for harmful content" : {
 
     }
   },

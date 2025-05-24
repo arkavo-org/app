@@ -51,7 +51,7 @@ When using IDB for button taps, especially with multiple monitors:
 1. **Always tap at element centers**: Buttons require taps at their exact center for reliable interaction
 2. **Use accessibility data**: Find elements via `idb ui describe-all` and filter by AXLabel
 3. **Calculate center coordinates**: `center_x = x + width/2`, `center_y = y + height/2`
-4. **Automation script available**: `Arkavo/automation_scripts/idb_automation_fix.sh` provides reusable functions:
+4. **Automation script available**: `automation/idb_automation_fix.sh` provides reusable functions:
    - `tap_button "Button Label"` - Find and tap button by accessibility label
    - `check_toggle "Toggle Label"` - Handle checkboxes and toggles
 5. **Example working tap**: 
@@ -75,3 +75,8 @@ When using IDB for button taps, especially with multiple monitors:
 
 ## Workflow Practices
 - When create a issue that has a related screenshot, add it to the issue
+
+## Development Guidelines
+- Use github issues to track work except at the minute level
+- Minimize markdown file creation
+- Code comments should describe why this code does what it does, do not put status messages that are only relevant at that moment

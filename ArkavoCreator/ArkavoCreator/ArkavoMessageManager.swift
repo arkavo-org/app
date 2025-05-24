@@ -327,17 +327,17 @@ struct ArkavoMessage: Codable, Identifiable {
 
         var icon: String {
             switch self {
-            case .pending: return "clock"
-            case .replayed: return "checkmark.circle"
-            case .failed: return "exclamationmark.triangle"
+            case .pending: "clock"
+            case .replayed: "checkmark.circle"
+            case .failed: "exclamationmark.triangle"
             }
         }
 
         var color: Color {
             switch self {
-            case .pending: return .yellow
-            case .replayed: return .green
-            case .failed: return .red
+            case .pending: .yellow
+            case .replayed: .green
+            case .failed: .red
             }
         }
     }

@@ -4,11 +4,12 @@
 # This script demonstrates the working approach for IDB tap commands
 
 UDID="132B1310-2AF5-45F4-BB8E-CA5A2FEB9481"
+IDB="/Users/paul/Library/Python/3.12/bin/idb"
 
 # Function to find button coordinates using accessibility labels
 find_button() {
     local label="$1"
-    idb ui describe-all --udid "$UDID" | jq -r ".[] | select(.type == \"Button\") | select(.AXLabel | contains(\"$label\")) | {x: .frame.x, y: .frame.y, width: .frame.width, height: .frame.height, label: .AXLabel}"
+    $IDB ui describe-all --udid "$UDID" | jq -r ".[] | select(.type == \"Button\") | select(.AXLabel | contains(\"$label\")) | {x: .frame.x, y: .frame.y, width: .frame.width, height: .frame.height, label: .AXLabel}"
 }
 
 # Function to tap at center of element
@@ -21,7 +22,7 @@ tap_center() {
     local center_y=$(echo "$y + $height/2" | bc | cut -d. -f1)
     
     echo "Tapping at ($center_x, $center_y)"
-    idb ui tap "$center_x" "$center_y" --udid "$UDID"
+    $IDB ui tap "$center_x" "$center_y" --udid "$UDID"
 }
 
 # Function to find and tap button by label
@@ -48,7 +49,7 @@ check_toggle() {
     local label="$1"
     echo "Looking for toggle: $label"
     
-    local toggle_info=$(idb ui describe-all --udid "$UDID" | jq -r ".[] | select(.type == \"Switch\" or .type == \"Toggle\") | select(.AXLabel | contains(\"$label\")) | {x: .frame.x, y: .frame.y, width: .frame.width, height: .frame.height, label: .AXLabel, value: .AXValue}")
+    local toggle_info=$($IDB ui describe-all --udid "$UDID" | jq -r ".[] | select(.type == \"Switch\" or .type == \"Toggle\") | select(.AXLabel | contains(\"$label\")) | {x: .frame.x, y: .frame.y, width: .frame.width, height: .frame.height, label: .AXLabel, value: .AXValue}")
     
     if [ -z "$toggle_info" ]; then
         echo "Toggle '$label' not found"

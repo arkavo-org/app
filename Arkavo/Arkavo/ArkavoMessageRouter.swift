@@ -314,19 +314,19 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         // Decrypt payload using private KeyStore
         // Derive the symmetric key from the header using the private key store
         let symmetricKey = try await privateKeyStore.derivePayloadSymmetricKey(header: nano.header)
-        
+
         // Use the derived symmetric key to decrypt the NanoTDF payload
         do {
             let decryptedData = try await nano.getPayloadPlaintext(symmetricKey: symmetricKey)
             print("✅ Payload decrypted successfully. Size: \(decryptedData.count)")
-            
+
             #if DEBUG
-            // For debug purposes, try to show the beginning of the message if it's text
-            if let textPreview = String(data: decryptedData.prefix(min(100, decryptedData.count)), encoding: .utf8) {
-                print("   Preview of decrypted data: \(textPreview)")
-            }
+                // For debug purposes, try to show the beginning of the message if it's text
+                if let textPreview = String(data: decryptedData.prefix(min(100, decryptedData.count)), encoding: .utf8) {
+                    print("   Preview of decrypted data: \(textPreview)")
+                }
             #endif
-            
+
             // 4. Process the decrypted message
             await processDecryptedMessage(plaintext: decryptedData, header: nano.header)
         } catch {
