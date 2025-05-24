@@ -17,8 +17,8 @@ tap_center() {
     local y=$2
     local width=$3
     local height=$4
-    local center_x=$(echo "$x + $width/2" | bc)
-    local center_y=$(echo "$y + $height/2" | bc)
+    local center_x=$(echo "$x + $width/2" | bc | cut -d. -f1)
+    local center_y=$(echo "$y + $height/2" | bc | cut -d. -f1)
     
     echo "Tapping at ($center_x, $center_y)"
     idb ui tap "$center_x" "$center_y" --udid "$UDID"

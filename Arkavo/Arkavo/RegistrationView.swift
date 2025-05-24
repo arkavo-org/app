@@ -418,134 +418,218 @@ struct RegistrationView: View {
     }
 
     private var eulaView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("End User License Agreement (EULA)")
-                    .font(.title)
-                    .fontWeight(.bold)
-
-                Text("Effective Date: 2025-01-15")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 16) {
-                    Group {
-                        Text("1. Agreement to Terms")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.")
-                    }
-
-                    Group {
-                        Text("2. Prohibited Conduct")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.")
-                            BulletPoint("Engaging in harassment, threats, or abuse towards other users.")
-                            BulletPoint("Sharing content that infringes intellectual property rights or violates laws.")
-                            BulletPoint("Misusing the platform to distribute spam or malicious software.")
-                        }
-                    }
-
-                    Group {
-                        Text("3. Content Moderation")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.")
-                    }
-
-                    Group {
-                        Text("4. Reporting and Flagging Mechanisms")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Users can report objectionable content through the following steps:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            NumberedPoint(1, "Use the \"Report\" button available on all posts and user profiles.")
-                            NumberedPoint(2, "Specify the nature of the objectionable content or behavior.")
-                        }
-
-                        Text("Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account.")
-                    }
-
-                    Group {
-                        Text("5. Blocking Abusive Users")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo allows users to block other users who engage in abusive behavior. To block a user:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            NumberedPoint(1, "Navigate to the user's profile.")
-                            NumberedPoint(2, "Select the \"Block User\" option.")
-                        }
-
-                        Text("Blocked users will no longer be able to interact with or view the blocker's profile or content.")
-                    }
-
-                    Group {
-                        Text("6. Enforcement Actions")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Users found violating this EULA may face one or more of the following actions:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Warning notifications for minor violations.")
-                            BulletPoint("Temporary suspension of account privileges.")
-                            BulletPoint("Permanent account termination for severe or repeated violations.")
-                        }
-                    }
-
-                    Group {
-                        Text("7. Developer's Responsibility")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo's development team is committed to:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Reviewing and acting on all reports of objectionable content within 24 hours.")
-                            BulletPoint("Permanently removing content that violates this EULA.")
-                            BulletPoint("Ejecting users who repeatedly or severely violate these terms.")
-                        }
-                    }
-
-                    Group {
-                        Text("8. Updates to the EULA")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.")
-                    }
-
-                    Group {
-                        Text("9. Contact Information")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.")
-                    }
-
-                    Divider()
-                        .padding(.vertical)
-
-                    Text("By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.")
-                        .fontWeight(.medium)
-                }
-
-                Spacer(minLength: 20)
-
-                Toggle("I have read and agree to the End User License Agreement", isOn: $eulaAccepted)
-                    .padding(.top)
+        VStack(spacing: 0) {
+            // Fixed Header (HIG-compliant)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Please review and accept our terms")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
+            .background(Color(UIColor.systemBackground))
+
+            Divider()
+
+            // Scrollable Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Key Points Summary (HIG-compliant)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Key Points", systemImage: "checkmark.shield.fill")
+                            .font(.headline)
+                            .foregroundColor(.accentColor)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Zero-tolerance for harmful content", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("Military-grade encryption for your data", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("You own your content", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("Privacy by design", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                        }
+                    }
+                    .padding()
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(12)
+
+                    Text("End User License Agreement (EULA)")
+                        .font(.title2.bold())
+
+                    Text("Effective Date: 2025-01-15")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Group {
+                            Text("1. Agreement to Terms")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.")
+                        }
+
+                        Group {
+                            Text("2. Prohibited Conduct")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.")
+                                BulletPoint("Engaging in harassment, threats, or abuse towards other users.")
+                                BulletPoint("Sharing content that infringes intellectual property rights or violates laws.")
+                                BulletPoint("Misusing the platform to distribute spam or malicious software.")
+                            }
+                        }
+
+                        Group {
+                            Text("3. Content Moderation")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.")
+                        }
+
+                        Group {
+                            Text("4. Reporting and Flagging Mechanisms")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Users can report objectionable content through the following steps:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                NumberedPoint(1, "Use the \"Report\" button available on all posts and user profiles.")
+                                NumberedPoint(2, "Specify the nature of the objectionable content or behavior.")
+                            }
+
+                            Text("Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account.")
+                        }
+
+                        Group {
+                            Text("5. Blocking Abusive Users")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo allows users to block other users who engage in abusive behavior. To block a user:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                NumberedPoint(1, "Navigate to the user's profile.")
+                                NumberedPoint(2, "Select the \"Block User\" option.")
+                            }
+
+                            Text("Blocked users will no longer be able to interact with or view the blocker's profile or content.")
+                        }
+
+                        Group {
+                            Text("6. Enforcement Actions")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Users found violating this EULA may face one or more of the following actions:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Warning notifications for minor violations.")
+                                BulletPoint("Temporary suspension of account privileges.")
+                                BulletPoint("Permanent account termination for severe or repeated violations.")
+                            }
+                        }
+
+                        Group {
+                            Text("7. Developer's Responsibility")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo's development team is committed to:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Reviewing and acting on all reports of objectionable content within 24 hours.")
+                                BulletPoint("Permanently removing content that violates this EULA.")
+                                BulletPoint("Ejecting users who repeatedly or severely violate these terms.")
+                            }
+                        }
+
+                        Group {
+                            Text("8. Updates to the EULA")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.")
+                        }
+
+                        Group {
+                            Text("9. Contact Information")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.")
+                        }
+
+                        Divider()
+                            .padding(.vertical)
+
+                        Text("By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.")
+                            .fontWeight(.medium)
+                    }
+                }
+                .padding()
+            }
+            .background(Color(UIColor.secondarySystemBackground))
+
+            // Fixed Footer (HIG-compliant)
+            VStack(spacing: 16) {
+                Divider()
+
+                // Toggle with HIG-compliant styling
+                Toggle(isOn: $eulaAccepted) {
+                    Text("I have read and agree to the End User License Agreement")
+                        .font(.footnote)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+                .padding(.horizontal)
+                .accessibilityLabel("EULA Agreement Toggle")
+                .accessibilityHint(eulaAccepted ? "Agreement accepted" : "Tap to accept agreement")
+
+                // Support links
+                HStack {
+                    Link("Privacy Policy", destination: URL(string: "https://arkavo.com/privacy.html")!)
+                        .font(.caption)
+
+                    Spacer()
+
+                    Link("Contact Support", destination: URL(string: "mailto:support@arkavo.com")!)
+                        .font(.caption)
+                }
+                .padding(.horizontal)
+                .foregroundColor(.accentColor)
+            }
+            .padding(.vertical, 12)
+            .background(Color(UIColor.systemBackground))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color(UIColor.separator)),
+                alignment: .top
+            )
+        }
+    }
+}
+
+// HIG-compliant horizontal label style
+struct HorizontalLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            configuration.icon
+                .foregroundColor(.green)
+                .imageScale(.small)
+            configuration.title
         }
     }
 }

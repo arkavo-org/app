@@ -115,32 +115,32 @@ public final class ArkavoClient: NSObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 print("WebSocket state changing to: \(newState)")
-                self.currentState = newState
+                currentState = newState
 
                 // Resume the continuation when connected
                 switch newState {
                 case .connected:
-                    if let continuation = self.connectionContinuation {
-                        self.connectionContinuation = nil
+                    if let continuation = connectionContinuation {
+                        connectionContinuation = nil
                         continuation.resume(returning: ())
                     }
                 case let .error(error):
-                    if let continuation = self.connectionContinuation {
-                        self.connectionContinuation = nil
+                    if let continuation = connectionContinuation {
+                        connectionContinuation = nil
                         continuation.resume(throwing: error)
                     }
                     // Also handle any pending message handlers
-                    for handler in self.messageHandlers.values {
+                    for handler in messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    self.messageHandlers.removeAll()
+                    messageHandlers.removeAll()
                 case .disconnected:
                     // Clean up any pending handlers on disconnect
                     let error = ArkavoError.connectionFailed("Connection disconnected")
-                    for handler in self.messageHandlers.values {
+                    for handler in messageHandlers.values {
                         handler.resume(throwing: error)
                     }
-                    self.messageHandlers.removeAll()
+                    messageHandlers.removeAll()
                 case .connecting:
                     print("connecting")
                 case .authenticating:
