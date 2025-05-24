@@ -181,7 +181,7 @@ final class KeyStoreDataTests: XCTestCase {
             keyCurve: .secp256r1, // Use valid curve for initialization
             capacity: 8192
         )
-        
+
         // Manually set invalid curve string to test default behavior
         invalidCurveData.keyCurveRawValue = "invalid"
 
