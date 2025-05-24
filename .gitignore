@@ -96,6 +96,7 @@ iOSInjectionProject/
 .idea/app.iml
 .idea/vcs.xml
 OpenTDFKit/
+test_results/
 Arkavo/OpenTDFKit/
 Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /default.store

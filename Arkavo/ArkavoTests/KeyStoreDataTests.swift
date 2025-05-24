@@ -174,13 +174,16 @@ final class KeyStoreDataTests: XCTestCase {
     }
 
     func testKeyStoreWithDefaultCurve() {
-        // Create KeyStoreData with invalid curve string
+        // Create KeyStoreData with invalid curve string by directly setting the raw value
         let invalidCurveData = KeyStoreData(
             profile: mockProfile,
             serializedData: "invalidCurveData".data(using: .utf8)!,
-            keyCurve: Curve(rawValue: "invalid")!, // This will be nil in real code
+            keyCurve: .secp256r1, // Use valid curve for initialization
             capacity: 8192
         )
+        
+        // Manually set invalid curve string to test default behavior
+        invalidCurveData.keyCurveRawValue = "invalid"
 
         // Verify default curve is used
         XCTAssertEqual(invalidCurveData.keyCurve, .secp256r1)
