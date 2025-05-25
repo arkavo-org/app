@@ -186,16 +186,15 @@ struct ContentView: View {
             if !sharedState.showCreateView, !sharedState.showChatOverlay {
                 timeOnScreen += 1
 
-                // Show tooltip after inactivity
-                if timeOnScreen == 3 {
+                // Show tooltip after 3 seconds if content is awaiting
+                if timeOnScreen >= 3 && timeOnScreen < 9 && sharedState.isAwaiting && !showTooltip {
                     withAnimation(.easeInOut) {
-                        // if a view has no content then show tooltip, repurposing isAwaiting
-                        showTooltip = sharedState.isAwaiting
+                        showTooltip = true
                     }
                 }
 
-                // Hide tooltip after being shown
-                if timeOnScreen == 9 {
+                // Hide tooltip after being shown for 6 seconds
+                if timeOnScreen >= 9 && showTooltip {
                     withAnimation(.easeInOut) {
                         showTooltip = false
                     }
@@ -206,6 +205,21 @@ struct ContentView: View {
             // Reset timer when tab changes
             timeOnScreen = 0
             showTooltip = false
+        }
+        // Also respond to isAwaiting changes
+        .onChange(of: sharedState.isAwaiting) { _, isNowAwaiting in
+            // If content is now awaiting and we've been on screen for 3+ seconds, show tooltip
+            if isNowAwaiting && timeOnScreen >= 3 && timeOnScreen < 9 && !showTooltip {
+                withAnimation(.easeInOut) {
+                    showTooltip = true
+                }
+            }
+            // If content is no longer awaiting, hide tooltip
+            else if !isNowAwaiting && showTooltip {
+                withAnimation(.easeInOut) {
+                    showTooltip = false
+                }
+            }
         }
     }
 

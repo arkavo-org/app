@@ -44,6 +44,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
     @Published var postQueue = PostMessageQueue()
+    @Published var hasAttemptedLoad = false
 
     required init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
@@ -189,8 +190,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
 
     private func loadThoughts() async {
         isLoading = true
-        defer { isLoading = false }
-
+        
         // First try to load from stream
         let postStream = getPostStream()
 
@@ -220,6 +220,8 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             let relevantThoughts = postStream.thoughts
                 .filter { $0.metadata.mediaType == .post }
                 .suffix(10) // Load up to 10 post
+            
+            print("PostFeedViewModel: Loading \(relevantThoughts.count) thoughts from post stream")
 
             for thought in relevantThoughts {
                 try? await client.sendMessage(thought.nano)
@@ -227,6 +229,16 @@ class PostFeedViewModel: ViewModel, ObservableObject {
                 postQueue.enqueuePost(thought)
             }
         }
+        
+        print("PostFeedViewModel: loadThoughts completed. Posts count: \(posts.count)")
+        
+        // Wait a bit for notifications to process
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        
+        // Now we can consider loading complete
+        isLoading = false
+        hasAttemptedLoad = true
+        print("PostFeedViewModel: After delay. Posts count: \(posts.count)")
     }
 
     private func createFlatBuffersPolicy(for thoughtModel: ThoughtServiceModel) throws -> Data {
@@ -445,7 +457,11 @@ struct PostFeedView: View {
     private var mainFeedView: some View {
         GeometryReader { geometry in
             ZStack {
-                if viewModel.posts.isEmpty {
+                if !viewModel.hasAttemptedLoad {
+                    // Show loading indicator while initial load hasn't completed
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.posts.isEmpty {
                     WaveEmptyStateView()
                 } else {
                     ScrollViewReader { proxy in

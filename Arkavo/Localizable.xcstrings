@@ -126,19 +126,13 @@
     "Activity Level: %@" : {
 
     },
-    "Add" : {
-
-    },
     "Add %@ to InnerCircle" : {
 
     },
     "Add a description..." : {
 
     },
-    "Add contacts" : {
-
-    },
-    "Add New Contact" : {
+    "Add someone you know who's right beside you—verify in person to grow your trusted network." : {
 
     },
     "Add to InnerCircle" : {
@@ -173,6 +167,9 @@
 
     },
     "Agreement accepted" : {
+
+    },
+    "All connections use end-to-end encryption with One-Time TDF technology to ensure your conversations remain private." : {
 
     },
     "Already in InnerCircle" : {
@@ -256,6 +253,9 @@
     "Broadcast" : {
 
     },
+    "Build your trusted network" : {
+
+    },
     "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App." : {
 
     },
@@ -290,13 +290,25 @@
     "Connect" : {
 
     },
+    "Connect Nearby" : {
+
+    },
     "Connect to Peers (Optional)" : {
+
+    },
+    "Connect with %@?" : {
+
+    },
+    "Connect with Others" : {
 
     },
     "Connected" : {
 
     },
     "Connected %@" : {
+
+    },
+    "Connected Peers" : {
 
     },
     "Connecting..." : {
@@ -306,9 +318,6 @@
 
     },
     "Contact Details" : {
-
-    },
-    "Contact ID or handle" : {
 
     },
     "Contact Support" : {
@@ -399,9 +408,6 @@
     "Ensure other devices are also searching." : {
 
     },
-    "Enter Contact ID" : {
-
-    },
     "Enter handle" : {
 
     },
@@ -445,10 +451,10 @@
     "Features" : {
 
     },
-    "Find contacts using peer-to-peer" : {
+    "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
 
     },
-    "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
+    "For security, confirm the device name with the person before connecting." : {
 
     },
     "Granularity" : {
@@ -507,6 +513,9 @@
 
     },
     "Invite Friends" : {
+
+    },
+    "Invite Remotely" : {
 
     },
     "Key Points" : {
@@ -581,6 +590,12 @@
 
     },
     "logo" : {
+
+    },
+    "Make sure the other person has Arkavo open and is also searching for connections." : {
+
+    },
+    "Make sure this is the person you want to connect with. They will receive a connection request." : {
 
     },
     "Map" : {
@@ -845,12 +860,6 @@
         }
       }
     },
-    "Scan a contact's QR code to connect" : {
-
-    },
-    "Scan QR Code" : {
-
-    },
     "Scanning for Devices..." : {
 
     },
@@ -860,10 +869,7 @@
     "Search" : {
 
     },
-    "Search contacts" : {
-
-    },
-    "Search Nearby" : {
+    "Searching for nearby devices..." : {
 
     },
     "Section" : {
@@ -872,10 +878,16 @@
     "Secure" : {
 
     },
+    "Secure Connections" : {
+
+    },
     "Send" : {
 
     },
     "Send Message" : {
+
+    },
+    "Send your Arkavo link with the iOS Share Sheet to connect with someone you already know—no matter the distance." : {
 
     },
     "Settings" : {
@@ -1031,6 +1043,9 @@
     "Tap to accept agreement" : {
 
     },
+    "Tap to connect" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
@@ -1110,6 +1125,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Verify in Person" : {
 
     },
     "Video" : {

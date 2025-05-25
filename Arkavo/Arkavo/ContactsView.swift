@@ -7,14 +7,8 @@ struct ContactsView: View {
     @State private var showAddContact = false
     @State private var selectedContact: Profile?
     @State private var showContactActions = false
-    
-    // Fetch all peer profiles from persistence
-    @Query(
-        filter: #Predicate<Profile> { profile in
-            profile.name != "Me" && profile.name != "InnerCircle"
-        },
-        sort: \Profile.name
-    ) private var contacts: [Profile]
+    @State private var contacts: [Profile] = []
+    @State private var isLoading = true
     
     var filteredContacts: [Profile] {
         if searchText.isEmpty {
@@ -29,61 +23,12 @@ struct ContactsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 16) {
-                    HStack {
-                        Text("Contacts")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        Spacer()
-                        
-                        Button {
-                            showAddContact = true
-                        } label: {
-                            Image(systemName: "person.badge.plus")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                                .scaleEffect(contacts.isEmpty ? 1.2 : 1.0)
-                                .animation(
-                                    contacts.isEmpty ? Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
-                                    value: contacts.isEmpty
-                                )
-                        }
-                        .overlay(
-                            // Add a pulsing hint when no contacts
-                            contacts.isEmpty ? 
-                            Text("Add contacts")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                                .offset(y: 30)
-                                .opacity(0.8)
-                                .animation(
-                                    Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
-                                    value: contacts.isEmpty
-                                )
-                            : nil
-                        )
-                    }
-                    .padding(.horizontal)
-                    
-                    // Search bar
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        
-                        TextField("Search contacts", text: $searchText)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.top)
-                .padding(.bottom, 8)
-                
-                Divider()
-                
                 // Contact list
-                if filteredContacts.isEmpty && searchText.isEmpty {
+                if isLoading {
+                    // Show loading state
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredContacts.isEmpty && searchText.isEmpty {
                     // Show awaiting animation when no contacts at all
                     WaveEmptyStateView()
                 } else if filteredContacts.isEmpty {
@@ -127,14 +72,41 @@ struct ContactsView: View {
                 }
             }
             .sheet(isPresented: $showAddContact) {
-                AddContactView()
+                ContactsCreateView()
+            }
+            .sheet(isPresented: $sharedState.showCreateView) {
+                ContactsCreateView()
             }
             .sheet(item: $selectedContact) { contact in
                 ContactDetailView(contact: contact)
             }
+            .task {
+                await loadContacts()
+            }
+            .refreshable {
+                await loadContacts()
+            }
         }
+    
+    private func loadContacts() async {
+        isLoading = true
+        do {
+            let peerProfiles = try await PersistenceController.shared.fetchAllPeerProfiles()
+            // Filter out "Me" and "InnerCircle" profiles
+            await MainActor.run {
+                contacts = peerProfiles.filter { profile in
+                    profile.name != "Me" && profile.name != "InnerCircle"
+                }
+            }
+        } catch {
+            print("Failed to fetch contacts: \(error)")
+            await MainActor.run {
+                contacts = []
+            }
+        }
+        isLoading = false
     }
-
+}
 
 struct ContactRow: View {
     let contact: Profile
@@ -342,102 +314,6 @@ struct ContactDetailView: View {
     }
 }
 
-struct AddContactView: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var searchText = ""
-    @State private var showScanner = false
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                Text("Add New Contact")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.top)
-                
-                VStack(spacing: 16) {
-                    // Scan QR code option
-                    Button {
-                        showScanner = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "qrcode.viewfinder")
-                                .font(.title2)
-                            
-                            VStack(alignment: .leading) {
-                                Text("Scan QR Code")
-                                    .font(.headline)
-                                Text("Scan a contact's QR code to connect")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Search nearby option
-                    Button {
-                        // Trigger P2P discovery
-                    } label: {
-                        HStack {
-                            Image(systemName: "dot.radiowaves.left.and.right")
-                                .font(.title2)
-                            
-                            VStack(alignment: .leading) {
-                                Text("Search Nearby")
-                                    .font(.headline)
-                                Text("Find contacts using peer-to-peer")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding()
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Manual entry option
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Enter Contact ID")
-                            .font(.headline)
-                        
-                        HStack {
-                            TextField("Contact ID or handle", text: $searchText)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                            
-                            Button("Add") {
-                                // Handle manual addition
-                            }
-                            .disabled(searchText.isEmpty)
-                        }
-                    }
-                    .padding()
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
 
 #Preview {
     ContactsView()

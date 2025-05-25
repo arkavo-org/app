@@ -41,6 +41,7 @@
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
 		DA57B9A92DE28A9D002D5C8F /* WaveEmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */; };
 		DA57B9AB2DE28AB6002D5C8F /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */; };
+		DA57B9AD2DE293B3002D5C8F /* ContactsCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */; };
 		DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */; };
 		DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */; };
 		DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA73B3342C6436EF00393056 /* StreamCloudView.swift */; };
@@ -143,6 +144,7 @@
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveEmptyStateView.swift; sourceTree = "<group>"; };
 		DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
+		DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsCreateView.swift; sourceTree = "<group>"; };
 		DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotGenerator.swift; sourceTree = "<group>"; };
 		DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		DA73B3342C6436EF00393056 /* StreamCloudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCloudView.swift; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 			isa = PBXGroup;
 			children = (
 				DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */,
+				DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */,
 				DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */,
 				DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
@@ -554,6 +557,7 @@
 				DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */,
 				DAAFCBCE2D090740003FC56F /* GroupView.swift in Sources */,
 				DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */,
+				DA57B9AD2DE293B3002D5C8F /* ContactsCreateView.swift in Sources */,
 				DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */,
 				DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */,
 				DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */,

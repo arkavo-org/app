@@ -13,6 +13,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     @Published var streams: [Stream] = []
     @Published var selectedStream: Stream?
     @Published var connectionState: ArkavoClientState = .disconnected
+    @Published var isLoading = true
     // Track pending streams by their ephemeral public key
     private var pendingStreams: [Data: (header: Header, payload: Payload, nano: NanoTDF)] = [:]
     private var notificationObservers: [NSObjectProtocol] = []
@@ -46,6 +47,9 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             // If there are no sources (initial thoughts), it's a group chat stream
             stream.isGroupChatStream
         }
+        
+        // Set loading to false after streams are loaded
+        isLoading = false
     }
 
     private func setupNotifications() {
@@ -520,6 +524,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     /// Reloads the streams list, typically called after a creation or deletion action.
     func reloadStreamsAfterCreation() async {
         print("GroupViewModel: Reloading streams after potential creation/modification...")
+        isLoading = true
         await loadStreams()
     }
 
@@ -648,7 +653,16 @@ struct GroupView: View {
     private func streamListView(geometry: GeometryProxy) -> some View {
         let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
         
-        // Show WaveLoadingView if no regular streams exist
+        // Show loading indicator while data is loading
+        if viewModel.isLoading {
+            return AnyView(
+                ProgressView()
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                    .frame(maxHeight: .infinity)
+            )
+        }
+        
+        // Show WaveEmptyStateView if no regular streams exist after loading
         if regularStreams.isEmpty {
             return AnyView(
                 WaveEmptyStateView()

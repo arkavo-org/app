@@ -72,6 +72,7 @@ struct ArkavoApp: App {
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
+            .modelContainer(persistenceController.container)
             .onAppear {
                 // Update the shared state reference now that the StateObject is properly installed
                 ViewModelFactory.shared.setSharedState(sharedState)

@@ -33,7 +33,11 @@ struct VideoFeedView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if viewModel.videos.isEmpty {
+                if viewModel.isLoading {
+                    // Show loading indicator while data is loading
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.videos.isEmpty {
                     WaveEmptyStateView()
                 } else {
                     ScrollViewReader { proxy in

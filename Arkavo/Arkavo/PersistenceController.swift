@@ -84,17 +84,23 @@ class PersistenceController {
                 continue
             }
 
-            // For other streams, we'll try to identify them by other characteristics
-            // or handle them as unknown streams that may need recreation
-            // We cannot safely access stream.source without risking a crash
-
-            // If we have profile information, we might infer the stream type
-            if stream.profile.name.lowercased().contains("video") {
-                videoStream = stream
-                print("PersistenceController: Found potential video stream by name: \(stream.id)")
-            } else if stream.profile.name.lowercased().contains("post") {
-                postStream = stream
-                print("PersistenceController: Found potential post stream by name: \(stream.id)")
+            // For other streams, we need to identify them differently since they use the user's profile
+            // Video and post streams have a source thought, while group chat streams don't
+            // We can't safely access stream.source, but we can check if it's non-nil
+            
+            // Try to identify by checking if this is a stream with a source (video/post stream)
+            // We'll use a workaround: if it's not a group chat stream and not InnerCircle,
+            // it must be either video or post stream
+            if !stream.isGroupChatStream {
+                // This stream has a source thought, so it's either video or post
+                // We'll assign them based on what we haven't found yet
+                if videoStream == nil {
+                    videoStream = stream
+                    print("PersistenceController: Found video stream (has source): \(stream.id)")
+                } else if postStream == nil {
+                    postStream = stream
+                    print("PersistenceController: Found post stream (has source): \(stream.id)")
+                }
             }
         }
 
