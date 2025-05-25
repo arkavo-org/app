@@ -388,11 +388,17 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 //        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
 //        print("- Auth tag: \(authTag.hexEncodedString())")
 
+        // Detect NanoTDF version from header
+        // v12 uses magic number 0x4C, v13 uses 0x4D
+        let headerData = header.toData()
+        let isV13 = headerData.count >= 2 && headerData[1] == 0x4D
+        
         // Decrypt the key using ArkavoClient's helper
         let symmetricKey = try client.decryptRewrappedKey(
             nonce: nonce,
             rewrappedKey: rewrappedKey,
-            authTag: authTag
+            authTag: authTag,
+            isV13: isV13
         )
 //        print("✅ Decrypted symmetric key")
 

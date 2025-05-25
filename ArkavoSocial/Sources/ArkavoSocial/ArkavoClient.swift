@@ -380,7 +380,7 @@ public final class ArkavoClient: NSObject {
     }
 
     // Helper method to decrypt rewrapped keys
-    public func decryptRewrappedKey(nonce: Data, rewrappedKey: Data, authTag: Data) throws -> SymmetricKey {
+    public func decryptRewrappedKey(nonce: Data, rewrappedKey: Data, authTag: Data, isV13: Bool = true) throws -> SymmetricKey {
         guard let sessionKey = sessionSymmetricKey else {
             throw ArkavoError.invalidState
         }
@@ -392,11 +392,17 @@ public final class ArkavoClient: NSObject {
         )
 
         let decryptedDataSharedSecret = try AES.GCM.open(sealedBox, using: sessionKey)
+        
+        // The server sends the shared secret, not the final DEK
+        // We need to derive the symmetric key using HKDF
         let sharedSecretKey = SymmetricKey(data: decryptedDataSharedSecret)
-
+        
+        // Use appropriate salt based on NanoTDF version
+        let salt = isV13 ? Data("L1M".utf8) : Data("L1L".utf8)
+        
         return deriveSymmetricKey(
             sharedSecretKey: sharedSecretKey,
-            salt: Data("L1L".utf8),
+            salt: salt,
             info: Data("encryption".utf8),
             outputByteCount: 32
         )
@@ -666,7 +672,7 @@ public final class ArkavoClient: NSObject {
     }
 
     private func handleRewrappedKeyMessage(_ data: Data) {
-//        print("ArkavoClient Handling rewrapped key message of length: \(data.count)")
+//        print("ArkavoClient: Handling rewrapped key message of length: \(data.count)")
         guard data.count == 93 else {
             if data.count == 33 {
                 // DENY -- Notify the app with the identifier
@@ -1075,6 +1081,7 @@ private final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @u
                            didOpenWithProtocol protocol: String?)
     {
         print("WebSocket did connect with protocol: \(`protocol` ?? "none")")
+        onConnect?()
         Task {
             await stateHandler.handleState(.connected)
         }

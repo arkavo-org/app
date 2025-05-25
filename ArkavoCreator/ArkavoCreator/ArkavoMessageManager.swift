@@ -288,7 +288,7 @@ class ArkavoMessageManager: ObservableObject {
             let decoder = JSONDecoder()
             // Decoding can be computationally intensive, consider background thread if needed
             let loadedMessages = try files.compactMap { fileURL -> ArkavoMessage? in
-                guard fileURL.pathExtension == "json" else { return nil }
+                guard fileURL.pathExtension == "tdf" else { return nil }
                 let data = try Data(contentsOf: fileURL)
                 return try decoder.decode(ArkavoMessage.self, from: data)
             }
