@@ -784,20 +784,6 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         let compressedData = try await compressVideo(url: videoURL, description: description, targetSize: videoTargetSize)
         print("Compressed video size: \(compressedData.count) bytes")
 
-        // Create NanoTDF
-        let nanoTDFData = try await client.encryptRemotePolicy(
-            payload: compressedData,
-            remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
-        )
-
-        guard nanoTDFData.count <= 1_000_000 else {
-            throw NSError(domain: "VideoCompression", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
-        }
-
-        // Send over websocket
-//        try await client.sendNATSMessage(nanoTDFData)
-
         // Process video metadata and save
         let persistenceController = PersistenceController.shared
         let context = persistenceController.container.mainContext
@@ -827,6 +813,15 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             metadata: metadata
         )
         result.nano = videoThought.nano
+
+        // Verify NanoTDF size before sending
+        guard videoThought.nano.count <= 1_000_000 else {
+            throw NSError(domain: "VideoCompression", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
+        }
+
+        // Send the same NanoTDF over websocket
+        try await client.sendNATSMessage(videoThought.nano)
 
         videoStream.addThought(videoThought)
         try context.save()
