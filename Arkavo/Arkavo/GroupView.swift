@@ -47,7 +47,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             // If there are no sources (initial thoughts), it's a group chat stream
             stream.isGroupChatStream
         }
-        
+
         // Set loading to false after streams are loaded
         isLoading = false
     }
@@ -648,11 +648,10 @@ struct GroupView: View {
         }
     }
 
-
     // Stream list - Changed ScrollView/LazyVStack to List
     private func streamListView(geometry: GeometryProxy) -> some View {
         let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
-        
+
         // Show loading indicator while data is loading
         if viewModel.isLoading {
             return AnyView(
@@ -661,7 +660,7 @@ struct GroupView: View {
                     .frame(maxHeight: .infinity)
             )
         }
-        
+
         // Show WaveEmptyStateView if no regular streams exist after loading
         if regularStreams.isEmpty {
             return AnyView(
@@ -669,7 +668,7 @@ struct GroupView: View {
                     .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
             )
         }
-        
+
         return AnyView(
             List {
                 // --- 1. InnerCircle Stream Section ---

@@ -175,6 +175,9 @@
     "Already in InnerCircle" : {
 
     },
+    "Are you sure you want to delete %@? You'll also be removed from any chats you only share with this person." : {
+
+    },
     "Are you sure you want to delete this post? This action cannot be undone." : {
 
     },
@@ -357,6 +360,12 @@
 
     },
     "Delete" : {
+
+    },
+    "Delete Contact" : {
+
+    },
+    "Delete Contact?" : {
 
     },
     "Delete Post" : {

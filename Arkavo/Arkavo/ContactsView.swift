@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContactsView: View {
     @EnvironmentObject var sharedState: SharedState
@@ -9,85 +9,112 @@ struct ContactsView: View {
     @State private var showContactActions = false
     @State private var contacts: [Profile] = []
     @State private var isLoading = true
-    
+    @State private var contactToDelete: Profile?
+    @State private var showDeleteConfirmation = false
+
     var filteredContacts: [Profile] {
         if searchText.isEmpty {
-            return contacts
+            contacts
         } else {
-            return contacts.filter { contact in
+            contacts.filter { contact in
                 contact.name.localizedCaseInsensitiveContains(searchText) ||
-                (contact.handle?.localizedCaseInsensitiveContains(searchText) ?? false)
+                    (contact.handle?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
-                // Contact list
-                if isLoading {
-                    // Show loading state
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if filteredContacts.isEmpty && searchText.isEmpty {
-                    // Show awaiting animation when no contacts at all
-                    WaveEmptyStateView()
-                } else if filteredContacts.isEmpty {
-                    // Show search empty state when filtering
-                    VStack(spacing: 20) {
-                        Spacer()
-                        
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        
-                        Text("No contacts found")
-                            .font(.title2)
-                            .foregroundColor(.secondary)
-                        
-                        Text("Try a different search term")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                    }
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(filteredContacts) { contact in
-                                ContactRow(contact: contact) {
-                                    selectedContact = contact
-                                    showContactActions = true
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                
-                                if contact.id != filteredContacts.last?.id {
-                                    Divider()
-                                        .padding(.leading, 80)
+            // Contact list
+            if isLoading {
+                // Show loading state
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredContacts.isEmpty, searchText.isEmpty {
+                // Show awaiting animation when no contacts at all
+                WaveEmptyStateView()
+            } else if filteredContacts.isEmpty {
+                // Show search empty state when filtering
+                VStack(spacing: 20) {
+                    Spacer()
+
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 60))
+                        .foregroundColor(.secondary)
+
+                    Text("No contacts found")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+
+                    Text("Try a different search term")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredContacts) { contact in
+                            ContactRow(contact: contact) {
+                                selectedContact = contact
+                                showContactActions = true
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    contactToDelete = contact
+                                    showDeleteConfirmation = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
+
+                            if contact.id != filteredContacts.last?.id {
+                                Divider()
+                                    .padding(.leading, 80)
+                            }
                         }
-                        .padding(.vertical, 8)
                     }
+                    .padding(.vertical, 8)
                 }
             }
-            .sheet(isPresented: $showAddContact) {
-                ContactsCreateView()
-            }
-            .sheet(isPresented: $sharedState.showCreateView) {
-                ContactsCreateView()
-            }
-            .sheet(item: $selectedContact) { contact in
-                ContactDetailView(contact: contact)
-            }
-            .task {
-                await loadContacts()
-            }
-            .refreshable {
-                await loadContacts()
+        }
+        .sheet(isPresented: $showAddContact) {
+            ContactsCreateView()
+        }
+        .sheet(isPresented: $sharedState.showCreateView) {
+            ContactsCreateView()
+        }
+        .sheet(item: $selectedContact) { contact in
+            ContactDetailView(contact: contact) { profileToDelete in
+                contactToDelete = profileToDelete
+                showDeleteConfirmation = true
             }
         }
-    
+        .alert("Delete Contact?", isPresented: $showDeleteConfirmation, presenting: contactToDelete) { contact in
+            Button("Cancel", role: .cancel) {
+                contactToDelete = nil
+                showDeleteConfirmation = false
+            }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await deleteContact(contact)
+                    showDeleteConfirmation = false
+                }
+            }
+        } message: { contact in
+            Text("Are you sure you want to delete \(contact.name)? You'll also be removed from any chats you only share with this person.")
+        }
+        .task {
+            await loadContacts()
+        }
+        .refreshable {
+            await loadContacts()
+        }
+    }
+
     private func loadContacts() async {
         isLoading = true
         do {
@@ -106,12 +133,27 @@ struct ContactsView: View {
         }
         isLoading = false
     }
+
+    private func deleteContact(_ contact: Profile) async {
+        do {
+            // Delete the profile and its associated data
+            try await PersistenceController.shared.deletePeerProfile(contact)
+
+            // Reload contacts to refresh the UI
+            await loadContacts()
+
+            // Clear the reference
+            contactToDelete = nil
+        } catch {
+            print("Failed to delete contact: \(error)")
+        }
+    }
 }
 
 struct ContactRow: View {
     let contact: Profile
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -120,24 +162,24 @@ struct ContactRow: View {
                     Circle()
                         .fill(Color.blue.opacity(0.2))
                         .frame(width: 50, height: 50)
-                    
+
                     Text(contact.name.prefix(1).uppercased())
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.blue)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(contact.name)
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     if let handle = contact.handle {
                         Text("@\(handle)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     // Show connection status
                     HStack(spacing: 4) {
                         if contact.hasHighEncryption {
@@ -145,7 +187,7 @@ struct ContactRow: View {
                                 .font(.caption2)
                                 .foregroundColor(.green)
                         }
-                        
+
                         if contact.keyStorePublic != nil {
                             Text("Connected")
                                 .font(.caption2)
@@ -157,9 +199,9 @@ struct ContactRow: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Action indicator
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -172,9 +214,11 @@ struct ContactRow: View {
 
 struct ContactDetailView: View {
     let contact: Profile
+    let onDelete: (Profile) -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var sharedState: SharedState
-    
+    @State private var showDeleteButton = false
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -185,17 +229,17 @@ struct ContactDetailView: View {
                             Circle()
                                 .fill(Color.blue.opacity(0.2))
                                 .frame(width: 100, height: 100)
-                            
+
                             Text(contact.name.prefix(1).uppercased())
                                 .font(.system(size: 48))
                                 .fontWeight(.bold)
                                 .foregroundColor(.blue)
                         }
-                        
+
                         Text(contact.name)
                             .font(.title)
                             .fontWeight(.bold)
-                        
+
                         if let handle = contact.handle {
                             Text("@\(handle)")
                                 .font(.body)
@@ -203,7 +247,7 @@ struct ContactDetailView: View {
                         }
                     }
                     .padding(.top)
-                    
+
                     // Connection status
                     VStack(alignment: .leading, spacing: 16) {
                         Label {
@@ -213,7 +257,7 @@ struct ContactDetailView: View {
                             Image(systemName: contact.keyStorePublic != nil ? "link.circle.fill" : "link.circle")
                                 .foregroundColor(contact.keyStorePublic != nil ? .green : .orange)
                         }
-                        
+
                         if contact.hasHighEncryption {
                             Label {
                                 Text("High Encryption")
@@ -223,7 +267,7 @@ struct ContactDetailView: View {
                                     .foregroundColor(.green)
                             }
                         }
-                        
+
                         if contact.hasHighIdentityAssurance {
                             Label {
                                 Text("Identity Verified")
@@ -238,7 +282,7 @@ struct ContactDetailView: View {
                     .background(Color.secondary.opacity(0.1))
                     .cornerRadius(12)
                     .padding(.horizontal)
-                    
+
                     // Actions
                     VStack(spacing: 12) {
                         if contact.keyStorePublic != nil {
@@ -268,7 +312,7 @@ struct ContactDetailView: View {
                                     .cornerRadius(12)
                             }
                         }
-                        
+
                         Button {
                             // Show more options
                         } label: {
@@ -281,13 +325,13 @@ struct ContactDetailView: View {
                         }
                     }
                     .padding(.horizontal)
-                    
+
                     // Additional info
                     if let blurb = contact.blurb, !blurb.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("About")
                                 .font(.headline)
-                            
+
                             Text(blurb)
                                 .font(.body)
                                 .foregroundColor(.secondary)
@@ -298,6 +342,20 @@ struct ContactDetailView: View {
                         .cornerRadius(12)
                         .padding(.horizontal)
                     }
+
+                    // Delete button in danger zone
+                    Button {
+                        showDeleteButton = true
+                    } label: {
+                        Label("Delete Contact", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 20)
                 }
                 .padding(.bottom)
             }
@@ -310,10 +368,18 @@ struct ContactDetailView: View {
                     }
                 }
             }
+            .alert("Delete Contact?", isPresented: $showDeleteButton) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    dismiss()
+                    onDelete(contact)
+                }
+            } message: {
+                Text("Are you sure you want to delete \(contact.name)? You'll also be removed from any chats you only share with this person.")
+            }
         }
     }
 }
-
 
 #Preview {
     ContactsView()

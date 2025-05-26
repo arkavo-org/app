@@ -1,5 +1,5 @@
-import SwiftUI
 import MultipeerConnectivity
+import SwiftUI
 
 struct ContactsCreateView: View {
     @Environment(\.dismiss) var dismiss
@@ -8,7 +8,7 @@ struct ContactsCreateView: View {
     @State private var isSearchingNearby = false
     @State private var showShareSheet = false
     @State private var shareableLink: String = ""
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -19,17 +19,17 @@ struct ContactsCreateView: View {
                             .font(.system(size: 80))
                             .foregroundColor(.blue)
                             .symbolRenderingMode(.hierarchical)
-                        
+
                         Text("Connect with Others")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                        
+
                         Text("Build your trusted network")
                             .font(.title3)
                             .foregroundColor(.secondary)
                     }
                     .padding(.top, 20)
-                    
+
                     // Connection Options
                     VStack(spacing: 20) {
                         // Connect Nearby Option
@@ -44,20 +44,20 @@ struct ContactsCreateView: View {
                                         .frame(width: 50, height: 50)
                                         .background(Color.blue.opacity(0.1))
                                         .clipShape(Circle())
-                                    
+
                                     Spacer()
-                                    
+
                                     if isSearchingNearby {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle())
                                     }
                                 }
-                                
+
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Connect Nearby")
                                         .font(.headline)
                                         .foregroundColor(.primary)
-                                    
+
                                     Text("Add someone you know who's right beside you—verify in person to grow your trusted network.")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
@@ -71,7 +71,7 @@ struct ContactsCreateView: View {
                             .cornerRadius(16)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        
+
                         // Invite Remotely Option
                         Button {
                             showInviteRemotely()
@@ -84,15 +84,15 @@ struct ContactsCreateView: View {
                                         .frame(width: 50, height: 50)
                                         .background(Color.green.opacity(0.1))
                                         .clipShape(Circle())
-                                    
+
                                     Spacer()
                                 }
-                                
+
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Invite Remotely")
                                         .font(.headline)
                                         .foregroundColor(.primary)
-                                    
+
                                     Text("Send your Arkavo link with the iOS Share Sheet to connect with someone you already know—no matter the distance.")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
@@ -108,19 +108,19 @@ struct ContactsCreateView: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                     .padding(.horizontal)
-                    
+
                     // Security Note
                     VStack(spacing: 12) {
                         HStack {
                             Image(systemName: "lock.shield.fill")
                                 .font(.title3)
                                 .foregroundColor(.blue)
-                            
+
                             Text("Secure Connections")
                                 .font(.headline)
                                 .foregroundColor(.primary)
                         }
-                        
+
                         Text("All connections use end-to-end encryption with One-Time TDF technology to ensure your conversations remain private.")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -128,7 +128,7 @@ struct ContactsCreateView: View {
                             .padding(.horizontal)
                     }
                     .padding(.vertical)
-                    
+
                     Spacer(minLength: 40)
                 }
             }
@@ -152,12 +152,12 @@ struct ContactsCreateView: View {
             }
         }
     }
-    
+
     private func startNearbyConnection() {
         isSearchingNearby = true
         // The NearbyConnectionView will handle the actual peer discovery
     }
-    
+
     private func showInviteRemotely() {
         // Generate a shareable link for the user's profile
         if let profile = ViewModelFactory.shared.getCurrentProfile() {
@@ -174,31 +174,31 @@ struct NearbyConnectionView: View {
     let onDismiss: () -> Void
     @State private var selectedPeer: MCPeerID?
     @State private var showingConfirmation = false
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
                 // Searching Animation
                 if peerManager.connectedPeers.isEmpty {
                     Spacer()
-                    
+
                     VStack(spacing: 20) {
                         Image(systemName: "dot.radiowaves.left.and.right")
                             .font(.system(size: 60))
                             .foregroundColor(.blue)
                             .symbolEffect(.variableColor.iterative.reversing)
-                        
+
                         Text("Searching for nearby devices...")
                             .font(.title3)
                             .foregroundColor(.secondary)
-                        
+
                         Text("Make sure the other person has Arkavo open and is also searching for connections.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
                     }
-                    
+
                     Spacer()
                 } else {
                     // Found Peers List
@@ -213,19 +213,19 @@ struct NearbyConnectionView: View {
                                         Image(systemName: "person.circle.fill")
                                             .font(.title2)
                                             .foregroundColor(.blue)
-                                        
+
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(peer.displayName)
                                                 .font(.headline)
                                                 .foregroundColor(.primary)
-                                            
+
                                             Text("Tap to connect")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
-                                        
+
                                         Spacer()
-                                        
+
                                         Image(systemName: "chevron.right")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -240,13 +240,13 @@ struct NearbyConnectionView: View {
                     }
                     .listStyle(InsetGroupedListStyle())
                 }
-                
+
                 // Instructions
                 VStack(spacing: 8) {
                     Label("Verify in Person", systemImage: "checkmark.shield")
                         .font(.footnote)
                         .foregroundColor(.green)
-                    
+
                     Text("For security, confirm the device name with the person before connecting.")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -300,8 +300,8 @@ struct NearbyConnectionView: View {
 struct ContactShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
     @Binding var isPresented: Bool
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
+
+    func makeUIViewController(context _: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(
             activityItems: activityItems,
             applicationActivities: nil
@@ -311,8 +311,8 @@ struct ContactShareSheet: UIViewControllerRepresentable {
         }
         return controller
     }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+
+    func updateUIViewController(_: UIActivityViewController, context _: Context) {}
 }
 
 #Preview {

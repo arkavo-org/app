@@ -187,14 +187,14 @@ struct ContentView: View {
                 timeOnScreen += 1
 
                 // Show tooltip after 3 seconds if content is awaiting
-                if timeOnScreen >= 3 && timeOnScreen < 9 && sharedState.isAwaiting && !showTooltip {
+                if timeOnScreen >= 3, timeOnScreen < 9, sharedState.isAwaiting, !showTooltip {
                     withAnimation(.easeInOut) {
                         showTooltip = true
                     }
                 }
 
                 // Hide tooltip after being shown for 6 seconds
-                if timeOnScreen >= 9 && showTooltip {
+                if timeOnScreen >= 9, showTooltip {
                     withAnimation(.easeInOut) {
                         showTooltip = false
                     }
@@ -209,13 +209,13 @@ struct ContentView: View {
         // Also respond to isAwaiting changes
         .onChange(of: sharedState.isAwaiting) { _, isNowAwaiting in
             // If content is now awaiting and we've been on screen for 3+ seconds, show tooltip
-            if isNowAwaiting && timeOnScreen >= 3 && timeOnScreen < 9 && !showTooltip {
+            if isNowAwaiting, timeOnScreen >= 3, timeOnScreen < 9, !showTooltip {
                 withAnimation(.easeInOut) {
                     showTooltip = true
                 }
             }
             // If content is no longer awaiting, hide tooltip
-            else if !isNowAwaiting && showTooltip {
+            else if !isNowAwaiting, showTooltip {
                 withAnimation(.easeInOut) {
                     showTooltip = false
                 }
@@ -241,7 +241,6 @@ struct ContentView: View {
         }
     }
 }
-
 
 struct BounceAnimationModifier: ViewModifier {
     let isAwaiting: Bool

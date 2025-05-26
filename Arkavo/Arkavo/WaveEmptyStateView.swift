@@ -4,7 +4,7 @@ import SwiftUI
 /// Automatically manages isAwaiting state and uses the appropriate message based on the current tab
 struct WaveEmptyStateView: View {
     @EnvironmentObject var sharedState: SharedState
-    
+
     var body: some View {
         VStack {
             Spacer()

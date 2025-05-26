@@ -190,7 +190,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
 
     private func loadThoughts() async {
         isLoading = true
-        
+
         // First try to load from stream
         let postStream = getPostStream()
 
@@ -220,7 +220,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             let relevantThoughts = postStream.thoughts
                 .filter { $0.metadata.mediaType == .post }
                 .suffix(10) // Load up to 10 post
-            
+
             print("PostFeedViewModel: Loading \(relevantThoughts.count) thoughts from post stream")
 
             for thought in relevantThoughts {
@@ -229,12 +229,12 @@ class PostFeedViewModel: ViewModel, ObservableObject {
                 postQueue.enqueuePost(thought)
             }
         }
-        
+
         print("PostFeedViewModel: loadThoughts completed. Posts count: \(posts.count)")
-        
+
         // Wait a bit for notifications to process
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-        
+
         // Now we can consider loading complete
         isLoading = false
         hasAttemptedLoad = true

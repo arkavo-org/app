@@ -87,7 +87,7 @@ class PersistenceController {
             // For other streams, we need to identify them differently since they use the user's profile
             // Video and post streams have a source thought, while group chat streams don't
             // We can't safely access stream.source, but we can check if it's non-nil
-            
+
             // Try to identify by checking if this is a stream with a source (video/post stream)
             // We'll use a workaround: if it's not a group chat stream and not InnerCircle,
             // it must be either video or post stream
@@ -297,6 +297,33 @@ class PersistenceController {
         // Create a fetch descriptor for all profiles, sorted by name
         let descriptor = FetchDescriptor<Profile>(sortBy: [SortDescriptor(\.name)])
         return try mainContext.fetch(descriptor)
+    }
+
+    /// Deletes a peer profile and all associated data.
+    /// This method is specifically for deleting peer (contact) profiles, not the user's own profile.
+    /// - Parameter peerProfile: The peer profile to delete
+    func deletePeerProfile(_ peerProfile: Profile) async throws {
+        print("PersistenceController: Deleting peer profile: \(peerProfile.publicID.base58EncodedString)")
+
+        // Ensure this is not the user's own profile
+        let userAccount = try await getOrCreateAccount()
+        guard peerProfile.publicID != userAccount.profile?.publicID else {
+            print("PersistenceController: Cannot delete user's own profile through deletePeerProfile")
+            throw ArkavoError.profileError("Cannot delete user's own profile")
+        }
+
+        // Clear KeyStore data
+        peerProfile.keyStorePublic = nil
+        peerProfile.keyStorePrivate = nil
+
+        // TODO: Remove from any group chats where this is the only shared member
+        // This would require checking all Stream objects and their member lists
+
+        // Delete the profile
+        mainContext.delete(peerProfile)
+        try await saveChanges()
+
+        print("PersistenceController: Peer profile successfully deleted")
     }
 
     // MARK: - Stream Operations

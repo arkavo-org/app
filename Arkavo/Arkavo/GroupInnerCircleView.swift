@@ -28,10 +28,10 @@ enum InnerCircleConstants {
     static let trustGreen: Color = .init(red: 52 / 255, green: 199 / 255, blue: 89 / 255) // #34C759
     static let trustYellow: Color = .init(red: 255 / 255, green: 204 / 255, blue: 0 / 255) // #FFCC00
     static let trustRed: Color = .init(red: 255 / 255, green: 59 / 255, blue: 48 / 255) // #FF3B30
-    static let backgroundColor: Color = Color(.systemBackground) // Adapts to light/dark mode
-    static let cardBackgroundColor: Color = Color(.secondarySystemBackground) // Adapts to light/dark mode
-    static let primaryTextColor: Color = Color(.label) // Adapts to light/dark mode
-    static let secondaryTextColor: Color = Color(.secondaryLabel) // Adapts to light/dark mode
+    static let backgroundColor: Color = .init(.systemBackground) // Adapts to light/dark mode
+    static let cardBackgroundColor: Color = .init(.secondarySystemBackground) // Adapts to light/dark mode
+    static let primaryTextColor: Color = .init(.label) // Adapts to light/dark mode
+    static let secondaryTextColor: Color = .init(.secondaryLabel) // Adapts to light/dark mode
 }
 
 // MARK: - InnerCircle Member Views
