@@ -87,7 +87,7 @@ public class VideoSegmentationProcessor {
                 results.append(FrameSegmentation(
                     timestamp: CMTimeGetSeconds(time),
                     segmentation: output.semanticPredictionsShapedArray,
-                    frameImage: cgImage
+                    frameImage: cgImage,
                 ))
 
                 // Report progress
@@ -199,7 +199,7 @@ public class VideoSegmentationProcessor {
             provider: provider,
             decode: nil,
             shouldInterpolate: false,
-            intent: .defaultIntent
+            intent: .defaultIntent,
         ) else {
             throw ProcessingError.segmentationFailed
         }
@@ -211,7 +211,7 @@ public class VideoSegmentationProcessor {
         // Scale segmentation to match original if needed
         let scaledSegmentation = ciSegmentation.transformed(by: CGAffineTransform(
             scaleX: CGFloat(frame.frameImage.width) / CGFloat(segmentationImage.width),
-            y: CGFloat(frame.frameImage.height) / CGFloat(segmentationImage.height)
+            y: CGFloat(frame.frameImage.height) / CGFloat(segmentationImage.height),
         ))
 
         // Create multiply blend filter for opacity
@@ -252,7 +252,7 @@ public class VideoSegmentationProcessor {
             fileURL as CFURL,
             UTType.jpeg.identifier as CFString,
             1,
-            nil
+            nil,
         ) else {
             throw ProcessingError.segmentationFailed
         }
@@ -299,7 +299,7 @@ public class VideoSceneDetector {
         return VideoMetadata(
             videoId: videoURL.lastPathComponent,
             duration: durationSeconds,
-            significantScenes: significantScenes
+            significantScenes: significantScenes,
         )
     }
 
@@ -323,7 +323,7 @@ public class VideoSceneDetector {
             timestamp: segmentation.timestamp,
             classDistribution: classCount,
             dominantClasses: dominantClasses,
-            totalPixels: scalarArray.count
+            totalPixels: scalarArray.count,
         )
     }
 
@@ -337,7 +337,7 @@ public class VideoSceneDetector {
         let similarity = VideoSceneDetector.calculateDistributionSimilarity(
             current.classDistribution,
             previous.classDistribution,
-            totalPixels: current.totalPixels
+            totalPixels: current.totalPixels,
         )
 
         return similarity < similarityThreshold
@@ -381,7 +381,7 @@ public class VideoSceneDetector {
                             sourceTimestamp: scene.timestamp,
                             matchedVideoId: reference.videoId,
                             matchedTimestamp: refScene.timestamp,
-                            similarity: similarity
+                            similarity: similarity,
                         ))
                     }
                 }
@@ -394,7 +394,7 @@ public class VideoSceneDetector {
             calculateDistributionSimilarity(
                 scene1.classDistribution,
                 scene2.classDistribution,
-                totalPixels: scene1.totalPixels
+                totalPixels: scene1.totalPixels,
             )
         }
     }

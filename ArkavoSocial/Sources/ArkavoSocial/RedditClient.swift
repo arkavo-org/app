@@ -49,16 +49,16 @@ public class RedditClient: ObservableObject {
     public func loadStoredTokens() {
         accessToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
         refreshToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.refreshToken
+            account: KeychainKey.refreshToken,
         )
 
         if let expirationString = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.tokenExpiration
+            account: KeychainKey.tokenExpiration,
         ) {
             tokenExpirationDate = ISO8601DateFormatter().date(from: expirationString)
         }
@@ -117,21 +117,21 @@ public class RedditClient: ObservableObject {
         KeychainManager.save(
             value: accessToken,
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
 
         if let refreshToken {
             KeychainManager.save(
                 value: refreshToken,
                 service: keychainServiceBase,
-                account: KeychainKey.refreshToken
+                account: KeychainKey.refreshToken,
             )
         }
 
         KeychainManager.save(
             value: ISO8601DateFormatter().string(from: expirationDate),
             service: keychainServiceBase,
-            account: KeychainKey.tokenExpiration
+            account: KeychainKey.tokenExpiration,
         )
     }
 
@@ -261,7 +261,7 @@ public class RedditClient: ObservableObject {
         saveTokens(
             accessToken: response.access_token,
             refreshToken: response.refresh_token,
-            expirationDate: expirationDate
+            expirationDate: expirationDate,
         )
 
         isAuthenticated = true

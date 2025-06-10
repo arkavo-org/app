@@ -1,7 +1,6 @@
 import ArkavoSocial
 import Foundation
-import SwiftUI // Added for Color type used in ArkavoMessage
-import SwiftUICore
+import SwiftUI
 
 // First, let's modify the ArkavoMessageChainDelegate to properly handle type 0x05 messages
 class ArkavoMessageChainDelegate: NSObject, ArkavoClientDelegate {
@@ -219,7 +218,7 @@ class ArkavoMessageManager: ObservableObject {
             data: data,
             status: .pending,
             retryCount: 0,
-            lastRetryDate: nil
+            lastRetryDate: nil,
         )
 
         // Store to filesystem (synchronous, on MainActor)
@@ -282,7 +281,7 @@ class ArkavoMessageManager: ObservableObject {
             // Consider making file reading asynchronous if it becomes a bottleneck
             let files = try fileManager.contentsOfDirectory(
                 at: messageDirectory,
-                includingPropertiesForKeys: nil
+                includingPropertiesForKeys: nil,
             )
 
             let decoder = JSONDecoder()
@@ -378,8 +377,8 @@ struct ArkavoMessage: Codable, Identifiable {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(
                     codingPath: [CodingKeys.data],
-                    debugDescription: "Could not decode base64 string to Data"
-                )
+                    debugDescription: "Could not decode base64 string to Data",
+                ),
             )
         }
         data = decodedData

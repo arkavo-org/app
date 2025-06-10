@@ -110,7 +110,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             let publicKeyCredentialRequest = provider.createCredentialRegistrationRequest(
                 challenge: challengeData,
                 name: accountName,
-                userID: userIDData
+                userID: userIDData,
             )
             let controller = ASAuthorizationController(authorizationRequests: [publicKeyCredentialRequest])
             controller.delegate = self
@@ -142,7 +142,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                         print("Failed to get registration options: \(error.localizedDescription)")
                         completion(nil, nil)
                     }
-                }
+                },
             )
         }.resume()
     }
@@ -245,7 +245,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 //                        }
                         completion(.failure(error))
                     }
-                }
+                },
             )
         }.resume()
     }

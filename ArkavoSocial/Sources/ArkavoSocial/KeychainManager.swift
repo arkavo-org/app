@@ -305,7 +305,7 @@ public extension KeychainManager {
             nil,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             [.privateKeyUsage],
-            nil
+            nil,
         ) else {
             throw DIDKeyError.accessControlCreationFailed
         }
@@ -387,7 +387,7 @@ public extension KeychainManager {
             privateKey,
             .ecdsaSignatureMessageX962SHA256,
             message as CFData,
-            &error
+            &error,
         ) as Data? else {
             throw error?.takeRetainedValue() ?? DIDKeyError.signatureCreationFailed
         }
@@ -404,7 +404,7 @@ public extension KeychainManager {
             .ecdsaSignatureMessageX962SHA256,
             message as CFData,
             signature as CFData,
-            &error
+            &error,
         )
 
         if let error = error?.takeRetainedValue() {

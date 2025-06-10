@@ -92,7 +92,7 @@ struct WebView: View {
                 url: url,
                 handleCallback: handleCallback,
                 isLoading: $isLoading,
-                error: $error
+                error: $error,
             )
 
             if isLoading {
@@ -140,7 +140,7 @@ class WebViewWindow: NSWindow {
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
-            defer: false
+            defer: false,
         )
 
         title = "Authentication"
@@ -149,7 +149,7 @@ class WebViewWindow: NSWindow {
 
         contentView = NSHostingView(
             rootView: WebView(url: url, handleCallback: handleCallback)
-                .frame(width: 800, height: 600)
+                .frame(width: 800, height: 600),
         )
     }
 }

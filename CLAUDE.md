@@ -5,7 +5,7 @@
 - Build main app: `xcodebuild -workspace Arkavo.xcworkspace -scheme Arkavo -destination "platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64" -quiet build`
 - Test all: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64'`
 - Test single class: `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64' -only-testing:ArkavoTests/ArkavoTests`
-- Format code: `swiftformat --swiftversion 6.0 .`
+- Format code: `swiftformat --swiftversion 6.2 .`
 - Package tests: `cd ArkavoSocial && swift test`
 
 ## iOS Simulator Testing Setup

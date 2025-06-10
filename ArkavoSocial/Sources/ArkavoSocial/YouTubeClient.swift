@@ -42,7 +42,7 @@ public actor YouTubeClient: ObservableObject {
     private func loadStoredTokens() async {
         let accessToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
 
         await MainActor.run {
@@ -60,19 +60,19 @@ public actor YouTubeClient: ObservableObject {
         KeychainManager.save(
             value: accessToken,
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
 
         KeychainManager.save(
             value: refreshToken,
             service: keychainServiceBase,
-            account: KeychainKey.refreshToken
+            account: KeychainKey.refreshToken,
         )
 
         KeychainManager.save(
             value: ISO8601DateFormatter().string(from: expirationDate),
             service: keychainServiceBase,
-            account: KeychainKey.tokenExpiration
+            account: KeychainKey.tokenExpiration,
         )
     }
 
@@ -190,7 +190,7 @@ public actor YouTubeClient: ObservableObject {
             saveTokens(
                 accessToken: tokenResponse.access_token,
                 refreshToken: tokenResponse.refresh_token ?? "",
-                expiresIn: tokenResponse.expires_in
+                expiresIn: tokenResponse.expires_in,
             )
         } else {
             // Parse error response for better error messages
@@ -204,7 +204,7 @@ public actor YouTubeClient: ObservableObject {
     private func refreshAccessToken() async throws {
         guard let refreshToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.refreshToken
+            account: KeychainKey.refreshToken,
         ) else {
             throw YouTubeError.noRefreshToken
         }
@@ -234,7 +234,7 @@ public actor YouTubeClient: ObservableObject {
             saveTokens(
                 accessToken: tokenResponse.access_token,
                 refreshToken: refreshToken, // Keep existing refresh token
-                expiresIn: tokenResponse.expires_in
+                expiresIn: tokenResponse.expires_in,
             )
         } else {
             throw YouTubeError.httpError(statusCode: httpResponse.statusCode)
@@ -246,12 +246,12 @@ public actor YouTubeClient: ObservableObject {
     private func getValidAccessToken() async throws -> String {
         if let expirationString = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.tokenExpiration
+            account: KeychainKey.tokenExpiration,
         ),
             let expirationDate = ISO8601DateFormatter().date(from: expirationString),
             let accessToken = KeychainManager.getValue(
                 service: keychainServiceBase,
-                account: KeychainKey.accessToken
+                account: KeychainKey.accessToken,
             ),
             expirationDate > Date().addingTimeInterval(60)
         {
@@ -263,7 +263,7 @@ public actor YouTubeClient: ObservableObject {
 
         guard let newAccessToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         ) else {
             throw YouTubeError.noAccessToken
         }
@@ -300,14 +300,14 @@ public actor YouTubeClient: ObservableObject {
                         thumbnailUrl: channel.snippet.thumbnails.default.url,
                         subscriberCount: Int(channel.statistics.subscriberCount) ?? 0,
                         videoCount: Int(channel.statistics.videoCount) ?? 0,
-                        viewCount: Int(channel.statistics.viewCount) ?? 0
+                        viewCount: Int(channel.statistics.viewCount) ?? 0,
                     )
 
                     // Save channel ID for future use
                     KeychainManager.save(
                         value: channel.id,
                         service: keychainServiceBase,
-                        account: KeychainKey.channelId
+                        account: KeychainKey.channelId,
                     )
 
                     await MainActor.run {

@@ -23,7 +23,7 @@ struct BlueskyRootView: View {
                         .frame(height: 100)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1),
                         )
 
                     HStack {

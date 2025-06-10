@@ -41,7 +41,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
@@ -54,7 +54,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data,
                   let header = notification.userInfo?["header"] as? Header,
@@ -70,7 +70,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
         let errorObserver = NotificationCenter.default.addObserver(
             forName: .messageHandlingError,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let error = notification.userInfo?["error"] as? Error else { return }
             Task { @MainActor [weak self] in
@@ -95,7 +95,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
             while loadedCount < count {
                 if let (messageId, message) = queueManager.getNextMessage(
                     ofType: 0x05,
-                    forStream: videoStream.publicID
+                    forStream: videoStream.publicID,
                 ) {
                     do {
                         try await router.processMessage(message.data, messageId: messageId)
@@ -196,7 +196,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
                 streamPublicID: streamPublicID,
                 url: videoFileURL,
                 contributors: [contributor],
-                description: description
+                description: description,
             )
 
             // Add to queue
@@ -266,7 +266,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
             let cacheContents = try fileManager.contentsOfDirectory(
                 at: cacheDir,
                 includingPropertiesForKeys: [.creationDateKey],
-                options: [.skipsHiddenFiles]
+                options: [.skipsHiddenFiles],
             )
 
             // Keep only the 20 most recent videos
@@ -302,7 +302,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
                     streamPublicID: videoStream.publicID,
                     mediaType: .video,
                     createdAt: Date(),
-                    contributors: contributors
+                    contributors: contributors,
                 )
 
                 // Convert video URL to data for storage
@@ -395,7 +395,7 @@ struct Video: Identifiable, Hashable {
             url: URL(string: uploadResult.playbackURL)!,
             contributors: contributors,
             description: Date().ISO8601Format(),
-            nano: uploadResult.nano
+            nano: uploadResult.nano,
         )
     }
 
@@ -406,7 +406,7 @@ struct Video: Identifiable, Hashable {
             streamPublicID: thought.metadata.streamPublicID,
             url: URL(string: "nano://\(thought.publicID.base58EncodedString)/")!,
             contributors: thought.metadata.contributors,
-            description: thought.metadata.createdAt.ISO8601Format()
+            description: thought.metadata.createdAt.ISO8601Format(),
         )
     }
 }

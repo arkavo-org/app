@@ -31,7 +31,7 @@ struct PatronManagementView: View {
                 // Campaigns Sidebar
                 CampaignsSidebar(
                     patreonClient: patreonClient,
-                    selectedCampaign: $selectedCampaign
+                    selectedCampaign: $selectedCampaign,
                 )
                 .frame(height: 120)
 
@@ -42,7 +42,7 @@ struct PatronManagementView: View {
                     selectedCampaign: $selectedCampaign,
                     selectedTier: $selectedTier,
                     showNewTierSheet: $showNewTierSheet,
-                    isEditingMode: $isEditingMode
+                    isEditingMode: $isEditingMode,
                 )
             }
             .frame(minWidth: 250, maxWidth: 300)
@@ -55,7 +55,7 @@ struct PatronManagementView: View {
                 patreonClient: patreonClient,
                 searchText: $searchText,
                 filterStatus: $filterStatus,
-                selectedPatrons: $selectedPatrons
+                selectedPatrons: $selectedPatrons,
             )
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -181,7 +181,7 @@ struct CampaignsSidebar: View {
                 let tierDataDict = Dictionary(
                     uniqueKeysWithValues: response.included
                         .filter { $0.type == "tier" }
-                        .map { ($0.id, $0) }
+                        .map { ($0.id, $0) },
                 )
                 // Map tier IDs to PatronTier objects
                 let tiers = campaignData.relationships.tiers.data.compactMap { tierRelation -> PatronTier? in
@@ -212,7 +212,7 @@ struct CampaignsSidebar: View {
                         benefits: benefits,
                         patronCount: patronCount,
                         color: .blue,
-                        description: description
+                        description: description,
                     )
                 }
                 return Campaign(
@@ -224,7 +224,7 @@ struct CampaignsSidebar: View {
                     patronCount: campaignData.attributes.patron_count,
                     publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
                     summary: campaignData.attributes.summary,
-                    tiers: tiers
+                    tiers: tiers,
                 )
             }
 
@@ -351,7 +351,7 @@ struct NewCampaignSheet: View {
                                 .cornerRadius(6)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6)
-                                        .stroke(borderColor, lineWidth: 1)
+                                        .stroke(borderColor, lineWidth: 1),
                                 )
                                 .overlay(
                                     Group {
@@ -361,7 +361,7 @@ struct NewCampaignSheet: View {
                                                 .padding(.horizontal, 4)
                                                 .padding(.vertical, 8)
                                         }
-                                    }
+                                    },
                                 )
                         }
                     }
@@ -408,13 +408,13 @@ struct NewCampaignSheet: View {
                                     .cornerRadius(8)
                                     .overlay(
                                         Image(systemName: "photo")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.secondary),
                                     )
                             }
                         }
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(borderColor, lineWidth: 1)
+                                .stroke(borderColor, lineWidth: 1),
                         )
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -576,7 +576,7 @@ struct PatronNameCell: View {
                 .overlay(
                     Text(patron.name)
                         .foregroundColor(.white)
-                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .font(.system(.caption, design: .rounded, weight: .medium)),
                 )
 
             VStack(alignment: .leading) {
@@ -689,7 +689,7 @@ struct NewTierSheet: View {
                                 .cornerRadius(6)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6)
-                                        .stroke(borderColor, lineWidth: 1)
+                                        .stroke(borderColor, lineWidth: 1),
                                 )
                         }
                     }
@@ -715,13 +715,13 @@ struct NewTierSheet: View {
                                         .cornerRadius(8)
                                         .overlay(
                                             Image(systemName: "photo")
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(.secondary),
                                         )
                                 }
                             }
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(borderColor, lineWidth: 1)
+                                    .stroke(borderColor, lineWidth: 1),
                             )
 
                             VStack(alignment: .leading, spacing: 8) {
@@ -750,8 +750,8 @@ struct NewTierSheet: View {
                                                         selectedColor == color ?
                                                             (colorScheme == .dark ? .white : .black) :
                                                             .clear,
-                                                        lineWidth: 2
-                                                    )
+                                                        lineWidth: 2,
+                                                    ),
                                             )
                                             .onTapGesture {
                                                 selectedColor = color

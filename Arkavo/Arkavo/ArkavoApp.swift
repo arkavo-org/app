@@ -24,7 +24,7 @@ struct ArkavoApp: App {
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256
+            curve: .p256,
             // Note: Modified for compatibility with latest OpenTDFKit
             // Capacity of 8192 keys is set in GroupViewModel.swift
         )
@@ -32,7 +32,7 @@ struct ArkavoApp: App {
         // Initialize router
         let router = ArkavoMessageRouter(
             client: client,
-            persistenceController: PersistenceController.shared
+            persistenceController: PersistenceController.shared,
         )
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
@@ -118,7 +118,7 @@ struct ArkavoApp: App {
                         if error.isBlocking {
                             selectedView = .main
                         }
-                    }
+                    },
                 )
             }
         }
@@ -189,7 +189,7 @@ struct ArkavoApp: App {
                     title: "Registration Error",
                     message: "Failed to generate security credentials. Please try again.",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 return false
             }
@@ -208,28 +208,28 @@ struct ArkavoApp: App {
                         title: "Registration Failed",
                         message: message,
                         action: "Try Again",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 case .connectionFailed:
                     connectionError = ConnectionError(
                         title: "Connection Failed",
                         message: "We're having trouble reaching our servers. Please check your internet connection and try again.",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 case .invalidResponse:
                     connectionError = ConnectionError(
                         title: "Server Error",
                         message: "Received an invalid response from the server. Please try again.",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 default:
                     connectionError = ConnectionError(
                         title: "Registration Error",
                         message: "An unexpected error occurred during registration. Please try again.",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 }
                 return false
@@ -239,7 +239,7 @@ struct ArkavoApp: App {
                     title: "Registration Error",
                     message: "Failed to complete registration. Please try again.",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 return false
             }
@@ -263,7 +263,7 @@ struct ArkavoApp: App {
                     title: "Setup Error",
                     message: "Failed to set up your account streams. Please try again.",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 return false
             }
@@ -286,7 +286,7 @@ struct ArkavoApp: App {
                     title: "Connection Error",
                     message: "Failed to establish connection. Please try again.",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 return false
             }
@@ -297,7 +297,7 @@ struct ArkavoApp: App {
                 title: "Profile Error",
                 message: "Failed to save your profile. Please try again.",
                 action: "Retry",
-                isBlocking: true
+                isBlocking: true,
             )
             return false
         }
@@ -314,8 +314,8 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids
-            )
+                age: .onlyKids,
+            ),
         )
 
         // Create initial thought that marks this as a video stream
@@ -324,12 +324,12 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            contributors: []
+            contributors: [],
         )
 
         let initialThought = Thought(
             nano: Data(),
-            metadata: initialMetadata
+            metadata: initialMetadata,
         )
 
         // Save the initial thought
@@ -361,8 +361,8 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids
-            )
+                age: .onlyKids,
+            ),
         )
 
         // Create initial thought that marks this as a post stream
@@ -371,12 +371,12 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .post, // Posts are primarily text-based
             createdAt: Date(),
-            contributors: []
+            contributors: [],
         )
 
         let initialThought = Thought(
             nano: Data(), // Empty initial data
-            metadata: initialMetadata
+            metadata: initialMetadata,
         )
 
         print("Created initial post stream thought with ID: \(initialThought.id)")
@@ -414,7 +414,7 @@ struct ArkavoApp: App {
             name: "InnerCircle",
             blurb: "Local peer-to-peer communication",
             interests: "local",
-            location: ""
+            location: "",
         )
 
         // Create the stream with appropriate policies
@@ -424,8 +424,8 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .openInvitation,
                 interaction: .open,
-                age: .forAll
-            )
+                age: .forAll,
+            ),
         )
 
         // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
@@ -550,7 +550,7 @@ struct ArkavoApp: App {
                     title: "Profile Error",
                     message: "There was an error loading your profile. Please try signing up again.",
                     action: "Sign Up",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 selectedView = .registration
                 return
@@ -669,7 +669,7 @@ struct ArkavoApp: App {
                         title: "Offline Mode",
                         message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",
                         action: "Try to Connect",
-                        isBlocking: false
+                        isBlocking: false,
                     )
                 } else {
                     // No profile, route to registration
@@ -927,7 +927,7 @@ final class ViewModelFactory {
             client: client,
             account: account,
             profile: profile,
-            streamPublicID: streamPublicID
+            streamPublicID: streamPublicID,
         )
     }
 

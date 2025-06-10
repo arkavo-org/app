@@ -132,7 +132,7 @@ public actor PatreonClient: ObservableObject {
 
         try KeychainManager.saveTokens(
             accessToken: token.accessToken,
-            refreshToken: token.refreshToken
+            refreshToken: token.refreshToken,
         )
 
         await MainActor.run {
@@ -179,7 +179,7 @@ public actor PatreonClient: ObservableObject {
         let token = try await refreshToken(rToken)
         try KeychainManager.saveTokens(
             accessToken: token.accessToken,
-            refreshToken: token.refreshToken
+            refreshToken: token.refreshToken,
         )
     }
 
@@ -192,7 +192,7 @@ public actor PatreonClient: ObservableObject {
                 URLQueryItem(name: "include", value: "memberships.campaign,memberships.currently_entitled_tiers"),
                 URLQueryItem(name: "fields[user]", value: UserFields.allCases.map(\.rawValue).joined(separator: ",")),
                 URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
+            ],
         )
     }
 
@@ -205,7 +205,7 @@ public actor PatreonClient: ObservableObject {
                 URLQueryItem(name: "include", value: "creator,tiers,benefits.tiers,goals"),
                 URLQueryItem(name: "fields[campaign]", value: CampaignFields.allCases.map(\.rawValue).joined(separator: ",")),
                 URLQueryItem(name: "fields[tier]", value: TierFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
+            ],
         )
         return response
     }
@@ -218,7 +218,7 @@ public actor PatreonClient: ObservableObject {
             queryItems: [
                 URLQueryItem(name: "include", value: "user,address,campaign,currently_entitled_tiers"),
                 URLQueryItem(name: "fields[member]", value: MemberFields.allCases.map(\.rawValue).joined(separator: ",")),
-            ]
+            ],
         )
         return response
     }
@@ -268,7 +268,7 @@ public actor PatreonClient: ObservableObject {
         return try await request(
             endpoint: .oauthToken,
             method: "POST",
-            body: params
+            body: params,
         )
     }
 
@@ -283,7 +283,7 @@ public actor PatreonClient: ObservableObject {
         return try await request(
             endpoint: .oauthToken,
             method: "POST",
-            body: params
+            body: params,
         )
     }
 
@@ -297,7 +297,7 @@ public actor PatreonClient: ObservableObject {
                 URLQueryItem(name: "fields[member]", value: "full_name,email,patron_status,last_charge_date,currently_entitled_amount_cents,lifetime_support_cents"),
                 URLQueryItem(name: "fields[user]", value: "thumb_url,url"),
                 URLQueryItem(name: "page[count]", value: "100"),
-            ]
+            ],
         )
 
         return response.data.map { member in
@@ -316,7 +316,7 @@ public actor PatreonClient: ObservableObject {
                 tierAmount: Double(member.attributes.currentlyEntitledAmountCents) / 100.0,
                 lifetimeSupport: Double(member.attributes.lifetimeSupportCents) / 100.0,
                 joinDate: member.attributes.lastChargeDate.flatMap { dateFormatter.date(from: $0) } ?? Date(),
-                url: URL(string: userData?.attributes.url ?? "")
+                url: URL(string: userData?.attributes.url ?? ""),
             )
         }
     }
@@ -624,7 +624,7 @@ public struct AnyCodable: Codable, Sendable {
         } else {
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "AnyCodable cannot decode value"
+                debugDescription: "AnyCodable cannot decode value",
             )
         }
     }
@@ -801,7 +801,7 @@ public extension PatreonClient {
                 URLQueryItem(name: "include", value: "creator,tiers,goals"),
                 URLQueryItem(name: "fields[campaign]", value: "summary,creation_name,patron_count,created_at,published_at,is_monthly,is_nsfw"),
                 URLQueryItem(name: "fields[tier]", value: "amount_cents,description,title,patron_count,discord_role_ids,edited_at,image_url,published,published_at,remaining,requires_shipping,user_limit"),
-            ]
+            ],
         )
     }
 }
@@ -912,7 +912,7 @@ public extension PatreonClient {
                 name: title,
                 description: included.attributes["description"]?.value as? String,
                 amount: Double(amountCents) / 100.0,
-                patronCount: included.attributes["patron_count"]?.value as? Int
+                patronCount: included.attributes["patron_count"]?.value as? Int,
             )
         }
     }

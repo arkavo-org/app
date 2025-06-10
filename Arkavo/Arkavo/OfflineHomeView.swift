@@ -26,19 +26,19 @@ struct OfflineHomeView: View {
                 FeatureStatusRow(
                     title: "P2P InnerCircle Messaging",
                     description: "One-time TDF secure messaging works in offline mode",
-                    isAvailable: true
+                    isAvailable: true,
                 )
 
                 FeatureStatusRow(
                     title: "Video Feed",
                     description: "Requires internet connection",
-                    isAvailable: false
+                    isAvailable: false,
                 )
 
                 FeatureStatusRow(
                     title: "Social Feed",
                     description: "Requires internet connection",
-                    isAvailable: false
+                    isAvailable: false,
                 )
             }
             .padding(.horizontal, 20)

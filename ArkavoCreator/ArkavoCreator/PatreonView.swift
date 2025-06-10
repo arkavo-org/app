@@ -75,7 +75,7 @@ struct PatreonLoginView: View {
                                         // Keep the window open on error to show any error pages
                                     }
                                 }
-                            }
+                            },
                         )
                     }
                     Button("Login with Reddit") {
@@ -84,7 +84,7 @@ struct PatreonLoginView: View {
                             handleCallback: { url in
                                 authManager.handleCallback(url)
                                 webViewPresenter.dismiss()
-                            }
+                            },
                         )
                     }
                 }
@@ -187,8 +187,8 @@ struct PatronView: View {
                     LazyVStack(spacing: 16) {
                         PatronStatsView(
                             totalCount: patrons.count,
-                            activeCount: patrons.filter { $0.status == .active }.count,
-                            newCount: patrons.filter { $0.status == .new }.count
+                            activeCount: patrons.count(where: { $0.status == .active }),
+                            newCount: patrons.count(where: { $0.status == .new }),
                         )
 
                         ForEach(filteredPatrons) { patron in
@@ -348,7 +348,7 @@ struct PatronSearchBar: View {
                     ForEach(PatronFilter.allCases, id: \.self) { filter in
                         FilterChip(
                             title: filter.rawValue,
-                            isSelected: selectedFilter == filter
+                            isSelected: selectedFilter == filter,
                         ) {
                             selectedFilter = filter
                         }
@@ -893,7 +893,7 @@ struct CampaignView: View {
                     patronCount: campaignData.attributes.patron_count,
                     publishedAt: campaignData.attributes.published_at.flatMap { dateFormatter.date(from: $0) },
                     summary: campaignData.attributes.summary,
-                    tiers: []
+                    tiers: [],
                 )
             }
         } catch {
@@ -919,13 +919,13 @@ struct CampaignCard: View {
                         StatLabel(
                             icon: "person.2",
                             value: "\(campaign.patronCount)",
-                            label: "Patrons"
+                            label: "Patrons",
                         )
 
                         StatLabel(
                             icon: "calendar",
                             value: campaign.createdAt.formatted(.dateTime.month().year()),
-                            label: "Created"
+                            label: "Created",
                         )
                     }
                 }
@@ -1030,7 +1030,7 @@ struct MessageComposerView: View {
                     DisclosureGroup("Scheduling Options", isExpanded: $isShowingAdvancedOptions) {
                         Toggle("Schedule for Later", isOn: .init(
                             get: { scheduledDate > Date() },
-                            set: { if $0 { scheduledDate = Date() + 3600 } else { scheduledDate = Date() } }
+                            set: { if $0 { scheduledDate = Date() + 3600 } else { scheduledDate = Date() } },
                         ))
 
                         if scheduledDate > Date() {
@@ -1038,7 +1038,7 @@ struct MessageComposerView: View {
                                 "Send Date",
                                 selection: $scheduledDate,
                                 in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute]
+                                displayedComponents: [.date, .hourAndMinute],
                             )
                         }
                     }
@@ -1161,7 +1161,7 @@ struct MessageComposerView: View {
                     benefits: [],
                     patronCount: tier.patronCount ?? 0,
                     color: .blue,
-                    description: tier.description ?? ""
+                    description: tier.description ?? "",
                 )
             }
         } catch {

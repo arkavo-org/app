@@ -23,7 +23,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .arkavoClientStateChanged,
             object: nil,
-            userInfo: ["state": state]
+            userInfo: ["state": state],
         )
     }
 
@@ -41,7 +41,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 NotificationCenter.default.post(
                     name: .messageHandlingError,
                     object: nil,
-                    userInfo: ["error": error]
+                    userInfo: ["error": error],
                 )
             }
         }
@@ -87,7 +87,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .arkavoClientError,
             object: nil,
-            userInfo: ["error": error]
+            userInfo: ["error": error],
         )
     }
 
@@ -122,7 +122,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "data": plaintext, // The final decrypted content
                 "header": header, // Pass the original header for context
                 "policy": ArkavoPolicy(header.policy), // Pass the parsed policy
-            ]
+            ],
         )
     }
 
@@ -241,7 +241,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .rewrapRequestReceived,
             object: nil,
-            userInfo: ["header": header]
+            userInfo: ["header": header],
         )
     }
 
@@ -403,7 +403,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
             nonce: nonce,
             rewrappedKey: rewrappedKey,
             authTag: authTag,
-            isV13: isV13
+            isV13: isV13,
         )
 //        print("✅ Decrypted symmetric key")
 
@@ -441,7 +441,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "payload": payload,
                 // perhaps remove this and have handlers use header
                 "policy": ArkavoPolicy(header.policy),
-            ]
+            ],
         )
     }
 }

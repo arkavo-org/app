@@ -63,7 +63,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
@@ -78,7 +78,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data,
                   let policy = notification.userInfo?["policy"] as? ArkavoPolicy
@@ -110,7 +110,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let natsObserver = NotificationCenter.default.addObserver(
             forName: .natsMessageReceived,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data else { return }
             Task { @MainActor [weak self] in
@@ -125,7 +125,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let profileSavedObserver = NotificationCenter.default.addObserver(
             forName: .profileSharedAndSaved,
             object: nil,
-            queue: .main // Ensure handler runs on main thread
+            queue: .main, // Ensure handler runs on main thread
         ) { [weak self] notification in
             guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
                 print("❌ ProfileShare: Received .profileSharedAndSaved notification without profilePublicID.")
@@ -141,7 +141,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let keyStoreSavedObserver = NotificationCenter.default.addObserver(
             forName: .keyStoreSharedAndSaved,
             object: nil,
-            queue: .main // Ensure handler runs on main thread
+            queue: .main, // Ensure handler runs on main thread
         ) { notification in
             guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
                 print("❌ KeyStoreShare: Received .keyStoreSharedAndSaved notification without profilePublicID.")
@@ -180,7 +180,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             sourceType: .accountProfile,
             targetType: .streamProfile,
             sourceIdVectorOffset: builder.createVector(bytes: accountProfilePublicID),
-            targetIdVectorOffset: builder.createVector(bytes: publicID)
+            targetIdVectorOffset: builder.createVector(bytes: publicID),
         )
 
         // Create Event
@@ -190,7 +190,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             timestamp: UInt64(Date().timeIntervalSince1970),
             status: .preparing,
             dataType: .userevent,
-            dataOffset: userEventOffset
+            dataOffset: userEventOffset,
         )
 
         builder.finish(offset: eventOffset)
@@ -260,13 +260,13 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
                 interests: streamProfile.interests ?? "",
                 location: streamProfile.location ?? "",
                 hasHighEncryption: streamProfile.encryptionLevel == .el2,
-                hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2
+                hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2,
             ),
             policies: Policies(
                 admission: .open, // Default policy, adjust as needed
                 interaction: .open, // Default policy, adjust as needed
-                age: .forAll // Default policy, adjust as needed
-            )
+                age: .forAll, // Default policy, adjust as needed
+            ),
         )
 
         // First save the stream
@@ -308,7 +308,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             locationOffset: locationOffset,
             locationLevel: .approximate,
             identityAssuranceLevel: stream.profile.hasHighIdentityAssurance ? .ial2 : .ial1,
-            encryptionLevel: stream.profile.hasHighEncryption ? .el2 : .el1
+            encryptionLevel: stream.profile.hasHighEncryption ? .el2 : .el1,
         )
 
         // Create Activity
@@ -317,7 +317,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             dateCreated: Int64(Date().timeIntervalSince1970),
             expertLevel: .novice,
             activityLevel: .low,
-            trustLevel: .low
+            trustLevel: .low,
         )
 
         // Create PublicIds
@@ -334,14 +334,14 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             activityOffset: activityOffset,
             creatorPublicIdOffset: creatorPublicIdOffset,
             membersPublicIdVectorOffset: Offset(),
-            streamLevel: .sl1
+            streamLevel: .sl1,
         )
 
         // Create EntityRoot with Stream as the entity
         let entityRootOffset = Arkavo_EntityRoot.createEntityRoot(
             &builder,
             entityType: .stream,
-            entityOffset: streamOffset
+            entityOffset: streamOffset,
         )
 
         builder.finish(offset: entityRootOffset)
@@ -359,7 +359,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: targetPayloadVector,
             ttl: 604_800, // 1 week TTL
-            oneTimeAccess: false
+            oneTimeAccess: false,
         )
 
         // Create Event
@@ -369,7 +369,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             timestamp: UInt64(Date().timeIntervalSince1970),
             status: .preparing,
             dataType: .cacheevent,
-            dataOffset: cacheEventOffset
+            dataOffset: cacheEventOffset,
         )
 
         builder.finish(offset: eventOffset)
@@ -399,7 +399,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             pendingStreams[epk] = (
                 header: header,
                 payload: payload,
-                nano: nano
+                nano: nano,
             )
 
             // Send rewrap message to get the key
@@ -435,7 +435,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             let symmetricKey = try client.decryptRewrappedKey(
                 nonce: nonce,
                 rewrappedKey: rewrappedKey,
-                authTag: authTag
+                authTag: authTag,
             )
 //            print("Successfully decrypted rewrapped key")
 
@@ -633,7 +633,7 @@ struct GroupView: View {
                 if let url = URL(string: urlString) {
                     ShareSheet(
                         activityItems: [url],
-                        isPresented: $isShareSheetPresented
+                        isPresented: $isShareSheetPresented,
                     )
                 }
             }
@@ -654,7 +654,7 @@ struct GroupView: View {
             return AnyView(
                 ProgressView()
                     .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
-                    .frame(maxHeight: .infinity)
+                    .frame(maxHeight: .infinity),
             )
         }
 
@@ -662,7 +662,7 @@ struct GroupView: View {
         if regularStreams.isEmpty {
             return AnyView(
                 WaveEmptyStateView()
-                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+                    .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width),
             )
         }
 
@@ -708,7 +708,7 @@ struct GroupView: View {
             }
             .listStyle(.plain) // Use plain style to remove default List background/styling
             .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
-            .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()) // Use constant color
+            .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()), // Use constant color
         )
     }
 
@@ -722,9 +722,9 @@ struct GroupView: View {
                         viewModel.selectedStream = stream
                         sharedState.selectedStreamPublicID = stream.publicID
                         sharedState.showChatOverlay = true
-                    }
+                    },
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 10)),
             )
         } else {
             return AnyView(EmptyView())
@@ -825,7 +825,7 @@ struct GroupCardView: View {
             if let url = URL(string: urlString) {
                 ShareSheet(
                     activityItems: [url],
-                    isPresented: $isShareSheetPresented
+                    isPresented: $isShareSheetPresented,
                 )
             }
         }

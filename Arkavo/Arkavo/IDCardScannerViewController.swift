@@ -273,19 +273,19 @@
             // Convert normalized points to layer coordinates
             let topLeft = CGPoint(
                 x: convertedRect.minX + (convertedRect.width * rectangle.topLeft.x),
-                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.topLeft.y))
+                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.topLeft.y)),
             )
             let topRight = CGPoint(
                 x: convertedRect.minX + (convertedRect.width * rectangle.topRight.x),
-                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.topRight.y))
+                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.topRight.y)),
             )
             let bottomRight = CGPoint(
                 x: convertedRect.minX + (convertedRect.width * rectangle.bottomRight.x),
-                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.bottomRight.y))
+                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.bottomRight.y)),
             )
             let bottomLeft = CGPoint(
                 x: convertedRect.minX + (convertedRect.width * rectangle.bottomLeft.x),
-                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.bottomLeft.y))
+                y: convertedRect.minY + (convertedRect.height * (1 - rectangle.bottomLeft.y)),
             )
 
             path.move(to: topLeft)
@@ -492,7 +492,7 @@
             let alert = UIAlertController(
                 title: "Verification Failed",
                 message: message,
-                preferredStyle: .alert
+                preferredStyle: .alert,
             )
 
             alert.addAction(UIAlertAction(title: "OK", style: .default))

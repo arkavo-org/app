@@ -35,7 +35,7 @@ struct StreamProfileBadge: View {
                     .clipShape(Circle())
                     .overlay(
                         Circle()
-                            .stroke(viewModel.isHighlighted ? Color.blue : Color.gray, lineWidth: 2)
+                            .stroke(viewModel.isHighlighted ? Color.blue : Color.gray, lineWidth: 2),
                     )
                 VStack(alignment: .leading) {
                     Text(viewModel.stream?.profile.name ?? "")

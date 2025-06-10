@@ -59,7 +59,7 @@ struct AccountProfileInterestsView: View {
                                     if let bucketIndex = getBucketIndexAtPosition(value.location) {
                                         dropTopicIntoBucket(topic, bucketIndex: bucketIndex, screenSize: geometry.size)
                                     }
-                                }
+                                },
                         )
                         .onTapGesture {
                             if topic.isMainTopic {

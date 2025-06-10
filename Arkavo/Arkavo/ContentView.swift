@@ -120,7 +120,7 @@ struct ContentView: View {
                                 .padding(.vertical, 8)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.black.opacity(0.8))
+                                        .fill(Color.black.opacity(0.8)),
                                 )
                                 .transition(.opacity.combined(with: .slide))
                         }
@@ -151,7 +151,7 @@ struct ContentView: View {
                         insertion: .scale(scale: 0.1, anchor: .center)
                             .combined(with: .opacity),
                         removal: .scale(scale: 0.1, anchor: .center)
-                            .combined(with: .opacity)
+                            .combined(with: .opacity),
                     ))
                 }
 
@@ -268,13 +268,13 @@ struct BounceAnimationModifier: ViewModifier {
     private func startAnimation() {
         withAnimation(
             .easeInOut(duration: 0.6)
-                .repeatForever(autoreverses: true)
+                .repeatForever(autoreverses: true),
         ) {
             bounceOffset = -10 // More pronounced bounce
         }
         withAnimation(
             .easeInOut(duration: 0.8)
-                .repeatForever(autoreverses: true)
+                .repeatForever(autoreverses: true),
         ) {
             scaleEffect = 1.2 // Slight scaling for emphasis
         }

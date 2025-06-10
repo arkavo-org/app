@@ -34,7 +34,7 @@ final class Thought: Identifiable { // Removed Codable conformance
             streamPublicID: Data(),
             mediaType: .text,
             createdAt: Date(), // Default creation time
-            contributors: []
+            contributors: [],
         )
         // Update publicID after all properties are initialized
         publicID = withUnsafeBytes(of: id) { buffer in
@@ -179,7 +179,7 @@ extension Thought {
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
             createdAt: model.createdAt, // Use timestamp from service model
-            contributors: [contributor]
+            contributors: [contributor],
         )
 
         let nano = model.content

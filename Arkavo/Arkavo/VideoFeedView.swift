@@ -47,7 +47,7 @@ struct VideoFeedView: View {
                                     VideoPlayerView(
                                         video: video,
                                         viewModel: viewModel,
-                                        size: geometry.size
+                                        size: geometry.size,
                                     )
                                     .id(video.id)
                                     .frame(width: geometry.size.width, height: geometry.size.height)
@@ -77,7 +77,7 @@ struct VideoFeedView: View {
                                             }
                                         }
                                     }
-                                }
+                                },
                         )
                     }
                 }
@@ -102,7 +102,7 @@ struct ContributorsView: View {
                     profile: profile,
                     sharedState: sharedState,
                     size: .large,
-                    showRole: false
+                    showRole: false,
                 )
                 .task {
                     do {
@@ -126,7 +126,7 @@ struct ContributorsView: View {
                             profile: profile,
                             sharedState: sharedState,
                             size: .small,
-                            showRole: true
+                            showRole: true,
                         )
                         .padding(.leading, 8)
                         .task {
@@ -251,7 +251,7 @@ struct VideoPlayerView: View {
                     playerManager: viewModel.playerManager,
                     size: size,
                     isCurrentVideo: viewModel.currentVideoIndex < viewModel.videos.count &&
-                        viewModel.videos[viewModel.currentVideoIndex].id == video.id
+                        viewModel.videos[viewModel.currentVideoIndex].id == video.id,
                 )
                 // Content overlay
                 HStack(spacing: 0) {
@@ -263,7 +263,7 @@ struct VideoPlayerView: View {
                                 .rotationEffect(.degrees(-90), anchor: .center)
                                 .position(
                                     x: systemMargin + geometry.safeAreaInsets.leading,
-                                    y: metrics.size.height / 2
+                                    y: metrics.size.height / 2,
                                 )
                         }
                     }
@@ -285,7 +285,7 @@ struct VideoPlayerView: View {
                                         try? await viewModel.client.sendMessage(nano)
                                     }
                                 }
-                            }
+                            },
                         )
                         .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
                         .padding(.bottom, systemMargin * 6.25)
@@ -298,7 +298,7 @@ struct VideoPlayerView: View {
                     HStack {
                         ContributorsView(
                             client: viewModel.client,
-                            contributors: video.contributors
+                            contributors: video.contributors,
                         )
                         .padding(.horizontal, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -319,7 +319,7 @@ struct VideoPlayerView: View {
                                 }
                             }
                         }
-                    }
+                    },
             )
         }
         .frame(width: size.width, height: size.height)
@@ -402,7 +402,7 @@ struct GroupChatIconList: View {
                     insertion: .scale(scale: 0.1, anchor: .trailing)
                         .combined(with: .opacity),
                     removal: .scale(scale: 0.1, anchor: .trailing)
-                        .combined(with: .opacity)
+                        .combined(with: .opacity),
                 ))
             }
 
@@ -427,7 +427,7 @@ struct GroupChatIconList: View {
             ReportView(
                 content: currentVideo as Any,
                 contentId: currentVideo?.id ?? "",
-                contributor: currentVideo?.contributors.first
+                contributor: currentVideo?.contributors.first,
             )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

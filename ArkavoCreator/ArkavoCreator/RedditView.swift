@@ -37,7 +37,7 @@ struct RedditRootView: View {
                             .frame(width: 60, height: 60)
                             .overlay(
                                 Image(systemName: "person.fill")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.white),
                             )
 
                         VStack(alignment: .leading, spacing: 4) {

@@ -30,7 +30,7 @@ public actor BlueskyClient: ObservableObject {
         do {
             let response = try await createSession(
                 identifier: identifier,
-                password: password
+                password: password,
             )
             print("Logged in as: \(response.handle)")
         } catch {
@@ -46,7 +46,7 @@ public actor BlueskyClient: ObservableObject {
             endpoint,
             method: "POST",
             body: request,
-            headers: [:]
+            headers: [:],
         )
         try KeychainManager.saveBlueskyHandle(response.handle)
         try KeychainManager.saveBlueskyDID(response.did)
@@ -78,7 +78,7 @@ public actor BlueskyClient: ObservableObject {
                 url,
                 method: method,
                 body: method == "GET" ? nil : body,
-                headers: ["Authorization": "Bearer \(accessToken)"]
+                headers: ["Authorization": "Bearer \(accessToken)"],
             )
         } catch let error as BlueskyError where error.error == "ExpiredToken" && retryCount > 0 {
             // Token expired, try to refresh and retry the request once
@@ -88,7 +88,7 @@ public actor BlueskyClient: ObservableObject {
                 method: method,
                 queryItems: queryItems,
                 body: body,
-                retryCount: retryCount - 1
+                retryCount: retryCount - 1,
             )
         } catch {
             throw error
@@ -117,7 +117,7 @@ public actor BlueskyClient: ObservableObject {
         do {
             let timeline: TimelineResponse = try await authenticatedRequest(
                 endpoint: "app.bsky.feed.getTimeline",
-                method: "GET"
+                method: "GET",
             )
             self.timeline = timeline
             print("Fetched \(timeline.feed.count) posts")
@@ -157,7 +157,7 @@ public actor BlueskyClient: ObservableObject {
             let profile: ProfileViewResponse = try await authenticatedRequest(
                 endpoint: "app.bsky.actor.getProfile",
                 method: "GET",
-                queryItems: [URLQueryItem(name: "actor", value: actor)]
+                queryItems: [URLQueryItem(name: "actor", value: actor)],
             )
             print("Fetched profile for: \(profile.handle)")
             return profile
@@ -186,7 +186,7 @@ public actor BlueskyClient: ObservableObject {
             let response: CreatePostResponse = try await authenticatedRequest(
                 endpoint: "com.atproto.repo.createRecord",
                 method: "POST",
-                body: request
+                body: request,
             )
             print("Created post with URI: \(response.uri)")
 
@@ -208,7 +208,7 @@ public actor BlueskyClient: ObservableObject {
             let _: EmptyResponse = try await authenticatedRequest(
                 endpoint: "app.bsky.feed.deletePost",
                 method: "POST",
-                body: ["uri": uri]
+                body: ["uri": uri],
             )
             print("Deleted post: \(uri)")
         } catch {
@@ -227,7 +227,7 @@ public actor BlueskyClient: ObservableObject {
             let _: EmptyResponse = try await authenticatedRequest(
                 endpoint: "app.bsky.feed.like",
                 method: "POST",
-                body: ["uri": uri, "cid": cid]
+                body: ["uri": uri, "cid": cid],
             )
             print("Liked post: \(uri)")
         } catch {
@@ -244,7 +244,7 @@ public actor BlueskyClient: ObservableObject {
             let _: EmptyResponse = try await authenticatedRequest(
                 endpoint: "app.bsky.feed.unlike",
                 method: "POST",
-                body: ["uri": uri]
+                body: ["uri": uri],
             )
             print("Unliked post: \(uri)")
         } catch {
@@ -263,7 +263,7 @@ public actor BlueskyClient: ObservableObject {
             endpoint,
             method: "POST",
             body: nil,
-            headers: ["Authorization": "Bearer \(refreshToken)"]
+            headers: ["Authorization": "Bearer \(refreshToken)"],
         )
 
         // Save new tokens

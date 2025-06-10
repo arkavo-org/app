@@ -36,7 +36,7 @@ struct AccountView: View {
                 #if !os(macOS)
                     AgeVerificationRow(
                         account: account,
-                        showingAgeVerification: $showingAgeVerification
+                        showingAgeVerification: $showingAgeVerification,
                     )
                 #else
                     HStack {
@@ -280,7 +280,7 @@ struct AccountView: View {
                             ageVerificationManager.showingScanner = false
                             ageVerificationManager.isVerifying = false
                             ageVerificationManager.verificationStatus = .unverified
-                        }
+                        },
                     )
                 }
                 #endif

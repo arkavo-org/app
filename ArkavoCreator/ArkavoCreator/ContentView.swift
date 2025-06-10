@@ -29,7 +29,7 @@ struct ContentView: View {
                     redditClient: redditClient,
                     micropubClient: micropubClient,
                     blueskyClient: blueskyClient,
-                    youtubeClient: youtubeClient
+                    youtubeClient: youtubeClient,
                 )
             }
             .navigationTitle(selectedSection.rawValue)
@@ -160,7 +160,7 @@ struct SectionContainer: View {
                                                     // Keep the window open on error to show any error pages
                                                 }
                                             }
-                                        }
+                                        },
                                     )
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -177,7 +177,7 @@ struct SectionContainer: View {
                                         handleCallback: { url in
                                             redditClient.handleCallback(url)
                                             webViewPresenter.dismiss()
-                                        }
+                                        },
                                     )
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -200,7 +200,7 @@ struct SectionContainer: View {
                                                     print("Micro.blog OAuth error: \(error)")
                                                 }
                                             }
-                                        }
+                                        },
                                     )
                                 }
                                 .buttonStyle(.borderedProminent)
@@ -246,7 +246,7 @@ struct SectionContainer: View {
                                                                     print("YouTube OAuth error: \(error)")
                                                                 }
                                                             }
-                                                        }
+                                                        },
                                                     )
                                                 }
                                             }
@@ -276,7 +276,7 @@ struct SectionContainer: View {
                                                 .cornerRadius(6)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 6)
-                                                        .stroke(Color.gray.opacity(0.2))
+                                                        .stroke(Color.gray.opacity(0.2)),
                                                 )
 
                                             if let error = youtubeClient.error {
@@ -434,26 +434,26 @@ struct DefaultSectionView: View {
                             FeatureCard(
                                 title: "Creator Ownership Control",
                                 description: "Maintain full ownership and control of your content across sharing platforms and AI model interactions",
-                                symbol: "shield.lefthalf.filled"
+                                symbol: "shield.lefthalf.filled",
                             )
 
                             FeatureCard(
                                 title: "Attribution & Compensation",
                                 description: "Ensure proper citation and fair compensation when your content is shared with third parties",
-                                symbol: "creditcard.circle"
+                                symbol: "creditcard.circle",
                             )
 
                         case .social:
                             FeatureCard(
                                 title: "Cross-Platform Sharing",
                                 description: "Share content across multiple platforms with customized previews using native macOS integration",
-                                symbol: "square.and.arrow.up"
+                                symbol: "square.and.arrow.up",
                             )
 
                             FeatureCard(
                                 title: "Analytics Dashboard",
                                 description: "Track engagement and performance with detailed metrics and customizable reports",
-                                symbol: "chart.line.uptrend.xyaxis"
+                                symbol: "chart.line.uptrend.xyaxis",
                             )
 
                         default:
@@ -466,7 +466,7 @@ struct DefaultSectionView: View {
                             FeatureCard(
                                 title: "Notification Management",
                                 description: "Sync and manage notifications across all your connected social platforms",
-                                symbol: "bell.badge"
+                                symbol: "bell.badge",
                             )
                             .gridCellColumns(2)
                         }
@@ -547,7 +547,7 @@ extension AnyTransition {
     static func moveAndFade() -> AnyTransition {
         AnyTransition.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .trailing)),
-            removal: .opacity.combined(with: .move(edge: .leading))
+            removal: .opacity.combined(with: .move(edge: .leading)),
         )
     }
 }
@@ -633,7 +633,7 @@ struct SidebarRow: View {
     var body: some View {
         Label(
             title: { Text(section.rawValue) },
-            icon: { Image(systemName: section.systemImage) }
+            icon: { Image(systemName: section.systemImage) },
         )
     }
 }
@@ -653,7 +653,7 @@ struct ContentCard: View {
                         .frame(width: 40, height: 40)
                         .overlay(
                             Image(systemName: "doc.text")
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Color.accentColor),
                         )
 
                     VStack(alignment: .leading, spacing: 4) {

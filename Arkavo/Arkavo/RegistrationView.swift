@@ -82,7 +82,7 @@ struct RegistrationView: View {
                     Spacer()
                 }
                 .background(Color.gray.opacity(0.1))
-                
+
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
                         ZStack(alignment: .top) {
@@ -104,11 +104,11 @@ struct RegistrationView: View {
                                 .frame(width: geometry.size.width, alignment: .top)
                                 .opacity(currentStep == step ? 1 : 0)
                                 .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
-                                }
+                            }
                         }
                         .animation(.easeInOut(duration: 0.3), value: currentStep)
                         .frame(height: geometry.size.height * 0.7, alignment: .top)
-    
+
                         Spacer()
 
                         VStack {
@@ -125,7 +125,7 @@ struct RegistrationView: View {
 
                             ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                                 .padding()
-    
+
                             HStack {
                                 if currentStep != .welcome {
                                     Button("Back") {
@@ -198,7 +198,7 @@ struct RegistrationView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 2)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 2),
                 )
 
             Text("Enable passkeys")
@@ -242,7 +242,7 @@ struct RegistrationView: View {
                     name: selectedScreenName,
                     interests: Array(selectedInterests).joined(separator: ","),
                     hasHighEncryption: true,
-                    hasHighIdentityAssurance: true
+                    hasHighIdentityAssurance: true,
                 )
                 Task {
                     await onComplete(newProfile)
@@ -368,7 +368,7 @@ struct RegistrationView: View {
             get: { selectedScreenName },
             set: { newValue in
                 selectedScreenName = validateAndFormatScreenName(newValue)
-            }
+            },
         )
     }
 
@@ -654,7 +654,7 @@ struct RegistrationView: View {
                 Rectangle()
                     .frame(height: 1)
                     .foregroundColor(Color(UIColor.separator)),
-                alignment: .top
+                alignment: .top,
             )
         }
     }

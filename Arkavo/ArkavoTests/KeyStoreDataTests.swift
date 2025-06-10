@@ -96,7 +96,7 @@ final class KeyStoreDataTests: XCTestCase {
             profile: mockProfile,
             serializedData: sampleData,
             keyCurve: .secp256r1,
-            capacity: 8192
+            capacity: 8192,
         )
     }
 
@@ -126,7 +126,7 @@ final class KeyStoreDataTests: XCTestCase {
             profile: nil,
             serializedData: "noProfileData".data(using: .utf8)!,
             keyCurve: .secp384r1,
-            capacity: 4096
+            capacity: 4096,
         )
 
         // Verify properties
@@ -179,7 +179,7 @@ final class KeyStoreDataTests: XCTestCase {
             profile: mockProfile,
             serializedData: "invalidCurveData".data(using: .utf8)!,
             keyCurve: .secp256r1, // Use valid curve for initialization
-            capacity: 8192
+            capacity: 8192,
         )
 
         // Manually set invalid curve string to test default behavior

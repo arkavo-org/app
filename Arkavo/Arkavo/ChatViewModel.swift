@@ -99,7 +99,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted, // Assuming ArkavoClient posts this after successful decryption
             object: nil, // Optionally filter by client instance if needed
-            queue: .main
+            queue: .main,
         ) { [weak self] notification in
             guard let self, // Ensure self is valid
                   let data = notification.userInfo?["data"] as? Data,
@@ -171,7 +171,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                 publicID: thoughtModel.publicID,
                 creatorPublicID: thoughtModel.creatorPublicID,
                 mediaType: thoughtModel.mediaType,
-                rawContent: thoughtModel.content // Store original decrypted content
+                rawContent: thoughtModel.content, // Store original decrypted content
             )
 
             // Avoid adding duplicates
@@ -249,7 +249,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                     try await keystore.deserialize(from: keyStorePublic)
                     if let rl = ResourceLocator(
                         protocolEnum: .sharedResourceDirectory,
-                        body: profile.publicID.base58EncodedString
+                        body: profile.publicID.base58EncodedString,
                     ) {
                         kasMetadata = try await keystore.createKasMetadata(resourceLocator: rl)
                         // Create thought service model
@@ -258,7 +258,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                             streamPublicID: profile.publicID, // route to each individual, perhaps rename to targetPublicID
                             mediaType: .say,
                             createdAt: creationDate,
-                            content: messageData
+                            content: messageData,
                         )
                         policyData = try createFlatBuffersPolicy(for: thoughtModel)
                         profile.keyStorePublic = await keystore.serialize()
@@ -305,7 +305,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                 streamPublicID: streamPublicID,
                 mediaType: .say,
                 createdAt: creationDate, // Set the creation timestamp
-                content: messageData
+                content: messageData,
             )
             let isOneTime = policyData != nil
             if policyData == nil {
@@ -331,7 +331,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
                 let thought = try await createAndSaveThought(
                     nanoData: nanoData, // Save the *encrypted* data
                     thoughtModel: thoughtModel,
-                    publicID: thoughtModel.publicID // Use the ID from the service model
+                    publicID: thoughtModel.publicID, // Use the ID from the service model
                 )
                 addLocalChatMessage(content: content, thoughtPublicID: thought.publicID, timestamp: thought.metadata.createdAt)
             } else {
@@ -391,7 +391,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             publicID: thoughtPublicID,
             creatorPublicID: profile.publicID,
             mediaType: .say,
-            rawContent: content.data(using: .utf8) ?? Data()
+            rawContent: content.data(using: .utf8) ?? Data(),
         )
 
         if !messages.contains(where: { $0.id == message.id }) {
@@ -411,7 +411,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             &builder,
             type: .plain,
             versionOffset: formatVersionString,
-            profileOffset: formatProfileString
+            profileOffset: formatProfileString,
         )
 
         // Create content format
@@ -419,7 +419,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             &builder,
             mediaType: thoughtModel.mediaType == .image ? .image : .text,
             dataEncoding: .utf8,
-            formatOffset: formatInfo
+            formatOffset: formatInfo,
         )
 
         // Create rating
@@ -432,7 +432,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             hate: .none_,
             harm: .none_,
             mature: .none_,
-            bully: .none_
+            bully: .none_,
         )
 
         // Create purpose
@@ -446,7 +446,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             opinion: 0.2,
             transactional: 0.0,
             harmful: 0.0,
-            confidence: 0.9
+            confidence: 0.9,
         )
 
         // Create ID and related vectors
@@ -468,7 +468,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             ratingOffset: rating,
             purposeOffset: purpose,
             topicsVectorOffset: topicsVector,
-            contentOffset: contentFormat
+            contentOffset: contentFormat,
         )
 
         builder.finish(offset: metadata)
@@ -482,7 +482,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
         // Return the final binary policy data
         return Data(
             bytes: buffer.memory.advanced(by: buffer.reader),
-            count: Int(buffer.size)
+            count: Int(buffer.size),
         )
     }
 
@@ -496,7 +496,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
             createdAt: model.createdAt, // Use timestamp from service model
-            contributors: []
+            contributors: [],
         )
     }
 
@@ -507,7 +507,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
 
         let thought = Thought(
             nano: nanoData, // Store the encrypted NanoTDF data
-            metadata: thoughtMetadata
+            metadata: thoughtMetadata,
         )
         // Ensure the Thought's publicID matches the one used/generated for the service model
         thought.publicID = publicID
@@ -550,7 +550,7 @@ extension Thought {
             streamPublicID: model.streamPublicID,
             mediaType: model.mediaType,
             createdAt: model.createdAt, // Use timestamp from service model
-            contributors: []
+            contributors: [],
         )
         self.init(nano: nano, metadata: metadata)
         // Ensure the publicID matches the service model's ID

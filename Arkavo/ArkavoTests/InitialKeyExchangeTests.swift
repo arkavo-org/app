@@ -318,7 +318,7 @@ final class InitialKeyExchangeTests: XCTestCase {
         // Verify the state is old
         XCTAssertLessThan(
             initiatorViewModel.peerKeyExchangeStates[responderPeerID]!.lastActivity,
-            Date().addingTimeInterval(-60) // At least 1 minute old
+            Date().addingTimeInterval(-60), // At least 1 minute old
         )
 
         // For a timeout handler, you would typically verify it gets transitioned to .failed

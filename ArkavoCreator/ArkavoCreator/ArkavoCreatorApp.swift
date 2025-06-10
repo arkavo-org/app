@@ -23,7 +23,7 @@ struct ArkavoCreatorApp: App {
     let youtubeClient = YouTubeClient(
         clientId: Secrets.youtubeClientId,
         clientSecret: Secrets.youtubeClientSecret,
-        redirectUri: "urn:ietf:wg:oauth:2.0:oob"
+        redirectUri: "urn:ietf:wg:oauth:2.0:oob",
     )
     let arkavoClient: ArkavoClient
 
@@ -32,7 +32,7 @@ struct ArkavoCreatorApp: App {
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256
+            curve: .p256,
         )
         ViewModelFactory.shared.serviceLocator.register(arkavoClient)
         // TODO: Initialize router
@@ -51,7 +51,7 @@ struct ArkavoCreatorApp: App {
                 redditClient: redditClient,
                 micropubClient: micropubClient,
                 blueskyClient: blueskyClient,
-                youtubeClient: youtubeClient
+                youtubeClient: youtubeClient,
             )
             .onAppear {
                 // Load stored tokens
@@ -143,7 +143,7 @@ struct ArkavoCreatorApp: App {
                     NotificationCenter.default.post(
                         name: notificationName,
                         object: nil,
-                        userInfo: ["url": url]
+                        userInfo: ["url": url],
                     )
                 }
             }

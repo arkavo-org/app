@@ -304,7 +304,7 @@ struct ContactShareSheet: UIViewControllerRepresentable {
     func makeUIViewController(context _: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(
             activityItems: activityItems,
-            applicationActivities: nil
+            applicationActivities: nil,
         )
         controller.completionWithItemsHandler = { _, _, _, _ in
             isPresented = false

@@ -18,7 +18,7 @@ class ServerConnectivityIntegrationTests: XCTestCase {
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256
+            curve: .p256,
         )
     }
 

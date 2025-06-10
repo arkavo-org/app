@@ -94,7 +94,7 @@ struct InnerCircleView: View {
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .refreshInnerCircleMembers,
             object: nil,
-            queue: .main
+            queue: .main,
         ) { _ in
             Task {
                 await loadInnerCircleProfiles()
@@ -271,7 +271,7 @@ struct InnerCircleView: View {
                             isOnline: true,
                             connectionTime: getConnectionTime(for: profile),
                             stream: stream,
-                            peerManager: peerManager // Pass peerManager
+                            peerManager: peerManager, // Pass peerManager
                         )
                         .padding(.horizontal, systemMargin) // Use systemMargin
                         .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)
@@ -290,7 +290,7 @@ struct InnerCircleView: View {
                             isOnline: false,
                             // lastSeen removed
                             stream: stream,
-                            peerManager: peerManager // Pass peerManager
+                            peerManager: peerManager, // Pass peerManager
                         )
                         .padding(.horizontal, systemMargin) // Use systemMargin
                         .padding(.vertical, systemMargin / 4) // Use systemMargin multiple (4pt)

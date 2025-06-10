@@ -410,7 +410,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         mcAdvertiser = MCNearbyServiceAdvertiser(
             peer: mcPeerID,
             discoveryInfo: discoveryInfo,
-            serviceType: serviceType
+            serviceType: serviceType,
         )
         mcAdvertiser?.delegate = self
 
@@ -613,7 +613,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let nanoTDFData = try await arkavoClient.encryptAndSendPayload(
                     payload: data,
                     policyData: policyData,
-                    kasMetadata: finalKasMetadata // Provide the specific KAS metadata
+                    kasMetadata: finalKasMetadata, // Provide the specific KAS metadata
                 )
                 print("      Encryption successful. NanoTDF size: \(nanoTDFData.count) bytes.")
 
@@ -666,7 +666,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                     senderProfileID: profile.publicID.base58EncodedString,
                     timestamp: Date(),
                     stream: stream,
-                    nanoData: nil // Indicate it's unencrypted content
+                    nanoData: nil, // Indicate it's unencrypted content
                 )
                 print("✅ Local text message stored as Thought ID: \(thought.id)")
                 await MainActor.run {
@@ -705,7 +705,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             NotificationCenter.default.post(
                 name: .nonJsonDataReceived,
                 object: nil,
-                userInfo: ["data": data, "peer": peer]
+                userInfo: ["data": data, "peer": peer],
             )
         }
     }
@@ -721,7 +721,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             streamPublicID: stream.publicID,
             mediaType: .say, // Use .say for P2P text messages
             createdAt: timestamp,
-            contributors: []
+            contributors: [],
         )
 
         // Use provided nanoData (e.g., encrypted) or convert content string (decrypted)
@@ -777,7 +777,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 NotificationCenter.default.post(
                     name: .profileSharedAndSaved,
                     object: nil,
-                    userInfo: ["profilePublicID": sharedProfile.publicID] // Send public ID
+                    userInfo: ["profilePublicID": sharedProfile.publicID], // Send public ID
                 )
             } catch {
                 print("❌ Error handling ProfileShare from \(peer.displayName): \(error)")
@@ -815,7 +815,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 NotificationCenter.default.post(
                     name: .keyStoreSharedAndSaved,
                     object: nil,
-                    userInfo: ["profilePublicID": senderProfileID]
+                    userInfo: ["profilePublicID": senderProfileID],
                 )
 
                 // --- Check Key Exchange State and Complete Protocol ---
@@ -963,7 +963,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         let request = KeyRegenerationRequest(
             requestID: UUID(),
             initiatorProfileID: myProfile.publicID.base58EncodedString,
-            timestamp: Date()
+            timestamp: Date(),
         )
 
         // Update state *before* sending
@@ -1001,7 +1001,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                     requestID: request.requestID,
                     responderProfileID: myProfile.publicID.base58EncodedString,
                     nonce: nonce,
-                    timestamp: Date()
+                    timestamp: Date(),
                 )
 
                 // Update state *before* sending
@@ -1040,7 +1040,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                     requestID: offer.requestID,
                     initiatorProfileID: myProfile.publicID.base58EncodedString,
                     nonce: initiatorNonce, // Send back *our* original nonce
-                    timestamp: Date()
+                    timestamp: Date(),
                 )
 
                 // Update state *before* sending
@@ -1063,7 +1063,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let keySharePayload = KeyStoreSharePayload(
                     senderProfileID: myProfile.publicID.base58EncodedString,
                     keyStorePublicData: localPublicKeyStoreData,
-                    timestamp: Date()
+                    timestamp: Date(),
                 )
                 try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
                 print("KeyExchange (Initiator): Sent KeyStoreShare to \(peer.displayName)")
@@ -1097,7 +1097,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let commit = KeyRegenerationCommit(
                     requestID: ack.requestID,
                     responderProfileID: myProfile.publicID.base58EncodedString,
-                    timestamp: Date()
+                    timestamp: Date(),
                 )
 
                 // Update state *before* sending
@@ -1120,7 +1120,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let keySharePayload = KeyStoreSharePayload(
                     senderProfileID: myProfile.publicID.base58EncodedString,
                     keyStorePublicData: localPublicKeyStoreData,
-                    timestamp: Date()
+                    timestamp: Date(),
                 )
                 try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
                 print("KeyExchange (Responder): Sent KeyStoreShare to \(peer.displayName)")

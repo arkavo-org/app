@@ -18,7 +18,7 @@ final class Stream: Identifiable, Hashable {
     var policies: Policies? = Policies(
         admission: .closed,
         interaction: .closed,
-        age: .forAll
+        age: .forAll,
     )
     // InnerCircle profiles - direct profiles for members
     var innerCircleProfiles: [Profile] = []
@@ -36,7 +36,7 @@ final class Stream: Identifiable, Hashable {
         policies = Policies(
             admission: .closed,
             interaction: .closed,
-            age: .forAll
+            age: .forAll,
         )
     }
 
@@ -153,7 +153,7 @@ extension Stream {
         policies ?? Policies(
             admission: .closed,
             interaction: .closed,
-            age: .forAll
+            age: .forAll,
         )
     }
 }

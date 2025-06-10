@@ -75,7 +75,7 @@ public class VideoClassificationProcessor {
                         ClassificationResult(
                             timestamp: CMTimeGetSeconds(currentTime),
                             label: observation.identifier,
-                            confidence: observation.confidence
+                            confidence: observation.confidence,
                         )
                     }
                     results.append(contentsOf: frameResults)

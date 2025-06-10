@@ -329,7 +329,7 @@ struct DetailedStreamProfileView: View {
         NotificationCenter.default.post(
             name: .peerTrustRevoked,
             object: nil,
-            userInfo: ["revokedProfileID": profileIDData] // Keep using profileIDData
+            userInfo: ["revokedProfileID": profileIDData], // Keep using profileIDData
         )
         print("✅ RevokeTrust [deleteKeysAndNotify]: Posted peerTrustRevoked notification for profile ID: \(profileIDString)")
     }

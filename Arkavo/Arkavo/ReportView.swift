@@ -173,7 +173,7 @@ struct ReportView: View {
                     blockUser: blockUser,
                     timestamp: Date(),
                     contentId: contentId,
-                    reporterId: accountProfilePublicID.base58EncodedString
+                    reporterId: accountProfilePublicID.base58EncodedString,
                 )
 
                 // Handle blocking the user if enabled
@@ -184,7 +184,7 @@ struct ReportView: View {
                     report.blockedPublicID = creatorPublicID.base58EncodedString
                     let blockedProfile = BlockedProfile(
                         blockedPublicID: creatorPublicID,
-                        report: report
+                        report: report,
                     )
                     try await PersistenceController.shared.saveBlockedProfile(blockedProfile)
                 }
@@ -249,7 +249,7 @@ class ReportViewModel: ViewModel {
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: payloadVector,
             ttl: 0, // No TTL for reports
-            oneTimeAccess: false
+            oneTimeAccess: false,
         )
 
         // Create Event
@@ -259,7 +259,7 @@ class ReportViewModel: ViewModel {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             status: .preparing,
             dataType: .cacheevent,
-            dataOffset: cacheEvent
+            dataOffset: cacheEvent,
         )
 
         builder.finish(offset: event)

@@ -63,7 +63,7 @@ extension RegistrationView {
                         // EULA sections
                         eulaSection(
                             title: "1. Agreement to Terms",
-                            content: "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App."
+                            content: "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.",
                         )
 
                         eulaSection(
@@ -73,7 +73,7 @@ extension RegistrationView {
                                 "Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory",
                                 "Engaging in harassment, threats, or abuse towards other users",
                                 "Sharing content that infringes intellectual property rights or violates laws",
-                            ]
+                            ],
                         )
 
                         // Additional sections...

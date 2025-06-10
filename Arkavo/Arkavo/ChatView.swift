@@ -86,7 +86,7 @@ struct ChatView: View {
                                 showError = true
                             }
                         }
-                    }
+                    },
                 )
             }
         }
@@ -160,7 +160,7 @@ struct MessageRow: View {
                 .overlay(
                     Text(message.username.prefix(1))
                         .font(.headline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.blue),
                 )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -203,7 +203,7 @@ struct MessageRow: View {
                                 .frame(height: 200)
                                 .overlay(
                                     Image(systemName: "play.rectangle.fill")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.gray),
                                 )
                         }
 
@@ -217,7 +217,7 @@ struct MessageRow: View {
                                 .frame(height: 50)
                                 .overlay(
                                     Image(systemName: "waveform")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.gray),
                                 )
                         }
                     }
@@ -386,8 +386,8 @@ struct ChatOverlay: View {
                 // Chat view
                 ChatView(
                     viewModel: ViewModelFactory.shared.makeChatViewModel(
-                        streamPublicID: streamPublicID
-                    )
+                        streamPublicID: streamPublicID,
+                    ),
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .focused($isChatFieldFocused)

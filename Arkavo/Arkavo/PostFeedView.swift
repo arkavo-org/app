@@ -66,7 +66,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         let stateObserver = NotificationCenter.default.addObserver(
             forName: .arkavoClientStateChanged,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let state = notification.userInfo?["state"] as? ArkavoClientState else { return }
             Task { @MainActor [weak self] in
@@ -79,7 +79,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         let messageObserver = NotificationCenter.default.addObserver(
             forName: .messageDecrypted,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let data = notification.userInfo?["data"] as? Data,
                   let header = notification.userInfo?["header"] as? Header else { return }
@@ -94,7 +94,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         let errorObserver = NotificationCenter.default.addObserver(
             forName: .messageHandlingError,
             object: nil,
-            queue: nil
+            queue: nil,
         ) { [weak self] notification in
             guard let error = notification.userInfo?["error"] as? Error else { return }
             Task { @MainActor [weak self] in
@@ -131,7 +131,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
                     createdAt: thought.metadata.createdAt,
                     mediaType: thought.metadata.mediaType,
                     creatorPublicID: thought.metadata.creatorPublicID,
-                    thought: thought
+                    thought: thought,
                 )
 //                print("post: \(post) stream: \(post.streamPublicID.base58EncodedString)")
                 await MainActor.run {
@@ -202,7 +202,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         for _ in 0 ..< 10 { // Load up to 10 messages initially
             if let (messageId, message) = queueManager.getNextMessage(
                 ofType: 0x05,
-                forStream: postStream.publicID
+                forStream: postStream.publicID,
             ) {
                 do {
                     try await router.processMessage(message.data, messageId: messageId)
@@ -251,7 +251,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             &builder,
             type: .plain,
             versionOffset: formatVersionString,
-            profileOffset: formatProfileString
+            profileOffset: formatProfileString,
         )
 
         // Create content format
@@ -259,7 +259,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             &builder,
             mediaType: thoughtModel.mediaType == .image ? .image : .text,
             dataEncoding: .utf8,
-            formatOffset: formatInfo
+            formatOffset: formatInfo,
         )
 
         // Create rating
@@ -272,7 +272,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             hate: .none_,
             harm: .none_,
             mature: .none_,
-            bully: .none_
+            bully: .none_,
         )
 
         // Create purpose
@@ -286,7 +286,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             opinion: 0.2,
             transactional: 0.0,
             harmful: 0.0,
-            confidence: 0.9
+            confidence: 0.9,
         )
 
         // Create ID and related vectors
@@ -308,7 +308,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             ratingOffset: rating,
             purposeOffset: purpose,
             topicsVectorOffset: topicsVector,
-            contentOffset: contentFormat
+            contentOffset: contentFormat,
         )
 
         builder.finish(offset: metadata)
@@ -322,7 +322,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         // Return the final binary policy data
         return Data(
             bytes: buffer.memory.advanced(by: buffer.reader),
-            count: Int(buffer.size)
+            count: Int(buffer.size),
         )
     }
 
@@ -338,7 +338,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             creatorPublicID: profile.publicID,
             streamPublicID: postStream.publicID,
             mediaType: .post,
-            content: messageData
+            content: messageData,
         )
 
         // Create and encrypt policy data
@@ -348,7 +348,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         // Encrypt and send via client
         let nanoData = try await client.encryptAndSendPayload(
             payload: payload,
-            policyData: policyData
+            policyData: policyData,
         )
         let contributors: [Contributor] = [Contributor(profilePublicID: profile.publicID, role: "creator")]
         let thoughtMetadata = Thought.Metadata(
@@ -356,13 +356,13 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             streamPublicID: postStream.publicID,
             mediaType: .post,
             createdAt: Date(),
-            contributors: contributors
+            contributors: contributors,
         )
 
         let thought = Thought(
             id: UUID(),
             nano: nanoData,
-            metadata: thoughtMetadata
+            metadata: thoughtMetadata,
         )
 
         // Save thought
@@ -376,8 +376,8 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             policies: Policies(
                 admission: .open,
                 interaction: .open,
-                age: .forAll
-            )
+                age: .forAll,
+            ),
         )
         stream.source = thought
         _ = try PersistenceController.shared.saveStream(stream)
@@ -398,7 +398,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             creatorPublicID: profile.publicID,
             streamPublicID: postStream.publicID,
             mediaType: .image,
-            content: imageData
+            content: imageData,
         )
 
         // Create and encrypt policy data
@@ -408,7 +408,7 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         // Encrypt and send via client
         let nanoData = try await client.encryptAndSendPayload(
             payload: payload,
-            policyData: policyData
+            policyData: policyData,
         )
 
         let thoughtMetadata = Thought.Metadata(
@@ -416,13 +416,13 @@ class PostFeedViewModel: ViewModel, ObservableObject {
             streamPublicID: postStream.publicID,
             mediaType: .image,
             createdAt: Date(),
-            contributors: []
+            contributors: [],
         )
 
         // Create thought with encrypted data
         let thought = Thought(
             nano: nanoData,
-            metadata: thoughtMetadata
+            metadata: thoughtMetadata,
         )
 
         // Save thought
@@ -471,7 +471,7 @@ struct PostFeedView: View {
                                     ImmersiveThoughtCard(
                                         viewModel: viewModel,
                                         post: post,
-                                        size: geometry.size
+                                        size: geometry.size,
                                     )
                                     .frame(width: geometry.size.width, height: geometry.size.height)
                                 }
@@ -498,7 +498,7 @@ struct PostFeedView: View {
                                             }
                                         }
                                     }
-                                }
+                                },
                         )
                     }
                 }
@@ -696,7 +696,7 @@ struct ImmersiveThoughtCard: View {
                                 Task {
                                     try? await viewModel.client.sendMessage(post.thought.nano)
                                 }
-                            }
+                            },
                         )
                         .padding(.trailing, systemMargin)
                         .padding(.bottom, systemMargin * 8)
@@ -709,7 +709,7 @@ struct ImmersiveThoughtCard: View {
                     HStack {
                         ContributorsView(
                             client: viewModel.client,
-                            contributors: post.contributors
+                            contributors: post.contributors,
                         )
                         .padding(.horizontal, systemMargin)
                         .padding(.bottom, systemMargin * 8)

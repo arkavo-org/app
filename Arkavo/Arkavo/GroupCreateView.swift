@@ -91,7 +91,7 @@ struct GroupCreateView: View {
                 // Enable button if groupName is not empty OR at least one peer is selected
                 .disabled(
                     groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                        selectedInnerCircleProfiles.isEmpty
+                        selectedInnerCircleProfiles.isEmpty,
                 )
             }
         }
@@ -390,7 +390,7 @@ struct GroupCreateView: View {
                     .overlay(
                         Image(systemName: trustStatus.icon)
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white) // Ensure contrast
+                            .foregroundColor(.white), // Ensure contrast
                     )
                     .accessibilityLabel(Text("Trust status: \(trustStatus.description)"))
             }
@@ -530,7 +530,7 @@ struct GroupCreateView: View {
             let newStream = Stream(
                 creatorPublicID: ViewModelFactory.shared.getCurrentProfile()!.publicID,
                 profile: groupProfile,
-                policies: Policies(admission: .openInvitation, interaction: .open, age: .onlyKids) // Example policies
+                policies: Policies(admission: .openInvitation, interaction: .open, age: .onlyKids), // Example policies
             )
             print("Creating new stream: \(newStream.profile.name) (\(newStream.publicID.base58EncodedString))")
 

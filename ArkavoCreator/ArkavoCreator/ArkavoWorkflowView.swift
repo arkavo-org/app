@@ -46,7 +46,7 @@ struct ArkavoWorkflowView: View {
             MessageListView(
                 messageManager: viewModel.messageDelegate.getMessageManager(),
                 workflowViewModel: viewModel,
-                selectedMessages: $selectedMessages
+                selectedMessages: $selectedMessages,
             )
             .navigationTitle("Messages")
             .searchable(text: $searchText, prompt: "Search messages")
@@ -90,7 +90,7 @@ struct ArkavoWorkflowView: View {
             .fileImporter(
                 isPresented: $isFileDialogPresented,
                 allowedContentTypes: [UTType.quickTimeMovie],
-                allowsMultipleSelection: false
+                allowsMultipleSelection: false,
             ) { result in
                 switch result {
                 case let .success(urls):
@@ -404,7 +404,7 @@ struct ContentRow: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: content.type.icon)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.accentColor),
                 )
 
             // Content Info
@@ -708,7 +708,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
 
             // Create scene match detector with reference metadata
             let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata]
+                referenceMetadata: [referenceMetadata],
             )
 
             // Process the video with progress updates

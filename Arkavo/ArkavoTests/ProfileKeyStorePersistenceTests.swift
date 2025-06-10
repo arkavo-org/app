@@ -133,7 +133,7 @@ final class ProfileKeyStorePersistenceTests: XCTestCase {
         try await mockPersistenceController.savePeerProfile(
             testProfile,
             keyStorePublicData: publicKeyData,
-            keyStorePrivateData: privateKeyData
+            keyStorePrivateData: privateKeyData,
         )
 
         // Assert - Verify method was called correctly
@@ -157,7 +157,7 @@ final class ProfileKeyStorePersistenceTests: XCTestCase {
         try await mockPersistenceController.savePeerProfile(
             testProfile,
             keyStorePublicData: publicKeyData,
-            keyStorePrivateData: privateKeyData
+            keyStorePrivateData: privateKeyData,
         )
 
         let publicIDString = testProfile.publicID.base58EncodedString
@@ -182,7 +182,7 @@ final class ProfileKeyStorePersistenceTests: XCTestCase {
         do {
             try await mockPersistenceController.savePeerProfile(
                 testProfile,
-                keyStorePublicData: "data".data(using: .utf8)
+                keyStorePublicData: "data".data(using: .utf8),
             )
             XCTFail("Should have thrown an error")
         } catch {
