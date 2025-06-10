@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUICore
+import SwiftUI
 
 final class ActivityServiceModel {
     var dateCreated: Date

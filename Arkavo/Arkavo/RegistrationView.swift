@@ -71,75 +71,84 @@ struct RegistrationView: View {
     ]
 
     var body: some View {
-        NavigationView {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    ZStack(alignment: .top) {
-                        ForEach(RegistrationStep.allCases, id: \.self) { step in
-                            Group {
-                                switch step {
-                                case .welcome:
-                                    welcomeView
-                                case .eula:
-                                    eulaView
-//                                case .selectInterests:
-//                                    chooseInterestsView
-                                case .generateScreenName:
-                                    generateScreenNameView
-                                case .enablePasskeys:
-                                    enablePasskeysView
-                                }
-                            }
-                            .frame(width: geometry.size.width, alignment: .top)
-                            .opacity(currentStep == step ? 1 : 0)
-                            .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.3), value: currentStep)
-                    .frame(height: geometry.size.height * 0.7, alignment: .top)
-
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Custom title bar
+                HStack {
+                    Text(currentStep.title)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .padding()
                     Spacer()
-
-                    VStack {
-                        Button(action: {
-                            handleButtonAction()
-                        }) {
-                            Text(currentStep.buttonLabel)
-                                .frame(width: geometry.size.width * 0.8)
-                                .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
-
-                        ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
-                            .padding()
-
-                        HStack {
-                            if currentStep != .welcome {
-                                Button("Back") {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        slideDirection = .right
-                                        currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                }
+                .background(Color.gray.opacity(0.1))
+                
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        ZStack(alignment: .top) {
+                            ForEach(RegistrationStep.allCases, id: \.self) { step in
+                                Group {
+                                    switch step {
+                                    case .welcome:
+                                        welcomeView
+                                    case .eula:
+                                        eulaView
+//                                    case .selectInterests:
+//                                        chooseInterestsView
+                                    case .generateScreenName:
+                                        generateScreenNameView
+                                    case .enablePasskeys:
+                                        enablePasskeysView
                                     }
                                 }
-                            }
-                            Spacer()
-                            if currentStep == .welcome {
-                                Button("Next") {
-                                    handleButtonAction()
+                                .frame(width: geometry.size.width, alignment: .top)
+                                .opacity(currentStep == step ? 1 : 0)
+                                .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
                                 }
-                                .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
-                            }
                         }
-                        .padding()
+                        .animation(.easeInOut(duration: 0.3), value: currentStep)
+                        .frame(height: geometry.size.height * 0.7, alignment: .top)
+    
+                        Spacer()
+
+                        VStack {
+                            Button(action: {
+                                handleButtonAction()
+                            }) {
+                                Text(currentStep.buttonLabel)
+                                    .frame(width: geometry.size.width * 0.8)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
+
+                            ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
+                                .padding()
+    
+                            HStack {
+                                if currentStep != .welcome {
+                                    Button("Back") {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            slideDirection = .right
+                                            currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                        }
+                                    }
+                                }
+                                Spacer()
+                                if currentStep == .welcome {
+                                    Button("Next") {
+                                        handleButtonAction()
+                                    }
+                                    .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                }
+                            }
+                            .padding()
+                        }
                     }
                 }
-                .navigationTitle(currentStep.title)
-                #if ios
-                    .navigationBarTitleDisplayMode(.large)
-                #endif
             }
+            .navigationBarHidden(true) // Hide the default navigation bar
         }
     }
 
@@ -249,20 +258,20 @@ struct RegistrationView: View {
             HStack {
                 #if os(iOS)
                     TextField("Enter handle", text: screenNameBinding)
-                        .writingToolsBehavior(.automatic)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding()
                         .border(.secondary)
+                        .textFieldStyle(.roundedBorder)
                         .focused($isHandleFieldFocused)
                         .accessibilityLabel("Handle input field")
                         .accessibilityIdentifier("handleTextField")
                         .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
-                            // Set focus after a small delay to ensure view is fully rendered
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                isHandleFieldFocused = true
-                            }
+                            // Commenting out auto-focus as it might interfere with keyboard input
+                            // DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            //     isHandleFieldFocused = true
+                            // }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {
@@ -285,10 +294,10 @@ struct RegistrationView: View {
                         .accessibilityIdentifier("handleTextField")
                         .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
-                            // Set focus after a small delay to ensure view is fully rendered
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                isHandleFieldFocused = true
-                            }
+                            // Commenting out auto-focus as it might interfere with keyboard input
+                            // DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            //     isHandleFieldFocused = true
+                            // }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {

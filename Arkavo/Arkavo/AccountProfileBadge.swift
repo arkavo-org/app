@@ -43,13 +43,7 @@ struct AccountProfileBadge: View {
                         }
                     }
 
-                    Text("Location: \(viewModel.profile.location)")
-                    if let activityService = viewModel.activityServiceModel {
-                        Text("Expert Level: \(activityService.expertLevel)")
-                        Text("Activity Level: \(activityService.activityLevel)")
-                        Text("Trust Level: \(activityService.trustLevel)")
-                        Text("Member since: \(activityService.dateCreated, formatter: DateFormatter.shortDateTime)")
-                    }
+                    Text("Location: \(String(describing: viewModel.profile.location))")
 
                     if viewModel.profile.hasHighEncryption {
                         Image(systemName: "lock.shield")

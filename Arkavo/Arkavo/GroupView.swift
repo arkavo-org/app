@@ -455,21 +455,18 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 
     /// Deletes streams at the specified offsets from the filtered list of regular streams.
     func deleteStream(at offsets: IndexSet) async {
-        // 1. Get the list of regular streams currently displayed
-        // Ensure we filter based on the *current* state of viewModel.streams
-        let regularStreams = await MainActor.run { streams.filter { !$0.isInnerCircleStream } }
+        // 1. Get the publicIDs of streams to delete before crossing async boundary
+        // This avoids the Sendable conformance issue with Stream model objects
+        let publicIDsToDelete = await MainActor.run {
+            let regularStreams = streams.filter { !$0.isInnerCircleStream }
+            return offsets.map { regularStreams[$0].publicID }
+        }
 
-        // 2. Identify the actual Stream objects to delete based on the offsets
-        let streamsToDelete = offsets.map { regularStreams[$0] }
-
-        // 3. Fetch and delete each identified stream directly from the context using its publicID
+        // 2. Fetch and delete each identified stream directly from the context using its publicID
         var deletedCount = 0
-        // Get the publicIDs to delete
-        let publicIDsToDelete = streamsToDelete.map(\.publicID)
 
         for publicID in publicIDsToDelete {
-            let streamName = streamsToDelete.first { $0.publicID == publicID }?.profile.name ?? "Unknown" // Get name for logging
-            print("GroupViewModel: Attempting to fetch and delete stream '\(streamName)' (ID: \(publicID.base58EncodedString))")
+            print("GroupViewModel: Attempting to fetch and delete stream (ID: \(publicID.base58EncodedString))")
             do {
                 // Fetch the stream directly from the persistence controller
                 if let streamInContext = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {

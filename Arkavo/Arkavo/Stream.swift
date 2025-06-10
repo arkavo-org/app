@@ -1,10 +1,15 @@
+// PersistentModels cannot conform to Sendable because they represent reference types
+// with mutable state managed by the SwiftData framework. To safely use these models
+// across concurrency domains (such as async or multi-threaded contexts), use the
+// ModelActor or their persistentModelID instead of passing the model instances directly.
+
 import AppIntents
 import CryptoKit
 import Foundation
 import SwiftData
 
 @Model
-final class Stream: Identifiable, Hashable, @unchecked Sendable {
+final class Stream: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID
     @Attribute(.unique) var publicID: Data
     var creatorPublicID: Data
@@ -127,31 +132,6 @@ enum AgePolicy: String, Codable, CaseIterable {
     case onlyKids = "Only Kids"
     case forAll = "For All"
     case onlyTeens = "Only Teens"
-}
-
-// MARK: - AppEntity Conformance
-
-extension Stream: AppEntity {
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Stream"
-    static var defaultQuery = StreamQuery()
-
-    var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(profile.name)")
-    }
-}
-
-struct StreamQuery: EntityQuery {
-    typealias Entity = Stream
-
-    func entities(for _: [Stream.ID]) async throws -> [Stream] {
-        // Implement this method to fetch streams from your SwiftData store
-        []
-    }
-
-    func suggestedEntities() async throws -> [Stream] {
-        // Implement this method to fetch suggested streams from your SwiftData store
-        []
-    }
 }
 
 extension Stream {

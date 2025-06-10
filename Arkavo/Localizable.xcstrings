@@ -123,9 +123,6 @@
         }
       }
     },
-    "Activity Level: %@" : {
-
-    },
     "Add %@ to InnerCircle" : {
 
     },
@@ -442,9 +439,6 @@
     "EULA Agreement Checkbox" : {
 
     },
-    "Expert Level: %@" : {
-
-    },
     "Face" : {
 
     },
@@ -619,9 +613,6 @@
       }
     },
     "Media" : {
-
-    },
-    "Member since: %@" : {
 
     },
     "Members:" : {
@@ -1088,9 +1079,6 @@
 
     },
     "Topic Tags:" : {
-
-    },
-    "Trust Level: %@" : {
 
     },
     "Trust Revoked" : {
