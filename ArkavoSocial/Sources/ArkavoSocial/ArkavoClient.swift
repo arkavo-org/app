@@ -375,7 +375,7 @@ public final class ArkavoClient: NSObject {
             using: SHA256.self,
             salt: salt,
             sharedInfo: Data("rewrappedKey".utf8),
-            outputByteCount: 32,
+            outputByteCount: 32
         )
     }
 
@@ -388,7 +388,7 @@ public final class ArkavoClient: NSObject {
         let sealedBox = try AES.GCM.SealedBox(
             nonce: AES.GCM.Nonce(data: nonce),
             ciphertext: rewrappedKey,
-            tag: authTag,
+            tag: authTag
         )
 
         let decryptedDataSharedSecret = try AES.GCM.open(sealedBox, using: sessionKey)
@@ -404,7 +404,7 @@ public final class ArkavoClient: NSObject {
             sharedSecretKey: sharedSecretKey,
             salt: salt,
             info: Data("encryption".utf8),
-            outputByteCount: 32,
+            outputByteCount: 32
         )
     }
 
@@ -448,7 +448,7 @@ public final class ArkavoClient: NSObject {
             inputKeyMaterial: sharedSecretKey,
             salt: salt,
             info: info,
-            outputByteCount: outputByteCount,
+            outputByteCount: outputByteCount
         )
     }
 
@@ -486,7 +486,7 @@ public final class ArkavoClient: NSObject {
 
         // Create assertion request
         let assertionRequest = provider.createCredentialAssertionRequest(
-            challenge: challengeData,
+            challenge: challengeData
         )
 
         // Perform the authentication
@@ -779,7 +779,7 @@ public final class ArkavoClient: NSObject {
 
         let registrationOptions = try await fetchRegistrationOptions(
             handle: handle,
-            did: did,
+            did: did
         )
 
         let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
@@ -789,14 +789,14 @@ public final class ArkavoClient: NSObject {
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
             name: handle,
-            userID: userIDData,
+            userID: userIDData
         )
 
         let credential = try await performRegistration(request: credentialRequest)
         return try await completeRegistration(
             credential: credential,
             handle: handle,
-            did: did,
+            did: did
         )
     }
 
@@ -933,25 +933,25 @@ public final class ArkavoClient: NSObject {
         let kasMetadata = try KasMetadata(
             resourceLocator: kasRL,
             publicKey: kasPublicKey as Any,
-            curve: .secp256r1,
+            curve: .secp256r1
         )
 
         let remotePolicy = ResourceLocator(
             protocolEnum: .sharedResourceDirectory,
-            body: remotePolicyBody,
+            body: remotePolicyBody
         )!
 
         var policy = Policy(
             type: .remote,
             body: nil,
             remote: remotePolicy,
-            binding: nil,
+            binding: nil
         )
 
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
-            plaintext: payload,
+            plaintext: payload
         )
 
         return nanoTDF.toData()
@@ -966,21 +966,21 @@ public final class ArkavoClient: NSObject {
         let kasMetadataDefault = try KasMetadata(
             resourceLocator: ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!,
             publicKey: kasPublicKey as Any,
-            curve: .secp256r1,
+            curve: .secp256r1
         )
         let kasMetadata = kasMetadata ?? kasMetadataDefault
         var policy = Policy(
             type: .embeddedPlaintext,
             body: EmbeddedPolicyBody(body: policyData),
             remote: nil,
-            binding: nil,
+            binding: nil
         )
 
         // Create NanoTDF
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
-            plaintext: payload,
+            plaintext: payload
         )
 
         // Send via NATS message

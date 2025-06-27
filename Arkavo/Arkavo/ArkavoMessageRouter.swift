@@ -23,7 +23,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .arkavoClientStateChanged,
             object: nil,
-            userInfo: ["state": state],
+            userInfo: ["state": state]
         )
     }
 
@@ -41,7 +41,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 NotificationCenter.default.post(
                     name: .messageHandlingError,
                     object: nil,
-                    userInfo: ["error": error],
+                    userInfo: ["error": error]
                 )
             }
         }
@@ -87,7 +87,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .arkavoClientError,
             object: nil,
-            userInfo: ["error": error],
+            userInfo: ["error": error]
         )
     }
 
@@ -122,7 +122,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "data": plaintext, // The final decrypted content
                 "header": header, // Pass the original header for context
                 "policy": ArkavoPolicy(header.policy), // Pass the parsed policy
-            ],
+            ]
         )
     }
 
@@ -241,7 +241,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         NotificationCenter.default.post(
             name: .rewrapRequestReceived,
             object: nil,
-            userInfo: ["header": header],
+            userInfo: ["header": header]
         )
     }
 
@@ -252,10 +252,8 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let copiedData = Data(data)
         let parser = BinaryParser(data: copiedData)
         let header = try parser.parseHeader()
-        // test if valid - only for embedded policies
-        if let policyBody = header.policy.body?.body {
-            _ = try ArkavoPolicy.parseMetadata(from: policyBody)
-        }
+        // test if valid
+        _ = try ArkavoPolicy.parseMetadata(from: header.policy.body!.body)
         let payload = try parser.parsePayload(config: header.payloadSignatureConfig)
         let nano = NanoTDF(header: header, payload: payload, signature: nil)
 
@@ -390,20 +388,11 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
 //        print("- Rewrapped key: \(rewrappedKey.hexEncodedString())")
 //        print("- Auth tag: \(authTag.hexEncodedString())")
 
-        // Detect NanoTDF version from header
-        // Magic number is "L1L" (0x4C 0x31 0x4C) for v12 or "L1M" (0x4C 0x31 0x4D) for v13
-        let headerData = header.toData()
-        let isV13 = headerData.count >= 3 && headerData[2] == 0x4D
-        if headerData.count >= 3 {
-            print("NanoTDF version detection: header[2]=0x\(String(format: "%02X", headerData[2])), isV13=\(isV13)")
-        }
-
         // Decrypt the key using ArkavoClient's helper
         let symmetricKey = try client.decryptRewrappedKey(
             nonce: nonce,
             rewrappedKey: rewrappedKey,
-            authTag: authTag,
-            isV13: isV13,
+            authTag: authTag
         )
 //        print("✅ Decrypted symmetric key")
 
@@ -441,7 +430,7 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
                 "payload": payload,
                 // perhaps remove this and have handlers use header
                 "policy": ArkavoPolicy(header.policy),
-            ],
+            ]
         )
     }
 }
