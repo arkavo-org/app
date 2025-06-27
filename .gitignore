@@ -114,3 +114,5 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 .aider*
 
 **/.claude/settings.local.json
+/.arkavo/
+/.gemini/
