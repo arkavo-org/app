@@ -320,7 +320,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             let nanoData = try await client.encryptAndSendPayload(
                 payload: payload,
                 policyData: policyData!,
-                kasMetadata: kasMetadata,
+                kasMetadata: kasMetadata
             )
             print("ChatViewModel: Encrypted and sent payload via ArkavoClient.")
 

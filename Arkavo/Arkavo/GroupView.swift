@@ -1,6 +1,7 @@
 import ArkavoSocial
 import FlatBuffers
 import OpenTDFKit
+import SwiftData
 import SwiftUI
 
 // MARK: - Models
@@ -455,44 +456,41 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 
     /// Deletes streams at the specified offsets from the filtered list of regular streams.
     func deleteStream(at offsets: IndexSet) async {
-        // 1. Get the publicIDs of streams to delete before crossing async boundary
-        // This avoids the Sendable conformance issue with Stream model objects
-        let publicIDsToDelete = await MainActor.run {
-            let regularStreams = streams.filter { !$0.isInnerCircleStream }
-            return offsets.map { regularStreams[$0].publicID }
-        }
+        // 1. Get the list of regular stream IDs currently displayed
+        // Ensure we filter based on the *current* state of viewModel.streams
+        let regularStreamIDs = await MainActor.run { streams.filter { !$0.isInnerCircleStream }.map { $0.persistentModelID } }
 
-        // 2. Fetch and delete each identified stream directly from the context using its publicID
+        // 2. Identify the actual Stream objects to delete based on the offsets
+        let streamIDsToDelete = offsets.map { regularStreamIDs[$0] }
+
+        // 3. Fetch and delete each identified stream directly from the context using its persistentModelID
         var deletedCount = 0
+        var successfullyDeletedIDs = Set<PersistentIdentifier>()
 
-        for publicID in publicIDsToDelete {
-            print("GroupViewModel: Attempting to fetch and delete stream (ID: \(publicID.base58EncodedString))")
-            do {
-                // Fetch the stream directly from the persistence controller
-                if let streamInContext = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
+        for persistentModelID in streamIDsToDelete {
+            // Fetch the stream directly from the persistence controller using persistentModelID
+            if let streamInContext = PersistenceController.shared.fetchStream(withPersistentModelID: persistentModelID) {
+                    let streamName = streamInContext.profile.name
+                    let publicID = streamInContext.publicID
+                    print("GroupViewModel: Attempting to fetch and delete stream '\(streamName)' (ID: \(publicID.base58EncodedString))")
                     // Ensure it's managed by the correct context before deleting
                     if streamInContext.modelContext == PersistenceController.shared.mainContext {
                         PersistenceController.shared.mainContext.delete(streamInContext)
                         print("   Fetched and marked stream for deletion in context.")
                         deletedCount += 1
+                        successfullyDeletedIDs.insert(persistentModelID)
                     } else {
                         // This case should ideally not happen if fetch works correctly
                         print("   ❌ ERROR: Fetched stream is not managed by the main context. Deletion skipped.")
                     }
                 } else {
                     // Log the error clearly if fetch fails
-                    print("   ❌ ERROR: Could not find stream \(publicID.base58EncodedString) in context for deletion.")
+                    print("   ❌ ERROR: Could not find stream with persistentModelID \(persistentModelID) in context for deletion.")
                 }
-            } catch {
-                print("   ❌ ERROR: Failed to fetch stream \(publicID.base58EncodedString) for deletion: \(error)")
-            }
         }
 
         // 4. Save the changes only if deletions were successful
         if deletedCount > 0 {
-            // Keep track of IDs successfully marked for deletion
-            let successfullyDeletedIDs = Set(publicIDsToDelete.prefix(deletedCount)) // Assuming order is preserved or adjust logic if needed
-
             do {
                 try await PersistenceController.shared.saveChanges()
                 print("GroupViewModel: Successfully saved changes after deleting \(deletedCount) stream(s).")
@@ -500,7 +498,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
                 // 5. Update the @Published streams array directly to trigger UI refresh
                 await MainActor.run { // Ensure UI updates on main thread
                     let initialCount = streams.count
-                    streams.removeAll { successfullyDeletedIDs.contains($0.publicID) }
+                    streams.removeAll { successfullyDeletedIDs.contains($0.persistentModelID) }
                     print("GroupViewModel: Updated @Published streams array. Removed \(initialCount - streams.count) stream(s).")
                 }
                 // No need to call loadStreams() anymore as we updated the array directly

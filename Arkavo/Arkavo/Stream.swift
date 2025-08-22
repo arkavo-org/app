@@ -18,7 +18,7 @@ final class Stream: Identifiable, Hashable {
     var policies: Policies? = Policies(
         admission: .closed,
         interaction: .closed,
-        age: .forAll,
+        age: .forAll
     )
     // InnerCircle profiles - direct profiles for members
     var innerCircleProfiles: [Profile] = []
@@ -36,7 +36,7 @@ final class Stream: Identifiable, Hashable {
         policies = Policies(
             admission: .closed,
             interaction: .closed,
-            age: .forAll,
+            age: .forAll
         )
     }
 
@@ -134,6 +134,7 @@ enum AgePolicy: String, Codable, CaseIterable {
     case onlyTeens = "Only Teens"
 }
 
+
 extension Stream {
     var isGroupChatStream: Bool {
         // A group chat stream has no initial thought/sources
@@ -153,7 +154,7 @@ extension Stream {
         policies ?? Policies(
             admission: .closed,
             interaction: .closed,
-            age: .forAll,
+            age: .forAll
         )
     }
 }

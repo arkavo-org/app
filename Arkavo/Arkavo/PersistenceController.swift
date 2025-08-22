@@ -339,6 +339,14 @@ class PersistenceController {
         return try mainContext.fetch(fetchDescriptor).first
     }
 
+    func fetchStream(withPersistentModelID persistentModelID: PersistentIdentifier) -> Stream? {
+        // Use SwiftData's built-in method to fetch by persistent model ID
+        guard let stream = mainContext.model(for: persistentModelID) as? Stream else {
+            return nil
+        }
+        return stream
+    }
+
     func saveStream(_ stream: Stream) throws {
         // Only insert stream if it's not already in a context
         if stream.modelContext == nil {
