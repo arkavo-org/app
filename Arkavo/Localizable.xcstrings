@@ -811,6 +811,9 @@
         }
       }
     },
+    "Registration issue: %@" : {
+
+    },
     "Remove" : {
 
     },
@@ -1181,6 +1184,9 @@
       }
     },
     "What We are Discussing" : {
+
+    },
+    "You can retry, or contact support@arkavo.com with these details." : {
 
     },
     "You own your content" : {

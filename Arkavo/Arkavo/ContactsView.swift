@@ -25,6 +25,27 @@ struct ContactsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Search bar
+            if !isLoading && !contacts.isEmpty {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search contacts", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+
             // Contact list
             if isLoading {
                 // Show loading state
@@ -153,49 +174,85 @@ struct ContactsView: View {
 struct ContactRow: View {
     let contact: Profile
     let onTap: () -> Void
+    @State private var isPressed = false
+
+    var avatarGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.blue, Color.purple],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Contact avatar
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            onTap()
+        }) {
+            HStack(spacing: 16) {
+                // Contact avatar with gradient
                 ZStack {
                     Circle()
-                        .fill(Color.blue.opacity(0.2))
-                        .frame(width: 50, height: 50)
+                        .fill(avatarGradient.opacity(0.3))
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            Circle()
+                                .stroke(avatarGradient, lineWidth: 2)
+                        )
 
                     Text(contact.name.prefix(1).uppercased())
                         .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.blue)
+                        .fontWeight(.bold)
+                        .foregroundStyle(avatarGradient)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(contact.name)
                         .font(.headline)
                         .foregroundColor(.primary)
 
                     if let handle = contact.handle {
                         Text("@\(handle)")
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
 
-                    // Show connection status
-                    HStack(spacing: 4) {
+                    // Show connection status with icons
+                    HStack(spacing: 8) {
                         if contact.hasHighEncryption {
-                            Image(systemName: "lock.shield.fill")
-                                .font(.caption2)
-                                .foregroundColor(.green)
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                                Text("Secure")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
                         }
 
                         if contact.keyStorePublic != nil {
-                            Text("Connected")
-                                .font(.caption2)
-                                .foregroundColor(.green)
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                                Text("Connected")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                            }
                         } else {
-                            Text("Not connected")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 6, height: 6)
+                                Text("Not connected")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
                         }
                     }
                 }
@@ -206,9 +263,19 @@ struct ContactRow: View {
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .opacity(0.6)
             }
+            .padding(.vertical, 4)
         }
         .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .accessibilityIdentifier("contact-\(contact.id)")
     }
 }
 
@@ -223,30 +290,56 @@ struct ContactDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Contact header
-                    VStack(spacing: 16) {
+                    // Contact header with gradient
+                    VStack(spacing: 20) {
                         ZStack {
                             Circle()
-                                .fill(Color.blue.opacity(0.2))
-                                .frame(width: 100, height: 100)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.blue, Color.purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ).opacity(0.3)
+                                )
+                                .frame(width: 120, height: 120)
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [Color.blue, Color.purple],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 3
+                                        )
+                                )
+                                .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
 
                             Text(contact.name.prefix(1).uppercased())
-                                .font(.system(size: 48))
+                                .font(.system(size: 52))
                                 .fontWeight(.bold)
-                                .foregroundColor(.blue)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color.blue, Color.purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                         }
 
-                        Text(contact.name)
-                            .font(.title)
-                            .fontWeight(.bold)
+                        VStack(spacing: 8) {
+                            Text(contact.name)
+                                .font(.title)
+                                .fontWeight(.bold)
 
-                        if let handle = contact.handle {
-                            Text("@\(handle)")
-                                .font(.body)
-                                .foregroundColor(.secondary)
+                            if let handle = contact.handle {
+                                Text("@\(handle)")
+                                    .font(.title3)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
-                    .padding(.top)
+                    .padding(.top, 20)
 
                     // Connection status
                     VStack(alignment: .leading, spacing: 16) {
@@ -287,29 +380,49 @@ struct ContactDetailView: View {
                     VStack(spacing: 12) {
                         if contact.keyStorePublic != nil {
                             Button {
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
                                 // Navigate to chat
                                 sharedState.selectedCreatorPublicID = contact.publicID
                                 sharedState.showChatOverlay = true
                                 dismiss()
                             } label: {
                                 Label("Send Message", systemImage: "message.fill")
+                                    .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.blue)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color.blue, Color.purple],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                                     .foregroundColor(.white)
-                                    .cornerRadius(12)
+                                    .cornerRadius(14)
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                         } else {
                             Button {
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
                                 // Initiate P2P connection
                                 // This would trigger the P2P discovery/connection flow
                             } label: {
                                 Label("Connect", systemImage: "link")
+                                    .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.blue)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color.blue, Color.purple],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                                     .foregroundColor(.white)
-                                    .cornerRadius(12)
+                                    .cornerRadius(14)
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                         }
 
