@@ -240,7 +240,9 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
         }
 
         // --- Determine Send Method and Policy ---
-        // FIXME: revise to see if all profiles in a stream hav a KeyStore
+        // For InnerCircle streams, we use the first available profile's keystore
+        // NOTE: This assumes at least one peer has completed key exchange.
+        // Future enhancement: validate all profiles have keystores or implement multi-recipient encryption
         if stream.isInnerCircleStream {
             print("ChatViewModel: Sending message in InnerCircle stream...")
             for profile in stream.innerCircleProfiles {

@@ -43,6 +43,14 @@ enum RegistrationStep: Int, CaseIterable {
 
 struct RegistrationView: View {
     var onComplete: (_ profile: Profile) async -> Void
+    @EnvironmentObject private var sharedState: SharedState
+
+    private let skipPasskeysFlag: Bool = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ArkavoSkipPasskey") { return true }
+        if UserDefaults.standard.bool(forKey: "ArkavoSkipPasskey") { return true }
+        return false
+    }()
 
     @State private var currentStep: RegistrationStep = .welcome
     @State private var slideDirection: SlideDirection = .right
@@ -115,7 +123,7 @@ struct RegistrationView: View {
                             Button(action: {
                                 handleButtonAction()
                             }) {
-                                Text(currentStep.buttonLabel)
+                                Text(currentButtonLabel)
                                     .frame(width: geometry.size.width * 0.8)
                                     .padding(.vertical, 6)
                             }
@@ -125,6 +133,26 @@ struct RegistrationView: View {
 
                             ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
                                 .padding()
+
+                            if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text("Registration issue: \(details)")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    Text("You can retry, or contact support@arkavo.com with these details.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(10)
+                                .background(Color(UIColor.secondarySystemBackground))
+                                .cornerRadius(8)
+                                .padding(.horizontal)
+                            }
 
                             HStack {
                                 if currentStep != .welcome {
@@ -222,6 +250,13 @@ struct RegistrationView: View {
         .padding()
     }
 
+    private var currentButtonLabel: String {
+        if currentStep == .generateScreenName, skipPasskeysFlag {
+            return "Finish Registration"
+        }
+        return currentStep.buttonLabel
+    }
+
     private func handleButtonAction() {
         withAnimation(.easeInOut(duration: 0.3)) {
             slideDirection = .left
@@ -236,7 +271,17 @@ struct RegistrationView: View {
 //                currentStep = .generateScreenName
 //                generatedScreenNames = []
             case .generateScreenName:
-                currentStep = .enablePasskeys
+                if skipPasskeysFlag {
+                    let newProfile = Profile(
+                        name: selectedScreenName,
+                        interests: Array(selectedInterests).joined(separator: ","),
+                        hasHighEncryption: true,
+                        hasHighIdentityAssurance: true,
+                    )
+                    Task { await onComplete(newProfile) }
+                } else {
+                    currentStep = .enablePasskeys
+                }
             case .enablePasskeys:
                 let newProfile = Profile(
                     name: selectedScreenName,

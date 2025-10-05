@@ -69,7 +69,7 @@ public class KeychainManager {
     static func getValue(service: String, account: String) -> String? {
         do {
             let data = try load(service: service, account: account)
-            return String(data: data, encoding: .utf8)!
+            return String(data: data, encoding: .utf8)
         } catch {
             return nil
         }

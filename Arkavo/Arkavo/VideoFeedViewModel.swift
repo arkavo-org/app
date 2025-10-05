@@ -399,7 +399,12 @@ struct Video: Identifiable, Hashable {
         )
     }
 
-    // FIXME: this isn't working
+    // TODO: Implement proper video URL resolution from NanoTDF thought data
+    // Currently creates a placeholder nano:// URL that doesn't work with AVPlayer
+    // Future implementation should:
+    // 1. Decrypt the NanoTDF payload to get actual video data
+    // 2. Cache decrypted video locally
+    // 3. Return file:// URL to cached video
     static func from(thought: Thought) -> Video? {
         Video(
             id: thought.id.uuidString,

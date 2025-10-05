@@ -2,6 +2,7 @@ import ArkavoSocial
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import OSLog
 import SwiftData
 
 #if canImport(UIKit)
@@ -26,6 +27,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
     private let baseURL = URL(string: "https://webauthn.arkavo.net")!
     private var authenticationToken: Data?
+    private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "Auth")
 
     override init() {}
 
@@ -131,19 +133,19 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
                 response: response,
                 error: error,
                 successMessage: "Registration options retrieved successfully",
-                failureMessage: "Error fetching registration options",
-                completion: { (result: Result<RegistrationOptionsResponse, Error>) in
-                    switch result {
-                    case let .success(response):
-                        let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64())
-                        let userIDData = Data(base64Encoded: response.publicKey.user.id.base64URLToBase64())
-                        completion(challengeData, userIDData)
-                    case let .failure(error):
-                        print("Failed to get registration options: \(error.localizedDescription)")
-                        completion(nil, nil)
-                    }
-                },
-            )
+                failureMessage: "Error fetching registration options"
+            ) { (result: Result<RegistrationOptionsResponse, Error>) in
+                switch result {
+                case let .success(response):
+                    let challengeData = Data(base64Encoded: response.publicKey.challenge.base64URLToBase64())
+                    let userIDData = Data(base64Encoded: response.publicKey.user.id.base64URLToBase64())
+                    completion(challengeData, userIDData)
+                case let .failure(error):
+                    self?.logger.error("[RegistrationOptions] Failure: \(String(describing: error))")
+                    print("Failed to get registration options: \(error.localizedDescription)")
+                    completion(nil, nil)
+                }
+            }
         }.resume()
     }
 

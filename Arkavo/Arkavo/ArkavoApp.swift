@@ -1,4 +1,5 @@
 import ArkavoSocial
+import OSLog
 import SwiftUI
 
 @main
@@ -17,6 +18,7 @@ struct ArkavoApp: App {
     // END screenshots
 
     let persistenceController = PersistenceController.shared
+    private let regLogger = Logger(subsystem: "com.arkavo.Arkavo", category: "Registration")
     let client: ArkavoClient
 
     init() {
@@ -116,6 +118,8 @@ struct ArkavoApp: App {
                     },
                     secondaryButton: .cancel(Text("Later")) {
                         if error.isBlocking {
+                            // Enter offline mode to avoid constructing view models that require an account
+                            sharedState.isOfflineMode = true
                             selectedView = .main
                         }
                     },
@@ -178,6 +182,7 @@ struct ArkavoApp: App {
             // Generate default handle from name
             let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "-")
 
+            regLogger.log("[Registration] Starting profile save for handle generation")
             // Generate DID key and get the DID string
             let did: String
             do {
@@ -185,6 +190,7 @@ struct ArkavoApp: App {
                 print("Generated DID: \(did)")
             } catch {
                 print("Failed to generate DID: \(error)")
+                regLogger.error("[Registration] DID generation failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Registration Error",
                     message: "Failed to generate security credentials. Please try again.",
@@ -199,25 +205,32 @@ struct ArkavoApp: App {
 
             // Complete WebAuthn registration
             do {
+                regLogger.log("[Registration] Calling registerUser for handle=\(handle, privacy: .private)")
                 let token = try await client.registerUser(handle: handle, did: did)
                 try KeychainManager.saveAuthenticationToken(token)
+                regLogger.log("[Registration] registerUser succeeded, token saved")
             } catch let error as ArkavoError {
+                regLogger.error("[Registration] ArkavoError during registerUser: \(String(describing: error))")
+                let details: String
                 switch error {
                 case let .authenticationFailed(message):
+                    details = message
                     connectionError = ConnectionError(
                         title: "Registration Failed",
-                        message: message,
+                        message: "The server rejected the registration request. Details: \(message)",
                         action: "Try Again",
                         isBlocking: true,
                     )
-                case .connectionFailed:
+                case let .connectionFailed(message):
+                    details = message
                     connectionError = ConnectionError(
                         title: "Connection Failed",
-                        message: "We're having trouble reaching our servers. Please check your internet connection and try again.",
+                        message: "We couldn't reach the server. \(message)",
                         action: "Retry",
                         isBlocking: true,
                     )
                 case .invalidResponse:
+                    details = "Invalid response from server"
                     connectionError = ConnectionError(
                         title: "Server Error",
                         message: "Received an invalid response from the server. Please try again.",
@@ -225,22 +238,31 @@ struct ArkavoApp: App {
                         isBlocking: true,
                     )
                 default:
+                    details = error.localizedDescription
                     connectionError = ConnectionError(
                         title: "Registration Error",
-                        message: "An unexpected error occurred during registration. Please try again.",
+                        message: "An unexpected error occurred during registration. Details: \(error.localizedDescription)",
                         action: "Retry",
                         isBlocking: true,
                     )
                 }
+                sharedState.lastRegistrationErrorDetails = details
                 return false
             } catch {
                 print("Failed to register user: \(error)")
+                regLogger.error("[Registration] Unknown error during registerUser: \(String(describing: error))")
+                let ns = error as NSError
+                var msg = error.localizedDescription
+                if ns.domain == "HTTPError" {
+                    msg = "HTTP \(ns.code): \(msg)"
+                }
                 connectionError = ConnectionError(
                     title: "Registration Error",
-                    message: "Failed to complete registration. Please try again.",
+                    message: "Failed to complete registration. \(msg)",
                     action: "Retry",
                     isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = msg
                 return false
             }
 
@@ -259,12 +281,14 @@ struct ArkavoApp: App {
                 print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
             } catch {
                 print("Failed to create streams: \(error)")
+                regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Setup Error",
-                    message: "Failed to set up your account streams. Please try again.",
+                    message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
                     action: "Retry",
                     isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = error.localizedDescription
                 return false
             }
 
@@ -272,22 +296,26 @@ struct ArkavoApp: App {
 
             // Connect with WebAuthn
             do {
+                regLogger.log("[Registration] Connecting with WebAuthn for account=\(profile.name, privacy: .private)")
                 try await client.connect(accountName: profile.name)
                 // If connection is successful, save token and changes
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
                     selectedView = .main // Only change view on complete success
+                    regLogger.log("[Registration] Connected and saved; switching to main view")
                     return true
                 }
             } catch {
                 print("Failed to connect: \(error)")
+                regLogger.error("[Registration] Connect failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Connection Error",
-                    message: "Failed to establish connection. Please try again.",
+                    message: "Failed to establish connection. Details: \(error.localizedDescription)",
                     action: "Retry",
                     isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = error.localizedDescription
                 return false
             }
 
@@ -798,6 +826,7 @@ class SharedState: ObservableObject {
     @Published var showChatOverlay: Bool = false
     @Published var isAwaiting: Bool = false
     @Published var isOfflineMode: Bool = false
+    @Published var lastRegistrationErrorDetails: String?
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]

@@ -184,7 +184,7 @@ mv metadata_generated.swift MetadataServiceModel.swift
 ### Format
 
 ```shell
-swiftformat --swiftversion 6.0 .
+swiftformat --swiftversion 6.2 .
 ```
 
 ### Release build

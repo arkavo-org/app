@@ -1424,8 +1424,8 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
             case .credentialImport:
                 print("credential import")
             case .credentialExport:
-                print("credemtial export")
-            @unknown default:
+                print("credential export")
+            default:
                 print("An unexpected error occurred")
             }
         }
