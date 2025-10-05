@@ -58,7 +58,7 @@ final class MessageQueueManager {
             for: .cachesDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
-            create: true
+            create: true,
         )
         queueDirectory = baseURL.appendingPathComponent("ArkavoMessageQueue", isDirectory: true)
         try createQueueDirectoryIfNeeded()
@@ -96,7 +96,7 @@ final class MessageQueueManager {
             messageType: messageType,
             streamPublicID: streamPublicID,
             headerData: header?.toData(),
-            payloadData: payload?.toData()
+            payloadData: payload?.toData(),
         )
 
         // Store in memory
@@ -114,7 +114,7 @@ final class MessageQueueManager {
                 "messageId": messageId,
                 "messageType": messageType,
                 "streamPublicID": streamPublicID as Any,
-            ]
+            ],
         )
     }
 
@@ -161,7 +161,7 @@ final class MessageQueueManager {
         NotificationCenter.default.post(
             name: .messageRemovedFromQueue,
             object: nil,
-            userInfo: ["messageId": messageId]
+            userInfo: ["messageId": messageId],
         )
     }
 
@@ -172,7 +172,7 @@ final class MessageQueueManager {
         if !fileManager.fileExists(atPath: queueDirectory.path, isDirectory: &isDirectory) {
             try fileManager.createDirectory(
                 at: queueDirectory,
-                withIntermediateDirectories: true
+                withIntermediateDirectories: true,
             )
         }
     }
@@ -180,7 +180,7 @@ final class MessageQueueManager {
     private func loadQueuedMessages() {
         guard let fileURLs = try? fileManager.contentsOfDirectory(
             at: queueDirectory,
-            includingPropertiesForKeys: nil
+            includingPropertiesForKeys: nil,
         ) else { return }
 
         for fileURL in fileURLs {

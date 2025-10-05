@@ -1,9 +1,9 @@
 import ArkavoSocial
-import UniformTypeIdentifiers
 import AuthenticationServices
-import CryptoKit
 import CoreML
+import CryptoKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ArkavoWorkflowView: View {
     @StateObject private var viewModel: WorkflowViewModel
@@ -46,7 +46,7 @@ struct ArkavoWorkflowView: View {
             MessageListView(
                 messageManager: viewModel.messageDelegate.getMessageManager(),
                 workflowViewModel: viewModel,
-                selectedMessages: $selectedMessages
+                selectedMessages: $selectedMessages,
             )
             .navigationTitle("Messages")
             .searchable(text: $searchText, prompt: "Search messages")
@@ -90,7 +90,7 @@ struct ArkavoWorkflowView: View {
             .fileImporter(
                 isPresented: $isFileDialogPresented,
                 allowedContentTypes: [UTType.quickTimeMovie],
-                allowsMultipleSelection: false
+                allowsMultipleSelection: false,
             ) { result in
                 switch result {
                 case let .success(urls):
@@ -128,11 +128,11 @@ struct ArkavoWorkflowView: View {
                 Image(systemName: "message")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
-                
+
                 Text("No Messages")
                     .font(.title2)
                     .foregroundColor(.primary)
-                
+
                 Text("Messages will appear here when content is processed")
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -223,43 +223,43 @@ struct MessageRow: View {
     let message: ArkavoMessage
     @StateObject private var viewModel: MessageRowViewModel
     @Environment(\.isEnabled) private var isEnabled
-    
+
     init(message: ArkavoMessage, workflowViewModel: WorkflowViewModel) {
         self.message = message
         _viewModel = StateObject(wrappedValue: MessageRowViewModel(workflowViewModel: workflowViewModel))
     }
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // Status icon
             Image(systemName: message.status.icon)
                 .foregroundColor(message.status.color)
                 .font(.system(size: 16))
-            
+
             // Message info
             VStack(alignment: .leading, spacing: 4) {
                 Text("Message \(message.id.uuidString.prefix(8))")
                     .font(.headline)
-                
+
                 Text("Received: \(message.timestamp.formatted())")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
+
                 if message.status == .pending {
                     Text("Retry count: \(message.retryCount)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 if let lastRetry = message.lastRetryDate {
                     Text("Last retry: \(lastRetry.formatted())")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             Text(message.status.rawValue.capitalized)
                 .font(.caption)
                 .foregroundColor(message.status.color)
@@ -273,9 +273,9 @@ struct MessageRow: View {
 class MessageRowViewModel: ObservableObject {
     @Published var isSending = false
     @Published var error: Error?
-    
+
     private let workflowViewModel: WorkflowViewModel
-    
+
     init(workflowViewModel: WorkflowViewModel) {
         self.workflowViewModel = workflowViewModel
     }
@@ -285,7 +285,7 @@ struct MessageListView: View {
     @ObservedObject var messageManager: ArkavoMessageManager
     let workflowViewModel: WorkflowViewModel
     @Binding var selectedMessages: Set<UUID>
-    
+
     var body: some View {
         List(selection: $selectedMessages) {
             ForEach(messageManager.messages) { message in
@@ -308,14 +308,14 @@ struct MessageListView: View {
             }
         }
     }
-    
+
     private var hasFailedMessages: Bool {
         guard !selectedMessages.isEmpty else { return false }
         return messageManager.messages
             .filter { selectedMessages.contains($0.id) }
             .contains { $0.status == .failed }
     }
-    
+
     private func retrySelected() async {
         let failedMessages = selectedMessages.filter { messageId in
             messageManager.messages.first { $0.id == messageId }?.status == .failed
@@ -404,7 +404,7 @@ struct ContentRow: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: content.type.icon)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.accentColor),
                 )
 
             // Content Info
@@ -490,23 +490,23 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         print("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
         self.messageDelegate = messageDelegate
-        
+
         if let handle = KeychainManager.getHandle() {
             accountName = handle
         }
-        
+
         // Set up delegate chain
         messageDelegate.updateNextDelegate(self)
         client.delegate = messageDelegate
     }
 
     // MARK: - ArkavoClientDelegate Methods
-    
-    func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
+
+    func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
         print("WorkflowViewModel: Client state changed to: \(state)")
         Task { @MainActor in
             switch state {
-            case .error(let error):
+            case let .error(error):
                 self.errorMessage = error.localizedDescription
             case .disconnected:
                 print("WorkflowViewModel: Client disconnected")
@@ -519,8 +519,8 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             }
         }
     }
-    
-    func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
+
+    func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
         print("WorkflowViewModel: Received message of size: \(message.count)")
         if let messageType = message.first {
             switch messageType {
@@ -532,8 +532,8 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             }
         }
     }
-    
-    func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
+
+    func clientDidReceiveError(_: ArkavoClient, error: Error) {
         print("WorkflowViewModel: Received error: \(error)")
         Task { @MainActor in
             self.errorMessage = error.localizedDescription
@@ -541,7 +541,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     }
 
     // MARK: - Private Message Handlers
-    
+
     private func handleType6Message(_ messageData: Data) {
         print("WorkflowViewModel: Processing type 6 message of size: \(messageData.count)")
     }
@@ -573,13 +573,14 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
                 print("WorkflowViewModel: Client connected successfully")
                 handleSuccessfulLogin()
                 return
-                
+
             } catch let error as ASAuthorizationError where error.code == .failed &&
-                                                          error.localizedDescription.contains("Request already in progress") {
+                error.localizedDescription.contains("Request already in progress")
+            {
                 currentRetry += 1
                 print("WorkflowViewModel: Request in progress - will retry after delay")
                 continue
-                
+
             } catch {
                 print("WorkflowViewModel: Login failed with error: \(error)")
                 errorMessage = "Login failed. Please try again."
@@ -590,7 +591,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         if currentRetry >= maxRetries {
             errorMessage = "Unable to complete login. Please wait a moment and try again."
         }
-        
+
         isLoading = false
     }
 
@@ -598,11 +599,11 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         // Save account name for future sessions
         UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
         print("WorkflowViewModel: Saved account name to UserDefaults")
-        
+
         showingLoginSheet = false
         accountName = ""
     }
-    
+
     func logout() async {
         print("WorkflowViewModel: Starting logout process")
         await client.disconnect()
@@ -707,7 +708,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
 
             // Create scene match detector with reference metadata
             let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata]
+                referenceMetadata: [referenceMetadata],
             )
 
             // Process the video with progress updates
@@ -747,29 +748,29 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             errorMessage = "Not connected to network"
             return
         }
-        
+
         guard !selectedIds.isEmpty else {
             errorMessage = "No messages selected"
             return
         }
-        
+
         isLoading = true
         defer { isLoading = false }
-        
+
         let manager = messageDelegate.getMessageManager()
-        
+
         do {
             // Get all selected messages
             let selectedMessages = manager.messages.filter { selectedIds.contains($0.id) }
-            
+
             // Send each selected message
             for message in selectedMessages {
                 // Convert the first 20 bytes of the message data to hex
                 let first20Bytes = message.data.prefix(20)
                 let hexString = first20Bytes.map { String(format: "%02x", $0) }.joined(separator: " ")
-                
+
                 print("Message \(message.id): \(hexString)")
-                
+
                 try await client.sendMessage(message.data)
                 print("Sent message: \(message.id)")
             }
@@ -777,7 +778,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             errorMessage = "Failed to send message: \(error.localizedDescription)"
         }
     }
-    
+
     // MARK: - Computed Properties
 
     var isConnected: Bool {

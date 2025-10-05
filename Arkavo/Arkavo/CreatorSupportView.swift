@@ -44,7 +44,7 @@ struct CreatorSupportView: View {
                             TierCard(
                                 tier: tier,
                                 isSelected: selectedTier == tier,
-                                onSelect: { selectedTier = tier }
+                                onSelect: { selectedTier = tier },
                             )
                         }
                     }
@@ -150,7 +150,7 @@ struct TierCard: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.purple : Color.gray.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? Color.purple : Color.gray.opacity(0.3), lineWidth: 2),
             )
         }
         .buttonStyle(PlainButtonStyle())

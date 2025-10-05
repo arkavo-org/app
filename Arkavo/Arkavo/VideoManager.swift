@@ -203,7 +203,7 @@ actor HLSProcessingManager {
             return ProcessingResult(
                 directory: outputDirectory,
                 thumbnail: thumbnail,
-                duration: duration
+                duration: duration,
             )
         } catch {
             print("❌ Video processing failed: \(error.localizedDescription)")
@@ -260,7 +260,7 @@ final class VideoPlayerManager: NSObject {
         loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
-            queue: .main
+            queue: .main,
         ) { [weak self] _ in
             self?.player.seek(to: .zero)
             self?.player.play()

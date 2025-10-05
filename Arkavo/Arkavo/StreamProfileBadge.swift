@@ -35,7 +35,7 @@ struct StreamProfileBadge: View {
                     .clipShape(Circle())
                     .overlay(
                         Circle()
-                            .stroke(viewModel.isHighlighted ? Color.blue : Color.gray, lineWidth: 2)
+                            .stroke(viewModel.isHighlighted ? Color.blue : Color.gray, lineWidth: 2),
                     )
                 VStack(alignment: .leading) {
                     Text(viewModel.stream?.profile.name ?? "")
@@ -90,7 +90,7 @@ struct StreamProfileBadge: View {
                         Text("Admission Policy:")
                             .font(.subheadline)
                             .bold()
-                        Text(viewModel.stream?.policies.admission.rawValue ?? "")
+                        Text(viewModel.stream?.policiesSafe.admission.rawValue ?? "")
                             .font(.caption)
                             .padding(5)
                             .background(Color.blue.opacity(0.2))
@@ -101,7 +101,7 @@ struct StreamProfileBadge: View {
                         Text("Interaction Policy:")
                             .font(.subheadline)
                             .bold()
-                        Text(viewModel.stream?.policies.interaction.rawValue ?? "")
+                        Text(viewModel.stream?.policiesSafe.interaction.rawValue ?? "")
                             .font(.caption)
                             .padding(5)
                             .background(Color.blue.opacity(0.2))
@@ -112,7 +112,7 @@ struct StreamProfileBadge: View {
                         Text("Age Policy:")
                             .font(.subheadline)
                             .bold()
-                        Text(viewModel.stream?.policies.age.rawValue ?? "")
+                        Text(viewModel.stream?.policiesSafe.age.rawValue ?? "")
                             .font(.caption)
                             .padding(8)
                             .background(Color.blue.opacity(0.2))

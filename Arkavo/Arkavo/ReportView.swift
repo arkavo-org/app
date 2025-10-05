@@ -1,6 +1,6 @@
-import SwiftUI
-import FlatBuffers
 import ArkavoSocial
+import FlatBuffers
+import SwiftUI
 
 struct ReportView: View {
     @Environment(\.dismiss) private var dismiss
@@ -165,7 +165,7 @@ struct ReportView: View {
         Task {
             do {
                 let accountProfilePublicID = viewModel.profile.publicID
-                
+
                 // Create the report object
                 var report = ContentReport(
                     reasons: selectedSeverities,
@@ -173,17 +173,18 @@ struct ReportView: View {
                     blockUser: blockUser,
                     timestamp: Date(),
                     contentId: contentId,
-                    reporterId: accountProfilePublicID.base58EncodedString
+                    reporterId: accountProfilePublicID.base58EncodedString,
                 )
 
                 // Handle blocking the user if enabled
                 if blockUser,
-                   let creatorPublicID = contributor?.profilePublicID {
+                   let creatorPublicID = contributor?.profilePublicID
+                {
                     // set optional
                     report.blockedPublicID = creatorPublicID.base58EncodedString
                     let blockedProfile = BlockedProfile(
                         blockedPublicID: creatorPublicID,
-                        report: report
+                        report: report,
                     )
                     try await PersistenceController.shared.saveBlockedProfile(blockedProfile)
                 }
@@ -220,37 +221,37 @@ class ReportViewModel: ViewModel {
     let client: ArkavoClient
     let account: Account
     let profile: Profile
-    
+
     required init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
     }
-    
+
     func submitReport(_ report: ContentReport) async throws {
         // Create FlatBuffer builder
         var builder = FlatBufferBuilder()
-        
+
         // Serialize report to JSON data
         let encoder = JSONEncoder()
         let reportData = try encoder.encode(report)
-        
+
         // Create target ID from report ID
         let targetId = "\(report.contentId)\(report.blockedPublicID ?? "")"
-        
+
         // Create vectors for target ID and payload
         let targetIdVector = builder.createVector(bytes: Data(targetId.utf8))
         let payloadVector = builder.createVector(bytes: reportData)
-        
+
         // Create CacheEvent
         let cacheEvent = Arkavo_CacheEvent.createCacheEvent(
             &builder,
             targetIdVectorOffset: targetIdVector,
             targetPayloadVectorOffset: payloadVector,
-            ttl: 0,  // No TTL for reports
-            oneTimeAccess: false
+            ttl: 0, // No TTL for reports
+            oneTimeAccess: false,
         )
-        
+
         // Create Event
         let event = Arkavo_Event.createEvent(
             &builder,
@@ -258,12 +259,12 @@ class ReportViewModel: ViewModel {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             status: .preparing,
             dataType: .cacheevent,
-            dataOffset: cacheEvent
+            dataOffset: cacheEvent,
         )
-        
+
         builder.finish(offset: event)
         let eventData = builder.data
-        
+
         // Send event through client
         try await client.sendNATSEvent(eventData)
     }

@@ -1,11 +1,12 @@
 import ArkavoSocial
+import OSLog
 import SwiftUI
 
 @main
 struct ArkavoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationPath = NavigationPath()
-    @State private var selectedView: AppView = .registration
+    @State private var selectedView: AppView = .registration // Default to registration view
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
@@ -17,6 +18,7 @@ struct ArkavoApp: App {
     // END screenshots
 
     let persistenceController = PersistenceController.shared
+    private let regLogger = Logger(subsystem: "com.arkavo.Arkavo", category: "Registration")
     let client: ArkavoClient
 
     init() {
@@ -24,16 +26,22 @@ struct ArkavoApp: App {
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256
+            curve: .p256,
+            // Note: Modified for compatibility with latest OpenTDFKit
+            // Capacity of 8192 keys is set in GroupViewModel.swift
         )
         ViewModelFactory.shared.serviceLocator.register(client)
         // Initialize router
         let router = ArkavoMessageRouter(
             client: client,
-            persistenceController: PersistenceController.shared
+            persistenceController: PersistenceController.shared,
         )
         _messageRouter = StateObject(wrappedValue: router)
         ViewModelFactory.shared.serviceLocator.register(router)
+        // Create a separate instance of SharedState for initialization
+        // This avoids accessing the @StateObject property before it's installed
+        let initialSharedState = SharedState()
+        ViewModelFactory.shared.setSharedState(initialSharedState)
         do {
             let queueManager = try MessageQueueManager()
             ViewModelFactory.shared.serviceLocator.register(queueManager)
@@ -66,6 +74,11 @@ struct ArkavoApp: App {
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
+            .modelContainer(persistenceController.container)
+            .onAppear {
+                // Update the shared state reference now that the StateObject is properly installed
+                ViewModelFactory.shared.setSharedState(sharedState)
+            }
             // BEGIN screenshots
 //            .onAppear {
 //                // Set up window accessor for screenshots
@@ -105,9 +118,11 @@ struct ArkavoApp: App {
                     },
                     secondaryButton: .cancel(Text("Later")) {
                         if error.isBlocking {
+                            // Enter offline mode to avoid constructing view models that require an account
+                            sharedState.isOfflineMode = true
                             selectedView = .main
                         }
-                    }
+                    },
                 )
             }
         }
@@ -127,11 +142,26 @@ struct ArkavoApp: App {
                 case .authenticating, .connected, .connecting:
                     break
                 }
+
+                // Set up timer for handling retry connections
+                tokenCheckTimer?.invalidate()
+                tokenCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                    if Data.didPostRetryConnection {
+                        Data.didPostRetryConnection = false
+                        Task { @MainActor [self] in
+                            // Reset offline mode flag
+                            sharedState.isOfflineMode = false
+                            // Attempt to reconnect
+                            await checkAccountStatus()
+                        }
+                    }
+                }
             case .background:
                 Task {
                     await saveChanges()
                 }
                 NotificationCenter.default.post(name: .closeWebSockets, object: nil)
+                // No need to remove observer for retry connection
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
             // BEGIN screenshots
@@ -152,6 +182,7 @@ struct ArkavoApp: App {
             // Generate default handle from name
             let handle = profile.name.lowercased().replacingOccurrences(of: " ", with: "-")
 
+            regLogger.log("[Registration] Starting profile save for handle generation")
             // Generate DID key and get the DID string
             let did: String
             do {
@@ -159,11 +190,12 @@ struct ArkavoApp: App {
                 print("Generated DID: \(did)")
             } catch {
                 print("Failed to generate DID: \(error)")
+                regLogger.error("[Registration] DID generation failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Registration Error",
                     message: "Failed to generate security credentials. Please try again.",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 return false
             }
@@ -173,48 +205,64 @@ struct ArkavoApp: App {
 
             // Complete WebAuthn registration
             do {
+                regLogger.log("[Registration] Calling registerUser for handle=\(handle, privacy: .private)")
                 let token = try await client.registerUser(handle: handle, did: did)
                 try KeychainManager.saveAuthenticationToken(token)
+                regLogger.log("[Registration] registerUser succeeded, token saved")
             } catch let error as ArkavoError {
+                regLogger.error("[Registration] ArkavoError during registerUser: \(String(describing: error))")
+                let details: String
                 switch error {
                 case let .authenticationFailed(message):
+                    details = message
                     connectionError = ConnectionError(
                         title: "Registration Failed",
-                        message: message,
+                        message: "The server rejected the registration request. Details: \(message)",
                         action: "Try Again",
-                        isBlocking: true
+                        isBlocking: true,
                     )
-                case .connectionFailed:
+                case let .connectionFailed(message):
+                    details = message
                     connectionError = ConnectionError(
                         title: "Connection Failed",
-                        message: "We're having trouble reaching our servers. Please check your internet connection and try again.",
+                        message: "We couldn't reach the server. \(message)",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 case .invalidResponse:
+                    details = "Invalid response from server"
                     connectionError = ConnectionError(
                         title: "Server Error",
                         message: "Received an invalid response from the server. Please try again.",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 default:
+                    details = error.localizedDescription
                     connectionError = ConnectionError(
                         title: "Registration Error",
-                        message: "An unexpected error occurred during registration. Please try again.",
+                        message: "An unexpected error occurred during registration. Details: \(error.localizedDescription)",
                         action: "Retry",
-                        isBlocking: true
+                        isBlocking: true,
                     )
                 }
+                sharedState.lastRegistrationErrorDetails = details
                 return false
             } catch {
                 print("Failed to register user: \(error)")
+                regLogger.error("[Registration] Unknown error during registerUser: \(String(describing: error))")
+                let ns = error as NSError
+                var msg = error.localizedDescription
+                if ns.domain == "HTTPError" {
+                    msg = "HTTP \(ns.code): \(msg)"
+                }
                 connectionError = ConnectionError(
                     title: "Registration Error",
-                    message: "Failed to complete registration. Please try again.",
+                    message: "Failed to complete registration. \(msg)",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = msg
                 return false
             }
 
@@ -226,15 +274,21 @@ struct ArkavoApp: App {
             do {
                 let videoStream = try await createVideoStream(account: account, profile: profile)
                 let postStream = try await createPostStream(account: account, profile: profile)
-                print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
+
+                // Create InnerCircle stream for P2P communication
+                let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+
+                print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
             } catch {
                 print("Failed to create streams: \(error)")
+                regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Setup Error",
-                    message: "Failed to set up your account streams. Please try again.",
+                    message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = error.localizedDescription
                 return false
             }
 
@@ -242,22 +296,26 @@ struct ArkavoApp: App {
 
             // Connect with WebAuthn
             do {
+                regLogger.log("[Registration] Connecting with WebAuthn for account=\(profile.name, privacy: .private)")
                 try await client.connect(accountName: profile.name)
                 // If connection is successful, save token and changes
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
                     try await persistenceController.saveChanges()
                     selectedView = .main // Only change view on complete success
+                    regLogger.log("[Registration] Connected and saved; switching to main view")
                     return true
                 }
             } catch {
                 print("Failed to connect: \(error)")
+                regLogger.error("[Registration] Connect failed: \(String(describing: error))")
                 connectionError = ConnectionError(
                     title: "Connection Error",
-                    message: "Failed to establish connection. Please try again.",
+                    message: "Failed to establish connection. Details: \(error.localizedDescription)",
                     action: "Retry",
-                    isBlocking: true
+                    isBlocking: true,
                 )
+                sharedState.lastRegistrationErrorDetails = error.localizedDescription
                 return false
             }
 
@@ -267,7 +325,7 @@ struct ArkavoApp: App {
                 title: "Profile Error",
                 message: "Failed to save your profile. Please try again.",
                 action: "Retry",
-                isBlocking: true
+                isBlocking: true,
             )
             return false
         }
@@ -284,8 +342,8 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids
-            )
+                age: .onlyKids,
+            ),
         )
 
         // Create initial thought that marks this as a video stream
@@ -294,16 +352,16 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            contributors: []
+            contributors: [],
         )
 
         let initialThought = Thought(
             nano: Data(),
-            metadata: initialMetadata
+            metadata: initialMetadata,
         )
 
         // Save the initial thought
-        let saved = try PersistenceController.shared.saveThought(initialThought)
+        let saved = try await PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a video stream
@@ -331,8 +389,8 @@ struct ArkavoApp: App {
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids
-            )
+                age: .onlyKids,
+            ),
         )
 
         // Create initial thought that marks this as a post stream
@@ -341,18 +399,18 @@ struct ArkavoApp: App {
             streamPublicID: stream.publicID,
             mediaType: .post, // Posts are primarily text-based
             createdAt: Date(),
-            contributors: []
+            contributors: [],
         )
 
         let initialThought = Thought(
             nano: Data(), // Empty initial data
-            metadata: initialMetadata
+            metadata: initialMetadata,
         )
 
         print("Created initial post stream thought with ID: \(initialThought.id)")
 
         // Save the initial thought
-        let saved = try PersistenceController.shared.saveThought(initialThought)
+        let saved = try await PersistenceController.shared.saveThought(initialThought)
         print("Saved initial thought \(saved)")
 
         // Set the source thought to mark this as a post stream
@@ -366,6 +424,47 @@ struct ArkavoApp: App {
         // Save changes
         try await persistenceController.saveChanges()
         print("Post stream creation completed")
+
+        return stream
+    }
+
+    func createInnerCircleStream(account: Account, profile: Profile) async throws -> Stream {
+        print("Creating InnerCircle stream for profile: \(profile.name)")
+
+        // Check if InnerCircle already exists
+        if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
+            print("InnerCircle stream already exists with ID: \(existingInnerCircle.id)")
+            return existingInnerCircle
+        }
+
+        // Create a special profile for InnerCircle
+        let innerCircleProfile = Profile(
+            name: "InnerCircle",
+            blurb: "Local peer-to-peer communication",
+            interests: "local",
+            location: "",
+        )
+
+        // Create the stream with appropriate policies
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
+            profile: innerCircleProfile,
+            policies: Policies(
+                admission: .openInvitation,
+                interaction: .open,
+                age: .forAll,
+            ),
+        )
+
+        // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
+
+        // Add to account
+        try account.addStream(stream)
+        print("Added InnerCircle stream to account. Stream ID: \(stream.id)")
+
+        // Save changes
+        try await persistenceController.saveChanges()
+        print("InnerCircle stream creation completed")
 
         return stream
     }
@@ -411,6 +510,24 @@ struct ArkavoApp: App {
                 print("✅ Post stream found: \(postStream!.id)")
             }
 
+            // Check InnerCircle stream
+            let innerCircleStream = account.streams.first(where: { stream in
+                stream.isInnerCircleStream
+            })
+
+            if innerCircleStream == nil {
+                print("⚠️ InnerCircle stream missing - attempting to create")
+                guard let profile = account.profile else {
+                    print("❌ Cannot create InnerCircle stream: Profile not found")
+                    return
+                }
+
+                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
+            } else {
+                print("✅ InnerCircle stream found: \(innerCircleStream!.id)")
+            }
+
             // Save any changes
             try await persistenceController.saveChanges()
 
@@ -443,161 +560,150 @@ struct ArkavoApp: App {
 
         do {
             let account = try await persistenceController.getOrCreateAccount()
-            ViewModelFactory.shared.setAccount(account)
+            print("Account retrieved: \(account.id), profile: \(String(describing: account.profile))")
+
+            // If profile is nil, go to registration immediately
             if account.profile == nil {
+                print("No profile found - routing to registration")
                 selectedView = .registration
                 return
             }
 
+            // Set the account only after confirming it has a profile
+            ViewModelFactory.shared.setAccount(account)
+
             guard let profile = account.profile else {
+                print("Profile is nil after check - this shouldn't happen")
                 connectionError = ConnectionError(
                     title: "Profile Error",
                     message: "There was an error loading your profile. Please try signing up again.",
                     action: "Sign Up",
-                    isBlocking: true
+                    isBlocking: true,
                 )
                 selectedView = .registration
                 return
             }
 
-            // Validate that required streams exist
-            let videoStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .video
-            })
+            // First, try to validate streams safely without accessing Thoughts
+            do {
+                let (existingVideoStream, existingPostStream, existingInnerCircleStream) =
+                    try await persistenceController.validateStreamsWithoutAccessingThoughts()
 
-            if videoStream == nil {
-                print("⚠️ Video stream missing - attempting to create")
+                // If we can't identify stream types safely, remove potentially corrupted streams
+                if existingVideoStream == nil, existingPostStream == nil, !account.streams.isEmpty {
+                    print("⚠️ Cannot safely identify stream types - removing potentially corrupted streams")
+                    try await persistenceController.removeStreamsWithPotentiallyInvalidThoughts()
+                }
+
+                // Now recreate any missing streams
+                if existingVideoStream == nil {
+                    print("⚠️ Video stream missing - creating new one")
+                    let newVideoStream = try await createVideoStream(account: account, profile: profile)
+                    print("✅ Created new video stream: \(newVideoStream.id)")
+                }
+
+                if existingPostStream == nil {
+                    print("⚠️ Post stream missing - creating new one")
+                    let newPostStream = try await createPostStream(account: account, profile: profile)
+                    print("✅ Created new post stream: \(newPostStream.id)")
+                }
+
+                if existingInnerCircleStream == nil {
+                    print("⚠️ InnerCircle stream missing - creating new one")
+                    let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                    print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
+                }
+            } catch {
+                print("❌ Error validating streams: \(error.localizedDescription)")
+                // If validation fails completely, remove all streams and recreate
+                try await persistenceController.removeStreamsWithPotentiallyInvalidThoughts()
+
+                // Create fresh streams
                 let newVideoStream = try await createVideoStream(account: account, profile: profile)
-                print("✅ Created new video stream: \(newVideoStream.id)")
-            } else {
-                print("✅ Video stream exists: \(videoStream!.id)")
-            }
+                print("✅ Created new video stream after error: \(newVideoStream.id)")
 
-            let postStream = account.streams.first(where: { stream in
-                stream.source?.metadata.mediaType == .post
-            })
-
-            if postStream == nil {
-                print("⚠️ Post stream missing - attempting to create")
                 let newPostStream = try await createPostStream(account: account, profile: profile)
-                print("✅ Created new post stream: \(newPostStream.id)")
-            } else {
-                print("✅ Post stream exists: \(postStream!.id)")
+                print("✅ Created new post stream after error: \(newPostStream.id)")
+
+                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                print("✅ Created new InnerCircle stream after error: \(newInnerCircleStream.id)")
             }
 
             try await persistenceController.saveChanges()
 
-            // If we're already connected, nothing to do
-            if case .connected = client.currentState {
-                print("Client already connected, no action needed")
-                selectedView = .main
-                return
-            }
-
-            // If we're in the process of connecting, wait for that to complete
-            if case .connecting = client.currentState {
-                print("Connection already in progress, waiting...")
-                return
-            }
-
-            // Try to connect with existing token if available
+            // Try to connect, but proceed to main view even if connection fails
             if KeychainManager.getAuthenticationToken() != nil {
                 do {
                     print("Attempting connection with existing token")
                     try await client.connect(accountName: profile.name)
-                    selectedView = .main
                     print("checkAccountStatus: Connected with existing token")
-                    return
                 } catch {
-                    print("Connection with existing token failed: \(error.localizedDescription)")
-                    KeychainManager.deleteAuthenticationToken()
-                    // Fall through to fresh connection attempt
+                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                    // Allow the app to function without network features
+                    sharedState.isOfflineMode = true
+                }
+            } else {
+                do {
+                    print("Attempting fresh connection")
+                    try await client.connect(accountName: profile.name)
+                    print("checkAccountStatus: Connected with fresh connection")
+                } catch let error as ArkavoError {
+                    if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
+                        // User exists locally but not on server, go to registration
+                        print("User exists locally but not on server - routing to registration")
+
+                        // Clear the invalid account data
+                        KeychainManager.deleteAuthenticationToken()
+
+                        // Reset account state so registration can create a new one
+                        account.profile = nil
+                        try? await persistenceController.saveChanges()
+
+                        // Route to registration
+                        selectedView = .registration
+                        ViewModelFactory.shared.clearAccount()
+                        return
+                    } else {
+                        print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                        // Allow the app to function without network features
+                        sharedState.isOfflineMode = true
+                    }
+                } catch {
+                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                    // Allow the app to function without network features
+                    sharedState.isOfflineMode = true
                 }
             }
 
-            // Only reach here if no token, token connection failed, or we're disconnected
-            print("Attempting fresh connection")
-            try await client.connect(accountName: profile.name)
+            // Proceed to main view regardless of connection status
             selectedView = .main
-            print("checkAccountStatus: Connected with fresh connection")
 
-        } catch let error as ArkavoError {
-            switch error {
-            case .authenticationFailed:
-                connectionError = ConnectionError(
-                    title: "Authentication Failed",
-                    message: "We couldn't verify your identity. This can happen if you've signed in on another device. Please sign in again to continue.",
-                    action: "Sign In",
-                    isBlocking: true
-                )
-                selectedView = .main
+            // No need to show offline mode alert - OfflineHomeView provides sufficient information
+            // User can tap "Try to Reconnect" button in OfflineHomeView if needed
 
-            case .connectionFailed:
-                connectionError = ConnectionError(
-                    title: "Connection Failed",
-                    message: "We're having trouble reaching Arkavo servers. Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-                if selectedView != .main {
-                    selectedView = .main
-                }
-
-            case .invalidResponse:
-                connectionError = ConnectionError(
-                    title: "Update Required",
-                    message: "This version of Arkavo is no longer supported. Please update to the latest version from the App Store to continue.",
-                    action: "Update App",
-                    isBlocking: true
-                )
-                selectedView = .main
-
-            default:
-                connectionError = ConnectionError(
-                    title: "Connection Error",
-                    message: "Something went wrong while connecting to Arkavo. Please try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-                selectedView = .main
-            }
-        } catch let error as URLError {
-            switch error.code {
-            case .notConnectedToInternet:
-                connectionError = ConnectionError(
-                    title: "No Internet Connection",
-                    message: "Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-
-            case .timedOut:
-                connectionError = ConnectionError(
-                    title: "Connection Timeout",
-                    message: "The connection to Arkavo is taking longer than expected. This might be due to a slow internet connection.",
-                    action: "Try Again",
-                    isBlocking: false
-                )
-
-            default:
-                connectionError = ConnectionError(
-                    title: "Network Error",
-                    message: "There was a problem connecting to Arkavo. Please check your internet connection and try again.",
-                    action: "Retry",
-                    isBlocking: false
-                )
-            }
-            if selectedView != .main {
-                selectedView = .main
-            }
         } catch {
-            connectionError = ConnectionError(
-                title: "Unexpected Error",
-                message: "Something unexpected happened. Please try again or contact support if the problem persists.",
-                action: "Retry",
-                isBlocking: false
-            )
-            selectedView = .main
+            print("Error checking account status: \(error.localizedDescription)")
+
+            // Even if there's an error, we'll still try to load the account
+            do {
+                let account = try? await persistenceController.getOrCreateAccount()
+                if let account, let _ = account.profile {
+                    // We have a profile, so we can proceed in offline mode
+                    ViewModelFactory.shared.setAccount(account)
+                    selectedView = .main
+                    sharedState.isOfflineMode = true
+
+                    connectionError = ConnectionError(
+                        title: "Offline Mode",
+                        message: "You're currently using Arkavo in offline mode. Some features like video and social feeds are unavailable. Secure P2P messaging still works.",
+                        action: "Try to Connect",
+                        isBlocking: false,
+                    )
+                } else {
+                    // No profile, route to registration
+                    selectedView = .registration
+                }
+            }
         }
     }
 
@@ -670,6 +776,7 @@ enum DeepLinkDestination: Hashable {
 extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
+    static let retryConnection = Notification.Name("RetryConnection")
 }
 
 @MainActor
@@ -692,6 +799,21 @@ enum ArkavoError: Error {
     case invalidEvent(String)
     case profileError(String)
     case profileNotFound(String)
+    case streamError(String)
+    case keyStoreError(String)
+    case decryptionError(String)
+    var errorDescription: String? {
+        switch self {
+        case let .profileError(message):
+            "Profile Error: \(message)"
+        case let .streamError(message):
+            "Stream Error: \(message)"
+        case let .keyStoreError(message):
+            "KeyStore Error: \(message)"
+        default:
+            nil
+        }
+    }
 }
 
 class SharedState: ObservableObject {
@@ -703,6 +825,41 @@ class SharedState: ObservableObject {
     @Published var showCreateView: Bool = false
     @Published var showChatOverlay: Bool = false
     @Published var isAwaiting: Bool = false
+    @Published var isOfflineMode: Bool = false
+    @Published var lastRegistrationErrorDetails: String?
+
+    // Store additional state values that don't need @Published
+    private var stateStorage: [String: Any] = [:]
+
+    func getState(forKey key: String) -> Any? {
+        stateStorage[key]
+    }
+
+    func setState(_ value: Any, forKey key: String) {
+        stateStorage[key] = value
+        // Trigger objectWillChange if needed for UI updates
+        objectWillChange.send()
+    }
+
+    func getCenterPrompt() -> String {
+        switch selectedTab {
+        case .home: "Capture" // create a video
+        case .communities: "Converse" // start chatting
+        case .contacts: "Connect" // invite someone new
+        case .social: "Publish" // post to the feed
+        case .profile: "Express" // personalize your profile
+        }
+    }
+
+    func getTooltipText() -> String {
+        switch selectedTab {
+        case .home: "Capture video"
+        case .communities: "Converse in chat"
+        case .contacts: "Connect with someone"
+        case .social: "Publish post"
+        case .profile: "Express yourself"
+        }
+    }
 }
 
 final class ServiceLocator {
@@ -719,6 +876,11 @@ final class ServiceLocator {
             fatalError("No registered service for type \(T.self)")
         }
         return service
+    }
+
+    func resolve<T>(type: T.Type) -> T? {
+        let key = String(describing: type)
+        return services[key] as? T
     }
 }
 
@@ -748,8 +910,14 @@ final class ViewModelFactory {
     // Set current account and profile
     @MainActor
     func setAccount(_ account: Account) {
+        // Only set the account if it has a valid profile
+        guard let profile = account.profile else {
+            print("Warning: Attempted to set account without profile")
+            return
+        }
         currentAccount = account
-        currentProfile = account.profile
+        currentProfile = profile
+        print("Set account with profile: \(profile.name)")
     }
 
     // Clear current account and profile
@@ -788,7 +956,40 @@ final class ViewModelFactory {
             client: client,
             account: account,
             profile: profile,
-            streamPublicID: streamPublicID
+            streamPublicID: streamPublicID,
         )
+    }
+
+    func getChatViewModel(for streamPublicID: Data) -> ChatViewModel? {
+        guard currentAccount != nil, currentProfile != nil else {
+            return nil
+        }
+        return makeChatViewModel(streamPublicID: streamPublicID)
+    }
+
+    // Access the MultipeerConnectivity view model for peer discovery
+    private var peerDiscoveryManager: PeerDiscoveryManager?
+    private var globalSharedState: SharedState?
+
+    @MainActor
+    func getPeerDiscoveryManager() -> PeerDiscoveryManager {
+        if peerDiscoveryManager == nil {
+            let client = serviceLocator.resolve() as ArkavoClient
+            peerDiscoveryManager = PeerDiscoveryManager(arkavoClient: client)
+        }
+        return peerDiscoveryManager!
+    }
+
+    @MainActor
+    func setSharedState(_ state: SharedState) {
+        globalSharedState = state
+    }
+
+    @MainActor
+    func getSharedState() -> SharedState {
+        if globalSharedState == nil {
+            globalSharedState = SharedState()
+        }
+        return globalSharedState!
     }
 }

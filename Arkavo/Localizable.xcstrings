@@ -4,6 +4,18 @@
     "" : {
 
     },
+    "(%lld)" : {
+
+    },
+    "(Connected)" : {
+
+    },
+    "(Offline)" : {
+
+    },
+    "@%@" : {
+
+    },
     "%@" : {
       "localizations" : {
         "es-US" : {
@@ -14,6 +26,9 @@
         }
       }
     },
+    "%@ is in InnerCircle" : {
+
+    },
     "%@/month" : {
 
     },
@@ -23,6 +38,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
           }
         }
       }
@@ -98,10 +123,16 @@
         }
       }
     },
-    "Activity Level: %@" : {
+    "Add %@ to InnerCircle" : {
 
     },
     "Add a description..." : {
+
+    },
+    "Add someone you know who's right beside you—verify in person to grow your trusted network." : {
+
+    },
+    "Add to InnerCircle" : {
 
     },
     "Admission" : {
@@ -132,10 +163,25 @@
     "Age Verification" : {
 
     },
+    "Agreement accepted" : {
+
+    },
+    "All connections use end-to-end encryption with One-Time TDF technology to ensure your conversations remain private." : {
+
+    },
+    "Already in InnerCircle" : {
+
+    },
+    "Are you sure you want to delete %@? You'll also be removed from any chats you only share with this person." : {
+
+    },
     "Are you sure you want to delete this post? This action cannot be undone." : {
 
     },
     "Are you sure you want to delete this video? This action cannot be undone." : {
+
+    },
+    "Are you sure you want to remove %@ from your InnerCircle? They will no longer be able to communicate directly with you." : {
 
     },
     "Are you sure you want to unblock this user? They will be able to interact with your content again." : {
@@ -166,6 +212,12 @@
 
     },
     "Available" : {
+
+    },
+    "Available Private Keys: %lld" : {
+
+    },
+    "Available Public Keys: %lld" : {
 
     },
     "Back" : {
@@ -201,6 +253,9 @@
     "Broadcast" : {
 
     },
+    "Build your trusted network" : {
+
+    },
     "By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App." : {
 
     },
@@ -217,6 +272,9 @@
         }
       }
     },
+    "Chat with %@" : {
+
+    },
     "Classification" : {
 
     },
@@ -229,7 +287,43 @@
     "Comments" : {
 
     },
+    "Connect" : {
+
+    },
+    "Connect Nearby" : {
+
+    },
+    "Connect to Peers (Optional)" : {
+
+    },
+    "Connect with %@?" : {
+
+    },
+    "Connect with Others" : {
+
+    },
     "Connected" : {
+
+    },
+    "Connected %@" : {
+
+    },
+    "Connected Peers" : {
+
+    },
+    "Connecting..." : {
+
+    },
+    "Connection Failed" : {
+
+    },
+    "Contact Details" : {
+
+    },
+    "Contact Support" : {
+
+    },
+    "Contacts" : {
 
     },
     "Contributors" : {
@@ -265,13 +359,34 @@
     "Delete" : {
 
     },
+    "Delete Contact" : {
+
+    },
+    "Delete Contact?" : {
+
+    },
     "Delete Post" : {
 
     },
     "Delete Video" : {
 
     },
+    "Disconnect" : {
+
+    },
+    "Disconnect from %@" : {
+
+    },
+    "Disconnect P2P with %@?" : {
+
+    },
     "Disconnected" : {
+
+    },
+    "Discover Peers" : {
+
+    },
+    "Discovered Devices (%lld)" : {
 
     },
     "Done" : {
@@ -296,7 +411,13 @@
     "End User License Agreement (EULA)" : {
 
     },
+    "Ensure other devices are also searching." : {
+
+    },
     "Enter handle" : {
+
+    },
+    "Enter your unique handle for arkavo.social" : {
 
     },
     "Error" : {
@@ -309,10 +430,13 @@
         }
       }
     },
+    "Error Revoking Trust" : {
+
+    },
     "Error: %@" : {
 
     },
-    "Expert Level: %@" : {
+    "EULA Agreement Checkbox" : {
 
     },
     "Face" : {
@@ -324,10 +448,16 @@
     "Failed to load image" : {
 
     },
+    "Failed to revoke trust: %@" : {
+
+    },
     "Features" : {
 
     },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
+
+    },
+    "For security, confirm the device name with the person before connecting." : {
 
     },
     "Granularity" : {
@@ -339,6 +469,12 @@
     "Group Name" : {
 
     },
+    "Handle input field" : {
+
+    },
+    "High Encryption" : {
+
+    },
     "Home" : {
 
     },
@@ -346,6 +482,21 @@
 
     },
     "Identity" : {
+
+    },
+    "Identity Verified" : {
+
+    },
+    "Inactive" : {
+
+    },
+    "Inner Circle" : {
+
+    },
+    "Inner Circle Members (%lld)" : {
+
+    },
+    "InnerCircle" : {
 
     },
     "Interaction" : {
@@ -365,6 +516,12 @@
 
     },
     "Invite Friends" : {
+
+    },
+    "Invite Remotely" : {
+
+    },
+    "Key Points" : {
 
     },
     "Last known location: %lf, %lf" : {
@@ -423,6 +580,9 @@
     "Loading profile..." : {
 
     },
+    "Loading stream details..." : {
+
+    },
     "Location" : {
 
     },
@@ -433,6 +593,12 @@
 
     },
     "logo" : {
+
+    },
+    "Make sure the other person has Arkavo open and is also searching for connections." : {
+
+    },
+    "Make sure this is the person you want to connect with. They will receive a connection request." : {
 
     },
     "Map" : {
@@ -449,10 +615,13 @@
     "Media" : {
 
     },
-    "Member since: %@" : {
+    "Members:" : {
 
     },
-    "Members:" : {
+    "Military-grade encryption for your data" : {
+
+    },
+    "More Options" : {
 
     },
     "My Account" : {
@@ -482,10 +651,37 @@
     "Next" : {
 
     },
+    "No contacts found" : {
+
+    },
+    "No members added to the Inner Circle yet." : {
+
+    },
+    "No Members Found" : {
+
+    },
+    "No members match your search." : {
+
+    },
+    "No Peers Discovered" : {
+
+    },
     "Not available" : {
 
     },
     "Not available on macOS" : {
+
+    },
+    "Not connected" : {
+
+    },
+    "Not Connected" : {
+
+    },
+    "Offline" : {
+
+    },
+    "Offline Mode" : {
 
     },
     "OK" : {
@@ -498,13 +694,22 @@
         }
       }
     },
+    "Online" : {
+
+    },
     "Owner:" : {
+
+    },
+    "Peers" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
 
     },
     "Please provide a valid government-issued ID and a selfie to verify your age." : {
+
+    },
+    "Please review and accept our terms" : {
 
     },
     "Policies" : {
@@ -524,6 +729,12 @@
 
     },
     "Privacy" : {
+
+    },
+    "Privacy by design" : {
+
+    },
+    "Privacy Policy" : {
 
     },
     "Processing..." : {
@@ -549,6 +760,9 @@
         }
       }
     },
+    "Profile Management" : {
+
+    },
     "Profile: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -564,6 +778,9 @@
 
     },
     "Public ID" : {
+
+    },
+    "Public ID: %@" : {
 
     },
     "Ready to join?" : {
@@ -594,6 +811,18 @@
         }
       }
     },
+    "Registration issue: %@" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove Member" : {
+
+    },
+    "Renew keys with %@" : {
+
+    },
     "Report Content" : {
 
     },
@@ -603,7 +832,25 @@
     "Reports are reviewed within 24 hours. Severe violations may be acted upon sooner." : {
 
     },
+    "Reset" : {
+
+    },
+    "Reset Profile" : {
+
+    },
     "Retry" : {
+
+    },
+    "Revoke" : {
+
+    },
+    "Revoke Trust" : {
+
+    },
+    "Revoke Trust?" : {
+
+    },
+    "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
 
     },
     "Save" : {
@@ -616,10 +863,34 @@
         }
       }
     },
+    "Scanning for Devices..." : {
+
+    },
+    "Scanning for nearby devices..." : {
+
+    },
+    "Search" : {
+
+    },
+    "Searching for nearby devices..." : {
+
+    },
     "Section" : {
 
     },
+    "Secure" : {
+
+    },
+    "Secure Connections" : {
+
+    },
     "Send" : {
+
+    },
+    "Send Message" : {
+
+    },
+    "Send your Arkavo link with the iOS Share Sheet to connect with someone you already know—no matter the distance." : {
 
     },
     "Settings" : {
@@ -717,6 +988,9 @@
         }
       }
     },
+    "Stop Discovery" : {
+
+    },
     "Stream" : {
       "localizations" : {
         "es-US" : {
@@ -726,6 +1000,9 @@
           }
         }
       }
+    },
+    "Stream Details" : {
+
     },
     "Stream ID" : {
       "extractionState" : "stale",
@@ -739,7 +1016,6 @@
       }
     },
     "Streams" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -764,13 +1040,31 @@
     "Support Tiers" : {
 
     },
+    "Tap 'Discover Peers' to find nearby devices." : {
+
+    },
+    "Tap to accept agreement" : {
+
+    },
+    "Tap to connect" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
     "Thank you for helping keep our community safe." : {
 
     },
+    "There are no members to display." : {
+
+    },
     "This will be the name of your new group" : {
+
+    },
+    "This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone." : {
+
+    },
+    "This will end your direct peer-to-peer connection. %@ will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting." : {
 
     },
     "Thought service is unavailable" : {
@@ -790,7 +1084,16 @@
     "Topic Tags:" : {
 
     },
-    "Trust Level: %@" : {
+    "Trust Revoked" : {
+
+    },
+    "Trust status: %@" : {
+
+    },
+    "Try a different search term" : {
+
+    },
+    "Try to Reconnect" : {
 
     },
     "Type a message..." : {
@@ -822,6 +1125,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Verify in Person" : {
 
     },
     "Video" : {
@@ -880,7 +1186,19 @@
     "What We are Discussing" : {
 
     },
+    "You can retry, or contact support@arkavo.com with these details." : {
+
+    },
+    "You own your content" : {
+
+    },
+    "You're currently using Arkavo in offline mode." : {
+
+    },
     "Your handle must be unique within arkavo.social" : {
+
+    },
+    "Zero-tolerance for harmful content" : {
 
     }
   },

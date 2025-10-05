@@ -77,7 +77,7 @@
             // Compare faces using face landmarks
             return try await compareFaceLandmarks(
                 idFaces: idFaceRequest.results ?? [],
-                selfieFaces: selfieFaceRequest.results ?? []
+                selfieFaces: selfieFaceRequest.results ?? [],
             )
         }
 
@@ -148,7 +148,7 @@
                 let pixelRect = VNImageRectForNormalizedRect(
                     faceRect,
                     Int(cgImage.width),
-                    Int(cgImage.height)
+                    Int(cgImage.height),
                 )
 
                 // Crop the face region
@@ -239,7 +239,7 @@
                     // Compare faces
                     let matches = try await manager.compareFaces(
                         idCardImage: idCardImage,
-                        selfieImage: selfieImage
+                        selfieImage: selfieImage,
                     )
 
                     print("Face match result:", matches)

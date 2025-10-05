@@ -1,6 +1,7 @@
 import ArkavoSocial
 import CryptoKit
 import FlatBuffers
+import Foundation
 import OpenTDFKit
 import SwiftUI
 
@@ -12,10 +13,44 @@ struct ChatView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var keyboardHeight: CGFloat = 0
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                // Direct message header, only shown when in direct message mode
+                if viewModel.isDirectMessageChat {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Button(action: {
+                                // Clear the direct message profile when dismissing
+                                let sharedState = ViewModelFactory.shared.getSharedState()
+                                // Use NSNull() since nil isn't compatible with Any
+                                sharedState.setState(NSNull(), forKey: "selectedDirectMessageProfile")
+                            }) {
+                                HStack {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
+                                }
+                                .foregroundColor(.blue)
+                            }
+
+                            Spacer()
+
+                            Text("Chat with \(viewModel.directMessageRecipientName)")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+
+                        Divider()
+                    }
+                    .background(Color(.secondarySystemBackground))
+                }
+
                 ScrollViewReader { scrollProxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 16) {
@@ -26,7 +61,7 @@ struct ChatView: View {
                         }
                         .padding()
                     }
-                    .frame(maxHeight: geometry.size.height - keyboardHeight - 56)
+                    .frame(maxHeight: max(100, geometry.size.height - keyboardHeight - 56))
                     .onChange(of: viewModel.messages) { _, _ in
                         // Scroll to the last message with animation
                         if let lastMessage = viewModel.messages.last {
@@ -51,7 +86,7 @@ struct ChatView: View {
                                 showError = true
                             }
                         }
-                    }
+                    },
                 )
             }
         }
@@ -125,7 +160,7 @@ struct MessageRow: View {
                 .overlay(
                     Text(message.username.prefix(1))
                         .font(.headline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.blue),
                 )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -168,7 +203,7 @@ struct MessageRow: View {
                                 .frame(height: 200)
                                 .overlay(
                                     Image(systemName: "play.rectangle.fill")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.gray),
                                 )
                         }
 
@@ -182,7 +217,7 @@ struct MessageRow: View {
                                 .frame(height: 50)
                                 .overlay(
                                     Image(systemName: "waveform")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.gray),
                                 )
                         }
                     }
@@ -351,8 +386,8 @@ struct ChatOverlay: View {
                 // Chat view
                 ChatView(
                     viewModel: ViewModelFactory.shared.makeChatViewModel(
-                        streamPublicID: streamPublicID
-                    )
+                        streamPublicID: streamPublicID,
+                    ),
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .focused($isChatFieldFocused)

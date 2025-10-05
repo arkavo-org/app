@@ -39,7 +39,7 @@ struct StreamCloudView: View {
                         .foregroundColor(Color(
                             red: .random(in: 0.4 ... 1),
                             green: .random(in: 0.4 ... 1),
-                            blue: .random(in: 0.4 ... 1)
+                            blue: .random(in: 0.4 ... 1),
                         ))
                         .position(animatedPosition(for: box))
                         .opacity(box.opacity)
@@ -113,13 +113,13 @@ struct StreamCloudView: View {
             let radius = min(availableSize.width, availableSize.height) * 0.4 * (1 - animationProgress)
             return CGPoint(
                 x: endPosition.x + cos(angle) * radius,
-                y: endPosition.y + sin(angle) * radius
+                y: endPosition.y + sin(angle) * radius,
             )
         }
 
         return CGPoint(
             x: startPosition.x + (endPosition.x - startPosition.x) * animationProgress,
-            y: startPosition.y + (endPosition.y - startPosition.y) * animationProgress
+            y: startPosition.y + (endPosition.y - startPosition.y) * animationProgress,
         )
     }
 
@@ -140,7 +140,7 @@ struct StreamCloudView: View {
                 rect: CGRect(origin: .zero, size: CGSize(width: textSize.width + spacing, height: textSize.height + spacing)),
                 word: word.0,
                 size: wordSize,
-                position: .zero // We'll set this later if we find a position
+                position: .zero, // We'll set this later if we find a position
             )
 
             if let position = findNonOverlappingPosition(for: box, in: size) {
@@ -201,7 +201,7 @@ struct BoundingBoxView: View {
                 .foregroundColor(Color(
                     red: .random(in: 0.4 ... 1),
                     green: .random(in: 0.4 ... 1),
-                    blue: .random(in: 0.4 ... 1)
+                    blue: .random(in: 0.4 ... 1),
                 ))
         }
         .position(x: box.rect.midX, y: box.rect.midY)

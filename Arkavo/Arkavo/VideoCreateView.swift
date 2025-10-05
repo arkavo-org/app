@@ -26,7 +26,7 @@ struct VideoCreateView: View {
             onComplete: { _ in
                 // Simply dismiss the view when complete
                 sharedState.showCreateView = false
-            }
+            },
         )
         .alert("Recording Error", isPresented: $showError) {
             Button("OK") {
@@ -57,7 +57,7 @@ struct VideoCreateView: View {
 
         guard let compositionTrack = composition.addMutableTrack(
             withMediaType: .video,
-            preferredTrackID: kCMPersistentTrackID_Invalid
+            preferredTrackID: kCMPersistentTrackID_Invalid,
         ) else {
             throw VideoError.compressionFailed("Failed to create composition track")
         }
@@ -66,7 +66,7 @@ struct VideoCreateView: View {
         try await compositionTrack.insertTimeRange(
             CMTimeRange(start: .zero, duration: asset.load(.duration)),
             of: assetTrack,
-            at: .zero
+            at: .zero,
         )
 
         // Create video composition
@@ -98,7 +98,7 @@ struct VideoCreateView: View {
         // Configure export session
         guard let exporter = AVAssetExportSession(
             asset: composition,
-            presetName: AVAssetExportPresetHighestQuality // Changed to highest quality
+            presetName: AVAssetExportPresetHighestQuality, // Changed to highest quality
         ) else {
             throw VideoError.exportSessionCreationFailed("Failed to create export session")
         }
@@ -204,7 +204,7 @@ struct ModernRecordingInterface: View {
                             .black.opacity(0.3),
                         ],
                         startPoint: .top,
-                        endPoint: .bottom
+                        endPoint: .bottom,
                     )
                     .ignoresSafeArea()
                 }
@@ -225,7 +225,7 @@ struct ModernRecordingInterface: View {
                         RecordingControl(
                             viewModel: viewModel,
                             description: videoDescription,
-                            onComplete: onComplete
+                            onComplete: onComplete,
                         )
 
                         HStack {
@@ -401,7 +401,7 @@ struct SendButton: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 24)
                             .strokeBorder(.white.opacity(0.2))
-                    }
+                    },
             )
         }
         .disabled(state != .ready)
@@ -436,8 +436,8 @@ struct ProgressBar: View {
                                         .clear,
                                     ],
                                     startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                                    endPoint: .bottom,
+                                ),
                             )
                     }
 
@@ -451,8 +451,8 @@ struct ProgressBar: View {
                                 Color.red, // Standard red
                             ],
                             startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                            endPoint: .trailing,
+                        ),
                     )
                     .frame(width: geometry.size.width * progress)
                     .overlay {
@@ -466,8 +466,8 @@ struct ProgressBar: View {
                                         .clear,
                                     ],
                                     startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                    endPoint: .trailing,
+                                ),
                             )
                             .frame(width: 20)
                             .offset(x: isAnimating ? geometry.size.width : -20)
@@ -600,7 +600,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             // First create the result
             let result = UploadResult(
                 id: processedVideo.directory.lastPathComponent,
-                playbackURL: videoURL.absoluteString
+                playbackURL: videoURL.absoluteString,
             )
 
             // Handle all the processing and uploading
@@ -637,7 +637,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             hate: .none_,
             harm: .none_,
             mature: .none_,
-            bully: .none_
+            bully: .none_,
         )
         print("📊 Rating created at offset: \(rating.o)")
 
@@ -652,7 +652,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             opinion: 0.0,
             transactional: 0.0,
             harmful: 0.0,
-            confidence: 0.9
+            confidence: 0.9,
         )
         print("🎯 Purpose created at offset: \(purpose.o)")
 
@@ -663,7 +663,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             &builder,
             type: .plain,
             versionOffset: versionString,
-            profileOffset: profileString
+            profileOffset: profileString,
         )
         print("📄 Format info created at offset: \(formatInfo.o)")
 
@@ -672,7 +672,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             &builder,
             mediaType: .video,
             dataEncoding: .binary,
-            formatOffset: formatInfo
+            formatOffset: formatInfo,
         )
         print("📦 Content format created at offset: \(contentFormat.o)")
 
@@ -735,13 +735,13 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         // Create NanoTDF with metadata in policy
         let nanoTDFData = try await client.encryptAndSendPayload(
             payload: videoData,
-            policyData: policyData
+            policyData: policyData,
         )
 
         return Thought(
             id: thoughtUUID,
             nano: nanoTDFData,
-            metadata: metadata // This is now redundant since it's in the policy
+            metadata: metadata, // This is now redundant since it's in the policy
         )
     }
 
@@ -784,20 +784,6 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         let compressedData = try await compressVideo(url: videoURL, description: description, targetSize: videoTargetSize)
         print("Compressed video size: \(compressedData.count) bytes")
 
-        // Create NanoTDF
-        let nanoTDFData = try await client.encryptRemotePolicy(
-            payload: compressedData,
-            remotePolicyBody: ArkavoPolicy.PolicyType.videoFrame.rawValue
-        )
-
-        guard nanoTDFData.count <= 1_000_000 else {
-            throw NSError(domain: "VideoCompression", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
-        }
-
-        // Send over websocket
-//        try await client.sendNATSMessage(nanoTDFData)
-
         // Process video metadata and save
         let persistenceController = PersistenceController.shared
         let context = persistenceController.container.mainContext
@@ -818,15 +804,24 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             streamPublicID: videoStream.publicID,
             mediaType: .video,
             createdAt: Date(),
-            contributors: [contributor]
+            contributors: [contributor],
         )
 
         // Create thought with policy and encrypted data
         let videoThought = try await createThoughtWithPolicy(
             videoData: compressedData,
-            metadata: metadata
+            metadata: metadata,
         )
         result.nano = videoThought.nano
+
+        // Verify NanoTDF size before sending
+        guard videoThought.nano.count <= 1_000_000 else {
+            throw NSError(domain: "VideoCompression", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
+        }
+
+        // Send the same NanoTDF over websocket
+        try await client.sendNATSMessage(videoThought.nano)
 
         videoStream.addThought(videoThought)
         try context.save()

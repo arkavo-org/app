@@ -232,7 +232,7 @@ public class KASWebSocket: @unchecked Sendable {
                 sharedSecretKey: sharedSecretKey,
                 salt: Data("L1L".utf8),
                 info: Data("encryption".utf8),
-                outputByteCount: 32
+                outputByteCount: 32,
             )
             // Notify the app with the identifier and derived symmetric key
             rewrapCallback?(identifier, tdfSymmetricKey)

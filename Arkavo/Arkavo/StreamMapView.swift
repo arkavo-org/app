@@ -76,7 +76,7 @@ struct StreamMapView: View {
             centerCoordinate: centerCoordinate,
             distance: 40_000_000,
             heading: 0,
-            pitch: 0
+            pitch: 0,
         ))
     }
 
@@ -103,7 +103,7 @@ struct StreamMapView: View {
                 centerCoordinate: currentCenter,
                 distance: 400_000,
                 heading: 0,
-                pitch: 0
+                pitch: 0,
             ))
         }
         // FIXME: Switch to word cloud view
@@ -119,8 +119,8 @@ struct StreamMapView: View {
                             centerCoordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
                             distance: 40_000_000,
                             heading: delta.width,
-                            pitch: delta.height
-                        )
+                            pitch: delta.height,
+                        ),
                     )
                 }
             }

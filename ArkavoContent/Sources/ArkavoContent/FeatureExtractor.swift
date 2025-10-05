@@ -140,7 +140,7 @@ public extension CopyrightDetectionSystem {
             if !matches.isEmpty {
                 frames.append(VideoFrame(
                     timestamp: currentTime.seconds,
-                    matches: matches
+                    matches: matches,
                 ))
             }
 

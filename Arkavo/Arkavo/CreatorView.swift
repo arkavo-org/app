@@ -17,9 +17,6 @@ struct CreatorView: View {
                 CreatorListView(viewModel: viewModel)
             }
         }
-        .onAppear {
-            sharedState.isAwaiting = viewModel.bio.isEmpty
-        }
         .onDisappear {
             sharedState.selectedCreatorPublicID = nil
         }
@@ -190,6 +187,13 @@ struct CreatorDetailView: View {
 
                 contentSection
                     .padding(.top)
+
+                // Display Profile Public ID
+                Text("Public ID: \(viewModel.profile.publicID.base58EncodedString)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, InnerCircleConstants.systemMargin) // Using existing constant for consistency
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -225,7 +229,7 @@ struct BlockedUsersSection: View {
                             Task {
                                 await viewModel.unblockProfile(blockedProfile)
                             }
-                        }
+                        },
                     )
                 }
             }
@@ -297,7 +301,7 @@ struct BlockedUserRow: View {
         .padding(.horizontal)
         .confirmationDialog(
             "Unblock User",
-            isPresented: $showingUnblockConfirmation
+            isPresented: $showingUnblockConfirmation,
         ) {
             Button("Unblock", role: .destructive, action: onUnblock)
             Button("Cancel", role: .cancel) {}
@@ -442,6 +446,9 @@ struct CreatorAboutSection: View {
                             .cornerRadius(8)
                     }
                     .disabled(isSubmitting)
+                } else if viewModel.bio.isEmpty {
+                    WaveEmptyStateView()
+                        .frame(height: 200) // Constrain height for bio section
                 } else {
                     Text(viewModel.bio)
                         .font(.body)
@@ -517,7 +524,7 @@ struct CreatorVideosSection: View {
                         Task {
                             await viewModel.deleteVideo(thought)
                         }
-                    }
+                    },
                 )
             }
         }
@@ -578,7 +585,7 @@ struct VideoThoughtView: View {
                         .confirmationDialog(
                             "Delete Video",
                             isPresented: $showingDeleteConfirmation,
-                            presenting: thought
+                            presenting: thought,
                         ) { _ in
                             Button("Delete", role: .destructive, action: onDelete)
                             Button("Cancel", role: .cancel) {}
@@ -626,7 +633,7 @@ struct CreatorPostsSection: View {
                         Task {
                             await viewModel.deletePost(thought)
                         }
-                    }
+                    },
                 )
             }
         }
@@ -687,7 +694,7 @@ struct PostThoughtView: View {
                         .confirmationDialog(
                             "Delete Post",
                             isPresented: $showingDeleteConfirmation,
-                            presenting: thought
+                            presenting: thought,
                         ) { _ in
                             Button("Delete", role: .destructive, action: onDelete)
                             Button("Cancel", role: .cancel) {}
@@ -742,14 +749,14 @@ extension Message {
             creatorId: "1",
             content: "🎉 New tutorial dropping tomorrow! Get ready for an in-depth look at digital painting techniques.",
             timestamp: Date().addingTimeInterval(-1800),
-            isPinned: true
+            isPinned: true,
         ),
         Message(
             id: "2",
             creatorId: "2",
             content: "Thanks for your amazing support! Working on something special for my premium supporters.",
             timestamp: Date().addingTimeInterval(-3600),
-            isPinned: false
+            isPinned: false,
         ),
     ]
 }

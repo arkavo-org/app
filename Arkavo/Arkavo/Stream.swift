@@ -1,32 +1,59 @@
+// PersistentModels cannot conform to Sendable because they represent reference types
+// with mutable state managed by the SwiftData framework. To safely use these models
+// across concurrency domains (such as async or multi-threaded contexts), use the
+// ModelActor or their persistentModelID instead of passing the model instances directly.
+
 import AppIntents
 import CryptoKit
 import Foundation
 import SwiftData
 
 @Model
-final class Stream: Identifiable, Hashable, @unchecked Sendable {
+final class Stream: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID
     @Attribute(.unique) var publicID: Data
     var creatorPublicID: Data
     var profile: Profile
-    var policies: Policies
+    // Make this optional to handle deserialization of existing store data
+    var policies: Policies? = Policies(
+        admission: .closed,
+        interaction: .closed,
+        age: .forAll
+    )
+    // InnerCircle profiles - direct profiles for members
+    var innerCircleProfiles: [Profile] = []
     // Initial thought that determines stream type
     var source: Thought?
     @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
     var thoughts: [Thought] = []
+
+    // Default empty init required by SwiftData
+    init() {
+        id = UUID()
+        publicID = Data()
+        creatorPublicID = Data()
+        profile = Profile(name: "Default")
+        policies = Policies(
+            admission: .closed,
+            interaction: .closed,
+            age: .forAll
+        )
+    }
 
     init(
         id: UUID = UUID(),
         publicID: Data? = nil,
         creatorPublicID: Data,
         profile: Profile,
-        policies: Policies
+        policies: Policies? = nil
     ) {
         self.id = id
         self.publicID = publicID ?? Stream.generatePublicID(from: id)
         self.creatorPublicID = creatorPublicID
         self.profile = profile
-        self.policies = policies
+        if let policies {
+            self.policies = policies
+        }
     }
 
     private static func generatePublicID(from uuid: UUID) -> Data {
@@ -60,6 +87,25 @@ extension Stream {
             thought.stream = nil
         }
     }
+
+    // InnerCircle management methods
+
+    // Add a profile to the InnerCircle
+    func addToInnerCircle(_ profile: Profile) {
+        if !innerCircleProfiles.contains(where: { $0.id == profile.id }) {
+            innerCircleProfiles.append(profile)
+        }
+    }
+
+    // Remove a profile from the InnerCircle
+    func removeFromInnerCircle(_ profile: Profile) {
+        innerCircleProfiles.removeAll { $0.id == profile.id }
+    }
+
+    // Check if a profile is part of the InnerCircle
+    func isInInnerCircle(_ profile: Profile) -> Bool {
+        innerCircleProfiles.contains { $0.id == profile.id }
+    }
 }
 
 struct Policies: Codable {
@@ -88,34 +134,27 @@ enum AgePolicy: String, Codable, CaseIterable {
     case onlyTeens = "Only Teens"
 }
 
-// MARK: - AppEntity Conformance
-
-extension Stream: AppEntity {
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Stream"
-    static var defaultQuery = StreamQuery()
-
-    var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(profile.name)")
-    }
-}
-
-struct StreamQuery: EntityQuery {
-    typealias Entity = Stream
-
-    func entities(for _: [Stream.ID]) async throws -> [Stream] {
-        // Implement this method to fetch streams from your SwiftData store
-        []
-    }
-
-    func suggestedEntities() async throws -> [Stream] {
-        // Implement this method to fetch suggested streams from your SwiftData store
-        []
-    }
-}
 
 extension Stream {
     var isGroupChatStream: Bool {
         // A group chat stream has no initial thought/sources
         source == nil
+    }
+
+    var isInnerCircleStream: Bool {
+        isGroupChatStream && profile.name == "InnerCircle"
+    }
+
+    var hasInnerCircleMembers: Bool {
+        !innerCircleProfiles.isEmpty
+    }
+
+    // Safely access policies with a default if nil
+    var policiesSafe: Policies {
+        policies ?? Policies(
+            admission: .closed,
+            interaction: .closed,
+            age: .forAll
+        )
     }
 }

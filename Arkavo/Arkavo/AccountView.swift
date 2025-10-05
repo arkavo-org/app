@@ -17,6 +17,8 @@ struct AccountView: View {
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
+    @State private var showingDeleteProfileAlert = false
+    @State private var isResettingProfile = false
 
     private var account: Account? {
         accounts.first
@@ -34,7 +36,7 @@ struct AccountView: View {
                 #if !os(macOS)
                     AgeVerificationRow(
                         account: account,
-                        showingAgeVerification: $showingAgeVerification
+                        showingAgeVerification: $showingAgeVerification,
                     )
                 #else
                     HStack {
@@ -44,6 +46,30 @@ struct AccountView: View {
                             .foregroundColor(.gray)
                     }
                 #endif
+            }
+
+            Section(header: Text("Profile Management")) {
+                Button(action: {
+                    showingDeleteProfileAlert = true
+                }) {
+                    HStack {
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .foregroundColor(.red)
+                        Text("Reset Profile")
+                            .foregroundColor(.red)
+                    }
+                }
+                .disabled(isResettingProfile)
+                .alert("Reset Profile", isPresented: $showingDeleteProfileAlert) {
+                    Button("Cancel", role: .cancel) {
+                        // Empty closure: Default behavior is to dismiss the alert.
+                    }
+                    Button("Reset", role: .destructive) {
+                        resetProfile()
+                    }
+                } message: {
+                    Text("This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone.")
+                }
             }
 
             // Rest of the sections remain unchanged
@@ -96,7 +122,9 @@ struct AccountView: View {
         }
         .navigationTitle("Account")
         .alert("Location Permission", isPresented: $showingLocationPermissionAlert) {
-            Button("OK") {}
+            Button("OK") {
+                // Empty closure: Default behavior is to dismiss the alert.
+            }
         } message: {
             Text("Please grant location permission in Settings to use this feature.")
         }
@@ -140,6 +168,33 @@ struct AccountView: View {
             try await PersistenceController.shared.saveChanges()
         } catch {
             print("Error saving verification status: \(error)")
+        }
+    }
+
+    private func resetProfile() {
+        Task {
+            isResettingProfile = true
+            defer { isResettingProfile = false }
+
+            do {
+                guard let account, let profile = account.profile else {
+                    print("No account or profile found to reset")
+                    return
+                }
+
+                // Delete the profile, which will clear KeyStore data and create a new empty profile
+                try await PersistenceController.shared.deleteProfile(profile)
+
+                // Reset local state variables
+                identityAssuranceLevel = .ial0
+                #if !os(macOS)
+                    ageVerificationManager.verificationStatus = .unverified
+                #endif
+
+                print("Profile successfully reset")
+            } catch {
+                print("Error resetting profile: \(error)")
+            }
         }
     }
 }
@@ -216,15 +271,16 @@ struct AccountView: View {
                 .fullScreenCover(isPresented: $ageVerificationManager.showingScanner) {
                     IDCardScannerView(
                         onCapture: { _ in
+                            // TODO: Process captured ID card data
                             ageVerificationManager.showingScanner = false
                             ageVerificationManager.isVerifying = false
-                            ageVerificationManager.verificationStatus = .verified
+                            ageVerificationManager.verificationStatus = .verified // Placeholder: Assume success for now
                         },
                         onCancel: {
                             ageVerificationManager.showingScanner = false
                             ageVerificationManager.isVerifying = false
                             ageVerificationManager.verificationStatus = .unverified
-                        }
+                        },
                     )
                 }
                 #endif
@@ -235,6 +291,7 @@ struct AccountView: View {
 
 struct ClassificationView: View {
     var body: some View {
+        // TODO: Implement classification settings UI
         Text("Classification settings go here")
             .navigationTitle("Classification")
     }

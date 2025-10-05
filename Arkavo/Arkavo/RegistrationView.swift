@@ -43,6 +43,14 @@ enum RegistrationStep: Int, CaseIterable {
 
 struct RegistrationView: View {
     var onComplete: (_ profile: Profile) async -> Void
+    @EnvironmentObject private var sharedState: SharedState
+
+    private let skipPasskeysFlag: Bool = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-ArkavoSkipPasskey") { return true }
+        if UserDefaults.standard.bool(forKey: "ArkavoSkipPasskey") { return true }
+        return false
+    }()
 
     @State private var currentStep: RegistrationStep = .welcome
     @State private var slideDirection: SlideDirection = .right
@@ -54,6 +62,7 @@ struct RegistrationView: View {
     @State private var isScreenNameAvailable = true
     @State private var screenNameCancellable: AnyCancellable?
     @State private var eulaAccepted = false
+    @FocusState private var isHandleFieldFocused: Bool
 
     private var debouncedScreenNamePublisher: Publishers.Debounce<NotificationCenter.Publisher, RunLoop> {
         NotificationCenter.default
@@ -70,75 +79,104 @@ struct RegistrationView: View {
     ]
 
     var body: some View {
-        NavigationView {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    ZStack(alignment: .top) {
-                        ForEach(RegistrationStep.allCases, id: \.self) { step in
-                            Group {
-                                switch step {
-                                case .welcome:
-                                    welcomeView
-                                case .eula:
-                                    eulaView
-//                                case .selectInterests:
-//                                    chooseInterestsView
-                                case .generateScreenName:
-                                    generateScreenNameView
-                                case .enablePasskeys:
-                                    enablePasskeysView
-                                }
-                            }
-                            .frame(width: geometry.size.width, alignment: .top)
-                            .opacity(currentStep == step ? 1 : 0)
-                            .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.3), value: currentStep)
-                    .frame(height: geometry.size.height * 0.7, alignment: .top)
-
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Custom title bar
+                HStack {
+                    Text(currentStep.title)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .padding()
                     Spacer()
+                }
+                .background(Color.gray.opacity(0.1))
 
-                    VStack {
-                        Button(action: {
-                            handleButtonAction()
-                        }) {
-                            Text(currentStep.buttonLabel)
-                                .frame(width: geometry.size.width * 0.8)
-                                .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
-
-                        ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
-                            .padding()
-
-                        HStack {
-                            if currentStep != .welcome {
-                                Button("Back") {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        slideDirection = .right
-                                        currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        ZStack(alignment: .top) {
+                            ForEach(RegistrationStep.allCases, id: \.self) { step in
+                                Group {
+                                    switch step {
+                                    case .welcome:
+                                        welcomeView
+                                    case .eula:
+                                        eulaView
+//                                    case .selectInterests:
+//                                        chooseInterestsView
+                                    case .generateScreenName:
+                                        generateScreenNameView
+                                    case .enablePasskeys:
+                                        enablePasskeysView
                                     }
                                 }
-                            }
-                            Spacer()
-                            if currentStep == .welcome {
-                                Button("Next") {
-                                    handleButtonAction()
-                                }
-                                .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                .frame(width: geometry.size.width, alignment: .top)
+                                .opacity(currentStep == step ? 1 : 0)
+                                .offset(x: currentStep == step ? 0 : (currentStep.rawValue > step.rawValue ? -geometry.size.width : geometry.size.width))
                             }
                         }
-                        .padding()
+                        .animation(.easeInOut(duration: 0.3), value: currentStep)
+                        .frame(height: geometry.size.height * 0.7, alignment: .top)
+
+                        Spacer()
+
+                        VStack {
+                            Button(action: {
+                                handleButtonAction()
+                            }) {
+                                Text(currentButtonLabel)
+                                    .frame(width: geometry.size.width * 0.8)
+                                    .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
+
+                            ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
+                                .padding()
+
+                            if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                        Text("Registration issue: \(details)")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    Text("You can retry, or contact support@arkavo.com with these details.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(10)
+                                .background(Color(UIColor.secondarySystemBackground))
+                                .cornerRadius(8)
+                                .padding(.horizontal)
+                            }
+
+                            HStack {
+                                if currentStep != .welcome {
+                                    Button("Back") {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            slideDirection = .right
+                                            currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                        }
+                                    }
+                                }
+                                Spacer()
+                                if currentStep == .welcome {
+                                    Button("Next") {
+                                        handleButtonAction()
+                                    }
+                                    .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                }
+                            }
+                            .padding()
+                        }
                     }
                 }
-                .navigationTitle(currentStep.title)
-                #if ios
-                    .navigationBarTitleDisplayMode(.large)
-                #endif
             }
+            .navigationBarHidden(true) // Hide the default navigation bar
         }
     }
 
@@ -188,7 +226,7 @@ struct RegistrationView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 2)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 2),
                 )
 
             Text("Enable passkeys")
@@ -212,6 +250,13 @@ struct RegistrationView: View {
         .padding()
     }
 
+    private var currentButtonLabel: String {
+        if currentStep == .generateScreenName, skipPasskeysFlag {
+            return "Finish Registration"
+        }
+        return currentStep.buttonLabel
+    }
+
     private func handleButtonAction() {
         withAnimation(.easeInOut(duration: 0.3)) {
             slideDirection = .left
@@ -226,13 +271,23 @@ struct RegistrationView: View {
 //                currentStep = .generateScreenName
 //                generatedScreenNames = []
             case .generateScreenName:
-                currentStep = .enablePasskeys
+                if skipPasskeysFlag {
+                    let newProfile = Profile(
+                        name: selectedScreenName,
+                        interests: Array(selectedInterests).joined(separator: ","),
+                        hasHighEncryption: true,
+                        hasHighIdentityAssurance: true,
+                    )
+                    Task { await onComplete(newProfile) }
+                } else {
+                    currentStep = .enablePasskeys
+                }
             case .enablePasskeys:
                 let newProfile = Profile(
                     name: selectedScreenName,
                     interests: Array(selectedInterests).joined(separator: ","),
                     hasHighEncryption: true,
-                    hasHighIdentityAssurance: true
+                    hasHighIdentityAssurance: true,
                 )
                 Task {
                     await onComplete(newProfile)
@@ -248,12 +303,20 @@ struct RegistrationView: View {
             HStack {
                 #if os(iOS)
                     TextField("Enter handle", text: screenNameBinding)
-                        .writingToolsBehavior(.automatic)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding()
                         .border(.secondary)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isHandleFieldFocused)
+                        .accessibilityLabel("Handle input field")
+                        .accessibilityIdentifier("handleTextField")
+                        .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
+                            // Commenting out auto-focus as it might interfere with keyboard input
+                            // DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            //     isHandleFieldFocused = true
+                            // }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {
@@ -271,7 +334,15 @@ struct RegistrationView: View {
                         .autocorrectionDisabled()
                         .padding()
                         .border(.secondary)
+                        .focused($isHandleFieldFocused)
+                        .accessibilityLabel("Handle input field")
+                        .accessibilityIdentifier("handleTextField")
+                        .accessibilityHint("Enter your unique handle for arkavo.social")
                         .onAppear {
+                            // Commenting out auto-focus as it might interfere with keyboard input
+                            // DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            //     isHandleFieldFocused = true
+                            // }
                             screenNameCancellable = debouncedScreenNamePublisher
                                 .sink { _ in
                                     Task {
@@ -342,7 +413,7 @@ struct RegistrationView: View {
             get: { selectedScreenName },
             set: { newValue in
                 selectedScreenName = validateAndFormatScreenName(newValue)
-            }
+            },
         )
     }
 
@@ -418,134 +489,230 @@ struct RegistrationView: View {
     }
 
     private var eulaView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("End User License Agreement (EULA)")
-                    .font(.title)
-                    .fontWeight(.bold)
-
-                Text("Effective Date: 2025-01-15")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 16) {
-                    Group {
-                        Text("1. Agreement to Terms")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.")
-                    }
-
-                    Group {
-                        Text("2. Prohibited Conduct")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.")
-                            BulletPoint("Engaging in harassment, threats, or abuse towards other users.")
-                            BulletPoint("Sharing content that infringes intellectual property rights or violates laws.")
-                            BulletPoint("Misusing the platform to distribute spam or malicious software.")
-                        }
-                    }
-
-                    Group {
-                        Text("3. Content Moderation")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.")
-                    }
-
-                    Group {
-                        Text("4. Reporting and Flagging Mechanisms")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Users can report objectionable content through the following steps:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            NumberedPoint(1, "Use the \"Report\" button available on all posts and user profiles.")
-                            NumberedPoint(2, "Specify the nature of the objectionable content or behavior.")
-                        }
-
-                        Text("Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account.")
-                    }
-
-                    Group {
-                        Text("5. Blocking Abusive Users")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo allows users to block other users who engage in abusive behavior. To block a user:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            NumberedPoint(1, "Navigate to the user's profile.")
-                            NumberedPoint(2, "Select the \"Block User\" option.")
-                        }
-
-                        Text("Blocked users will no longer be able to interact with or view the blocker's profile or content.")
-                    }
-
-                    Group {
-                        Text("6. Enforcement Actions")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Users found violating this EULA may face one or more of the following actions:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Warning notifications for minor violations.")
-                            BulletPoint("Temporary suspension of account privileges.")
-                            BulletPoint("Permanent account termination for severe or repeated violations.")
-                        }
-                    }
-
-                    Group {
-                        Text("7. Developer's Responsibility")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo's development team is committed to:")
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            BulletPoint("Reviewing and acting on all reports of objectionable content within 24 hours.")
-                            BulletPoint("Permanently removing content that violates this EULA.")
-                            BulletPoint("Ejecting users who repeatedly or severely violate these terms.")
-                        }
-                    }
-
-                    Group {
-                        Text("8. Updates to the EULA")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.")
-                    }
-
-                    Group {
-                        Text("9. Contact Information")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Text("For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.")
-                    }
-
-                    Divider()
-                        .padding(.vertical)
-
-                    Text("By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.")
-                        .fontWeight(.medium)
-                }
-
-                Spacer(minLength: 20)
-
-                Toggle("I have read and agree to the End User License Agreement", isOn: $eulaAccepted)
-                    .padding(.top)
+        VStack(spacing: 0) {
+            // Fixed Header (HIG-compliant)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Please review and accept our terms")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
+            .background(Color(UIColor.systemBackground))
+
+            Divider()
+
+            // Scrollable Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Key Points Summary (HIG-compliant)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Key Points", systemImage: "checkmark.shield.fill")
+                            .font(.headline)
+                            .foregroundColor(.accentColor)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Zero-tolerance for harmful content", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("Military-grade encryption for your data", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("You own your content", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                            Label("Privacy by design", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .labelStyle(HorizontalLabelStyle())
+                        }
+                    }
+                    .padding()
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(12)
+
+                    Text("End User License Agreement (EULA)")
+                        .font(.title2.bold())
+
+                    Text("Effective Date: 2025-01-15")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Group {
+                            Text("1. Agreement to Terms")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("By creating an account or using Arkavo (\"App\"), you agree to be bound by this End User License Agreement (\"EULA\"). If you do not agree to these terms, you must not use the App.")
+                        }
+
+                        Group {
+                            Text("2. Prohibited Conduct")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo has a zero-tolerance policy for objectionable content or abusive behavior. Users are prohibited from:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Posting or sharing content that is defamatory, obscene, violent, hateful, or discriminatory.")
+                                BulletPoint("Engaging in harassment, threats, or abuse towards other users.")
+                                BulletPoint("Sharing content that infringes intellectual property rights or violates laws.")
+                                BulletPoint("Misusing the platform to distribute spam or malicious software.")
+                            }
+                        }
+
+                        Group {
+                            Text("3. Content Moderation")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo implements a comprehensive content moderation system to filter objectionable material. Automated tools, combined with manual review processes, ensure compliance with this EULA and applicable laws.")
+                        }
+
+                        Group {
+                            Text("4. Reporting and Flagging Mechanisms")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Users can report objectionable content through the following steps:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                NumberedPoint(1, "Use the \"Report\" button available on all posts and user profiles.")
+                                NumberedPoint(2, "Specify the nature of the objectionable content or behavior.")
+                            }
+
+                            Text("Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account.")
+                        }
+
+                        Group {
+                            Text("5. Blocking Abusive Users")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo allows users to block other users who engage in abusive behavior. To block a user:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                NumberedPoint(1, "Navigate to the user's profile.")
+                                NumberedPoint(2, "Select the \"Block User\" option.")
+                            }
+
+                            Text("Blocked users will no longer be able to interact with or view the blocker's profile or content.")
+                        }
+
+                        Group {
+                            Text("6. Enforcement Actions")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Users found violating this EULA may face one or more of the following actions:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Warning notifications for minor violations.")
+                                BulletPoint("Temporary suspension of account privileges.")
+                                BulletPoint("Permanent account termination for severe or repeated violations.")
+                            }
+                        }
+
+                        Group {
+                            Text("7. Developer's Responsibility")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo's development team is committed to:")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                BulletPoint("Reviewing and acting on all reports of objectionable content within 24 hours.")
+                                BulletPoint("Permanently removing content that violates this EULA.")
+                                BulletPoint("Ejecting users who repeatedly or severely violate these terms.")
+                            }
+                        }
+
+                        Group {
+                            Text("8. Updates to the EULA")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("Arkavo reserves the right to modify this EULA at any time. Updates will be communicated through the App, and continued use constitutes acceptance of the revised terms.")
+                        }
+
+                        Group {
+                            Text("9. Contact Information")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+
+                            Text("For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com.")
+                        }
+
+                        Divider()
+                            .padding(.vertical)
+
+                        Text("By using Arkavo, you agree to abide by these terms and help maintain a safe and respectful community.")
+                            .fontWeight(.medium)
+                    }
+                }
+                .padding()
+            }
+            .background(Color(UIColor.secondarySystemBackground))
+
+            // Fixed Footer (HIG-compliant)
+            VStack(spacing: 16) {
+                Divider()
+
+                // Custom checkbox button for better automation support
+                Button(action: {
+                    eulaAccepted.toggle()
+                }) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: eulaAccepted ? "checkmark.square.fill" : "square")
+                            .foregroundColor(eulaAccepted ? .accentColor : Color(UIColor.tertiaryLabel))
+                            .font(.system(size: 22))
+
+                        Text("I have read and agree to the End User License Agreement")
+                            .font(.footnote)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal)
+                .accessibilityLabel("EULA Agreement Checkbox")
+                .accessibilityHint(eulaAccepted ? "Agreement accepted" : "Tap to accept agreement")
+                .accessibilityAddTraits(.isButton)
+
+                // Support links
+                HStack {
+                    Link("Privacy Policy", destination: URL(string: "https://arkavo.com/privacy.html")!)
+                        .font(.caption)
+
+                    Spacer()
+
+                    Link("Contact Support", destination: URL(string: "mailto:support@arkavo.com")!)
+                        .font(.caption)
+                }
+                .padding(.horizontal)
+                .foregroundColor(.accentColor)
+            }
+            .padding(.vertical, 12)
+            .background(Color(UIColor.systemBackground))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color(UIColor.separator)),
+                alignment: .top,
+            )
+        }
+    }
+}
+
+// HIG-compliant horizontal label style
+struct HorizontalLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            configuration.icon
+                .foregroundColor(.green)
+                .imageScale(.small)
+            configuration.title
         }
     }
 }

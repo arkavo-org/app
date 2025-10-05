@@ -32,5 +32,12 @@
 	</array>
 	<key>UIBackgroundModes</key>
 	<array/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_arkavo-circle._tcp</string>
+		<string>_arkavo-circle._udp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Arkavo uses the local network to discover and connect with nearby devices for InnerCircle group chat</string>
 </dict>
 </plist>

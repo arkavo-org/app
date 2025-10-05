@@ -34,11 +34,11 @@ public class MicropubClient: ObservableObject {
     public func loadStoredTokens() {
         let accessToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
         let micropubEndpoint = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.micropubEndpoint
+            account: KeychainKey.micropubEndpoint,
         )
 
         isAuthenticated = accessToken != nil
@@ -49,12 +49,12 @@ public class MicropubClient: ObservableObject {
                     micropubEndpoint: micropubEndpoint,
                     mediaEndpoint: KeychainManager.getValue(
                         service: keychainServiceBase,
-                        account: KeychainKey.mediaEndpoint
+                        account: KeychainKey.mediaEndpoint,
                     ),
                     destinations: [],
                     postTypes: [],
                     channels: [],
-                    syndicateTo: []
+                    syndicateTo: [],
                 )
             }
 
@@ -68,7 +68,7 @@ public class MicropubClient: ObservableObject {
         KeychainManager.save(
             value: accessToken,
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         )
     }
 
@@ -162,7 +162,7 @@ public class MicropubClient: ObservableObject {
                 KeychainManager.save(
                     value: micropubEndpoint,
                     service: keychainServiceBase,
-                    account: KeychainKey.micropubEndpoint
+                    account: KeychainKey.micropubEndpoint,
                 )
             }
 
@@ -170,7 +170,7 @@ public class MicropubClient: ObservableObject {
                 KeychainManager.save(
                     value: mediaEndpoint,
                     service: keychainServiceBase,
-                    account: KeychainKey.mediaEndpoint
+                    account: KeychainKey.mediaEndpoint,
                 )
             }
         } catch {
@@ -210,7 +210,7 @@ public class MicropubClient: ObservableObject {
         var request = try makeAuthorizedRequest(
             url: URL(string: micropubEndpoint)!,
             method: "POST",
-            contentType: "application/json"
+            contentType: "application/json",
         )
 
         // Log request for debugging
@@ -251,7 +251,7 @@ public class MicropubClient: ObservableObject {
                 } else {
                     throw MicropubError.apiError(
                         error: errorResponse.error,
-                        description: errorResponse.error_description
+                        description: errorResponse.error_description,
                     )
                 }
             } else {
@@ -271,7 +271,7 @@ public class MicropubClient: ObservableObject {
         var request = try makeAuthorizedRequest(
             url: URL(string: mediaEndpoint)!,
             method: "POST",
-            contentType: "multipart/form-data; boundary=\(boundary)"
+            contentType: "multipart/form-data; boundary=\(boundary)",
         )
 
         var bodyData = Data()
@@ -302,7 +302,7 @@ public class MicropubClient: ObservableObject {
     @MainActor
     private func queryConfig() async throws -> MicropubConfig {
         let request = try makeAuthorizedRequest(
-            url: URL(string: "https://micro.blog/micropub?q=config")!
+            url: URL(string: "https://micro.blog/micropub?q=config")!,
         )
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -325,7 +325,7 @@ public class MicropubClient: ObservableObject {
                         destinations: config.destinations,
                         postTypes: config.postTypes,
                         channels: config.channels,
-                        syndicateTo: config.syndicateTo
+                        syndicateTo: config.syndicateTo,
                     )
                 }
 
@@ -346,7 +346,7 @@ public class MicropubClient: ObservableObject {
     ) throws -> URLRequest {
         guard let accessToken = KeychainManager.getValue(
             service: keychainServiceBase,
-            account: KeychainKey.accessToken
+            account: KeychainKey.accessToken,
         ) else {
             throw MicropubError.noAccessToken
         }

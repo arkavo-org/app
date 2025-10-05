@@ -69,7 +69,7 @@ public class KeychainManager {
     static func getValue(service: String, account: String) -> String? {
         do {
             let data = try load(service: service, account: account)
-            return String(data: data, encoding: .utf8)!
+            return String(data: data, encoding: .utf8)
         } catch {
             return nil
         }
@@ -232,19 +232,18 @@ public class KeychainManager {
     }
 }
 
-extension KeychainManager {
-    
+public extension KeychainManager {
     // DID and Handle pair management
-    public static func saveHandle(_ handle: String) throws {
+    static func saveHandle(_ handle: String) throws {
         guard !handle.isEmpty else {
             throw KeychainError.invalidHandle
         }
         try save(handle.data(using: .utf8)!,
-                service: "com.arkavo.identity",
-                account: "handle")
+                 service: "com.arkavo.identity",
+                 account: "handle")
     }
 
-    public static func getHandle() -> String? {
+    static func getHandle() -> String? {
         do {
             let data = try load(service: "com.arkavo.identity", account: "handle")
             return String(data: data, encoding: .utf8)
@@ -253,24 +252,25 @@ extension KeychainManager {
         }
     }
 
-    public static func saveIdentityPair(handle: String, did: String) throws {
+    static func saveIdentityPair(handle: String, did: String) throws {
         // Save handle first
         try saveHandle(handle)
         // Then save DID using existing method
         try save(did.data(using: .utf8)!,
-                service: "com.arkavo.identity",
-                account: "did")
+                 service: "com.arkavo.identity",
+                 account: "did")
     }
 
-    public static func getIdentityPair() -> (handle: String, did: String)? {
+    static func getIdentityPair() -> (handle: String, did: String)? {
         guard let handle = getHandle(),
-              let did = getDID() else {
+              let did = getDID()
+        else {
             return nil
         }
         return (handle: handle, did: did)
     }
 
-    public static func getDID() -> String? {
+    static func getDID() -> String? {
         do {
             let data = try load(service: "com.arkavo.identity", account: "did")
             return String(data: data, encoding: .utf8)
@@ -279,14 +279,14 @@ extension KeychainManager {
         }
     }
 
-    public static func deleteIdentityPair() {
+    static func deleteIdentityPair() {
         try? delete(service: "com.arkavo.identity", account: "handle")
         try? delete(service: "com.arkavo.identity", account: "did")
     }
-   
+
     // MARK: - DID Key Management
 
-    enum DIDKeyError: Error {
+    internal enum DIDKeyError: Error {
         case accessControlCreationFailed
         case keyGenerationFailed(OSStatus)
         case invalidPublicKey
@@ -294,37 +294,37 @@ extension KeychainManager {
         case keyNotFound
     }
 
-    static func generateAndSaveDIDKey() throws -> String {
+    internal static func generateAndSaveDIDKey() throws -> String {
         // First check if key already exists
         if let (_, _, did) = try? getDIDKey() {
             return did
         }
-        
+
         // Create access control
         guard let accessControl = SecAccessControlCreateWithFlags(
             nil,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             [.privateKeyUsage],
-            nil
+            nil,
         ) else {
             throw DIDKeyError.accessControlCreationFailed
         }
-        
+
         // Define private key attributes separately
         let privateKeyAttributes: [String: Any] = [
             kSecAttrIsPermanent as String: true,
             kSecAttrApplicationTag as String: didKeyTag.data(using: .utf8)!,
-            kSecAttrAccessControl as String: accessControl
+            kSecAttrAccessControl as String: accessControl,
         ]
-        
+
         // Define key generation attributes
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-            kSecPrivateKeyAttrs as String: privateKeyAttributes
+            kSecPrivateKeyAttrs as String: privateKeyAttributes,
         ]
-        
+
         var error: Unmanaged<CFError>?
         guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
             if let err = error?.takeRetainedValue() {
@@ -334,52 +334,52 @@ extension KeychainManager {
             }
             throw DIDKeyError.keyGenerationFailed(errSecParam)
         }
-        
+
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw DIDKeyError.invalidPublicKey
         }
-        
+
         guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
             throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed(0)
         }
-        
+
         // Generate DID using base58 encoding of the public key
         return "did:key:z" + publicKeyData.base58String
     }
 
-    static func getDIDKey() throws -> (privateKey: SecKey, publicKey: SecKey, did: String) {
+    internal static func getDIDKey() throws -> (privateKey: SecKey, publicKey: SecKey, did: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: didKeyTag.data(using: .utf8)!,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecReturnRef as String: true,
-            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
         ]
-        
+
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
+
         guard status == errSecSuccess else {
             throw DIDKeyError.keyNotFound
         }
-        
+
         let privateKey = result as! SecKey
-        
+
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw DIDKeyError.invalidPublicKey
         }
-        
+
         var error: Unmanaged<CFError>?
         guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
             throw error?.takeRetainedValue() ?? DIDKeyError.keyGenerationFailed(0)
         }
-        
+
         let did = "did:key:z" + publicKeyData.base58String
-        
+
         return (privateKey, publicKey, did)
     }
 
-    static func signWithDIDKey(message: Data) throws -> Data {
+    internal static func signWithDIDKey(message: Data) throws -> Data {
         let (privateKey, _, _) = try getDIDKey()
 
         var error: Unmanaged<CFError>?
@@ -387,7 +387,7 @@ extension KeychainManager {
             privateKey,
             .ecdsaSignatureMessageX962SHA256,
             message as CFData,
-            &error
+            &error,
         ) as Data? else {
             throw error?.takeRetainedValue() ?? DIDKeyError.signatureCreationFailed
         }
@@ -395,7 +395,7 @@ extension KeychainManager {
         return signature
     }
 
-    static func verifyDIDSignature(message: Data, signature: Data) throws -> Bool {
+    internal static func verifyDIDSignature(message: Data, signature: Data) throws -> Bool {
         let (_, publicKey, _) = try getDIDKey()
 
         var error: Unmanaged<CFError>?
@@ -404,7 +404,7 @@ extension KeychainManager {
             .ecdsaSignatureMessageX962SHA256,
             message as CFData,
             signature as CFData,
-            &error
+            &error,
         )
 
         if let error = error?.takeRetainedValue() {
@@ -414,7 +414,7 @@ extension KeychainManager {
         return result
     }
 
-    static func deleteDIDKey() throws {
+    internal static func deleteDIDKey() throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: didKeyTag,
@@ -426,58 +426,59 @@ extension KeychainManager {
             throw KeychainError.unknown(status)
         }
     }
-    
+
     // Arkavo Handle
-    public static func saveArkavoHandle(_ handle: String) throws {
+    static func saveArkavoHandle(_ handle: String) throws {
         try save(handle.data(using: .utf8)!,
                  service: "com.arkavo.handle",
                  account: "arkavo")
     }
-    
-    public static func getArkavoHandle() -> String? {
+
+    static func getArkavoHandle() -> String? {
         do {
             let data = try load(service: "com.arkavo.handle",
-                              account: "arkavo")
+                                account: "arkavo")
             return String(data: data, encoding: .utf8)
         } catch {
             return nil
         }
     }
-    
+
     // Arkavo DID
-    public static func saveArkavoDID(_ did: String) throws {
+    static func saveArkavoDID(_ did: String) throws {
         try save(did.data(using: .utf8)!,
                  service: "com.arkavo.did",
                  account: "arkavo")
     }
-    
-    public static func getArkavoDID() -> String? {
+
+    static func getArkavoDID() -> String? {
         do {
             let data = try load(service: "com.arkavo.did",
-                              account: "arkavo")
+                                account: "arkavo")
             return String(data: data, encoding: .utf8)
         } catch {
             return nil
         }
     }
-    
+
     // Helper to save both at once
-    public static func saveArkavoCredentials(handle: String, did: String) throws {
+    static func saveArkavoCredentials(handle: String, did: String) throws {
         try saveArkavoHandle(handle)
         try saveArkavoDID(did)
     }
-    
+
     // Helper to get both at once
-    public static func getArkavoCredentials() -> (handle: String, did: String)? {
+    static func getArkavoCredentials() -> (handle: String, did: String)? {
         guard let handle = getArkavoHandle(),
-              let did = getArkavoDID() else {
+              let did = getArkavoDID()
+        else {
             return nil
         }
         return (handle: handle, did: did)
     }
-    
+
     // Helper to delete both
-    public static func deleteArkavoCredentials() {
+    static func deleteArkavoCredentials() {
         try? delete(service: "com.arkavo.handle", account: "arkavo")
         try? delete(service: "com.arkavo.did", account: "arkavo")
     }

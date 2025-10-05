@@ -55,7 +55,7 @@ struct MicroblogRootView: View {
                     .frame(height: 100)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1),
                     )
 
                 HStack {
