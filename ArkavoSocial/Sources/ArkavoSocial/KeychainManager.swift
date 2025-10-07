@@ -25,6 +25,8 @@ public class KeychainManager {
             kSecAttrService as String: service as AnyObject,
             kSecAttrAccount as String: account as AnyObject,
             kSecValueData as String: data as AnyObject,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecUseDataProtectionKeychain as String: true as AnyObject,
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -50,6 +52,7 @@ public class KeychainManager {
             kSecAttrAccount as String: account as AnyObject,
             kSecReturnData as String: kCFBooleanTrue,
             kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseDataProtectionKeychain as String: true as AnyObject,
         ]
 
         var result: AnyObject?
@@ -80,6 +83,7 @@ public class KeychainManager {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
             kSecAttrAccount as String: account as AnyObject,
+            kSecUseDataProtectionKeychain as String: true as AnyObject,
         ]
 
         let status = SecItemDelete(query as CFDictionary)

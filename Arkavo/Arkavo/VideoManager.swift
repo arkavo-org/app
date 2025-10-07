@@ -102,6 +102,12 @@ class VideoRecordingManager {
         let videoPath = tempDir.appendingPathComponent("\(videoID).mp4")
         print("📝 Will save video to: \(videoPath.path)")
 
+        // Apply file protection to ensure video is encrypted when device is locked
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: tempDir.path
+        )
+
         return try await withCheckedThrowingContinuation { continuation in
             // Create new delegate and store strong reference
             let delegate = RecordingDelegate { [weak self] error in

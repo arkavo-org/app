@@ -846,6 +846,12 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         for preset in presets {
             let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
 
+            // Apply file protection before writing compressed video
+            try? FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: FileManager.default.temporaryDirectory.path
+            )
+
             print("\nTrying compression with preset: \(preset)")
 
             guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset) else {

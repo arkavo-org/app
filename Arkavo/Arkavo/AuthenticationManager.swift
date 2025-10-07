@@ -29,6 +29,17 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
     private var authenticationToken: Data?
     private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "Auth")
 
+    // Certificate pinning for secure HTTPS connections
+    private let certificatePinningDelegate = CertificatePinningDelegate()
+    private lazy var secureURLSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        config.httpCookieAcceptPolicy = .never
+        config.httpShouldSetCookies = false
+        return URLSession(configuration: config, delegate: certificatePinningDelegate, delegateQueue: nil)
+    }()
+
     override init() {}
 
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
@@ -127,7 +138,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         let url = baseURL.appendingPathComponent("register/\(accountName)")
         let request = URLRequest(url: url)
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        secureURLSession.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
                 response: response,
@@ -196,7 +207,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
 //        if let body = request.httpBody {
 //            print("Request Body: \(String(data: body, encoding: .utf8) ?? "")")
 //        }
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        secureURLSession.dataTask(with: request) { [weak self] data, response, error in
             self?.handleServerResponse(
                 data: data,
                 response: response,
@@ -286,7 +297,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             return
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        secureURLSession.dataTask(with: request) { data, response, error in
             if let error {
                 print("Error sending authentication data: \(error.localizedDescription)")
                 return
@@ -392,7 +403,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             return
         }
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
+        secureURLSession.dataTask(with: request) { _, response, error in
             if let error {
                 print("Error sending registration data: \(error.localizedDescription)")
                 return
@@ -448,7 +459,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         guard let headerData = try? JSONSerialization.data(withJSONObject: header),
               let payloadData = try? JSONSerialization.data(withJSONObject: payload)
         else {
-            print("Failed to encode header or payload")
+            logger.error("Failed to encode JWT header or payload")
             return nil
         }
 
@@ -459,17 +470,51 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
 
-        // Create signature
+        // Create signature using persistent key from Keychain
         let signatureInput = "\(headerString).\(payloadString)"
-        // In a real-world scenario, you'd use a secure way to store and retrieve this key
-        let key = SymmetricKey(size: .bits256)
-        let signature = HMAC<SHA256>.authenticationCode(for: Data(signatureInput.utf8), using: key)
+
+        // Retrieve or create persistent JWT signing key
+        guard let jwtKey = getOrCreateJWTSigningKey() else {
+            logger.error("Failed to retrieve JWT signing key")
+            return nil
+        }
+
+        let signature = HMAC<SHA256>.authenticationCode(for: Data(signatureInput.utf8), using: jwtKey)
         let signatureString = Data(signature).base64EncodedString().replacingOccurrences(of: "=", with: "")
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
 
         // Combine all parts
         return "\(headerString).\(payloadString).\(signatureString)"
+    }
+
+    // MARK: - JWT Signing Key Management
+
+    /// Retrieves the persistent JWT signing key from Keychain, or generates and stores a new one
+    private func getOrCreateJWTSigningKey() -> SymmetricKey? {
+        let service = "com.arkavo.jwt"
+        let account = "signing-key"
+
+        // Try to load existing key
+        do {
+            let keyData = try ArkavoSocial.KeychainManager.load(service: service, account: account)
+            return SymmetricKey(data: keyData)
+        } catch {
+            // Key doesn't exist, generate and store new one
+            logger.info("Generating new JWT signing key")
+            let newKey = SymmetricKey(size: .bits256)
+
+            // Store the key in keychain
+            let keyData = newKey.withUnsafeBytes { Data($0) }
+            do {
+                try ArkavoSocial.KeychainManager.save(keyData, service: service, account: account)
+                logger.info("Successfully stored new JWT signing key in keychain")
+                return newKey
+            } catch {
+                logger.error("Failed to store JWT signing key in keychain: \(error.localizedDescription)")
+                return nil
+            }
+        }
     }
 
     private func storeAccountInKeychain(accountName: String, account _: String) {
