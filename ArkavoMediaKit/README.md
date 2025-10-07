@@ -5,7 +5,7 @@ A Swift package for TDF3-based HLS streaming with DRM protection, providing an o
 ## Overview
 
 ArkavoMediaKit enables:
-- **TDF3 Encryption**: Per-segment encryption using NanoTDF format
+- **Standard TDF Encryption**: Per-segment encryption using Standard TDF (ZIP-based) format
 - **HLS Streaming**: Compatible with standard HLS players via AVFoundation
 - **Media DRM Policies**: Rental windows, concurrency limits, geo-restrictions, HDCP
 - **Cross-Platform**: iOS 18+, macOS 15+, tvOS 18+
@@ -25,14 +25,16 @@ ArkavoMediaKit enables:
    - Import video → Segment with AVFoundation
    - Generate unique DEK per segment
    - Encrypt segment with AES-256-GCM
-   - Wrap DEK in NanoTDF with policy
-   - Generate HLS manifest with TDF3 key URLs
+   - Wrap DEK with KAS RSA public key (2048+ bit)
+   - Create Standard TDF archive (.tdf ZIP containing manifest.json + encrypted payload)
+   - Generate HLS manifest with .tdf segment URLs
 
 2. **Playback** (iOS/macOS/tvOS):
-   - AVPlayer requests segment
-   - TDF3ContentKeyDelegate intercepts key request
+   - AVPlayer requests .tdf segment
+   - StandardTDFContentKeyDelegate intercepts key request
+   - Downloads .tdf archive and extracts manifest
    - Validates session and policy
-   - Unwraps DEK from NanoTDF
+   - Requests DEK unwrapping from KAS (RSA rewrap protocol)
    - Returns key to AVPlayer for decryption
 
 ## Usage
@@ -43,21 +45,18 @@ ArkavoMediaKit enables:
 import ArkavoMediaKit
 import OpenTDFKit
 
-// Setup
-let kasMetadata = try KasMetadata(
-    resourceLocator: ResourceLocator(
-        protocol: "https",
-        body: "kas.arkavo.net"
-    ),
-    publicKey: kasPublicKey,
-    curve: .secp256r1
-)
+// Setup KAS configuration
+let kasURL = URL(string: "https://kas.arkavo.net")!
+let kasPublicKeyPEM = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----
+"""
 
-let keyStore = try await KeyStore(curve: .secp256r1)
 let sessionManager = TDF3MediaSession()
-let keyProvider = TDF3KeyProvider(
-    kasMetadata: kasMetadata,
-    keyStore: keyStore,
+let keyProvider = StandardTDFKeyProvider(
+    kasURL: kasURL,
+    kasPublicKeyPEM: kasPublicKeyPEM,
     sessionManager: sessionManager
 )
 
@@ -69,20 +68,39 @@ let policy = MediaDRMPolicy(
     maxConcurrentStreams: 2
 )
 
+// Create Standard TDF policy JSON
+let policyJSON = """
+{
+  "uuid": "policy-12345",
+  "body": {
+    "dataAttributes": [],
+    "dissem": ["user-001"]
+  }
+}
+""".data(using: .utf8)!
+
 // Encrypt segments
 let encryptor = HLSSegmentEncryptor(
-    keyProvider: keyProvider,
-    policy: policy
+    kasURL: kasURL,
+    kasPublicKeyPEM: kasPublicKeyPEM,
+    policy: policy,
+    policyJSON: policyJSON
 )
 
-let segments: [(Data, Double)] = // ... load video segments
+let segments: [(Data, Double)] = // ... load video segments (2-10MB each)
 let results = try await encryptor.encryptSegments(
     segments: segments,
     assetID: "movie-12345",
     startIndex: 0
 )
 
-// Generate playlist
+// Save .tdf archives
+for (index, result) in results.enumerated() {
+    let tdfURL = outputDir.appendingPathComponent("segment_\(index).tdf")
+    try encryptor.saveSegment(tdfData: result.tdfData, to: tdfURL)
+}
+
+// Generate playlist (points to .tdf files)
 let generator = HLSPlaylistGenerator(
     kasBaseURL: URL(string: "https://kas.arkavo.net")!,
     cdnBaseURL: URL(string: "https://cdn.arkavo.net")!
@@ -167,9 +185,9 @@ Performance benchmarks target <50ms P95 key delivery latency.
 
 ## Dependencies
 
-- [OpenTDFKit](https://github.com/arkavo-org/OpenTDFKit) - TDF3/NanoTDF implementation
+- [OpenTDFKit](https://github.com/arkavo-org/OpenTDFKit) - Standard TDF implementation (ZIP-based archives)
 - AVFoundation - Video playback and content key management
-- CryptoKit - AES-GCM encryption
+- CryptoKit - AES-256-GCM encryption and RSA key operations
 
 ## Known Limitations
 
@@ -177,16 +195,26 @@ Performance benchmarks target <50ms P95 key delivery latency.
 
 ### Implementation Required
 
-1. **`fetchNanoTDFHeader()` Method** (TDF3ContentKeyDelegate.swift)
+1. **`fetchSegmentURL()` Method** (StandardTDFContentKeyDelegate.swift)
    - **Status**: Placeholder implementation that throws `notImplemented` error
    - **Impact**: Playback will not work until implemented
    - **Options**: Parse from HLS manifest, fetch from metadata endpoint, or load from cache
    - **Documentation**: See method documentation for integration guide
 
-2. **KAS Server Integration**
+2. **KAS Rewrap Protocol** (StandardTDFKeyProvider.swift)
+   - **Status**: Not yet implemented - currently uses offline decryption only
+   - **Impact**: Online playback requires KAS integration
+   - **Requirements**:
+     - Generate ephemeral RSA key pair
+     - Send Standard TDF manifest + ephemeral public key to KAS
+     - KAS validates policy and rewraps DEK with ephemeral key
+     - Decrypt rewrapped DEK with ephemeral private key
+   - **Reference**: See OpenTDF protocol specification
+
+3. **KAS Server Integration**
    - **Status**: Requires arkavo-rs deployment with media DRM endpoints
    - **Required Endpoints**:
-     - `POST /media/v1/key-request`
+     - `POST /media/v1/key-request` (Standard TDF manifest-based)
      - `POST /media/v1/session/start`
      - `POST /media/v1/session/{id}/heartbeat`
      - `DELETE /media/v1/session/{id}`

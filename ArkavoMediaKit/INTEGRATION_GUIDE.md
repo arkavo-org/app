@@ -30,19 +30,16 @@ import OpenTDFKit
 ### Step 2: Configure KAS Connection
 
 ```swift
-// Configure KAS metadata
-let kasMetadata = try KasMetadata(
-    resourceLocator: ResourceLocator(
-        protocol: "https",
-        body: "kas.arkavo.net"  // Your KAS server
-    ),
-    publicKey: kasPublicKeyData,  // KAS public key
-    curve: .secp256r1
-)
-
-// Create key store with your private key
-let keyStore = try await KeyStore(curve: .secp256r1)
+// Configure KAS with RSA public key
+let kasURL = URL(string: "https://kas.arkavo.net")!
+let kasPublicKeyPEM = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----
+"""
 ```
+
+**Note**: Standard TDF uses RSA-2048+ key wrapping (not EC P-256 like NanoTDF).
 
 ### Step 3: Initialize Session Manager
 
@@ -50,11 +47,12 @@ let keyStore = try await KeyStore(curve: .secp256r1)
 // Create session manager
 let sessionManager = TDF3MediaSession(heartbeatTimeout: 300) // 5 minutes
 
-// Create key provider
-let keyProvider = TDF3KeyProvider(
-    kasMetadata: kasMetadata,
-    keyStore: keyStore,
-    sessionManager: sessionManager
+// Create Standard TDF key provider
+let keyProvider = StandardTDFKeyProvider(
+    kasURL: kasURL,
+    kasPublicKeyPEM: kasPublicKeyPEM,
+    sessionManager: sessionManager,
+    rsaPrivateKeyPEM: nil  // Optional: for offline decryption
 )
 ```
 
@@ -175,25 +173,42 @@ let segments: [(Data, Double)] = try await segmentVideo(asset)
 #### Step 2: Encrypt Segments
 
 ```swift
+// Create Standard TDF policy JSON
+let policyJSON = """
+{
+  "uuid": "policy-12345",
+  "body": {
+    "dataAttributes": [],
+    "dissem": ["user-001"]
+  }
+}
+""".data(using: .utf8)!
+
 // Create encryptor
 let encryptor = HLSSegmentEncryptor(
-    keyProvider: keyProvider,
-    policy: policy
+    kasURL: kasURL,
+    kasPublicKeyPEM: kasPublicKeyPEM,
+    policy: policy,
+    policyJSON: policyJSON
 )
 
-// Encrypt all segments
+// Encrypt all segments (each becomes a .tdf ZIP archive)
 let results = try await encryptor.encryptSegments(
-    segments: segments,
+    segments: segments,  // 2-10MB video segments
     assetID: "movie-12345",
     startIndex: 0
 )
 
-// Save encrypted segments
+// Save .tdf archives (not .ts files)
 for (index, result) in results.enumerated() {
-    let segmentURL = outputDir.appendingPathComponent("segment_\(index).ts")
-    try result.encryptedData.write(to: segmentURL)
+    let tdfURL = outputDir.appendingPathComponent("segment_\(index).tdf")
+    try encryptor.saveSegment(tdfData: result.tdfData, to: tdfURL)
 }
 ```
+
+**Note**: Each segment is now a complete Standard TDF archive containing:
+- `0.manifest.json` - Wrapped DEK, policy, KAS info
+- `0.payload` - AES-256-GCM encrypted segment data
 
 #### Step 3: Generate HLS Playlist
 
@@ -220,13 +235,22 @@ try generator.savePlaylist(playlist, to: playlistURL)
 #### Step 4: Upload to CDN
 
 ```swift
-// Upload segments and playlist to CDN
-for segment in results {
-    try await uploadToCDN(segmentURL: segment.metadata.url)
+// Upload .tdf segments and playlist to CDN
+for (index, result) in results.enumerated() {
+    let tdfURL = outputDir.appendingPathComponent("segment_\(index).tdf")
+    try await uploadToCDN(
+        fileURL: tdfURL,
+        destinationURL: URL(string: "https://cdn.arkavo.net/movie-12345/segment_\(index).tdf")!
+    )
 }
 
-try await uploadToCDN(playlistURL: playlistURL)
+try await uploadToCDN(
+    fileURL: playlistURL,
+    destinationURL: URL(string: "https://cdn.arkavo.net/movie-12345/playlist.m3u8")!
+)
 ```
+
+**Important**: HLS manifest now references `.tdf` files instead of `.ts` files.
 
 ## Backend Setup
 
@@ -245,20 +269,22 @@ The KAS server must implement these endpoints:
      "user_id": "string",
      "asset_id": "string",
      "segment_index": 0,
-     "nanotdf_header": "base64-encoded-header"
+     "tdf_manifest": "base64-encoded-standard-tdf-manifest"
    }
    ```
 
    Response:
    ```json
    {
-     "wrapped_key": "base64-encoded-key",
+     "wrapped_key": "base64-encoded-rewrapped-dek",
      "metadata": {
        "segment_index": 0,
        "latency_ms": 15
      }
    }
    ```
+
+   **Note**: Changed from `nanotdf_header` to `tdf_manifest` (Standard TDF JSON manifest)
 
 2. **Session Start** - `POST /media/v1/session/start`
 3. **Session Heartbeat** - `POST /media/v1/session/{id}/heartbeat`
@@ -286,11 +312,16 @@ export SESSION_HEARTBEAT_TIMEOUT=300
 
 ### Common Issues
 
-#### 1. "fetchNanoTDFHeader() requires implementation"
+#### 1. "fetchSegmentURL() requires implementation"
 
 **Error**: Key requests fail with `notImplemented` error.
 
-**Solution**: Implement `fetchNanoTDFHeader()` in `TDF3ContentKeyDelegate`. See method documentation for implementation options.
+**Solution**: Implement `fetchSegmentURL()` in `StandardTDFContentKeyDelegate`. This method should:
+- Parse HLS manifest to get .tdf segment URL
+- Or fetch from metadata endpoint
+- Or load from local cache
+
+See method documentation for implementation options.
 
 #### 2. Session Timeout
 
@@ -357,15 +388,32 @@ Test against local KAS server:
 
 ```swift
 // Use localhost KAS for testing
-let kasMetadata = try KasMetadata(
-    resourceLocator: ResourceLocator(
-        protocol: "http",
-        body: "localhost:8443"
-    ),
-    publicKey: testKASPublicKey,
-    curve: .secp256r1
+let kasURL = URL(string: "http://localhost:8443")!
+let kasPublicKeyPEM = """
+-----BEGIN PUBLIC KEY-----
+[Test RSA-2048 public key]
+-----END PUBLIC KEY-----
+"""
+
+let keyProvider = StandardTDFKeyProvider(
+    kasURL: kasURL,
+    kasPublicKeyPEM: kasPublicKeyPEM,
+    sessionManager: sessionManager
 )
 ```
+
+### Architecture Notes
+
+**Standard TDF vs NanoTDF**:
+- ✅ **Use Standard TDF**: For video segments (2-10MB typical)
+- ❌ **Don't use NanoTDF**: Only for small messages (<10KB)
+
+**Key Differences**:
+- Standard TDF: ZIP-based container, RSA-2048+ key wrapping, ~1.1KB overhead
+- NanoTDF: Binary format, EC P-256 key wrapping, minimal overhead
+- File extensions: `.tdf` (Standard TDF) vs `.ntdf` (NanoTDF)
+
+See [OPENTDFKIT_API_RECOMMENDATIONS.md](OPENTDFKIT_API_RECOMMENDATIONS.md) for detailed analysis.
 
 ## Support
 

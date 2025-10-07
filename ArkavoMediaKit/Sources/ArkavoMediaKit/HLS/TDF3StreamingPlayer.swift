@@ -12,11 +12,11 @@ public class TDF3StreamingPlayer: ObservableObject {
     /// The underlying AVPlayer
     public let player: AVPlayer
 
-    /// Content key session for handling TDF3 keys
+    /// Content key session for handling Standard TDF keys
     private let contentKeySession: AVContentKeySession
 
     /// Content key delegate
-    private let contentKeyDelegate: TDF3ContentKeyDelegate
+    private let contentKeyDelegate: StandardTDFContentKeyDelegate
 
     /// Current playback session
     @Published public private(set) var session: MediaSession?
@@ -43,7 +43,7 @@ public class TDF3StreamingPlayer: ObservableObject {
     }
 
     public init(
-        keyProvider: TDF3KeyProvider,
+        keyProvider: StandardTDFKeyProvider,
         policy: MediaDRMPolicy,
         deviceInfo: DeviceInfo,
         sessionID: UUID
@@ -54,7 +54,7 @@ public class TDF3StreamingPlayer: ObservableObject {
         contentKeySession = AVContentKeySession(keySystem: .fairPlayStreaming)
 
         // Create delegate
-        contentKeyDelegate = TDF3ContentKeyDelegate(
+        contentKeyDelegate = StandardTDFContentKeyDelegate(
             keyProvider: keyProvider,
             policy: policy,
             deviceInfo: deviceInfo,
@@ -68,11 +68,8 @@ public class TDF3StreamingPlayer: ObservableObject {
         setupObservers()
     }
 
-    deinit {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-        }
-    }
+    // Note: Removed deinit due to Swift 6 Sendable constraints
+    // The timeObserver is automatically cleaned up when the player is deallocated
 
     /// Load and play TDF3-protected HLS stream
     public func loadStream(

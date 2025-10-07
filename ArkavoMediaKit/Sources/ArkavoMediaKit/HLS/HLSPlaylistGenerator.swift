@@ -1,6 +1,9 @@
 import Foundation
 
-/// Generates HLS playlists (.m3u8) for TDF3-protected content
+/// Generates HLS playlists (.m3u8) for Standard TDF-protected content
+///
+/// Creates HLS manifests that reference .tdf segment files.
+/// Each segment URL points to a Standard TDF archive containing encrypted video data.
 public struct HLSPlaylistGenerator {
     private let kasBaseURL: URL
     private let cdnBaseURL: URL
@@ -27,7 +30,19 @@ public struct HLSPlaylistGenerator {
         return lines.joined(separator: "\n")
     }
 
-    /// Generate media playlist with TDF3 key references
+    /// Generate media playlist with Standard TDF segment references
+    ///
+    /// Creates an HLS manifest where each segment is a .tdf file.
+    /// The player must implement custom resource loading to extract the encrypted payload from .tdf archives.
+    ///
+    /// - Parameters:
+    ///   - segments: Array of segment metadata (each referencing a .tdf file)
+    ///   - assetID: Asset identifier
+    ///   - userID: User identifier for policy validation
+    ///   - sessionID: Playback session ID
+    ///   - targetDuration: Target segment duration in seconds
+    ///   - mediaSequence: Starting media sequence number
+    /// - Returns: HLS media playlist string (.m3u8)
     public func generateMediaPlaylist(
         segments: [SegmentMetadata],
         assetID: String,
@@ -44,7 +59,8 @@ public struct HLSPlaylistGenerator {
         ]
 
         for segment in segments {
-            // Add key directive for TDF3
+            // For Standard TDF, we use a custom key URL that points to the KAS server
+            // The player will extract the manifest from the .tdf file and request unwrapping from KAS
             let keyURL = generateKeyURL(
                 assetID: assetID,
                 userID: userID,
@@ -52,14 +68,16 @@ public struct HLSPlaylistGenerator {
                 segmentIndex: segment.index
             )
 
-            // Convert IV to hex string
+            // Convert IV to hex string for HLS compatibility
             let ivHex = segment.iv.map { String(format: "%02x", $0) }.joined()
 
+            // Add key directive
+            // METHOD=AES-128 is standard HLS, but our .tdf files handle the actual encryption
             lines.append("#EXT-X-KEY:METHOD=AES-128,URI=\"\(keyURL.absoluteString)\",IV=0x\(ivHex)")
 
-            // Add segment
+            // Add segment - note this points to a .tdf file, not raw .ts
             lines.append("#EXTINF:\(String(format: "%.3f", segment.duration)),")
-            lines.append(segment.url.absoluteString)
+            lines.append(segment.url.absoluteString) // e.g., https://cdn.arkavo.net/asset/segment_0.tdf
         }
 
         lines.append("#EXT-X-ENDLIST")

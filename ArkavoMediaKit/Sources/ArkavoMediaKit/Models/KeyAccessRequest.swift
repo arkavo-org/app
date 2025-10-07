@@ -1,6 +1,8 @@
 import Foundation
 
 /// Request for accessing a segment decryption key
+///
+/// Sent to KAS with the Standard TDF manifest to request key unwrapping.
 public struct KeyAccessRequest: Sendable {
     /// Session identifier
     public let sessionID: UUID
@@ -14,8 +16,11 @@ public struct KeyAccessRequest: Sendable {
     /// Segment index
     public let segmentIndex: Int
 
-    /// NanoTDF header (base64 encoded) from the segment
-    public let nanoTDFHeader: String
+    /// Standard TDF manifest (base64-encoded JSON)
+    ///
+    /// Contains the wrapped DEK, policy, and encryption parameters.
+    /// KAS validates the policy and unwraps the DEK for authorized requests.
+    public let tdfManifest: String
 
     /// Request timestamp
     public let timestamp: Date
@@ -28,14 +33,14 @@ public struct KeyAccessRequest: Sendable {
         userID: String,
         assetID: String,
         segmentIndex: Int,
-        nanoTDFHeader: String,
+        tdfManifest: String,
         context: [String: String] = [:]
     ) {
         self.sessionID = sessionID
         self.userID = userID
         self.assetID = assetID
         self.segmentIndex = segmentIndex
-        self.nanoTDFHeader = nanoTDFHeader
+        self.tdfManifest = tdfManifest
         self.timestamp = Date()
         self.context = context
     }
@@ -44,7 +49,10 @@ public struct KeyAccessRequest: Sendable {
 /// Response containing the wrapped decryption key
 public struct KeyAccessResponse: Sendable {
     /// Wrapped symmetric key (base64 encoded)
-    public let wrappedKey: Data
+    ///
+    /// For Standard TDF, this is the RSA-wrapped DEK that can be unwrapped
+    /// with the client's private key (offline) or via KAS rewrap (online).
+    public let wrappedKey: String
 
     /// Key metadata
     public let metadata: KeyMetadata
@@ -61,7 +69,7 @@ public struct KeyAccessResponse: Sendable {
         }
     }
 
-    public init(wrappedKey: Data, metadata: KeyMetadata) {
+    public init(wrappedKey: String, metadata: KeyMetadata) {
         self.wrappedKey = wrappedKey
         self.metadata = metadata
     }

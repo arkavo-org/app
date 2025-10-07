@@ -1,19 +1,28 @@
 import AVFoundation
+import CryptoKit
 import Foundation
 import OpenTDFKit
 
 #if canImport(UIKit) || canImport(AppKit)
 
-/// AVContentKeySessionDelegate implementation for TDF3-protected media
+/// AVContentKeySessionDelegate implementation for Standard TDF-protected media
+///
+/// Handles key requests from AVPlayer for .tdf segment files.
+/// Downloads the .tdf archive, extracts the manifest, requests key unwrapping from KAS,
+/// and provides the DEK to AVPlayer for decryption.
 @available(iOS 18.0, macOS 15.0, tvOS 18.0, *)
-public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unchecked Sendable {
-    private let keyProvider: TDF3KeyProvider
+public class StandardTDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unchecked Sendable {
+    private let keyProvider: StandardTDFKeyProvider
     private let policy: MediaDRMPolicy
     private let deviceInfo: DeviceInfo
     private let sessionID: UUID
 
+    /// Cache of unwrapped DEKs by segment index to avoid re-parsing .tdf files
+    private var dekCache: [Int: SymmetricKey] = [:]
+    private let cacheQueue = DispatchQueue(label: "com.arkavo.mediakit.dekcache")
+
     public init(
-        keyProvider: TDF3KeyProvider,
+        keyProvider: StandardTDFKeyProvider,
         policy: MediaDRMPolicy,
         deviceInfo: DeviceInfo,
         sessionID: UUID
@@ -72,7 +81,7 @@ public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unc
         }
 
         // Parse segment index from URL
-        // Expected format: tdf3://kas.arkavo.net/key?segment=N&asset=ID
+        // Expected format: tdf3://kas.arkavo.net/key?segment=N&asset=ID&user=UID
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let segmentParam = components.queryItems?.first(where: { $0.name == "segment" }),
               let segmentIndexString = segmentParam.value,
@@ -85,14 +94,26 @@ public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unc
             throw ContentKeyError.invalidURL
         }
 
-        // Get NanoTDF header from somewhere (could be embedded in URL or loaded from manifest)
-        // For now, we'll need to fetch it based on the segment
-        guard let nanoTDFHeader = try await fetchNanoTDFHeader(
-            assetID: assetID,
-            segmentIndex: segmentIndex
-        ) else {
-            throw ContentKeyError.headerNotFound
+        // Check DEK cache first
+        if let cachedDEK = cacheQueue.sync(execute: { dekCache[segmentIndex] }) {
+            try provideKey(cachedDEK, to: keyRequest)
+            return
         }
+
+        // Download the .tdf segment file
+        guard let tdfURL = try await fetchSegmentURL(assetID: assetID, segmentIndex: segmentIndex) else {
+            throw ContentKeyError.segmentNotFound
+        }
+
+        let (tdfData, _) = try await URLSession.shared.data(from: tdfURL)
+
+        // Parse TDF archive to extract manifest
+        let reader = try TDFArchiveReader(data: tdfData)
+        let manifest = try reader.manifest()
+
+        // Encode manifest as base64 for key request
+        let manifestData = try JSONEncoder().encode(manifest)
+        let manifestBase64 = manifestData.base64EncodedString()
 
         // Create key access request
         let accessRequest = KeyAccessRequest(
@@ -100,64 +121,74 @@ public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unc
             userID: userID,
             assetID: assetID,
             segmentIndex: segmentIndex,
-            nanoTDFHeader: nanoTDFHeader
+            tdfManifest: manifestBase64
         )
 
-        // Request key from provider
+        // Request key from provider (calls KAS or uses offline key)
         let response = try await keyProvider.requestKey(
             request: accessRequest,
             policy: policy,
             deviceInfo: deviceInfo
         )
 
-        // Create AVContentKeyResponse with the unwrapped key
-        let keyResponse = AVContentKeyResponse(
-            fairPlayStreamingKeyResponseData: response.wrappedKey
+        // Unwrap the DEK from the .tdf archive
+        let dek = try await keyProvider.unwrapSegmentKey(
+            tdfData: tdfData,
+            useKASRewrap: false // Use offline unwrapping for now
         )
 
+        // Cache the DEK
+        cacheQueue.sync {
+            dekCache[segmentIndex] = dek
+        }
+
+        // Provide key to AVPlayer
+        try provideKey(dek, to: keyRequest)
+    }
+
+    private func provideKey(_ key: SymmetricKey, to keyRequest: AVContentKeyRequest) throws {
+        // Extract key data
+        let keyData = key.withUnsafeBytes { Data($0) }
+
+        // Create content key response
+        let keyResponse = AVContentKeyResponse(fairPlayStreamingKeyResponseData: keyData)
         keyRequest.processContentKeyResponse(keyResponse)
     }
 
-    /// Fetch NanoTDF header for a specific segment
+    /// Fetch the .tdf segment URL
     ///
     /// ⚠️ **IMPLEMENTATION REQUIRED**
     ///
-    /// This method must be implemented to retrieve the NanoTDF header for a given segment.
-    /// The header contains the encrypted DEK and policy information required for playback.
+    /// This method must be implemented to retrieve the .tdf segment URL.
     ///
     /// ## Implementation Options:
     ///
     /// ### Option 1: Parse from HLS Manifest
-    /// Extract the NanoTDF header embedded in the `#EXT-X-KEY` directive:
-    /// ```
-    /// #EXT-X-KEY:METHOD=AES-128,URI="tdf3://...",NANOTDF="base64header"
+    /// The segment URL is already in the HLS playlist, extract it from there:
+    /// ```swift
+    /// // Store playlist segments during loadStream()
+    /// private var segmentURLs: [Int: URL] = [:]
+    /// return segmentURLs[segmentIndex]
     /// ```
     ///
-    /// ### Option 2: Fetch from Metadata Endpoint
-    /// Query a separate metadata service:
+    /// ### Option 2: Construct from CDN Pattern
+    /// Build the URL using a known pattern:
     /// ```swift
-    /// let url = URL(string: "https://metadata.arkavo.net/\(assetID)/segment/\(segmentIndex)/header")!
+    /// return URL(string: "https://cdn.arkavo.net/\(assetID)/segment_\(segmentIndex).tdf")
+    /// ```
+    ///
+    /// ### Option 3: Fetch from Metadata Service
+    /// Query a service for the segment URL:
+    /// ```swift
+    /// let url = URL(string: "https://api.arkavo.net/assets/\(assetID)/segments/\(segmentIndex)")!
     /// let (data, _) = try await URLSession.shared.data(from: url)
-    /// return String(data: data, encoding: .utf8)
+    /// let response = try JSONDecoder().decode(SegmentURLResponse.self, from: data)
+    /// return response.tdfURL
     /// ```
-    ///
-    /// ### Option 3: Load from Local Cache
-    /// For offline playback, retrieve from local storage:
-    /// ```swift
-    /// let cacheKey = "\(assetID)-\(segmentIndex)"
-    /// return headerCache[cacheKey]
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - assetID: Asset identifier
-    ///   - segmentIndex: Segment index
-    /// - Returns: Base64-encoded NanoTDF header
-    /// - Throws: `ContentKeyError.headerNotFound` if header cannot be retrieved
-    private func fetchNanoTDFHeader(assetID: String, segmentIndex: Int) async throws -> String? {
-        // TODO: CRITICAL - Implement header fetching before production use
-        // Currently throws to prevent silent failures
+    private func fetchSegmentURL(assetID: String, segmentIndex: Int) async throws -> URL? {
+        // TODO: CRITICAL - Implement segment URL fetching before production use
         throw ContentKeyError.notImplemented(
-            "fetchNanoTDFHeader() requires implementation. " +
+            "fetchSegmentURL() requires implementation. " +
             "See method documentation for integration options."
         )
     }
@@ -167,7 +198,7 @@ public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unc
 public enum ContentKeyError: Error, LocalizedError, Sendable {
     case invalidIdentifier
     case invalidURL
-    case headerNotFound
+    case segmentNotFound
     case keyProcessingFailed
     case notImplemented(String)
 
@@ -176,9 +207,9 @@ public enum ContentKeyError: Error, LocalizedError, Sendable {
         case .invalidIdentifier:
             "Invalid content key identifier"
         case .invalidURL:
-            "Invalid key request URL"
-        case .headerNotFound:
-            "NanoTDF header not found for segment"
+            "Invalid segment URL format"
+        case .segmentNotFound:
+            "TDF segment not found"
         case .keyProcessingFailed:
             "Failed to process content key"
         case let .notImplemented(message):
