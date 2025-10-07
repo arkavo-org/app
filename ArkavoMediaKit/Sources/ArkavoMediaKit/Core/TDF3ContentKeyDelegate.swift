@@ -119,23 +119,57 @@ public class TDF3ContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unc
     }
 
     /// Fetch NanoTDF header for a specific segment
-    /// This is a placeholder - actual implementation would fetch from manifest or storage
+    ///
+    /// ⚠️ **IMPLEMENTATION REQUIRED**
+    ///
+    /// This method must be implemented to retrieve the NanoTDF header for a given segment.
+    /// The header contains the encrypted DEK and policy information required for playback.
+    ///
+    /// ## Implementation Options:
+    ///
+    /// ### Option 1: Parse from HLS Manifest
+    /// Extract the NanoTDF header embedded in the `#EXT-X-KEY` directive:
+    /// ```
+    /// #EXT-X-KEY:METHOD=AES-128,URI="tdf3://...",NANOTDF="base64header"
+    /// ```
+    ///
+    /// ### Option 2: Fetch from Metadata Endpoint
+    /// Query a separate metadata service:
+    /// ```swift
+    /// let url = URL(string: "https://metadata.arkavo.net/\(assetID)/segment/\(segmentIndex)/header")!
+    /// let (data, _) = try await URLSession.shared.data(from: url)
+    /// return String(data: data, encoding: .utf8)
+    /// ```
+    ///
+    /// ### Option 3: Load from Local Cache
+    /// For offline playback, retrieve from local storage:
+    /// ```swift
+    /// let cacheKey = "\(assetID)-\(segmentIndex)"
+    /// return headerCache[cacheKey]
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - assetID: Asset identifier
+    ///   - segmentIndex: Segment index
+    /// - Returns: Base64-encoded NanoTDF header
+    /// - Throws: `ContentKeyError.headerNotFound` if header cannot be retrieved
     private func fetchNanoTDFHeader(assetID: String, segmentIndex: Int) async throws -> String? {
-        // TODO: Implement actual header fetching logic
-        // This could:
-        // - Parse from HLS manifest
-        // - Fetch from a metadata endpoint
-        // - Load from local cache
-        return nil
+        // TODO: CRITICAL - Implement header fetching before production use
+        // Currently throws to prevent silent failures
+        throw ContentKeyError.notImplemented(
+            "fetchNanoTDFHeader() requires implementation. " +
+            "See method documentation for integration options."
+        )
     }
 }
 
 /// Content key errors
-public enum ContentKeyError: Error, LocalizedError {
+public enum ContentKeyError: Error, LocalizedError, Sendable {
     case invalidIdentifier
     case invalidURL
     case headerNotFound
     case keyProcessingFailed
+    case notImplemented(String)
 
     public var errorDescription: String? {
         switch self {
@@ -147,6 +181,8 @@ public enum ContentKeyError: Error, LocalizedError {
             "NanoTDF header not found for segment"
         case .keyProcessingFailed:
             "Failed to process content key"
+        case let .notImplemented(message):
+            "Not implemented: \(message)"
         }
     }
 }

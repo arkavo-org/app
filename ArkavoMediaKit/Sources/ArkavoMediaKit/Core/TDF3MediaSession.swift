@@ -24,6 +24,14 @@ public actor TDF3MediaSession {
         policy: MediaDRMPolicy? = nil,
         metadata: [String: String] = [:]
     ) throws -> MediaSession {
+        // Validate inputs
+        try InputValidator.validateUserID(userID)
+        try InputValidator.validateAssetID(assetID)
+
+        if let region = geoRegion {
+            try InputValidator.validateRegionCode(region)
+        }
+
         // Check concurrency limit if policy specifies
         if let maxStreams = policy?.maxConcurrentStreams {
             let currentStreams = activeStreamsPerUser[userID]?.count ?? 0
@@ -44,11 +52,8 @@ public actor TDF3MediaSession {
         // Store session
         sessions[session.sessionID] = session
 
-        // Track user's active streams
-        if activeStreamsPerUser[userID] == nil {
-            activeStreamsPerUser[userID] = Set()
-        }
-        activeStreamsPerUser[userID]?.insert(session.sessionID)
+        // Track user's active streams (using dictionary default to avoid race condition)
+        activeStreamsPerUser[userID, default: Set()].insert(session.sessionID)
 
         return session
     }

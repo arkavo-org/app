@@ -7,6 +7,7 @@ import OpenTDFKit
 
 /// AVPlayer wrapper for TDF3-protected HLS streams
 @available(iOS 18.0, macOS 15.0, tvOS 18.0, *)
+@MainActor
 public class TDF3StreamingPlayer: ObservableObject {
     /// The underlying AVPlayer
     public let player: AVPlayer

@@ -171,11 +171,95 @@ Performance benchmarks target <50ms P95 key delivery latency.
 - AVFoundation - Video playback and content key management
 - CryptoKit - AES-GCM encryption
 
+## Known Limitations
+
+⚠️ **Critical**: This package requires additional implementation before production use.
+
+### Implementation Required
+
+1. **`fetchNanoTDFHeader()` Method** (TDF3ContentKeyDelegate.swift)
+   - **Status**: Placeholder implementation that throws `notImplemented` error
+   - **Impact**: Playback will not work until implemented
+   - **Options**: Parse from HLS manifest, fetch from metadata endpoint, or load from cache
+   - **Documentation**: See method documentation for integration guide
+
+2. **KAS Server Integration**
+   - **Status**: Requires arkavo-rs deployment with media DRM endpoints
+   - **Required Endpoints**:
+     - `POST /media/v1/key-request`
+     - `POST /media/v1/session/start`
+     - `POST /media/v1/session/{id}/heartbeat`
+     - `DELETE /media/v1/session/{id}`
+   - **Reference**: See [Integration Guide](INTEGRATION_GUIDE.md#backend-setup)
+
+### Current Limitations
+
+1. **No Session Persistence**
+   - Sessions stored in memory only
+   - Lost on app restart
+   - No cross-device synchronization
+   - **Workaround**: Implement Redis integration (see IMPLEMENTATION.md)
+
+2. **No Offline Playback**
+   - `AVAssetDownloadTask` integration not implemented
+   - Cannot download content for offline viewing
+   - **Roadmap**: Planned for future release
+
+3. **Performance Not Validated**
+   - Claims <50ms P95 key delivery but not benchmarked
+   - No production load testing
+   - **Action**: Run performance tests before production deployment
+
+4. **No Policy Caching**
+   - Policies evaluated on every key request
+   - Potential performance bottleneck under load
+   - **Optimization**: Implement Redis policy cache
+
+5. **Limited Error Recovery**
+   - Basic retry logic only
+   - No circuit breaker for KAS failures
+   - **Enhancement**: Add resilience patterns
+
+### Security Hardening Required
+
+Before production deployment, implement:
+
+1. **TLS Certificate Pinning** - Pin KAS server certificates
+2. **Rate Limiting** - Per-user request limits (60/min recommended)
+3. **Audit Logging** - Log all key requests and policy violations
+4. **Key Rotation** - KAS key rotation procedure (90-day schedule)
+5. **Monitoring** - Metrics collection and alerting
+
+See [SECURITY.md](SECURITY.md) for complete security guide.
+
+### Platform Support
+
+- ✅ iOS 18.0+
+- ✅ macOS 15.0+
+- ✅ tvOS 18.0+
+- ❌ watchOS (AVPlayer limitations)
+
+## Testing
+
+Run tests:
+```bash
+swift test
+```
+
+**Current Coverage**:
+- ✅ Unit tests (6 tests)
+- ✅ Integration tests (6 tests)
+- ❌ Performance tests (not implemented)
+- ❌ E2E tests with real KAS (requires deployment)
+
 ## License
 
 Same as parent Arkavo project.
 
 ## Related
 
+- [Integration Guide](INTEGRATION_GUIDE.md) - Step-by-step integration
+- [Security Guide](SECURITY.md) - Security best practices
+- [Implementation Details](IMPLEMENTATION.md) - Technical architecture
 - [TDF3 Media DRM Testing Plan](../FairPlay_Streaming_Server_SDK_5.1/TDF3_MEDIA_DRM_TESTING_PLAN.md)
 - [arkavo-rs KAS Implementation](https://github.com/arkavo-org/arkavo-rs/issues/21)

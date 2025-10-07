@@ -59,13 +59,15 @@ public actor TDF3SegmentKey {
         kasMetadata: KasMetadata,
         policy: MediaDRMPolicy,
         assetID: String,
-        segmentIndex: Int
+        segmentIndex: Int,
+        policyEndpoint: URL = URL(string: "https://policy.arkavo.net")!
     ) async throws -> NanoTDF {
         // Convert policy to TDF3 policy format
         var tdf3Policy = try convertToTDF3Policy(
             mediaPolicy: policy,
             assetID: assetID,
-            segmentIndex: segmentIndex
+            segmentIndex: segmentIndex,
+            policyEndpoint: policyEndpoint
         )
 
         // Extract segment key data
@@ -97,11 +99,13 @@ public actor TDF3SegmentKey {
     private static func convertToTDF3Policy(
         mediaPolicy: MediaDRMPolicy,
         assetID: String,
-        segmentIndex: Int
+        segmentIndex: Int,
+        policyEndpoint: URL
     ) throws -> Policy {
         var attributes: [String] = []
 
-        // Add asset and segment attributes
+        // Validate and add asset/segment attributes
+        try InputValidator.validateAssetID(assetID)
         attributes.append("asset:\(assetID)")
         attributes.append("segment:\(segmentIndex)")
 
@@ -129,11 +133,19 @@ public actor TDF3SegmentKey {
             attributes.append("hdcp:\(hdcp.rawValue)")
         }
 
-        // Create TDF3 Policy with remote ResourceLocator
-        // The remote policy is stored as a ResourceLocator pointing to the policy service
+        // Validate and encode policy attributes
+        let encodedAttrs = try attributes.map { try InputValidator.validatePolicyAttribute($0) }
+            .joined(separator: ";")
+
+        // Create TDF3 Policy with configurable remote ResourceLocator
+        guard let policyHost = policyEndpoint.host else {
+            throw TDF3SegmentKeyError.policyConversionFailed
+        }
+
+        let policyPath = "/\(assetID)?attrs=\(encodedAttrs)"
         let policyLocator = ResourceLocator(
-            protocol: "https",
-            body: "policy.arkavo.net/\(assetID)?attrs=\(attributes.joined(separator: ";"))"
+            protocol: policyEndpoint.scheme ?? "https",
+            body: policyHost + policyPath
         )
 
         // Note: Policy binding will be calculated by createNanoTDF
