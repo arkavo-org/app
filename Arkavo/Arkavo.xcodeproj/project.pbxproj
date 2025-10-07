@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */; };
+		15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */; };
 		CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2652C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
@@ -113,6 +115,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
+		591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertificatePinningDelegate.swift; sourceTree = "<group>"; };
 		CB68E2622C9A743600FF3167 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
@@ -322,7 +326,9 @@
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
-			);
+							0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */,
+				591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */,
+);
 			path = Arkavo;
 			sourceTree = "<group>";
 		};
@@ -596,7 +602,9 @@
 				DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */,
 				DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
-			);
+							DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */,
+				15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */,
+);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DAC1F9F22C34DA7100499631 /* Sources */ = {

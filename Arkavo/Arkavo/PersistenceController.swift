@@ -22,10 +22,24 @@ class PersistenceController {
                 Thought.self,
                 BlockedProfile.self,
             ])
+
+            // Enable data protection for the database file
             let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             print("PersistenceController: Model Store URL: \(modelConfiguration.url)")
 
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+
+            // Apply file protection to the database after container creation
+            let url = modelConfiguration.url
+            do {
+                try FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.complete],
+                    ofItemAtPath: url.path
+                )
+                print("PersistenceController: Enabled complete data protection for database")
+            } catch {
+                print("PersistenceController Warning: Could not set file protection: \(error)")
+            }
         } catch {
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
