@@ -11,7 +11,7 @@ public class KeychainManager {
         case invalidHandle
     }
 
-    static func save(value: String, service: String, account: String) {
+    public static func save(value: String, service: String, account: String) {
         do {
             try save(value.data(using: .utf8)!, service: service, account: account)
         } catch {
@@ -19,7 +19,7 @@ public class KeychainManager {
         }
     }
 
-    static func save(_ data: Data, service: String, account: String) throws {
+    public static func save(_ data: Data, service: String, account: String) throws {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
@@ -45,7 +45,7 @@ public class KeychainManager {
         }
     }
 
-    static func load(service: String, account: String) throws -> Data {
+    public static func load(service: String, account: String) throws -> Data {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,
@@ -69,7 +69,7 @@ public class KeychainManager {
         return data
     }
 
-    static func getValue(service: String, account: String) -> String? {
+    public static func getValue(service: String, account: String) -> String? {
         do {
             let data = try load(service: service, account: account)
             return String(data: data, encoding: .utf8)
@@ -78,7 +78,7 @@ public class KeychainManager {
         }
     }
 
-    static func delete(service: String, account: String) throws {
+    public static func delete(service: String, account: String) throws {
         let query: [String: AnyObject] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service as AnyObject,

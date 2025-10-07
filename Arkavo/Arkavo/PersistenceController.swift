@@ -24,25 +24,22 @@ class PersistenceController {
             ])
 
             // Enable data protection for the database file
-            var modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-            // Apply file protection to the database
-            if let url = modelConfiguration.url {
-                print("PersistenceController: Model Store URL: \(url)")
-
-                // Set file protection attribute to complete protection
-                do {
-                    try FileManager.default.setAttributes(
-                        [.protectionKey: FileProtectionType.complete],
-                        ofItemAtPath: url.path
-                    )
-                    print("PersistenceController: Enabled complete data protection for database")
-                } catch {
-                    print("PersistenceController Warning: Could not set file protection: \(error)")
-                }
-            }
+            let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            print("PersistenceController: Model Store URL: \(modelConfiguration.url)")
 
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+
+            // Apply file protection to the database after container creation
+            let url = modelConfiguration.url
+            do {
+                try FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.complete],
+                    ofItemAtPath: url.path
+                )
+                print("PersistenceController: Enabled complete data protection for database")
+            } catch {
+                print("PersistenceController Warning: Could not set file protection: \(error)")
+            }
         } catch {
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
