@@ -139,6 +139,15 @@ class AgentTester {
         print("📞 Test 3: JSON-RPC Request/Response")
         print("─────────────────────────────────────────────────\n")
 
+        // Ensure we have agents
+        if manager.agents.isEmpty {
+            if !manager.isDiscovering {
+                manager.startDiscovery()
+                print("⏳ Discovering agents (3s)...")
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+
         guard let agent = manager.agents.first else {
             print("❌ SKIP: No agents available\n")
             return
@@ -186,6 +195,15 @@ class AgentTester {
     func test4_ChatSession() async {
         print("💬 Test 4: Chat Session")
         print("─────────────────────────────────────────────────\n")
+
+        // Ensure we have agents
+        if manager.agents.isEmpty {
+            if !manager.isDiscovering {
+                manager.startDiscovery()
+                print("⏳ Discovering agents (3s)...")
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
 
         guard let agent = manager.agents.first else {
             print("❌ SKIP: No agents available\n")
