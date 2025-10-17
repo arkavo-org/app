@@ -4,13 +4,26 @@ import Combine
 /// Represents a chat session with an A2A agent
 public struct ChatSession: Codable, Identifiable, Sendable {
     public let id: String
-    public let agentId: String
+    public let capabilities: ChatCapabilities?
     public let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id = "session_id"
-        case agentId = "agent_id"
+        case capabilities
         case createdAt = "created_at"
+    }
+}
+
+/// Chat capabilities for a session
+public struct ChatCapabilities: Codable, Sendable {
+    public let supportedMessageTypes: [String]?
+    public let maxMessageLength: Int?
+    public let supportsStreaming: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case supportedMessageTypes = "supported_message_types"
+        case maxMessageLength = "max_message_length"
+        case supportsStreaming = "supports_streaming"
     }
 }
 
@@ -147,6 +160,7 @@ public final class AgentChatSessionManager: ObservableObject {
     // MARK: - Private Properties
 
     private let agentManager: AgentManager
+    private var sessionAgentMap: [String: String] = [:] // session_id -> agent_id
 
     // MARK: - Initialization
 
@@ -180,9 +194,12 @@ public final class AgentChatSessionManager: ObservableObject {
         }
 
         let sessionData = try JSONSerialization.data(withJSONObject: result.value)
-        let session = try JSONDecoder().decode(ChatSession.self, from: sessionData)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let session = try decoder.decode(ChatSession.self, from: sessionData)
 
         activeSessions[session.id] = session
+        sessionAgentMap[session.id] = agentId
         messageDeltas[session.id] = []
 
         return session
@@ -194,11 +211,12 @@ public final class AgentChatSessionManager: ObservableObject {
         content: String,
         attachments: [String]? = nil
     ) async throws {
-        guard let session = activeSessions[sessionId] else {
+        guard activeSessions[sessionId] != nil else {
             throw AgentError.invalidResponse("Session not found")
         }
 
-        guard let connection = agentManager.getConnection(for: session.agentId) else {
+        guard let agentId = sessionAgentMap[sessionId],
+              let connection = agentManager.getConnection(for: agentId) else {
             throw AgentError.notConnected
         }
 
@@ -221,11 +239,12 @@ public final class AgentChatSessionManager: ObservableObject {
 
     /// Close a chat session
     public func closeSession(sessionId: String) async {
-        guard let session = activeSessions.removeValue(forKey: sessionId) else {
+        guard activeSessions.removeValue(forKey: sessionId) != nil else {
             return
         }
 
-        guard let connection = agentManager.getConnection(for: session.agentId) else {
+        guard let agentId = sessionAgentMap.removeValue(forKey: sessionId),
+              let connection = agentManager.getConnection(for: agentId) else {
             return
         }
 
