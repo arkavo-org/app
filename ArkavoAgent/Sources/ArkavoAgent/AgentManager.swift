@@ -77,7 +77,7 @@ public final class AgentManager: ObservableObject {
         // Connect
         do {
             if autoReconnect {
-                connection.startWithReconnection()
+                await connection.startWithReconnection()
             } else {
                 try await connection.connect()
             }
@@ -125,7 +125,8 @@ public final class AgentManager: ObservableObject {
             throw AgentError.notConnected
         }
 
-        return try await connection.call(method: method, params: params)
+        nonisolated(unsafe) let unsafeParams = params
+        return try await connection.call(method: method, params: unsafeParams)
     }
 
     // MARK: - Private Methods
@@ -165,14 +166,17 @@ public final class AgentManager: ObservableObject {
     // MARK: - Telemetry
 
     /// Get connection statistics
-    public func getConnectionStats() -> [String: Any] {
+    public func getConnectionStats() async -> [String: Any] {
+        var connectedCount = 0
+        for connection in connections.values {
+            if await connection.isConnected() {
+                connectedCount += 1
+            }
+        }
+
         return [
             "total_agents": agents.count,
-            "connected": connections.values.filter { connection in
-                Task {
-                    await connection.isConnected()
-                }.result.get() ?? false
-            }.count,
+            "connected": connectedCount,
             "discovering": isDiscovering
         ]
     }

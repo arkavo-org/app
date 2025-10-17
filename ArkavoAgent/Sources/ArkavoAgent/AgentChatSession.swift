@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Represents a chat session with an A2A agent
-public struct ChatSession: Codable, Identifiable {
+public struct ChatSession: Codable, Identifiable, Sendable {
     public let id: String
     public let agentId: String
     public let createdAt: Date
@@ -15,7 +15,7 @@ public struct ChatSession: Codable, Identifiable {
 }
 
 /// Request to open a new chat session
-public struct ChatOpenRequest: Codable {
+public struct ChatOpenRequest: Codable, Sendable {
     public let token: String?
     public let context: [String: AnyCodable]?
     public let metadata: [String: AnyCodable]?
@@ -28,7 +28,7 @@ public struct ChatOpenRequest: Codable {
 }
 
 /// User message to send in a chat session
-public struct UserMessage: Codable {
+public struct UserMessage: Codable, Sendable {
     public let content: String
     public let attachments: [String]?
     public let metadata: [String: AnyCodable]?
@@ -41,7 +41,7 @@ public struct UserMessage: Codable {
 }
 
 /// Message delta from the agent
-public struct MessageDelta: Codable {
+public struct MessageDelta: Codable, Sendable {
     public let sessionId: String
     public let messageId: String
     public let sequence: Int
@@ -58,7 +58,7 @@ public struct MessageDelta: Codable {
 }
 
 /// Content of a message delta
-public enum MessageDeltaContent: Codable {
+public enum MessageDeltaContent: Codable, Sendable {
     case text(text: String)
     case toolCall(toolCallId: String, name: String?, argsFragment: String, done: Bool)
     case streamEnd
@@ -169,7 +169,8 @@ public final class AgentChatSessionManager: ObservableObject {
         let request = ChatOpenRequest(token: token, context: context)
         let requestParams = try encodeToAnyCodable(request)
 
-        let response = try await connection.call(method: "chat_open", params: ["request": requestParams])
+        nonisolated(unsafe) let params: [String: Any] = ["request": requestParams]
+        let response = try await connection.call(method: "chat_open", params: params)
 
         guard case .success(_, let result) = response else {
             if case .error(_, let code, let message) = response {
@@ -204,9 +205,10 @@ public final class AgentChatSessionManager: ObservableObject {
         let message = UserMessage(content: content, attachments: attachments)
         let messageParams = try encodeToAnyCodable(message)
 
+        nonisolated(unsafe) let params: [String: Any] = ["session_id": sessionId, "message": messageParams]
         let response = try await connection.call(
             method: "chat_send",
-            params: ["session_id": sessionId, "message": messageParams]
+            params: params
         )
 
         guard case .success = response else {

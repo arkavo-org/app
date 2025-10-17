@@ -184,7 +184,7 @@ public final class AgentDiscoveryService: NSObject, ObservableObject {
 
 // MARK: - NetServiceBrowserDelegate
 
-extension AgentDiscoveryService: NetServiceBrowserDelegate {
+extension AgentDiscoveryService: @preconcurrency NetServiceBrowserDelegate {
     public func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
         print("NetServiceBrowser will start searching")
     }
@@ -213,7 +213,7 @@ extension AgentDiscoveryService: NetServiceBrowserDelegate {
 
 // MARK: - NetServiceDelegate
 
-extension AgentDiscoveryService: NetServiceDelegate {
+extension AgentDiscoveryService: @preconcurrency NetServiceDelegate {
     public func netServiceDidResolveAddress(_ sender: NetService) {
         handleServiceResolved(sender)
     }

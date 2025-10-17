@@ -175,7 +175,7 @@ class InteractiveCLI {
         }
 
         print("")
-        let stats = manager.getConnectionStats()
+        let stats = await manager.getConnectionStats()
         print("Summary:")
         print("  Total agents: \(stats["total_agents"] ?? 0)")
         print("  Connected:    \(stats["connected"] ?? 0)")

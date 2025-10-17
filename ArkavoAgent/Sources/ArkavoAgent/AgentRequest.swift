@@ -1,7 +1,7 @@
 import Foundation
 
 /// A JSON-RPC 2.0 request to an A2A agent
-public struct AgentRequest: Codable {
+public struct AgentRequest: Codable, Sendable {
     /// JSON-RPC version (always "2.0")
     public let jsonrpc: String
 
@@ -23,7 +23,7 @@ public struct AgentRequest: Codable {
 }
 
 /// A JSON-RPC 2.0 response from an A2A agent
-public enum AgentResponse: Codable {
+public enum AgentResponse: Codable, Sendable {
     case success(id: String, result: AnyCodable)
     case error(id: String, code: Int, message: String)
 
@@ -85,7 +85,7 @@ public enum AgentResponse: Codable {
 }
 
 /// Type-erased codable wrapper for JSON-RPC params and results
-public struct AnyCodable: Codable {
+public struct AnyCodable: Codable, @unchecked Sendable {
     public let value: Any
 
     public init(_ value: Any) {

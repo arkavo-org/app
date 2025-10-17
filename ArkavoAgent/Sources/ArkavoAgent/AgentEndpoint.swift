@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents an A2A agent endpoint
-public struct AgentEndpoint: Codable, Identifiable, Hashable {
+public struct AgentEndpoint: Codable, Identifiable, Hashable, Sendable {
     /// Unique identifier for the agent
     public let id: String
 
@@ -38,7 +38,7 @@ public struct AgentEndpoint: Codable, Identifiable, Hashable {
 }
 
 /// Metadata about an agent discovered via mDNS
-public struct AgentMetadata: Codable, Hashable {
+public struct AgentMetadata: Codable, Hashable, Sendable {
     /// Human-readable name for the agent
     public let name: String
 

@@ -2,7 +2,8 @@ import ArkavoAgent
 import Foundation
 
 @main
-struct AgentTestCLI {
+@MainActor
+enum AgentTestCLI {
     static func main() async {
         print("🚀 ArkavoAgent Test CLI")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

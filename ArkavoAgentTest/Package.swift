@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "ArkavoAgentTest",
-            dependencies: ["ArkavoAgent"]
+            dependencies: ["ArkavoAgent"],
+            swiftSettings: [
+                .unsafeFlags(["-parse-as-library"])
+            ]
         )
     ]
 )
