@@ -87,8 +87,10 @@ final class AgentService: ObservableObject {
 
                 // Filter out any LocalAIAgent from mDNS discovery
                 let remoteAgents = discoveredAgents.filter { agent in
-                    !agent.id.lowercased().contains("local_ai_agent") &&
-                    !agent.metadata.purpose.lowercased().contains("local ai for on-device")
+                    let id = agent.id.lowercased()
+                    let purpose = agent.metadata.purpose.lowercased()
+                    // Exclude if ID contains "local" or purpose mentions local AI
+                    return !id.contains("local") && !purpose.contains("local ai")
                 }
 
                 // Get built-in LocalAIAgent (first in list)

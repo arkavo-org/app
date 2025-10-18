@@ -140,10 +140,12 @@ public final class AgentManager: ObservableObject {
                     // Update agents list
                     self.agents = discoveredAgents
 
-                    // Auto-connect to new agents
+                    // Auto-connect to new agents (skip LocalAIAgent - it's in-process)
                     if self.autoConnect {
                         for agent in discoveredAgents {
-                            if self.connections[agent.id] == nil {
+                            // Skip LocalAIAgent - it doesn't need WebSocket connection
+                            let isLocalAgent = agent.id.lowercased().contains("local")
+                            if !isLocalAgent && self.connections[agent.id] == nil {
                                 print("Auto-connecting to discovered agent: \(agent.id)")
                                 try? await self.connect(to: agent)
                             }

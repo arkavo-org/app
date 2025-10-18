@@ -185,6 +185,9 @@
     "Agent Properties" : {
 
     },
+    "Agents" : {
+
+    },
     "Agreement accepted" : {
 
     },
@@ -618,9 +621,6 @@
 
     },
     "Loading stream details..." : {
-
-    },
-    "Local Agents" : {
 
     },
     "Location" : {
