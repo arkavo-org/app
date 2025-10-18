@@ -32,6 +32,9 @@ final class AgentService: ObservableObject {
     /// Discovery state
     @Published var isDiscovering: Bool = false
 
+    /// LocalAIAgent publishing state
+    @Published var isLocalAgentPublishing: Bool = false
+
     /// Error state
     @Published var lastError: AgentError?
 
@@ -39,6 +42,7 @@ final class AgentService: ObservableObject {
 
     private let agentManager: AgentManager
     private let chatManager: AgentChatSessionManager
+    private let localAgent: LocalAIAgent
     private var cancellables = Set<AnyCancellable>()
 
     /// Stream handlers for active sessions (session_id -> AgentStreamHandler)
@@ -49,6 +53,7 @@ final class AgentService: ObservableObject {
     init() {
         self.agentManager = AgentManager.shared
         self.chatManager = AgentChatSessionManager(agentManager: AgentManager.shared)
+        self.localAgent = LocalAIAgent.shared
 
         setupBindings()
         logger.log("[AgentService] Initialized")
@@ -60,6 +65,29 @@ final class AgentService: ObservableObject {
         // Bind AgentManager.agents to our published property
         agentManager.$agents
             .assign(to: &$discoveredAgents)
+
+        // Bind LocalAIAgent publishing state
+        localAgent.$isPublishing
+            .assign(to: &$isLocalAgentPublishing)
+    }
+
+    // MARK: - LocalAIAgent Management
+
+    /// Start publishing LocalAIAgent as an A2A service
+    func startLocalAgent(port: UInt16 = 0) throws {
+        logger.log("[AgentService] Starting LocalAIAgent")
+        try localAgent.startPublishing(port: port)
+    }
+
+    /// Stop publishing LocalAIAgent
+    func stopLocalAgent() {
+        logger.log("[AgentService] Stopping LocalAIAgent")
+        localAgent.stopPublishing()
+    }
+
+    /// Get device capabilities from LocalAIAgent
+    func getDeviceCapabilities() -> DeviceCapabilities {
+        localAgent.getDeviceCapabilities()
     }
 
     // MARK: - Discovery
@@ -245,6 +273,16 @@ final class AgentService: ObservableObject {
     /// Call when app goes to foreground
     func onAppearActive() {
         logger.log("[AgentService] App became active")
+
+        // Start LocalAIAgent to publish on-device capabilities
+        do {
+            try startLocalAgent()
+        } catch {
+            logger.error("[AgentService] Failed to start LocalAIAgent: \(String(describing: error))")
+            lastError = .connectionFailed("Failed to start LocalAIAgent")
+        }
+
+        // Start discovering other agents
         startDiscovery()
     }
 
@@ -252,6 +290,7 @@ final class AgentService: ObservableObject {
     func onDisappear() {
         logger.log("[AgentService] App going to background")
         stopDiscovery()
+        stopLocalAgent()
 
         // Close all active sessions
         Task {
@@ -265,6 +304,7 @@ final class AgentService: ObservableObject {
     func cleanup() async {
         logger.log("[AgentService] Cleaning up")
         stopDiscovery()
+        stopLocalAgent()
 
         // Close all sessions
         for sessionId in activeSessions.keys {
@@ -277,6 +317,45 @@ final class AgentService: ObservableObject {
         }
 
         cancellables.removeAll()
+    }
+
+    // MARK: - Task Submission
+
+    /// Submit a task offer to the Orchestrator (if available)
+    /// Returns the agent ID of the Orchestrator if found, nil otherwise
+    func submitTaskOffer(_ taskOffer: TaskOffer) async throws -> String? {
+        // Find the Orchestrator agent (look for purpose "orchestrator" or "Orchestrator")
+        guard let orchestrator = discoveredAgents.first(where: { agent in
+            agent.metadata.purpose.lowercased().contains("orchestrat")
+        }) else {
+            logger.warning("[AgentService] No Orchestrator found - task cannot be submitted")
+            return nil
+        }
+
+        logger.log("[AgentService] Submitting task offer to Orchestrator: \(orchestrator.id)")
+
+        // Connect if not already connected
+        if !isConnected(to: orchestrator.id) {
+            try await connect(to: orchestrator)
+        }
+
+        // Get connection
+        guard let connection = agentManager.getConnection(for: orchestrator.id) else {
+            throw AgentError.notConnected
+        }
+
+        // Send task_offer request
+        let params = AnyCodable(taskOffer)
+        let request = AgentRequest(
+            method: "task_offer",
+            params: params,
+            id: UUID().uuidString
+        )
+
+        _ = try await connection.sendRequest(request)
+
+        logger.log("[AgentService] Task offer submitted successfully")
+        return orchestrator.id
     }
 }
 

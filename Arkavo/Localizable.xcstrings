@@ -83,6 +83,9 @@
     "• Your report will be reviewed within 24 hours" : {
 
     },
+    "+%lld" : {
+
+    },
     "1. Agreement to Terms" : {
 
     },
@@ -290,6 +293,9 @@
           }
         }
       }
+    },
+    "Capabilities" : {
+
     },
     "Chat Sessions" : {
 

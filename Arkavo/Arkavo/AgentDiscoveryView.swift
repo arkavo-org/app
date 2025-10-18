@@ -146,21 +146,27 @@ struct AgentCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with icon and connection status
+            // Header with agent type icon and connection status
             HStack {
-                Image(systemName: "cpu")
+                agentIcon
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(agentColor)
 
                 Spacer()
 
                 connectionBadge
             }
 
-            // Agent ID
-            Text(agent.id)
-                .font(.headline)
-                .lineLimit(1)
+            // Agent name and type badge
+            HStack {
+                Text(agent.metadata.name)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Spacer()
+
+                agentTypeBadge
+            }
 
             // Model info
             HStack(spacing: 4) {
@@ -179,6 +185,11 @@ struct AgentCard: View {
                 .foregroundColor(.secondary)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Capabilities
+            if !capabilities.isEmpty {
+                capabilitiesView
+            }
 
             Divider()
 
@@ -200,6 +211,91 @@ struct AgentCard: View {
         )
     }
 
+    // MARK: - Agent Type Detection
+
+    private var agentType: AgentType {
+        let purpose = agent.metadata.purpose.lowercased()
+        if purpose.contains("orchestrat") {
+            return .orchestrator
+        } else if purpose.contains("local") && purpose.contains("ai") {
+            return .localAI
+        } else {
+            return .remote
+        }
+    }
+
+    private var agentIcon: Image {
+        switch agentType {
+        case .orchestrator:
+            return Image(systemName: "cpu.fill")
+        case .localAI:
+            return Image(systemName: "iphone")
+        case .remote:
+            return Image(systemName: "globe")
+        }
+    }
+
+    private var agentColor: Color {
+        switch agentType {
+        case .orchestrator:
+            return .purple
+        case .localAI:
+            return .blue
+        case .remote:
+            return .green
+        }
+    }
+
+    private var agentTypeBadge: some View {
+        Text(agentType.rawValue)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(agentColor)
+            .cornerRadius(6)
+    }
+
+    // MARK: - Capabilities
+
+    private var capabilities: [String] {
+        if let caps = agent.metadata.properties["capabilities"] {
+            return caps.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        }
+        return []
+    }
+
+    private var capabilitiesView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Capabilities")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+
+            FlowLayout(spacing: 4) {
+                ForEach(capabilities.prefix(4), id: \.self) { capability in
+                    capabilityChip(capability)
+                }
+                if capabilities.count > 4 {
+                    Text("+\(capabilities.count - 4)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private func capabilityChip(_ capability: String) -> some View {
+        Text(capability)
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(4)
+    }
+
     private var connectionBadge: some View {
         HStack(spacing: 4) {
             Circle()
@@ -209,6 +305,67 @@ struct AgentCard: View {
             Text(isConnected ? "Connected" : "Available")
                 .font(.caption2)
                 .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Agent Type Enum
+
+enum AgentType: String {
+    case orchestrator = "Orchestrator"
+    case localAI = "Local AI"
+    case remote = "Remote"
+}
+
+// MARK: - Flow Layout for Chips
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX, y: bounds.minY + result.frames[index].minY), proposal: .unspecified)
+        }
+    }
+
+    struct FlowResult {
+        var size: CGSize = .zero
+        var frames: [CGRect] = []
+
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var currentX: CGFloat = 0
+            var currentY: CGFloat = 0
+            var lineHeight: CGFloat = 0
+
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+
+                if currentX + size.width > maxWidth && currentX > 0 {
+                    currentX = 0
+                    currentY += lineHeight + spacing
+                    lineHeight = 0
+                }
+
+                frames.append(CGRect(origin: CGPoint(x: currentX, y: currentY), size: size))
+                currentX += size.width + spacing
+                lineHeight = max(lineHeight, size.height)
+            }
+
+            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
         }
     }
 }
