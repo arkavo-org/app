@@ -14,7 +14,16 @@ struct AgentDetailView: View {
     @State private var showError = false
 
     var isConnected: Bool {
-        agentService.isConnected(to: agent.id)
+        // LocalAIAgent doesn't need connection - it's in-process
+        if isLocalAgent {
+            return agentService.isLocalAgentPublishing
+        }
+        return agentService.isConnected(to: agent.id)
+    }
+
+    var isLocalAgent: Bool {
+        agent.id.lowercased().contains("local") ||
+        agent.metadata.purpose.lowercased().contains("local")
     }
 
     var body: some View {
@@ -31,7 +40,9 @@ struct AgentDetailView: View {
                     metadataSection
 
                     // Chat Sessions Section
-                    if isConnected {
+                    // LocalAIAgent: Always available (in-process)
+                    // Remote agents: Only when connected
+                    if isLocalAgent || isConnected {
                         chatSessionsSection
                     }
 
@@ -108,8 +119,20 @@ struct AgentDetailView: View {
 
     private var connectionSection: some View {
         VStack(spacing: 16) {
-            // Connection button
-            if isConnecting {
+            // Connection button (not needed for LocalAIAgent - it's in-process)
+            if isLocalAgent {
+                HStack {
+                    Image(systemName: "iphone.circle.fill")
+                    Text("In-Process Agent")
+                    Spacer()
+                    Text(isConnected ? "Running" : "Stopped")
+                        .foregroundColor(isConnected ? .green : .secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+            } else if isConnecting {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -207,20 +230,32 @@ struct AgentDetailView: View {
             Text("Chat Sessions")
                 .font(.headline)
 
-            Button(action: {
-                Task {
-                    await openChatSession()
+            // LocalAIAgent: Can start chat without connection
+            // Remote agents: Need connection first
+            if isLocalAgent || isConnected {
+                Button(action: {
+                    Task {
+                        await openChatSession()
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "message.fill")
+                        Text("Start New Chat")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                 }
-            }) {
-                HStack {
-                    Image(systemName: "message.fill")
-                    Text("Start New Chat")
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.green)
-                .foregroundColor(.white)
-                .cornerRadius(12)
+            } else {
+                Text("Connect to agent first to start a chat session")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
             }
 
             // Active sessions list

@@ -22,7 +22,7 @@ public final class LocalAIAgent: NSObject, ObservableObject {
 
     private let agentId = "local_ai_agent"
     private let agentName = "LocalAI Agent"
-    private let agentPurpose = "On-device AI and sensor access"
+    private let agentPurpose = "Local AI for on-device intelligence and sensor access"
 
     private override init() {
         sensorBridge = SensorBridge()
