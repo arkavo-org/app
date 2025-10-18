@@ -5,6 +5,7 @@ enum Tab {
     case home
     case communities
     case contacts
+    case agents
     case social
 //    case creators
 //    case protect
@@ -15,6 +16,7 @@ enum Tab {
         case .home: "Home"
         case .communities: "Community"
         case .contacts: "Contacts"
+        case .agents: "Agents"
         case .social: "Social"
 //        case .creators: "Creators"
 //        case .protect: "Protect"
@@ -27,6 +29,7 @@ enum Tab {
         case .home: "play.circle.fill"
         case .communities: "bubble.left.and.bubble.right.fill"
         case .contacts: "person.2.fill"
+        case .agents: "cpu"
         case .social: "network"
 //        case .creators: "star.circle.fill"
 //        case .protect: "shield.checkerboard"
@@ -37,6 +40,7 @@ enum Tab {
 
 struct ContentView: View {
     @EnvironmentObject var sharedState: SharedState
+    @EnvironmentObject var agentService: AgentService
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
@@ -67,6 +71,9 @@ struct ContentView: View {
                 case .contacts:
                     // Contacts view for managing peers and connections
                     ContactsView()
+                case .agents:
+                    // Agent discovery and chat (always available)
+                    AgentDiscoveryView(agentService: agentService)
                 case .social:
                     if sharedState.isOfflineMode {
                         // Redirect to offline home if they somehow get to this tab in offline mode
@@ -132,8 +139,8 @@ struct ContentView: View {
             ZStack {
                 if !isCollapsed {
                     // Expanded TabView
-                    HStack(spacing: 25) {
-                        ForEach([Tab.home, .communities, .contacts, .social, .profile], id: \.self) { tab in
+                    HStack(spacing: 20) {
+                        ForEach([Tab.home, .communities, .contacts, .agents, .social, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -310,6 +317,8 @@ struct EmptyStateView: View {
             "Need help? Tap the '+' to start creating your group."
         case .contacts:
             "Connect with others! Tap '+' to add your first contact."
+        case .agents:
+            "No agents discovered yet. Make sure an agent is running on your network."
         case .home:
             "Share your first video! Tap '+' to get started."
         case .social:

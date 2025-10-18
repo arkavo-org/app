@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */; };
 		15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */; };
 		CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
@@ -61,6 +60,12 @@
 		DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C042D380ADE0033F6B8 /* ReportView.swift */; };
 		DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C062D3849910033F6B8 /* BlockedProfile.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
+		DAAC24262EA3D83300E06FE1 /* ArkavoAgent in Frameworks */ = {isa = PBXBuildFile; productRef = DAAC24252EA3D83300E06FE1 /* ArkavoAgent */; };
+		DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC24292EA3D99000E06FE1 /* AgentDetailView.swift */; };
+		DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC24272EA3D99000E06FE1 /* AgentChatListView.swift */; };
+		DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC242A2EA3D99000E06FE1 /* AgentDiscoveryView.swift */; };
+		DAAC242F2EA3D99000E06FE1 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC242B2EA3D99000E06FE1 /* AgentService.swift */; };
+		DAAC24302EA3D99000E06FE1 /* AgentChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */; };
 		DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */; };
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
 		DAAFCBCE2D090740003FC56F /* GroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* GroupView.swift */; };
@@ -95,6 +100,7 @@
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 		DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */; };
+		DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -164,6 +170,11 @@
 		DA975C042D380ADE0033F6B8 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		DA975C062D3849910033F6B8 /* BlockedProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedProfile.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		DAAC24272EA3D99000E06FE1 /* AgentChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatListView.swift; sourceTree = "<group>"; };
+		DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatView.swift; sourceTree = "<group>"; };
+		DAAC24292EA3D99000E06FE1 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
+		DAAC242A2EA3D99000E06FE1 /* AgentDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDiscoveryView.swift; sourceTree = "<group>"; };
+		DAAC242B2EA3D99000E06FE1 /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorView.swift; sourceTree = "<group>"; };
 		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DAAFCBCD2D09073A003FC56F /* GroupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupView.swift; sourceTree = "<group>"; };
@@ -209,6 +220,7 @@
 			files = (
 				DA3A752D2CFB85FA004472CD /* ArkavoSocial in Frameworks */,
 				DA73E7F52CF961180078D943 /* ArkavoSocial in Frameworks */,
+				DAAC24262EA3D83300E06FE1 /* ArkavoAgent in Frameworks */,
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
 				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
 				DA91AA0B2CFB655900BE9912 /* ArkavoSocial in Frameworks */,
@@ -256,6 +268,11 @@
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				DAAC24272EA3D99000E06FE1 /* AgentChatListView.swift */,
+				DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */,
+				DAAC24292EA3D99000E06FE1 /* AgentDetailView.swift */,
+				DAAC242A2EA3D99000E06FE1 /* AgentDiscoveryView.swift */,
+				DAAC242B2EA3D99000E06FE1 /* AgentService.swift */,
 				DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */,
 				DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */,
 				DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */,
@@ -326,9 +343,9 @@
 				DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */,
 				DAC1F9EC2C34DA7100499631 /* Assets.xcassets */,
 				DAC1F9EF2C34DA7100499631 /* Preview Content */,
-							0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */,
+				0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */,
 				591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */,
-);
+			);
 			path = Arkavo;
 			sourceTree = "<group>";
 		};
@@ -386,6 +403,7 @@
 				DA73E7F42CF961180078D943 /* ArkavoSocial */,
 				DA91AA0A2CFB655900BE9912 /* ArkavoSocial */,
 				DA3A752C2CFB85FA004472CD /* ArkavoSocial */,
+				DAAC24252EA3D83300E06FE1 /* ArkavoAgent */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -435,7 +453,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1610;
-				LastUpgradeCheck = 1630;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					DAC1F9E22C34DA7000499631 = {
 						CreatedOnToolsVersion = 16.0;
@@ -464,6 +482,7 @@
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 				DA3A752B2CFB85FA004472CD /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
+				DAAC24242EA3D83300E06FE1 /* XCLocalSwiftPackageReference "../ArkavoAgent" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -582,6 +601,11 @@
 				DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
+				DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */,
+				DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */,
+				DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */,
+				DAAC242F2EA3D99000E06FE1 /* AgentService.swift in Sources */,
+				DAAC24302EA3D99000E06FE1 /* AgentChatView.swift in Sources */,
 				DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */,
 				DA1C90672CB3099100806E8A /* StreamLoadingView.swift in Sources */,
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
@@ -602,9 +626,9 @@
 				DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */,
 				DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
-							DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */,
+				DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */,
 				15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */,
-);
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DAC1F9F22C34DA7100499631 /* Sources */ = {
@@ -705,6 +729,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -764,6 +789,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -781,8 +807,10 @@
 				CURRENT_PROJECT_VERSION = 100;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Arkavo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Arkavo;
@@ -830,8 +858,10 @@
 				CURRENT_PROJECT_VERSION = 100;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Arkavo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Arkavo;
@@ -1003,6 +1033,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoSocial;
 		};
+		DAAC24242EA3D83300E06FE1 /* XCLocalSwiftPackageReference "../ArkavoAgent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoAgent;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1036,6 +1070,10 @@
 		DA91AA0A2CFB655900BE9912 /* ArkavoSocial */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArkavoSocial;
+		};
+		DAAC24252EA3D83300E06FE1 /* ArkavoAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArkavoAgent;
 		};
 		DABFC28F2C34F54E00232D79 /* OpenTDFKit */ = {
 			isa = XCSwiftPackageProductDependency;

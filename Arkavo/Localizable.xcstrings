@@ -29,6 +29,16 @@
     "%@ is in InnerCircle" : {
 
     },
+    "%@:%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@:%2$lld"
+          }
+        }
+      }
+    },
     "%@/month" : {
 
     },
@@ -52,6 +62,9 @@
         }
       }
     },
+    "%lld types" : {
+
+    },
     "%lld." : {
 
     },
@@ -68,6 +81,9 @@
 
     },
     "• Your report will be reviewed within 24 hours" : {
+
+    },
+    "+%lld" : {
 
     },
     "1. Agreement to Terms" : {
@@ -161,6 +177,15 @@
 
     },
     "Age Verification" : {
+
+    },
+    "Agent Details" : {
+
+    },
+    "Agent Properties" : {
+
+    },
+    "Agents" : {
 
     },
     "Agreement accepted" : {
@@ -272,6 +297,12 @@
         }
       }
     },
+    "Capabilities" : {
+
+    },
+    "Chat Sessions" : {
+
+    },
     "Chat with %@" : {
 
     },
@@ -291,6 +322,12 @@
 
     },
     "Connect Nearby" : {
+
+    },
+    "Connect to agent first to start a chat session" : {
+
+    },
+    "Connect to an agent and start a chat session to see it here" : {
 
     },
     "Connect to Peers (Optional)" : {
@@ -487,6 +524,9 @@
     "Identity Verified" : {
 
     },
+    "In-Process Agent" : {
+
+    },
     "Inactive" : {
 
     },
@@ -595,6 +635,9 @@
     "logo" : {
 
     },
+    "Make sure an agent is running on your local network" : {
+
+    },
     "Make sure the other person has Arkavo open and is also searching for connections." : {
 
     },
@@ -616,6 +659,9 @@
 
     },
     "Members:" : {
+
+    },
+    "Message %@..." : {
 
     },
     "Military-grade encryption for your data" : {
@@ -649,6 +695,15 @@
       }
     },
     "Next" : {
+
+    },
+    "No Active Chats" : {
+
+    },
+    "No additional properties" : {
+
+    },
+    "No Agents Found" : {
 
     },
     "No contacts found" : {
@@ -853,6 +908,9 @@
     "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
 
     },
+    "Running" : {
+
+    },
     "Save" : {
       "localizations" : {
         "es-US" : {
@@ -870,6 +928,9 @@
 
     },
     "Search" : {
+
+    },
+    "Search contacts" : {
 
     },
     "Searching for nearby devices..." : {
@@ -891,6 +952,9 @@
 
     },
     "Send your Arkavo link with the iOS Share Sheet to connect with someone you already know—no matter the distance." : {
+
+    },
+    "Session %@..." : {
 
     },
     "Settings" : {
@@ -974,7 +1038,16 @@
         }
       }
     },
+    "Start New Chat" : {
+
+    },
+    "Start Searching" : {
+
+    },
     "Start Verification" : {
+
+    },
+    "Started: %@ ago" : {
 
     },
     "Stop" : {
@@ -989,6 +1062,9 @@
       }
     },
     "Stop Discovery" : {
+
+    },
+    "Stopped" : {
 
     },
     "Stream" : {
@@ -1014,6 +1090,9 @@
           }
         }
       }
+    },
+    "Streaming" : {
+
     },
     "Streams" : {
       "localizations" : {
