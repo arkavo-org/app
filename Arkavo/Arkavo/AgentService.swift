@@ -257,11 +257,17 @@ final class AgentService: ObservableObject {
                 let response = try await localAgent.sendDirectMessage(sessionId: sessionId, content: content)
 
                 // Update streaming text with the response
+                logger.log("[AgentService] Got response from LocalAIAgent: '\(response)' (length: \(response.count))")
                 streamingText[sessionId] = response
+                logger.log("[AgentService] Set streamingText[\(sessionId)] = '\(response)'")
                 logger.log("[AgentService] Direct message sent and received response")
+
+                // Small delay to ensure UI processes the text update before we end streaming
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
 
                 // End streaming state (triggers message finalization in UI)
                 streamingStates[sessionId] = false
+                logger.log("[AgentService] Set streamingStates[\(sessionId)] = false")
 
                 return
             } catch {

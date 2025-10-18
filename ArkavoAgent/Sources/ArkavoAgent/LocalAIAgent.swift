@@ -98,6 +98,8 @@ public final class LocalAIAgent: NSObject, ObservableObject {
         // Generate response using Foundation Models
         let response = try await generateResponse(for: content, session: session)
 
+        print("[LocalAIAgent] Generated response: \(response)")
+
         // Add assistant message
         let assistantMessage = ChatMessage(role: "assistant", content: response)
         session.messages.append(assistantMessage)
@@ -105,6 +107,7 @@ public final class LocalAIAgent: NSObject, ObservableObject {
         // Update session
         inProcessSessions[sessionId] = session
 
+        print("[LocalAIAgent] Returning response of length: \(response.count)")
         return response
     }
 
@@ -463,8 +466,11 @@ public final class LocalAIAgent: NSObject, ObservableObject {
 
     /// Generate a response for the user's message
     private func generateResponse(for message: String, session: InProcessChatSession) async throws -> String {
+        print("[LocalAIAgent] generateResponse called with message: '\(message)'")
+
         // Try to use Foundation Models if available
         if appleIntelligenceClient.isAvailable {
+            print("[LocalAIAgent] Foundation Models available, attempting to use")
             let toolCall = ToolCall(
                 toolCallId: UUID().uuidString,
                 name: "foundation_models_generate",
@@ -477,12 +483,18 @@ public final class LocalAIAgent: NSObject, ObservableObject {
             )
             let result = try await appleIntelligenceClient.executeToolCall(toolCall)
             if result.success, let text = result.result?.value as? [String: Any], let response = text["text"] as? String {
+                print("[LocalAIAgent] Foundation Models returned: \(response)")
                 return response
             }
+            print("[LocalAIAgent] Foundation Models failed or returned no text, using fallback")
+        } else {
+            print("[LocalAIAgent] Foundation Models not available, using fallback")
         }
 
         // Fallback: Simple echo with context awareness
-        return generateFallbackResponse(for: message, session: session)
+        let fallbackResponse = generateFallbackResponse(for: message, session: session)
+        print("[LocalAIAgent] Fallback response: \(fallbackResponse)")
+        return fallbackResponse
     }
 
     /// Fallback response when Foundation Models not available
