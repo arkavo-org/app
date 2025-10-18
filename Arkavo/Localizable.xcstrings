@@ -321,6 +321,9 @@
     "Connect Nearby" : {
 
     },
+    "Connect to agent first to start a chat session" : {
+
+    },
     "Connect to an agent and start a chat session to see it here" : {
 
     },
@@ -516,6 +519,9 @@
 
     },
     "Identity Verified" : {
+
+    },
+    "In-Process Agent" : {
 
     },
     "Inactive" : {
@@ -902,6 +908,9 @@
     "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
 
     },
+    "Running" : {
+
+    },
     "Save" : {
       "localizations" : {
         "es-US" : {
@@ -1053,6 +1062,9 @@
       }
     },
     "Stop Discovery" : {
+
+    },
+    "Stopped" : {
 
     },
     "Stream" : {

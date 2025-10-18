@@ -141,6 +141,30 @@ final class AgentService: ObservableObject {
     func openChatSession(with agentId: String) async throws -> ChatSession {
         logger.log("[AgentService] Opening chat session with agent: \(agentId)")
 
+        // For LocalAIAgent, use direct in-process call (no WebSocket)
+        let isLocalAgent = agentId.lowercased().contains("local")
+        if isLocalAgent {
+            logger.log("[AgentService] Using direct in-process chat for LocalAIAgent")
+            let sessionId = localAgent.openDirectChatSession()
+
+            // Create a ChatSession compatible with UI
+            let session = ChatSession(
+                id: sessionId,
+                capabilities: ChatCapabilities(
+                    supportedMessageTypes: ["text"],
+                    maxMessageLength: 10000,
+                    supportsStreaming: false
+                ),
+                createdAt: Date()
+            )
+
+            activeSessions[session.id] = session
+            sessionAgentMap[session.id] = agentId
+            logger.log("[AgentService] Opened direct chat session: \(session.id)")
+            return session
+        }
+
+        // For remote agents, use WebSocket connection
         do {
             let session = try await chatManager.openSession(with: agentId)
             activeSessions[session.id] = session
@@ -159,8 +183,28 @@ final class AgentService: ObservableObject {
         logger.log("[AgentService] Sending message to session: \(sessionId)")
 
         // Get agent ID for this session
-        guard let agentId = sessionAgentMap[sessionId],
-              let connection = agentManager.getConnection(for: agentId) else {
+        guard let agentId = sessionAgentMap[sessionId] else {
+            throw AgentError.notConnected
+        }
+
+        // For LocalAIAgent, use direct in-process call
+        let isLocalAgent = agentId.lowercased().contains("local")
+        if isLocalAgent {
+            logger.log("[AgentService] Using direct in-process message send for LocalAIAgent")
+            do {
+                let response = try await localAgent.sendDirectMessage(sessionId: sessionId, content: content)
+                // Update streaming text with the response
+                streamingText[sessionId] = response
+                logger.log("[AgentService] Direct message sent and received response")
+                return
+            } catch {
+                logger.error("[AgentService] Failed to send direct message: \(String(describing: error))")
+                throw error
+            }
+        }
+
+        // For remote agents, use WebSocket streaming
+        guard let connection = agentManager.getConnection(for: agentId) else {
             throw AgentError.notConnected
         }
 
@@ -211,7 +255,17 @@ final class AgentService: ObservableObject {
     func closeChatSession(sessionId: String) async {
         logger.log("[AgentService] Closing chat session: \(sessionId)")
 
-        // Unsubscribe from streaming
+        // Check if this is a LocalAIAgent session
+        if let agentId = sessionAgentMap[sessionId], agentId.lowercased().contains("local") {
+            logger.log("[AgentService] Closing direct LocalAIAgent session")
+            localAgent.closeDirectChatSession(sessionId: sessionId)
+            activeSessions.removeValue(forKey: sessionId)
+            sessionAgentMap.removeValue(forKey: sessionId)
+            streamingText.removeValue(forKey: sessionId)
+            return
+        }
+
+        // For remote agents, unsubscribe from streaming
         if let streamHandler = streamHandlers[sessionId] {
             await streamHandler.unsubscribe()
             streamHandlers.removeValue(forKey: sessionId)

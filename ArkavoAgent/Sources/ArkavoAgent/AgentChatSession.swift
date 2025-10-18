@@ -7,6 +7,12 @@ public struct ChatSession: Codable, Identifiable, Sendable {
     public let capabilities: ChatCapabilities?
     public let createdAt: Date
 
+    public init(id: String, capabilities: ChatCapabilities? = nil, createdAt: Date) {
+        self.id = id
+        self.capabilities = capabilities
+        self.createdAt = createdAt
+    }
+
     enum CodingKeys: String, CodingKey {
         case id = "session_id"
         case capabilities
@@ -19,6 +25,12 @@ public struct ChatCapabilities: Codable, Sendable {
     public let supportedMessageTypes: [String]?
     public let maxMessageLength: Int?
     public let supportsStreaming: Bool?
+
+    public init(supportedMessageTypes: [String]? = nil, maxMessageLength: Int? = nil, supportsStreaming: Bool? = nil) {
+        self.supportedMessageTypes = supportedMessageTypes
+        self.maxMessageLength = maxMessageLength
+        self.supportsStreaming = supportsStreaming
+    }
 
     enum CodingKeys: String, CodingKey {
         case supportedMessageTypes = "supported_message_types"
