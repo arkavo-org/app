@@ -251,13 +251,22 @@ final class AgentService: ObservableObject {
         if isLocalAgent {
             logger.log("[AgentService] Using direct in-process message send for LocalAIAgent")
             do {
+                // Start streaming state
+                streamingStates[sessionId] = true
+
                 let response = try await localAgent.sendDirectMessage(sessionId: sessionId, content: content)
+
                 // Update streaming text with the response
                 streamingText[sessionId] = response
                 logger.log("[AgentService] Direct message sent and received response")
+
+                // End streaming state (triggers message finalization in UI)
+                streamingStates[sessionId] = false
+
                 return
             } catch {
                 logger.error("[AgentService] Failed to send direct message: \(String(describing: error))")
+                streamingStates[sessionId] = false
                 throw error
             }
         }
