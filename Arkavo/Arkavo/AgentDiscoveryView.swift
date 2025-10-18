@@ -23,7 +23,7 @@ struct AgentDiscoveryView: View {
                     agentListView
                 }
             }
-            .navigationTitle("Local Agents")
+            .navigationTitle("Agents")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

@@ -55,15 +55,52 @@ final class AgentService: ObservableObject {
         self.chatManager = AgentChatSessionManager(agentManager: AgentManager.shared)
         self.localAgent = LocalAIAgent.shared
 
+        // Add built-in LocalAIAgent as first agent (always available, no discovery)
+        let localAgentEndpoint = AgentEndpoint(
+            id: "local_ai_agent",
+            url: "local://in-process", // Not used, but required
+            metadata: AgentMetadata(
+                name: "LocalAI Agent",
+                purpose: "Local AI for on-device intelligence and sensor access",
+                model: "on-device",
+                properties: [
+                    "capabilities": "sensors,foundation_models,writing_tools,image_playground,sentiment_analysis"
+                ]
+            )
+        )
+        discoveredAgents.append(localAgentEndpoint)
+        connectedAgents["local_ai_agent"] = true // Always "connected" (in-process)
+
         setupBindings()
-        logger.log("[AgentService] Initialized")
+        logger.log("[AgentService] Initialized with built-in LocalAIAgent")
     }
 
     // MARK: - Setup
 
     private func setupBindings() {
         // Bind AgentManager.agents to our published property
+        // Filter out LocalAIAgent if it appears in mDNS discovery (it shouldn't discover itself)
+        // Then prepend our built-in LocalAIAgent endpoint
         agentManager.$agents
+            .map { [weak self] discoveredAgents in
+                guard let self = self else { return [] }
+
+                // Filter out any LocalAIAgent from mDNS discovery
+                let remoteAgents = discoveredAgents.filter { agent in
+                    !agent.id.lowercased().contains("local_ai_agent") &&
+                    !agent.metadata.purpose.lowercased().contains("local ai for on-device")
+                }
+
+                // Get built-in LocalAIAgent (first in list)
+                let builtInLocal = self.discoveredAgents.first { $0.id == "local_ai_agent" }
+
+                // Return built-in LocalAIAgent first, then remote agents
+                if let builtInLocal = builtInLocal {
+                    return [builtInLocal] + remoteAgents
+                } else {
+                    return remoteAgents
+                }
+            }
             .assign(to: &$discoveredAgents)
 
         // Bind LocalAIAgent publishing state
