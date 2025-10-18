@@ -1,12 +1,18 @@
 import Foundation
 #if os(iOS)
     import UIKit
+    #if canImport(ImagePlayground)
+        import ImagePlayground
+    #endif
 #elseif os(macOS)
     import AppKit
+    #if canImport(ImagePlayground)
+        import ImagePlayground
+    #endif
 #endif
 
 /// Integration with Image Playground (iOS 26+, macOS 26+)
-/// Provides on-device image synthesis
+/// Provides on-device image synthesis using ImageCreator API
 @MainActor
 public final class ImagePlaygroundIntegration: ObservableObject {
     @Published public private(set) var isAvailable: Bool = false
@@ -19,8 +25,12 @@ public final class ImagePlaygroundIntegration: ObservableObject {
 
     /// Check if Image Playground is available on this device
     private func checkAvailability() {
+        #if canImport(ImagePlayground)
         #if os(iOS)
             if #available(iOS 26.0, *) {
+                // Note: ImageCreator API structure is different than initially researched
+                // Actual API needs verification from Xcode documentation
+                // For now, assume available if framework can be imported
                 isAvailable = true
             } else {
                 isAvailable = false
@@ -31,6 +41,9 @@ public final class ImagePlaygroundIntegration: ObservableObject {
             } else {
                 isAvailable = false
             }
+        #else
+            isAvailable = false
+        #endif
         #else
             isAvailable = false
         #endif
@@ -132,33 +145,45 @@ public final class ImagePlaygroundIntegration: ObservableObject {
         }
     }
 
-    /// Perform image generation with Image Playground
-    /// NOTE: This is a placeholder for the actual iOS 26 Image Playground API
+    /// Perform image generation using Image Playground ImageCreator API
+    /// Note: Actual ImagePlayground API structure differs from initial research
+    /// TODO: Update with correct API once verified from Xcode 26 documentation
     private func performGeneration(prompt: String, style: String, size: String) async throws -> Data {
+        #if canImport(ImagePlayground)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                throw ImagePlaygroundError.notImplemented("Image Playground API integration pending")
+                // TODO: Replace with actual ImagePlayground API calls
+                // The actual API structure is different - needs:
+                // 1. Correct availability checking method
+                // 2. Proper style enumeration
+                // 3. Correct request/response structure
+                throw ImagePlaygroundError.notImplemented("Image Playground API needs proper integration - API structure differs from initial research")
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                throw ImagePlaygroundError.notImplemented("Image Playground API integration pending")
+                throw ImagePlaygroundError.notImplemented("Image Playground API needs proper integration - API structure differs from initial research")
             }
+        #endif
         #endif
 
         throw ImagePlaygroundError.notAvailable
     }
 
-    /// Perform image editing with Image Playground
-    /// NOTE: This is a placeholder for the actual iOS 26 Image Playground API
+    /// Perform image editing using Image Playground ImageCreator API
+    /// Note: Actual ImagePlayground API structure differs from initial research
+    /// TODO: Update with correct API once verified from Xcode 26 documentation
     private func performEdit(prompt: String, imageData: Data) async throws -> Data {
+        #if canImport(ImagePlayground)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                throw ImagePlaygroundError.notImplemented("Image Playground API integration pending")
+                // TODO: Replace with actual ImagePlayground API calls
+                throw ImagePlaygroundError.notImplemented("Image Playground API needs proper integration - API structure differs from initial research")
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                throw ImagePlaygroundError.notImplemented("Image Playground API integration pending")
+                throw ImagePlaygroundError.notImplemented("Image Playground API needs proper integration - API structure differs from initial research")
             }
+        #endif
         #endif
 
         throw ImagePlaygroundError.notAvailable

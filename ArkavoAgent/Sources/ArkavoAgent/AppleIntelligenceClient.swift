@@ -1,4 +1,15 @@
 import Foundation
+#if os(iOS)
+    import UIKit
+    #if canImport(FoundationModels)
+        import FoundationModels
+    #endif
+#elseif os(macOS)
+    import AppKit
+    #if canImport(FoundationModels)
+        import FoundationModels
+    #endif
+#endif
 
 /// Client for Apple Intelligence Foundation Models (iOS 26+)
 /// Provides structured generation, streaming, and local tool calling
@@ -7,7 +18,9 @@ public final class AppleIntelligenceClient: ObservableObject {
     @Published public private(set) var isAvailable: Bool = false
     @Published public private(set) var lastError: String?
 
-    private var activeSession: FoundationModelsSession?
+    #if canImport(FoundationModels)
+    private var session: Any? // Stores LanguageModelSession, but using Any to avoid @available requirement
+    #endif
 
     public init() {
         checkAvailability()
@@ -15,18 +28,34 @@ public final class AppleIntelligenceClient: ObservableObject {
 
     /// Check if Foundation Models are available on this device
     private func checkAvailability() {
+        #if canImport(FoundationModels)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                isAvailable = true
+                // Check actual model availability
+                if case .available = SystemLanguageModel.default.availability {
+                    isAvailable = true
+                    session = LanguageModelSession()
+                } else {
+                    isAvailable = false
+                }
             } else {
                 isAvailable = false
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                isAvailable = true
+                // Check actual model availability
+                if case .available = SystemLanguageModel.default.availability {
+                    isAvailable = true
+                    session = LanguageModelSession()
+                } else {
+                    isAvailable = false
+                }
             } else {
                 isAvailable = false
             }
+        #else
+            isAvailable = false
+        #endif
         #else
             isAvailable = false
         #endif
@@ -116,67 +145,196 @@ public final class AppleIntelligenceClient: ObservableObject {
     }
 
     /// Perform text generation with Foundation Models
-    /// NOTE: This is a placeholder for the actual iOS 26 Foundation Models API
     private func performGeneration(prompt: String, maxTokens: Int, temperature: Double) async throws -> String {
+        #if canImport(FoundationModels)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Foundation Models API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                // Note: Foundation Models API doesn't expose maxTokens or temperature directly
+                // These are handled by the system model
+                do {
+                    let response = try await session.respond(to: prompt)
+                    return response.content
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Generation failed: \(error.localizedDescription)")
+                }
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Foundation Models API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                do {
+                    let response = try await session.respond(to: prompt)
+                    return response.content
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Generation failed: \(error.localizedDescription)")
+                }
             }
+        #endif
         #endif
 
         throw AppleIntelligenceError.notAvailable
     }
 
     /// Perform structured generation with Foundation Models
-    /// NOTE: This is a placeholder for the actual iOS 26 Foundation Models API
+    /// Note: For true structured output with compile-time safety, define structs with @Generable macro
+    /// This implementation uses text generation with schema prompting as fallback
     private func performStructuredGeneration(prompt: String, schema: [String: Any]) async throws -> [String: Any] {
+        #if canImport(FoundationModels)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Foundation Models API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                // Convert schema to JSON string for prompt augmentation
+                let schemaData = try JSONSerialization.data(withJSONObject: schema)
+                let schemaString = String(data: schemaData, encoding: .utf8) ?? "{}"
+
+                let structuredPrompt = """
+                \(prompt)
+
+                Please respond with valid JSON matching this schema:
+                \(schemaString)
+
+                Respond only with the JSON object, no additional text.
+                """
+
+                do {
+                    let response = try await session.respond(to: structuredPrompt)
+                    let responseText = response.content
+
+                    // Parse JSON response
+                    guard let responseData = responseText.data(using: .utf8),
+                          let jsonObject = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+                        throw AppleIntelligenceError.sessionError("Failed to parse structured response as JSON")
+                    }
+
+                    return jsonObject
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Structured generation failed: \(error.localizedDescription)")
+                }
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Foundation Models API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                let schemaData = try JSONSerialization.data(withJSONObject: schema)
+                let schemaString = String(data: schemaData, encoding: .utf8) ?? "{}"
+
+                let structuredPrompt = """
+                \(prompt)
+
+                Please respond with valid JSON matching this schema:
+                \(schemaString)
+
+                Respond only with the JSON object, no additional text.
+                """
+
+                do {
+                    let response = try await session.respond(to: structuredPrompt)
+                    let responseText = response.content
+
+                    guard let responseData = responseText.data(using: .utf8),
+                          let jsonObject = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+                        throw AppleIntelligenceError.sessionError("Failed to parse structured response as JSON")
+                    }
+
+                    return jsonObject
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Structured generation failed: \(error.localizedDescription)")
+                }
             }
+        #endif
         #endif
 
         throw AppleIntelligenceError.notAvailable
     }
 
-    /// Stream text generation (placeholder for streaming API)
+    /// Stream text generation
+    /// Note: Foundation Models API may not expose true streaming yet
+    /// This implementation simulates streaming by chunking the response
     public func streamGeneration(prompt: String, onDelta: @escaping (String) -> Void) async throws {
         guard isAvailable else {
             throw AppleIntelligenceError.notAvailable
         }
 
+        #if canImport(FoundationModels)
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Streaming API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                do {
+                    // Get full response
+                    let response = try await session.respond(to: prompt)
+                    let responseText = response.content
+
+                    // Simulate streaming by chunking the response
+                    // This provides a better UX than waiting for the full response
+                    let chunkSize = 20 // characters per chunk
+                    var startIndex = responseText.startIndex
+
+                    while startIndex < responseText.endIndex {
+                        let endIndex = responseText.index(startIndex, offsetBy: chunkSize, limitedBy: responseText.endIndex) ?? responseText.endIndex
+                        let chunk = String(responseText[startIndex..<endIndex])
+                        onDelta(chunk)
+
+                        // Small delay to simulate streaming
+                        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+
+                        startIndex = endIndex
+                    }
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Streaming generation failed: \(error.localizedDescription)")
+                }
             }
         #elseif os(macOS)
             if #available(macOS 26.0, *) {
-                throw AppleIntelligenceError.notImplemented("Streaming API integration pending")
+                guard let session = session as? LanguageModelSession else {
+                    throw AppleIntelligenceError.sessionError("Session not initialized")
+                }
+
+                do {
+                    let response = try await session.respond(to: prompt)
+                    let responseText = response.content
+
+                    let chunkSize = 20
+                    var startIndex = responseText.startIndex
+
+                    while startIndex < responseText.endIndex {
+                        let endIndex = responseText.index(startIndex, offsetBy: chunkSize, limitedBy: responseText.endIndex) ?? responseText.endIndex
+                        let chunk = String(responseText[startIndex..<endIndex])
+                        onDelta(chunk)
+
+                        try await Task.sleep(nanoseconds: 50_000_000)
+
+                        startIndex = endIndex
+                    }
+                } catch {
+                    throw AppleIntelligenceError.sessionError("Streaming generation failed: \(error.localizedDescription)")
+                }
             }
+        #endif
         #endif
 
         throw AppleIntelligenceError.notAvailable
     }
 
     /// Call a local tool from within Foundation Models
-    /// NOTE: This allows Foundation Models to call device-local tools only
+    /// Note: Foundation Models API tool calling uses the @ToolProvider macro
+    /// This is a future enhancement for dynamic tool registration
     public func callLocalTool(name: String, args: [String: Any]) async throws -> [String: Any] {
-        throw AppleIntelligenceError.notImplemented("Local tool calling pending")
+        throw AppleIntelligenceError.notImplemented("Dynamic tool calling pending - use @ToolProvider macro for compile-time tool definition")
     }
-}
-
-/// Represents a Foundation Models session (placeholder)
-private struct FoundationModelsSession {
-    let id: String
-    let createdAt: Date
 }
 
 public enum AppleIntelligenceError: Error, LocalizedError {
