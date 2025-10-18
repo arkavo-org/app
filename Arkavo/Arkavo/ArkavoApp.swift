@@ -12,6 +12,7 @@ struct ArkavoApp: App {
     @State private var connectionError: ConnectionError?
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
+    @StateObject private var agentService = AgentService()
     // BEGIN screenshots
 //    @StateObject private var windowAccessor = WindowAccessor.shared
 //    @State private var screenshotGenerator: AppStoreScreenshotGenerator?
@@ -74,10 +75,13 @@ struct ArkavoApp: App {
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
+            .environmentObject(agentService)
             .modelContainer(persistenceController.container)
             .onAppear {
                 // Update the shared state reference now that the StateObject is properly installed
                 ViewModelFactory.shared.setSharedState(sharedState)
+                // Register agent service in service locator
+                ViewModelFactory.shared.serviceLocator.register(agentService)
             }
             // BEGIN screenshots
 //            .onAppear {
@@ -156,6 +160,10 @@ struct ArkavoApp: App {
                         }
                     }
                 }
+
+                // Start agent discovery when app becomes active
+                agentService.onAppearActive()
+
             case .background:
                 Task {
                     await saveChanges()
@@ -164,6 +172,10 @@ struct ArkavoApp: App {
                 // No need to remove observer for retry connection
                 tokenCheckTimer?.invalidate()
                 tokenCheckTimer = nil
+
+                // Stop agent discovery and cleanup when going to background
+                agentService.onDisappear()
+
             // BEGIN screenshots
             // Stop screenshot capture when going to background
 //                screenshotGenerator?.stopCapturing()
@@ -846,6 +858,7 @@ class SharedState: ObservableObject {
         case .home: "Capture" // create a video
         case .communities: "Converse" // start chatting
         case .contacts: "Connect" // invite someone new
+        case .agents: "Discover" // find local agents
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -856,6 +869,7 @@ class SharedState: ObservableObject {
         case .home: "Capture video"
         case .communities: "Converse in chat"
         case .contacts: "Connect with someone"
+        case .agents: "Discover agents"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }
