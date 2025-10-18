@@ -58,6 +58,22 @@ struct AgentChatView: View {
                 ))
                 isInputFocused = true
             }
+            .onChange(of: agentService.streamingText[session.id]) { _, newText in
+                // Update streaming message as text arrives
+                currentStreamingMessage = newText ?? ""
+            }
+            .onChange(of: agentService.streamingStates[session.id]) { oldValue, newValue in
+                // Handle streaming state changes
+                if oldValue == true && newValue == false {
+                    // Stream ended, finalize the message
+                    finalizeStreamingMessage()
+                } else if newValue == true {
+                    // Stream started
+                    isStreamingResponse = true
+                } else {
+                    isStreamingResponse = false
+                }
+            }
         }
     }
 
@@ -152,38 +168,45 @@ struct AgentChatView: View {
         let sentContent = messageText
         messageText = ""
 
-        isStreamingResponse = true
-        currentStreamingMessage = ""
-
+        // Streaming will be managed automatically by AgentService
         do {
             try await agentService.sendMessage(sessionId: session.id, content: sentContent)
-
-            // TODO: Replace with actual streaming response
-            // For now, simulate a response
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-
-            // Add agent response (placeholder until streaming is implemented)
-            let agentResponse = AgentMessage(
-                id: UUID().uuidString,
-                role: .agent,
-                content: "Message received: \(sentContent)\n\n(Streaming responses will be implemented next)",
-                timestamp: Date()
-            )
-
-            messages.append(agentResponse)
-
+            // Stream handler will update currentStreamingMessage via onChange bindings
         } catch {
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             showError = true
+            isStreamingResponse = false
+            currentStreamingMessage = ""
         }
-
-        isStreamingResponse = false
-        currentStreamingMessage = ""
     }
 
     private func closeSession() async {
         await agentService.closeChatSession(sessionId: session.id)
         dismiss()
+    }
+
+    private func finalizeStreamingMessage() {
+        // Get the final text from the stream
+        guard let finalText = agentService.finalizeStream(sessionId: session.id),
+              !finalText.isEmpty else {
+            isStreamingResponse = false
+            currentStreamingMessage = ""
+            return
+        }
+
+        // Add the completed message to the messages array
+        let agentResponse = AgentMessage(
+            id: UUID().uuidString,
+            role: .agent,
+            content: finalText,
+            timestamp: Date()
+        )
+
+        messages.append(agentResponse)
+
+        // Clear streaming state
+        isStreamingResponse = false
+        currentStreamingMessage = ""
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {

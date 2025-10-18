@@ -134,6 +134,11 @@ public actor AgentConnection {
         return try await sendRequest(request)
     }
 
+    /// Set the notification handler for this connection
+    public func setNotificationHandler(_ handler: (any AgentNotificationHandler)?) async {
+        await transport.setNotificationHandler(handler)
+    }
+
     // MARK: - Private Methods
 
     private func waitForDisconnection() async {

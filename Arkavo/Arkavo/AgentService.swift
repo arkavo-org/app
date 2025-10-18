@@ -23,6 +23,12 @@ final class AgentService: ObservableObject {
     /// Session to agent mapping (session_id -> agent_id)
     private var sessionAgentMap: [String: String] = [:]
 
+    /// Streaming text for active sessions (session_id -> accumulated text)
+    @Published var streamingText: [String: String] = [:]
+
+    /// Streaming state for sessions (session_id -> isStreaming)
+    @Published var streamingStates: [String: Bool] = [:]
+
     /// Discovery state
     @Published var isDiscovering: Bool = false
 
@@ -34,6 +40,9 @@ final class AgentService: ObservableObject {
     private let agentManager: AgentManager
     private let chatManager: AgentChatSessionManager
     private var cancellables = Set<AnyCancellable>()
+
+    /// Stream handlers for active sessions (session_id -> AgentStreamHandler)
+    private var streamHandlers: [String: AgentStreamHandler] = [:]
 
     // MARK: - Initialization
 
@@ -117,13 +126,52 @@ final class AgentService: ObservableObject {
         }
     }
 
-    /// Send a message in an existing chat session
+    /// Send a message in an existing chat session with streaming support
     func sendMessage(sessionId: String, content: String) async throws {
         logger.log("[AgentService] Sending message to session: \(sessionId)")
 
+        // Get agent ID for this session
+        guard let agentId = sessionAgentMap[sessionId],
+              let connection = agentManager.getConnection(for: agentId) else {
+            throw AgentError.notConnected
+        }
+
         do {
+            // Create or get stream handler for this session
+            let streamHandler: AgentStreamHandler
+            if let existingHandler = streamHandlers[sessionId] {
+                streamHandler = existingHandler
+            } else {
+                streamHandler = AgentStreamHandler(sessionId: sessionId, connection: connection)
+                streamHandlers[sessionId] = streamHandler
+
+                // Set up notification handler on the connection
+                await connection.setNotificationHandler(streamHandler)
+
+                // Bind stream handler's published properties to our own
+                streamHandler.$streamingText
+                    .sink { [weak self] text in
+                        self?.streamingText[sessionId] = text
+                    }
+                    .store(in: &cancellables)
+
+                streamHandler.$isStreaming
+                    .sink { [weak self] isStreaming in
+                        self?.streamingStates[sessionId] = isStreaming
+                    }
+                    .store(in: &cancellables)
+            }
+
+            // Subscribe to streaming before sending the message
+            try await streamHandler.subscribe()
+
+            // Send the message
             try await chatManager.sendMessage(sessionId: sessionId, content: content)
-            logger.log("[AgentService] Message sent successfully")
+
+            // Start auto-acknowledgment for back-pressure management
+            streamHandler.startAutoAcknowledgment()
+
+            logger.log("[AgentService] Message sent successfully, streaming started")
         } catch {
             logger.error("[AgentService] Failed to send message: \(String(describing: error))")
             lastError = error as? AgentError
@@ -134,6 +182,17 @@ final class AgentService: ObservableObject {
     /// Close a chat session
     func closeChatSession(sessionId: String) async {
         logger.log("[AgentService] Closing chat session: \(sessionId)")
+
+        // Unsubscribe from streaming
+        if let streamHandler = streamHandlers[sessionId] {
+            await streamHandler.unsubscribe()
+            streamHandlers.removeValue(forKey: sessionId)
+        }
+
+        // Clean up streaming state
+        streamingText.removeValue(forKey: sessionId)
+        streamingStates.removeValue(forKey: sessionId)
+
         await chatManager.closeSession(sessionId: sessionId)
         activeSessions.removeValue(forKey: sessionId)
         sessionAgentMap.removeValue(forKey: sessionId)
@@ -159,6 +218,26 @@ final class AgentService: ObservableObject {
     /// Get agent ID for a session
     func getAgentId(for sessionId: String) -> String? {
         sessionAgentMap[sessionId]
+    }
+
+    // MARK: - Streaming Helpers
+
+    /// Check if a session is currently streaming
+    func isStreaming(sessionId: String) -> Bool {
+        streamingStates[sessionId] ?? false
+    }
+
+    /// Get the current streaming text for a session
+    func getStreamingText(sessionId: String) -> String? {
+        streamingText[sessionId]
+    }
+
+    /// Get the final accumulated text and complete streaming
+    func finalizeStream(sessionId: String) -> String? {
+        let text = streamingText[sessionId]
+        streamingText.removeValue(forKey: sessionId)
+        streamingStates[sessionId] = false
+        return text
     }
 
     // MARK: - Lifecycle

@@ -14,6 +14,9 @@ public actor AgentWebSocketTransport {
     // Request/response correlation
     private var pendingRequests: [String: CheckedContinuation<AgentResponse, Error>] = [:]
 
+    // Notification handler
+    private weak var notificationHandler: (any AgentNotificationHandler)?
+
     // Configuration
     private let timeoutMs: UInt64
     private let requireTLS: Bool
@@ -93,6 +96,11 @@ public actor AgentWebSocketTransport {
         isConnected
     }
 
+    /// Set the notification handler
+    public func setNotificationHandler(_ handler: (any AgentNotificationHandler)?) {
+        self.notificationHandler = handler
+    }
+
     // MARK: - Request/Response
 
     /// Send a JSON-RPC request and await the response
@@ -147,6 +155,20 @@ public actor AgentWebSocketTransport {
         do {
             let data = Data(text.utf8)
             let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+
+            // First, try to determine if this is a notification or a response
+            // Notifications don't have an "id" field
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if json["id"] == nil && json["method"] != nil {
+                    // This is a notification
+                    let notification = try decoder.decode(AgentNotification.self, from: data)
+                    await handleNotification(notification)
+                    return
+                }
+            }
+
+            // Not a notification, try to decode as response
             let response = try decoder.decode(AgentResponse.self, from: data)
 
             // Find and resume the pending request
@@ -154,7 +176,14 @@ public actor AgentWebSocketTransport {
                 continuation.resume(returning: response)
             }
         } catch {
-            print("Failed to decode response: \(error)")
+            print("Failed to decode message: \(error)")
+        }
+    }
+
+    private func handleNotification(_ notification: AgentNotification) async {
+        // Dispatch to handler on MainActor
+        if let handler = notificationHandler {
+            await handler.handleNotification(method: notification.method, params: notification.params)
         }
     }
 
