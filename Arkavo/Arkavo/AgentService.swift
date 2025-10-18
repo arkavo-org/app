@@ -112,6 +112,15 @@ final class AgentService: ObservableObject {
     func connect(to agent: AgentEndpoint) async throws {
         logger.log("[AgentService] Connecting to agent: \(agent.id)")
 
+        // LocalAIAgent doesn't need WebSocket connection - it's in-process
+        let isLocalAgent = agent.id.lowercased().contains("local")
+        if isLocalAgent {
+            logger.log("[AgentService] Skipping WebSocket connection for LocalAIAgent (in-process)")
+            connectedAgents[agent.id] = true // Mark as "connected" for UI purposes
+            return
+        }
+
+        // For remote agents, establish WebSocket connection
         do {
             try await agentManager.connect(to: agent)
             connectedAgents[agent.id] = true
@@ -126,6 +135,16 @@ final class AgentService: ObservableObject {
     /// Disconnect from a specific agent
     func disconnect(from agentId: String) async {
         logger.log("[AgentService] Disconnecting from agent: \(agentId)")
+
+        // LocalAIAgent doesn't have WebSocket connection to disconnect
+        let isLocalAgent = agentId.lowercased().contains("local")
+        if isLocalAgent {
+            logger.log("[AgentService] LocalAIAgent disconnect (no-op, in-process)")
+            connectedAgents[agentId] = false
+            return
+        }
+
+        // For remote agents, disconnect WebSocket
         await agentManager.disconnect(from: agentId)
         connectedAgents[agentId] = false
     }
