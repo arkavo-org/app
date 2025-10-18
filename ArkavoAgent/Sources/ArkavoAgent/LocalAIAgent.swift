@@ -1,5 +1,10 @@
 import Foundation
 import Network
+#if os(iOS) || os(tvOS) || os(watchOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// LocalAIAgent: A participant agent that exposes on-device capabilities via A2A protocol
 /// - Publishes itself as an A2A service via mDNS
@@ -20,19 +25,47 @@ public final class LocalAIAgent: NSObject, ObservableObject {
     private let imagePlayground: ImagePlaygroundIntegration
     private var connections: [UUID: NWConnection] = [:]
 
-    private let agentId = "local_ai_agent"
-    private let agentName = "LocalAI Agent"
+    // Unique agent ID based on device
+    private let agentId: String
+    private let agentName: String
     private let agentPurpose = "Local AI for on-device intelligence and sensor access"
 
     // In-process chat sessions (for direct calls, not WebSocket)
     private var inProcessSessions: [String: InProcessChatSession] = [:]
 
     private override init() {
+        // Generate unique agent ID using device name and identifier
+        #if os(iOS)
+        let deviceName = UIDevice.current.name
+        let deviceId = UIDevice.current.identifierForVendor?.uuidString.prefix(8) ?? "unknown"
+        #elseif os(macOS)
+        let deviceName = Host.current().localizedName ?? "Mac"
+        let deviceId = UUID().uuidString.prefix(8) // macOS doesn't have persistent device ID
+        #else
+        let deviceName = "Device"
+        let deviceId = UUID().uuidString.prefix(8)
+        #endif
+
+        self.agentId = "local_ai_\(deviceId)"
+        self.agentName = "LocalAI (\(deviceName))"
+
         sensorBridge = SensorBridge()
         appleIntelligenceClient = AppleIntelligenceClient()
         writingTools = WritingToolsIntegration()
         imagePlayground = ImagePlaygroundIntegration()
         super.init()
+    }
+
+    // MARK: - Public Properties
+
+    /// Get the unique agent ID for this device
+    public var id: String {
+        agentId
+    }
+
+    /// Get the agent name
+    public var name: String {
+        agentName
     }
 
     // MARK: - Direct In-Process API (No WebSocket)

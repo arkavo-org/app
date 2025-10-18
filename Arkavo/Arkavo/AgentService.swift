@@ -56,11 +56,12 @@ final class AgentService: ObservableObject {
         self.localAgent = LocalAIAgent.shared
 
         // Add built-in LocalAIAgent as first agent (always available, no discovery)
+        // Use unique ID from LocalAIAgent instance (device-specific)
         let localAgentEndpoint = AgentEndpoint(
-            id: "local_ai_agent",
+            id: localAgent.id,
             url: "local://in-process", // Not used, but required
             metadata: AgentMetadata(
-                name: "LocalAI Agent",
+                name: localAgent.name,
                 purpose: "Local AI for on-device intelligence and sensor access",
                 model: "on-device",
                 properties: [
@@ -69,7 +70,7 @@ final class AgentService: ObservableObject {
             )
         )
         discoveredAgents.append(localAgentEndpoint)
-        connectedAgents["local_ai_agent"] = true // Always "connected" (in-process)
+        connectedAgents[localAgent.id] = true // Always "connected" (in-process)
 
         setupBindings()
         logger.log("[AgentService] Initialized with built-in LocalAIAgent")
@@ -94,7 +95,7 @@ final class AgentService: ObservableObject {
                 }
 
                 // Get built-in LocalAIAgent (first in list)
-                let builtInLocal = self.discoveredAgents.first { $0.id == "local_ai_agent" }
+                let builtInLocal = self.discoveredAgents.first { $0.id == self.localAgent.id }
 
                 // Return built-in LocalAIAgent first, then remote agents
                 if let builtInLocal = builtInLocal {
