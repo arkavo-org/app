@@ -7,10 +7,6 @@
 		<string>webcredentials:webauthn.arkavo.net</string>
 		<string>applinks:app.arkavo.com</string>
 	</array>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.device.camera</key>
-	<true/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.arkavo.Arkavo</string>
@@ -19,7 +15,7 @@
 		<string>$(AppIdentifierPrefix)com.arkavo.bluesky</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.webauthn</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.did</string>
-        <string>$(AppIdentifierPrefix)com.arkavo.handle</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.handle</string>
 	</array>
 </dict>
 </plist>
