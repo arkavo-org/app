@@ -82,6 +82,13 @@ public enum AgentResponse: Codable, Sendable {
             return id
         }
     }
+
+    public var isSuccess: Bool {
+        switch self {
+        case .success: return true
+        case .error: return false
+        }
+    }
 }
 
 /// Type-erased codable wrapper for JSON-RPC params and results

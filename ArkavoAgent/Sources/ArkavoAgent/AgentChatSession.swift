@@ -223,30 +223,51 @@ public final class AgentChatSessionManager: ObservableObject {
         content: String,
         attachments: [String]? = nil
     ) async throws {
+        print("[AgentChatSessionManager] Sending message in session: \(sessionId)")
+
         guard activeSessions[sessionId] != nil else {
+            print("[AgentChatSessionManager] ERROR: Session not found: \(sessionId)")
             throw AgentError.invalidResponse("Session not found")
         }
 
         guard let agentId = sessionAgentMap[sessionId],
               let connection = agentManager.getConnection(for: agentId) else {
+            print("[AgentChatSessionManager] ERROR: Not connected to agent for session: \(sessionId)")
             throw AgentError.notConnected
         }
 
         let message = UserMessage(content: content, attachments: attachments)
+        print("[AgentChatSessionManager] Created UserMessage with content length: \(content.count)")
+
         let messageParams = try encodeToAnyCodable(message)
 
-        nonisolated(unsafe) let params: [String: Any] = ["session_id": sessionId, "message": messageParams]
+        // Create params with session_id and nested message object
+        let params: [String: Any] = [
+            "session_id": sessionId,
+            "message": messageParams
+        ]
+
+        print("[AgentChatSessionManager] Calling chat_send with params keys: \(params.keys.sorted())")
+
+        // Mark as nonisolated(unsafe) since params is created locally and not shared
+        nonisolated(unsafe) let paramsForCall = params
         let response = try await connection.call(
             method: "chat_send",
-            params: params
+            params: paramsForCall
         )
+
+        print("[AgentChatSessionManager] Received response: \(response)")
 
         guard case .success = response else {
             if case .error(_, let code, let message) = response {
+                print("[AgentChatSessionManager] ERROR: RPC error \(code): \(message)")
                 throw AgentError.jsonRpcError(code: code, message: message)
             }
+            print("[AgentChatSessionManager] ERROR: Unexpected response format")
             throw AgentError.invalidResponse("Unexpected response format")
         }
+
+        print("[AgentChatSessionManager] Message sent successfully")
     }
 
     /// Close a chat session

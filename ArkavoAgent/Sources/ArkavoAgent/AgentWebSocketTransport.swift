@@ -106,6 +106,7 @@ public actor AgentWebSocketTransport {
     /// Send a JSON-RPC request and await the response
     public func sendRequest(_ request: AgentRequest) async throws -> AgentResponse {
         guard isConnected, let task = webSocketTask else {
+            print("[AgentWebSocketTransport] ERROR: Not connected")
             throw AgentError.notConnected
         }
 
@@ -113,20 +114,32 @@ public actor AgentWebSocketTransport {
         let encoder = JSONEncoder()
         let data = try encoder.encode(request)
         guard let jsonString = String(data: data, encoding: .utf8) else {
+            print("[AgentWebSocketTransport] ERROR: Failed to encode request as UTF-8")
             throw AgentError.webSocketError("Failed to encode request as UTF-8")
         }
+
+        print("[AgentWebSocketTransport] Sending request: method=\(request.method), id=\(request.id)")
+        print("[AgentWebSocketTransport] JSON payload: \(jsonString)")
 
         // Send the message
         let message = URLSessionWebSocketTask.Message.string(jsonString)
         try await task.send(message)
+        print("[AgentWebSocketTransport] Request sent, waiting for response...")
 
         // Wait for response with timeout
-        return try await withTimeout(ms: timeoutMs) {
-            try await withCheckedThrowingContinuation { continuation in
-                Task {
-                    await self.registerPendingRequest(id: request.id, continuation: continuation)
+        do {
+            let response = try await withTimeout(ms: timeoutMs) {
+                try await withCheckedThrowingContinuation { continuation in
+                    Task {
+                        await self.registerPendingRequest(id: request.id, continuation: continuation)
+                    }
                 }
             }
+            print("[AgentWebSocketTransport] Received response for request \(request.id): \(response)")
+            return response
+        } catch {
+            print("[AgentWebSocketTransport] ERROR: Request failed: \(error)")
+            throw error
         }
     }
 
@@ -149,6 +162,7 @@ public actor AgentWebSocketTransport {
 
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) async {
         guard case .string(let text) = message else {
+            print("[AgentWebSocketTransport] Received non-string message, ignoring")
             return
         }
 
@@ -161,7 +175,12 @@ public actor AgentWebSocketTransport {
             // Notifications don't have an "id" field
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 if json["id"] == nil && json["method"] != nil {
-                    // This is a notification
+                    // This is a notification - only log non-streaming notifications
+                    let method = json["method"] as? String ?? "unknown"
+                    if method != "chat_stream" {
+                        print("[AgentWebSocketTransport] Notification: \(method)")
+                    }
+                    // Don't log individual chat_stream deltas - too verbose
                     let notification = try decoder.decode(AgentNotification.self, from: data)
                     await handleNotification(notification)
                     return
@@ -170,13 +189,17 @@ public actor AgentWebSocketTransport {
 
             // Not a notification, try to decode as response
             let response = try decoder.decode(AgentResponse.self, from: data)
+            print("[AgentWebSocketTransport] Response received for id=\(response.id)")
 
             // Find and resume the pending request
             if let continuation = pendingRequests.removeValue(forKey: response.id) {
                 continuation.resume(returning: response)
+            } else {
+                print("[AgentWebSocketTransport] WARNING: No pending request for \(response.id)")
             }
         } catch {
-            print("Failed to decode message: \(error)")
+            print("[AgentWebSocketTransport] ERROR: Failed to decode message: \(error)")
+            print("[AgentWebSocketTransport] Message text: \(text.prefix(200))...")
         }
     }
 

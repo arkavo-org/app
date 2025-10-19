@@ -314,8 +314,9 @@ final class AgentService: ObservableObject {
             // Send the message
             try await chatManager.sendMessage(sessionId: sessionId, content: content)
 
-            // Start auto-acknowledgment for back-pressure management
-            streamHandler.startAutoAcknowledgment()
+            // DISABLED: Auto-acknowledgment causes infinite loop
+            // TODO: Fix auto-acknowledgment task lifecycle
+            // streamHandler.startAutoAcknowledgment()
 
             logger.log("[AgentService] Message sent successfully, streaming started")
         } catch {

@@ -1,0 +1,1 @@
+- only support iOS 26, iPadOS 26, macOS 26 which has been released and installed

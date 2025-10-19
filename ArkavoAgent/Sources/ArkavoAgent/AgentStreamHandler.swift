@@ -28,6 +28,9 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
     // Accumulated tool calls
     private var toolCalls: [String: ToolCallAccumulator] = [:]
 
+    // Auto-acknowledgment task
+    private var ackTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     public init(sessionId: String, connection: AgentConnection) {
@@ -39,6 +42,8 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
 
     /// Subscribe to message deltas for this session
     public func subscribe() async throws {
+        print("[AgentStreamHandler] Subscribing to chat stream for session: \(sessionId)")
+
         isStreaming = true
         streamingText = ""
         lastError = nil
@@ -49,15 +54,21 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
             "session_id": sessionId
         ]
 
+        print("[AgentStreamHandler] Calling chat_stream with params: \(params)")
+
         let response = try await connection.call(
             method: "chat_stream",
             params: params
         )
 
+        print("[AgentStreamHandler] Got subscription response: \(response)")
+
         guard case .success(_, let result) = response else {
             if case .error(_, let code, let message) = response {
+                print("[AgentStreamHandler] ERROR: Subscription failed: \(code) - \(message)")
                 throw AgentError.jsonRpcError(code: code, message: message)
             }
+            print("[AgentStreamHandler] ERROR: Invalid subscription response")
             throw AgentError.invalidResponse("Failed to subscribe to chat stream")
         }
 
@@ -65,13 +76,22 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
         if let subDict = result.value as? [String: Any],
            let subId = subDict["subscription"] as? String {
             subscriptionId = subId
+            print("[AgentStreamHandler] Subscribed with ID: \(subId)")
+        } else {
+            print("[AgentStreamHandler] WARNING: No subscription ID in response")
         }
+
+        print("[AgentStreamHandler] Subscription complete, streaming active")
     }
 
     /// Unsubscribe from message deltas
     public func unsubscribe() async {
         isStreaming = false
         subscriptionId = nil
+
+        // Cancel auto-acknowledgment task
+        ackTask?.cancel()
+        ackTask = nil
     }
 
     // MARK: - Notification Handling
@@ -164,11 +184,19 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
     }
 
     private func handleStreamEnd(_ delta: [String: Any]) {
+        print("[AgentStreamHandler] handleStreamEnd called, setting isStreaming = false")
         isStreaming = false
+
+        // Cancel auto-acknowledgment task
+        print("[AgentStreamHandler] Cancelling auto-ack task")
+        ackTask?.cancel()
+        ackTask = nil
 
         // Extract end reason if present
         if let reason = delta["reason"] as? String {
             print("[AgentStreamHandler] Stream ended: \(reason)")
+        } else {
+            print("[AgentStreamHandler] Stream ended (no reason provided)")
         }
     }
 
@@ -177,6 +205,10 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
            let message = delta["message"] as? String {
             lastError = "Stream error \(code): \(message)"
             isStreaming = false
+
+            // Cancel auto-acknowledgment task
+            ackTask?.cancel()
+            ackTask = nil
         }
     }
 
@@ -189,24 +221,47 @@ public final class AgentStreamHandler: ObservableObject, AgentNotificationHandle
             "last_seq": sequence
         ]
 
-        // Send chat_metrics_ack (fire and forget, don't wait for response)
-        Task {
-            _ = try? await connection.call(
-                method: "chat_metrics_ack",
-                params: params
-            )
-        }
+        // Mark as nonisolated since params is created locally
+        nonisolated(unsafe) let paramsForCall = params
+
+        // Send chat_metrics_ack (don't wait for response, but don't spawn new task)
+        _ = try? await connection.call(
+            method: "chat_metrics_ack",
+            params: paramsForCall
+        )
     }
 
     /// Automatically acknowledge received messages periodically
     public func startAutoAcknowledgment(interval: TimeInterval = 0.5) {
-        Task {
-            while isStreaming {
+        // Only start if streaming is active
+        guard isStreaming else {
+            print("[AgentStreamHandler] WARNING: Not starting auto-ack, streaming is not active")
+            return
+        }
+
+        // Cancel any existing acknowledgment task to prevent duplicates
+        ackTask?.cancel()
+
+        print("[AgentStreamHandler] Starting auto-acknowledgment loop")
+
+        // Start new acknowledgment task
+        ackTask = Task {
+            var ackCount = 0
+            while isStreaming && !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+
+                // Check again after sleep in case stream ended
+                guard isStreaming && !Task.isCancelled else {
+                    print("[AgentStreamHandler] Auto-ack loop stopped (sent \(ackCount) acks)")
+                    break
+                }
+
                 if lastSequence > 0 {
+                    ackCount += 1
                     try? await acknowledgeUpTo(sequence: lastSequence)
                 }
             }
+            print("[AgentStreamHandler] Auto-ack task completed after \(ackCount) acknowledgments")
         }
     }
 
