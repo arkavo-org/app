@@ -561,6 +561,12 @@ struct ArkavoApp: App {
     @MainActor
     private func checkAccountStatus() async {
         guard !isCheckingAccountStatus else { return }
+
+        if let next = sharedState.nextAllowedAccountCheck, Date() < next {
+            print("checkAccountStatus: respecting backoff until \(next)")
+            return
+        }
+
         isCheckingAccountStatus = true
         defer { isCheckingAccountStatus = false }
 
@@ -653,6 +659,7 @@ struct ArkavoApp: App {
                     print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                     // Allow the app to function without network features
                     sharedState.isOfflineMode = true
+                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
                 }
             } else {
                 do {
@@ -679,11 +686,13 @@ struct ArkavoApp: App {
                         print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                         // Allow the app to function without network features
                         sharedState.isOfflineMode = true
+                        sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
                     }
                 } catch {
                     print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                     // Allow the app to function without network features
                     sharedState.isOfflineMode = true
+                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
                 }
             }
 
@@ -695,6 +704,7 @@ struct ArkavoApp: App {
 
         } catch {
             print("Error checking account status: \(error.localizedDescription)")
+            sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
 
             // Even if there's an error, we'll still try to load the account
             do {
@@ -839,6 +849,7 @@ class SharedState: ObservableObject {
     @Published var isAwaiting: Bool = false
     @Published var isOfflineMode: Bool = false
     @Published var lastRegistrationErrorDetails: String?
+    @Published var nextAllowedAccountCheck: Date? = nil
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]
@@ -1007,3 +1018,4 @@ final class ViewModelFactory {
         return globalSharedState!
     }
 }
+
