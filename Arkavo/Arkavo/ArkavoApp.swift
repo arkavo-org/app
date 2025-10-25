@@ -22,6 +22,11 @@ struct ArkavoApp: App {
     private let regLogger = Logger(subsystem: "com.arkavo.Arkavo", category: "Registration")
     let client: ArkavoClient
 
+    // Connection retry configuration
+    private enum ConnectionRetry {
+        static let backoffInterval: TimeInterval = 10
+    }
+
     init() {
         client = ArkavoClient(
             authURL: URL(string: "https://webauthn.arkavo.net")!,
@@ -655,17 +660,19 @@ struct ArkavoApp: App {
                     print("Attempting connection with existing token")
                     try await client.connect(accountName: profile.name)
                     print("checkAccountStatus: Connected with existing token")
+                    sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
                 } catch {
                     print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                     // Allow the app to function without network features
                     sharedState.isOfflineMode = true
-                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
+                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
                 }
             } else {
                 do {
                     print("Attempting fresh connection")
                     try await client.connect(accountName: profile.name)
                     print("checkAccountStatus: Connected with fresh connection")
+                    sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
                 } catch let error as ArkavoError {
                     if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
                         // User exists locally but not on server, go to registration
@@ -686,13 +693,13 @@ struct ArkavoApp: App {
                         print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                         // Allow the app to function without network features
                         sharedState.isOfflineMode = true
-                        sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
+                        sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
                     }
                 } catch {
                     print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                     // Allow the app to function without network features
                     sharedState.isOfflineMode = true
-                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
+                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
                 }
             }
 
@@ -704,7 +711,7 @@ struct ArkavoApp: App {
 
         } catch {
             print("Error checking account status: \(error.localizedDescription)")
-            sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(10)
+            sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
 
             // Even if there's an error, we'll still try to load the account
             do {
