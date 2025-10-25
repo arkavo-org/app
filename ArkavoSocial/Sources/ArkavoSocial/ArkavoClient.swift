@@ -190,6 +190,16 @@ public final class ArkavoClient: NSObject {
             try await sendInitialMessages()
         } catch {
             print("connect error: \(error)")
+            if let kcError = error as? KeychainManager.KeychainError {
+                switch kcError {
+                case .itemNotFound:
+                    print("ArkavoClient.connect: Keychain item not found (likely -25300). Will not trigger immediate retry.")
+                case let .unknown(status):
+                    print("ArkavoClient.connect: Keychain unknown status=\(status)")
+                default:
+                    break
+                }
+            }
             currentState = .error(error)
             throw error
         }
@@ -553,7 +563,9 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.invalidState
         }
 
+        print("ArkavoClient: Reading authentication token from Keychain (com.arkavo.webauthn/authentication_token)")
         guard let token = KeychainManager.getAuthenticationToken() else {
+            print("ArkavoClient: No authentication token found in Keychain (treating as signed-out state)")
             currentState = .error(ArkavoError.authenticationFailed("No authentication token"))
             throw ArkavoError.authenticationFailed("No authentication token")
         }
@@ -1501,3 +1513,4 @@ class ProfileCache {
         usageOrder.append(key)
     }
 }
+

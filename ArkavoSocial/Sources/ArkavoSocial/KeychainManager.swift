@@ -59,6 +59,9 @@ public class KeychainManager {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess else {
+            if status == errSecItemNotFound {
+                throw KeychainError.itemNotFound
+            }
             throw KeychainError.unknown(status)
         }
 
