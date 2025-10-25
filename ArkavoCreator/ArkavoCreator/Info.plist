@@ -19,6 +19,10 @@
 		</array>
 		<key>LSMinimumSystemVersion</key>
 		<string>10.15</string>
+		<key>CFBundleDisplayName</key>
+		<string>Arkavo Creator</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Arkavo Creator needs microphone access for avatar lip sync animation.</string>
 		<key>NSFileUsageDescription</key>
 		<string>Arkavo Creator requires access to encrypt and protect your content.</string>
 	</dict>
