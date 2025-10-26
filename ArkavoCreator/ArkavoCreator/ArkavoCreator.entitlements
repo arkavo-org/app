@@ -7,12 +7,6 @@
 		<string>webcredentials:webauthn.arkavo.net</string>
 		<string>webcredentials:example.com</string>
 	</array>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
-	<true/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.arkavo.ArkavoCreator</string>
@@ -20,7 +14,7 @@
 		<string>$(AppIdentifierPrefix)com.arkavo.bluesky</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.webauthn</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.did</string>
-        <string>$(AppIdentifierPrefix)com.arkavo.handle</string>
+		<string>$(AppIdentifierPrefix)com.arkavo.handle</string>
 	</array>
 </dict>
 </plist>
