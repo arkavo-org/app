@@ -81,13 +81,17 @@ final class RecordingsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.loadRecordings()
+            Task { @MainActor in
+                await self?.loadRecordings()
+            }
         }
 
-        loadRecordings()
+        Task {
+            await loadRecordings()
+        }
     }
 
-    func loadRecordings() {
+    func loadRecordings() async {
         do {
             let fileURLs = try FileManager.default.contentsOfDirectory(
                 at: recordingsDirectory,
@@ -97,23 +101,30 @@ final class RecordingsManager: ObservableObject {
 
             let movFiles = fileURLs.filter { $0.pathExtension == "mov" }
 
-            recordings = movFiles.compactMap { url in
+            var loadedRecordings: [Recording] = []
+            for url in movFiles {
                 guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
                       let fileSize = attributes[.size] as? Int64,
                       let creationDate = attributes[.creationDate] as? Date else {
-                    return nil
+                    continue
                 }
 
-                // Get video duration
-                let asset = AVAsset(url: url)
-                let duration = asset.duration.seconds
+                // Get video duration using modern API
+                let asset = AVURLAsset(url: url)
+                let duration: TimeInterval
+                do {
+                    let durationValue = try await asset.load(.duration)
+                    duration = durationValue.seconds
+                } catch {
+                    duration = 0
+                }
 
                 // Extract title from metadata or use filename
                 let title = url.deletingPathExtension().lastPathComponent
                     .replacingOccurrences(of: "arkavo_recording_", with: "")
                     .replacingOccurrences(of: "_", with: " ")
 
-                return Recording(
+                let recording = Recording(
                     id: UUID(),
                     url: url,
                     title: title,
@@ -123,8 +134,10 @@ final class RecordingsManager: ObservableObject {
                     thumbnailPath: nil, // Will be generated on demand
                     c2paStatus: .unknown // Will be checked on demand
                 )
+                loadedRecordings.append(recording)
             }
-            .sorted { $0.date > $1.date } // Most recent first
+
+            recordings = loadedRecordings.sorted { $0.date > $1.date } // Most recent first
 
         } catch {
             print("Error loading recordings: \(error)")
@@ -141,19 +154,21 @@ final class RecordingsManager: ObservableObject {
                 try? FileManager.default.removeItem(at: thumbnailPath)
             }
 
-            loadRecordings()
+            Task {
+                await loadRecordings()
+            }
         } catch {
             print("Error deleting recording: \(error)")
         }
     }
 
     func generateThumbnail(for recording: Recording) async -> NSImage? {
-        let asset = AVAsset(url: recording.url)
+        let asset = AVURLAsset(url: recording.url)
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
 
         do {
-            let cgImage = try imageGenerator.copyCGImage(at: .zero, actualTime: nil)
+            let (cgImage, _) = try await imageGenerator.image(at: .zero)
             return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         } catch {
             print("Error generating thumbnail: \(error)")

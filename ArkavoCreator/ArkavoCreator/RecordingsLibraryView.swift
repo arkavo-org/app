@@ -46,8 +46,8 @@ struct RecordingsLibraryView: View {
                 ProvenanceView(recording: recording)
             }
         }
-        .onAppear {
-            manager.loadRecordings()
+        .task {
+            await manager.loadRecordings()
         }
     }
 
@@ -65,9 +65,11 @@ struct RecordingsLibraryView: View {
                 .foregroundColor(.secondary)
                 .font(.subheadline)
 
-            Button(action: {
-                manager.loadRecordings()
-            }) {
+            Button {
+                Task {
+                    await manager.loadRecordings()
+                }
+            } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .help("Refresh")
