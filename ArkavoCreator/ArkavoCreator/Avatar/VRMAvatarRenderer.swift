@@ -36,8 +36,12 @@ class VRMAvatarRenderer: NSObject {
 
         super.init()
 
-        // Initialize renderer
-        renderer = VRMRenderer(device: device)
+        // Initialize renderer with standard 3D mode (not Toon2D)
+        let vrmRenderer = VRMRenderer(device: device)
+        vrmRenderer.renderingMode = .standard  // Use standard 3D MToon rendering
+        renderer = vrmRenderer
+
+        print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode")
         setupCamera()
     }
 
@@ -48,15 +52,22 @@ class VRMAvatarRenderer: NSObject {
         error = nil
 
         do {
+            print("[VRMAvatarRenderer] Loading model from: \(url.path)")
+
             // Load VRM model
             let vrmModel = try await VRMModel.load(from: url, device: device)
             model = vrmModel
 
+            print("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
+
             // Load into renderer
             renderer?.loadModel(vrmModel)
 
+            print("[VRMAvatarRenderer] Model loaded into renderer")
+
             isLoaded = true
         } catch {
+            print("[VRMAvatarRenderer] Failed to load model: \(error)")
             self.error = error
             isLoaded = false
             throw error
@@ -139,9 +150,18 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         guard let renderer,
               let commandBuffer = commandQueue.makeCommandBuffer(),
               let renderPassDescriptor = view.currentRenderPassDescriptor,
-              let drawable = view.currentDrawable,
-              isLoaded
+              let drawable = view.currentDrawable
         else {
+            return
+        }
+
+        // Only render if model is loaded
+        guard isLoaded else {
+            // Clear to background color
+            let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+            encoder?.endEncoding()
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
             return
         }
 
@@ -149,10 +169,11 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         // For MVP, we're just doing static pose + lip sync
 
         // Render
+        print("[VRMAvatarRenderer] Drawing frame, mode: \(renderer.renderingMode)")
         renderer.draw(
             in: view,
             commandBuffer: commandBuffer,
-            renderPassDescriptor: renderPassDescriptor,
+            renderPassDescriptor: renderPassDescriptor
         )
 
         commandBuffer.present(drawable)

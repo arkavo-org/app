@@ -29,6 +29,7 @@ struct AvatarRecordView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .accessibilityIdentifier("RecordingModePicker")
 
                 if viewModel.recordingMode == .avatar {
                     Divider()
@@ -38,6 +39,7 @@ struct AvatarRecordView: View {
                     VStack(spacing: 12) {
                         TextField("VRM URL", text: $vrmURL)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("VRMURLField")
 
                         Button {
                             Task {

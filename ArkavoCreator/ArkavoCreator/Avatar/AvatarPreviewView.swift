@@ -22,14 +22,18 @@ struct AvatarPreviewView: NSViewRepresentable {
         mtkView.enableSetNeedsDisplay = false
         mtkView.isPaused = false
 
-        // Set background color
-        let nsColor = NSColor(backgroundColor)
-        mtkView.clearColor = MTLClearColor(
-            red: Double(nsColor.redComponent),
-            green: Double(nsColor.greenComponent),
-            blue: Double(nsColor.blueComponent),
-            alpha: Double(nsColor.alphaComponent),
-        )
+        // Set background color (convert to RGB colorspace first)
+        if let rgbColor = NSColor(backgroundColor).usingColorSpace(.deviceRGB) {
+            mtkView.clearColor = MTLClearColor(
+                red: Double(rgbColor.redComponent),
+                green: Double(rgbColor.greenComponent),
+                blue: Double(rgbColor.blueComponent),
+                alpha: Double(rgbColor.alphaComponent),
+            )
+        } else {
+            // Fallback to green if conversion fails
+            mtkView.clearColor = MTLClearColor(red: 0, green: 1, blue: 0, alpha: 1)
+        }
 
         // Enable depth testing
         mtkView.depthStencilPixelFormat = .depth32Float
@@ -38,14 +42,15 @@ struct AvatarPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: MTKView, context _: Context) {
-        // Update background color
-        let nsColor = NSColor(backgroundColor)
-        nsView.clearColor = MTLClearColor(
-            red: Double(nsColor.redComponent),
-            green: Double(nsColor.greenComponent),
-            blue: Double(nsColor.blueComponent),
-            alpha: Double(nsColor.alphaComponent),
-        )
+        // Update background color (convert to RGB colorspace first)
+        if let rgbColor = NSColor(backgroundColor).usingColorSpace(.deviceRGB) {
+            nsView.clearColor = MTLClearColor(
+                red: Double(rgbColor.redComponent),
+                green: Double(rgbColor.greenComponent),
+                blue: Double(rgbColor.blueComponent),
+                alpha: Double(rgbColor.alphaComponent),
+            )
+        }
     }
 }
 
