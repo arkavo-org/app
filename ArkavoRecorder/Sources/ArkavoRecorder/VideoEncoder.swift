@@ -1,7 +1,9 @@
 @preconcurrency import AVFoundation
 import CoreVideo
+import ArkavoStreaming
 
 /// Encodes video and audio to MOV files using AVAssetWriter
+/// Supports optional simultaneous streaming via RTMP
 public final class VideoEncoder: Sendable {
     // MARK: - Properties
 
@@ -18,6 +20,14 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var totalPausedDuration: CMTime = .zero
 
     nonisolated(unsafe) public private(set) var isRecording: Bool = false
+
+    // Streaming support
+    nonisolated(unsafe) private var rtmpPublisher: RTMPPublisher?
+    nonisolated(unsafe) private var isStreaming: Bool = false
+    nonisolated(unsafe) private var videoFormatDescription: CMFormatDescription?
+    nonisolated(unsafe) private var audioFormatDescription: CMFormatDescription?
+    nonisolated(unsafe) private var sentVideoSequenceHeader: Bool = false
+    nonisolated(unsafe) private var sentAudioSequenceHeader: Bool = false
 
     // Encoding settings
     private let videoWidth: Int = 1920
@@ -185,9 +195,16 @@ public final class VideoEncoder: Sendable {
             adjustedTimestamp = CMTimeSubtract(timestamp, totalPausedDuration)
         }
 
-        // Append pixel buffer
+        // Append pixel buffer to file
         adaptor.append(pixelBuffer, withPresentationTime: adjustedTimestamp)
         lastVideoTimestamp = timestamp
+
+        // Also stream if streaming is active
+        if isStreaming, let publisher = rtmpPublisher {
+            // Need to convert pixel buffer to sample buffer for streaming
+            // This would require creating a CMSampleBuffer from CVPixelBuffer
+            // For now, skip - will implement when we have full pipeline
+        }
     }
 
     /// Encodes an audio sample
@@ -208,8 +225,28 @@ public final class VideoEncoder: Sendable {
             adjustedBuffer = sampleBuffer
         }
 
-        // Append audio sample
+        // Append audio sample to file
         audioInput.append(adjustedBuffer)
+
+        // Also stream if streaming is active
+        if isStreaming, let publisher = rtmpPublisher {
+            Task {
+                do {
+                    // Send audio sequence header on first audio packet
+                    if !sentAudioSequenceHeader, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                        audioFormatDescription = formatDesc
+                        // TODO: Send audio sequence header via FLVMuxer
+                        sentAudioSequenceHeader = true
+                    }
+
+                    // Send audio data
+                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    try await publisher.publishAudio(buffer: sampleBuffer, timestamp: timestamp)
+                } catch {
+                    print("⚠️ Failed to publish audio: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - Private Methods
@@ -242,5 +279,50 @@ public final class VideoEncoder: Sendable {
         metadata.append(dateItem)
 
         return metadata
+    }
+
+    // MARK: - Streaming Methods
+
+    /// Start streaming to RTMP destination(s) while recording
+    public func startStreaming(to destination: RTMPPublisher.Destination, streamKey: String) async throws {
+        guard !isStreaming else {
+            print("⚠️ Already streaming")
+            return
+        }
+
+        print("📡 Starting RTMP stream...")
+
+        let publisher = RTMPPublisher()
+        try await publisher.connect(to: destination, streamKey: streamKey)
+
+        rtmpPublisher = publisher
+        isStreaming = true
+        sentVideoSequenceHeader = false
+        sentAudioSequenceHeader = false
+
+        print("✅ RTMP stream started")
+    }
+
+    /// Stop streaming
+    public func stopStreaming() async {
+        guard isStreaming, let publisher = rtmpPublisher else { return }
+
+        print("📡 Stopping RTMP stream...")
+        await publisher.disconnect()
+
+        rtmpPublisher = nil
+        isStreaming = false
+        sentVideoSequenceHeader = false
+        sentAudioSequenceHeader = false
+
+        print("✅ RTMP stream stopped")
+    }
+
+    /// Get streaming statistics
+    public var streamStatistics: RTMPPublisher.StreamStatistics? {
+        get async {
+            guard let publisher = rtmpPublisher else { return nil }
+            return await publisher.statistics
+        }
     }
 }

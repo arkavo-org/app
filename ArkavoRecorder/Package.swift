@@ -13,10 +13,15 @@ let package = Package(
             targets: ["ArkavoRecorder"]
         )
     ],
+    dependencies: [
+        .package(path: "../ArkavoStreaming")
+    ],
     targets: [
         .target(
             name: "ArkavoRecorder",
-            dependencies: [],
+            dependencies: [
+                .product(name: "ArkavoStreaming", package: "ArkavoStreaming")
+            ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")
             ]
