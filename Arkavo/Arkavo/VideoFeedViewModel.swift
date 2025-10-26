@@ -127,7 +127,9 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
 
     deinit {
         // Clean up observers
-        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        MainActor.assumeIsolated {
+            notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        }
     }
 
     private func handleDecryptedMessage(data: Data, header: Header, policy: ArkavoPolicy) async {

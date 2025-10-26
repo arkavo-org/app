@@ -63,7 +63,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         #endif
     }
 
-    private func handleServerResponse<T: Decodable>(
+    nonisolated private func handleServerResponse<T: Decodable>(
         data: Data?,
         response: URLResponse?,
         error: Error?,

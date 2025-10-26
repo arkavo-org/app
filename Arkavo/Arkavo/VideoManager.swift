@@ -19,7 +19,7 @@ enum VideoError: Error {
     case exportSessionFailed(String)
 }
 
-class VideoRecordingManager {
+final class VideoRecordingManager: @unchecked Sendable {
     private let captureSession: AVCaptureSession
     private let videoOutput: AVCaptureMovieFileOutput
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
@@ -217,7 +217,7 @@ actor HLSProcessingManager {
         }
     }
 
-    private func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
+    private nonisolated func generateThumbnail(for asset: AVAsset) async throws -> UIImage? {
         print("generateThumbnail")
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true

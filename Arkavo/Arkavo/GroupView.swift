@@ -158,7 +158,9 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     }
 
     deinit {
-        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        MainActor.assumeIsolated {
+            notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        }
     }
 
     func requestStream(withPublicID publicID: Data) async throws -> Stream? {

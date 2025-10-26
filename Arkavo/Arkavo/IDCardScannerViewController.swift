@@ -199,7 +199,7 @@
     // MARK: - Photo Capture Delegate
 
     extension IDCardScannerViewController: AVCapturePhotoCaptureDelegate {
-        func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        nonisolated func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
             if let error {
                 print("Debug: Photo capture error: \(error)")
                 hideProcessingOverlay()
@@ -221,7 +221,7 @@
             // Process the captured image
             sessionQueue.async { [weak self] in
                 self?.processIDCardImage(capturedImage) { result in
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
                         self?.hideProcessingOverlay()
 
                         switch result {
@@ -241,7 +241,7 @@
     // MARK: - Rectangle Detection Delegate
 
     extension IDCardScannerViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
-        func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
+        nonisolated func captureOutput(_: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from _: AVCaptureConnection) {
             guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
             let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right)
@@ -250,9 +250,13 @@
                       let rectangle = results.first else { return }
 
                 self?.lastObservedRectangle = rectangle
-
-                DispatchQueue.main.async {
-                    self?.updateRectangleFrame(rectangle)
+                let boundingBox = rectangle.boundingBox
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    // Recreate observation with just the bounding box data
+                    if let currentRectangle = self.lastObservedRectangle, currentRectangle.boundingBox == boundingBox {
+                        self.updateRectangleFrame(currentRectangle)
+                    }
                 }
             }
 
