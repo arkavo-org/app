@@ -3,7 +3,7 @@ import CryptoKit
 
 /// SSL Certificate Pinning Delegate for secure HTTPS connections
 /// Validates server certificates against known public key hashes to prevent MITM attacks
-class CertificatePinningDelegate: NSObject, URLSessionDelegate {
+final class CertificatePinningDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
 
     // MARK: - Configuration
 

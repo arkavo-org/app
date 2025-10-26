@@ -150,7 +150,9 @@ class PostFeedViewModel: ViewModel, ObservableObject {
     }
 
     deinit {
-        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        MainActor.assumeIsolated {
+            notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        }
     }
 
     func streams() -> [Stream] {

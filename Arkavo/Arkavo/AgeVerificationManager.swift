@@ -53,9 +53,6 @@
         // MARK: - Main Processing Methods
 
         func compareFaces(idCardImage: UIImage, selfieImage: UIImage) async throws -> Bool {
-            let idFaceRequest = VNDetectFaceRectanglesRequest()
-            let selfieFaceRequest = VNDetectFaceRectanglesRequest()
-
             // Process both images
             guard let idCGImage = idCardImage.cgImage,
                   let selfieCGImage = selfieImage.cgImage
@@ -63,16 +60,12 @@
                 throw IDVerificationError.imageConversionFailed
             }
 
-            await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    try VNImageRequestHandler(cgImage: idCGImage, options: [:])
-                        .perform([idFaceRequest])
-                }
-                group.addTask {
-                    try VNImageRequestHandler(cgImage: selfieCGImage, options: [:])
-                        .perform([selfieFaceRequest])
-                }
-            }
+            // Create requests and process images sequentially to avoid Sendable issues
+            let idFaceRequest = VNDetectFaceRectanglesRequest()
+            try VNImageRequestHandler(cgImage: idCGImage, options: [:]).perform([idFaceRequest])
+
+            let selfieFaceRequest = VNDetectFaceRectanglesRequest()
+            try VNImageRequestHandler(cgImage: selfieCGImage, options: [:]).perform([selfieFaceRequest])
 
             // Compare faces using face landmarks
             return try await compareFaceLandmarks(

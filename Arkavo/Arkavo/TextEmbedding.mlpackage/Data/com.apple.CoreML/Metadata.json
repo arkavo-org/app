@@ -1,0 +1,14 @@
+{
+  "MLModelVersionStringKey" : "1.0",
+  "MLModelDescriptionKey" : "BERT-based text embedding model optimized for Neural Engine",
+  "MLModelCreatorDefinedKey" : {
+    "compute_precision" : "float16",
+    "com.github.apple.coremltools.source_dialect" : "TorchScript",
+    "base_model" : "sentence-transformers\/all-MiniLM-L6-v2",
+    "embedding_dim" : "384",
+    "com.github.apple.coremltools.version" : "8.0",
+    "com.github.apple.coremltools.source" : "torch==2.4.0"
+  },
+  "MLModelAuthorKey" : "Arkavo",
+  "MLModelLicenseKey" : "MIT"
+}

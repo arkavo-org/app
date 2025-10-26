@@ -564,6 +564,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
 
     // MARK: - Recording Controls
 
+    @MainActor
     func startRecording() async {
         guard let recordingManager else { return }
 
@@ -579,6 +580,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         }
     }
 
+    @MainActor
     func stopRecording(description: String) async {
         guard let recordingManager else { return }
 

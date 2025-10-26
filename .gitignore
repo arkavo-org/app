@@ -116,4 +116,4 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 **/.claude/settings.local.json
 /.arkavo/
 /.gemini/
-vendor/FairPlay*
+vendor/FairPlay*/
