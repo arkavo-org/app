@@ -10,6 +10,7 @@
 		DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA072CFB643300BE9912 /* ArkavoSocial */; };
 		DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA0D2CFB659800BE9912 /* ArkavoSocial */; };
 		DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */ = {isa = PBXBuildFile; productRef = DACF22322CFE9B4B00814332 /* ArkavoContent */; };
+		DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAVRM0042CFB643500BE9912 /* VRMMetalKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 				DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */,
 				DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */,
 				DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */,
+				DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +126,7 @@
 				DA91AA072CFB643300BE9912 /* ArkavoSocial */,
 				DA91AA0D2CFB659800BE9912 /* ArkavoSocial */,
 				DACF22322CFE9B4B00814332 /* ArkavoContent */,
+				DAVRM0042CFB643500BE9912 /* VRMMetalKit */,
 			);
 			productName = ArkavoCreator;
 			productReference = DA91A9BA2CFB625000BE9912 /* ArkavoCreator.app */;
@@ -210,6 +213,7 @@
 			packageReferences = (
 				DA91AA0C2CFB659800BE9912 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
 				DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
+				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -339,12 +343,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG VRM_METALKIT_ENABLE_LOGS $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 			};
@@ -398,7 +402,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -429,7 +433,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -460,7 +464,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -478,7 +482,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -497,7 +501,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreatorTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -593,6 +597,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
+			requirement = {
+				kind = exactVersion;
+				version = 0.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		DA91AA072CFB643300BE9912 /* ArkavoSocial */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -605,6 +620,11 @@
 		DACF22322CFE9B4B00814332 /* ArkavoContent */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArkavoContent;
+		};
+		DAVRM0042CFB643500BE9912 /* VRMMetalKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */;
+			productName = VRMMetalKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
