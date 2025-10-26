@@ -13,6 +13,7 @@ struct ContentView: View {
     @StateObject var micropubClient: MicropubClient
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
+    @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
 
     var body: some View {
         NavigationSplitView {
@@ -30,13 +31,14 @@ struct ContentView: View {
                     micropubClient: micropubClient,
                     blueskyClient: blueskyClient,
                     youtubeClient: youtubeClient,
+                    twitchClient: twitchClient,
                 )
             }
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
                 if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated || micropubClient.isAuthenticated ||
-                    blueskyClient.isAuthenticated
+                    blueskyClient.isAuthenticated || twitchClient.isAuthenticated
                 {
                     ToolbarItemGroup {
                         Button(action: {
@@ -71,6 +73,11 @@ struct ContentView: View {
                                     youtubeClient.logout()
                                 })
                             }
+                            if twitchClient.isAuthenticated {
+                                Button("Twitch Sign Out", action: {
+                                    twitchClient.logout()
+                                })
+                            }
                         } label: {
                             Image(systemName: "person.circle")
                         }
@@ -87,6 +94,8 @@ struct ContentView: View {
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
     case record = "Record"
+    case stream = "Stream"
+    case library = "Library"
     case workflow = "Workflow"
     case patrons = "Patron Management"
     case protection = "Content Protection"
@@ -105,6 +114,8 @@ enum NavigationSection: String, CaseIterable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .record: "record.circle"
+        case .stream: "antenna.radiowaves.left.and.right"
+        case .library: "video.stack"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
@@ -116,7 +127,9 @@ enum NavigationSection: String, CaseIterable {
     var subtitle: String {
         switch self {
         case .dashboard: "Overview"
-        case .record: "Avatar & Camera Recording"
+        case .record: "Screen + Camera + Audio Recording"
+        case .stream: "Live Streaming to Twitch, YouTube & More"
+        case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
         case .patrons: "Manage Your Community"
         case .protection: "Content Security"
@@ -135,6 +148,7 @@ struct SectionContainer: View {
     @ObservedObject var micropubClient: MicropubClient
     @ObservedObject var blueskyClient: BlueskyClient
     @ObservedObject var youtubeClient: YouTubeClient
+    @ObservedObject var twitchClient: TwitchAuthClient
     @StateObject private var webViewPresenter = WebViewPresenter()
     @State private var authCode: String = ""
     @Namespace private var animation
@@ -317,6 +331,39 @@ struct SectionContainer: View {
                                 }
                             }
                         }
+                        // Twitch Section
+                        DashboardCard(title: "Twitch") {
+                            if twitchClient.isAuthenticated, let username = twitchClient.username {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("Logged in as \(username)")
+                                            .font(.headline)
+                                    }
+                                    Text("Ready to stream")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else {
+                                Button("Login with Twitch") {
+                                    webViewPresenter.present(
+                                        url: twitchClient.authorizationURL,
+                                        handleCallback: { url in
+                                            Task {
+                                                do {
+                                                    try await twitchClient.handleCallback(url)
+                                                    webViewPresenter.dismiss()
+                                                } catch {
+                                                    print("Twitch OAuth error: \(error)")
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
                     }
                     .padding()
                 }
@@ -327,9 +374,17 @@ struct SectionContainer: View {
                     .transition(.moveAndFade())
                     .id("patrons")
             case .record:
-                AvatarRecordView()
+                RecordView()
                     .transition(.moveAndFade())
                     .id("record")
+            case .stream:
+                StreamView()
+                    .transition(.moveAndFade())
+                    .id("stream")
+            case .library:
+                RecordingsLibraryView()
+                    .transition(.moveAndFade())
+                    .id("library")
             case .workflow:
                 ArkavoWorkflowView()
                     .transition(.moveAndFade())
