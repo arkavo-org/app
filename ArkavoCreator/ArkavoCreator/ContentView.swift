@@ -87,6 +87,7 @@ struct ContentView: View {
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
     case record = "Record"
+    case stream = "Stream"
     case library = "Library"
     case workflow = "Workflow"
     case patrons = "Patron Management"
@@ -106,6 +107,7 @@ enum NavigationSection: String, CaseIterable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .record: "record.circle"
+        case .stream: "antenna.radiowaves.left.and.right"
         case .library: "video.stack"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
@@ -119,6 +121,7 @@ enum NavigationSection: String, CaseIterable {
         switch self {
         case .dashboard: "Overview"
         case .record: "Screen + Camera + Audio Recording"
+        case .stream: "Live Streaming to Twitch, YouTube & More"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
         case .patrons: "Manage Your Community"
@@ -333,6 +336,10 @@ struct SectionContainer: View {
                 RecordView()
                     .transition(.moveAndFade())
                     .id("record")
+            case .stream:
+                StreamView()
+                    .transition(.moveAndFade())
+                    .id("stream")
             case .library:
                 RecordingsLibraryView()
                     .transition(.moveAndFade())

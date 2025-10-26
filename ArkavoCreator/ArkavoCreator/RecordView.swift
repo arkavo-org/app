@@ -1,6 +1,6 @@
-import SwiftUI
-import AVFoundation
 import ArkavoRecorder
+import AVFoundation
+import SwiftUI
 
 struct RecordView: View {
     @State private var viewModel = RecordViewModel()
@@ -85,6 +85,31 @@ struct RecordView: View {
                         }
                     }
                 }
+
+                Divider()
+
+                // Watermark settings
+                Toggle("Arkavo Watermark", isOn: $viewModel.watermarkEnabled)
+
+                if viewModel.watermarkEnabled {
+                    Picker("Watermark Position", selection: $viewModel.watermarkPosition) {
+                        ForEach(WatermarkPosition.allCases) { position in
+                            Text(position.rawValue).tag(position)
+                        }
+                    }
+
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("Opacity")
+                                .font(.caption)
+                            Spacer()
+                            Text("\(Int(viewModel.watermarkOpacity * 100))%")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $viewModel.watermarkOpacity, in: 0.2 ... 1.0)
+                    }
+                }
             }
             .frame(maxWidth: 300)
         }
@@ -162,7 +187,7 @@ struct RecordView: View {
         }) {
             Label(
                 viewModel.isRecording ? "Stop Recording" : "Start Recording",
-                systemImage: viewModel.isRecording ? "stop.circle.fill" : "record.circle.fill"
+                systemImage: viewModel.isRecording ? "stop.circle.fill" : "record.circle.fill",
             )
             .font(.title3)
             .padding(.horizontal, 24)
@@ -183,11 +208,11 @@ struct RecordView: View {
 
     private func levelColor(for level: Double) -> Color {
         if level < 0.5 {
-            return .green
+            .green
         } else if level < 0.8 {
-            return .yellow
+            .yellow
         } else {
-            return .red
+            .red
         }
     }
 }

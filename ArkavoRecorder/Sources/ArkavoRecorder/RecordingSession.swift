@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import ArkavoStreaming
 
 /// Coordinates screen, camera, and audio capture with composition and encoding
 @MainActor
@@ -26,6 +27,21 @@ public final class RecordingSession: Sendable {
     public var pipPosition: PiPPosition {
         get { compositor.pipPosition }
         set { compositor.pipPosition = newValue }
+    }
+
+    public var watermarkEnabled: Bool {
+        get { compositor.watermarkEnabled }
+        set { compositor.watermarkEnabled = newValue }
+    }
+
+    public var watermarkPosition: WatermarkPosition {
+        get { compositor.watermarkPosition }
+        set { compositor.watermarkPosition = newValue }
+    }
+
+    public var watermarkOpacity: Float {
+        get { compositor.watermarkOpacity }
+        set { compositor.watermarkOpacity = newValue }
     }
 
     nonisolated(unsafe) public var enableCamera: Bool = true
@@ -183,5 +199,34 @@ public final class RecordingSession: Sendable {
     /// Get camera preview session
     public func getCameraPreview() -> AVCaptureSession {
         return cameraCapture.getPreviewSession()
+    }
+
+    // MARK: - Streaming
+
+    /// Start streaming to RTMP destination
+    public func startStreaming(to destination: RTMPPublisher.Destination, streamKey: String) async throws {
+        try await encoder.startStreaming(to: destination, streamKey: streamKey)
+    }
+
+    /// Stop streaming
+    public func stopStreaming() async {
+        await encoder.stopStreaming()
+    }
+
+    /// Get streaming statistics
+    public var streamStatistics: RTMPPublisher.StreamStatistics? {
+        get async {
+            return await encoder.streamStatistics
+        }
+    }
+
+    /// Check if currently streaming
+    public var isStreaming: Bool {
+        get async {
+            if let stats = await encoder.streamStatistics {
+                return stats.framesSent > 0
+            }
+            return false
+        }
     }
 }

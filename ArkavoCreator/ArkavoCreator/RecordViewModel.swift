@@ -1,8 +1,8 @@
+import ArkavoC2PA
+import ArkavoRecorder
+import AVFoundation
 import Foundation
 import SwiftUI
-import AVFoundation
-import ArkavoRecorder
-import ArkavoC2PA
 
 @MainActor
 @Observable
@@ -20,6 +20,11 @@ final class RecordViewModel {
     var pipPosition: PiPPosition = .bottomRight
     var enableCamera: Bool = true
     var enableMicrophone: Bool = true
+
+    // Watermark configuration
+    var watermarkEnabled: Bool = true // Enabled by default per MVP spec
+    var watermarkPosition: WatermarkPosition = .bottomCenter
+    var watermarkOpacity: Float = 0.6
 
     // Status
     var error: String?
@@ -43,7 +48,13 @@ final class RecordViewModel {
             session.pipPosition = pipPosition
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
+            session.watermarkEnabled = watermarkEnabled
+            session.watermarkPosition = watermarkPosition
+            session.watermarkOpacity = watermarkOpacity
             recordingSession = session
+
+            // Register with shared state for streaming access
+            RecordingState.shared.setRecordingSession(session)
 
             // Generate output URL
             let outputURL = try generateOutputURL()
@@ -59,6 +70,7 @@ final class RecordViewModel {
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             recordingSession = nil
+            RecordingState.shared.setRecordingSession(nil)
         }
     }
 
@@ -79,6 +91,9 @@ final class RecordViewModel {
             duration = 0.0
             recordingSession = nil
 
+            // Unregister from shared state
+            RecordingState.shared.setRecordingSession(nil)
+
             // Recording complete - saved successfully
             print("Recording saved and signed: \(signedURL.path)")
 
@@ -96,18 +111,18 @@ final class RecordViewModel {
     private func signRecording(outputURL: URL, recordingTitle: String, recordingDuration: TimeInterval) async throws -> URL {
         // Build C2PA manifest
         var builder = C2PAManifestBuilder(title: recordingTitle)
-        builder.addCreatedAction()
-        builder.addRecordedAction(when: Date(), duration: recordingDuration)
+        _ = builder.addCreatedAction()
+        _ = builder.addRecordedAction(when: Date(), duration: recordingDuration)
 
         // Add device metadata
         #if os(macOS)
-        let deviceModel = getMacModel()
-        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
-        builder.addDeviceMetadata(model: deviceModel, os: osVersion)
+            let deviceModel = getMacModel()
+            let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+            _ = builder.addDeviceMetadata(model: deviceModel, os: osVersion)
         #endif
 
         // Add author (if we have identity info - for now use app name)
-        builder.addAuthor(name: "Arkavo Creator")
+        _ = builder.addAuthor(name: "Arkavo Creator")
 
         let manifest = builder.build()
 
@@ -119,7 +134,7 @@ final class RecordViewModel {
             try await signer.sign(
                 inputFile: outputURL,
                 outputFile: signedURL,
-                manifest: manifest
+                manifest: manifest,
             )
 
             // Replace original with signed version
@@ -136,13 +151,14 @@ final class RecordViewModel {
 
     private func getMacModel() -> String {
         #if os(macOS)
-        var size = 0
-        sysctlbyname("hw.model", nil, &size, nil, 0)
-        var model = [CChar](repeating: 0, count: size)
-        sysctlbyname("hw.model", &model, &size, nil, 0)
-        return String(cString: model)
+            var size = 0
+            sysctlbyname("hw.model", nil, &size, nil, 0)
+            var model = [CChar](repeating: 0, count: size)
+            sysctlbyname("hw.model", &model, &size, nil, 0)
+            let bytes = model.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) }
+            return String(decoding: bytes, as: UTF8.self)
         #else
-        return "Unknown"
+            return "Unknown"
         #endif
     }
 
@@ -165,9 +181,9 @@ final class RecordViewModel {
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self, let session = self.recordingSession else { return }
-                self.duration = session.duration
-                self.audioLevel = session.audioLevel
+                guard let self, let session = recordingSession else { return }
+                duration = session.duration
+                audioLevel = session.audioLevel
             }
         }
     }
@@ -202,15 +218,15 @@ final class RecordViewModel {
     }
 
     func getAvailableDevices() -> (screens: [ScreenInfo], cameras: [CameraInfo], microphones: [AudioDeviceInfo]) {
-        return (
+        (
             RecordingSession.availableScreens(),
             RecordingSession.availableCameras(),
-            RecordingSession.availableMicrophones()
+            RecordingSession.availableMicrophones(),
         )
     }
 
     func getCameraPreview() -> AVCaptureSession? {
-        return recordingSession?.getCameraPreview()
+        recordingSession?.getCameraPreview()
     }
 
     // MARK: - Format Helpers
@@ -222,6 +238,6 @@ final class RecordViewModel {
     }
 
     func audioLevelPercentage() -> Double {
-        return Double(min(1.0, max(0.0, audioLevel)))
+        Double(min(1.0, max(0.0, audioLevel)))
     }
 }

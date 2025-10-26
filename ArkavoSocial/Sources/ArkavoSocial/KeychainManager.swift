@@ -489,6 +489,45 @@ public extension KeychainManager {
         try? delete(service: "com.arkavo.handle", account: "arkavo")
         try? delete(service: "com.arkavo.did", account: "arkavo")
     }
+
+    // MARK: - Stream Key Management
+
+    /// Saves a stream key for a specific platform
+    public static func saveStreamKey(_ streamKey: String, for platform: String) throws {
+        let service = "com.arkavo.ArkavoCreator.\(platform.lowercased()).streamKey"
+        try save(streamKey.data(using: .utf8)!,
+                 service: service,
+                 account: "streamKey")
+    }
+
+    /// Retrieves a stream key for a specific platform
+    public static func getStreamKey(for platform: String) -> String? {
+        let service = "com.arkavo.ArkavoCreator.\(platform.lowercased()).streamKey"
+        return getValue(service: service, account: "streamKey")
+    }
+
+    /// Deletes a stream key for a specific platform
+    public static func deleteStreamKey(for platform: String) {
+        let service = "com.arkavo.ArkavoCreator.\(platform.lowercased()).streamKey"
+        try? delete(service: service, account: "streamKey")
+    }
+
+    /// Saves a custom RTMP URL
+    public static func saveCustomRTMPURL(_ url: String) throws {
+        try save(url.data(using: .utf8)!,
+                 service: "com.arkavo.ArkavoCreator.custom.rtmpURL",
+                 account: "rtmpURL")
+    }
+
+    /// Retrieves the custom RTMP URL
+    public static func getCustomRTMPURL() -> String? {
+        return getValue(service: "com.arkavo.ArkavoCreator.custom.rtmpURL", account: "rtmpURL")
+    }
+
+    /// Deletes the custom RTMP URL
+    public static func deleteCustomRTMPURL() {
+        try? delete(service: "com.arkavo.ArkavoCreator.custom.rtmpURL", account: "rtmpURL")
+    }
 }
 
 extension Data {
