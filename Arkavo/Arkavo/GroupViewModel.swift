@@ -266,7 +266,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     private var mcPeerID: MCPeerID?
     private var mcAdvertiser: MCNearbyServiceAdvertiser?
     private var mcBrowser: MCBrowserViewController?
-    private var invitationHandler: ((Bool, MCSession?) -> Void)?
+    private var invitationHandler: (@Sendable (Bool, MCSession?) -> Void)?
 
     private let arkavoClient: ArkavoClient
 
@@ -1414,7 +1414,7 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
 // MARK: - MCNearbyServiceAdvertiserDelegate
 
 extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
-    nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+    nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping @Sendable (Bool, MCSession?) -> Void) {
         print("Advertiser received invitation from: \(peerID.displayName)")
         Task { @MainActor in
             self.invitationHandler = invitationHandler // Store handler for acceptance

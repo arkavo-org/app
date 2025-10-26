@@ -197,7 +197,7 @@ xcodebuild -scheme Arkavo -sdk macosx -configuration Release build
 xcodebuild -scheme Arkavo -sdk iphoneos -configuration Release build
 ```
 
-#### ArkavoCreator
+#### Arkavo Creator
 
 ```shell
 cd ArkavoCreator

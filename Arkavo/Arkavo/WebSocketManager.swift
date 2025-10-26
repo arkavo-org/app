@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import OpenTDFKit
 
+@MainActor
 final class WebSocketManager: ObservableObject {
     // MARK: - Singleton Instance
 

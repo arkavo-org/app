@@ -6,8 +6,8 @@ import PackageDescription
 let package = Package(
     name: "ArkavoAgent",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(

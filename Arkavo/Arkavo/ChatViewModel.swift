@@ -36,7 +36,9 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
     }
 
     deinit {
-        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        MainActor.assumeIsolated {
+            notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        }
         // Consider setting client.delegate = nil if appropriate lifecycle management is needed
     }
 
@@ -114,7 +116,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             {
                 print("   Stream ID MATCH: \(thoughtModel.streamPublicID.base58EncodedString). Handling message.") // Log match
                 print("ChatViewModel: Received decrypted message notification for this stream.")
-                Task { @MainActor [weak self] in
+                Task { @MainActor [weak self, policy] in
                     await self?.handleDecryptedThought(payload: data, policy: policy)
                 }
             } else {

@@ -2,7 +2,7 @@ import FlatBuffers
 import Foundation
 import OpenTDFKit
 
-class ArkavoPolicy {
+final class ArkavoPolicy: @unchecked Sendable {
     enum PolicyType: String {
         case accountProfile = "ap"
         case streamProfile = "sp"
