@@ -443,9 +443,9 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Arkavo Creator";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Arkavo Creator needs camera access to include you in picture-in-picture while recording your screen.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Arkavo Creator needs microphone access to record audio with your videos.";
 				INFOPLIST_KEY_NSScreenCaptureDescription = "Arkavo Creator needs screen recording permission to capture your screen content with C2PA provenance tracking.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -479,9 +479,9 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Arkavo Creator";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Arkavo Creator needs camera access to include you in picture-in-picture while recording your screen.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Arkavo Creator needs microphone access to record audio with your videos.";
 				INFOPLIST_KEY_NSScreenCaptureDescription = "Arkavo Creator needs screen recording permission to capture your screen content with C2PA provenance tracking.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -131,15 +131,27 @@ Recording did not start - check Screen Recording permission in System Settings
 
 **Solution**: Grant Screen Recording permission (see Prerequisites above)
 
-### When c2patool is Not Installed
+### C2PA Signing Status
+
+**Current Implementation**: C2PA signing is temporarily unavailable in sandboxed builds.
+
+**Reason**: The current implementation uses c2patool CLI, which cannot be accessed from sandboxed macOS apps.
+
+**Future Implementation**: Native C2PA signing via c2pa-opentdf-rs Rust library:
+- https://github.com/arkavo-org/c2pa-opentdf-rs/issues
+- Will provide native signing without external tools
+- Works seamlessly in sandboxed apps
+- Includes OpenTDF integration for encryption
+
+**Current Behavior**:
+- Recordings are saved successfully but unsigned
+- C2PA tests pass but report unsigned status
+- No functionality loss - recordings work perfectly
 
 C2PA tests will pass but report:
 ```
-ℹ️ Recording is unsigned - c2patool may not be installed
-Install c2patool for automatic signing: cargo install c2patool
+ℹ️ Recording is unsigned - C2PA integration pending c2pa-opentdf-rs
 ```
-
-Recording functionality works, but files won't have C2PA manifests.
 
 ### When Everything is Configured
 

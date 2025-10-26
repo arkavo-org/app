@@ -87,6 +87,7 @@ struct ContentView: View {
 enum NavigationSection: String, CaseIterable {
     case dashboard = "Dashboard"
     case record = "Record"
+    case library = "Library"
     case workflow = "Workflow"
     case patrons = "Patron Management"
     case protection = "Content Protection"
@@ -105,6 +106,7 @@ enum NavigationSection: String, CaseIterable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .record: "record.circle"
+        case .library: "video.stack"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
@@ -116,7 +118,8 @@ enum NavigationSection: String, CaseIterable {
     var subtitle: String {
         switch self {
         case .dashboard: "Overview"
-        case .record: "Avatar & Camera Recording"
+        case .record: "Screen + Camera + Audio Recording"
+        case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
         case .patrons: "Manage Your Community"
         case .protection: "Content Security"
@@ -327,9 +330,13 @@ struct SectionContainer: View {
                     .transition(.moveAndFade())
                     .id("patrons")
             case .record:
-                AvatarRecordView()
+                RecordView()
                     .transition(.moveAndFade())
                     .id("record")
+            case .library:
+                RecordingsLibraryView()
+                    .transition(.moveAndFade())
+                    .id("library")
             case .workflow:
                 ArkavoWorkflowView()
                     .transition(.moveAndFade())
