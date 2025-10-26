@@ -13,6 +13,7 @@ struct ContentView: View {
     @StateObject var micropubClient: MicropubClient
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
+    @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
 
     var body: some View {
         NavigationSplitView {
@@ -30,13 +31,14 @@ struct ContentView: View {
                     micropubClient: micropubClient,
                     blueskyClient: blueskyClient,
                     youtubeClient: youtubeClient,
+                    twitchClient: twitchClient,
                 )
             }
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
                 if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated || micropubClient.isAuthenticated ||
-                    blueskyClient.isAuthenticated
+                    blueskyClient.isAuthenticated || twitchClient.isAuthenticated
                 {
                     ToolbarItemGroup {
                         Button(action: {
@@ -69,6 +71,11 @@ struct ContentView: View {
                             if youtubeClient.isAuthenticated {
                                 Button("YouTube Sign Out", action: {
                                     youtubeClient.logout()
+                                })
+                            }
+                            if twitchClient.isAuthenticated {
+                                Button("Twitch Sign Out", action: {
+                                    twitchClient.logout()
                                 })
                             }
                         } label: {
@@ -141,6 +148,7 @@ struct SectionContainer: View {
     @ObservedObject var micropubClient: MicropubClient
     @ObservedObject var blueskyClient: BlueskyClient
     @ObservedObject var youtubeClient: YouTubeClient
+    @ObservedObject var twitchClient: TwitchAuthClient
     @StateObject private var webViewPresenter = WebViewPresenter()
     @State private var authCode: String = ""
     @Namespace private var animation
@@ -321,6 +329,39 @@ struct SectionContainer: View {
                                         .frame(maxWidth: 400)
                                     }
                                 }
+                            }
+                        }
+                        // Twitch Section
+                        DashboardCard(title: "Twitch") {
+                            if twitchClient.isAuthenticated, let username = twitchClient.username {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("Logged in as \(username)")
+                                            .font(.headline)
+                                    }
+                                    Text("Ready to stream")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else {
+                                Button("Login with Twitch") {
+                                    webViewPresenter.present(
+                                        url: twitchClient.authorizationURL,
+                                        handleCallback: { url in
+                                            Task {
+                                                do {
+                                                    try await twitchClient.handleCallback(url)
+                                                    webViewPresenter.dismiss()
+                                                } catch {
+                                                    print("Twitch OAuth error: \(error)")
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                                .buttonStyle(.borderedProminent)
                             }
                         }
                     }
