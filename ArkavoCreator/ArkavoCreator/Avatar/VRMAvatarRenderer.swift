@@ -100,14 +100,6 @@ class VRMAvatarRenderer: NSObject {
         renderer.viewMatrix = lookAtMatrix(eye: eye, center: center, up: up)
     }
 
-    // MARK: - Expression Control
-
-    func setMouthOpenWeight(_ weight: Float) {
-        // Map to VRM expression
-        // VRM uses "aa" expression for mouth open
-        renderer?.expressionController?.setExpressionWeight(.aa, weight: weight)
-    }
-
     // MARK: - Matrix Helpers
 
     private func perspectiveMatrix(fov: Float, aspect: Float, near: Float, far: Float) -> simd_float4x4 {
@@ -169,7 +161,6 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         // For MVP, we're just doing static pose + lip sync
 
         // Render
-        print("[VRMAvatarRenderer] Drawing frame, mode: \(renderer.renderingMode)")
         renderer.draw(
             in: view,
             commandBuffer: commandBuffer,

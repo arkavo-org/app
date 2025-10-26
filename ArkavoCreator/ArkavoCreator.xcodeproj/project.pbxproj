@@ -213,7 +213,7 @@
 			packageReferences = (
 				DA91AA0C2CFB659800BE9912 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
 				DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
-				DAVRM0032CFE9B4C00814332 /* XCLocalSwiftPackageReference "../../VRMMetalKit" */,
+				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -595,11 +595,18 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoContent;
 		};
-		DAVRM0032CFE9B4C00814332 /* XCLocalSwiftPackageReference "../../VRMMetalKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../VRMMetalKit;
-		};
 /* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
+			requirement = {
+				kind = exactVersion;
+				version = 0.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		DA91AA072CFB643300BE9912 /* ArkavoSocial */ = {
@@ -616,7 +623,7 @@
 		};
 		DAVRM0042CFB643500BE9912 /* VRMMetalKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DAVRM0032CFE9B4C00814332 /* XCLocalSwiftPackageReference "../../VRMMetalKit" */;
+			package = DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */;
 			productName = VRMMetalKit;
 		};
 /* End XCSwiftPackageProductDependency section */

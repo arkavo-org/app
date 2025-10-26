@@ -11,7 +11,6 @@ import SwiftUI
 /// Main view for avatar recording mode
 struct AvatarRecordView: View {
     @StateObject private var viewModel = AvatarViewModel()
-    @StateObject private var lipSync = LipSyncController()
     @State private var vrmURL = ""
     @State private var renderer: VRMAvatarRenderer?
     @State private var showError = false
@@ -92,31 +91,12 @@ struct AvatarRecordView: View {
                     // Avatar Settings
                     sectionHeader("Avatar Settings")
 
-                    Toggle("Enable Lip Sync", isOn: $viewModel.isLipSyncEnabled)
-                        .onChange(of: viewModel.isLipSyncEnabled) { _, newValue in
-                            if newValue {
-                                startLipSync()
-                            } else {
-                                stopLipSync()
-                            }
-                        }
-
                     ColorPicker("Background", selection: $viewModel.backgroundColor)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Avatar Scale: \(viewModel.avatarScale, specifier: "%.1f")")
                             .font(.caption)
                         Slider(value: $viewModel.avatarScale, in: 0.5 ... 2.0)
-                    }
-
-                    if lipSync.isRecording {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Mouth: \(Int(lipSync.currentMouthWeight * 100))%")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            ProgressView(value: lipSync.currentMouthWeight)
-                                .progressViewStyle(.linear)
-                        }
                     }
                 }
 
@@ -151,9 +131,6 @@ struct AvatarRecordView: View {
                     cameraPlaceholder
                 }
             }
-        }
-        .onChange(of: lipSync.currentMouthWeight) { _, newValue in
-            renderer?.setMouthOpenWeight(newValue)
         }
         .onChange(of: viewModel.selectedModelURL) { _, _ in
             // Auto-load when selection changes
@@ -246,11 +223,6 @@ struct AvatarRecordView: View {
 
             do {
                 try await renderer.loadModel(from: url)
-
-                // Start lip sync if enabled
-                if viewModel.isLipSyncEnabled {
-                    startLipSync()
-                }
             } catch {
                 viewModel.error = "Failed to load model: \(error.localizedDescription)"
                 showError = true
@@ -258,21 +230,6 @@ struct AvatarRecordView: View {
 
             viewModel.isLoading = false
         }
-    }
-
-    private func startLipSync() {
-        do {
-            try lipSync.startCapture()
-        } catch {
-            viewModel.error = "Failed to start lip sync: \(error.localizedDescription)"
-            viewModel.isLipSyncEnabled = false
-            showError = true
-        }
-    }
-
-    private func stopLipSync() {
-        lipSync.stopCapture()
-        renderer?.setMouthOpenWeight(0.0)
     }
 }
 

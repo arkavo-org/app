@@ -16,7 +16,6 @@ class AvatarViewModel: ObservableObject {
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
     @Published var selectedModelURL: URL?
-    @Published var isLipSyncEnabled = true
     @Published var backgroundColor: Color = .green
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
