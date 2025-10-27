@@ -1,1 +1,2 @@
 - only support iOS 26, iPadOS 26, macOS 26 which has been released and installed
+- do not check commit STATUS files.  Place all STATUS files under docs/

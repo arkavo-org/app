@@ -117,3 +117,5 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /.arkavo/
 /.gemini/
 vendor/FairPlay*/
+docs/*STATUS*.md
+
