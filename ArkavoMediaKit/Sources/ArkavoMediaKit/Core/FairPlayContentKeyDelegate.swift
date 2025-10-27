@@ -154,40 +154,11 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
 
     private func requestOnlineKey(keyRequest: AVContentKeyRequest, assetID: String) async {
         do {
-            // Get FPS certificate
-            let certificate = configuration.fpsCertificate
-
-            // Prepare asset identifier data
-            guard let assetIDData = assetID.data(using: .utf8) else {
-                throw ValidationError.invalidContentKeyIdentifier(assetID)
-            }
-
-            // Generate SPC (Server Playback Context)
-            let spcData = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                keyRequest.makeStreamingContentKeyRequestData(
-                    forApp: certificate,
-                    contentIdentifier: assetIDData,
-                    options: [AVContentKeyRequestProtocolVersionsKey: [1]]
-                ) { spcData, error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else if let spcData {
-                        continuation.resume(returning: spcData)
-                    } else {
-                        continuation.resume(throwing: KeyRequestError.invalidSPCData)
-                    }
-                }
-            }
-
-            // Request CKC from server
-            let response = try await serverClient.requestKey(
-                sessionId: sessionId,
-                spcData: spcData,
-                assetId: assetID
+            // Generate SPC and request CKC from server
+            let (spcData, ckcData) = try await generateSPCAndRequestCKC(
+                keyRequest: keyRequest,
+                assetID: assetID
             )
-
-            // Decode CKC
-            let ckcData = try response.decodedCKC()
 
             // Cache the key
             cacheKey(ckcData, for: assetID)
@@ -199,6 +170,53 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
         } catch {
             keyRequest.processContentKeyResponseError(error)
         }
+    }
+
+    /// Generate SPC and request CKC from server
+    /// - Parameters:
+    ///   - keyRequest: Content key request from AVFoundation
+    ///   - assetID: Asset identifier
+    /// - Returns: Tuple of (SPC data, CKC data)
+    private func generateSPCAndRequestCKC(
+        keyRequest: AVContentKeyRequest,
+        assetID: String
+    ) async throws -> (Data, Data) {
+        // Get FPS certificate
+        let certificate = configuration.fpsCertificate
+
+        // Prepare asset identifier data
+        guard let assetIDData = assetID.data(using: .utf8) else {
+            throw ValidationError.invalidContentKeyIdentifier(assetID)
+        }
+
+        // Generate SPC (Server Playback Context)
+        let spcData = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+            keyRequest.makeStreamingContentKeyRequestData(
+                forApp: certificate,
+                contentIdentifier: assetIDData,
+                options: [AVContentKeyRequestProtocolVersionsKey: [1]]
+            ) { spcData, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let spcData {
+                    continuation.resume(returning: spcData)
+                } else {
+                    continuation.resume(throwing: KeyRequestError.invalidSPCData)
+                }
+            }
+        }
+
+        // Request CKC from server
+        let response = try await serverClient.requestKey(
+            sessionId: sessionId,
+            spcData: spcData,
+            assetId: assetID
+        )
+
+        // Decode CKC
+        let ckcData = try response.decodedCKC()
+
+        return (spcData, ckcData)
     }
 
     #if os(iOS)
@@ -218,36 +236,11 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
                     return
                 }
 
-                // Generate SPC for persistable key
-                let certificate = configuration.fpsCertificate
-                guard let assetIDData = assetID.data(using: .utf8) else {
-                    throw ValidationError.invalidContentKeyIdentifier(assetID)
-                }
-
-                let spcData = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-                    keyRequest.makeStreamingContentKeyRequestData(
-                        forApp: certificate,
-                        contentIdentifier: assetIDData,
-                        options: [AVContentKeyRequestProtocolVersionsKey: [1]]
-                    ) { spcData, error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        } else if let spcData {
-                            continuation.resume(returning: spcData)
-                        } else {
-                            continuation.resume(throwing: KeyRequestError.invalidSPCData)
-                        }
-                    }
-                }
-
-                // Request CKC
-                let response = try await serverClient.requestKey(
-                    sessionId: sessionId,
-                    spcData: spcData,
-                    assetId: assetID
+                // Generate SPC and request CKC from server (reuse common method)
+                let (_, ckcData) = try await generateSPCAndRequestCKC(
+                    keyRequest: keyRequest,
+                    assetID: assetID
                 )
-
-                let ckcData = try response.decodedCKC()
 
                 // Create persistable key
                 let persistableData = try keyRequest.persistableContentKey(fromKeyVendorResponse: ckcData)
