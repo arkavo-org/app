@@ -22,7 +22,10 @@ let package = Package(
     targets: [
         .target(
             name: "ArkavoMediaKit",
-            dependencies: ["OpenTDFKit"]
+            dependencies: ["OpenTDFKit"],
+            resources: [
+                .process("Resources/test_fps_certificate_v26.bin")
+            ]
         ),
         .testTarget(
             name: "ArkavoMediaKitTests",
