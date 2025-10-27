@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// HTTP client for media server API endpoints
 public actor MediaServerClient {
@@ -6,6 +7,22 @@ public actor MediaServerClient {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+
+    /// API endpoint paths
+    private enum Endpoint {
+        static let sessionStart = "/media/v1/session/start"
+        static let keyRequest = "/media/v1/key-request"
+
+        static func sessionHeartbeat(_ sessionId: String) -> String {
+            "/media/v1/session/\(sessionId)/heartbeat"
+        }
+
+        static func sessionEnd(_ sessionId: String) -> String {
+            "/media/v1/session/\(sessionId)"
+        }
+    }
+
+    private let logger = Logger(subsystem: "com.arkavo.mediakit", category: "network")
 
     /// Initialize with configuration
     /// - Parameter configuration: DRM configuration
@@ -38,7 +55,7 @@ public actor MediaServerClient {
         clientIP: String? = nil,
         geoRegion: String? = nil
     ) async throws -> SessionStartResponse {
-        let url = baseURL.appendingPathComponent("/media/v1/session/start")
+        let url = baseURL.appendingPathComponent(Endpoint.sessionStart)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -82,7 +99,7 @@ public actor MediaServerClient {
         spcData: Data,
         assetId: String
     ) async throws -> KeyRequestResponse {
-        let url = baseURL.appendingPathComponent("/media/v1/key-request")
+        let url = baseURL.appendingPathComponent(Endpoint.keyRequest)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -119,7 +136,7 @@ public actor MediaServerClient {
         state: String,
         position: Double? = nil
     ) async throws {
-        let url = baseURL.appendingPathComponent("/media/v1/session/\(sessionId)/heartbeat")
+        let url = baseURL.appendingPathComponent(Endpoint.sessionHeartbeat(sessionId))
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -142,7 +159,7 @@ public actor MediaServerClient {
     /// End playback session
     /// - Parameter sessionId: Session identifier
     public func endSession(sessionId: String) async throws {
-        let url = baseURL.appendingPathComponent("/media/v1/session/\(sessionId)")
+        let url = baseURL.appendingPathComponent(Endpoint.sessionEnd(sessionId))
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"

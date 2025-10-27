@@ -32,10 +32,17 @@ public final class DRMMediaPlayer {
 
     /// Initialize with configuration
     /// - Parameter configuration: DRM configuration (defaults to .default)
-    public init(configuration: DRMConfiguration = .default) {
-        self.configuration = configuration
-        self.sessionManager = MediaSessionManager(configuration: configuration)
-        self.serverClient = MediaServerClient(configuration: configuration)
+    /// - Throws: If default configuration cannot be created
+    public init(configuration: DRMConfiguration? = nil) throws {
+        if let config = configuration {
+            self.configuration = config
+        } else if let defaultConfig = DRMConfiguration.default {
+            self.configuration = defaultConfig
+        } else {
+            throw DRMPlayerError.configurationUnavailable
+        }
+        self.sessionManager = MediaSessionManager(configuration: self.configuration)
+        self.serverClient = MediaServerClient(configuration: self.configuration)
     }
 
     // MARK: - Session Management
@@ -104,6 +111,12 @@ public final class DRMMediaPlayer {
     public func play(url: URL) async throws {
         guard sessionId != nil else {
             throw DRMPlayerError.noActiveSession
+        }
+
+        // Validate URL scheme
+        guard let scheme = url.scheme,
+              ["https", "http", "skd", "tdf3"].contains(scheme) else {
+            throw DRMPlayerError.invalidURL
         }
 
         // Create player if needed
@@ -234,6 +247,7 @@ public enum DRMPlayerError: Error, LocalizedError {
     case noActiveSession
     case invalidURL
     case playbackFailed(Error)
+    case configurationUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -243,6 +257,8 @@ public enum DRMPlayerError: Error, LocalizedError {
             "Invalid media URL"
         case let .playbackFailed(error):
             "Playback failed: \(error.localizedDescription)"
+        case .configurationUnavailable:
+            "DRM configuration unavailable. Failed to load FairPlay certificate."
         }
     }
 }

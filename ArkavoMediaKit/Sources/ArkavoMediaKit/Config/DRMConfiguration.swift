@@ -15,16 +15,18 @@ public struct DRMConfiguration: Sendable {
     public let sessionTimeout: TimeInterval
 
     /// Default configuration using test certificate and production server
-    public static let `default`: DRMConfiguration = {
-        guard let config = try? DRMConfiguration(
-            serverURL: URL(string: "https://100.arkavo.net")!,
+    /// Returns nil if certificate cannot be loaded
+    public static var `default`: DRMConfiguration? {
+        guard let serverURL = URL(string: "https://100.arkavo.net") else {
+            return nil
+        }
+
+        return try? DRMConfiguration(
+            serverURL: serverURL,
             heartbeatInterval: 30,
             sessionTimeout: 300
-        ) else {
-            fatalError("Failed to load default DRM configuration")
-        }
-        return config
-    }()
+        )
+    }
 
     /// Initialize with custom parameters
     /// - Parameters:

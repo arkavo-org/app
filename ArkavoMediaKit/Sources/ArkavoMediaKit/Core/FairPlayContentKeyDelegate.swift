@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os.log
 
 /// FairPlay Streaming content key delegate
 /// Implements AVContentKeySessionDelegate to handle key requests from AVPlayer
@@ -8,9 +9,14 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
     private let serverClient: MediaServerClient
     private let sessionId: String
 
+    /// Logger for DRM operations
+    private let logger = Logger(subsystem: "com.arkavo.mediakit", category: "drm")
+
     /// Thread-safe cache for decryption keys (DEK)
     private let cacheQueue = DispatchQueue(label: "com.arkavo.mediakit.keycache")
     private var dekCache: [String: Data] = [:]
+    private var cacheAccessOrder: [String] = []
+    private let maxCacheSize = 50
 
     /// Directory for storing persistable content keys (iOS only)
     #if os(iOS)
@@ -96,7 +102,7 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
         contentKeyRequest keyRequest: AVContentKeyRequest,
         didFailWithError err: Error
     ) {
-        print("Content key request failed: \(err.localizedDescription)")
+        logger.error("Content key request failed: \(err.localizedDescription)")
     }
 
     #if os(iOS)
@@ -137,7 +143,7 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
                     return
                 } catch {
                     // Fall through to online key request
-                    print("Persistable key request failed, falling back to online: \(error)")
+                    logger.warning("Persistable key request failed, falling back to online: \(error.localizedDescription)")
                 }
             }
         #endif
@@ -280,13 +286,30 @@ public final class FairPlayContentKeyDelegate: NSObject, AVContentKeySessionDele
 
     private func getCachedKey(for assetID: String) -> Data? {
         cacheQueue.sync {
-            dekCache[assetID]
+            // Update access order for LRU
+            if let index = cacheAccessOrder.firstIndex(of: assetID) {
+                cacheAccessOrder.remove(at: index)
+                cacheAccessOrder.append(assetID)
+            }
+            return dekCache[assetID]
         }
     }
 
     private func cacheKey(_ keyData: Data, for assetID: String) {
         cacheQueue.sync {
             dekCache[assetID] = keyData
+
+            // Update LRU access order
+            cacheAccessOrder.removeAll { $0 == assetID }
+            cacheAccessOrder.append(assetID)
+
+            // Evict oldest if over limit
+            while dekCache.count > maxCacheSize {
+                if let oldest = cacheAccessOrder.first {
+                    dekCache.removeValue(forKey: oldest)
+                    cacheAccessOrder.removeFirst()
+                }
+            }
         }
     }
 

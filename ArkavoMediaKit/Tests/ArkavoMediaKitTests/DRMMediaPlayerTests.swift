@@ -5,7 +5,7 @@ final class DRMMediaPlayerTests: XCTestCase {
 
     func testDRMConfigurationLoadsTestCertificate() throws {
         // Test that the default configuration loads the bundled test certificate
-        let config = DRMConfiguration.default
+        let config = try XCTUnwrap(DRMConfiguration.default, "Default configuration should be available")
 
         XCTAssertFalse(config.fpsCertificate.isEmpty, "FPS certificate should not be empty")
         XCTAssertEqual(config.serverURL.absoluteString, "https://100.arkavo.net")
@@ -107,23 +107,35 @@ final class DRMMediaPlayerTests: XCTestCase {
         XCTAssertThrowsError(try InputValidator.validateRegionCode("U"))
     }
 
-    func testDRMPlayerInitialization() {
+    func testDRMPlayerInitialization() throws {
         // Test player initialization with default config
-        let player = DRMMediaPlayer()
+        let player = try DRMMediaPlayer()
 
         XCTAssertNil(player.player)
         XCTAssertNil(player.sessionId)
         XCTAssertNil(player.error)
-        XCTAssertEqual(player.state, .idle)
+
+        // Use pattern matching for state comparison
+        if case .idle = player.state {
+            // Pass
+        } else {
+            XCTFail("Expected idle state")
+        }
     }
 
-    func testDRMPlayerCustomConfiguration() {
+    func testDRMPlayerCustomConfiguration() throws {
         // Test player with custom configuration
-        let config = DRMConfiguration.default
-        let player = DRMMediaPlayer(configuration: config)
+        let config = try XCTUnwrap(DRMConfiguration.default)
+        let player = try DRMMediaPlayer(configuration: config)
 
         XCTAssertNil(player.player)
-        XCTAssertEqual(player.state, .idle)
+
+        // Use pattern matching for state comparison
+        if case .idle = player.state {
+            // Pass
+        } else {
+            XCTFail("Expected idle state")
+        }
     }
 
     // Note: Integration tests with actual server would require:

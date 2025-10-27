@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Manages media playback sessions with automatic heartbeat
 public actor MediaSessionManager {
@@ -10,6 +11,12 @@ public actor MediaSessionManager {
 
     /// Heartbeat task for periodic updates
     private var heartbeatTask: Task<Void, Never>?
+
+    /// Logger for session management
+    private let logger = Logger(subsystem: "com.arkavo.mediakit", category: "session")
+
+    /// Optional callback for heartbeat failures
+    public var onHeartbeatFailure: (@Sendable (String, Error) -> Void)?
 
     public struct ActiveSession: Sendable {
         let sessionId: String
@@ -146,7 +153,7 @@ public actor MediaSessionManager {
                 guard let self else { return }
 
                 // Wait for heartbeat interval
-                let interval = await self.configuration.heartbeatInterval
+                let interval = configuration.heartbeatInterval
                 try? await Task.sleep(for: .seconds(interval))
 
                 // Send heartbeats for all active sessions
@@ -178,7 +185,8 @@ public actor MediaSessionManager {
 
             } catch {
                 // Log error but continue with other sessions
-                print("Failed to send heartbeat for session \(sessionId): \(error)")
+                logger.error("Failed to send heartbeat for session \(sessionId): \(error.localizedDescription)")
+                onHeartbeatFailure?(sessionId, error)
 
                 // Check if session expired (no successful heartbeat for timeout period)
                 let elapsed = now.timeIntervalSince(session.lastHeartbeat)
