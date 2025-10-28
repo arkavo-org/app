@@ -117,3 +117,14 @@ Arkavo/Arkavo.xcodeproj/project.xcworkspace/xcuserdata
 /.arkavo/
 /.gemini/
 vendor/FairPlay*/
+docs/*STATUS*.md
+
+# FairPlay Streaming certificates and keys - NEVER commit these
+*.bin
+*.der
+*.cer
+**/Resources/*.bin
+**/Resources/*.der
+**/Resources/*.cer
+**/.fairplay_keys/
+
