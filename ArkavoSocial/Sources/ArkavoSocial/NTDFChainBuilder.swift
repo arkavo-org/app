@@ -2,6 +2,53 @@ import Foundation
 import OpenTDFKit
 import CryptoKit
 
+/// Signed payload structure that wraps data with a cryptographic signature
+public struct SignedPayload: Codable, Sendable {
+    /// The actual payload data (could be nested NanoTDF, user data, etc.)
+    public let data: Data
+    /// ECDSA signature over (claims + data)
+    public let signature: Data
+    /// Public key used for signing (compressed format)
+    public let publicKey: Data
+    /// Timestamp when signature was created
+    public let timestamp: Date
+    /// Algorithm used (always "ES256" for P-256)
+    public let algorithm: String
+
+    public init(data: Data, signature: Data, publicKey: Data, timestamp: Date = Date(), algorithm: String = "ES256") {
+        self.data = data
+        self.signature = signature
+        self.publicKey = publicKey
+        self.timestamp = timestamp
+        self.algorithm = algorithm
+    }
+
+    /// Serializes to JSON for inclusion in NanoTDF payload
+    public func toData() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    /// Parses from JSON payload
+    public static func from(data: Data) throws -> SignedPayload {
+        try JSONDecoder().decode(SignedPayload.self, from: data)
+    }
+
+    /// Verifies the signature against the provided claims
+    public func verify(claims: Data) throws -> Bool {
+        // Reconstruct the signed message: claims + data
+        let message = claims + data
+
+        // Parse the public key
+        let pubKey = try P256.Signing.PublicKey(compressedRepresentation: publicKey)
+
+        // Create signature object
+        let sig = try P256.Signing.ECDSASignature(derRepresentation: signature)
+
+        // Verify
+        return pubKey.isValidSignature(sig, for: message)
+    }
+}
+
 /// Builds NTDF Profile v1.2 Chain of Trust by nesting NanoTDF containers
 /// According to the spec, NanoTDF payloads can contain arbitrary data, including other NanoTDFs
 public actor NTDFChainBuilder {
@@ -100,19 +147,18 @@ public actor NTDFChainBuilder {
             binding: nil
         )
 
-        // The "payload" is the actual user data or a marker
-        // For authorization tokens, this could be empty or contain additional context
-        let payload = Data("PE".utf8)
+        // Create signed payload
+        let userData = Data("PE".utf8)  // Could be actual user data
+        let signedPayload = try await createSignedPayload(
+            data: userData,
+            claims: claims
+        )
 
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
-            plaintext: payload
+            plaintext: try signedPayload.toData()
         )
-
-        // TODO: Sign the Origin Link once OpenTDFKit exposes SignatureAndPayloadConfig
-        // For now, signatures are optional in the spec
-        // try await addSignatureToNanoTDF(nanoTDF: &nanoTDF, privateKey: signingKey, config: config)
 
         return nanoTDF
     }
@@ -144,17 +190,62 @@ public actor NTDFChainBuilder {
         // This creates the chain by nesting
         let innerLinkData = innerLink.toData()
 
+        // Create signed payload wrapping the inner link
+        let signedPayload = try await createSignedPayload(
+            data: innerLinkData,
+            claims: claims
+        )
+
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
-            plaintext: innerLinkData  // Nested NanoTDF as payload
+            plaintext: try signedPayload.toData()
         )
 
-        // TODO: Sign the Intermediate Link once OpenTDFKit exposes SignatureAndPayloadConfig
-        // For now, signatures are optional in the spec
-        // try await addSignatureToNanoTDF(nanoTDF: &nanoTDF, privateKey: signingKey, config: config)
-
         return nanoTDF
+    }
+
+    /// Creates a signed payload wrapping data with claims
+    private func createSignedPayload(
+        data: Data,
+        claims: Data
+    ) async throws -> SignedPayload {
+        // Get DID key from keychain for signing
+        let didKey = try KeychainManager.getDIDKey()
+
+        // Message to sign: claims + data
+        let message = claims + data
+
+        // Sign with DID private key
+        let signature = try KeychainManager.signWithDIDKey(message: message)
+
+        // Get public key
+        let publicKey = didKey.publicKey
+
+        // Convert SecKey public key to P256 compressed representation
+        var error: Unmanaged<CFError>?
+        guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            throw NTDFChainError.signingFailed
+        }
+
+        // Convert uncompressed (65 bytes) to compressed (33 bytes)
+        let compressedPublicKey: Data
+        if publicKeyData.count == 65 {
+            // First byte is 0x04 (uncompressed), next 32 bytes are x, last 32 are y
+            let x = publicKeyData[1..<33]
+            let y = publicKeyData[33..<65]
+            let yLastByte = y.last!
+            let prefix: UInt8 = (yLastByte & 1) == 0 ? 0x02 : 0x03
+            compressedPublicKey = Data([prefix]) + x
+        } else {
+            compressedPublicKey = publicKeyData
+        }
+
+        return SignedPayload(
+            data: data,
+            signature: signature,
+            publicKey: compressedPublicKey
+        )
     }
 
     /// Extracts and validates a nested NanoTDF from the payload
@@ -163,10 +254,19 @@ public actor NTDFChainBuilder {
         keyStore: KeyStore
     ) async throws -> NanoTDF {
         // Decrypt the outer link's payload
-        let innerLinkData = try await outerLink.getPlaintext(using: keyStore)
+        let decryptedPayload = try await outerLink.getPlaintext(using: keyStore)
 
-        // Parse the inner NanoTDF
-        return try await parseNanoTDF(data: innerLinkData)
+        // Parse as SignedPayload
+        let signedPayload = try SignedPayload.from(data: decryptedPayload)
+
+        // Verify signature (claims are in the policy)
+        let claims = outerLink.header.policy.body?.body ?? Data()
+        guard try signedPayload.verify(claims: claims) else {
+            throw NTDFChainError.signatureVerificationFailed
+        }
+
+        // Extract inner link data
+        return try await parseNanoTDF(data: signedPayload.data)
     }
 
     /// Parses a NanoTDF from raw data
@@ -201,6 +301,7 @@ public enum NTDFChainError: Error {
     case parsingNotAvailable
     case invalidClaims
     case signatureVerificationFailed
+    case signingFailed
 }
 
 /// Person Entity (PE) claims for Origin Link
