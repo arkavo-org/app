@@ -17,5 +17,9 @@
 		<string>$(AppIdentifierPrefix)com.arkavo.did</string>
 		<string>$(AppIdentifierPrefix)com.arkavo.handle</string>
 	</array>
+	<key>com.apple.developer.networking.multicast</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>
