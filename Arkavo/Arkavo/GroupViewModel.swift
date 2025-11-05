@@ -53,6 +53,27 @@ enum KeyExchangeState: Codable, Equatable {
     }
 }
 
+// MARK: - User Feedback Types
+
+/// User-friendly error information for display in UI
+struct UserFacingError: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let recoverySuggestion: String?
+    let severity: Severity
+
+    enum Severity {
+        case warning  // Yellow - operation may continue
+        case error    // Red - operation failed
+        case info     // Blue - informational
+    }
+
+    static func == (lhs: UserFacingError, rhs: UserFacingError) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 /// Stores the tracking information for a key exchange with a peer.
 struct KeyExchangeTrackingInfo: Codable, Equatable {
     var state: KeyExchangeState = .idle
@@ -158,6 +179,11 @@ class PeerDiscoveryManager: ObservableObject {
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:]
     // Removed peerKeyCounts tracking
 
+    /// Current user-facing error to display
+    @Published var currentError: UserFacingError? = nil
+    /// Success message to display
+    @Published var successMessage: String? = nil
+
     private var implementation: P2PGroupViewModel
 
     init(arkavoClient: ArkavoClient) {
@@ -174,6 +200,10 @@ class PeerDiscoveryManager: ObservableObject {
         implementation.$connectedPeerProfiles.assign(to: &$connectedPeerProfiles)
         implementation.$peerKeyExchangeStates.assign(to: &$peerKeyExchangeStates)
         // Removed peerKeyCounts binding
+
+        // Bind user feedback properties
+        implementation.$currentError.assign(to: &$currentError)
+        implementation.$successMessage.assign(to: &$successMessage)
 
         // REMOVED: arkavoClient.delegate = implementation (ArkavoMessageRouter is the delegate)
     }
@@ -282,6 +312,10 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     @Published var peerKeyExchangeStates: [MCPeerID: KeyExchangeTrackingInfo] = [:] // Tracks key exchange state per peer
     // Removed peerKeyCounts tracking
 
+    // User feedback
+    @Published var currentError: UserFacingError? = nil // Latest user-facing error
+    @Published var successMessage: String? = nil // Success feedback message
+
     // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
     private var activeInputStreams: [InputStream: MCPeerID] = [:] // Tracks open streams by peer
@@ -348,6 +382,115 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     var peerIDToProfileID: [MCPeerID: String] = [:]
 
     private let persistenceController = PersistenceController.shared
+
+    // MARK: - User Feedback Helpers
+
+    /// Converts a P2PError or generic Error into a user-friendly error message
+    private func createUserError(from error: Error, context: String = "", peerName: String? = nil) -> UserFacingError {
+        let peer = peerName ?? "the device"
+
+        if let p2pError = error as? P2PError {
+            switch p2pError {
+            case .sessionNotInitialized:
+                return UserFacingError(
+                    title: "Connection Not Ready",
+                    message: "The peer-to-peer connection hasn't been set up yet.",
+                    recoverySuggestion: "Try enabling peer discovery in Settings, then try again.",
+                    severity: .error
+                )
+            case .peerNotConnected:
+                return UserFacingError(
+                    title: "Device Not Connected",
+                    message: "\(peer.capitalized) is no longer nearby or has disconnected.",
+                    recoverySuggestion: "Make sure both devices are close together with Bluetooth and Wi-Fi enabled.",
+                    severity: .warning
+                )
+            case .profileNotAvailable:
+                return UserFacingError(
+                    title: "Profile Not Found",
+                    message: "Your profile information is missing.",
+                    recoverySuggestion: "Try restarting the app or signing in again.",
+                    severity: .error
+                )
+            case .keyExchangeError(let reason):
+                return UserFacingError(
+                    title: "Key Exchange Failed",
+                    message: "Unable to exchange encryption keys with \(peer).",
+                    recoverySuggestion: "Try again, or move closer to \(peer). Details: \(reason)",
+                    severity: .error
+                )
+            case .keyGenerationFailed(let reason):
+                return UserFacingError(
+                    title: "Key Generation Failed",
+                    message: "Failed to generate secure encryption keys.",
+                    recoverySuggestion: "This may be a temporary issue. Try again in a moment. Details: \(reason)",
+                    severity: .error
+                )
+            case let .keyStoreSharingError(reason), let .keyStoreSerializationFailed(reason):
+                return UserFacingError(
+                    title: "Key Sharing Failed",
+                    message: "Unable to share encryption keys with \(peer).",
+                    recoverySuggestion: "Check that both devices have enough storage space. Details: \(reason)",
+                    severity: .error
+                )
+            case .invalidStateForAction(let reason):
+                return UserFacingError(
+                    title: "Operation Not Allowed",
+                    message: "Can't perform this action right now.",
+                    recoverySuggestion: "Wait for the current operation to complete, then try again. Details: \(reason)",
+                    severity: .warning
+                )
+            case .noConnectedPeers:
+                return UserFacingError(
+                    title: "No Devices Connected",
+                    message: "No nearby devices are currently connected.",
+                    recoverySuggestion: "Make sure the other device has the app open and peer discovery enabled.",
+                    severity: .info
+                )
+            default:
+                return UserFacingError(
+                    title: "Operation Failed",
+                    message: context.isEmpty ? "An error occurred during \(context)." : "An unexpected error occurred.",
+                    recoverySuggestion: "Please try again. If the problem persists, try restarting the app.",
+                    severity: .error
+                )
+            }
+        } else {
+            // Generic error
+            return UserFacingError(
+                title: "Something Went Wrong",
+                message: context.isEmpty ? error.localizedDescription : "\(context): \(error.localizedDescription)",
+                recoverySuggestion: "Please try again. If the problem persists, check your network connection.",
+                severity: .error
+            )
+        }
+    }
+
+    /// Shows a user-facing error
+    private func showError(_ error: UserFacingError) {
+        print("🔴 User Error: \(error.title) - \(error.message)")
+        currentError = error
+        // Auto-dismiss after 8 seconds
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            if currentError?.id == error.id {
+                currentError = nil
+            }
+        }
+    }
+
+    /// Shows a success message to the user
+    private func showSuccess(_ message: String) {
+        print("✅ Success: \(message)")
+        successMessage = message
+        // Auto-dismiss after 3 seconds
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if successMessage == message {
+                successMessage = nil
+            }
+        }
+    }
 
     // MARK: - Initialization and Cleanup
 
@@ -827,9 +970,11 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                     case let .commitSent(nonce): // Responder was waiting for keys
                         print("KeyExchange (Responder): Received keys from Initiator. Completing protocol.")
                         updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
+                        showSuccess("Secure connection established with \(peer.displayName)")
                     case let .commitReceivedWaitingForKeys(nonce): // Initiator was waiting for keys
                         print("KeyExchange (Initiator): Received keys from Responder. Completing protocol.")
                         updatePeerExchangeState(for: peer, newState: .completed(nonce: nonce))
+                        showSuccess("Secure connection established with \(peer.displayName)")
                     default:
                         print("KeyExchange: Received KeyStoreShare in unexpected state (\(currentState)). No state transition.")
                     }
@@ -946,35 +1091,44 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     /// Initiates the key regeneration protocol with a peer. (Step 1)
     func initiateKeyRegeneration(with peer: MCPeerID) async throws {
         print("KeyExchange: Initiating with \(peer.displayName)")
-        guard let session = mcSession, session.connectedPeers.contains(peer) else {
-            throw P2PError.peerNotConnected("Peer \(peer.displayName) not connected.")
-        }
-        guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
-            throw P2PError.profileNotAvailable
-        }
-
-        // Allow initiation only from idle or failed state
-        let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
-        guard currentState == .idle || currentState.nonce == nil else { // Check if failed or idle
-            throw P2PError.invalidStateForAction("Cannot initiate key exchange, state is \(currentState)")
-        }
-
-        let nonce = generateNonce()
-        let request = KeyRegenerationRequest(
-            requestID: UUID(),
-            initiatorProfileID: myProfile.publicID.base58EncodedString,
-            timestamp: Date(),
-        )
-
-        // Update state *before* sending
-        updatePeerExchangeState(for: peer, newState: .requestSent(nonce: nonce))
 
         do {
+            guard let session = mcSession, session.connectedPeers.contains(peer) else {
+                let error = P2PError.peerNotConnected("Peer \(peer.displayName) not connected.")
+                showError(createUserError(from: error, context: "initiating key exchange", peerName: peer.displayName))
+                throw error
+            }
+            guard let myProfile = ViewModelFactory.shared.getCurrentProfile() else {
+                let error = P2PError.profileNotAvailable
+                showError(createUserError(from: error, context: "initiating key exchange"))
+                throw error
+            }
+
+            // Allow initiation only from idle or failed state
+            let currentState = peerKeyExchangeStates[peer]?.state ?? .idle
+            guard currentState == .idle || currentState.nonce == nil else { // Check if failed or idle
+                let error = P2PError.invalidStateForAction("Cannot initiate key exchange, state is \(currentState)")
+                showError(createUserError(from: error, context: "initiating key exchange", peerName: peer.displayName))
+                throw error
+            }
+
+            let nonce = generateNonce()
+            let request = KeyRegenerationRequest(
+                requestID: UUID(),
+                initiatorProfileID: myProfile.publicID.base58EncodedString,
+                timestamp: Date(),
+            )
+
+            // Update state *before* sending
+            updatePeerExchangeState(for: peer, newState: .requestSent(nonce: nonce))
+
             try await sendP2PMessage(type: .keyRegenerationRequest, payload: request, toPeers: [peer])
             print("KeyExchange: Sent Request to \(peer.displayName)")
+
         } catch {
             // Rollback state on send failure
             updatePeerExchangeState(for: peer, newState: .failed("Failed to send request: \(error.localizedDescription)"))
+            showError(createUserError(from: error, context: "sending key exchange request", peerName: peer.displayName))
             throw error
         }
     }
@@ -1448,7 +1602,28 @@ extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
 
     nonisolated func advertiser(_: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
         print("Advertiser failed to start: \(error.localizedDescription)")
-        Task { @MainActor in self.connectionStatus = .failed(error) }
+        Task { @MainActor in
+            self.connectionStatus = .failed(error)
+
+            // Show user-friendly error for common network permission issues
+            let userError: UserFacingError
+            if error.localizedDescription.contains("denied") || error.localizedDescription.contains("permission") {
+                userError = UserFacingError(
+                    title: "Network Access Denied",
+                    message: "Cannot discover nearby devices without local network permission.",
+                    recoverySuggestion: "Go to Settings → Arkavo → Local Network and enable access. Also ensure Bluetooth and Wi-Fi are turned on.",
+                    severity: .error
+                )
+            } else {
+                userError = UserFacingError(
+                    title: "Discovery Failed",
+                    message: "Unable to start looking for nearby devices.",
+                    recoverySuggestion: "Make sure Wi-Fi and Bluetooth are enabled. Try restarting the app. Error: \(error.localizedDescription)",
+                    severity: .error
+                )
+            }
+            self.showError(userError)
+        }
     }
 }
 
