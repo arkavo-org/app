@@ -796,7 +796,9 @@ public final class ArkavoClient: NSObject {
 
         let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
         let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64())!
-        print("userIDData: \(userIDData) challengeData: \(challengeData)")
+        print("userIDData: \(userIDData.count) bytes challengeData: \(challengeData.count) bytes")
+        print("userIDData hex: \(userIDData.map { String(format: "%02x", $0) }.joined())")
+        print("Creating credential registration request for handle: \(handle)")
 
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
@@ -804,12 +806,52 @@ public final class ArkavoClient: NSObject {
             userID: userIDData
         )
 
-        let credential = try await performRegistration(request: credentialRequest)
-        return try await completeRegistration(
-            credential: credential,
-            handle: handle,
-            did: did
-        )
+        print("Credential request created, calling performRegistration")
+        do {
+            let credential = try await performRegistration(request: credentialRequest)
+            print("performRegistration succeeded, completing registration")
+            return try await completeRegistration(
+                credential: credential,
+                handle: handle,
+                did: did
+            )
+        } catch {
+            print("performRegistration threw error: \(error)")
+            let nsError = error as NSError
+            print("Error details: domain=\(nsError.domain) code=\(nsError.code) description=\(error.localizedDescription)")
+
+            // Check if this is a duplicate passkey error
+            if nsError.code == -25300 {
+                print("Detected errSecDuplicateItem (-25300)")
+                throw NSError(
+                    domain: "ArkavoRegistration",
+                    code: -25300,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "A passkey already exists for this relying party",
+                        NSLocalizedRecoverySuggestionErrorKey: """
+                        A passkey for '\(relyingPartyID)' already exists on this device.
+
+                        To register a new account:
+                        1. Open Settings → Passwords
+                        2. Search for '\(relyingPartyID)'
+                        3. Delete all existing passkeys
+                        4. Return to Arkavo and try again
+
+                        Or try using a different username.
+
+                        Technical details: The passkey system prevents duplicate credentials.
+                        Each device can have multiple passkeys for the same site, but they
+                        must have different user IDs. If you're seeing this error repeatedly,
+                        the server may be generating the same user ID for different usernames.
+                        """,
+                        NSLocalizedFailureReasonErrorKey: "errSecDuplicateItem: Duplicate passkey detected"
+                    ]
+                )
+            }
+
+            // Re-throw original error if not duplicate
+            throw error
+        }
     }
 
     private func fetchRegistrationOptions(
@@ -1368,46 +1410,27 @@ private class WebAuthnRegistrationDelegate: NSObject, ASAuthorizationControllerD
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("✅ WebAuthnRegistrationDelegate: Authorization succeeded")
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration else {
+            print("❌ WebAuthnRegistrationDelegate: Invalid credential type")
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
         }
+        print("✅ WebAuthnRegistrationDelegate: Got valid credential, resuming continuation")
         continuation.resume(returning: credential)
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("❌ WebAuthnRegistrationDelegate: Authorization failed with error")
         // Check for duplicate credential error (errSecDuplicateItem = -25300)
         let nsError = error as NSError
-        print("WebAuthnRegistrationDelegate error: domain=\(nsError.domain) code=\(nsError.code)")
+        print("❌ Error domain: '\(nsError.domain)'")
+        print("❌ Error code: \(nsError.code)")
+        print("❌ Error description: '\(error.localizedDescription)'")
+        print("❌ Error userInfo: \(nsError.userInfo)")
 
-        // Check for various forms of duplicate credential error
-        let isDuplicate = (nsError.code == -25300) || // Direct errSecDuplicateItem
-                         (nsError.domain == "com.apple.AuthenticationServices.AuthorizationError" && nsError.code == 1004) ||
-                         (nsError.localizedDescription.contains("duplicate") || nsError.localizedDescription.contains("already exists"))
-
-        if isDuplicate {
-            print("Detected duplicate passkey error - creating user-friendly error message")
-            let duplicateError = NSError(
-                domain: "ArkavoRegistration",
-                code: -25300,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "A passkey already exists for this account",
-                    NSLocalizedRecoverySuggestionErrorKey: """
-                    To register a new account:
-                    1. Open Settings → Passwords
-                    2. Find 'webauthn.arkavo.net'
-                    3. Delete the existing passkey
-                    4. Return to Arkavo and try again
-
-                    Or use a different username.
-                    """,
-                    NSLocalizedFailureReasonErrorKey: "A passkey for this username already exists on this device"
-                ]
-            )
-            continuation.resume(throwing: duplicateError)
-        } else {
-            continuation.resume(throwing: error)
-        }
+        // The error will be caught and handled in registerUser, so just pass it through
+        continuation.resume(throwing: error)
     }
 }
 

@@ -269,16 +269,27 @@ struct ArkavoApp: App {
                 print("Failed to register user: \(error)")
                 regLogger.error("[Registration] Unknown error during registerUser: \(String(describing: error))")
                 let ns = error as NSError
+                print("[Registration] Error domain: \(ns.domain), code: \(ns.code)")
                 var msg = error.localizedDescription
                 var title = "Registration Error"
                 var action = "Retry"
 
-                // Handle duplicate passkey error specifically
-                if ns.code == -25300 || ns.domain == "ArkavoRegistration" {
+                // Handle duplicate passkey error specifically - check multiple conditions
+                let isDuplicatePasskey = ns.code == -25300 ||
+                                        ns.domain == "ArkavoRegistration" ||
+                                        msg.lowercased().contains("duplicate") ||
+                                        msg.lowercased().contains("already exists")
+
+                if isDuplicatePasskey {
+                    print("[Registration] Detected duplicate passkey error")
                     title = "Passkey Already Exists"
                     msg = ns.localizedDescription
                     if let recoverySuggestion = ns.localizedRecoverySuggestion {
                         msg += "\n\n\(recoverySuggestion)"
+                    }
+                    // If no recovery suggestion was provided, add default guidance
+                    if ns.localizedRecoverySuggestion == nil {
+                        msg += "\n\nTo register:\n1. Go to Settings → Passwords\n2. Search for 'webauthn.arkavo.net'\n3. Delete all existing passkeys\n4. Return and try again"
                     }
                     action = "Got It"
                 } else if ns.domain == "HTTPError" {
