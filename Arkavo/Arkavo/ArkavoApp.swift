@@ -372,6 +372,39 @@ struct ArkavoApp: App {
         return true
     }
 
+    /// Creates a local-only profile without requiring Arkavo social network registration
+    func createLocalProfile(account: Account) async throws -> Profile {
+        // Generate a random device-specific name
+        let deviceName = UIDevice.current.name
+        let randomSuffix = String(format: "%04d", Int.random(in: 0...9999))
+        let profileName = "\(deviceName) \(randomSuffix)"
+
+        // Generate a local DID that doesn't require server interaction
+        let localDID = try client.generateDID()
+        print("Generated local DID: \(localDID)")
+
+        // Create profile with local data
+        let profile = Profile(name: profileName, publicID: Data(UUID().uuidString.utf8))
+        profile.finalizeRegistration(did: localDID, handle: profileName.lowercased().replacingOccurrences(of: " ", with: "-"))
+
+        // Associate with account
+        account.profile = profile
+
+        // Create required streams for local operation
+        print("Creating local streams...")
+        let videoStream = try await createVideoStream(account: account, profile: profile)
+        let postStream = try await createPostStream(account: account, profile: profile)
+        let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+
+        print("Created local streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
+
+        // Save everything
+        try await persistenceController.saveChanges()
+        print("✅ Local profile saved successfully")
+
+        return profile
+    }
+
     func createVideoStream(account: Account, profile: Profile) async throws -> Stream {
         print("Creating video stream for profile: \(profile.name)")
 
@@ -608,10 +641,15 @@ struct ArkavoApp: App {
             let account = try await persistenceController.getOrCreateAccount()
             print("Account retrieved: \(account.id), profile: \(String(describing: account.profile))")
 
-            // If profile is nil, go to registration immediately
+            // If profile is nil, create a local-only profile automatically
             if account.profile == nil {
-                print("No profile found - routing to registration")
-                selectedView = .registration
+                print("No profile found - creating local-only profile")
+                let localProfile = try await createLocalProfile(account: account)
+                print("✅ Created local profile: \(localProfile.name)")
+                // Continue to main view in offline mode
+                ViewModelFactory.shared.setAccount(account)
+                sharedState.isOfflineMode = true
+                selectedView = .main
                 return
             }
 
@@ -995,7 +1033,13 @@ final class ViewModelFactory {
 
     func makeViewModel<T: ViewModel>() -> T {
         guard let account = currentAccount, let profile = currentProfile else {
-            fatalError("Attempting to create ViewModel without account/profile")
+            print("⚠️ Warning: Attempting to create ViewModel without account/profile - app may not function properly")
+            // Return a placeholder - this should not happen in normal flow
+            // but prevents crashes during initialization
+            let client = serviceLocator.resolve() as ArkavoClient
+            let tempAccount = Account()
+            let tempProfile = Profile(name: "Local User", publicID: Data(repeating: 0, count: 32))
+            return T(client: client, account: tempAccount, profile: tempProfile)
         }
         let client = serviceLocator.resolve() as ArkavoClient
         return T(client: client, account: account, profile: profile)
@@ -1004,7 +1048,12 @@ final class ViewModelFactory {
     @MainActor
     func makeChatViewModel(streamPublicID: Data) -> ChatViewModel {
         guard let account = currentAccount, let profile = currentProfile else {
-            fatalError("Attempting to create ChatViewModel without account/profile")
+            print("⚠️ Warning: Attempting to create ChatViewModel without account/profile - app may not function properly")
+            // Return a placeholder to prevent crashes
+            let client = serviceLocator.resolve() as ArkavoClient
+            let tempAccount = Account()
+            let tempProfile = Profile(name: "Local User", publicID: Data(repeating: 0, count: 32))
+            return ChatViewModel(client: client, account: tempAccount, profile: tempProfile, streamPublicID: streamPublicID)
         }
         let client = serviceLocator.resolve() as ArkavoClient
         return ChatViewModel(
