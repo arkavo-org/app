@@ -384,7 +384,7 @@ struct ArkavoApp: App {
         print("Generated local DID: \(localDID)")
 
         // Create profile with local data
-        let profile = Profile(name: profileName, publicID: Data(UUID().uuidString.utf8))
+        let profile = Profile(name: profileName)
         profile.finalizeRegistration(did: localDID, handle: profileName.lowercased().replacingOccurrences(of: " ", with: "-"))
 
         // Associate with account
@@ -1038,7 +1038,7 @@ final class ViewModelFactory {
             // but prevents crashes during initialization
             let client = serviceLocator.resolve() as ArkavoClient
             let tempAccount = Account()
-            let tempProfile = Profile(name: "Local User", publicID: Data(repeating: 0, count: 32))
+            let tempProfile = Profile(name: "Local User")
             return T(client: client, account: tempAccount, profile: tempProfile)
         }
         let client = serviceLocator.resolve() as ArkavoClient
@@ -1052,7 +1052,7 @@ final class ViewModelFactory {
             // Return a placeholder to prevent crashes
             let client = serviceLocator.resolve() as ArkavoClient
             let tempAccount = Account()
-            let tempProfile = Profile(name: "Local User", publicID: Data(repeating: 0, count: 32))
+            let tempProfile = Profile(name: "Local User")
             return ChatViewModel(client: client, account: tempAccount, profile: tempProfile, streamPublicID: streamPublicID)
         }
         let client = serviceLocator.resolve() as ArkavoClient
