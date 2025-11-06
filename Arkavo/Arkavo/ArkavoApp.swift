@@ -270,13 +270,25 @@ struct ArkavoApp: App {
                 regLogger.error("[Registration] Unknown error during registerUser: \(String(describing: error))")
                 let ns = error as NSError
                 var msg = error.localizedDescription
-                if ns.domain == "HTTPError" {
+                var title = "Registration Error"
+                var action = "Retry"
+
+                // Handle duplicate passkey error specifically
+                if ns.code == -25300 || ns.domain == "ArkavoRegistration" {
+                    title = "Passkey Already Exists"
+                    msg = ns.localizedDescription
+                    if let recoverySuggestion = ns.localizedRecoverySuggestion {
+                        msg += "\n\n\(recoverySuggestion)"
+                    }
+                    action = "Got It"
+                } else if ns.domain == "HTTPError" {
                     msg = "HTTP \(ns.code): \(msg)"
                 }
+
                 connectionError = ConnectionError(
-                    title: "Registration Error",
-                    message: "Failed to complete registration. \(msg)",
-                    action: "Retry",
+                    title: title,
+                    message: msg,
+                    action: action,
                     isBlocking: true,
                 )
                 sharedState.lastRegistrationErrorDetails = msg

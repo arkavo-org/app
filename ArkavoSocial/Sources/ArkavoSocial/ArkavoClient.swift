@@ -1376,7 +1376,38 @@ private class WebAuthnRegistrationDelegate: NSObject, ASAuthorizationControllerD
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
-        continuation.resume(throwing: error)
+        // Check for duplicate credential error (errSecDuplicateItem = -25300)
+        let nsError = error as NSError
+        print("WebAuthnRegistrationDelegate error: domain=\(nsError.domain) code=\(nsError.code)")
+
+        // Check for various forms of duplicate credential error
+        let isDuplicate = (nsError.code == -25300) || // Direct errSecDuplicateItem
+                         (nsError.domain == "com.apple.AuthenticationServices.AuthorizationError" && nsError.code == 1004) ||
+                         (nsError.localizedDescription.contains("duplicate") || nsError.localizedDescription.contains("already exists"))
+
+        if isDuplicate {
+            print("Detected duplicate passkey error - creating user-friendly error message")
+            let duplicateError = NSError(
+                domain: "ArkavoRegistration",
+                code: -25300,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "A passkey already exists for this account",
+                    NSLocalizedRecoverySuggestionErrorKey: """
+                    To register a new account:
+                    1. Open Settings → Passwords
+                    2. Find 'webauthn.arkavo.net'
+                    3. Delete the existing passkey
+                    4. Return to Arkavo and try again
+
+                    Or use a different username.
+                    """,
+                    NSLocalizedFailureReasonErrorKey: "A passkey for this username already exists on this device"
+                ]
+            )
+            continuation.resume(throwing: duplicateError)
+        } else {
+            continuation.resume(throwing: error)
+        }
     }
 }
 
