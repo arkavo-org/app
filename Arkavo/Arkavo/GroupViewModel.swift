@@ -508,6 +508,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     }
 
     private func cleanup() {
+        print("P2PGroupViewModel: Cleaning up session state before re-initialization...")
         stopSearchingForPeers()
         mcSession?.disconnect()
         invitationHandler = nil
@@ -521,18 +522,26 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         isRegeneratingKeys = false
         connectedPeers = []
         connectionStatus = .idle
-        print("P2PGroupViewModel cleaned up.")
+        print("P2PGroupViewModel: Session state reset complete.")
     }
 
     // MARK: - MultipeerConnectivity Setup
 
     func setupMultipeerConnectivity() async throws {
-        cleanup() // Ensure clean state
-
         guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
             connectionStatus = .failed(P2PError.profileNotAvailable)
             throw P2PError.profileNotAvailable
         }
+
+        // Check if already initialized for this profile
+        if let existingPeerID = mcPeerID,
+           existingPeerID.displayName == profile.name,
+           mcSession != nil {
+            print("MultipeerConnectivity already initialized for \(profile.name), skipping setup")
+            return
+        }
+
+        cleanup() // Clean up existing session if switching profiles
 
         mcPeerID = MCPeerID(displayName: profile.name)
         guard let mcPeerID else { return } // Should always succeed
