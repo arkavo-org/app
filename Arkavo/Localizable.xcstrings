@@ -4,6 +4,9 @@
     "" : {
 
     },
+    "\n%@" : {
+
+    },
     "(%lld)" : {
 
     },
@@ -497,6 +500,9 @@
     "For security, confirm the device name with the person before connecting." : {
 
     },
+    "Go to the Profile page to create a local profile and start using Out-of-Band messaging." : {
+
+    },
     "Granularity" : {
 
     },
@@ -719,6 +725,9 @@
 
     },
     "No Peers Discovered" : {
+
+    },
+    "No Profile Yet" : {
 
     },
     "Not available" : {
@@ -1128,6 +1137,9 @@
     "Tap to connect" : {
 
     },
+    "Tap to Reconnect" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
@@ -1170,9 +1182,6 @@
 
     },
     "Try a different search term" : {
-
-    },
-    "Try to Reconnect" : {
 
     },
     "Type a message..." : {

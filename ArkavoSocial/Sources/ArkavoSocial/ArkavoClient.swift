@@ -786,7 +786,7 @@ public final class ArkavoClient: NSObject {
 
     /// Register a new user with WebAuthn
     public func registerUser(handle: String, did: String) async throws -> String {
-        print("registerUser \(handle) \(relyingPartyID) \(did)")
+        print("Initiating user registration with handle: \(handle)")
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
 
         let registrationOptions = try await fetchRegistrationOptions(
@@ -794,10 +794,15 @@ public final class ArkavoClient: NSObject {
             did: did
         )
 
-        let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
-        let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64())!
-        print("userIDData: \(userIDData.count) bytes challengeData: \(challengeData.count) bytes")
-        print("userIDData hex: \(userIDData.map { String(format: "%02x", $0) }.joined())")
+        guard let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64()) else {
+            throw ArkavoError.authenticationFailed("Failed to decode challenge data from base64")
+        }
+
+        guard let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64()) else {
+            throw ArkavoError.authenticationFailed("Failed to decode userID data from base64")
+        }
+
+        print("Registration request prepared: \(userIDData.count) bytes userID, \(challengeData.count) bytes challenge")
         print("Creating credential registration request for handle: \(handle)")
 
         let credentialRequest = provider.createCredentialRegistrationRequest(
@@ -1456,11 +1461,7 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
         print("Raw AuthenticatorData length: \(credential.rawAuthenticatorData.count) bytes")
         print("Raw ClientDataJSON: \(String(data: credential.rawClientDataJSON, encoding: .utf8) ?? "unable to decode")")
         print("Signature length: \(credential.signature.count) bytes")
-        if let userID = credential.userID {
-            print("UserID: \(userID.base64EncodedString())")
-        } else {
-            print("No UserID present")
-        }
+        print("UserID present: \(credential.userID != nil)")
         print("=== End WebAuthn Authentication Completion ===\n")
 
         continuation.resume(returning: credential)

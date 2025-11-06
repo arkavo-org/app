@@ -295,7 +295,8 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     private var mcSession: MCSession?
     private var mcPeerID: MCPeerID?
     private var mcAdvertiser: MCNearbyServiceAdvertiser?
-    private var mcBrowser: MCBrowserViewController?
+    private var mcBrowser: MCNearbyServiceBrowser?
+    private var mcBrowserViewController: MCBrowserViewController? // Keep for UI-based browsing if needed
     private var invitationHandler: (@Sendable (Bool, MCSession?) -> Void)?
 
     private let arkavoClient: ArkavoClient
@@ -319,6 +320,11 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
     private var activeInputStreams: [InputStream: MCPeerID] = [:] // Tracks open streams by peer
+    private var isSettingUpSession: Bool = false // Prevents concurrent session setup
+
+    // Error recovery configuration
+    private let maxRetryAttempts = 3
+    private let baseRetryDelay: UInt64 = 1_000_000_000 // 1 second in nanoseconds
 
     /// Specific errors related to P2P operations.
     enum P2PError: Error, LocalizedError {
@@ -470,26 +476,47 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     private func showError(_ error: UserFacingError) {
         print("🔴 User Error: \(error.title) - \(error.message)")
         currentError = error
-        // Auto-dismiss after 8 seconds
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
-            if currentError?.id == error.id {
-                currentError = nil
-            }
-        }
+        // Manual dismissal required - user must tap to dismiss
     }
 
     /// Shows a success message to the user
     private func showSuccess(_ message: String) {
         print("✅ Success: \(message)")
         successMessage = message
-        // Auto-dismiss after 3 seconds
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if successMessage == message {
-                successMessage = nil
+        // Manual dismissal required - user must tap to dismiss
+    }
+
+    // MARK: - Error Recovery
+
+    /// Executes an async operation with exponential backoff retry logic
+    private func withRetry<T>(
+        operation: String,
+        maxAttempts: Int? = nil,
+        perform: () async throws -> T
+    ) async throws -> T {
+        let attempts = maxAttempts ?? maxRetryAttempts
+        var lastError: Error?
+
+        for attempt in 1...attempts {
+            do {
+                return try await perform()
+            } catch {
+                lastError = error
+                print("⚠️ \(operation) failed (attempt \(attempt)/\(attempts)): \(error.localizedDescription)")
+
+                // Don't retry on final attempt
+                if attempt < attempts {
+                    // Exponential backoff: 1s, 2s, 4s
+                    let delayMultiplier = UInt64(1 << (attempt - 1))
+                    let delay = baseRetryDelay * delayMultiplier
+                    print("   Retrying in \(delayMultiplier) second(s)...")
+                    try? await Task.sleep(nanoseconds: delay)
+                }
             }
         }
+
+        // All attempts failed
+        throw lastError ?? P2PError.keyExchangeError("Operation failed after \(attempts) attempts")
     }
 
     // MARK: - Initialization and Cleanup
@@ -510,8 +537,25 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     private func cleanup() {
         print("P2PGroupViewModel: Cleaning up session state before re-initialization...")
         stopSearchingForPeers()
+
+        // Properly cleanup MultipeerConnectivity components
+        mcAdvertiser?.delegate = nil
+        mcAdvertiser = nil
+
+        mcBrowser?.delegate = nil
+        mcBrowser = nil
+
+        mcBrowserViewController?.delegate = nil
+        mcBrowserViewController = nil
+
         mcSession?.disconnect()
+        mcSession?.delegate = nil
+        mcSession = nil
+
+        mcPeerID = nil
         invitationHandler = nil
+
+        // Clear state
         peerIDToProfileID.removeAll()
         connectedPeerProfiles.removeAll()
         peerKeyExchangeStates.removeAll()
@@ -528,6 +572,12 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     // MARK: - MultipeerConnectivity Setup
 
     func setupMultipeerConnectivity() async throws {
+        // Prevent concurrent setup calls
+        guard !isSettingUpSession else {
+            print("MultipeerConnectivity setup already in progress, returning early")
+            return
+        }
+
         guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
             connectionStatus = .failed(P2PError.profileNotAvailable)
             throw P2PError.profileNotAvailable
@@ -540,6 +590,9 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             print("MultipeerConnectivity already initialized for \(profile.name), skipping setup")
             return
         }
+
+        isSettingUpSession = true
+        defer { isSettingUpSession = false }
 
         cleanup() // Clean up existing session if switching profiles
 
@@ -566,8 +619,13 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         )
         mcAdvertiser?.delegate = self
 
-        mcBrowser = MCBrowserViewController(serviceType: serviceType, session: mcSession!)
+        // Create programmatic browser for background/NFC discovery
+        mcBrowser = MCNearbyServiceBrowser(peer: mcPeerID, serviceType: serviceType)
         mcBrowser?.delegate = self
+
+        // Keep UI-based browser for manual browsing if needed
+        mcBrowserViewController = MCBrowserViewController(serviceType: serviceType, session: mcSession!)
+        mcBrowserViewController?.delegate = self
 
         connectionStatus = .idle
         print("MultipeerConnectivity setup complete for \(profile.name)")
@@ -579,20 +637,24 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             throw P2PError.sessionNotInitialized
         }
         mcAdvertiser?.startAdvertisingPeer()
+        mcBrowser?.startBrowsingForPeers()
         isSearchingForPeers = true
         connectionStatus = .searching
-        print("Started advertising and searching for peers.")
+        print("Started advertising and browsing for peers (programmatic discovery enabled).")
     }
 
     func stopSearchingForPeers() {
-        mcAdvertiser?.stopAdvertisingPeer()
-        isSearchingForPeers = false
-        if connectedPeers.isEmpty {
-            connectionStatus = .idle
-        } else {
-            connectionStatus = .connected // Remain connected if peers exist
+        if isSearchingForPeers {
+            mcAdvertiser?.stopAdvertisingPeer()
+            mcBrowser?.stopBrowsingForPeers()
+            isSearchingForPeers = false
+            if connectedPeers.isEmpty {
+                connectionStatus = .idle
+            } else {
+                connectionStatus = .connected // Remain connected if peers exist
+            }
+            print("Stopped advertising and browsing for peers.")
         }
-        print("Stopped advertising and searching.")
     }
 
     /// Finds a connected peer by their Profile Public ID (Data).
@@ -647,7 +709,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
 
     /// Returns the MCBrowserViewController for presentation.
     func getBrowser() -> MCBrowserViewController? {
-        mcBrowser
+        mcBrowserViewController
     }
 
     // MARK: - Data Transmission
@@ -945,7 +1007,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let payload: KeyStoreSharePayload = try P2PMessage(messageType: .keyStoreShare, payload: data).decodePayload(KeyStoreSharePayload.self)
                 let senderProfileIDString = payload.senderProfileID
                 let receivedPublicData = payload.keyStorePublicData
-                print("Decoded KeyStoreSharePayload from \(senderProfileIDString). Public data: \(receivedPublicData.count) bytes.")
+                print("Decoded KeyStoreSharePayload. Received public key data.")
 
                 guard let senderProfileID = Data(base58Encoded: senderProfileIDString) else {
                     throw P2PError.keyStoreSharingError("Invalid sender profile ID format")
@@ -1131,7 +1193,10 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             // Update state *before* sending
             updatePeerExchangeState(for: peer, newState: .requestSent(nonce: nonce))
 
-            try await sendP2PMessage(type: .keyRegenerationRequest, payload: request, toPeers: [peer])
+            // Send with retry logic for transient failures
+            try await withRetry(operation: "Send key regeneration request to \(peer.displayName)") {
+                try await sendP2PMessage(type: .keyRegenerationRequest, payload: request, toPeers: [peer])
+            }
             print("KeyExchange: Sent Request to \(peer.displayName)")
 
         } catch {
@@ -1170,7 +1235,10 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 // Update state *before* sending
                 updatePeerExchangeState(for: peer, newState: .requestReceived(nonce: nonce)) // Store *our* (responder's) nonce
 
-                try await sendP2PMessage(type: .keyRegenerationOffer, payload: offer, toPeers: [peer])
+                // Send with retry logic for transient failures
+                try await withRetry(operation: "Send key regeneration offer to \(peer.displayName)") {
+                    try await sendP2PMessage(type: .keyRegenerationOffer, payload: offer, toPeers: [peer])
+                }
                 print("KeyExchange: Sent Offer to \(peer.displayName)")
                 // Transition state after successful send
                 updatePeerExchangeState(for: peer, newState: .offerSent(nonce: nonce))
@@ -1222,13 +1290,15 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 let localPublicKeyStoreData = try await performKeyGenerationAndSave(peerProfileIDData: peerProfileIDData, peer: peer)
                 print("KeyExchange (Initiator): Local key regeneration successful. Sharing public keys...")
 
-                // Send own public KeyStore data to the peer
+                // Send own public KeyStore data to the peer with retry
                 let keySharePayload = KeyStoreSharePayload(
                     senderProfileID: myProfile.publicID.base58EncodedString,
                     keyStorePublicData: localPublicKeyStoreData,
                     timestamp: Date(),
                 )
-                try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
+                try await withRetry(operation: "Send KeyStore share to \(peer.displayName)") {
+                    try await sendP2PMessage(type: .keyStoreShare, payload: keySharePayload, toPeers: [peer])
+                }
                 print("KeyExchange (Initiator): Sent KeyStoreShare to \(peer.displayName)")
                 // State remains ackSent, waiting for Commit and peer's KeyStoreShare
 
@@ -1338,7 +1408,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
 
             // Serialize updated private KeyStore
             let updatedSerializedData = await keyStore.serialize()
-            print("   Serialized updated KeyStore (\(updatedSerializedData.count) bytes).")
+            print("   Serialized updated KeyStore.")
 
             // --- Save Local Private Keys to Peer's Profile ---
             // Fetch the peer's profile from the context to save the local private keys generated for this relationship.
@@ -1358,7 +1428,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
             // Use await on the property access
-            await print("   Extracted public KeyStore data (\((publicKeyStore.publicKeys).count) keys, \(publicData.count) bytes).")
+            await print("   Extracted public KeyStore data.")
             return publicData
 
         } catch {
@@ -1571,6 +1641,73 @@ extension P2PGroupViewModel: MCBrowserViewControllerDelegate {
             }
         }
         return true // Always allow presentation in the browser
+    }
+}
+
+// MARK: - MCNearbyServiceBrowserDelegate
+
+extension P2PGroupViewModel: MCNearbyServiceBrowserDelegate {
+    nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
+        print("Browser found peer: \(peerID.displayName) with discovery info: \(info ?? [:])")
+        Task { @MainActor in
+            // Associate ProfileID from discovery info immediately if available
+            if let profileID = info?["profileID"] {
+                print("   Peer \(peerID.displayName) has Profile ID: \(profileID)")
+                // Update map if new or different
+                if self.peerIDToProfileID[peerID] != profileID {
+                    self.peerIDToProfileID[peerID] = profileID
+                    print("   Associated peer \(peerID.displayName) with profile ID")
+                }
+            } else {
+                print("   Peer \(peerID.displayName) did not provide profileID in discovery info.")
+            }
+
+            // Check if already connected or connecting to avoid duplicate invitations
+            guard let session = self.mcSession else {
+                print("   ⚠️ Session not initialized, skipping invitation")
+                return
+            }
+
+            // Check connection state - avoid duplicate invitations
+            if session.connectedPeers.contains(peerID) {
+                print("   ℹ️ Peer \(peerID.displayName) is already connected, skipping invitation")
+                return
+            }
+
+            if case .connecting = self.connectionStatus {
+                print("   ℹ️ Already connecting to a peer, skipping invitation to \(peerID.displayName)")
+                return
+            }
+
+            // Auto-invite the discovered peer
+            print("   Inviting peer \(peerID.displayName) to connect...")
+            browser.invitePeer(peerID, to: session, withContext: nil, timeout: 30)
+        }
+    }
+
+    nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        print("Browser lost peer: \(peerID.displayName)")
+        Task { @MainActor in
+            // Remove from map if no longer discoverable and not connected
+            if !self.connectedPeers.contains(peerID) {
+                self.peerIDToProfileID.removeValue(forKey: peerID)
+                print("   Removed peer \(peerID.displayName) from tracking")
+            }
+        }
+    }
+
+    nonisolated func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
+        print("❌ Browser failed to start: \(error.localizedDescription)")
+        Task { @MainActor in
+            self.connectionStatus = .failed(P2PError.browserNotInitialized)
+            let userError = UserFacingError(
+                title: "Peer Discovery Failed",
+                message: "Unable to search for nearby peers.",
+                recoverySuggestion: "Please check your network settings and try again.",
+                severity: .error
+            )
+            self.showError(userError)
+        }
     }
 }
 

@@ -372,11 +372,27 @@ struct ArkavoApp: App {
         return true
     }
 
+    /// Generates a cryptographically secure random alphanumeric suffix
+    private func generateSecureRandomSuffix(length: Int) -> String {
+        let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let result = SecRandomCopyBytes(kSecRandomDefault, length, &randomBytes)
+
+        guard result == errSecSuccess else {
+            // Fallback to system random if SecRandomCopyBytes fails
+            return String((0..<length).map { _ in characters.randomElement()! })
+        }
+
+        return String(randomBytes.map { byte in
+            characters[characters.index(characters.startIndex, offsetBy: Int(byte) % characters.count)]
+        })
+    }
+
     /// Creates a local-only profile without requiring Arkavo social network registration
     func createLocalProfile(account: Account) async throws -> Profile {
-        // Generate a random device-specific name
+        // Generate a random device-specific name with cryptographically secure suffix
         let deviceName = UIDevice.current.name
-        let randomSuffix = String(format: "%04d", Int.random(in: 0...9999))
+        let randomSuffix = generateSecureRandomSuffix(length: 8)
         let profileName = "\(deviceName) \(randomSuffix)"
 
         // Generate a local DID that doesn't require server interaction
