@@ -786,7 +786,7 @@ public final class ArkavoClient: NSObject {
 
     /// Register a new user with WebAuthn
     public func registerUser(handle: String, did: String) async throws -> String {
-        print("registerUser \(handle) \(relyingPartyID) \(did)")
+        print("Initiating user registration with handle: \(handle)")
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyID)
 
         let registrationOptions = try await fetchRegistrationOptions(
@@ -794,9 +794,16 @@ public final class ArkavoClient: NSObject {
             did: did
         )
 
-        let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64())!
-        let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64())!
-        print("userIDData: \(userIDData) challengeData: \(challengeData)")
+        guard let challengeData = Data(base64Encoded: registrationOptions.challenge.base64URLToBase64()) else {
+            throw ArkavoError.authenticationFailed("Failed to decode challenge data from base64")
+        }
+
+        guard let userIDData = Data(base64Encoded: registrationOptions.userID.base64URLToBase64()) else {
+            throw ArkavoError.authenticationFailed("Failed to decode userID data from base64")
+        }
+
+        print("Registration request prepared: \(userIDData.count) bytes userID, \(challengeData.count) bytes challenge")
+        print("Creating credential registration request for handle: \(handle)")
 
         let credentialRequest = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
@@ -804,12 +811,52 @@ public final class ArkavoClient: NSObject {
             userID: userIDData
         )
 
-        let credential = try await performRegistration(request: credentialRequest)
-        return try await completeRegistration(
-            credential: credential,
-            handle: handle,
-            did: did
-        )
+        print("Credential request created, calling performRegistration")
+        do {
+            let credential = try await performRegistration(request: credentialRequest)
+            print("performRegistration succeeded, completing registration")
+            return try await completeRegistration(
+                credential: credential,
+                handle: handle,
+                did: did
+            )
+        } catch {
+            print("performRegistration threw error: \(error)")
+            let nsError = error as NSError
+            print("Error details: domain=\(nsError.domain) code=\(nsError.code) description=\(error.localizedDescription)")
+
+            // Check if this is a duplicate passkey error
+            if nsError.code == -25300 {
+                print("Detected errSecDuplicateItem (-25300)")
+                throw NSError(
+                    domain: "ArkavoRegistration",
+                    code: -25300,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "A passkey already exists for this relying party",
+                        NSLocalizedRecoverySuggestionErrorKey: """
+                        A passkey for '\(relyingPartyID)' already exists on this device.
+
+                        To register a new account:
+                        1. Open Settings → Passwords
+                        2. Search for '\(relyingPartyID)'
+                        3. Delete all existing passkeys
+                        4. Return to Arkavo and try again
+
+                        Or try using a different username.
+
+                        Technical details: The passkey system prevents duplicate credentials.
+                        Each device can have multiple passkeys for the same site, but they
+                        must have different user IDs. If you're seeing this error repeatedly,
+                        the server may be generating the same user ID for different usernames.
+                        """,
+                        NSLocalizedFailureReasonErrorKey: "errSecDuplicateItem: Duplicate passkey detected"
+                    ]
+                )
+            }
+
+            // Re-throw original error if not duplicate
+            throw error
+        }
     }
 
     private func fetchRegistrationOptions(
@@ -1368,14 +1415,26 @@ private class WebAuthnRegistrationDelegate: NSObject, ASAuthorizationControllerD
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("✅ WebAuthnRegistrationDelegate: Authorization succeeded")
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration else {
+            print("❌ WebAuthnRegistrationDelegate: Invalid credential type")
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
         }
+        print("✅ WebAuthnRegistrationDelegate: Got valid credential, resuming continuation")
         continuation.resume(returning: credential)
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("❌ WebAuthnRegistrationDelegate: Authorization failed with error")
+        // Check for duplicate credential error (errSecDuplicateItem = -25300)
+        let nsError = error as NSError
+        print("❌ Error domain: '\(nsError.domain)'")
+        print("❌ Error code: \(nsError.code)")
+        print("❌ Error description: '\(error.localizedDescription)'")
+        print("❌ Error userInfo: \(nsError.userInfo)")
+
+        // The error will be caught and handled in registerUser, so just pass it through
         continuation.resume(throwing: error)
     }
 }
@@ -1402,11 +1461,7 @@ private class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControlle
         print("Raw AuthenticatorData length: \(credential.rawAuthenticatorData.count) bytes")
         print("Raw ClientDataJSON: \(String(data: credential.rawClientDataJSON, encoding: .utf8) ?? "unable to decode")")
         print("Signature length: \(credential.signature.count) bytes")
-        if let userID = credential.userID {
-            print("UserID: \(userID.base64EncodedString())")
-        } else {
-            print("No UserID present")
-        }
+        print("UserID present: \(credential.userID != nil)")
         print("=== End WebAuthn Authentication Completion ===\n")
 
         continuation.resume(returning: credential)

@@ -50,6 +50,9 @@ struct InnerCircleView: View {
     // Standard system margin from HIG
     private let systemMargin: CGFloat = 16
 
+    // Track alert presentation
+    @State private var showingErrorAlert = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Search and filter bar
@@ -71,10 +74,34 @@ struct InnerCircleView: View {
             removeNotificationObservers() // Remove observers
         }
         .overlay(statusMessageOverlay)
+        .overlay(errorOverlay)
+        .overlay(successOverlay)
         // Refresh UI when key exchange states change
         .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
             // This ensures the UI updates when a state changes for any peer
             print("InnerCircleView: Detected change in peerKeyExchangeStates")
+        }
+        // Show error alert when error occurs
+        .alert(
+            peerManager.currentError?.title ?? "Error",
+            isPresented: $showingErrorAlert,
+            presenting: peerManager.currentError
+        ) { error in
+            Button("OK", role: .cancel) {
+                // Dismiss and clear error
+                showingErrorAlert = false
+            }
+        } message: { error in
+            VStack(alignment: .leading, spacing: 8) {
+                Text(error.message)
+                if let suggestion = error.recoverySuggestion {
+                    Text("\n\(suggestion)")
+                        .font(.caption)
+                }
+            }
+        }
+        .onChange(of: peerManager.currentError) { _, newError in
+            showingErrorAlert = (newError != nil)
         }
     }
 
@@ -364,6 +391,92 @@ struct InnerCircleView: View {
                     }
                 Spacer()
             }
+        }
+    }
+
+    // Error overlay - Banner style for errors
+    @ViewBuilder
+    private var errorOverlay: some View {
+        if let error = peerManager.currentError {
+            VStack {
+                HStack(alignment: .top, spacing: 12) {
+                    // Icon based on severity
+                    Image(systemName: error.severity == .error ? "exclamationmark.triangle.fill" :
+                            error.severity == .warning ? "exclamationmark.circle.fill" : "info.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.white)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(error.title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text(error.message)
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.9))
+                        if let suggestion = error.recoverySuggestion {
+                            Text(suggestion)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.top, 4)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Dismiss button
+                    Button {
+                        withAnimation {
+                            showingErrorAlert = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                .padding(systemMargin)
+                .background(
+                    (error.severity == .error ? Color.red :
+                        error.severity == .warning ? Color.orange : Color.blue)
+                        .opacity(0.95)
+                )
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
+                .padding(systemMargin)
+
+                Spacer()
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: error.id)
+        }
+    }
+
+    // Success overlay - Banner style for success messages
+    @ViewBuilder
+    private var successOverlay: some View {
+        if let message = peerManager.successMessage {
+            VStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.white)
+
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+
+                    Spacer()
+                }
+                .padding(systemMargin)
+                .background(InnerCircleConstants.trustGreen.opacity(0.95))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
+                .padding(systemMargin)
+
+                Spacer()
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: message)
         }
     }
 }
@@ -824,14 +937,16 @@ struct InnerCircleMemberRow: View {
                         print("UI: Initiating key regeneration with peer \(peer.displayName) for profile \(profile.name)")
                         try await peerManager.initiateKeyRegeneration(with: peer)
                         print("UI: Key regeneration initiated successfully for \(profile.name)")
+                        // Success and error feedback is now handled by the PeerDiscoveryManager
                     } catch {
+                        // Error is already shown to user by PeerDiscoveryManager
                         print("❌ UI: Failed to initiate key regeneration for \(profile.name): \(error)")
-                        // Optionally show an error to the user (e.g., using an alert or status message)
-                        sharedState.setState("Key exchange failed: \(error.localizedDescription)", forKey: "errorMessage") // Example error handling
                     }
                 }
             } else {
                 print("❌ UI: Could not find MCPeerID for profile \(profile.name) to initiate key exchange.")
+                // This shouldn't happen for online peers, but show error just in case
+                sharedState.setState("Could not find peer connection for \(profile.name)", forKey: "errorMessage")
             }
         } label: {
             Group {
