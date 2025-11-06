@@ -1,0 +1,627 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		HF0000012 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000011 /* ArkavoSocial */; };
+		HF0000014 /* ArkavoAgent in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000013 /* ArkavoAgent */; };
+		HF0000016 /* ArkavoContent in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000015 /* ArkavoContent */; };
+		HF0000018 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000017 /* ArkavoMediaKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		HF0000022 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = HF0000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = HF0000003;
+			remoteInfo = HYPERforum;
+		};
+		HF0000032 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = HF0000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = HF0000003;
+			remoteInfo = HYPERforum;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		HF0000004 /* HYPERforum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HYPERforum.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		HF0000021 /* HYPERforumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HYPERforumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		HF0000031 /* HYPERforumUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HYPERforumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		HF0000005 /* HYPERforum */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HYPERforum;
+			sourceTree = "<group>";
+		};
+		HF0000024 /* HYPERforumTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HYPERforumTests;
+			sourceTree = "<group>";
+		};
+		HF0000034 /* HYPERforumUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HYPERforumUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		HF0000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				HF0000012 /* ArkavoSocial in Frameworks */,
+				HF0000014 /* ArkavoAgent in Frameworks */,
+				HF0000016 /* ArkavoContent in Frameworks */,
+				HF0000018 /* ArkavoMediaKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000025 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000035 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		HF0000000 = {
+			isa = PBXGroup;
+			children = (
+				HF0000005 /* HYPERforum */,
+				HF0000024 /* HYPERforumTests */,
+				HF0000034 /* HYPERforumUITests */,
+				HF0000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		HF0000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				HF0000004 /* HYPERforum.app */,
+				HF0000021 /* HYPERforumTests.xctest */,
+				HF0000031 /* HYPERforumUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		HF0000003 /* HYPERforum */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = HF0000041 /* Build configuration list for PBXNativeTarget "HYPERforum" */;
+			buildPhases = (
+				HF0000007 /* Sources */,
+				HF0000006 /* Frameworks */,
+				HF0000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				HF0000005 /* HYPERforum */,
+			);
+			name = HYPERforum;
+			packageProductDependencies = (
+				HF0000011 /* ArkavoSocial */,
+				HF0000013 /* ArkavoAgent */,
+				HF0000015 /* ArkavoContent */,
+				HF0000017 /* ArkavoMediaKit */,
+			);
+			productName = HYPERforum;
+			productReference = HF0000004 /* HYPERforum.app */;
+			productType = "com.apple.product-type.application";
+		};
+		HF0000020 /* HYPERforumTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = HF0000044 /* Build configuration list for PBXNativeTarget "HYPERforumTests" */;
+			buildPhases = (
+				HF0000026 /* Sources */,
+				HF0000025 /* Frameworks */,
+				HF0000027 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				HF0000023 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				HF0000024 /* HYPERforumTests */,
+			);
+			name = HYPERforumTests;
+			packageProductDependencies = (
+			);
+			productName = HYPERforumTests;
+			productReference = HF0000021 /* HYPERforumTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		HF0000030 /* HYPERforumUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = HF0000047 /* Build configuration list for PBXNativeTarget "HYPERforumUITests" */;
+			buildPhases = (
+				HF0000036 /* Sources */,
+				HF0000035 /* Frameworks */,
+				HF0000037 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				HF0000033 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				HF0000034 /* HYPERforumUITests */,
+			);
+			name = HYPERforumUITests;
+			packageProductDependencies = (
+			);
+			productName = HYPERforumUITests;
+			productReference = HF0000031 /* HYPERforumUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		HF0000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1610;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					HF0000003 = {
+						CreatedOnToolsVersion = 16.1;
+					};
+					HF0000020 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = HF0000003;
+					};
+					HF0000030 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = HF0000003;
+					};
+				};
+			};
+			buildConfigurationList = HF0000009 /* Build configuration list for PBXProject "HYPERforum" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = HF0000000;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
+				HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */,
+				HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
+				HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = HF0000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				HF0000003 /* HYPERforum */,
+				HF0000020 /* HYPERforumTests */,
+				HF0000030 /* HYPERforumUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		HF0000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000027 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000037 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		HF0000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000026 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		HF0000036 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		HF0000023 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = HF0000003 /* HYPERforum */;
+			targetProxy = HF0000022 /* PBXContainerItemProxy */;
+		};
+		HF0000033 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = HF0000003 /* HYPERforum */;
+			targetProxy = HF0000032 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		HF0000042 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HYPERforum/HYPERforum.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HYPERforum/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "HYPΞRforum";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 Arkavo. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforum;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		HF0000043 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HYPERforum/HYPERforum.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HYPERforum/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "HYPΞRforum";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2025 Arkavo. All rights reserved.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforum;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		HF0000045 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforumTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HYPERforum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HYPERforum";
+			};
+			name = Debug;
+		};
+		HF0000046 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforumTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HYPERforum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HYPERforum";
+			};
+			name = Release;
+		};
+		HF0000048 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforumUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = HYPERforum;
+			};
+			name = Debug;
+		};
+		HF0000049 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforumUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = HYPERforum;
+			};
+			name = Release;
+		};
+		HF0000050 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		HF0000051 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		HF0000009 /* Build configuration list for PBXProject "HYPERforum" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HF0000050 /* Debug */,
+				HF0000051 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		HF0000041 /* Build configuration list for PBXNativeTarget "HYPERforum" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HF0000042 /* Debug */,
+				HF0000043 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		HF0000044 /* Build configuration list for PBXNativeTarget "HYPERforumTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HF0000045 /* Debug */,
+				HF0000046 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		HF0000047 /* Build configuration list for PBXNativeTarget "HYPERforumUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HF0000048 /* Debug */,
+				HF0000049 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoSocial;
+		};
+		HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoAgent;
+		};
+		HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoContent;
+		};
+		HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoMediaKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		HF0000011 /* ArkavoSocial */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */;
+			productName = ArkavoSocial;
+		};
+		HF0000013 /* ArkavoAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */;
+			productName = ArkavoAgent;
+		};
+		HF0000015 /* ArkavoContent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */;
+			productName = ArkavoContent;
+		};
+		HF0000017 /* ArkavoMediaKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
+			productName = ArkavoMediaKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = HF0000001 /* Project object */;
+}
