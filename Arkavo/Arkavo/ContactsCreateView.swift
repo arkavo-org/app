@@ -269,10 +269,13 @@ struct NearbyConnectionView: View {
             }
         }
         .onAppear {
-            do {
-                try peerManager.startSearchingForPeers()
-            } catch {
-                print("Failed to start peer discovery: \(error)")
+            Task {
+                do {
+                    try await peerManager.setupMultipeerConnectivity()
+                    try peerManager.startSearchingForPeers()
+                } catch {
+                    print("Failed to start peer discovery: \(error)")
+                }
             }
         }
         .onDisappear {
