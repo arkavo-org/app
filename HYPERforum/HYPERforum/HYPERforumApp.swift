@@ -19,6 +19,7 @@ struct HYPERforumApp: App {
     @StateObject private var webAuthnManager: WebAuthnManager
     @StateObject private var messagingViewModel: MessagingViewModel
     @StateObject private var encryptionManager: EncryptionManager
+    @StateObject private var councilManager = AICouncilManager()
 
     let arkavoClient: ArkavoClient
 
@@ -49,6 +50,7 @@ struct HYPERforumApp: App {
                 .environmentObject(webAuthnManager)
                 .environmentObject(messagingViewModel)
                 .environmentObject(encryptionManager)
+                .environmentObject(councilManager)
                 .onAppear {
                     // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
