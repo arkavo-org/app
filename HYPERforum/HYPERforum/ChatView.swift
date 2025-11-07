@@ -3,9 +3,10 @@ import SwiftUI
 struct ChatView: View {
     let group: ForumGroup
     @EnvironmentObject var messagingViewModel: MessagingViewModel
+    @EnvironmentObject var encryptionManager: EncryptionManager
     @EnvironmentObject var appState: AppState
     @State private var messageText = ""
-    @State private var showingEncryptionToggle = false
+    @State private var showingEncryptionInfo = false
 
     var groupMessages: [ForumMessage] {
         messagingViewModel.getMessages(for: group.id)
@@ -13,8 +14,8 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            ChatHeaderView(group: group)
+            // Header with encryption status
+            ChatHeaderView(group: group, encryptionEnabled: encryptionManager.encryptionEnabled)
 
             // Messages List
             ScrollViewReader { proxy in
@@ -37,16 +38,34 @@ struct ChatView: View {
                 }
             }
 
-            // Message Input
+            // Message Input with encryption toggle
             MessageInputView(
                 messageText: $messageText,
+                encryptionEnabled: $encryptionManager.encryptionEnabled,
                 onSend: {
                     sendMessage()
+                },
+                onToggleEncryption: {
+                    encryptionManager.toggleEncryption()
                 }
             )
         }
         .navigationTitle(group.name)
-        .navigationSubtitle("\(group.memberCount) members")
+        .navigationSubtitle("\(group.memberCount) members • \(encryptionManager.encryptionEnabled ? "🔒 Encrypted" : "Unencrypted")")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: {
+                    showingEncryptionInfo.toggle()
+                }) {
+                    Image(systemName: encryptionManager.encryptionEnabled ? "lock.shield.fill" : "lock.open")
+                        .foregroundColor(encryptionManager.encryptionEnabled ? .green : .secondary)
+                }
+                .help("Encryption: \(encryptionManager.encryptionEnabled ? "Enabled" : "Disabled")")
+                .popover(isPresented: $showingEncryptionInfo) {
+                    EncryptionInfoView(encryptionManager: encryptionManager)
+                }
+            }
+        }
         .onAppear {
             messagingViewModel.loadMessages(for: group.id)
         }
@@ -67,6 +86,7 @@ struct ChatView: View {
 
 struct ChatHeaderView: View {
     let group: ForumGroup
+    let encryptionEnabled: Bool
 
     var body: some View {
         HStack {
@@ -78,6 +98,12 @@ struct ChatHeaderView: View {
                 .font(.headline)
 
             Spacer()
+
+            if encryptionEnabled {
+                Image(systemName: "lock.shield.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
 
             Text("\(group.memberCount) members")
                 .font(.caption)
@@ -163,10 +189,21 @@ struct MessageBubble: View {
 
 struct MessageInputView: View {
     @Binding var messageText: String
+    @Binding var encryptionEnabled: Bool
     let onSend: () -> Void
+    let onToggleEncryption: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
+            // Encryption toggle
+            Button(action: onToggleEncryption) {
+                Image(systemName: encryptionEnabled ? "lock.shield.fill" : "lock.open")
+                    .font(.system(size: 20))
+                    .foregroundColor(encryptionEnabled ? .green : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle encryption: \(encryptionEnabled ? "ON" : "OFF")")
+
             // Text field
             TextField("Type a message...", text: $messageText, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -191,6 +228,76 @@ struct MessageInputView: View {
         }
         .padding()
         .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// MARK: - Encryption Info
+
+struct EncryptionInfoView: View {
+    @ObservedObject var encryptionManager: EncryptionManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: encryptionManager.encryptionEnabled ? "lock.shield.fill" : "lock.open")
+                    .font(.title)
+                    .foregroundColor(encryptionManager.encryptionEnabled ? .green : .secondary)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("End-to-End Encryption")
+                        .font(.headline)
+                    Text(encryptionManager.encryptionEnabled ? "Enabled" : "Disabled")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About Encryption")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("Messages are secured using OpenTDF/NanoTDF encryption with policy-based access control.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if encryptionManager.encryptionEnabled {
+                    Label("Your messages are protected end-to-end", systemImage: "checkmark.shield.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
+
+                    Label("Only group members can decrypt", systemImage: "person.3.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+
+                    Label("Keys managed by Arkavo KAS", systemImage: "key.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                } else {
+                    Label("Messages are sent without encryption", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+
+            Divider()
+
+            Button(action: {
+                encryptionManager.toggleEncryption()
+            }) {
+                HStack {
+                    Image(systemName: encryptionManager.encryptionEnabled ? "lock.open" : "lock.shield.fill")
+                    Text(encryptionManager.encryptionEnabled ? "Disable Encryption" : "Enable Encryption")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(encryptionManager.encryptionEnabled ? .red : .green)
+        }
+        .padding()
+        .frame(width: 320)
     }
 }
 

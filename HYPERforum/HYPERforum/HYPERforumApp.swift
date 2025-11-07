@@ -18,6 +18,7 @@ struct HYPERforumApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var webAuthnManager: WebAuthnManager
     @StateObject private var messagingViewModel: MessagingViewModel
+    @StateObject private var encryptionManager: EncryptionManager
 
     let arkavoClient: ArkavoClient
 
@@ -32,11 +33,13 @@ struct HYPERforumApp: App {
         arkavoClient = client
         ViewModelFactory.shared.serviceLocator.register(client)
 
-        // Initialize WebAuthn manager
+        // Initialize managers
         _webAuthnManager = StateObject(wrappedValue: WebAuthnManager(arkavoClient: client))
+        _encryptionManager = StateObject(wrappedValue: EncryptionManager(arkavoClient: client))
 
         // Initialize messaging view model
-        _messagingViewModel = StateObject(wrappedValue: MessagingViewModel(arkavoClient: client))
+        let messaging = MessagingViewModel(arkavoClient: client)
+        _messagingViewModel = StateObject(wrappedValue: messaging)
     }
 
     var body: some Scene {
@@ -45,11 +48,15 @@ struct HYPERforumApp: App {
                 .environmentObject(appState)
                 .environmentObject(webAuthnManager)
                 .environmentObject(messagingViewModel)
+                .environmentObject(encryptionManager)
                 .onAppear {
                     // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         windowAccessor.window = NSApplication.shared.windows.first { $0.isVisible }
                     }
+
+                    // Wire up encryption manager to messaging
+                    messagingViewModel.setEncryptionManager(encryptionManager)
                 }
                 .onChange(of: NSApplication.shared.windows) { _, newValue in
                     if windowAccessor.window == nil {

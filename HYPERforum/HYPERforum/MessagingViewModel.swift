@@ -13,6 +13,9 @@ class MessagingViewModel: ObservableObject {
     private var currentUserId: String = ""
     private var currentUserName: String = ""
 
+    // Encryption manager
+    var encryptionManager: EncryptionManager?
+
     init(arkavoClient: ArkavoClient) {
         self.arkavoClient = arkavoClient
         setupClientDelegate()
@@ -23,12 +26,16 @@ class MessagingViewModel: ObservableObject {
         currentUserName = userName
     }
 
+    func setEncryptionManager(_ manager: EncryptionManager) {
+        self.encryptionManager = manager
+    }
+
     private func setupClientDelegate() {
         // Set up client delegate to receive messages
         arkavoClient.delegate = self
     }
 
-    /// Send a message to a group
+    /// Send a message to a group (with optional encryption)
     func sendMessage(content: String, groupId: String) async {
         guard !content.isEmpty else { return }
 
@@ -52,8 +59,25 @@ class MessagingViewModel: ObservableObject {
             let encoder = JSONEncoder()
             let jsonData = try encoder.encode(payload)
 
-            // Send via NATS message (0x05)
-            try await arkavoClient.sendNATSMessage(jsonData)
+            // Check if encryption is enabled
+            let shouldEncrypt = encryptionManager?.encryptionEnabled ?? false
+            let isEncrypted: Bool
+
+            if shouldEncrypt, let encryptionManager = encryptionManager {
+                // Encrypt and send via encryptAndSendPayload (already sends)
+                let policyData = encryptionManager.getPolicy(for: groupId)
+                _ = try await arkavoClient.encryptAndSendPayload(
+                    payload: jsonData,
+                    policyData: policyData
+                )
+                isEncrypted = true
+                print("Encrypted message sent: \(messageId)")
+            } else {
+                // Send plain via NATS message (0x05)
+                try await arkavoClient.sendNATSMessage(jsonData)
+                isEncrypted = false
+                print("Plain message sent: \(messageId)")
+            }
 
             // Add message to local list immediately (optimistic update)
             let message = ForumMessage(
@@ -64,11 +88,10 @@ class MessagingViewModel: ObservableObject {
                 content: content,
                 timestamp: Date(),
                 threadId: nil,
-                isEncrypted: false
+                isEncrypted: isEncrypted
             )
             messages.append(message)
 
-            print("Message sent successfully: \(messageId)")
         } catch {
             self.error = "Failed to send message: \(error.localizedDescription)"
             print("Error sending message: \(error)")
