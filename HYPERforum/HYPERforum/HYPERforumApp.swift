@@ -36,10 +36,11 @@ struct HYPERforumApp: App {
 
         // Initialize managers
         _webAuthnManager = StateObject(wrappedValue: WebAuthnManager(arkavoClient: client))
-        _encryptionManager = StateObject(wrappedValue: EncryptionManager(arkavoClient: client))
+        let encryption = EncryptionManager(arkavoClient: client)
+        _encryptionManager = StateObject(wrappedValue: encryption)
 
-        // Initialize messaging view model
-        let messaging = MessagingViewModel(arkavoClient: client)
+        // Initialize messaging view model with encryption manager
+        let messaging = MessagingViewModel(arkavoClient: client, encryptionManager: encryption)
         _messagingViewModel = StateObject(wrappedValue: messaging)
     }
 
@@ -57,8 +58,12 @@ struct HYPERforumApp: App {
                         windowAccessor.window = NSApplication.shared.windows.first { $0.isVisible }
                     }
 
-                    // Wire up encryption manager to messaging
-                    messagingViewModel.setEncryptionManager(encryptionManager)
+                    // Reconnect WebSocket if user is authenticated
+                    if appState.isAuthenticated, let user = appState.currentUser {
+                        Task {
+                            await reconnectIfNeeded(user: user)
+                        }
+                    }
                 }
                 .onChange(of: NSApplication.shared.windows) { _, newValue in
                     if windowAccessor.window == nil {
@@ -77,6 +82,27 @@ struct HYPERforumApp: App {
         .defaultSize(width: 1200, height: 800)
         .commands {
             // Custom menu commands can be added here
+        }
+    }
+
+    /// Reconnect WebSocket if needed on app launch
+    private func reconnectIfNeeded(user: String) async {
+        // Check if already connected
+        guard !webAuthnManager.isConnected else {
+            print("Already connected to WebSocket")
+            return
+        }
+
+        print("Attempting to reconnect WebSocket for user: \(user)")
+
+        do {
+            // Attempt to reconnect with passkey authentication
+            try await webAuthnManager.authenticate(accountName: user)
+            print("WebSocket reconnection successful")
+        } catch {
+            print("WebSocket reconnection failed: \(error)")
+            // If reconnection fails, sign out the user
+            appState.signOut()
         }
     }
 }

@@ -13,21 +13,22 @@ class MessagingViewModel: ObservableObject {
     private var currentUserId: String = ""
     private var currentUserName: String = ""
 
-    // Encryption manager
-    var encryptionManager: EncryptionManager?
+    // Encryption manager (required for secure messaging)
+    private(set) var encryptionManager: EncryptionManager
 
-    init(arkavoClient: ArkavoClient) {
+    // Message deduplication
+    private var messageIds: Set<String> = []
+    private var pendingMessages: Set<String> = []
+
+    init(arkavoClient: ArkavoClient, encryptionManager: EncryptionManager) {
         self.arkavoClient = arkavoClient
+        self.encryptionManager = encryptionManager
         setupClientDelegate()
     }
 
     func setCurrentUser(userId: String, userName: String) {
         currentUserId = userId
         currentUserName = userName
-    }
-
-    func setEncryptionManager(_ manager: EncryptionManager) {
-        self.encryptionManager = manager
     }
 
     private func setupClientDelegate() {
@@ -60,10 +61,10 @@ class MessagingViewModel: ObservableObject {
             let jsonData = try encoder.encode(payload)
 
             // Check if encryption is enabled
-            let shouldEncrypt = encryptionManager?.encryptionEnabled ?? false
+            let shouldEncrypt = encryptionManager.encryptionEnabled
             let isEncrypted: Bool
 
-            if shouldEncrypt, let encryptionManager = encryptionManager {
+            if shouldEncrypt {
                 // Encrypt and send via encryptAndSendPayload (already sends)
                 let policyData = encryptionManager.getPolicy(for: groupId)
                 _ = try await arkavoClient.encryptAndSendPayload(
@@ -90,6 +91,10 @@ class MessagingViewModel: ObservableObject {
                 threadId: nil,
                 isEncrypted: isEncrypted
             )
+
+            // Track as pending to avoid duplication when echo arrives
+            pendingMessages.insert(messageId)
+            messageIds.insert(messageId)
             messages.append(message)
 
         } catch {
@@ -162,6 +167,17 @@ class MessagingViewModel: ObservableObject {
     /// Clear all messages
     func clearMessages() {
         messages.removeAll()
+        messageIds.removeAll()
+        pendingMessages.removeAll()
+    }
+
+    /// Clean up old pending messages (called periodically)
+    func cleanupPendingMessages() {
+        // Remove pending messages that are already in the message list
+        pendingMessages = pendingMessages.filter { messageId in
+            !messages.contains { $0.id == messageId }
+        }
+        print("Cleaned up pending messages: \(pendingMessages.count) remaining")
     }
 
     /// Get messages for a specific group
@@ -206,6 +222,16 @@ extension MessagingViewModel: ArkavoClientDelegate {
             let decoder = JSONDecoder()
             let payload = try decoder.decode(MessagePayload.self, from: data)
 
+            // Check if this message is already known (deduplication)
+            guard !messageIds.contains(payload.messageId) else {
+                // If it was pending, mark as confirmed
+                if pendingMessages.contains(payload.messageId) {
+                    pendingMessages.remove(payload.messageId)
+                    print("Confirmed pending message: \(payload.messageId)")
+                }
+                return
+            }
+
             // Create message from payload
             let message = ForumMessage(
                 id: payload.messageId,
@@ -218,11 +244,11 @@ extension MessagingViewModel: ArkavoClientDelegate {
                 isEncrypted: false
             )
 
-            // Only add if not already in list (avoid duplicates from echo)
-            if !messages.contains(where: { $0.id == message.id }) {
-                messages.append(message)
-                print("Added new message from \(message.senderName)")
-            }
+            // Add to tracking and message list
+            messageIds.insert(message.id)
+            messages.append(message)
+            print("Added new message from \(message.senderName)")
+
         } catch {
             print("Failed to decode NATS message: \(error)")
         }

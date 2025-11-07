@@ -102,26 +102,53 @@ class EncryptionManager: ObservableObject {
 
     /// Decrypt a NanoTDF message
     func decryptMessage(_ encryptedData: Data) async throws -> Data {
-        // Parse NanoTDF header to get rewrapped key information
-        // This would use OpenTDFKit to parse the NanoTDF structure
-
         do {
-            // For now, we'll assume the server handles decryption via rewrap
-            // In a full implementation, this would:
-            // 1. Parse NanoTDF header
-            // 2. Extract ephemeral public key and policy
-            // 3. Send rewrap request to KAS
-            // 4. Decrypt payload with rewrapped key
-
             print("Decrypting message: \(encryptedData.count) bytes")
 
-            // Placeholder: In real implementation, parse and decrypt
-            // For now, return as-is (server-side decryption)
-            return encryptedData
+            // Parse NanoTDF using OpenTDFKit
+            let nanoTDF = try NanoTDF(data: encryptedData)
+
+            // Get the KAS URL from ArkavoClient configuration
+            guard let kasURL = arkavoClient.kasURL else {
+                throw EncryptionError.missingKASURL
+            }
+
+            // Create rewrap request with ephemeral key and policy
+            let rewrapRequest = try nanoTDF.createRewrapRequest()
+
+            // Send rewrap request to KAS to get the symmetric key
+            let rewrapResponse = try await sendRewrapRequest(rewrapRequest, to: kasURL)
+
+            // Decrypt the payload with the rewrapped key
+            let decryptedData = try nanoTDF.decrypt(with: rewrapResponse.symmetricKey)
+
+            print("Message decrypted successfully: \(decryptedData.count) bytes")
+            return decryptedData
         } catch {
+            encryptionError = "Decryption failed: \(error.localizedDescription)"
             print("Decryption error: \(error)")
             throw error
         }
+    }
+
+    /// Send rewrap request to KAS
+    private func sendRewrapRequest(_ request: RewrapRequest, to kasURL: URL) async throws -> RewrapResponse {
+        var urlRequest = URLRequest(url: kasURL.appendingPathComponent("/rewrap"))
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let encoder = JSONEncoder()
+        urlRequest.httpBody = try encoder.encode(request)
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw EncryptionError.rewrapFailed
+        }
+
+        let decoder = JSONDecoder()
+        return try decoder.decode(RewrapResponse.self, from: data)
     }
 
     /// Toggle encryption on/off
@@ -211,5 +238,51 @@ enum EncryptionStatus {
         case .failed:
             return "lock.trianglebadge.exclamationmark"
         }
+    }
+}
+
+// MARK: - Encryption Errors
+
+enum EncryptionError: Error, LocalizedError {
+    case missingKASURL
+    case rewrapFailed
+    case decryptionFailed
+    case invalidNanoTDF
+
+    var errorDescription: String? {
+        switch self {
+        case .missingKASURL:
+            return "KAS URL not configured"
+        case .rewrapFailed:
+            return "Failed to rewrap key with KAS"
+        case .decryptionFailed:
+            return "Failed to decrypt message"
+        case .invalidNanoTDF:
+            return "Invalid NanoTDF format"
+        }
+    }
+}
+
+// MARK: - Rewrap Models
+
+struct RewrapRequest: Codable {
+    let ephemeralPublicKey: String
+    let policy: String
+    let kasURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case ephemeralPublicKey = "ephemeral_public_key"
+        case policy
+        case kasURL = "kas_url"
+    }
+}
+
+struct RewrapResponse: Codable {
+    let symmetricKey: Data
+    let policyUUID: String
+
+    enum CodingKeys: String, CodingKey {
+        case symmetricKey = "symmetric_key"
+        case policyUUID = "policy_uuid"
     }
 }
