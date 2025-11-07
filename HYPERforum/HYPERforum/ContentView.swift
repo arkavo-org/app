@@ -250,40 +250,36 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     }
 }
 
-struct ForumGroup: Identifiable {
-    let id = UUID()
-    let name: String
-    let color: Color
-    let memberCount: Int
-
-    static let sampleGroups = [
-        ForumGroup(name: "General", color: Color(red: 1.0, green: 0.4, blue: 0.0), memberCount: 142),
-        ForumGroup(name: "Tech Discussions", color: .blue, memberCount: 89),
-        ForumGroup(name: "Philosophy", color: .purple, memberCount: 67),
-        ForumGroup(name: "AI & Future", color: .cyan, memberCount: 103)
-    ]
-}
+// ForumGroup model moved to Models.swift
 
 // MARK: - Placeholder Views
 
 struct GroupsView: View {
     let groups: [ForumGroup]
+    @State private var selectedGroup: ForumGroup?
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 20) {
                 ForEach(groups) { group in
                     GroupCard(group: group)
+                        .onTapGesture {
+                            selectedGroup = group
+                        }
                 }
             }
             .padding()
         }
         .navigationTitle("Groups")
+        .navigationDestination(item: $selectedGroup) { group in
+            ChatView(group: group)
+        }
     }
 }
 
 struct GroupCard: View {
     let group: ForumGroup
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -292,7 +288,7 @@ struct GroupCard: View {
                     .fill(group.color)
                     .frame(width: 40, height: 40)
 
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(group.name)
                         .font(.headline)
                     Text("\(group.memberCount) members")
@@ -302,19 +298,41 @@ struct GroupCard: View {
 
                 Spacer()
 
-                Button("Join") {
-                    // Join group action
-                }
-                .buttonStyle(.borderedProminent)
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.secondary)
+                    .opacity(isHovered ? 1 : 0.5)
             }
 
-            Text("Active discussion forum for \(group.name.lowercased()) topics with AI-augmented insights.")
+            Text(group.description.isEmpty ? "Active discussion forum for \(group.name.lowercased()) topics with AI-augmented insights." : group.description)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+                .lineLimit(2)
+
+            if let lastMessage = group.lastMessage {
+                HStack {
+                    Text("Last: ")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    + Text(lastMessage.content)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isHovered ? group.color.opacity(0.5) : Color.clear, lineWidth: 2)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 

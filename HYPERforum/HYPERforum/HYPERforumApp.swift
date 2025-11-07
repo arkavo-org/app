@@ -17,6 +17,7 @@ struct HYPERforumApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
     @StateObject private var appState = AppState()
     @StateObject private var webAuthnManager: WebAuthnManager
+    @StateObject private var messagingViewModel: MessagingViewModel
 
     let arkavoClient: ArkavoClient
 
@@ -33,6 +34,9 @@ struct HYPERforumApp: App {
 
         // Initialize WebAuthn manager
         _webAuthnManager = StateObject(wrappedValue: WebAuthnManager(arkavoClient: client))
+
+        // Initialize messaging view model
+        _messagingViewModel = StateObject(wrappedValue: MessagingViewModel(arkavoClient: client))
     }
 
     var body: some Scene {
@@ -40,6 +44,7 @@ struct HYPERforumApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(webAuthnManager)
+                .environmentObject(messagingViewModel)
                 .onAppear {
                     // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -49,6 +54,12 @@ struct HYPERforumApp: App {
                 .onChange(of: NSApplication.shared.windows) { _, newValue in
                     if windowAccessor.window == nil {
                         windowAccessor.window = newValue.first { $0.isVisible }
+                    }
+                }
+                .onChange(of: appState.currentUser) { _, newUser in
+                    // Update messaging view model with current user
+                    if let user = newUser {
+                        messagingViewModel.setCurrentUser(userId: user, userName: user)
                     }
                 }
         }
