@@ -163,6 +163,7 @@ struct FeatureRow: View {
 
 struct MainForumView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var webAuthnManager: WebAuthnManager
     @State private var selectedSidebar: SidebarItem = .groups
     @State private var groups: [ForumGroup] = ForumGroup.sampleGroups
 
@@ -194,7 +195,10 @@ struct MainForumView: View {
                     Menu {
                         Button("Settings") {}
                         Button("Sign Out") {
-                            appState.signOut()
+                            Task {
+                                await webAuthnManager.signOut()
+                                appState.signOut()
+                            }
                         }
                     } label: {
                         Image(systemName: "person.circle")
@@ -375,8 +379,13 @@ struct SettingsView: View {
 
 struct AuthenticationView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var webAuthnManager: WebAuthnManager
     @Environment(\.dismiss) var dismiss
-    @State private var isAuthenticating = false
+
+    @State private var accountName = ""
+    @State private var isRegistering = false
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         VStack(spacing: 30) {
@@ -386,25 +395,55 @@ struct AuthenticationView: View {
                 .font(.system(size: 60))
                 .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.0))
 
-            Text("Authenticate with Passkey")
+            Text(isRegistering ? "Register with Passkey" : "Authenticate with Passkey")
                 .font(.title2)
 
-            Text("Use your device's secure authentication to sign in")
+            Text(isRegistering ? "Create a new account with your passkey" : "Use your device's secure authentication to sign in")
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
+            // Account name input
+            TextField("Account name (e.g., username)", text: $accountName)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 300)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            if showError {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+
             Spacer()
 
-            if isAuthenticating {
-                ProgressView()
-                    .scaleEffect(1.5)
-            } else {
-                Button("Continue") {
-                    authenticateWithPasskey()
+            if webAuthnManager.isAuthenticating {
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text(isRegistering ? "Creating account..." : "Authenticating...")
+                        .foregroundColor(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            } else {
+                VStack(spacing: 15) {
+                    Button(isRegistering ? "Register" : "Sign In") {
+                        Task {
+                            await performAuthentication()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(accountName.isEmpty)
+
+                    Button(isRegistering ? "Already have an account? Sign in" : "Need an account? Register") {
+                        isRegistering.toggle()
+                        showError = false
+                    }
+                    .foregroundColor(.secondary)
+                }
             }
 
             Button("Cancel") {
@@ -412,19 +451,33 @@ struct AuthenticationView: View {
             }
             .padding(.bottom)
         }
-        .frame(width: 400, height: 500)
+        .frame(width: 450, height: 550)
         .padding()
     }
 
-    func authenticateWithPasskey() {
-        isAuthenticating = true
+    func performAuthentication() async {
+        showError = false
+        errorMessage = ""
 
-        // Simulate authentication delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            // In a real implementation, this would use WebAuthn
-            appState.signIn(user: "demo@hyperforum.net")
-            isAuthenticating = false
+        do {
+            if isRegistering {
+                // Register new user
+                try await webAuthnManager.register(handle: accountName)
+                // After registration, automatically sign in
+                try await webAuthnManager.authenticate(accountName: accountName)
+            } else {
+                // Authenticate existing user
+                try await webAuthnManager.authenticate(accountName: accountName)
+            }
+
+            // Success! Update app state
+            appState.signIn(user: accountName)
             dismiss()
+        } catch {
+            // Show error to user
+            showError = true
+            errorMessage = webAuthnManager.authError ?? error.localizedDescription
+            print("Authentication error: \(error)")
         }
     }
 }

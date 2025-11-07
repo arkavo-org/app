@@ -16,24 +16,30 @@ class WindowAccessor: ObservableObject {
 struct HYPERforumApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
     @StateObject private var appState = AppState()
+    @StateObject private var webAuthnManager: WebAuthnManager
 
     let arkavoClient: ArkavoClient
 
     init() {
         // Initialize Arkavo client with WebAuthn support
-        arkavoClient = ArkavoClient(
+        let client = ArkavoClient(
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
             relyingPartyID: "webauthn.arkavo.net",
             curve: .p256
         )
-        ViewModelFactory.shared.serviceLocator.register(arkavoClient)
+        arkavoClient = client
+        ViewModelFactory.shared.serviceLocator.register(client)
+
+        // Initialize WebAuthn manager
+        _webAuthnManager = StateObject(wrappedValue: WebAuthnManager(arkavoClient: client))
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(webAuthnManager)
                 .onAppear {
                     // Set up window accessor
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -129,5 +135,102 @@ class DefaultMacPresentationProvider: NSObject, ASAuthorizationControllerPresent
             return NSWindow()
         }
         return window
+    }
+}
+
+// MARK: - WebAuthn Manager
+
+@MainActor
+class WebAuthnManager: ObservableObject {
+    @Published var isAuthenticating = false
+    @Published var authError: String?
+
+    private let arkavoClient: ArkavoClient
+
+    init(arkavoClient: ArkavoClient) {
+        self.arkavoClient = arkavoClient
+    }
+
+    /// Register a new user with passkey
+    func register(handle: String) async throws {
+        isAuthenticating = true
+        authError = nil
+
+        defer {
+            isAuthenticating = false
+        }
+
+        do {
+            // Generate DID for the user
+            let did = try arkavoClient.generateDID()
+
+            // Register with WebAuthn
+            let token = try await arkavoClient.registerUser(handle: handle, did: did)
+
+            // Token is returned, registration successful
+            print("Registration successful, token received")
+        } catch {
+            authError = handleAuthError(error)
+            throw error
+        }
+    }
+
+    /// Authenticate existing user with passkey
+    func authenticate(accountName: String) async throws {
+        isAuthenticating = true
+        authError = nil
+
+        defer {
+            isAuthenticating = false
+        }
+
+        do {
+            // Connect will authenticate and establish WebSocket connection
+            try await arkavoClient.connect(accountName: accountName)
+            print("Authentication and connection successful")
+        } catch {
+            authError = handleAuthError(error)
+            throw error
+        }
+    }
+
+    /// Sign out the current user
+    func signOut() async {
+        await arkavoClient.disconnect()
+    }
+
+    /// Check if user is currently connected
+    var isConnected: Bool {
+        arkavoClient.currentState == .connected
+    }
+
+    /// Handle authentication errors and provide user-friendly messages
+    private func handleAuthError(_ error: Error) -> String {
+        if let arkavoError = error as? ArkavoError {
+            switch arkavoError {
+            case .authenticationFailed(let message):
+                if message.contains("User Not Found") {
+                    return "Account not found. Please register first."
+                }
+                return message
+            case .connectionFailed(let message):
+                return "Connection failed: \(message)"
+            case .invalidResponse:
+                return "Invalid response from server"
+            default:
+                return error.localizedDescription
+            }
+        }
+
+        // Handle NSError codes
+        let nsError = error as NSError
+        if nsError.code == -25300 {
+            // Duplicate passkey error
+            return "A passkey already exists. Please delete existing passkeys from Settings → Passwords."
+        } else if nsError.code == 1001 { // ASAuthorizationError.canceled
+            return "Authentication cancelled"
+        }
+
+        return error.localizedDescription
     }
 }
