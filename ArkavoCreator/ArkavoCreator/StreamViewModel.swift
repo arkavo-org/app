@@ -104,6 +104,13 @@ final class StreamViewModel {
 
     func startStreaming() async {
         guard canStartStreaming else { return }
+
+        // Validate inputs before streaming
+        if let validationError = validateInputs() {
+            error = validationError
+            return
+        }
+
         guard let session = recordingState.getRecordingSession() else {
             error = "No active recording session. Please start recording first."
             return
@@ -223,5 +230,110 @@ final class StreamViewModel {
             KeychainManager.deleteCustomRTMPURL()
             customRTMPURL = ""
         }
+    }
+
+    // MARK: - Input Validation
+
+    /// Validates stream key, RTMP URL, and title
+    /// - Returns: Error message if validation fails, nil if all inputs are valid
+    private func validateInputs() -> String? {
+        // Validate stream key
+        if let error = validateStreamKey(streamKey) {
+            return error
+        }
+
+        // Validate custom RTMP URL if custom platform
+        if selectedPlatform == .custom {
+            if let error = validateRTMPURL(customRTMPURL) {
+                return error
+            }
+        }
+
+        // Validate stream title
+        if let error = validateTitle(title) {
+            return error
+        }
+
+        return nil
+    }
+
+    /// Validates stream key format and length
+    private func validateStreamKey(_ key: String) -> String? {
+        // Check if empty
+        if key.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "Stream key cannot be empty"
+        }
+
+        // Check minimum length (most platforms require at least 10 characters)
+        if key.count < 10 {
+            return "Stream key is too short (minimum 10 characters)"
+        }
+
+        // Check maximum length (reasonable limit for stream keys)
+        if key.count > 200 {
+            return "Stream key is too long (maximum 200 characters)"
+        }
+
+        // Check for valid characters (alphanumeric, hyphens, underscores)
+        let validCharacterSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        if key.rangeOfCharacter(from: validCharacterSet.inverted) != nil {
+            return "Stream key contains invalid characters (only letters, numbers, hyphens, and underscores allowed)"
+        }
+
+        return nil
+    }
+
+    /// Validates RTMP URL format and protocol
+    private func validateRTMPURL(_ urlString: String) -> String? {
+        // Check if empty
+        if urlString.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "RTMP URL cannot be empty"
+        }
+
+        // Check if valid URL
+        guard let url = URL(string: urlString) else {
+            return "Invalid RTMP URL format"
+        }
+
+        // Check protocol
+        guard let scheme = url.scheme?.lowercased() else {
+            return "RTMP URL must specify a protocol (rtmp:// or rtmps://)"
+        }
+
+        guard scheme == "rtmp" || scheme == "rtmps" else {
+            return "RTMP URL must use rtmp:// or rtmps:// protocol"
+        }
+
+        // Check host
+        guard let host = url.host, !host.isEmpty else {
+            return "RTMP URL must include a valid host"
+        }
+
+        // Check overall length
+        if urlString.count > 500 {
+            return "RTMP URL is too long (maximum 500 characters)"
+        }
+
+        return nil
+    }
+
+    /// Validates stream title length and characters
+    private func validateTitle(_ title: String) -> String? {
+        // Allow empty title (optional field)
+        if title.isEmpty {
+            return nil
+        }
+
+        // Check maximum length
+        if title.count > 200 {
+            return "Stream title is too long (maximum 200 characters)"
+        }
+
+        // Check for control characters
+        if title.rangeOfCharacter(from: .controlCharacters) != nil {
+            return "Stream title contains invalid control characters"
+        }
+
+        return nil
     }
 }
