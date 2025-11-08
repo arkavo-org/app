@@ -56,6 +56,8 @@ struct RecordView: View {
             TextField("Enter title", text: $viewModel.title)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 400)
+                .accessibilityLabel("Recording title")
+                .accessibilityHint("Enter a title for your recording")
         }
     }
 
@@ -76,7 +78,11 @@ struct RecordView: View {
             // Quick settings
             VStack(spacing: 12) {
                 Toggle("Enable Camera", isOn: $viewModel.enableCamera)
+                    .accessibilityLabel("Enable camera")
+                    .accessibilityHint("Toggle camera recording in picture-in-picture mode")
                 Toggle("Enable Microphone", isOn: $viewModel.enableMicrophone)
+                    .accessibilityLabel("Enable microphone")
+                    .accessibilityHint("Toggle microphone audio recording")
 
                 if viewModel.enableCamera {
                     Picker("Camera Position", selection: $viewModel.pipPosition) {
@@ -84,12 +90,16 @@ struct RecordView: View {
                             Text(position.rawValue).tag(position)
                         }
                     }
+                    .accessibilityLabel("Camera position")
+                    .accessibilityHint("Select where the camera overlay appears on screen")
                 }
 
                 Divider()
 
                 // Watermark settings
                 Toggle("Arkavo Watermark", isOn: $viewModel.watermarkEnabled)
+                    .accessibilityLabel("Enable Arkavo watermark")
+                    .accessibilityHint("Toggle watermark overlay on recording")
 
                 if viewModel.watermarkEnabled {
                     Picker("Watermark Position", selection: $viewModel.watermarkPosition) {
@@ -97,6 +107,8 @@ struct RecordView: View {
                             Text(position.rawValue).tag(position)
                         }
                     }
+                    .accessibilityLabel("Watermark position")
+                    .accessibilityHint("Select where the watermark appears on screen")
 
                     VStack(spacing: 4) {
                         HStack {
@@ -108,6 +120,9 @@ struct RecordView: View {
                                 .foregroundColor(.secondary)
                         }
                         Slider(value: $viewModel.watermarkOpacity, in: 0.2 ... 1.0)
+                            .accessibilityLabel("Watermark opacity")
+                            .accessibilityValue("\(Int(viewModel.watermarkOpacity * 100)) percent")
+                            .accessibilityHint("Adjust watermark transparency")
                     }
                 }
             }
@@ -172,6 +187,8 @@ struct RecordView: View {
                 Label(viewModel.isPaused ? "Resume" : "Pause", systemImage: viewModel.isPaused ? "play.fill" : "pause.fill")
             }
             .buttonStyle(.bordered)
+            .accessibilityLabel(viewModel.isPaused ? "Resume recording" : "Pause recording")
+            .accessibilityHint(viewModel.isPaused ? "Resume the paused recording" : "Temporarily pause the recording")
         }
     }
 
@@ -196,6 +213,8 @@ struct RecordView: View {
         .buttonStyle(.borderedProminent)
         .tint(viewModel.isRecording ? .red : .blue)
         .disabled(viewModel.isProcessing)
+        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
+        .accessibilityHint(viewModel.isRecording ? "End the current recording session and save the video" : "Begin recording screen, camera, and microphone")
     }
 
     // MARK: - Helpers

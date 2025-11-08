@@ -6,6 +6,8 @@ struct RecordingsLibraryView: View {
     @State private var selectedRecording: Recording?
     @State private var showingPlayer = false
     @State private var showingProvenance = false
+    @State private var showingDeleteConfirmation = false
+    @State private var recordingToDelete: Recording?
     @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
 
     var body: some View {
@@ -48,6 +50,18 @@ struct RecordingsLibraryView: View {
         }
         .task {
             await manager.loadRecordings()
+        }
+        .alert("Delete Recording?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {
+                recordingToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                confirmDelete()
+            }
+        } message: {
+            if let recording = recordingToDelete {
+                Text("Are you sure you want to permanently delete \"\(recording.title)\"? This action cannot be undone.")
+            }
         }
     }
 
@@ -119,8 +133,16 @@ struct RecordingsLibraryView: View {
         Divider()
 
         Button("Delete", role: .destructive) {
-            manager.deleteRecording(recording)
+            recordingToDelete = recording
+            showingDeleteConfirmation = true
         }
+    }
+
+    /// Performs the actual deletion after confirmation
+    private func confirmDelete() {
+        guard let recording = recordingToDelete else { return }
+        manager.deleteRecording(recording)
+        recordingToDelete = nil
     }
 }
 

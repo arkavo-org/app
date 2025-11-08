@@ -82,6 +82,8 @@ struct StreamView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .accessibilityLabel("Streaming platform")
+                    .accessibilityHint("Select the platform to stream to: Twitch, YouTube, or custom RTMP server")
                 }
 
                 // Twitch OAuth Login
@@ -98,6 +100,8 @@ struct StreamView: View {
                             }
                             .buttonStyle(.borderless)
                             .controlSize(.small)
+                            .accessibilityLabel("Logout from Twitch")
+                            .accessibilityHint("Sign out of your Twitch account")
                         }
                         .padding()
                         .background(Color.green.opacity(0.1))
@@ -121,6 +125,8 @@ struct StreamView: View {
                             Label("Login with Twitch", systemImage: "person.circle")
                         }
                         .buttonStyle(.borderedProminent)
+                        .accessibilityLabel("Login with Twitch")
+                        .accessibilityHint("Authenticate with your Twitch account to enable streaming")
                     }
                 }
 
@@ -133,6 +139,8 @@ struct StreamView: View {
 
                         TextField("rtmp://your-server.com/live", text: $viewModel.customRTMPURL)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Custom RTMP server URL")
+                            .accessibilityHint("Enter the RTMP server URL for custom streaming")
                     }
                 }
 
@@ -152,11 +160,15 @@ struct StreamView: View {
                                 .font(.caption)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("Stream key help")
+                        .accessibilityHint("Open platform documentation to find your stream key")
                     }
 
                     HStack {
                         SecureField("Enter your stream key", text: $viewModel.streamKey)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Stream key")
+                            .accessibilityHint("Enter your platform-specific stream key for authentication")
 
                         if !viewModel.streamKey.isEmpty {
                             Button(action: {
@@ -167,6 +179,8 @@ struct StreamView: View {
                             }
                             .buttonStyle(.plain)
                             .help("Clear saved stream key")
+                            .accessibilityLabel("Clear stream key")
+                            .accessibilityHint("Remove the saved stream key from Keychain")
                         }
                     }
 
@@ -189,6 +203,8 @@ struct StreamView: View {
 
                     TextField("Going live!", text: $viewModel.title)
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Stream title")
+                        .accessibilityHint("Optional title for your live stream")
                 }
             }
             .frame(maxWidth: 400)
@@ -284,6 +300,8 @@ struct StreamView: View {
         .buttonStyle(.borderedProminent)
         .tint(viewModel.isStreaming ? .red : .blue)
         .disabled(!viewModel.canStartStreaming && !viewModel.isStreaming)
+        .accessibilityLabel(viewModel.isStreaming ? "Stop stream" : "Start stream")
+        .accessibilityHint(viewModel.isStreaming ? "End the live stream" : "Begin broadcasting to the selected platform")
     }
 
     // MARK: - Animation State

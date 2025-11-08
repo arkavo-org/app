@@ -18,7 +18,7 @@ struct ArkavoCreatorApp: App {
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
-    let micropubClient = MicropubClient(clientId: "https://app.arkavo.com/microblog-creator.json")
+    let micropubClient = MicropubClient(clientId: Config.micropubClientID)
     let blueskyClient: BlueskyClient = .init()
     let youtubeClient = YouTubeClient(
         clientId: Secrets.youtubeClientId,
@@ -29,9 +29,9 @@ struct ArkavoCreatorApp: App {
 
     init() {
         arkavoClient = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://100.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
+            authURL: Config.arkavoAuthURL,
+            websocketURL: Config.arkavoWebSocketURL,
+            relyingPartyID: Config.arkavoRelyingPartyID,
             curve: .p256,
         )
         ViewModelFactory.shared.serviceLocator.register(arkavoClient)
@@ -117,14 +117,18 @@ struct ArkavoCreatorApp: App {
             }
             .onOpenURL { url in
                 print("ac url: \(url.absoluteString)")
+
+                // Validate URL scheme and host
                 guard url.scheme == "arkavocreator",
-                      url.host == "oauth",
-                      url.path == "/patreon"
+                      url.host == "oauth"
                 else {
                     return
                 }
 
-                if url.path == "/patreon" {
+                // Route OAuth callback to appropriate handler based on path
+                switch url.path {
+                case "/patreon":
+                    // Handle Patreon OAuth callback
                     if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
                        let code = components.queryItems?.first(where: { $0.name == "code" })?.value
                     {
@@ -132,19 +136,53 @@ struct ArkavoCreatorApp: App {
                             do {
                                 let _ = try await patreonClient.exchangeCode(code)
                             } catch {
-                                print("OAuth error: \(error)")
+                                print("Patreon OAuth error: \(error)")
                             }
                         }
                     }
-                } else if url.path == "/reddit" {
-                    // Create a NotificationCenter name for Reddit OAuth callback
-                    let notificationName = Notification.Name("RedditOAuthCallback")
-                    // Post the URL to any listeners
+
+                case "/reddit":
+                    // Post notification for Reddit OAuth callback
                     NotificationCenter.default.post(
-                        name: notificationName,
+                        name: Notification.Name("RedditOAuthCallback"),
                         object: nil,
-                        userInfo: ["url": url],
+                        userInfo: ["url": url]
                     )
+
+                case "/youtube":
+                    // Post notification for YouTube OAuth callback
+                    NotificationCenter.default.post(
+                        name: Notification.Name("YouTubeOAuthCallback"),
+                        object: nil,
+                        userInfo: ["url": url]
+                    )
+
+                case "/twitch":
+                    // Post notification for Twitch OAuth callback
+                    NotificationCenter.default.post(
+                        name: Notification.Name("TwitchOAuthCallback"),
+                        object: nil,
+                        userInfo: ["url": url]
+                    )
+
+                case "/bluesky":
+                    // Post notification for Bluesky OAuth callback (if needed)
+                    NotificationCenter.default.post(
+                        name: Notification.Name("BlueskyOAuthCallback"),
+                        object: nil,
+                        userInfo: ["url": url]
+                    )
+
+                case "/micropub":
+                    // Post notification for Micropub OAuth callback
+                    NotificationCenter.default.post(
+                        name: Notification.Name("MicropubOAuthCallback"),
+                        object: nil,
+                        userInfo: ["url": url]
+                    )
+
+                default:
+                    print("Unknown OAuth callback path: \(url.path)")
                 }
             }
         }

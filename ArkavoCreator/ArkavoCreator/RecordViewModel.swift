@@ -42,6 +42,12 @@ final class RecordViewModel {
     // MARK: - Recording Control
 
     func startRecording() async {
+        // Validate title before starting
+        if let validationError = validateTitle(title) {
+            error = validationError
+            return
+        }
+
         do {
             // Create recording session
             let session = try RecordingSession()
@@ -239,5 +245,42 @@ final class RecordViewModel {
 
     func audioLevelPercentage() -> Double {
         Double(min(1.0, max(0.0, audioLevel)))
+    }
+
+    // MARK: - Input Validation
+
+    /// Validates recording title length and characters
+    /// - Parameter title: The recording title to validate
+    /// - Returns: Error message if validation fails, nil if valid
+    private func validateTitle(_ title: String) -> String? {
+        // Check if empty (title is optional but should have fallback)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            // This is OK - will use default title
+            return nil
+        }
+
+        // Check minimum length (if provided)
+        if trimmedTitle.count < 3 {
+            return "Recording title is too short (minimum 3 characters)"
+        }
+
+        // Check maximum length
+        if trimmedTitle.count > 200 {
+            return "Recording title is too long (maximum 200 characters)"
+        }
+
+        // Check for control characters
+        if title.rangeOfCharacter(from: .controlCharacters) != nil {
+            return "Recording title contains invalid control characters"
+        }
+
+        // Check for invalid file system characters
+        let invalidChars = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        if title.rangeOfCharacter(from: invalidChars) != nil {
+            return "Recording title contains invalid characters (/, \\, :, *, ?, \", <, >, |)"
+        }
+
+        return nil
     }
 }
