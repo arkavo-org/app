@@ -71,6 +71,7 @@ public final class ArkavoClient: NSObject {
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var messageHandlers: [UInt8: CheckedContinuation<Data, Error>] = [:]
     private let profileCache = ProfileCache(capacity: 100)
+    private let ntdfChainBuilder = NTDFChainBuilder()
 
     public var currentState: ArkavoClientState = .disconnected {
         didSet {
@@ -987,7 +988,8 @@ public final class ArkavoClient: NSObject {
         payload: Data,
         remotePolicyBody: String
     ) async throws -> Data {
-        // Create Nano
+        // Note: OpenTDFKit main branch only supports v13 (L1M) via public API
+        // TODO: Request v12 (L1L) support from OpenTDFKit team if backend requires it
         let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
         let kasMetadata = try KasMetadata(
             resourceLocator: kasRL,
@@ -1007,6 +1009,7 @@ public final class ArkavoClient: NSObject {
             binding: nil
         )
 
+        // Creates NanoTDF v13 (L1M) format
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
@@ -1035,7 +1038,7 @@ public final class ArkavoClient: NSObject {
             binding: nil
         )
 
-        // Create NanoTDF
+        // Creates NanoTDF v13 (L1M) format
         let nanoTDF = try await createNanoTDF(
             kas: kasMetadata,
             policy: &policy,
@@ -1047,6 +1050,60 @@ public final class ArkavoClient: NSObject {
         try await sendMessage(natsMessage.toData())
 
         return nanoTDF.toData()
+    }
+
+    // MARK: - NTDF Authorization Chain
+
+    /// Generates an NTDF authorization chain for zero-trust authentication
+    /// This creates a 2-link chain (Origin PE + Intermediate NPE) to be sent to IdP for Terminal Link
+    ///
+    /// - Parameters:
+    ///   - userId: The authenticated user identifier
+    ///   - authLevel: The authentication level achieved (e.g., biometric, webauthn)
+    ///   - appVersion: The application version string
+    /// - Returns: NTDFAuthorizationChain ready to send to IdP
+    public func generateNTDFAuthorizationChain(
+        userId: String,
+        authLevel: PEClaims.AuthLevel,
+        appVersion: String
+    ) async throws -> NTDFAuthorizationChain {
+        // Get KAS public key from session
+        guard let kasPublicKey else {
+            throw ArkavoError.invalidState
+        }
+
+        // Generate the authorization chain
+        // Note: Signatures are optional in NanoTDF spec and currently not supported
+        // due to OpenTDFKit's internal APIs. The chain is still cryptographically bound
+        // via GMAC policy binding and AES-GCM encryption.
+        return try await ntdfChainBuilder.createAuthorizationChain(
+            userId: userId,
+            authLevel: authLevel,
+            appVersion: appVersion,
+            kasPublicKey: kasPublicKey
+        )
+    }
+
+    /// Exchanges the PE+NPE authorization chain with IdP to obtain Terminal Link
+    /// This is the final step before using the NTDF token for API requests
+    ///
+    /// - Parameter chain: The authorization chain containing Origin and Intermediate links
+    /// - Returns: The complete Terminal Link from IdP (serialized NanoTDF)
+    public func exchangeForTerminalLink(_ chain: NTDFAuthorizationChain) async throws -> Data {
+        // TODO: Implement IdP endpoint communication
+        // POST to /ntdf/authorize with chain.toData()
+        // Receive Terminal Link from IdP
+        // For now, return the intermediate link (IdP not implemented yet)
+
+        // This would be something like:
+        // var request = URLRequest(url: authURL.appendingPathComponent("ntdf/authorize"))
+        // request.httpMethod = "POST"
+        // request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        // request.httpBody = chain.toData()
+        // let (data, response) = try await URLSession.shared.data(for: request)
+        // return data // Terminal Link from IdP
+
+        throw ArkavoError.invalidState // Placeholder until backend implements endpoint
     }
 }
 
