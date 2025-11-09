@@ -13,6 +13,7 @@ struct ArkavoApp: App {
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
     @StateObject private var agentService = AgentService()
+    @StateObject private var remoteStreamer = RemoteCameraStreamer()
     // BEGIN screenshots
 //    @StateObject private var windowAccessor = WindowAccessor.shared
 //    @State private var screenshotGenerator: AppStoreScreenshotGenerator?
@@ -75,8 +76,17 @@ struct ArkavoApp: App {
                     }
                 }
             }
+            .environmentObject(remoteStreamer)
             .task {
                 await checkAccountStatus()
+
+                // Auto-connect to ArkavoCreator for mounted phone use
+                if RemoteCameraStreamer.isAutoConnectEnabled {
+                    print("🔄 [App Launch Auto-Connect] Enabled - attempting to connect to ArkavoCreator")
+                    await remoteStreamer.smartConnect()
+                } else {
+                    print("⏸️ [App Launch Auto-Connect] Disabled - manual connection required")
+                }
             }
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
@@ -813,14 +823,46 @@ struct ArkavoApp: App {
         }
     }
 
+    // Handle QR code / deep link connection to ArkavoCreator
+    func handleConnectionURL(_ components: URLComponents) {
+        print("🔗 [QR Code] Handling connection URL")
+
+        let queryItems = components.queryItems ?? []
+        guard let host = queryItems.first(where: { $0.name == "host" })?.value,
+              let portString = queryItems.first(where: { $0.name == "port" })?.value,
+              let port = Int(portString)
+        else {
+            print("❌ [QR Code] Invalid connection URL - missing host or port")
+            return
+        }
+
+        print("📡 [QR Code] Extracted connection: \(host):\(port)")
+
+        // Connect via RemoteCameraStreamer
+        Task { @MainActor in
+            print("🔄 [QR Code] Initiating connection to \(host):\(port)")
+            await self.remoteStreamer.connectDirect(host: host, port: port)
+        }
+    }
+
     // applinks
     func handleIncomingURL(_ url: URL) {
         print("Handling URL: \(url.absoluteString)") // Debug logging
 
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-              components.host == "app.arkavo.com"
-        else {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
             print("Invalid URL format")
+            return
+        }
+
+        // Handle ArkavoCreator connection URLs (arkavo://connect?host=...&port=...)
+        if components.host == "connect" {
+            handleConnectionURL(components)
+            return
+        }
+
+        // Handle app.arkavo.com URLs
+        guard components.host == "app.arkavo.com" else {
+            print("Unknown URL host: \(components.host ?? "nil")")
             return
         }
 

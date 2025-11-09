@@ -29,6 +29,7 @@ final class RecordViewModel {
     private(set) var actualPort: UInt16 = 0  // The actual port being used
     private var previewStore: CameraPreviewStore?
     private var hasInitializedSession = false
+    private var remoteCameraServer: RemoteCameraServer?
 
     // Watermark configuration
     var watermarkEnabled: Bool = true // Enabled by default per MVP spec
@@ -470,5 +471,9 @@ final class RecordViewModel {
 
     var suggestedHostname: String {
         Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    }
+
+    var connectionInfo: String {
+        "arkavo://connect?host=\(suggestedHostname)&port=\(actualPort)"
     }
 }

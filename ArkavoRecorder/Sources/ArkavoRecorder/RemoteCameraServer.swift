@@ -210,6 +210,12 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
                     guard let self else { return }
                     self.delegate?.remoteCameraServer(self, didReceive: event)
                 }
+            case .audio:
+                guard let audioPayload = message.audio else { return }
+                state.sourceID = audioPayload.sourceID
+                updateSources(adding: audioPayload.sourceID)
+                // TODO: Implement audio sample buffer handling and delegate call
+                print("🎤 Received audio: \(audioPayload.audioData.count) bytes at \(audioPayload.sampleRate)Hz")
             }
 
             connections[id] = state

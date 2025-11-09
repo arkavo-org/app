@@ -3,6 +3,7 @@ import ArkavoRecorderShared
     import ArkavoRecorder  // For ARKitCaptureManager on iOS
 #endif
 import ARKit
+import AVFoundation
 import Combine
 import Foundation
 import Network
@@ -123,6 +124,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     private var netServiceBrowser: NetServiceBrowser?
     private var bonjourServices: [ObjectIdentifier: NetService] = [:]
     private var discoveredServersMap: [String: DiscoveredServer] = [:]
+    private var nwBrowser: NWBrowser?
 #if canImport(CoreNFC) && !targetEnvironment(macCatalyst)
     private var nfcReader: RemoteCameraNFCReader?
 #endif
@@ -144,6 +146,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         print("📱 [Device] Model: \(UIDevice.current.model)")
         logNetworkInterfaces()
         startBonjourBrowser()
+        startNWBrowser()
     }
 
     private func logNetworkInterfaces() {
@@ -181,6 +184,24 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     }
 
     // MARK: - Smart Connect (One-Tap Experience)
+
+    /// Direct connection with explicit host and port (e.g., from QR code)
+    func connectDirect(host: String, port: Int) async {
+        print("🔗 [Direct] Connecting to \(host):\(port)")
+        self.host = host
+        self.port = String(port)
+
+        connectionState = .connecting(host)
+
+        // Auto-detect best mode
+        let detectedMode = detectBestMode()
+        print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
+        self.mode = detectedMode
+        self.autoDetectedMode = detectedMode
+
+        // Start ARKit capture and connection
+        await startStreaming()
+    }
 
     func smartConnect() async {
         print("🎯 [SmartConnect] Starting one-tap connection flow...")
@@ -289,6 +310,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     private static let lastMacNameKey = "lastConnectedMacName"
     private static let lastMacHostKey = "lastConnectedMacHost"
     private static let lastMacPortKey = "lastConnectedMacPort"
+    private static let autoConnectEnabledKey = "autoConnectToCreatorEnabled"
 
     private func saveLastConnectedMac(_ server: DiscoveredServer) {
         UserDefaults.standard.set(server.id, forKey: Self.lastMacIDKey)
@@ -316,6 +338,21 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.lastMacPortKey)
     }
 
+    // MARK: - Auto-Connect Preference
+
+    static var isAutoConnectEnabled: Bool {
+        get {
+            // Default to true for mounted phone use case
+            if UserDefaults.standard.object(forKey: autoConnectEnabledKey) == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: autoConnectEnabledKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: autoConnectEnabledKey)
+        }
+    }
+
     // MARK: - Original Connection Methods
 
     func startStreaming() async {
@@ -334,6 +371,25 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         guard ARKitCaptureManager.isSupported(mode) else {
             statusMessage = "Selected AR mode not supported on this device"
             state = .error("Mode not supported")
+            return
+        }
+
+        // Request microphone permission before starting ARKit with audio
+        let micPermission = AVCaptureDevice.authorizationStatus(for: .audio)
+        if micPermission == .notDetermined {
+            print("🎤 [Permissions] Requesting microphone access...")
+            let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            if !granted {
+                statusMessage = "Microphone access denied"
+                state = .error("Permission denied")
+                print("❌ [Permissions] Microphone access denied by user")
+                return
+            }
+            print("✅ [Permissions] Microphone access granted")
+        } else if micPermission == .denied || micPermission == .restricted {
+            statusMessage = "Microphone access denied. Enable in Settings > Arkavo"
+            state = .error("Permission denied")
+            print("❌ [Permissions] Microphone access previously denied")
             return
         }
 
@@ -498,10 +554,92 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         netServiceBrowser = browser
     }
 
+    private func startNWBrowser() {
+        print("🔍 [NWBrowser] Starting Network framework discovery...")
+        nwBrowser?.cancel()
+
+        let parameters = NWParameters()
+        parameters.includePeerToPeer = true
+
+        let browser = NWBrowser(for: .bonjour(type: RemoteCameraConstants.serviceType, domain: "local."), using: parameters)
+
+        browser.stateUpdateHandler = { [weak self] state in
+            guard let self = self else { return }
+            Task { @MainActor in
+                switch state {
+                case .ready:
+                    print("✅ [NWBrowser] Ready and searching")
+                case .failed(let error):
+                    print("❌ [NWBrowser] Failed: \(error)")
+                case .cancelled:
+                    print("🛑 [NWBrowser] Cancelled")
+                default:
+                    break
+                }
+            }
+        }
+
+        browser.browseResultsChangedHandler = { [weak self] results, changes in
+            guard let self = self else { return }
+            Task { @MainActor in
+                print("📡 [NWBrowser] Results changed: \(results.count) endpoint(s)")
+                for result in results {
+                    switch result.endpoint {
+                    case .service(let name, let type, let domain, let interface):
+                        print("  └─ Found: \(name) (\(type)) on \(interface?.name ?? "unknown")")
+                        self.resolveNWEndpoint(result)
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+
+        browser.start(queue: .main)
+        nwBrowser = browser
+    }
+
+    private func resolveNWEndpoint(_ result: NWBrowser.Result) {
+        let connection = NWConnection(to: result.endpoint, using: .tcp)
+
+        connection.stateUpdateHandler = { [weak self] state in
+            guard let self = self else { return }
+            Task { @MainActor in
+                switch state {
+                case .ready:
+                    if case .service(let name, _, _, _) = result.endpoint,
+                       let innerEndpoint = connection.currentPath?.remoteEndpoint,
+                       case .hostPort(let host, let port) = innerEndpoint {
+                        let hostString = "\(host)"
+                        let portInt = Int(port.rawValue)
+                        print("✅ [NWBrowser] Resolved: \(name) -> \(hostString):\(portInt)")
+
+                        let key = "\(name)|\(hostString)|\(portInt)"
+                        let server = DiscoveredServer(
+                            id: key,
+                            name: name,
+                            host: hostString,
+                            port: portInt
+                        )
+                        self.discoveredServersMap[key] = server
+                        self.updateDiscoveredServers()
+                    }
+                    connection.cancel()
+                case .failed:
+                    connection.cancel()
+                default:
+                    break
+                }
+            }
+        }
+
+        connection.start(queue: .main)
+    }
+
     private func updateDiscoveredServers() {
         discoveredServers = discoveredServersMap.values
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        print("📋 [Bonjour] Updated server list: \(discoveredServers.count) server(s)")
+        print("📋 [Discovery] Updated server list: \(discoveredServers.count) server(s)")
         for server in discoveredServers {
             print("  └─ \(server.name) at \(server.host):\(server.port)")
         }
@@ -563,6 +701,22 @@ extension RemoteCameraStreamer: @preconcurrency NetServiceBrowserDelegate, @prec
         let prefix = "\(service.name)|"
         discoveredServersMap = discoveredServersMap.filter { !$0.key.hasPrefix(prefix) }
         updateDiscoveredServers()
+    }
+
+    func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+        print("🔍 [Bonjour] Browser will start searching")
+    }
+
+    func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
+        print("🛑 [Bonjour] Browser stopped searching")
+    }
+
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        print("❌ [Bonjour] Browser failed to search")
+        if let domain = errorDict["NSNetServicesErrorDomain"],
+           let code = errorDict["NSNetServicesErrorCode"] {
+            print("   Error - Domain: \(domain), Code: \(code)")
+        }
     }
 
     func netServiceDidResolveAddress(_ sender: NetService) {

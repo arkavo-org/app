@@ -24,6 +24,9 @@ class VRMAvatarRenderer: NSObject {
         renderer?.expressionController
     }
 
+    // ARKit face tracking driver
+    private let faceDriver: ARKitFaceDriver
+
     private(set) var isLoaded = false
     private(set) var error: Error?
 
@@ -37,6 +40,12 @@ class VRMAvatarRenderer: NSObject {
         self.device = device
         self.commandQueue = commandQueue
 
+        // Initialize ARKit face driver with default mapper and smoothing
+        self.faceDriver = ARKitFaceDriver(
+            mapper: .default,
+            smoothing: .default
+        )
+
         super.init()
 
         // Initialize renderer with standard 3D mode (not Toon2D)
@@ -44,7 +53,7 @@ class VRMAvatarRenderer: NSObject {
         vrmRenderer.renderingMode = .standard  // Use standard 3D MToon rendering
         renderer = vrmRenderer
 
-        print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode")
+        print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode and ARKit driver")
         setupCamera()
     }
 
@@ -82,8 +91,8 @@ class VRMAvatarRenderer: NSObject {
     private func setupCamera() {
         guard let renderer else { return }
 
-        // Set up perspective projection
-        let fov: Float = 45.0 * .pi / 180.0
+        // Set up perspective projection - tighter FOV for face focus
+        let fov: Float = 35.0 * .pi / 180.0  // Narrower FOV for portrait-style framing
         let aspect: Float = 16.0 / 9.0
         let near: Float = 0.1
         let far: Float = 100.0
@@ -95,10 +104,12 @@ class VRMAvatarRenderer: NSObject {
             far: far,
         )
 
-        // Set up view matrix (camera position)
-        let eye = SIMD3<Float>(0, 1.5, 3.0) // Camera position
-        let center = SIMD3<Float>(0, 1.0, 0) // Look at point
-        let up = SIMD3<Float>(0, 1, 0) // Up vector
+        // Set up view matrix - positioned for face tracking
+        // Camera positioned in front of avatar face, zoomed in for AR face tracking proportions
+        // VRM models typically face -Z, so camera is at negative Z to see the front
+        let eye = SIMD3<Float>(0, 1.45, -1.0)    // Eye level height (lowered camera to see higher), 1.0 unit away on -Z
+        let center = SIMD3<Float>(0, 1.45, 0)    // Look at eye level (center of screen)
+        let up = SIMD3<Float>(0, 1, 0)           // Up vector
 
         renderer.viewMatrix = lookAtMatrix(eye: eye, center: center, up: up)
     }
@@ -174,35 +185,47 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         commandBuffer.commit()
     }
 
-    func applyFaceTracking(blendShapes: [String: Float]) {
-        guard let expressionController else { return }
+    /// Apply ARKit face tracking blend shapes to the VRM avatar
+    ///
+    /// Uses the ARKitFaceDriver for proper mapping, smoothing, and QoS management.
+    ///
+    /// - Parameter blendShapes: ARKit face blend shapes from VRMMetalKit
+    func applyFaceTracking(blendShapes: ARKitFaceBlendShapes) {
+        guard let expressionController else {
+            print("[VRMAvatarRenderer] No expression controller available for face tracking")
+            return
+        }
 
-        let blinkLeft = clamped(blendShapes["eyeBlinkLeft"])
-        let blinkRight = clamped(blendShapes["eyeBlinkRight"])
-        expressionController.setExpressionWeight(.blinkLeft, weight: blinkLeft)
-        expressionController.setExpressionWeight(.blinkRight, weight: blinkRight)
+        print("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes")
 
-        let jawOpen = clamped(blendShapes["jawOpen"])
-        expressionController.setExpressionWeight(.aa, weight: jawOpen)
-
-        let smile = max(clamped(blendShapes["mouthSmileLeft"]), clamped(blendShapes["mouthSmileRight"]))
-        expressionController.setExpressionWeight(.happy, weight: smile)
-
-        let frown = max(clamped(blendShapes["mouthFrownLeft"]), clamped(blendShapes["mouthFrownRight"]))
-        expressionController.setExpressionWeight(.sad, weight: frown)
-
-        let browDown = max(clamped(blendShapes["browDownLeft"]), clamped(blendShapes["browDownRight"]))
-        expressionController.setExpressionWeight(.angry, weight: browDown)
-
-        let browUp = clamped(blendShapes["browInnerUp"])
-        expressionController.setExpressionWeight(.surprised, weight: browUp)
-
-        let mouthPucker = clamped(blendShapes["mouthPucker"])
-        expressionController.setExpressionWeight(.oh, weight: mouthPucker)
+        // Use ARKitFaceDriver to map, smooth, and apply blend shapes
+        faceDriver.update(
+            blendShapes: blendShapes,
+            controller: expressionController
+        )
     }
 
-    private func clamped(_ value: Float?) -> Float {
-        guard let value else { return 0 }
-        return min(max(value, 0), 1)
+    /// Apply face tracking from multiple sources (for multi-camera setup)
+    ///
+    /// - Parameters:
+    ///   - sources: Array of face tracking sources (e.g., iPhone + iPad)
+    ///   - priority: Strategy for selecting/merging sources (default: latest active)
+    func applyFaceTracking(
+        sources: [ARFaceSource],
+        priority: SourcePriorityStrategy = .latestActive
+    ) {
+        guard let expressionController else { return }
+
+        // Use ARKitFaceDriver with multi-source support
+        faceDriver.update(
+            sources: sources,
+            controller: expressionController,
+            priority: priority
+        )
+    }
+
+    /// Reset face tracking filters (call when switching avatars or restarting)
+    func resetFaceTracking() {
+        faceDriver.resetFilters()
     }
 }

@@ -30,41 +30,29 @@ struct AvatarRecordView: View {
 
     private var controlsPane: some View {
         VStack(alignment: .leading, spacing: 20) {
-            sectionHeader("Recording Mode")
-            Picker("Mode", selection: $viewModel.recordingMode) {
-                ForEach(RecordingMode.allCases) { mode in
-                    Label(mode.rawValue, systemImage: mode.icon)
-                        .tag(mode)
-                }
+            sectionHeader("Download VRM Model")
+            downloadSection
+
+            Divider()
+            sectionHeader("Select Avatar")
+            avatarList
+
+            Divider()
+            sectionHeader("Avatar Settings")
+            faceTrackingStatusView
+            ColorPicker("Background", selection: $viewModel.backgroundColor)
+            Slider(value: $viewModel.avatarScale, in: 0.5 ... 2.0) {
+                Text("Avatar Scale")
             }
-            .pickerStyle(.segmented)
+            .help("Adjust avatar scale")
 
-            if viewModel.recordingMode == .avatar {
-                Divider()
-                sectionHeader("Download VRM Model")
-                downloadSection
-
-                Divider()
-                sectionHeader("Select Avatar")
-                avatarList
-
-                Divider()
-                sectionHeader("Avatar Settings")
-                faceTrackingStatusView
-                ColorPicker("Background", selection: $viewModel.backgroundColor)
-                Slider(value: $viewModel.avatarScale, in: 0.5 ... 2.0) {
-                    Text("Avatar Scale")
+            if viewModel.selectedModelURL != nil {
+                Button {
+                    loadSelectedModel()
+                } label: {
+                    Label("Load Avatar", systemImage: "arrow.down.circle.fill")
                 }
-                .help("Adjust avatar scale")
-
-                if viewModel.selectedModelURL != nil {
-                    Button {
-                        loadSelectedModel()
-                    } label: {
-                        Label("Load Avatar", systemImage: "arrow.down.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+                .buttonStyle(.borderedProminent)
             }
 
             Spacer()
@@ -124,17 +112,13 @@ struct AvatarRecordView: View {
 
     private var previewPane: some View {
         Group {
-            if viewModel.recordingMode == .avatar {
-                if let renderer {
-                    AvatarPreviewView(
-                        renderer: renderer,
-                        backgroundColor: viewModel.backgroundColor
-                    )
-                } else {
-                    placeholderView
-                }
+            if let renderer {
+                AvatarPreviewView(
+                    renderer: renderer,
+                    backgroundColor: viewModel.backgroundColor
+                )
             } else {
-                cameraPlaceholder
+                placeholderView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,22 +137,6 @@ struct AvatarRecordView: View {
                 .foregroundStyle(.secondary)
             Text("Select and load a VRM model")
                 .font(.title3)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    private var cameraPlaceholder: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "video.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            Text("Camera Mode")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            Text("Camera recording coming in Phase 3")
-                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

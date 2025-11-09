@@ -43,8 +43,45 @@ This guide explains how to route live video plus ARKit metadata from an iPhone/i
 - ARKit tracking requires adequate lighting; the status text on iOS will report tracking errors.
 - Remote metadata is posted through `Notification.Name.cameraMetadataUpdated`, so avatar rigs respond exactly like Continuity Camera face feed data.
 
-## Next Steps
+## Implementation Status (Nov 2025)
 
-- Add Bonjour/NFC-based discovery to avoid manual host entry.
-- Encrypt the transport using One-Time TDF session keys.
-- Support high-bitrate HEVC streaming with hardware encode/decode for lower latency.
+### ✅ Completed Features
+
+**Multi-Layered Discovery**
+- ✅ Bonjour/mDNS auto-discovery (NetServiceBrowser)
+- ✅ Network framework discovery (NWBrowser) for peer-to-peer
+- ✅ QR code quick connect (`arkavo://connect?host=...&port=...`)
+- ✅ Auto-connect on app launch (configurable via UserDefaults)
+- ✅ Connection caching for faster reconnect
+
+**Permissions & Privacy**
+- ✅ Local network permission (`NSLocalNetworkUsageDescription`)
+- ✅ Microphone permission (`NSMicrophoneUsageDescription`)
+- ✅ Camera permission (`NSCameraUsageDescription`)
+- ✅ Bonjour service declaration (`NSBonjourServices: _arkavo-remote._tcp`)
+- ✅ Graceful permission handling (prompts before ARKit start)
+
+**Streaming**
+- ✅ ARKit face tracking (52 blend shapes + head transform)
+- ✅ JPEG frame streaming (~15 FPS)
+- ✅ Audio capture (microphone enabled)
+- ✅ NDJSON protocol with handshake, frame, metadata, audio messages
+- ✅ Dynamic port assignment (Mac server auto-assigns available port)
+
+**Avatar Integration**
+- ✅ VRMMetalKit 0.3.1 with ARKitFaceDriver
+- ✅ Metadata forwarding via NotificationCenter
+- ✅ Multi-source face tracking support (ARFaceSource infrastructure)
+- ✅ Camera positioning optimized for face framing (eye-level at Y=1.45)
+
+**UX Improvements**
+- ✅ QR code display in ArkavoCreator UI
+- ✅ Connection status indicators
+- ✅ Dual discovery systems for redundancy
+- ✅ Enhanced logging and diagnostics
+
+### 📋 Next Steps
+
+- Encrypt the transport using One-Time TDF session keys
+- Support high-bitrate HEVC streaming with hardware encode/decode for lower latency
+- Implement NFC pairing for one-tap connection

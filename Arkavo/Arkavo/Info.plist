@@ -37,8 +37,13 @@
 		<string>_arkavo-circle._tcp</string>
 		<string>_arkavo-circle._udp</string>
 		<string>_a2a._tcp</string>
+		<string>_arkavo-remote._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Arkavo uses the local network to discover and connect with nearby devices for InnerCircle group chat and AI agent communication</string>
+	<string>Arkavo uses the local network to discover and connect with nearby devices for InnerCircle group chat, AI agent communication, and remote camera streaming to ArkavoCreator</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Arkavo uses your microphone to capture audio when streaming to ArkavoCreator for video recording</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Arkavo uses your camera for ARKit face tracking when streaming to ArkavoCreator and for creating video content</string>
 </dict>
 </plist>

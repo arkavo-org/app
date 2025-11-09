@@ -5,6 +5,7 @@ public struct RemoteCameraMessage: Codable, Sendable {
     public enum Kind: String, Codable, Sendable {
         case frame
         case metadata
+        case audio
         case handshake
     }
 
@@ -34,15 +35,33 @@ public struct RemoteCameraMessage: Codable, Sendable {
         }
     }
 
+    public struct AudioPayload: Codable, Sendable {
+        public let sourceID: String
+        public let timestamp: TimeInterval
+        public let sampleRate: Double
+        public let channels: Int
+        public let audioData: Data
+
+        public init(sourceID: String, timestamp: TimeInterval, sampleRate: Double, channels: Int, audioData: Data) {
+            self.sourceID = sourceID
+            self.timestamp = timestamp
+            self.sampleRate = sampleRate
+            self.channels = channels
+            self.audioData = audioData
+        }
+    }
+
     public let kind: Kind
     public let frame: FramePayload?
     public let metadata: CameraMetadataEvent?
+    public let audio: AudioPayload?
     public let handshake: HandshakePayload?
 
-    public init(kind: Kind, frame: FramePayload? = nil, metadata: CameraMetadataEvent? = nil, handshake: HandshakePayload? = nil) {
+    public init(kind: Kind, frame: FramePayload? = nil, metadata: CameraMetadataEvent? = nil, audio: AudioPayload? = nil, handshake: HandshakePayload? = nil) {
         self.kind = kind
         self.frame = frame
         self.metadata = metadata
+        self.audio = audio
         self.handshake = handshake
     }
 
@@ -52,6 +71,10 @@ public struct RemoteCameraMessage: Codable, Sendable {
 
     public static func metadata(_ event: CameraMetadataEvent) -> RemoteCameraMessage {
         RemoteCameraMessage(kind: .metadata, metadata: event)
+    }
+
+    public static func audio(_ payload: AudioPayload) -> RemoteCameraMessage {
+        RemoteCameraMessage(kind: .audio, audio: payload)
     }
 
     public static func handshake(sourceID: String, deviceName: String) -> RemoteCameraMessage {

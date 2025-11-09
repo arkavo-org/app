@@ -5,8 +5,36 @@ import SwiftUI
 struct RecordView: View {
     @State private var viewModel = RecordViewModel()
     @ObservedObject private var previewStore = CameraPreviewStore.shared
+    @State private var recordingMode: RecordingMode = .camera
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Mode picker at top
+            modePicker
+
+            // Show appropriate view based on mode
+            if recordingMode == .avatar {
+                AvatarRecordView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                cameraRecordingView
+            }
+        }
+        .navigationTitle("Record")
+    }
+
+    private var modePicker: some View {
+        Picker("Recording Mode", selection: $recordingMode) {
+            ForEach(RecordingMode.allCases) { mode in
+                Label(mode.rawValue, systemImage: mode.icon)
+                    .tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding()
+    }
+
+    private var cameraRecordingView: some View {
         VStack(spacing: 24) {
             // Title section
             if !viewModel.isRecording {
@@ -43,7 +71,6 @@ struct RecordView: View {
         }
         .padding()
         .frame(minWidth: 400, minHeight: 300)
-        .navigationTitle("Record")
         .onAppear {
             viewModel.refreshCameraDevices()
             viewModel.bindPreviewStore(previewStore)
@@ -432,14 +459,51 @@ extension RecordView {
                             Spacer()
                         }
 
-                        Text("Or tap 'Stream to ArkavoCreator' in Arkavo iOS app")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 4)
+                        Divider()
+                            .padding(.vertical, 4)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Quick Connect Options:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+
+                                Text("1. Auto-discovery: Open Arkavo app on iPhone")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+
+                                Text("2. QR Code: Scan with iPhone camera →")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+
+                                Text("3. Manual: Enter host & port in Arkavo app")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            if viewModel.actualPort > 0,
+                               let qrImage = QRCodeGenerator.generateQRCode(from: viewModel.connectionInfo, size: CGSize(width: 120, height: 120)) {
+                                VStack(spacing: 4) {
+                                    Image(nsImage: qrImage)
+                                        .interpolation(.none)
+                                        .resizable()
+                                        .frame(width: 120, height: 120)
+                                        .background(Color.white)
+                                        .cornerRadius(8)
+
+                                    Text("Scan to connect")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
                     }
                     .padding(8)
                 } label: {
-                    Text("Connection Info")
+                    Text("Connection Info & QR Code")
                         .font(.caption2)
                 }
             }

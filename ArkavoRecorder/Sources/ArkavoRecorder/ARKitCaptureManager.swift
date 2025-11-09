@@ -79,7 +79,7 @@ public final class ARKitCaptureManager: NSObject {
         case .face:
             let faceConfig = ARFaceTrackingConfiguration()
             faceConfig.isWorldTrackingEnabled = false
-            faceConfig.providesAudioData = false
+            faceConfig.providesAudioData = true  // Enable microphone for remote streaming
             configuration = faceConfig
         case .body:
             if #available(iOS 13.0, *) {

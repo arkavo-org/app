@@ -633,7 +633,7 @@
 			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
 			requirement = {
 				kind = exactVersion;
-				version = 0.2.0;
+				version = 0.3.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
