@@ -5,10 +5,12 @@ import OpenTDFKit
 import SwiftData
 import XCTest
 
+extension Profile: @unchecked Sendable {}
+extension MCPeerID: @unchecked Sendable {}
+
 // MARK: - Mock ArkavoClient
 
-@MainActor
-class MockArkavoClient {
+class MockArkavoClient: @unchecked Sendable {
     var encryptAndSendPayloadCalled = false
     var lastEncryptedPayload: Data?
     var lastEncryptedPolicyData: Data?
@@ -71,7 +73,7 @@ final class KeyExchangeTests: XCTestCase {
     var mockPersistenceController: MockPersistenceController!
     var mockArkavoClient: MockArkavoClient!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
 
         // Create peer IDs

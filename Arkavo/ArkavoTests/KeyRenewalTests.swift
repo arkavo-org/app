@@ -6,8 +6,7 @@ import XCTest
 
 // MARK: - Mock PeerDiscoveryManager for Key Renewal
 
-@MainActor
-class MockPeerDiscoveryManagerForRenewal: ObservableObject {
+class MockPeerDiscoveryManagerForRenewal: ObservableObject, @unchecked Sendable {
     // Published properties
     @Published var localKeyStoreInfo: LocalKeyStoreInfo?
     @Published var isKeyStoreLow: Bool = false
@@ -82,7 +81,7 @@ final class KeyRenewalTests: XCTestCase {
     var testPeer: MCPeerID!
     var testProfile: Profile!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
 
         // Create test peer and profile

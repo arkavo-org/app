@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RecordView: View {
     @State private var viewModel = RecordViewModel()
+    @ObservedObject private var previewStore = CameraPreviewStore.shared
 
     var body: some View {
         VStack(spacing: 24) {
@@ -43,6 +44,25 @@ struct RecordView: View {
         .padding()
         .frame(minWidth: 400, minHeight: 300)
         .navigationTitle("Record")
+        .onAppear {
+            viewModel.refreshCameraDevices()
+            viewModel.bindPreviewStore(previewStore)
+            try? viewModel.activatePreviewPipeline()
+        }
+        .onChange(of: viewModel.selectedCameraIDs) { _, _ in
+            viewModel.refreshCameraPreview()
+        }
+        .onChange(of: viewModel.enableCamera) { _, isEnabled in
+            if isEnabled {
+                viewModel.refreshCameraDevices()
+            } else {
+                viewModel.selectedCameraIDs.removeAll()
+                viewModel.refreshCameraPreview()
+            }
+        }
+        .onChange(of: viewModel.remoteBridgeEnabled) { _, _ in
+            try? viewModel.activatePreviewPipeline()
+        }
     }
 
     // MARK: - View Components
@@ -75,6 +95,13 @@ struct RecordView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
+            CameraPreviewPanel(
+                title: "Camera Preview",
+                image: previewStore.image(for: viewModel.currentPreviewSourceID),
+                sourceLabel: viewModel.currentPreviewSourceID,
+                placeholderText: "Connect an iPhone/iPad with Arkavo Remote Camera"
+            )
+
             // Quick settings
             VStack(spacing: 12) {
                 Toggle("Enable Camera", isOn: $viewModel.enableCamera)
@@ -92,6 +119,9 @@ struct RecordView: View {
                     }
                     .accessibilityLabel("Camera position")
                     .accessibilityHint("Select where the camera overlay appears on screen")
+
+                    cameraSourcesSection
+                    remoteCameraSourcesSection
                 }
 
                 Divider()
@@ -125,6 +155,8 @@ struct RecordView: View {
                             .accessibilityHint("Adjust watermark transparency")
                     }
                 }
+
+                remoteBridgeSection
             }
             .frame(maxWidth: 300)
         }
@@ -173,6 +205,13 @@ struct RecordView: View {
                 }
                 .frame(maxWidth: 300)
             }
+
+            CameraPreviewPanel(
+                title: "Camera Preview",
+                image: previewStore.image(for: viewModel.currentPreviewSourceID),
+                sourceLabel: viewModel.currentPreviewSourceID,
+                placeholderText: "Connect an iPhone/iPad with Arkavo Remote Camera"
+            )
 
             // Pause/Resume button
             Button(action: {
@@ -232,6 +271,178 @@ struct RecordView: View {
             .yellow
         } else {
             .red
+        }
+    }
+}
+
+extension RecordView {
+    private var cameraSourcesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Camera Sources")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    viewModel.refreshCameraDevices()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh connected cameras")
+            }
+
+            if viewModel.availableCameras.isEmpty {
+                Text("No cameras detected. Connect an iPhone via Continuity Camera, USB-C, or Wi-Fi to get started.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(viewModel.availableCameras) { camera in
+                    Toggle(isOn: Binding(
+                        get: { viewModel.isCameraSelected(camera) },
+                        set: { viewModel.toggleCameraSelection(camera, isSelected: $0) }
+                    )) {
+                        HStack {
+                            Text(camera.displayName)
+                            Spacer()
+                            Text(viewModel.cameraTransportLabel(for: camera))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .disabled(!viewModel.canSelectMoreCameras(for: camera))
+                }
+
+                if viewModel.selectedCameraIDs.count > 1 {
+                    Picker("Layout", selection: $viewModel.cameraLayout) {
+                        ForEach(MultiCameraLayout.allCases) { layout in
+                            Text(layout.rawValue).tag(layout)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private var remoteCameraSourcesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Remote iOS Cameras")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+
+            if viewModel.remoteCameraSources.isEmpty {
+                Text("Waiting for Arkavo on iPhone/iPad to connect.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(viewModel.remoteCameraSources, id: \.self) { source in
+                    Toggle(isOn: Binding(
+                        get: { viewModel.isRemoteCameraSelected(source) },
+                        set: { viewModel.toggleRemoteCameraSelection(source, isSelected: $0) }
+                    )) {
+                        HStack {
+                            Text(source)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("Remote")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .disabled(!viewModel.isRemoteCameraSelected(source) && viewModel.selectedCameraIDs.count >= MultiCameraLayout.maxSupportedSources)
+                }
+            }
+        }
+    }
+
+    private var remoteBridgeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(viewModel.remoteBridgeEnabled ? Color.green : Color.gray)
+                            .frame(width: 8, height: 8)
+
+                        Text(viewModel.remoteBridgeEnabled ? "Accepting Remote Cameras" : "Remote Cameras Disabled")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+
+                    if viewModel.remoteBridgeEnabled {
+                        Text("\(viewModel.remoteCameraSources.count) connected")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: {
+                    viewModel.remoteBridgeEnabled.toggle()
+                }) {
+                    Text(viewModel.remoteBridgeEnabled ? "Disable" : "Enable")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(viewModel.remoteBridgeEnabled ? "Disable remote cameras" : "Enable remote cameras")
+            }
+            .padding(8)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(8)
+
+            if viewModel.remoteBridgeEnabled {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Connect from iPhone/iPad")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
+
+                        HStack {
+                            Text("Host:")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text(viewModel.suggestedHostname)
+                                .font(.caption2.monospaced())
+                                .textSelection(.enabled)
+                            Spacer()
+                        }
+
+                        HStack {
+                            Text("Port:")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text(viewModel.actualPort > 0 ? "\(viewModel.actualPort)" : "auto")
+                                .font(.caption2.monospaced())
+                                .textSelection(.enabled)
+                            if viewModel.actualPort > 0 {
+                                Text("(auto-assigned)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+
+                        Text("Or tap 'Stream to ArkavoCreator' in Arkavo iOS app")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
+                    .padding(8)
+                } label: {
+                    Text("Connection Info")
+                        .font(.caption2)
+                }
+            }
         }
     }
 }

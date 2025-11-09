@@ -115,7 +115,7 @@ enum NavigationSection: String, CaseIterable {
         case .dashboard: "square.grid.2x2"
         case .record: "record.circle"
         case .stream: "antenna.radiowaves.left.and.right"
-        case .library: "video.stack"
+        case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"

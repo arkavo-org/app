@@ -12,6 +12,18 @@ public final class CompositorManager: Sendable {
     private let commandQueue: MTLCommandQueue
     private let ciContext: CIContext
 
+    public struct CameraLayer {
+        public let id: String
+        public let buffer: CMSampleBuffer
+        public let position: PiPPosition?
+
+        public init(id: String, buffer: CMSampleBuffer, position: PiPPosition?) {
+            self.id = id
+            self.buffer = buffer
+            self.position = position
+        }
+    }
+
     // PiP configuration
     public nonisolated(unsafe) var pipPosition: PiPPosition = .bottomRight
     public nonisolated(unsafe) var pipScale: Float = 0.2 // 20% of screen size
@@ -48,63 +60,69 @@ public final class CompositorManager: Sendable {
     /// Composites screen and camera frames into a single frame with PiP layout
     public func composite(
         screen screenBuffer: CMSampleBuffer,
-        camera cameraBuffer: CMSampleBuffer?,
+        cameraLayers: [CameraLayer]
     ) -> CVPixelBuffer? {
         // Get screen image buffer
         guard let screenPixelBuffer = CMSampleBufferGetImageBuffer(screenBuffer) else {
             return nil
         }
 
-        // If no camera, return screen only
-        guard let cameraBuffer,
-              let cameraPixelBuffer = CMSampleBufferGetImageBuffer(cameraBuffer)
-        else {
-            return screenPixelBuffer
-        }
-
-        // Create CIImages
         let screenImage = CIImage(cvPixelBuffer: screenPixelBuffer)
-        let cameraImage = CIImage(cvPixelBuffer: cameraPixelBuffer)
-
-        // Calculate PiP dimensions and position
         let screenSize = screenImage.extent.size
-        let pipSize = CGSize(
-            width: screenSize.width * CGFloat(pipScale),
-            height: screenSize.height * CGFloat(pipScale),
-        )
+        var composited = screenImage
 
-        // Scale camera to PiP size maintaining aspect ratio
-        let cameraAspect = cameraImage.extent.width / cameraImage.extent.height
-        let pipAspect = pipSize.width / pipSize.height
+        for (index, layer) in cameraLayers.enumerated() {
+            guard let cameraPixelBuffer = CMSampleBufferGetImageBuffer(layer.buffer) else {
+                continue
+            }
 
-        var scaledCameraSize = pipSize
-        if cameraAspect > pipAspect {
-            // Camera is wider, fit width
-            scaledCameraSize.height = pipSize.width / cameraAspect
-        } else {
-            // Camera is taller, fit height
-            scaledCameraSize.width = pipSize.height * cameraAspect
+            let cameraImage = CIImage(cvPixelBuffer: cameraPixelBuffer)
+
+            // Calculate PiP dimensions and position
+            let pipSize = pipSize(for: screenSize, cameraCount: cameraLayers.count)
+
+            // Scale camera to PiP size maintaining aspect ratio
+            let cameraAspect = cameraImage.extent.width / cameraImage.extent.height
+            let pipAspect = pipSize.width / pipSize.height
+
+            var scaledCameraSize = pipSize
+            if cameraAspect > pipAspect {
+                scaledCameraSize.height = pipSize.width / cameraAspect
+            } else {
+                scaledCameraSize.width = pipSize.height * cameraAspect
+            }
+
+            let scaleX = scaledCameraSize.width / cameraImage.extent.width
+            let scaleY = scaledCameraSize.height / cameraImage.extent.height
+            let scaledCamera = cameraImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+
+            // Calculate position based on PiP setting or provided override
+            let placement = layer.position ?? pipPosition
+            let position: CGPoint
+            if cameraLayers.count > 1 {
+                position = multiCameraPosition(
+                    screenSize: screenSize,
+                    pipSize: scaledCameraSize,
+                    preferred: placement,
+                    index: index
+                )
+            } else {
+                position = calculatePiPPosition(
+                    screenSize: screenSize,
+                    pipSize: scaledCameraSize,
+                    position: placement
+                )
+            }
+
+            // Position the camera overlay
+            let positionedCamera = scaledCamera.transformed(by: CGAffineTransform(translationX: position.x, y: position.y))
+
+            // Add rounded corners and border to PiP
+            let pipWithEffects = addPiPEffects(to: positionedCamera, size: scaledCameraSize)
+
+            // Composite the images
+            composited = pipWithEffects.composited(over: composited)
         }
-
-        let scaleX = scaledCameraSize.width / cameraImage.extent.width
-        let scaleY = scaledCameraSize.height / cameraImage.extent.height
-        let scaledCamera = cameraImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-
-        // Calculate position based on PiP setting
-        let position = calculatePiPPosition(
-            screenSize: screenSize,
-            pipSize: scaledCameraSize,
-            position: pipPosition,
-        )
-
-        // Position the camera overlay
-        let positionedCamera = scaledCamera.transformed(by: CGAffineTransform(translationX: position.x, y: position.y))
-
-        // Add rounded corners and border to PiP
-        let pipWithEffects = addPiPEffects(to: positionedCamera, size: scaledCameraSize)
-
-        // Composite the images
-        var composited = pipWithEffects.composited(over: screenImage)
 
         // Add watermark if enabled
         if watermarkEnabled {
@@ -120,10 +138,9 @@ public final class CompositorManager: Sendable {
     private func calculatePiPPosition(
         screenSize: CGSize,
         pipSize: CGSize,
-        position: PiPPosition,
+        position: PiPPosition
     ) -> CGPoint {
         let margin: CGFloat = 20
-
         switch position {
         case .topLeft:
             return CGPoint(x: margin, y: screenSize.height - pipSize.height - margin)
@@ -321,9 +338,41 @@ public final class CompositorManager: Sendable {
             )
         }
     }
-}
 
-// MARK: - Supporting Types
+    private func multiCameraPosition(
+        screenSize: CGSize,
+        pipSize: CGSize,
+        preferred: PiPPosition,
+        index: Int
+    ) -> CGPoint {
+        let orderedPositions: [PiPPosition] = {
+            var order = [preferred]
+            order.append(contentsOf: PiPPosition.allCases.filter { $0 != preferred })
+            return order
+        }()
+        let resolved = orderedPositions[index % orderedPositions.count]
+        return calculatePiPPosition(screenSize: screenSize, pipSize: pipSize, position: resolved)
+    }
+
+    private func pipSize(for screenSize: CGSize, cameraCount: Int) -> CGSize {
+        let multiplier: CGFloat
+        switch cameraCount {
+        case 0, 1:
+            multiplier = CGFloat(pipScale)
+        case 2:
+            multiplier = CGFloat(pipScale * 0.9)
+        case 3:
+            multiplier = CGFloat(pipScale * 0.8)
+        default:
+            multiplier = CGFloat(pipScale * 0.7)
+        }
+
+        return CGSize(
+            width: screenSize.width * multiplier,
+            height: screenSize.height * multiplier
+        )
+    }
+}
 
 public enum PiPPosition: String, Sendable, CaseIterable, Identifiable {
     case topLeft = "Top Left"

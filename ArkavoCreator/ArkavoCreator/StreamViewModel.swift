@@ -100,6 +100,10 @@ final class StreamViewModel {
         }
     }
 
+    var previewSourceID: String? {
+        recordingState.getRecordingSession()?.cameraSourceIdentifiers.first
+    }
+
     // MARK: - Actions
 
     func startStreaming() async {

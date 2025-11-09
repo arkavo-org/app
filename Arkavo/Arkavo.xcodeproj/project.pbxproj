@@ -74,6 +74,10 @@
 		DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */; };
 		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
 		DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* VideoCreateView.swift */; };
+		DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */; };
+		DAF2B7042FF1A6DB00123456 /* RemoteCameraNFCReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7032FF1A6DB00123456 /* RemoteCameraNFCReader.swift */; };
+		DAF2B7072FF1ACE300123456 /* ArkavoRecorder in Frameworks */ = {isa = PBXBuildFile; productRef = DAF2B7062FF1ACD300123456 /* ArkavoRecorder */; };
+		DAF2B70A2FF1ACF400123459 /* ArkavoRecorderShared in Frameworks */ = {isa = PBXBuildFile; productRef = DAF2B7092FF1ACF400123458 /* ArkavoRecorderShared */; };
 		DABD7D4C2D0E4BDE00239F22 /* GroupCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */; };
 		DABD7D502D0F584B00239F22 /* CreatorSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
@@ -183,6 +187,8 @@
 		DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedView.swift; sourceTree = "<group>"; };
 		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
 		DABD7D492D0D336700239F22 /* VideoCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCreateView.swift; sourceTree = "<group>"; };
+		DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraStreamer.swift; sourceTree = "<group>"; };
+		DAF2B7032FF1A6DB00123456 /* RemoteCameraNFCReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraNFCReader.swift; sourceTree = "<group>"; };
 		DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCreateView.swift; sourceTree = "<group>"; };
 		DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorSupportView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -224,6 +230,8 @@
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
 				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
 				DA91AA0B2CFB655900BE9912 /* ArkavoSocial in Frameworks */,
+				DAF2B7072FF1ACE300123456 /* ArkavoRecorder in Frameworks */,
+				DAF2B70A2FF1ACF400123459 /* ArkavoRecorderShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -280,6 +288,8 @@
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
+				DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */,
+				DAF2B7032FF1A6DB00123456 /* RemoteCameraNFCReader.swift */,
 				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
 				DAAFCBCD2D09073A003FC56F /* GroupView.swift */,
 				DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */,
@@ -404,6 +414,8 @@
 				DA91AA0A2CFB655900BE9912 /* ArkavoSocial */,
 				DA3A752C2CFB85FA004472CD /* ArkavoSocial */,
 				DAAC24252EA3D83300E06FE1 /* ArkavoAgent */,
+				DAF2B7062FF1ACD300123456 /* ArkavoRecorder */,
+				DAF2B7092FF1ACF400123458 /* ArkavoRecorderShared */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -483,6 +495,8 @@
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 				DA3A752B2CFB85FA004472CD /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
 				DAAC24242EA3D83300E06FE1 /* XCLocalSwiftPackageReference "../ArkavoAgent" */,
+				DAF2B7052FF1ACD300123456 /* XCLocalSwiftPackageReference "../ArkavoRecorder" */,
+				DAF2B7082FF1ACF400123457 /* XCLocalSwiftPackageReference "../ArkavoRecorderShared" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -611,6 +625,8 @@
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */,
+				DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */,
+				DAF2B7042FF1A6DB00123456 /* RemoteCameraNFCReader.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
@@ -1037,6 +1053,14 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoAgent;
 		};
+		DAF2B7052FF1ACD300123456 /* XCLocalSwiftPackageReference "../ArkavoRecorder" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoRecorder;
+		};
+		DAF2B7082FF1ACF400123457 /* XCLocalSwiftPackageReference "../ArkavoRecorderShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoRecorderShared;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1084,6 +1108,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */;
 			productName = FlatBuffers;
+		};
+		DAF2B7062FF1ACD300123456 /* ArkavoRecorder */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAF2B7052FF1ACD300123456 /* XCLocalSwiftPackageReference "../ArkavoRecorder" */;
+			productName = ArkavoRecorder;
+		};
+		DAF2B7092FF1ACF400123458 /* ArkavoRecorderShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAF2B7082FF1ACF400123457 /* XCLocalSwiftPackageReference "../ArkavoRecorderShared" */;
+			productName = ArkavoRecorderShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -20,6 +20,9 @@ class VRMAvatarRenderer: NSObject {
     private let commandQueue: MTLCommandQueue
     private var renderer: VRMRenderer?
     private var model: VRMModel?
+    private var expressionController: VRMExpressionController? {
+        renderer?.expressionController
+    }
 
     private(set) var isLoaded = false
     private(set) var error: Error?
@@ -169,5 +172,37 @@ extension VRMAvatarRenderer: MTKViewDelegate {
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+    }
+
+    func applyFaceTracking(blendShapes: [String: Float]) {
+        guard let expressionController else { return }
+
+        let blinkLeft = clamped(blendShapes["eyeBlinkLeft"])
+        let blinkRight = clamped(blendShapes["eyeBlinkRight"])
+        expressionController.setExpressionWeight(.blinkLeft, weight: blinkLeft)
+        expressionController.setExpressionWeight(.blinkRight, weight: blinkRight)
+
+        let jawOpen = clamped(blendShapes["jawOpen"])
+        expressionController.setExpressionWeight(.aa, weight: jawOpen)
+
+        let smile = max(clamped(blendShapes["mouthSmileLeft"]), clamped(blendShapes["mouthSmileRight"]))
+        expressionController.setExpressionWeight(.happy, weight: smile)
+
+        let frown = max(clamped(blendShapes["mouthFrownLeft"]), clamped(blendShapes["mouthFrownRight"]))
+        expressionController.setExpressionWeight(.sad, weight: frown)
+
+        let browDown = max(clamped(blendShapes["browDownLeft"]), clamped(blendShapes["browDownRight"]))
+        expressionController.setExpressionWeight(.angry, weight: browDown)
+
+        let browUp = clamped(blendShapes["browInnerUp"])
+        expressionController.setExpressionWeight(.surprised, weight: browUp)
+
+        let mouthPucker = clamped(blendShapes["mouthPucker"])
+        expressionController.setExpressionWeight(.oh, weight: mouthPucker)
+    }
+
+    private func clamped(_ value: Float?) -> Float {
+        guard let value else { return 0 }
+        return min(max(value, 0), 1)
     }
 }

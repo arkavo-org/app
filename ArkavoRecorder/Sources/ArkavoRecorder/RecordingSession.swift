@@ -1,6 +1,10 @@
-@preconcurrency import AVFoundation
+import CoreGraphics
 import Foundation
+
+#if os(macOS)
+@preconcurrency import AVFoundation
 import ArkavoStreaming
+import VideoToolbox
 
 /// Coordinates screen, camera, and audio capture with composition and encoding
 @MainActor
@@ -8,7 +12,10 @@ public final class RecordingSession: Sendable {
     // MARK: - Properties
 
     private let screenCapture: ScreenCaptureManager
-    private let cameraCapture: CameraManager
+    private var cameraCaptures: [String: CameraManager]
+    private var latestCameraMetadata: [String: CameraMetadata] = [:]
+    private var remoteCameraIdentifiers: Set<String> = []
+    public private(set) var remoteCameraServer: RemoteCameraServer?
     private let audioCapture: AudioManager
     nonisolated(unsafe) private let compositor: CompositorManager
     nonisolated(unsafe) private let encoder: VideoEncoder
@@ -46,12 +53,17 @@ public final class RecordingSession: Sendable {
 
     nonisolated(unsafe) public var enableCamera: Bool = true
     nonisolated(unsafe) public var enableMicrophone: Bool = true
+    public var cameraSourceIdentifiers: [String] = []
+public var cameraLayoutStrategy: MultiCameraLayout = .pictureInPicture
+public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
+    public var previewHandler: (@Sendable (CameraPreviewEvent) -> Void)?
+    public var remoteSourcesHandler: (@Sendable ([String]) -> Void)?
 
     // MARK: - Initialization
 
     public init() throws {
         self.screenCapture = ScreenCaptureManager()
-        self.cameraCapture = CameraManager()
+        self.cameraCaptures = [:]
         self.audioCapture = AudioManager()
         self.compositor = try CompositorManager()
         self.encoder = VideoEncoder()
@@ -69,12 +81,6 @@ public final class RecordingSession: Sendable {
             Task {
                 await self?.processFrameSync(screen: screenBuffer)
             }
-        }
-
-        // Wire up camera capture
-        cameraCapture.onFrame = { @Sendable [weak self] cameraBuffer in
-            // Store latest camera frame immediately
-            self?.latestCameraBuffer = cameraBuffer
         }
 
         // Wire up audio capture
@@ -104,7 +110,7 @@ public final class RecordingSession: Sendable {
         try screenCapture.startCapture()
 
         if enableCamera {
-            try? cameraCapture.startCapture()
+            try startCameraCapturesIfNeeded()
         }
 
         if enableMicrophone {
@@ -119,7 +125,7 @@ public final class RecordingSession: Sendable {
     public func stopRecording() async throws -> URL {
         // Stop captures
         screenCapture.stopCapture()
-        cameraCapture.stopCapture()
+        stopCameraCaptures()
         audioCapture.stopCapture()
 
         // Finish encoding
@@ -156,14 +162,16 @@ public final class RecordingSession: Sendable {
         return true
     }
 
-    nonisolated(unsafe) private var latestCameraBuffer: CMSampleBuffer?
+    nonisolated(unsafe) private var latestCameraBuffers: [String: CMSampleBuffer] = [:]
 
     private nonisolated func processFrameSync(screen screenBuffer: CMSampleBuffer) async {
         guard encoder.isRecording else { return }
 
-        // Composite with camera if enabled
-        let cameraBuffer = enableCamera ? latestCameraBuffer : nil
-        guard let composited = compositor.composite(screen: screenBuffer, camera: cameraBuffer) else {
+        let cameraLayers = await MainActor.run { self.cameraLayersForComposition() }
+        guard let composited = compositor.composite(
+            screen: screenBuffer,
+            cameraLayers: cameraLayers
+        ) else {
             return
         }
 
@@ -196,9 +204,21 @@ public final class RecordingSession: Sendable {
         return AudioManager.availableMicrophones()
     }
 
-    /// Get camera preview session
-    public func getCameraPreview() -> AVCaptureSession {
-        return cameraCapture.getPreviewSession()
+    /// Get camera preview session (first active camera if available)
+    public func getCameraPreview() -> AVCaptureSession? {
+        return cameraCaptures.values.first?.getPreviewSession()
+    }
+
+    /// Starts camera capture purely for preview purposes (no recording).
+    public func startCameraPreview(for identifiers: [String]) throws {
+        cameraSourceIdentifiers = Array(identifiers.prefix(MultiCameraLayout.maxSupportedSources))
+        enableCamera = true
+        try startCameraCapturesIfNeeded()
+    }
+
+    /// Stops any preview camera capture sessions.
+    public func stopCameraPreview() {
+        stopCameraCaptures()
     }
 
     // MARK: - Streaming
@@ -228,5 +248,188 @@ public final class RecordingSession: Sendable {
             }
             return false
         }
+    }
+
+    // MARK: - Camera Management
+
+    public func setCameraSources(_ identifiers: [String]) {
+        cameraSourceIdentifiers = Array(identifiers.prefix(MultiCameraLayout.maxSupportedSources))
+    }
+
+    private func startCameraCapturesIfNeeded() throws {
+        stopCameraCaptures()
+
+        let identifiers = effectiveCameraIdentifiers()
+        guard enableCamera, !identifiers.isEmpty else { return }
+
+        for identifier in identifiers {
+            if remoteCameraIdentifiers.contains(identifier) {
+                // Remote feeds push frames asynchronously; no local capture session needed.
+                continue
+            }
+            let manager = CameraManager()
+            manager.onFrame = { [weak self] buffer in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.latestCameraBuffers[identifier] = buffer
+                    self.dispatchPreview(for: identifier, buffer: buffer)
+                }
+            }
+            cameraCaptures[identifier] = manager
+            do {
+                try manager.startCapture(with: identifier)
+            } catch {
+                print("⚠️ Failed to start camera \(identifier): \(error)")
+            }
+        }
+    }
+
+    private func effectiveCameraIdentifiers() -> [String] {
+        if !cameraSourceIdentifiers.isEmpty {
+            return Array(cameraSourceIdentifiers.prefix(MultiCameraLayout.maxSupportedSources))
+        }
+
+        if let fallback = CameraManager.defaultCameraIdentifier() {
+            return [fallback]
+        }
+
+        return []
+    }
+
+    private func stopCameraCaptures() {
+        for manager in cameraCaptures.values {
+            manager.stopCapture()
+        }
+        cameraCaptures.removeAll()
+        latestCameraBuffers.keys
+            .filter { !remoteCameraIdentifiers.contains($0) }
+            .forEach { latestCameraBuffers.removeValue(forKey: $0) }
+        latestCameraMetadata.keys
+            .filter { !remoteCameraIdentifiers.contains($0) }
+            .forEach { latestCameraMetadata.removeValue(forKey: $0) }
+    }
+
+    /// Allows external components to provide metadata updates for a camera feed.
+    public func updateCameraMetadata(_ event: CameraMetadataEvent) {
+        latestCameraMetadata[event.sourceID] = event.metadata
+        metadataHandler?(event)
+    }
+
+    /// Returns the last metadata value received for a particular camera.
+    public func metadata(forCamera id: String) -> CameraMetadata? {
+        latestCameraMetadata[id]
+    }
+
+    /// Listens for remote camera connections over TCP and advertises via Bonjour.
+    /// Uses a dynamic port (0) by default to avoid conflicts. The actual port is advertised via Bonjour.
+    public func enableRemoteCameraBridge(port: UInt16 = 0, serviceName: String? = nil) throws {
+        if remoteCameraServer != nil {
+            return
+        }
+        let server = RemoteCameraServer()
+        server.delegate = self
+        try server.start(port: port, serviceName: serviceName)
+        remoteCameraServer = server
+    }
+
+    private func registerRemoteCamera(identifier: String) {
+        if !remoteCameraIdentifiers.contains(identifier) {
+            remoteCameraIdentifiers.insert(identifier)
+        }
+    }
+
+    private func dispatchPreview(for identifier: String, buffer: CMSampleBuffer) {
+        guard let handler = previewHandler,
+              let pixelBuffer = CMSampleBufferGetImageBuffer(buffer)
+        else {
+            return
+        }
+
+        var cgImage: CGImage?
+        let status = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
+
+        if status == noErr, let cgImage {
+            handler(CameraPreviewEvent(sourceID: identifier, image: cgImage))
+        }
+    }
+
+    private func cameraLayersForComposition() -> [CompositorManager.CameraLayer] {
+        guard enableCamera else { return [] }
+
+        let orderedIdentifiers = cameraSourceIdentifiers.isEmpty
+            ? Array(latestCameraBuffers.keys)
+            : cameraSourceIdentifiers
+
+        return orderedIdentifiers.enumerated().compactMap { index, identifier in
+            guard let buffer = latestCameraBuffers[identifier] else { return nil }
+            let placement = placementForCamera(at: index, total: max(orderedIdentifiers.count, 1))
+            return CompositorManager.CameraLayer(id: identifier, buffer: buffer, position: placement)
+        }
+    }
+
+    private func placementForCamera(at index: Int, total: Int) -> PiPPosition {
+        if total <= 1 {
+            return pipPosition
+        }
+
+        if case .grid = cameraLayoutStrategy {
+            let ordered = [PiPPosition.topLeft, .topRight, .bottomLeft, .bottomRight]
+            return ordered[index % ordered.count]
+        }
+
+        let ordered = [pipPosition] + PiPPosition.allCases.filter { $0 != pipPosition }
+        return ordered[index % ordered.count]
+    }
+}
+
+// MARK: - Remote Camera Delegate
+
+@MainActor
+extension RecordingSession: RemoteCameraServerDelegate {
+    public func remoteCameraServer(_: RemoteCameraServer, didReceiveFrame buffer: CMSampleBuffer, sourceID: String) {
+        registerRemoteCamera(identifier: sourceID)
+        latestCameraBuffers[sourceID] = buffer
+        dispatchPreview(for: sourceID, buffer: buffer)
+    }
+
+    public func remoteCameraServer(_: RemoteCameraServer, didReceive metadata: CameraMetadataEvent) {
+        registerRemoteCamera(identifier: metadata.sourceID)
+        updateCameraMetadata(metadata)
+    }
+
+    public func remoteCameraServer(_: RemoteCameraServer, didUpdateSources sources: [String]) {
+        remoteCameraIdentifiers = Set(sources)
+
+        // Remove stale buffers/metadata for disconnected sources
+        let activeRemoteSources = remoteCameraIdentifiers
+        latestCameraBuffers.keys
+            .filter { !activeRemoteSources.contains($0) && cameraCaptures[$0] == nil }
+            .forEach { latestCameraBuffers.removeValue(forKey: $0) }
+
+        latestCameraMetadata.keys
+            .filter { !activeRemoteSources.contains($0) && cameraCaptures[$0] == nil }
+            .forEach { latestCameraMetadata.removeValue(forKey: $0) }
+
+        remoteSourcesHandler?(Array(remoteCameraIdentifiers).sorted())
+    }
+}
+#endif
+
+public enum MultiCameraLayout: String, CaseIterable, Identifiable, Sendable {
+    case pictureInPicture = "Picture in Picture"
+    case grid = "Grid"
+
+    public var id: String { rawValue }
+
+    public static let maxSupportedSources = 4
+}
+
+public struct CameraPreviewEvent: Sendable {
+    public let sourceID: String
+    public let image: CGImage
+
+    public init(sourceID: String, image: CGImage) {
+        self.sourceID = sourceID
+        self.image = image
     }
 }

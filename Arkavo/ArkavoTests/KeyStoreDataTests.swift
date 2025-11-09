@@ -82,7 +82,7 @@ final class KeyStoreDataTests: XCTestCase {
     var keyStoreData: KeyStoreData!
     var mockProfile: Profile!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
 
         // Create a mock profile

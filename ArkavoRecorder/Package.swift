@@ -14,13 +14,15 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(path: "../ArkavoStreaming")
+        .package(path: "../ArkavoStreaming"),
+        .package(path: "../ArkavoRecorderShared")
     ],
     targets: [
         .target(
             name: "ArkavoRecorder",
             dependencies: [
-                .product(name: "ArkavoStreaming", package: "ArkavoStreaming")
+                .product(name: "ArkavoStreaming", package: "ArkavoStreaming"),
+                .product(name: "ArkavoRecorderShared", package: "ArkavoRecorderShared")
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency")

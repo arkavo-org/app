@@ -236,6 +236,9 @@
     "Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account." : {
 
     },
+    "ARKit Mode" : {
+
+    },
     "Assurance" : {
 
     },
@@ -276,6 +279,9 @@
 
     },
     "Blurb: %@" : {
+
+    },
+    "Body" : {
 
     },
     "Broadcast" : {
@@ -354,6 +360,9 @@
     "Connecting..." : {
 
     },
+    "Connection Error" : {
+
+    },
     "Connection Failed" : {
 
     },
@@ -396,6 +405,9 @@
     "Data mode" : {
 
     },
+    "Debug Info" : {
+
+    },
     "Delete" : {
 
     },
@@ -409,6 +421,9 @@
 
     },
     "Delete Video" : {
+
+    },
+    "Developer Mode" : {
 
     },
     "Disconnect" : {
@@ -427,6 +442,9 @@
 
     },
     "Discovered Devices (%lld)" : {
+
+    },
+    "Discovered Servers" : {
 
     },
     "Done" : {
@@ -641,6 +659,9 @@
     "logo" : {
 
     },
+    "Mac Hostname or IP" : {
+
+    },
     "Make sure an agent is running on your local network" : {
 
     },
@@ -648,6 +669,9 @@
 
     },
     "Make sure this is the person you want to connect with. They will receive a connection request." : {
+
+    },
+    "Manual Connection" : {
 
     },
     "Map" : {
@@ -671,6 +695,9 @@
 
     },
     "Military-grade encryption for your data" : {
+
+    },
+    "Mode" : {
 
     },
     "More Options" : {
@@ -785,6 +812,9 @@
           }
         }
       }
+    },
+    "Port" : {
+
     },
     "Post" : {
 
@@ -930,6 +960,9 @@
         }
       }
     },
+    "Scan via NFC" : {
+
+    },
     "Scanning for Devices..." : {
 
     },
@@ -1047,6 +1080,9 @@
         }
       }
     },
+    "Start Manual Stream" : {
+
+    },
     "Start New Chat" : {
 
     },
@@ -1057,6 +1093,12 @@
 
     },
     "Started: %@ ago" : {
+
+    },
+    "State: %@" : {
+
+    },
+    "Status: %@" : {
 
     },
     "Stop" : {
@@ -1071,6 +1113,9 @@
       }
     },
     "Stop Discovery" : {
+
+    },
+    "Stop Manual Stream" : {
 
     },
     "Stopped" : {
@@ -1099,6 +1144,9 @@
           }
         }
       }
+    },
+    "Stream to ArkavoCreator" : {
+
     },
     "Streaming" : {
 

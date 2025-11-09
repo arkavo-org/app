@@ -1,3 +1,4 @@
+#if os(macOS)
 @preconcurrency import AVFoundation
 import CoreGraphics
 #if canImport(AppKit)
@@ -150,13 +151,4 @@ public struct ScreenInfo: Sendable {
     public let bounds: CGRect
 }
 
-public enum RecorderError: Error, Sendable {
-    case screenCaptureUnavailable
-    case cameraUnavailable
-    case microphoneUnavailable
-    case cannotAddInput
-    case cannotAddOutput
-    case recordingFailed
-    case encodingFailed
-    case permissionDenied
-}
+#endif

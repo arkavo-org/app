@@ -210,7 +210,18 @@ public final class VideoEncoder: Sendable {
     /// Encodes an audio sample
     public nonisolated func encodeAudioSample(_ sampleBuffer: CMSampleBuffer) async {
         guard isRecording, !isPaused else { return }
-        guard let audioInput = audioInput else { return }
+        guard startTime != nil else {
+            // Wait until video session has started to keep A/V in sync
+            return
+        }
+        guard
+            let audioInput = audioInput,
+            let writer = assetWriter,
+            writer.status == .writing,
+            CMSampleBufferIsValid(sampleBuffer)
+        else {
+            return
+        }
 
         // Wait if input is not ready
         if !audioInput.isReadyForMoreMediaData {
@@ -226,7 +237,10 @@ public final class VideoEncoder: Sendable {
         }
 
         // Append audio sample to file
-        audioInput.append(adjustedBuffer)
+        if !audioInput.append(adjustedBuffer) {
+            print("⚠️ Audio input rejected sample buffer; dropping frame")
+            return
+        }
 
         // Also stream if streaming is active
         if isStreaming, let publisher = rtmpPublisher {

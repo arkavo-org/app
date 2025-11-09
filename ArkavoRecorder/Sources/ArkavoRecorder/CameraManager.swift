@@ -138,27 +138,65 @@ public final class CameraManager: NSObject, Sendable {
         }
     }
 
-    /// Returns available cameras
+    /// Returns available cameras, including Continuity Camera when available
     public static func availableCameras() -> [CameraInfo] {
         #if os(macOS) || os(iOS)
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [
+            var deviceTypes: [AVCaptureDevice.DeviceType] = [
                 .builtInWideAngleCamera,
                 .external
-            ],
-            mediaType: .video,
-            position: .unspecified
-        )
+            ]
 
-        return discoverySession.devices.map { device in
-            CameraInfo(
-                id: device.uniqueID,
-                name: device.localizedName,
-                position: device.position
+            if #available(macOS 14.0, iOS 17.0, *) {
+                deviceTypes.append(.continuityCamera)
+            }
+
+            let discoverySession = AVCaptureDevice.DiscoverySession(
+                deviceTypes: deviceTypes,
+                mediaType: .video,
+                position: .unspecified
             )
-        }
+
+            return discoverySession.devices.map { device in
+                CameraInfo(
+                    id: device.uniqueID,
+                    name: device.localizedName,
+                    position: device.position,
+                    transport: transport(for: device)
+                )
+            }
         #else
-        return []
+            return []
+        #endif
+    }
+
+    /// Returns the preferred built-in front camera identifier
+    public static func defaultCameraIdentifier() -> String? {
+        #if os(macOS) || os(iOS)
+            if let front = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) {
+                return front.uniqueID
+            }
+            if let any = AVCaptureDevice.default(for: .video) {
+                return any.uniqueID
+            }
+            return nil
+        #else
+            return nil
+        #endif
+    }
+
+    private static func transport(for device: AVCaptureDevice) -> CameraTransport {
+        #if os(macOS) || os(iOS)
+            if #available(macOS 14.0, iOS 17.0, *), device.deviceType == .continuityCamera {
+                return .continuity
+            }
+
+            if device.position == .unspecified {
+                return .external
+            }
+
+            return .builtIn
+        #else
+            return .unknown
         #endif
     }
 
@@ -188,6 +226,7 @@ public struct CameraInfo: Sendable, Identifiable {
     public let id: String
     public let name: String
     public let position: AVCaptureDevice.Position
+    public let transport: CameraTransport
 
     public var displayName: String {
         switch position {
@@ -197,6 +236,38 @@ public struct CameraInfo: Sendable, Identifiable {
             return "\(name) (Back)"
         default:
             return name
+        }
+    }
+}
+
+public enum CameraTransport: String, Sendable {
+    case builtIn
+    case continuity
+    case external
+    case usb
+    case bluetooth
+    case virtual
+    case remote
+    case unknown
+
+    public var displayName: String {
+        switch self {
+        case .builtIn:
+            return "Built-In"
+        case .continuity:
+            return "Continuity"
+        case .external:
+            return "External"
+        case .usb:
+            return "USB-C"
+        case .bluetooth:
+            return "Bluetooth"
+        case .virtual:
+            return "Virtual"
+        case .remote:
+            return "Remote"
+        case .unknown:
+            return "Unknown"
         }
     }
 }

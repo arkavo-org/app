@@ -5,6 +5,7 @@ struct StreamView: View {
     @State private var viewModel = StreamViewModel()
     @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
     @StateObject private var webViewPresenter = WebViewPresenter()
+    @ObservedObject private var previewStore = CameraPreviewStore.shared
 
     var body: some View {
         VStack(spacing: 24) {
@@ -15,6 +16,13 @@ struct StreamView: View {
             }
 
             Spacer()
+
+            CameraPreviewPanel(
+                title: "Camera Preview",
+                image: previewStore.image(for: viewModel.previewSourceID),
+                sourceLabel: viewModel.previewSourceID,
+                placeholderText: "Start a recording with remote camera to see preview"
+            )
 
             controlButton
 

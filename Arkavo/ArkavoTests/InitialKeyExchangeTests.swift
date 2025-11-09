@@ -6,8 +6,7 @@ import XCTest
 
 // MARK: - Mock P2PGroupViewModel for Initial Key Exchange
 
-@MainActor
-class MockP2PGroupViewModelForInitialExchange {
+class MockP2PGroupViewModelForInitialExchange: @unchecked Sendable {
     // Properties to track method calls
     var sendP2PMessageCalled = false
     var lastMessageType: P2PMessageType?
@@ -157,7 +156,7 @@ final class InitialKeyExchangeTests: XCTestCase {
     var initiatorProfile: Profile!
     var responderProfile: Profile!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
 
         // Create peer IDs
