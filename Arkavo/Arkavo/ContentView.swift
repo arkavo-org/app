@@ -41,6 +41,7 @@ enum Tab {
 struct ContentView: View {
     @EnvironmentObject var sharedState: SharedState
     @EnvironmentObject var agentService: AgentService
+    @EnvironmentObject var featureConfig: FeatureConfig
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
@@ -48,6 +49,26 @@ struct ContentView: View {
     @State private var timeOnScreen: TimeInterval = 0
     let tooltipTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
+
+    /// Compute available tabs based on enabled features
+    var availableTabs: [Tab] {
+        var tabs: [Tab] = [.home, .communities, .contacts]
+
+        // Only include agents tab if enabled
+        if featureConfig.isEnabled(.agents) {
+            tabs.append(.agents)
+        }
+
+        // Only include social tab if enabled and not in offline mode
+        if featureConfig.isEnabled(.social) && !sharedState.isOfflineMode {
+            tabs.append(.social)
+        }
+
+        // Profile is always available
+        tabs.append(.profile)
+
+        return tabs
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -140,7 +161,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 20) {
-                        ForEach([Tab.home, .communities, .contacts, .agents, .social, .profile], id: \.self) { tab in
+                        ForEach(availableTabs, id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
