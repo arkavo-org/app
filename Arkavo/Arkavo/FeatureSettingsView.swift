@@ -129,9 +129,8 @@ private struct FeatureToggle: View {
                     sharedState.selectedTab = .home
                 }
             } else {
-                // Re-enable social network
-                // Note: Will require app restart or manual reconnection
-                // TODO: Add reconnection logic
+                // Re-enable social network and attempt reconnection
+                NotificationCenter.default.post(name: .reconnectSocial, object: nil)
             }
 
         case .agents:

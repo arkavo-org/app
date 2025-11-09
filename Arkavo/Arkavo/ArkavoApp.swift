@@ -114,6 +114,11 @@ struct ArkavoApp: App {
                     handleIncomingURL(url)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .reconnectSocial)) { _ in
+                Task {
+                    await attemptSocialReconnection()
+                }
+            }
             .alert(item: $connectionError) { error in
                 Alert(
                     title: Text(error.title),
@@ -735,8 +740,11 @@ struct ArkavoApp: App {
 
             try await persistenceController.saveChanges()
 
+            // Capture feature state to avoid race conditions during async operations
+            let socialEnabled = featureConfig.isEnabled(.social)
+
             // Only attempt connection if social features are enabled
-            if featureConfig.isEnabled(.social) {
+            if socialEnabled {
                 // Try to connect, but proceed to main view even if connection fails
                 if KeychainManager.getAuthenticationToken() != nil {
                     do {
@@ -823,6 +831,41 @@ struct ArkavoApp: App {
         }
     }
 
+    /// Attempts to reconnect to social network when feature is re-enabled
+    func attemptSocialReconnection() async {
+        guard featureConfig.isEnabled(.social) else {
+            print("Social features not enabled, skipping reconnection")
+            return
+        }
+
+        guard case .disconnected = client.currentState else {
+            print("Already connected or connecting")
+            return
+        }
+
+        guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
+            print("No profile available for reconnection")
+            return
+        }
+
+        print("Attempting to reconnect to social network...")
+        do {
+            try await client.connect(accountName: profile.name)
+            print("✅ Successfully reconnected to social network")
+            sharedState.isOfflineMode = false
+            sharedState.nextAllowedAccountCheck = nil
+        } catch {
+            print("❌ Reconnection failed: \(error.localizedDescription)")
+            sharedState.isOfflineMode = true
+            connectionError = ConnectionError(
+                title: "Connection Failed",
+                message: "Unable to connect to social network. You can continue using offline features.",
+                action: "Try Again",
+                isBlocking: false
+            )
+        }
+    }
+
     // applinks
     func handleIncomingURL(_ url: URL) {
         print("Handling URL: \(url.absoluteString)") // Debug logging
@@ -893,6 +936,7 @@ extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
     static let retryConnection = Notification.Name("RetryConnection")
+    static let reconnectSocial = Notification.Name("ReconnectSocial")
 }
 
 @MainActor

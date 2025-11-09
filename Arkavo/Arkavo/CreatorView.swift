@@ -181,8 +181,30 @@ struct CreatorDetailView: View {
                 .padding(.horizontal)
 
                 if viewModel.isProfileOwner {
-                    BlockedUsersSection(viewModel: viewModel)
-                        .padding(.top)
+                    VStack(spacing: 16) {
+                        // Feature Settings Link
+                        NavigationLink(destination: FeatureSettingsView()) {
+                            HStack {
+                                Image(systemName: "gearshape")
+                                    .foregroundColor(.blue)
+                                Text("Feature Settings")
+                                    .font(.headline)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(12)
+                            .shadow(radius: 2)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal)
+
+                        BlockedUsersSection(viewModel: viewModel)
+                    }
+                    .padding(.top)
                 }
 
                 contentSection
