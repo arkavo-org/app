@@ -13,6 +13,7 @@ struct ArkavoApp: App {
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
     @StateObject private var agentService = AgentService()
+    @StateObject private var featureConfig = FeatureConfig.shared
     // BEGIN screenshots
 //    @StateObject private var windowAccessor = WindowAccessor.shared
 //    @State private var screenshotGenerator: AppStoreScreenshotGenerator?
@@ -28,6 +29,8 @@ struct ArkavoApp: App {
     }
 
     init() {
+        // Note: ArkavoClient is always initialized for encryption primitives (used by P2P),
+        // but network connection only happens when social features are enabled
         client = ArkavoClient(
             authURL: URL(string: "https://webauthn.arkavo.net")!,
             websocketURL: URL(string: "wss://100.arkavo.net")!,
@@ -81,6 +84,7 @@ struct ArkavoApp: App {
             .environmentObject(sharedState)
             .environmentObject(messageRouter)
             .environmentObject(agentService)
+            .environmentObject(featureConfig)
             .modelContainer(persistenceController.container)
             .onAppear {
                 // Update the shared state reference now that the StateObject is properly installed
@@ -108,6 +112,11 @@ struct ArkavoApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .handleIncomingURL)) { notification in
                 if let url = notification.object as? URL {
                     handleIncomingURL(url)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .reconnectSocial)) { _ in
+                Task {
+                    await attemptSocialReconnection()
                 }
             }
             .alert(item: $connectionError) { error in
@@ -731,53 +740,62 @@ struct ArkavoApp: App {
 
             try await persistenceController.saveChanges()
 
-            // Try to connect, but proceed to main view even if connection fails
-            if KeychainManager.getAuthenticationToken() != nil {
-                do {
-                    print("Attempting connection with existing token")
-                    try await client.connect(accountName: profile.name)
-                    print("checkAccountStatus: Connected with existing token")
-                    sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
-                } catch {
-                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
-                    // Allow the app to function without network features
-                    sharedState.isOfflineMode = true
-                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
-                }
-            } else {
-                do {
-                    print("Attempting fresh connection")
-                    try await client.connect(accountName: profile.name)
-                    print("checkAccountStatus: Connected with fresh connection")
-                    sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
-                } catch let error as ArkavoError {
-                    if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
-                        // User exists locally but not on server, go to registration
-                        print("User exists locally but not on server - routing to registration")
+            // Capture feature state to avoid race conditions during async operations
+            let socialEnabled = featureConfig.isEnabled(.social)
 
-                        // Clear the invalid account data
-                        KeychainManager.deleteAuthenticationToken()
-
-                        // Reset account state so registration can create a new one
-                        account.profile = nil
-                        try? await persistenceController.saveChanges()
-
-                        // Route to registration
-                        selectedView = .registration
-                        ViewModelFactory.shared.clearAccount()
-                        return
-                    } else {
+            // Only attempt connection if social features are enabled
+            if socialEnabled {
+                // Try to connect, but proceed to main view even if connection fails
+                if KeychainManager.getAuthenticationToken() != nil {
+                    do {
+                        print("Attempting connection with existing token")
+                        try await client.connect(accountName: profile.name)
+                        print("checkAccountStatus: Connected with existing token")
+                        sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
+                    } catch {
                         print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                         // Allow the app to function without network features
                         sharedState.isOfflineMode = true
                         sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
                     }
-                } catch {
-                    print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
-                    // Allow the app to function without network features
-                    sharedState.isOfflineMode = true
-                    sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
+                } else {
+                    do {
+                        print("Attempting fresh connection")
+                        try await client.connect(accountName: profile.name)
+                        print("checkAccountStatus: Connected with fresh connection")
+                        sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
+                    } catch let error as ArkavoError {
+                        if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
+                            // User exists locally but not on server, go to registration
+                            print("User exists locally but not on server - routing to registration")
+
+                            // Clear the invalid account data
+                            KeychainManager.deleteAuthenticationToken()
+
+                            // Reset account state so registration can create a new one
+                            account.profile = nil
+                            try? await persistenceController.saveChanges()
+
+                            // Route to registration
+                            selectedView = .registration
+                            ViewModelFactory.shared.clearAccount()
+                            return
+                        } else {
+                            print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                            // Allow the app to function without network features
+                            sharedState.isOfflineMode = true
+                            sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
+                        }
+                    } catch {
+                        print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
+                        // Allow the app to function without network features
+                        sharedState.isOfflineMode = true
+                        sharedState.nextAllowedAccountCheck = Date().addingTimeInterval(ConnectionRetry.backoffInterval)
+                    }
                 }
+            } else {
+                print("Social features disabled - running in offline mode")
+                sharedState.isOfflineMode = true
             }
 
             // Proceed to main view regardless of connection status
@@ -810,6 +828,41 @@ struct ArkavoApp: App {
                     selectedView = .registration
                 }
             }
+        }
+    }
+
+    /// Attempts to reconnect to social network when feature is re-enabled
+    func attemptSocialReconnection() async {
+        guard featureConfig.isEnabled(.social) else {
+            print("Social features not enabled, skipping reconnection")
+            return
+        }
+
+        guard case .disconnected = client.currentState else {
+            print("Already connected or connecting")
+            return
+        }
+
+        guard let profile = ViewModelFactory.shared.getCurrentProfile() else {
+            print("No profile available for reconnection")
+            return
+        }
+
+        print("Attempting to reconnect to social network...")
+        do {
+            try await client.connect(accountName: profile.name)
+            print("✅ Successfully reconnected to social network")
+            sharedState.isOfflineMode = false
+            sharedState.nextAllowedAccountCheck = nil
+        } catch {
+            print("❌ Reconnection failed: \(error.localizedDescription)")
+            sharedState.isOfflineMode = true
+            connectionError = ConnectionError(
+                title: "Connection Failed",
+                message: "Unable to connect to social network. You can continue using offline features.",
+                action: "Try Again",
+                isBlocking: false
+            )
         }
     }
 
@@ -883,6 +936,7 @@ extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
     static let retryConnection = Notification.Name("RetryConnection")
+    static let reconnectSocial = Notification.Name("ReconnectSocial")
 }
 
 @MainActor

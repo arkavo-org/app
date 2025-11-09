@@ -41,6 +41,7 @@ enum Tab {
 struct ContentView: View {
     @EnvironmentObject var sharedState: SharedState
     @EnvironmentObject var agentService: AgentService
+    @EnvironmentObject var featureConfig: FeatureConfig
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
@@ -48,6 +49,29 @@ struct ContentView: View {
     @State private var timeOnScreen: TimeInterval = 0
     let tooltipTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
+
+    /// Cached available tabs (updated when features or offline mode changes)
+    @State private var cachedAvailableTabs: [Tab] = [.home, .communities, .contacts, .profile]
+
+    /// Compute available tabs based on enabled features
+    private func computeAvailableTabs() -> [Tab] {
+        var tabs: [Tab] = [.home, .communities, .contacts]
+
+        // Only include agents tab if enabled
+        if featureConfig.isEnabled(.agents) {
+            tabs.append(.agents)
+        }
+
+        // Only include social tab if enabled and not in offline mode
+        if featureConfig.isEnabled(.social) && !sharedState.isOfflineMode {
+            tabs.append(.social)
+        }
+
+        // Profile is always available
+        tabs.append(.profile)
+
+        return tabs
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -140,7 +164,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 20) {
-                        ForEach([Tab.home, .communities, .contacts, .agents, .social, .profile], id: \.self) { tab in
+                        ForEach(cachedAvailableTabs, id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -227,6 +251,18 @@ struct ContentView: View {
                     showTooltip = false
                 }
             }
+        }
+        // Update cached tabs when offline mode changes
+        .onChange(of: sharedState.isOfflineMode) { _, _ in
+            cachedAvailableTabs = computeAvailableTabs()
+        }
+        // Update cached tabs when enabled features change
+        .onChange(of: featureConfig.enabledFeatures) { _, _ in
+            cachedAvailableTabs = computeAvailableTabs()
+        }
+        .onAppear {
+            // Initialize cached tabs on first appearance
+            cachedAvailableTabs = computeAvailableTabs()
         }
     }
 
