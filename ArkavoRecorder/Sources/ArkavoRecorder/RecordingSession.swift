@@ -312,6 +312,7 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
     /// Allows external components to provide metadata updates for a camera feed.
     public func updateCameraMetadata(_ event: CameraMetadataEvent) {
         latestCameraMetadata[event.sourceID] = event.metadata
+        print("🔔 [RecordingSession] Posting metadata notification for \(event.sourceID)")
         metadataHandler?(event)
     }
 
@@ -393,8 +394,10 @@ extension RecordingSession: RemoteCameraServerDelegate {
     }
 
     public func remoteCameraServer(_: RemoteCameraServer, didReceive metadata: CameraMetadataEvent) {
+        print("📥 [RecordingSession] Received metadata from remote camera: \(metadata.sourceID)")
         registerRemoteCamera(identifier: metadata.sourceID)
         updateCameraMetadata(metadata)
+        print("   └─ Metadata forwarded to handler")
     }
 
     public func remoteCameraServer(_: RemoteCameraServer, didUpdateSources sources: [String]) {

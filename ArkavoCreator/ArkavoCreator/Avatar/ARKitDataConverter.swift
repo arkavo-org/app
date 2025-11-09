@@ -49,9 +49,13 @@ enum ARKitDataConverter {
     /// - Returns: ARKit blend shapes, or nil if not face tracking metadata
     static func toARKitFaceBlendShapes(_ event: CameraMetadataEvent) -> ARKitFaceBlendShapes? {
         guard case let .arFace(faceMetadata) = event.metadata else {
+            print("🔄 [ARKitDataConverter] Event metadata is not .arFace, returning nil")
             return nil
         }
-        return toARKitFaceBlendShapes(faceMetadata, timestamp: event.timestamp)
+        print("🔄 [ARKitDataConverter] Converting face metadata with \(faceMetadata.blendShapes.count) blend shapes")
+        let result = toARKitFaceBlendShapes(faceMetadata, timestamp: event.timestamp)
+        print("   └─ Converted to ARKitFaceBlendShapes with \(result.shapes.count) shapes")
+        return result
     }
 
     // MARK: - Body Tracking Conversion

@@ -286,9 +286,11 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
             let elapsed = Date().timeIntervalSince(startTime)
 
             if !discoveredServers.isEmpty {
-                let server = discoveredServers[0]
+                // Prefer .local hostnames over IP addresses (better for mDNS resolution)
+                let server = discoveredServers.first(where: { $0.host.hasSuffix(".local") }) ?? discoveredServers[0]
                 print("✅ [Discovery] Found \(discoveredServers.count) server(s) after \(String(format: "%.1f", elapsed))s")
                 print("📍 [Discovery] Connecting to: \(server.name) (\(server.host):\(server.port))")
+                print("   └─ Preferred .local hostname: \(server.host.hasSuffix(".local"))")
                 saveLastConnectedMac(server)
                 return server
             }
@@ -500,7 +502,9 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
     private func sendMetadata(_ metadata: CameraMetadata) {
         let event = CameraMetadataEvent(sourceID: sourceID, metadata: metadata)
+        print("📨 [RemoteCameraStreamer] Encoding metadata message for sourceID: \(sourceID)")
         send(message: .metadata(event))
+        print("   └─ Metadata message queued for send")
     }
 
     private func makeFramePayload(buffer: CVPixelBuffer, timestamp: CMTime) -> RemoteCameraMessage.FramePayload? {
@@ -528,6 +532,10 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         var normalized: [String: Float] = [:]
         for (key, value) in blendShapes {
             normalized[key.rawValue] = value.floatValue
+        }
+        print("📤 [RemoteCameraStreamer] Sending face metadata: \(normalized.count) blend shapes")
+        if let firstShape = normalized.first {
+            print("   └─ Sample: \(firstShape.key) = \(String(format: "%.3f", firstShape.value))")
         }
         let face = ARFaceMetadata(blendShapes: normalized, trackingState: currentTrackingState)
         sendMetadata(.arFace(face))
@@ -657,9 +665,13 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
         sendFrame(buffer: buffer, timestamp: timestamp)
 
         if let blendShapes = metadata.blendShapes {
+            print("🎭 [RemoteCameraStreamer] ARKit frame received with \(blendShapes.count) blend shapes")
             sendFaceMetadata(blendShapes: blendShapes)
         } else if let skeleton = metadata.bodySkeleton {
+            print("🚶 [RemoteCameraStreamer] ARKit frame received with body skeleton")
             sendBodyMetadata(skeleton)
+        } else {
+            print("⚠️ [RemoteCameraStreamer] ARKit frame received but NO metadata (no face/body detected)")
         }
     }
 

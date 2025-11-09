@@ -29,6 +29,15 @@ class VRMAvatarRenderer: NSObject {
 
     private(set) var isLoaded = false
     private(set) var error: Error?
+    private var updateCount = 0  // For logging control
+
+    // Idle animation state
+    private var idleAnimationTimer: Timer?
+    private var breathingPhase: Float = 0
+    private var nextBlinkTime: TimeInterval = 0
+    private var isBlinking = false
+    private var faceTrackingActive = false
+    private var lastFaceTrackingTime: TimeInterval = 0
 
     // MARK: - Initialization
 
@@ -78,11 +87,146 @@ class VRMAvatarRenderer: NSObject {
             print("[VRMAvatarRenderer] Model loaded into renderer")
 
             isLoaded = true
+
+            // Perform visual self-check (async to allow rendering)
+            Task { @MainActor in
+                await performVisualSelfCheck(model: vrmModel)
+                startIdleAnimation()
+            }
         } catch {
             print("[VRMAvatarRenderer] Failed to load model: \(error)")
             self.error = error
             isLoaded = false
             throw error
+        }
+    }
+
+    // MARK: - Self-Check Validation
+
+    /// Performs a visual self-check by animating through expressions
+    private func performVisualSelfCheck(model: VRMModel) async {
+        print("\n🎬 [Visual Self-Check] Starting expression animation test...")
+
+        guard let expressionController else {
+            print("❌ [Visual Self-Check] No expression controller available")
+            return
+        }
+
+        guard let expressions = model.expressions else {
+            print("❌ [Visual Self-Check] Model has no expressions defined")
+            return
+        }
+
+        // Report available expressions
+        print("📋 [Visual Self-Check] Model has \(expressions.preset.count) preset expressions")
+
+        // Test key expressions with visible animation
+        let testExpressions: [(VRMExpressionPreset, String, TimeInterval)] = [
+            (.neutral, "Neutral", 0.5),
+            (.happy, "Happy/Smile", 1.0),
+            (.neutral, "Neutral", 0.3),
+            (.blink, "Blink", 0.3),
+            (.neutral, "Neutral", 0.3),
+            (.aa, "Mouth Open", 0.8),
+            (.neutral, "Neutral", 0.3),
+            (.angry, "Angry", 0.8),
+            (.neutral, "Neutral", 0.3),
+            (.sad, "Sad", 0.8),
+            (.neutral, "Neutral", 0.5)
+        ]
+
+        print("\n🔬 [Visual Self-Check] Animating expressions (watch the avatar!)...")
+
+        for (preset, name, duration) in testExpressions {
+            if expressions.preset[preset] != nil {
+                // Animate to the expression
+                expressionController.setExpressionWeight(preset, weight: 1.0)
+                print("   → \(name)")
+
+                // Hold the expression
+                try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+
+                // Reset to neutral
+                expressionController.setExpressionWeight(preset, weight: 0.0)
+            }
+        }
+
+        // Report ARKit compatibility
+        let arkitMappedExpressions: [VRMExpressionPreset] = [
+            .happy, .angry, .sad, .surprised, .blink,
+            .aa, .ih, .ou, .ee, .oh
+        ]
+
+        let available = arkitMappedExpressions.filter { expressions.preset[$0] != nil }
+        let coverage = Float(available.count) / Float(arkitMappedExpressions.count) * 100
+
+        print("\n🎭 [Visual Self-Check] ARKit face tracking compatibility:")
+        print("   📊 Expression coverage: \(available.count)/\(arkitMappedExpressions.count) (\(String(format: "%.0f", coverage))%)")
+
+        if coverage >= 80 {
+            print("   ✨ Excellent - full face tracking support")
+        } else if coverage >= 50 {
+            print("   ⚡ Good - most expressions will work")
+        } else {
+            print("   ⚠️  Limited - some expressions missing")
+        }
+
+        print("\n✅ [Visual Self-Check] Complete - starting idle animation\n")
+    }
+
+    // MARK: - Idle Animation
+
+    private func startIdleAnimation() {
+        stopIdleAnimation()
+
+        print("💤 [Idle Animation] Starting breathing and blink animation")
+
+        nextBlinkTime = CACurrentMediaTime() + Double.random(in: 2.0...5.0)
+
+        idleAnimationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.updateIdleAnimation()
+            }
+        }
+    }
+
+    private func stopIdleAnimation() {
+        idleAnimationTimer?.invalidate()
+        idleAnimationTimer = nil
+    }
+
+    private func updateIdleAnimation() {
+        guard let expressionController else { return }
+
+        // Don't animate if face tracking is active
+        let now = CACurrentMediaTime()
+        if faceTrackingActive && (now - lastFaceTrackingTime) < 0.5 {
+            return
+        }
+
+        // Breathing animation (subtle mouth movement)
+        breathingPhase += 0.05
+        let breathWeight = (sin(breathingPhase) + 1.0) * 0.02  // Very subtle 0-4% mouth open
+        expressionController.setExpressionWeight(.aa, weight: breathWeight)
+
+        // Blink animation
+        if now >= nextBlinkTime {
+            if !isBlinking {
+                // Start blink
+                isBlinking = true
+                expressionController.setExpressionWeight(.blink, weight: 1.0)
+
+                // Schedule blink end
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                    guard let self else { return }
+                    self.expressionController?.setExpressionWeight(.blink, weight: 0.0)
+                    self.isBlinking = false
+                }
+
+                // Schedule next blink
+                nextBlinkTime = now + Double.random(in: 2.0...6.0)
+            }
         }
     }
 
@@ -214,7 +358,23 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         sources: [ARFaceSource],
         priority: SourcePriorityStrategy = .latestActive
     ) {
-        guard let expressionController else { return }
+        guard let expressionController else {
+            if updateCount == 0 {
+                print("   ❌ [VRMAvatarRenderer] No expression controller, cannot apply face tracking")
+            }
+            return
+        }
+
+        // Log available expressions in the model (only once, not every frame)
+        if let model = model, let expressions = model.expressions, updateCount == 0 {
+            print("🎨 [VRMAvatarRenderer] First face tracking update - model has \(expressions.preset.count) expression presets")
+            print("   💤 [VRMAvatarRenderer] Pausing idle animation for live face tracking")
+            updateCount += 1
+        }
+
+        // Mark face tracking as active (pauses idle animation)
+        faceTrackingActive = true
+        lastFaceTrackingTime = CACurrentMediaTime()
 
         // Use ARKitFaceDriver with multi-source support
         faceDriver.update(

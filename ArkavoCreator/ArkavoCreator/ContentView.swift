@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - Main Content View
 
 struct ContentView: View {
-    @State private var selectedSection: NavigationSection = .dashboard
+    @State private var selectedSection: NavigationSection = UserDefaults.standard.loadSelectedTab()
     @StateObject private var appState = AppState()
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
@@ -86,12 +86,15 @@ struct ContentView: View {
             }
         }
         .environmentObject(appState)
+        .onChange(of: selectedSection) { _, newValue in
+            UserDefaults.standard.saveSelectedTab(newValue)
+        }
     }
 }
 
 // MARK: - Navigation Section Updates
 
-enum NavigationSection: String, CaseIterable {
+enum NavigationSection: String, CaseIterable, Codable {
     case dashboard = "Dashboard"
     case record = "Record"
     case stream = "Stream"
@@ -768,5 +771,26 @@ struct SettingsContent: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - UserDefaults Extension for Tab Persistence
+
+extension UserDefaults {
+    private static let selectedTabKey = "ArkavoCreator.SelectedTab"
+
+    func saveSelectedTab(_ section: NavigationSection) {
+        if let encoded = try? JSONEncoder().encode(section) {
+            set(encoded, forKey: Self.selectedTabKey)
+        }
+    }
+
+    func loadSelectedTab() -> NavigationSection {
+        guard let data = data(forKey: Self.selectedTabKey),
+              let section = try? JSONDecoder().decode(NavigationSection.self, from: data)
+        else {
+            return .dashboard // Default to dashboard if no saved tab
+        }
+        return section
     }
 }

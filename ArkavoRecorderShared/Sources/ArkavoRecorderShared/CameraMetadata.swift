@@ -105,4 +105,31 @@ public struct CameraMetadataEvent: Sendable, Codable {
         self.metadata = metadata
         self.timestamp = timestamp
     }
+
+    // MARK: - Codable
+
+    enum CodingKeys: String, CodingKey {
+        case sourceID
+        case metadata
+        case timestamp
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceID = try container.decode(String.self, forKey: .sourceID)
+        metadata = try container.decode(CameraMetadata.self, forKey: .metadata)
+
+        // Decode timestamp as Double (timeIntervalSinceReferenceDate)
+        let timestampValue = try container.decode(Double.self, forKey: .timestamp)
+        timestamp = Date(timeIntervalSinceReferenceDate: timestampValue)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sourceID, forKey: .sourceID)
+        try container.encode(metadata, forKey: .metadata)
+
+        // Encode timestamp as Double (timeIntervalSinceReferenceDate)
+        try container.encode(timestamp.timeIntervalSinceReferenceDate, forKey: .timestamp)
+    }
 }

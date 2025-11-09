@@ -122,33 +122,77 @@ class AvatarViewModel: ObservableObject {
 
     // MARK: - Multi-Source Management
 
+    private var logFrameCount = 0  // For throttling logs
+
     /// Handle camera metadata event with multi-source support
     ///
     /// This method manages multiple camera sources (e.g., iPhone + iPad)
     /// and uses the ARFaceSource infrastructure for proper multi-source handling.
     private func handleMetadataEvent(_ event: CameraMetadataEvent) {
+        let shouldLog = logFrameCount % 30 == 0  // Log every 30th frame (~1 per second at 30fps)
+        logFrameCount += 1
+
+        if shouldLog {
+            print("🎭 [AvatarViewModel] handleMetadataEvent called for source: \(event.sourceID)")
+        }
+
         guard case let .arFace(faceMetadata) = event.metadata else {
-            print("[AvatarViewModel] Received non-face metadata, ignoring")
+            if shouldLog {
+                print("   ❌ [AvatarViewModel] Received non-face metadata, ignoring")
+            }
             return
         }
 
-        print("[AvatarViewModel] Received face metadata from source: \(event.sourceID.prefix(8))")
+        if shouldLog {
+            print("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
+        }
 
         // Get or create source for this camera
         let source = getOrCreateSource(for: event.sourceID)
+        if shouldLog {
+            print("   📍 [AvatarViewModel] Using source: \(source.sourceID)")
+        }
 
         // Convert and update source with new data
         let blendShapes = ARKitDataConverter.toARKitFaceBlendShapes(event)
         if let blendShapes {
             source.update(blendShapes: blendShapes)
-            print("[AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
+
+            if shouldLog {
+                print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
+
+                // Log key expression blend shapes for debugging
+                let eyeBlinkLeft = blendShapes.weight(for: "eyeBlinkLeft")
+                let eyeBlinkRight = blendShapes.weight(for: "eyeBlinkRight")
+                let mouthSmileLeft = blendShapes.weight(for: "mouthSmileLeft")
+                let mouthSmileRight = blendShapes.weight(for: "mouthSmileRight")
+                let browInnerUp = blendShapes.weight(for: "browInnerUp")
+                let browOuterUpLeft = blendShapes.weight(for: "browOuterUpLeft")
+                let browOuterUpRight = blendShapes.weight(for: "browOuterUpRight")
+                let jawOpen = blendShapes.weight(for: "jawOpen")
+
+                print("      └─ eyeBlinkL: \(String(format: "%.3f", eyeBlinkLeft)), eyeBlinkR: \(String(format: "%.3f", eyeBlinkRight))")
+                print("      └─ smileL: \(String(format: "%.3f", mouthSmileLeft)), smileR: \(String(format: "%.3f", mouthSmileRight))")
+                print("      └─ browInner: \(String(format: "%.3f", browInnerUp)), browOuter: \(String(format: "%.3f", (browOuterUpLeft + browOuterUpRight) / 2))")
+                print("      └─ jawOpen: \(String(format: "%.3f", jawOpen))")
+            }
+        } else {
+            if shouldLog {
+                print("   ❌ [AvatarViewModel] Failed to convert to ARKitFaceBlendShapes")
+            }
         }
 
         // Update renderer with all active sources
         let allSources = Array(faceSources.values)
         let activeSources = allSources.filter { $0.isActive }
-        print("[AvatarViewModel] Applying face tracking with \(activeSources.count) active sources")
+        if shouldLog {
+            print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
+            print("      └─ Renderer exists: \(renderer != nil)")
+        }
         renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+        if shouldLog {
+            print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
+        }
 
         // Update status based on active sources
         updateTrackingStatus(faceMetadata.trackingState, sourceID: event.sourceID)
