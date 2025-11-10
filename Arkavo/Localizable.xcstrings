@@ -236,9 +236,6 @@
     "Arkavo's moderation team will review reports within 24 hours and take appropriate action, including removing the content and addressing the user's account." : {
 
     },
-    "ARKit Mode" : {
-
-    },
     "Assurance" : {
 
     },
@@ -279,9 +276,6 @@
 
     },
     "Blurb: %@" : {
-
-    },
-    "Body" : {
 
     },
     "Broadcast" : {
@@ -457,6 +451,9 @@
         }
       }
     },
+    "Dual Device" : {
+
+    },
     "Effective Date: 2025-01-15" : {
 
     },
@@ -503,6 +500,9 @@
     "Face ID Terms & Conditions" : {
 
     },
+    "Face Only" : {
+
+    },
     "Failed to load image" : {
 
     },
@@ -516,6 +516,9 @@
 
     },
     "For security, confirm the device name with the person before connecting." : {
+
+    },
+    "Full Body" : {
 
     },
     "Go to the Profile page to create a local profile and start using Out-of-Band messaging." : {
@@ -701,6 +704,9 @@
 
     },
     "More Options" : {
+
+    },
+    "Mount iPhone on stand facing you (like webcam)" : {
 
     },
     "My Account" : {
@@ -1300,6 +1306,9 @@
       }
     },
     "Voice" : {
+
+    },
+    "VTuber Style" : {
 
     },
     "Welcome to Arkavo!" : {

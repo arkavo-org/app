@@ -432,12 +432,19 @@ final class RecordViewModel {
     }
 
     private func handleRemoteSourceUpdate(_ sources: [String]) {
+        let newSources = sources.sorted()
+
+        // Only process if sources actually changed
+        guard newSources != remoteCameraSources else {
+            return  // No change, skip processing
+        }
+
         print("📱 [RemoteCameras] Received source update: \(sources.count) source(s)")
         for source in sources {
             print("  └─ \(source)")
         }
 
-        remoteCameraSources = sources.sorted()
+        remoteCameraSources = newSources
 
         let availableIDs = Set(availableCameras.map(\.id)).union(remoteCameraSources)
         selectedCameraIDs.removeAll { !availableIDs.contains($0) }

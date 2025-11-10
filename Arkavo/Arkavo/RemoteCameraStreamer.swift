@@ -105,9 +105,20 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     @Published private(set) var autoDetectedMode: ARKitCaptureManager.Mode?
     @Published var host: String = ""
     @Published var port: String = "5757"
-    @Published var mode: ARKitCaptureManager.Mode = .face
+    @Published var mode: ARKitCaptureManager.Mode = .face {
+        didSet {
+            // Track that user manually changed the mode
+            if mode != oldValue {
+                hasManualModeSelection = true
+            }
+        }
+    }
     @Published private(set) var statusMessage: String = "Not connected"
     @Published private(set) var discoveredServers: [DiscoveredServer] = []
+
+    private var hasManualModeSelection = false
+    private var noDetectionFrameCount = 0
+    private var hasAutoSwitchedMode = false
 
     private var captureManager: ARKitCaptureManager?
     private var connection: NWConnection?
@@ -136,6 +147,8 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
             return "\(deviceName)-face"
         case .body:
             return "\(deviceName)-body"
+        case .combined:
+            return "\(deviceName)-combined"
         }
     }
 
@@ -193,11 +206,16 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
         connectionState = .connecting(host)
 
-        // Auto-detect best mode
-        let detectedMode = detectBestMode()
-        print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
-        self.mode = detectedMode
-        self.autoDetectedMode = detectedMode
+        // Only auto-detect if user hasn't manually selected a mode
+        if !hasManualModeSelection {
+            let detectedMode = detectBestMode()
+            print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
+            self.mode = detectedMode
+            self.autoDetectedMode = detectedMode
+        } else {
+            print("🎭 [Direct] Using manual mode selection: \(mode)")
+            self.autoDetectedMode = mode
+        }
 
         // Start ARKit capture and connection
         await startStreaming()
@@ -218,11 +236,16 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         print("✅ [SmartConnect] Found Mac: \(server.name) at \(server.host):\(server.port)")
         connectionState = .connecting(server.name)
 
-        // Auto-detect best mode
-        let detectedMode = detectBestMode()
-        print("🎭 [SmartConnect] Auto-detected mode: \(detectedMode)")
-        self.mode = detectedMode
-        self.autoDetectedMode = detectedMode
+        // Only auto-detect if user hasn't manually selected a mode
+        if !hasManualModeSelection {
+            let detectedMode = detectBestMode()
+            print("🎭 [SmartConnect] Auto-detected mode: \(detectedMode)")
+            self.mode = detectedMode
+            self.autoDetectedMode = detectedMode
+        } else {
+            print("🎭 [SmartConnect] Using manual mode selection: \(mode)")
+            self.autoDetectedMode = mode
+        }
 
         // Select server and connect
         selectServer(server)
@@ -246,17 +269,20 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     }
 
     private func detectBestMode() -> ARKitCaptureManager.Mode {
-        // Prefer face tracking if supported (TrueDepth camera)
         let faceSupported = ARKitCaptureManager.isSupported(.face)
         let bodySupported = ARKitCaptureManager.isSupported(.body)
 
-        print("📱 [ModeDetection] Face tracking: \(faceSupported ? "✅" : "❌"), Body tracking: \(bodySupported ? "✅" : "❌")")
+        print("📱 [ModeDetection] Face: \(faceSupported ? "✅" : "❌"), Body: \(bodySupported ? "✅" : "❌")")
 
+        // VTuber auto-detection: Default to face mode (most common use case)
+        // - Face mode: Front camera, expressions & lip sync, seated streaming
+        // - Body mode: Back camera, full skeleton, standing/walking (requires phone mount)
+        // - Combined mode: 2 devices, professional setup with face + body simultaneously
         if faceSupported {
-            print("🎭 [ModeDetection] Selected: Face tracking (preferred)")
+            print("🎭 [ModeDetection] Selected: Face tracking (seated vtuber style)")
             return .face
         } else if bodySupported {
-            print("🚶 [ModeDetection] Selected: Body tracking")
+            print("🦴 [ModeDetection] Selected: Body tracking (full-body vtuber style)")
             return .body
         }
         // Fallback to face even if not supported (error will be shown during connection)
@@ -664,14 +690,63 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
     ) {
         sendFrame(buffer: buffer, timestamp: timestamp)
 
-        if let blendShapes = metadata.blendShapes {
-            print("🎭 [RemoteCameraStreamer] ARKit frame received with \(blendShapes.count) blend shapes")
+        // In combined mode, send both face and body metadata when available
+        let hasFace = metadata.blendShapes != nil
+        let hasBody = metadata.bodySkeleton != nil
+
+        if hasFace && hasBody {
+            print("🎭🦴 [RemoteCameraStreamer] Combined tracking: face (\(metadata.blendShapes!.count) shapes) + body")
+            sendFaceMetadata(blendShapes: metadata.blendShapes!)
+            sendBodyMetadata(metadata.bodySkeleton!)
+            noDetectionFrameCount = 0  // Reset counter
+        } else if let blendShapes = metadata.blendShapes {
+            print("🎭 [RemoteCameraStreamer] Face tracking: \(blendShapes.count) blend shapes")
             sendFaceMetadata(blendShapes: blendShapes)
+            noDetectionFrameCount = 0  // Reset counter
         } else if let skeleton = metadata.bodySkeleton {
-            print("🚶 [RemoteCameraStreamer] ARKit frame received with body skeleton")
+            print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")
             sendBodyMetadata(skeleton)
+            noDetectionFrameCount = 0  // Reset counter
         } else {
-            print("⚠️ [RemoteCameraStreamer] ARKit frame received but NO metadata (no face/body detected)")
+            // No detection - implement smart fallback
+            noDetectionFrameCount += 1
+
+            // After 60 frames (~2 seconds at 30fps) with no detection, try switching modes
+            if !hasManualModeSelection && !hasAutoSwitchedMode && noDetectionFrameCount >= 60 {
+                print("🔄 [RemoteCameraStreamer] No detection for 2s - attempting smart camera switch...")
+
+                if mode == .face && ARKitCaptureManager.isSupported(.body) {
+                    print("   → Switching from face to body mode (back camera might be facing user)")
+                    Task { @MainActor in
+                        hasAutoSwitchedMode = true
+                        mode = .body
+                        autoDetectedMode = .body
+                        // Restart ARKit with new mode
+                        stopStreaming()
+                        Task {
+                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                            await startStreaming()
+                        }
+                    }
+                } else if mode == .body && ARKitCaptureManager.isSupported(.face) {
+                    print("   → Switching from body to face mode (front camera might be facing user)")
+                    Task { @MainActor in
+                        hasAutoSwitchedMode = true
+                        mode = .face
+                        autoDetectedMode = .face
+                        // Restart ARKit with new mode
+                        stopStreaming()
+                        Task {
+                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                            await startStreaming()
+                        }
+                    }
+                }
+            }
+
+            if noDetectionFrameCount % 30 == 0 {  // Log every second
+                print("⚠️ [RemoteCameraStreamer] No detection (\(noDetectionFrameCount) frames) - Mode: \(mode)")
+            }
         }
     }
 

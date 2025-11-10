@@ -414,7 +414,14 @@ struct StreamingCard: View {
             return "Tap to connect automatically"
         case .streaming:
             if let mode = streamer.autoDetectedMode {
-                return "\(mode == .face ? "Face" : "Body") Tracking"
+                switch mode {
+                case .face:
+                    return "📱 Front Camera • Face Tracking"
+                case .body:
+                    return "📱 Back Camera • Body Tracking"
+                case .combined:
+                    return "📱📱 Dual Device • Face + Body"
+                }
             }
             return nil
         case .failed(let error):
@@ -514,17 +521,42 @@ struct DeveloperModeView: View {
                 }
             }
 
-            // Mode picker
-            VStack(alignment: .leading, spacing: 6) {
-                Text("ARKit Mode")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            // Mode picker with VTuber style descriptions
+            VStack(alignment: .leading, spacing: 8) {
+                Text("VTuber Style")
+                    .font(.caption)
+                    .fontWeight(.medium)
 
                 Picker("Mode", selection: $streamer.mode) {
-                    Text("Face").tag(ARKitCaptureManager.Mode.face)
-                    Text("Body").tag(ARKitCaptureManager.Mode.body)
+                    Text("Face Only").tag(ARKitCaptureManager.Mode.face)
+                    Text("Full Body").tag(ARKitCaptureManager.Mode.body)
+                    Text("Dual Device").tag(ARKitCaptureManager.Mode.combined)
                 }
                 .pickerStyle(.segmented)
+
+                // Mode-specific instructions
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: modeIcon)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(modeInstructions)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if streamer.mode == .body {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text("Mount iPhone on stand facing you (like webcam)")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                        .padding(.top, 2)
+                    }
+                }
             }
 
             // Discovered servers
@@ -603,6 +635,28 @@ struct DeveloperModeView: View {
         .padding()
         .background(Color.gray.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var modeIcon: String {
+        switch streamer.mode {
+        case .face:
+            return "face.smiling"
+        case .body:
+            return "figure.walk"
+        case .combined:
+            return "person.2.fill"
+        }
+    }
+
+    private var modeInstructions: String {
+        switch streamer.mode {
+        case .face:
+            return "Front camera • Expressions & lip sync • Seated streaming"
+        case .body:
+            return "Back camera • Full body motion • Standing/walking"
+        case .combined:
+            return "2 devices • Face + body simultaneously • Pro setup"
+        }
     }
 }
 

@@ -28,6 +28,7 @@ public final class ARKitCaptureManager: NSObject {
     public enum Mode {
         case face
         case body
+        case combined  // Both face and body tracking simultaneously
     }
 
     public enum CaptureError: Swift.Error, LocalizedError {
@@ -44,6 +45,7 @@ public final class ARKitCaptureManager: NSObject {
     private let session = ARSession()
     public weak var delegate: ARKitCaptureManagerDelegate?
     private(set) var currentMode: Mode?
+    private var bodyDetectionFrameCount = 0
 
     public override init() {
         super.init()
@@ -60,6 +62,13 @@ public final class ARKitCaptureManager: NSObject {
             } else {
                 return false
             }
+        case .combined:
+            // Combined mode requires both face and body tracking support
+            if #available(iOS 13.0, *) {
+                return ARFaceTrackingConfiguration.isSupported && ARBodyTrackingConfiguration.isSupported
+            } else {
+                return false
+            }
         }
     }
 
@@ -72,6 +81,17 @@ public final class ARKitCaptureManager: NSObject {
             throw CaptureError.unsupported
         }
 
+        print("🚀 [ARKitCapture] Starting mode: \(mode)")
+        #if canImport(UIKit)
+        print("📱 [ARKitCapture] Device: \(UIDevice.current.name)")
+        print("📱 [ARKitCapture] Model: \(UIDevice.current.model)")
+        print("📱 [ARKitCapture] System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+        if #available(iOS 13.0, *) {
+            print("📱 [ARKitCapture] Body tracking supported: \(ARBodyTrackingConfiguration.isSupported)")
+        }
+        print("📱 [ARKitCapture] Face tracking supported: \(ARFaceTrackingConfiguration.isSupported)")
+        #endif
+
         currentMode = mode
         let configuration: ARConfiguration
 
@@ -82,6 +102,18 @@ public final class ARKitCaptureManager: NSObject {
             faceConfig.providesAudioData = true  // Enable microphone for remote streaming
             configuration = faceConfig
         case .body:
+            if #available(iOS 13.0, *) {
+                let bodyConfig = ARBodyTrackingConfiguration()
+                bodyConfig.isAutoFocusEnabled = true
+                bodyConfig.frameSemantics = [.bodyDetection]
+                configuration = bodyConfig
+            } else {
+                throw CaptureError.unsupported
+            }
+        case .combined:
+            // Combined mode: For single device, use body tracking (back camera)
+            // Body tracking provides skeleton including head position
+            // For true face+body, use separate devices (iPhone face + iPad body)
             if #available(iOS 13.0, *) {
                 let bodyConfig = ARBodyTrackingConfiguration()
                 bodyConfig.isAutoFocusEnabled = true
@@ -117,8 +149,34 @@ extension ARKitCaptureManager: @preconcurrency ARSessionDelegate {
         case .body:
             if #available(iOS 13.0, *) {
                 let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
+
+                // Debug logging for body detection
+                bodyDetectionFrameCount += 1
+                if bodyDetectionFrameCount % 30 == 0 {  // Log every 30 frames (~1 per second)
+                    print("🦴 [ARKitCapture] Body mode - Total anchors: \(frame.anchors.count)")
+                    print("   Body anchor detected: \(bodyAnchor != nil ? "YES" : "NO")")
+                    if let body = bodyAnchor {
+                        print("   Tracking state: \(body.isTracked)")
+                        print("   Joint count: \(body.skeleton.jointModelTransforms.count)")
+                    }
+                    print("   Camera tracking: \(frame.camera.trackingState)")
+                }
+
                 metadata = ARKitFrameMetadata(
                     blendShapes: nil,
+                    bodySkeleton: bodyAnchor?.skeleton,
+                    anchors: frame.anchors
+                )
+            } else {
+                metadata = ARKitFrameMetadata(blendShapes: nil, bodySkeleton: nil, anchors: frame.anchors)
+            }
+        case .combined:
+            // Extract both face and body anchors
+            if #available(iOS 13.0, *) {
+                let faceAnchor = frame.anchors.compactMap { $0 as? ARFaceAnchor }.first
+                let bodyAnchor = frame.anchors.compactMap { $0 as? ARBodyAnchor }.first
+                metadata = ARKitFrameMetadata(
+                    blendShapes: faceAnchor?.blendShapes,
                     bodySkeleton: bodyAnchor?.skeleton,
                     anchors: frame.anchors
                 )
