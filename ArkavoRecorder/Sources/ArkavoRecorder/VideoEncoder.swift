@@ -89,14 +89,9 @@ public final class VideoEncoder: Sendable {
         }
 
         // Setup audio input
-        let audioSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVNumberOfChannelsKey: 2,
-            AVSampleRateKey: 44100.0,
-            AVEncoderBitRateKey: audioBitrate
-        ]
-
-        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        // Use nil settings for audio to accept the source format without conversion
+        // This avoids audio format conversion errors that can cause the asset writer to fail
+        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
         audioInput?.expectsMediaDataInRealTime = true
 
         if let audioInput = audioInput {
@@ -234,6 +229,19 @@ public final class VideoEncoder: Sendable {
             return
         }
 
+        // Check if asset writer is still healthy before appending
+        guard assetWriter.status == .writing else {
+            if assetWriter.status == .failed {
+                let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+                let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
+                print("❌ Asset writer failed during video encoding: \(errorMessage)")
+                if let underlyingError = underlyingError {
+                    print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+                }
+            }
+            return
+        }
+
         // Adjust timestamp for pauses
         var adjustedTimestamp = timestamp
         if !totalPausedDuration.seconds.isZero {
@@ -241,7 +249,18 @@ public final class VideoEncoder: Sendable {
         }
 
         // Append pixel buffer to file
-        adaptor.append(pixelBuffer, withPresentationTime: adjustedTimestamp)
+        if !adaptor.append(pixelBuffer, withPresentationTime: adjustedTimestamp) {
+            print("❌ Failed to append video frame at timestamp \(adjustedTimestamp.seconds)")
+            if assetWriter.status == .failed {
+                let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+                let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
+                print("   Asset writer error: \(errorMessage)")
+                if let underlyingError = underlyingError {
+                    print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+                }
+            }
+            return
+        }
         lastVideoTimestamp = timestamp
 
         // Also stream if streaming is active
