@@ -137,20 +137,48 @@ public final class VideoEncoder: Sendable {
         }
 
         isRecording = false
-        print("📝 Marking inputs as finished...")
 
-        // Mark inputs as finished
-        videoInput?.markAsFinished()
-        audioInput?.markAsFinished()
+        // Check if a session was actually started (at least one frame was written)
+        let sessionStarted = startTime != nil
+        print("📊 Session started: \(sessionStarted), Asset writer status: \(assetWriter.status.rawValue)")
 
-        // Finish writing
-        print("⏳ Finishing asset writer...")
-        await assetWriter.finishWriting()
-        print("✅ Asset writer finished with status: \(assetWriter.status.rawValue)")
+        // Only finish if a session was started and asset writer is in writing state
+        if sessionStarted && assetWriter.status == .writing {
+            print("📝 Marking inputs as finished...")
+
+            // Mark inputs as finished if they exist and are ready
+            if let videoInput = videoInput, videoInput.isReadyForMoreMediaData {
+                videoInput.markAsFinished()
+                print("  ✓ Video input marked as finished")
+            } else {
+                print("  ⚠️ Video input not ready or nil")
+            }
+
+            if let audioInput = audioInput, audioInput.isReadyForMoreMediaData {
+                audioInput.markAsFinished()
+                print("  ✓ Audio input marked as finished")
+            } else {
+                print("  ⚠️ Audio input not ready or nil")
+            }
+
+            // Finish writing
+            print("⏳ Finishing asset writer...")
+            await assetWriter.finishWriting()
+            print("✅ Asset writer finished with status: \(assetWriter.status.rawValue)")
+        } else if !sessionStarted {
+            print("⚠️ No frames were written (session never started), cancelling asset writer")
+            assetWriter.cancelWriting()
+        } else {
+            print("⚠️ Asset writer not in writing state (status: \(assetWriter.status.rawValue)), cannot finish")
+        }
 
         if assetWriter.status == .failed {
             let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+            let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
             print("❌ Asset writer failed: \(errorMessage)")
+            if let underlyingError = underlyingError {
+                print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+            }
             throw assetWriter.error ?? RecorderError.encodingFailed
         }
 
