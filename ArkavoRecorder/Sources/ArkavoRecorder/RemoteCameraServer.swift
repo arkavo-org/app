@@ -144,7 +144,7 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
     }
 
     private func receive(on connection: NWConnection, id: UUID) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1_048_576) { [weak self] data, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: RemoteCameraConstants.maxReceiveBufferSize) { [weak self] data, _, isComplete, error in
             guard let self else { return }
 
             if let data, !data.isEmpty {
@@ -294,7 +294,7 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
 
         var timing = CMSampleTimingInfo(
             duration: .invalid,
-            presentationTimeStamp: CMTime(seconds: payload.timestamp, preferredTimescale: 600),
+            presentationTimeStamp: CMTime(seconds: payload.timestamp, preferredTimescale: RemoteCameraConstants.videoTimescale),
             decodeTimeStamp: .invalid
         )
 

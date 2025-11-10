@@ -104,7 +104,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     @Published private(set) var connectionState: ConnectionState = .idle
     @Published private(set) var autoDetectedMode: ARKitCaptureManager.Mode?
     @Published var host: String = ""
-    @Published var port: String = "5757"
+    @Published var port: String = String(RemoteCameraConstants.defaultPort)
     @Published var mode: ARKitCaptureManager.Mode = .face {
         didSet {
             // Track that user manually changed the mode
@@ -131,7 +131,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     private let ciContext = CIContext()
     private var currentTrackingState: ARFaceTrackingState = .unknown
     private var lastFrameSent: CFTimeInterval = 0
-    private let frameInterval: CFTimeInterval = 1 / 15 // ~15 FPS
+    private let frameInterval: CFTimeInterval = RemoteCameraConstants.frameInterval
     private var netServiceBrowser: NetServiceBrowser?
     private var bonjourServices: [ObjectIdentifier: NetService] = [:]
     private var discoveredServersMap: [String: DiscoveredServer] = [:]
@@ -208,7 +208,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
         // Only auto-detect if user hasn't manually selected a mode
         if !hasManualModeSelection {
-            let detectedMode = detectBestMode()
+            let detectedMode = ARKitModeDetector.detectBestMode()
             print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
             self.mode = detectedMode
             self.autoDetectedMode = detectedMode
@@ -226,8 +226,8 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connectionState = .discovering
 
         // Wait for discovery with timeout
-        print("🔍 [SmartConnect] Waiting for Mac discovery (10s timeout)...")
-        guard let server = await waitForDiscovery(timeout: 10.0) else {
+        print("🔍 [SmartConnect] Waiting for Mac discovery (\(RemoteCameraConstants.discoveryTimeout)s timeout)...")
+        guard let server = await waitForDiscovery(timeout: RemoteCameraConstants.discoveryTimeout) else {
             print("❌ [SmartConnect] No Mac found after timeout")
             connectionState = .failed(.noServersFound)
             return
@@ -238,7 +238,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
         // Only auto-detect if user hasn't manually selected a mode
         if !hasManualModeSelection {
-            let detectedMode = detectBestMode()
+            let detectedMode = ARKitModeDetector.detectBestMode()
             print("🎭 [SmartConnect] Auto-detected mode: \(detectedMode)")
             self.mode = detectedMode
             self.autoDetectedMode = detectedMode
@@ -268,27 +268,6 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connectionState = .idle
     }
 
-    private func detectBestMode() -> ARKitCaptureManager.Mode {
-        let faceSupported = ARKitCaptureManager.isSupported(.face)
-        let bodySupported = ARKitCaptureManager.isSupported(.body)
-
-        print("📱 [ModeDetection] Face: \(faceSupported ? "✅" : "❌"), Body: \(bodySupported ? "✅" : "❌")")
-
-        // VTuber auto-detection: Default to face mode (most common use case)
-        // - Face mode: Front camera, expressions & lip sync, seated streaming
-        // - Body mode: Back camera, full skeleton, standing/walking (requires phone mount)
-        // - Combined mode: 2 devices, professional setup with face + body simultaneously
-        if faceSupported {
-            print("🎭 [ModeDetection] Selected: Face tracking (seated vtuber style)")
-            return .face
-        } else if bodySupported {
-            print("🦴 [ModeDetection] Selected: Body tracking (full-body vtuber style)")
-            return .body
-        }
-        // Fallback to face even if not supported (error will be shown during connection)
-        print("⚠️ [ModeDetection] No ARKit support detected, defaulting to Face")
-        return .face
-    }
 
     private func waitForDiscovery(timeout: TimeInterval) async -> DiscoveredServer? {
         // Check cache first - try to reconnect to last used Mac
@@ -325,7 +304,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
                 print("⏳ [Discovery] Still searching... \(String(format: "%.1f", elapsed))s elapsed, \(discoveredServers.count) servers")
             }
 
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s polling interval
+            try? await Task.sleep(nanoseconds: RemoteCameraConstants.discoveryPollingInterval)
         }
 
         print("❌ [Discovery] Timeout after \(timeout)s, no servers found")
@@ -539,7 +518,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
             let jpeg = ciContext.jpegRepresentation(
                 of: ciImage,
                 colorSpace: CGColorSpaceCreateDeviceRGB(),
-                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.6]
+                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: RemoteCameraConstants.jpegCompressionQuality]
             )
         else {
             return nil
@@ -711,8 +690,8 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
             // No detection - implement smart fallback
             noDetectionFrameCount += 1
 
-            // After 60 frames (~2 seconds at 30fps) with no detection, try switching modes
-            if !hasManualModeSelection && !hasAutoSwitchedMode && noDetectionFrameCount >= 60 {
+            // After threshold frames (~2 seconds at 30fps) with no detection, try switching modes
+            if !hasManualModeSelection && !hasAutoSwitchedMode && noDetectionFrameCount >= RemoteCameraConstants.modeDetectionFrameThreshold {
                 print("🔄 [RemoteCameraStreamer] No detection for 2s - attempting smart camera switch...")
 
                 if mode == .face && ARKitCaptureManager.isSupported(.body) {
@@ -724,7 +703,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
                         // Restart ARKit with new mode
                         stopStreaming()
                         Task {
-                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                            try? await Task.sleep(nanoseconds: RemoteCameraConstants.discoveryPollingInterval)
                             await startStreaming()
                         }
                     }
@@ -737,14 +716,14 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
                         // Restart ARKit with new mode
                         stopStreaming()
                         Task {
-                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                            try? await Task.sleep(nanoseconds: RemoteCameraConstants.discoveryPollingInterval)
                             await startStreaming()
                         }
                     }
                 }
             }
 
-            if noDetectionFrameCount % 30 == 0 {  // Log every second
+            if noDetectionFrameCount % RemoteCameraConstants.noDetectionLoggingInterval == 0 {  // Log every second
                 print("⚠️ [RemoteCameraStreamer] No detection (\(noDetectionFrameCount) frames) - Mode: \(mode)")
             }
         }
@@ -778,7 +757,7 @@ extension RemoteCameraStreamer: @preconcurrency NetServiceBrowserDelegate, @prec
         bonjourServices[identifier] = service
         service.includesPeerToPeer = true
         service.delegate = self
-        service.resolve(withTimeout: 5)
+        service.resolve(withTimeout: RemoteCameraConstants.serviceResolutionTimeout)
     }
 
     func netServiceBrowser(_: NetServiceBrowser, didRemove service: NetService, moreComing _: Bool) {
