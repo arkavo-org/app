@@ -89,9 +89,19 @@ public final class VideoEncoder: Sendable {
         }
 
         // Setup audio input
-        // Use nil settings for audio to accept the source format without conversion
-        // This avoids audio format conversion errors that can cause the asset writer to fail
-        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
+        // Use Linear PCM which is well-supported in MOV containers
+        // This avoids complex audio format conversions that can fail
+        let audioSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 44100.0,
+            AVNumberOfChannelsKey: 2,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsNonInterleaved: false,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+
+        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
         audioInput?.expectsMediaDataInRealTime = true
 
         if let audioInput = audioInput {
@@ -278,6 +288,23 @@ public final class VideoEncoder: Sendable {
             // Wait until video session has started to keep A/V in sync
             return
         }
+
+        // Log audio format on first sample
+        if audioFormatDescription == nil, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+            audioFormatDescription = formatDesc
+            if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
+                print("📊 Audio format from capture:")
+                print("   Sample Rate: \(asbd.pointee.mSampleRate) Hz")
+                print("   Channels: \(asbd.pointee.mChannelsPerFrame)")
+                print("   Format ID: \(asbd.pointee.mFormatID)")
+                print("   Format Flags: \(asbd.pointee.mFormatFlags)")
+                print("   Bytes per Packet: \(asbd.pointee.mBytesPerPacket)")
+                print("   Frames per Packet: \(asbd.pointee.mFramesPerPacket)")
+                print("   Bytes per Frame: \(asbd.pointee.mBytesPerFrame)")
+                print("   Bits per Channel: \(asbd.pointee.mBitsPerChannel)")
+            }
+        }
+
         guard
             let audioInput = audioInput,
             let writer = assetWriter,
