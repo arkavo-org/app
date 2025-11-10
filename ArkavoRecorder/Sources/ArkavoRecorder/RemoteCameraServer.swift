@@ -20,10 +20,9 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.arkavo.remote-camera-server")
     private var listener: NWListener?
     private var connections: [UUID: ConnectionState] = [:]
-    private let ciContext = CIContext()
-    private let colorSpace = CGColorSpaceCreateDeviceRGB()
     private var netService: NetService?
     private var serviceName: String?
+    private var videoDecoders: [String: VideoStreamDecoder] = [:]  // sourceID -> decoder
 
     public weak var delegate: RemoteCameraServerDelegate?
     public private(set) var port: UInt16 = 0
@@ -138,6 +137,9 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
     private func cleanupConnection(id: UUID) {
         if let state = connections[id], let sourceID = state.sourceID {
             updateSources(removing: sourceID)
+            // Clean up decoder for this source
+            videoDecoders[sourceID]?.invalidate()
+            videoDecoders.removeValue(forKey: sourceID)
         }
         connections[id]?.connection.cancel()
         connections.removeValue(forKey: id)
@@ -189,19 +191,34 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
                     state.sourceID = sourceID
                     updateSources(adding: sourceID)
                 }
-            case .frame:
-                guard
-                    let framePayload = message.frame,
-                    let sampleBuffer = makeSampleBuffer(from: framePayload)
-                else {
-                    return
+            case .videoNALU:
+                guard let naluPayload = message.videoNALU else { return }
+                state.sourceID = naluPayload.sourceID
+                updateSources(adding: naluPayload.sourceID)
+
+                // Get or create decoder for this source
+                let decoder: VideoStreamDecoder
+                if let existingDecoder = self.videoDecoders[naluPayload.sourceID] {
+                    decoder = existingDecoder
+                } else {
+                    let newDecoder = VideoStreamDecoder { [weak self] pixelBuffer, timestamp in
+                        // Create sample buffer from decoded pixel buffer
+                        guard let sampleBuffer = self?.createSampleBuffer(from: pixelBuffer, timestamp: timestamp) else {
+                            return
+                        }
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
+                            self.delegate?.remoteCameraServer(self, didReceiveFrame: sampleBuffer, sourceID: naluPayload.sourceID)
+                        }
+                    }
+                    newDecoder.start()
+                    self.videoDecoders[naluPayload.sourceID] = newDecoder
+                    decoder = newDecoder
                 }
-                state.sourceID = framePayload.sourceID
-                updateSources(adding: framePayload.sourceID)
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.delegate?.remoteCameraServer(self, didReceiveFrame: sampleBuffer, sourceID: framePayload.sourceID)
-                }
+
+                // Decode H.264 NAL unit
+                let timestamp = CMTime(seconds: naluPayload.timestamp, preferredTimescale: RemoteCameraConstants.videoTimescale)
+                try? decoder.decode(naluPayload.naluData, isKeyFrame: naluPayload.isKeyFrame, timestamp: timestamp)
             case .metadata:
                 guard let event = message.metadata else { return }
                 state.sourceID = event.sourceID
@@ -253,48 +270,10 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
         }
     }
 
-    private func makeSampleBuffer(from payload: RemoteCameraMessage.FramePayload) -> CMSampleBuffer? {
-        guard let cgImageSource = CGImageSourceCreateWithData(payload.imageData as CFData, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(cgImageSource, 0, nil)
-        else {
-            return nil
-        }
-
-        let width = cgImage.width
-        let height = cgImage.height
-
-        var pixelBuffer: CVPixelBuffer?
-        let attributes: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
-            kCVPixelBufferMetalCompatibilityKey as String: true,
-        ]
-
-        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &pixelBuffer)
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
-            return nil
-        }
-
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        if let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(buffer),
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
-        ) {
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        } else {
-            return nil
-        }
-
+    private func createSampleBuffer(from pixelBuffer: CVPixelBuffer, timestamp: CMTime) -> CMSampleBuffer? {
         var timing = CMSampleTimingInfo(
             duration: .invalid,
-            presentationTimeStamp: CMTime(seconds: payload.timestamp, preferredTimescale: RemoteCameraConstants.videoTimescale),
+            presentationTimeStamp: timestamp,
             decodeTimeStamp: .invalid
         )
 
@@ -302,22 +281,20 @@ public final class RemoteCameraServer: NSObject, @unchecked Sendable {
         var formatDescription: CMVideoFormatDescription?
         let formatStatus = CMVideoFormatDescriptionCreateForImageBuffer(
             allocator: kCFAllocatorDefault,
-            imageBuffer: buffer,
+            imageBuffer: pixelBuffer,
             formatDescriptionOut: &formatDescription
         )
         guard formatStatus == noErr, let formatDescription else { return nil }
+
         let result = CMSampleBufferCreateReadyWithImageBuffer(
             allocator: kCFAllocatorDefault,
-            imageBuffer: buffer,
+            imageBuffer: pixelBuffer,
             formatDescription: formatDescription,
             sampleTiming: &timing,
             sampleBufferOut: &sampleBuffer
         )
 
-        if result != noErr {
-            return nil
-        }
-
+        guard result == noErr else { return nil }
         return sampleBuffer
     }
 }

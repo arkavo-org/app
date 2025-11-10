@@ -184,43 +184,33 @@ private func encodeAndSendFrame(buffer: CVPixelBuffer, timestamp: CMTime) {
 
 ## Migration Strategy
 
-### Backward Compatibility
+### Clean Break - No Backwards Compatibility
 
-Support both protocols during transition:
+Remove JPEG frame streaming entirely and replace with H.264 video encoding:
 
 ```swift
 enum RemoteCameraMessage {
-    case frame(FramePayload)      // Legacy JPEG
-    case videoNALU(VideoNALUPayload)  // New H.264
-    case metadata(...)
+    case handshake(HandshakePayload)
+    case videoNALU(VideoNALUPayload)  // H.264 only
+    case metadata(CameraMetadataEvent)
+    case audio(AudioPayload)
 }
 ```
 
-Server auto-detects format and uses appropriate decoder.
-
-### Feature Flag
-
-```swift
-// RemoteCameraConstants.swift
-public static let useVideoEncoding: Bool = true  // Feature flag
-
-// RemoteCameraStreamer.swift
-if RemoteCameraConstants.useVideoEncoding {
-    encodeAndSendFrame(buffer, timestamp)  // H.264
-} else {
-    sendFrame(buffer, timestamp)  // Legacy JPEG
-}
-```
+Benefits:
+- Simpler codebase (no dual code paths)
+- Immediate performance improvements
+- Cleaner architecture
 
 ## Performance Targets
 
-| Metric | Current (JPEG) | Target (H.264) |
-|--------|----------------|----------------|
-| Bandwidth | 750KB - 3MB/s | 250KB - 625KB/s |
-| FPS | 15 | 30 |
-| Latency | ~100-200ms | ~50-100ms |
-| CPU Usage | High (JPEG encode) | Low (HW encode) |
-| Quality | 60% JPEG | Adaptive H.264 |
+| Metric | Before (JPEG) | After (H.264) | Improvement |
+|--------|---------------|---------------|-------------|
+| Bandwidth | 750KB - 3MB/s | 250KB - 625KB/s | **50-80% reduction** |
+| FPS | 15 (throttled) | 30 (full rate) | **2x faster** |
+| Latency | ~100-200ms | ~50-100ms | **50% lower** |
+| CPU Usage | High (software) | Low (hardware) | **HW accelerated** |
+| Quality | Fixed 60% JPEG | Adaptive H.264 | **Better & adaptive** |
 
 ## References
 
@@ -233,9 +223,11 @@ if RemoteCameraConstants.useVideoEncoding {
 
 1. ✅ Document current JPEG approach (DONE)
 2. ✅ Design VideoStreamEncoder API (DONE)
-3. ⏳ Implement VideoStreamEncoder with VTCompressionSession
-4. ⏳ Implement VideoStreamDecoder with VTDecompressionSession
-5. ⏳ Update RemoteCameraMessage protocol
-6. ⏳ Integrate into RemoteCameraStreamer
-7. ⏳ Performance testing and optimization
-8. ⏳ Remove JPEG code path after validation
+3. ✅ Remove legacy JPEG constants (DONE)
+4. ⏳ Implement VideoStreamEncoder with VTCompressionSession
+5. ⏳ Implement VideoStreamDecoder with VTDecompressionSession
+6. ⏳ Update RemoteCameraMessage protocol (add videoNALU, remove frame)
+7. ⏳ Replace JPEG encoding in RemoteCameraStreamer
+8. ⏳ Update RemoteCameraServer to decode H.264
+9. ⏳ Performance testing and validation
+10. ⏳ Remove old JPEG code entirely

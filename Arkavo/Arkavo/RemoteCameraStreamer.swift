@@ -123,12 +123,12 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     private var captureManager: ARKitCaptureManager?
     private var connection: NWConnection?
     private let processingQueue = DispatchQueue(label: "com.arkavo.remote-camera-processing")
-    private let encoder: JSONEncoder = {
+    private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
-    private let ciContext = CIContext()
+    private var videoEncoder: VideoStreamEncoder?
     private var currentTrackingState: ARFaceTrackingState = .unknown
     private var lastFrameSent: CFTimeInterval = 0
     private let frameInterval: CFTimeInterval = RemoteCameraConstants.frameInterval
@@ -418,21 +418,41 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connection.start(queue: .global(qos: .userInitiated))
 
         do {
+            // Create video encoder for H.264 streaming
+            let encoder = try VideoStreamEncoder { [weak self] naluData, isKeyFrame, timestamp in
+                self?.sendVideoNALU(naluData, isKeyFrame: isKeyFrame, timestamp: timestamp)
+            }
+            try encoder.start()
+            self.videoEncoder = encoder
+
+            // Start ARKit capture
             let captureManager = ARKitCaptureManager()
             captureManager.delegate = self
             try captureManager.start(mode: mode)
             self.captureManager = captureManager
         } catch {
-            statusMessage = "ARKit start failed: \(error.localizedDescription)"
+            statusMessage = "Failed to start streaming: \(error.localizedDescription)"
             state = .error("Capture failed")
         }
     }
 
     func stopStreaming() {
+        // Stop video encoder
+        if let encoder = videoEncoder {
+            Task {
+                try? await encoder.stop()
+            }
+        }
+        videoEncoder = nil
+
+        // Stop capture
         captureManager?.stop()
         captureManager = nil
+
+        // Close connection
         connection?.cancel()
         connection = nil
+
         state = .idle
         statusMessage = "Not connected"
     }
@@ -492,17 +512,23 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         }
     }
 
-    private func sendFrame(buffer: CVPixelBuffer, timestamp: CMTime) {
+    private func encodeFrame(buffer: CVPixelBuffer, timestamp: CMTime) {
         let now = CACurrentMediaTime()
         guard now - lastFrameSent >= frameInterval else { return }
         lastFrameSent = now
 
-        processingQueue.async { [weak self] in
-            guard let self,
-                  let payload = self.makeFramePayload(buffer: buffer, timestamp: timestamp)
-            else { return }
-            self.send(message: .frame(payload))
-        }
+        // Encode with H.264 (callback will handle sending)
+        try? videoEncoder?.encode(buffer, timestamp: timestamp)
+    }
+
+    private func sendVideoNALU(_ naluData: Data, isKeyFrame: Bool, timestamp: CMTime) {
+        let payload = RemoteCameraMessage.VideoNALUPayload(
+            sourceID: sourceID,
+            timestamp: CMTimeGetSeconds(timestamp),
+            isKeyFrame: isKeyFrame,
+            naluData: naluData
+        )
+        send(message: .videoNALU(payload))
     }
 
     private func sendMetadata(_ metadata: CameraMetadata) {
@@ -512,25 +538,22 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         print("   └─ Metadata message queued for send")
     }
 
-    private func makeFramePayload(buffer: CVPixelBuffer, timestamp: CMTime) -> RemoteCameraMessage.FramePayload? {
-        let ciImage = CIImage(cvPixelBuffer: buffer)
-        guard
-            let jpeg = ciContext.jpegRepresentation(
-                of: ciImage,
-                colorSpace: CGColorSpaceCreateDeviceRGB(),
-                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: RemoteCameraConstants.jpegCompressionQuality]
-            )
-        else {
-            return nil
+    private func send(message: RemoteCameraMessage) {
+        guard let connection else { return }
+        processingQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                var data = try self.jsonEncoder.encode(message)
+                data.append(0x0A)
+                connection.send(content: data, completion: .contentProcessed { error in
+                    if let error {
+                        print("⚠️ RemoteCameraStreamer send error: \(error)")
+                    }
+                })
+            } catch {
+                print("⚠️ RemoteCameraStreamer encoding error: \(error)")
+            }
         }
-
-        return RemoteCameraMessage.FramePayload(
-            sourceID: sourceID,
-            timestamp: CMTimeGetSeconds(timestamp),
-            width: CVPixelBufferGetWidth(buffer),
-            height: CVPixelBufferGetHeight(buffer),
-            imageData: jpeg
-        )
     }
 
     private func sendFaceMetadata(blendShapes: [ARFaceAnchor.BlendShapeLocation: NSNumber]) {
@@ -667,7 +690,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
         timestamp: CMTime,
         metadata: ARKitFrameMetadata
     ) {
-        sendFrame(buffer: buffer, timestamp: timestamp)
+        encodeFrame(buffer: buffer, timestamp: timestamp)
 
         // In combined mode, send both face and body metadata when available
         let hasFace = metadata.blendShapes != nil

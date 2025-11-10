@@ -3,25 +3,24 @@ import Foundation
 /// Network-safe payload describing remote camera frames or metadata updates.
 public struct RemoteCameraMessage: Codable, Sendable {
     public enum Kind: String, Codable, Sendable {
-        case frame
+        case videoNALU  // H.264 NAL unit (compressed video)
         case metadata
         case audio
         case handshake
     }
 
-    public struct FramePayload: Codable, Sendable {
+    /// H.264 NAL unit payload for video streaming
+    public struct VideoNALUPayload: Codable, Sendable {
         public let sourceID: String
         public let timestamp: TimeInterval
-        public let width: Int
-        public let height: Int
-        public let imageData: Data
+        public let isKeyFrame: Bool  // True for I-frames
+        public let naluData: Data    // H.264 NAL unit
 
-        public init(sourceID: String, timestamp: TimeInterval, width: Int, height: Int, imageData: Data) {
+        public init(sourceID: String, timestamp: TimeInterval, isKeyFrame: Bool, naluData: Data) {
             self.sourceID = sourceID
             self.timestamp = timestamp
-            self.width = width
-            self.height = height
-            self.imageData = imageData
+            self.isKeyFrame = isKeyFrame
+            self.naluData = naluData
         }
     }
 
@@ -52,21 +51,21 @@ public struct RemoteCameraMessage: Codable, Sendable {
     }
 
     public let kind: Kind
-    public let frame: FramePayload?
+    public let videoNALU: VideoNALUPayload?
     public let metadata: CameraMetadataEvent?
     public let audio: AudioPayload?
     public let handshake: HandshakePayload?
 
-    public init(kind: Kind, frame: FramePayload? = nil, metadata: CameraMetadataEvent? = nil, audio: AudioPayload? = nil, handshake: HandshakePayload? = nil) {
+    public init(kind: Kind, videoNALU: VideoNALUPayload? = nil, metadata: CameraMetadataEvent? = nil, audio: AudioPayload? = nil, handshake: HandshakePayload? = nil) {
         self.kind = kind
-        self.frame = frame
+        self.videoNALU = videoNALU
         self.metadata = metadata
         self.audio = audio
         self.handshake = handshake
     }
 
-    public static func frame(_ payload: FramePayload) -> RemoteCameraMessage {
-        RemoteCameraMessage(kind: .frame, frame: payload)
+    public static func videoNALU(_ payload: VideoNALUPayload) -> RemoteCameraMessage {
+        RemoteCameraMessage(kind: .videoNALU, videoNALU: payload)
     }
 
     public static func metadata(_ event: CameraMetadataEvent) -> RemoteCameraMessage {

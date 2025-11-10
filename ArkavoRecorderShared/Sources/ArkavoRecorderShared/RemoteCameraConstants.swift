@@ -35,34 +35,17 @@ public enum RemoteCameraConstants {
 
     // MARK: - Video Encoding
 
-    /// Feature flag: Use H.264 video encoding instead of JPEG frames
-    /// TODO: Implement VideoStreamEncoder using VideoToolbox
-    public static let useVideoEncoding: Bool = false  // Currently JPEG, will migrate to H.264
+    /// Target frame rate for remote camera streaming (30 FPS - full ARKit rate)
+    public static let targetFrameRate: Double = 30.0
 
-    /// Target frame rate for remote camera streaming
-    /// - JPEG mode: 15 FPS (throttled for bandwidth)
-    /// - H.264 mode: 30 FPS (full ARKit rate)
-    public static let targetFrameRate: Double = 15.0
-
-    /// Frame interval for throttling (1/15 seconds ≈ 66ms)
+    /// Frame interval for streaming (1/30 seconds ≈ 33ms)
     public static let frameInterval: CFTimeInterval = 1.0 / targetFrameRate
 
-    // MARK: - JPEG Encoding (Legacy - to be replaced by H.264)
-
-    /// JPEG compression quality (0.0 - 1.0)
-    /// NOTE: This is inefficient. See docs/video-streaming-proposal.md for H.264 migration plan
-    public static let jpegCompressionQuality: Double = 0.6
-
-    // MARK: - H.264 Video Streaming (Future)
-
     /// H.264 video bitrate (3 Mbps default)
-    /// Much more efficient than JPEG: 250-625 KB/s vs 750KB-3MB/s
     public static let h264Bitrate: Int = 3_000_000
 
     /// H.264 keyframe interval (I-frame every 2 seconds at 30 FPS)
     public static let h264KeyFrameInterval: Int = 60
-
-    // MARK: - Common
 
     /// Video timescale for CMTime (600 units per second)
     public static let videoTimescale: CMTimeScale = 600
