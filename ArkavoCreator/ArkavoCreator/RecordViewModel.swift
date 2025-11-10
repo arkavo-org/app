@@ -103,10 +103,14 @@ final class RecordViewModel {
         isProcessing = true
 
         do {
+            print("⏹️ Stopping recording session...")
             let outputURL = try await session.stopRecording()
+            print("✅ Recording session stopped, output at: \(outputURL.path)")
 
             // Sign with C2PA
+            print("🔏 Signing recording with C2PA...")
             let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
+            print("✅ Recording signed successfully: \(signedURL.path)")
 
             isRecording = false
             isPaused = false
@@ -115,13 +119,17 @@ final class RecordViewModel {
             RecordingState.shared.setRecordingSession(nil)
 
             // Recording complete - saved successfully
-            print("Recording saved and signed: \(signedURL.path)")
+            print("✅ Recording saved and signed: \(signedURL.path)")
 
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
             try? activatePreviewPipeline()
+        } catch let error as RecorderError {
+            print("❌ RecorderError during stop: \(error)")
+            self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         } catch {
-            self.error = "Failed to stop recording: \(error.localizedDescription)"
+            print("❌ Error during stop: \(error)")
+            self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         }
 
         isProcessing = false

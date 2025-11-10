@@ -121,20 +121,36 @@ public final class VideoEncoder: Sendable {
 
     /// Finishes recording and returns the output URL
     public func finishRecording() async throws -> URL {
-        guard isRecording, let assetWriter = assetWriter, let outputURL = outputURL else {
+        guard isRecording else {
+            print("❌ finishRecording: Not currently recording")
+            throw RecorderError.encodingFailed
+        }
+
+        guard let assetWriter = assetWriter else {
+            print("❌ finishRecording: Asset writer is nil")
+            throw RecorderError.encodingFailed
+        }
+
+        guard let outputURL = outputURL else {
+            print("❌ finishRecording: Output URL is nil")
             throw RecorderError.encodingFailed
         }
 
         isRecording = false
+        print("📝 Marking inputs as finished...")
 
         // Mark inputs as finished
         videoInput?.markAsFinished()
         audioInput?.markAsFinished()
 
         // Finish writing
+        print("⏳ Finishing asset writer...")
         await assetWriter.finishWriting()
+        print("✅ Asset writer finished with status: \(assetWriter.status.rawValue)")
 
         if assetWriter.status == .failed {
+            let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+            print("❌ Asset writer failed: \(errorMessage)")
             throw assetWriter.error ?? RecorderError.encodingFailed
         }
 
@@ -144,6 +160,7 @@ public final class VideoEncoder: Sendable {
         self.audioInput = nil
         self.pixelBufferAdaptor = nil
 
+        print("✅ Recording finished successfully at: \(outputURL.path)")
         return outputURL
     }
 

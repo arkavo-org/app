@@ -279,7 +279,7 @@ struct RecordView: View {
         .buttonStyle(.borderedProminent)
         .tint(viewModel.isRecording ? .red : .blue)
         .disabled(viewModel.isProcessing)
-        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
+        .accessibilityLabel(viewModel.isRecording ? "Stop Recording" : "Start Recording")
         .accessibilityHint(viewModel.isRecording ? "End the current recording session and save the video" : "Begin recording screen, camera, and microphone")
     }
 
