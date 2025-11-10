@@ -19,11 +19,25 @@ import VRMMetalKit
 import ArkavoRecorderShared
 import simd
 
+final class AtomicBool: @unchecked Sendable {
+    private var value: Bool = false
+    private let lock = NSLock()
+
+    func getAndSet() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let old = value
+        value = true
+        return old
+    }
+}
+
 /// Converts between ArkavoRecorder metadata types and VRMMetalKit ARKit types.
 ///
 /// This converter bridges the transport-agnostic metadata from camera sources
 /// (CameraMetadataEvent) to the VRMMetalKit ARKit driver types.
 enum ARKitDataConverter {
+    private static let hasLoggedUnmappedJoints = AtomicBool()
 
     // MARK: - Face Tracking Conversion
 
@@ -82,10 +96,49 @@ enum ARKitDataConverter {
 
     /// Map ARBodyMetadata.Joint name to ARKitJoint enum
     ///
-    /// - Parameter jointName: Joint name from metadata (e.g., "hips", "leftUpperArm")
+    /// - Parameter jointName: Joint name from metadata (e.g., "hips_joint", "left_upLeg_joint")
     /// - Returns: ARKitJoint enum value, or nil if unknown joint
     static func toARKitJoint(_ jointName: String) -> ARKitJoint? {
-        return ARKitJoint(rawValue: jointName)
+        // ARKit joint names come with "_joint" suffix, strip it
+        var cleanName = jointName.hasSuffix("_joint")
+            ? String(jointName.dropLast(6))
+            : jointName
+
+        // Convert underscore_case to camelCase and map specific joint names
+        // ARKit: left_upLeg → VRM: leftUpperLeg
+        // ARKit: left_leg → VRM: leftLowerLeg
+        let mapping: [String: String] = [
+            "left_upLeg": "leftUpperLeg",
+            "left_leg": "leftLowerLeg",
+            "left_foot": "leftFoot",
+            "left_toes": "leftToes",
+            "left_toesEnd": "leftToes",  // Map toesEnd to toes
+            "right_upLeg": "rightUpperLeg",
+            "right_leg": "rightLowerLeg",
+            "right_foot": "rightFoot",
+            "right_toes": "rightToes",
+            "right_toesEnd": "rightToes",  // Map toesEnd to toes
+            "left_shoulder": "leftShoulder",
+            "left_arm": "leftUpperArm",
+            "left_forearm": "leftLowerArm",
+            "left_hand": "leftHand",
+            "right_shoulder": "rightShoulder",
+            "right_arm": "rightUpperArm",
+            "right_forearm": "rightLowerArm",
+            "right_hand": "rightHand",
+            "upper_chest": "upperChest",
+            "left_upArm": "leftUpperArm",
+            "left_lowArm": "leftLowerArm",
+            "right_upArm": "rightUpperArm",
+            "right_lowArm": "rightLowerArm"
+        ]
+
+        // Apply mapping if exists
+        if let mapped = mapping[cleanName] {
+            cleanName = mapped
+        }
+
+        return ARKitJoint(rawValue: cleanName)
     }
 
     /// Convert ARBodyMetadata to ARKitBodySkeleton
@@ -99,19 +152,29 @@ enum ARKitDataConverter {
         timestamp: Date
     ) -> ARKitBodySkeleton {
         var joints: [ARKitJoint: simd_float4x4] = [:]
+        var unmappedJoints: [String] = []
 
         for joint in metadata.joints {
             // Map joint name to ARKitJoint enum
             guard let arkitJoint = toARKitJoint(joint.name) else {
+                unmappedJoints.append(joint.name)
                 continue
             }
 
             // Convert transform array to matrix
             guard let matrix = toMatrix4x4(joint.transform) else {
+                print("⚠️ [ARKitDataConverter] Invalid transform for joint: \(joint.name)")
                 continue
             }
 
             joints[arkitJoint] = matrix
+        }
+
+        // Log unmapped joints (only first time)
+        if !unmappedJoints.isEmpty && !Self.hasLoggedUnmappedJoints.getAndSet() {
+            print("⚠️ [ARKitDataConverter] Unmapped joints (not in ARKitJoint enum):")
+            print("   Total: \(unmappedJoints.count) out of \(metadata.joints.count)")
+            print("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
         }
 
         return ARKitBodySkeleton(

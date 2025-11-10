@@ -25,6 +25,9 @@ class AvatarViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var faceTrackingStatus: String = "Awaiting face metadata"
 
+    // Debug: Latest body skeleton for visualization
+    @Published var latestBodySkeleton: ARKitBodySkeleton?
+
     // MARK: - Dependencies
 
     let downloader = VRMDownloader()
@@ -34,6 +37,9 @@ class AvatarViewModel: ObservableObject {
 
     // Multi-source face tracking management
     private var faceSources: [String: ARFaceSource] = [:]
+
+    // Multi-source body tracking management
+    private var bodySources: [String: ARBodySource] = [:]
 
     private final class MetadataObserverToken: @unchecked Sendable {
         let value: NSObjectProtocol
@@ -46,7 +52,7 @@ class AvatarViewModel: ObservableObject {
 
     init() {
         refreshModels()
-        print("[AvatarViewModel] Initializing - subscribing to face metadata notifications")
+        print("[AvatarViewModel] Initializing - subscribing to face & body metadata notifications")
         let observer = NotificationCenter.default.addObserver(
             forName: .cameraMetadataUpdated,
             object: nil,
@@ -62,7 +68,7 @@ class AvatarViewModel: ObservableObject {
             }
         }
         metadataObserver = MetadataObserverToken(observer)
-        print("[AvatarViewModel] Face tracking is ENABLED and ready to receive metadata")
+        print("[AvatarViewModel] Face & body tracking is ENABLED and ready to receive metadata")
     }
 
     deinit {
@@ -136,66 +142,107 @@ class AvatarViewModel: ObservableObject {
             print("🎭 [AvatarViewModel] handleMetadataEvent called for source: \(event.sourceID)")
         }
 
-        guard case let .arFace(faceMetadata) = event.metadata else {
+        // Handle face tracking metadata
+        if case let .arFace(faceMetadata) = event.metadata {
             if shouldLog {
-                print("   ❌ [AvatarViewModel] Received non-face metadata, ignoring")
+                print("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
             }
-            return
-        }
 
-        if shouldLog {
-            print("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
-        }
-
-        // Get or create source for this camera
-        let source = getOrCreateSource(for: event.sourceID)
-        if shouldLog {
-            print("   📍 [AvatarViewModel] Using source: \(source.sourceID)")
-        }
-
-        // Convert and update source with new data
-        let blendShapes = ARKitDataConverter.toARKitFaceBlendShapes(event)
-        if let blendShapes {
-            source.update(blendShapes: blendShapes)
-
+            // Get or create source for this camera
+            let source = getOrCreateSource(for: event.sourceID)
             if shouldLog {
-                print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
-
-                // Log key expression blend shapes for debugging
-                let eyeBlinkLeft = blendShapes.weight(for: "eyeBlinkLeft")
-                let eyeBlinkRight = blendShapes.weight(for: "eyeBlinkRight")
-                let mouthSmileLeft = blendShapes.weight(for: "mouthSmileLeft")
-                let mouthSmileRight = blendShapes.weight(for: "mouthSmileRight")
-                let browInnerUp = blendShapes.weight(for: "browInnerUp")
-                let browOuterUpLeft = blendShapes.weight(for: "browOuterUpLeft")
-                let browOuterUpRight = blendShapes.weight(for: "browOuterUpRight")
-                let jawOpen = blendShapes.weight(for: "jawOpen")
-
-                print("      └─ eyeBlinkL: \(String(format: "%.3f", eyeBlinkLeft)), eyeBlinkR: \(String(format: "%.3f", eyeBlinkRight))")
-                print("      └─ smileL: \(String(format: "%.3f", mouthSmileLeft)), smileR: \(String(format: "%.3f", mouthSmileRight))")
-                print("      └─ browInner: \(String(format: "%.3f", browInnerUp)), browOuter: \(String(format: "%.3f", (browOuterUpLeft + browOuterUpRight) / 2))")
-                print("      └─ jawOpen: \(String(format: "%.3f", jawOpen))")
+                print("   📍 [AvatarViewModel] Using face source: \(source.sourceID)")
             }
-        } else {
+
+            // Convert and update source with new data
+            let blendShapes = ARKitDataConverter.toARKitFaceBlendShapes(event)
+            if let blendShapes {
+                source.update(blendShapes: blendShapes)
+
+                if shouldLog {
+                    print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
+
+                    // Log key expression blend shapes for debugging
+                    let eyeBlinkLeft = blendShapes.weight(for: "eyeBlinkLeft")
+                    let eyeBlinkRight = blendShapes.weight(for: "eyeBlinkRight")
+                    let mouthSmileLeft = blendShapes.weight(for: "mouthSmileLeft")
+                    let mouthSmileRight = blendShapes.weight(for: "mouthSmileRight")
+                    let browInnerUp = blendShapes.weight(for: "browInnerUp")
+                    let browOuterUpLeft = blendShapes.weight(for: "browOuterUpLeft")
+                    let browOuterUpRight = blendShapes.weight(for: "browOuterUpRight")
+                    let jawOpen = blendShapes.weight(for: "jawOpen")
+
+                    print("      └─ eyeBlinkL: \(String(format: "%.3f", eyeBlinkLeft)), eyeBlinkR: \(String(format: "%.3f", eyeBlinkRight))")
+                    print("      └─ smileL: \(String(format: "%.3f", mouthSmileLeft)), smileR: \(String(format: "%.3f", mouthSmileRight))")
+                    print("      └─ browInner: \(String(format: "%.3f", browInnerUp)), browOuter: \(String(format: "%.3f", (browOuterUpLeft + browOuterUpRight) / 2))")
+                    print("      └─ jawOpen: \(String(format: "%.3f", jawOpen))")
+                }
+            } else {
+                if shouldLog {
+                    print("   ❌ [AvatarViewModel] Failed to convert to ARKitFaceBlendShapes")
+                }
+            }
+
+            // Update renderer with all active sources
+            let allSources = Array(faceSources.values)
+            let activeSources = allSources.filter { $0.isActive }
             if shouldLog {
-                print("   ❌ [AvatarViewModel] Failed to convert to ARKitFaceBlendShapes")
+                print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
+                print("      └─ Renderer exists: \(renderer != nil)")
+            }
+            renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+            if shouldLog {
+                print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
+            }
+
+            // Update status based on active sources
+            updateTrackingStatus(faceMetadata.trackingState, sourceID: event.sourceID)
+        }
+        // Handle body tracking metadata
+        else if case let .arBody(bodyMetadata) = event.metadata {
+            if shouldLog {
+                print("   🦴 [AvatarViewModel] Body metadata received: \(bodyMetadata.joints.count) joints")
+            }
+
+            // Get or create body source for this camera
+            let source = getOrCreateBodySource(for: event.sourceID)
+            if shouldLog {
+                print("   📍 [AvatarViewModel] Using body source: \(source.sourceID)")
+            }
+
+            // Convert and update source with new data
+            if let skeleton = ARKitDataConverter.toARKitBodySkeleton(event) {
+                source.update(skeleton: skeleton)
+
+                // Store latest skeleton for debug visualization
+                latestBodySkeleton = skeleton
+
+                if shouldLog {
+                    print("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
+                }
+            } else {
+                if shouldLog {
+                    print("   ❌ [AvatarViewModel] Failed to convert to ARKitBodySkeleton")
+                }
+            }
+
+            // Update renderer with all active body sources
+            let allBodySources = Array(bodySources.values)
+            let activeBodySources = allBodySources.filter { $0.isActive }
+            if shouldLog {
+                print("   🎯 [AvatarViewModel] Applying body tracking: \(activeBodySources.count) active / \(allBodySources.count) total sources")
+                print("      └─ Renderer exists: \(renderer != nil)")
+            }
+            renderer?.applyBodyTracking(sources: allBodySources, priority: .latestActive)
+            if shouldLog {
+                print("   ✅ [AvatarViewModel] Body tracking applied to renderer")
             }
         }
-
-        // Update renderer with all active sources
-        let allSources = Array(faceSources.values)
-        let activeSources = allSources.filter { $0.isActive }
-        if shouldLog {
-            print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
-            print("      └─ Renderer exists: \(renderer != nil)")
+        else {
+            if shouldLog {
+                print("   ⚠️  [AvatarViewModel] Received unknown metadata type, ignoring")
+            }
         }
-        renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
-        if shouldLog {
-            print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
-        }
-
-        // Update status based on active sources
-        updateTrackingStatus(faceMetadata.trackingState, sourceID: event.sourceID)
     }
 
     private func getOrCreateSource(for sourceID: String) -> ARFaceSource {
@@ -209,6 +256,20 @@ class AvatarViewModel: ObservableObject {
             metadata: ["sourceID": sourceID]
         )
         faceSources[sourceID] = source
+        return source
+    }
+
+    private func getOrCreateBodySource(for sourceID: String) -> ARBodySource {
+        if let existing = bodySources[sourceID] {
+            return existing
+        }
+
+        // Create new source
+        let source = ARBodySource(
+            name: "Camera \(sourceID.prefix(8))",
+            metadata: ["sourceID": sourceID]
+        )
+        bodySources[sourceID] = source
         return source
     }
 
@@ -237,5 +298,6 @@ class AvatarViewModel: ObservableObject {
     /// Remove inactive sources (called periodically or on source disconnect)
     func cleanupInactiveSources() {
         faceSources = faceSources.filter { $0.value.isActive }
+        bodySources = bodySources.filter { $0.value.isActive }
     }
 }

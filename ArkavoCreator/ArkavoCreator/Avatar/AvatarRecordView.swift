@@ -111,17 +111,23 @@ struct AvatarRecordView: View {
     }
 
     private var previewPane: some View {
-        Group {
-            if let renderer {
-                AvatarPreviewView(
-                    renderer: renderer,
-                    backgroundColor: viewModel.backgroundColor
-                )
-            } else {
-                placeholderView
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let renderer {
+                    AvatarPreviewView(
+                        renderer: renderer,
+                        backgroundColor: viewModel.backgroundColor
+                    )
+                } else {
+                    placeholderView
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Debug: Skeleton visualization overlay
+            SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
+                .padding(16)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func sectionHeader(_ title: String) -> some View {
