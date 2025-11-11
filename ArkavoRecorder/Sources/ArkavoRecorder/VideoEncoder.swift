@@ -9,7 +9,7 @@ public final class VideoEncoder: Sendable {
 
     nonisolated(unsafe) private var assetWriter: AVAssetWriter?
     nonisolated(unsafe) private var videoInput: AVAssetWriterInput?
-    nonisolated(unsafe) private var audioInput: AVAssetWriterInput?
+    nonisolated(unsafe) private var audioInputs: [String: AVAssetWriterInput] = [:]  // sourceID -> audio input
     nonisolated(unsafe) private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
 
     nonisolated(unsafe) private var outputURL: URL?
@@ -41,7 +41,11 @@ public final class VideoEncoder: Sendable {
     public init() {}
 
     /// Starts recording to the specified output file
-    public func startRecording(to url: URL, title: String) async throws {
+    /// - Parameters:
+    ///   - url: Output file URL
+    ///   - title: Recording title for metadata
+    ///   - audioSourceIDs: Optional array of audio source IDs to pre-create tracks for
+    public func startRecording(to url: URL, title: String, audioSourceIDs: [String] = []) async throws {
         guard !isRecording else { return }
 
         outputURL = url
@@ -88,35 +92,48 @@ public final class VideoEncoder: Sendable {
             assetWriter.add(videoInput)
         }
 
-        // Setup audio input
-        // Use Linear PCM which is well-supported in MOV containers
-        // This avoids complex audio format conversions that can fail
-        let audioSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 2,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsNonInterleaved: false,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false
-        ]
+        // Pre-create audio inputs for known sources
+        // This must be done BEFORE startWriting() because you cannot add inputs after the session starts
+        audioInputs = [:]
+        print("🎵 VideoEncoder: Pre-creating audio inputs for \(audioSourceIDs.count) source(s): \(audioSourceIDs)")
+        for sourceID in audioSourceIDs {
+            print("🎵 VideoEncoder: Creating audio input for: \(sourceID)")
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48000.0,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderBitRateKey: audioBitrate  // 128 kbps
+            ]
 
-        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-        audioInput?.expectsMediaDataInRealTime = true
+            let newInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            newInput.expectsMediaDataInRealTime = true
 
-        if let audioInput = audioInput {
-            assetWriter.add(audioInput)
+            // Add metadata to identify the source
+            let sourceMetadata = AVMutableMetadataItem()
+            sourceMetadata.key = "source" as NSString
+            sourceMetadata.value = sourceID as NSString
+            newInput.metadata = [sourceMetadata]
+
+            assetWriter.add(newInput)
+            audioInputs[sourceID] = newInput
+            print("✅ VideoEncoder: Pre-created AAC audio track for source: \(sourceID)")
         }
+        print("🎵 VideoEncoder: Total audio inputs created: \(audioInputs.count)")
 
         // Add metadata
         assetWriter.metadata = createMetadata(title: title)
 
         // Start writing
         guard assetWriter.startWriting() else {
+            print("❌ VideoEncoder: Failed to start asset writer")
+            if let error = assetWriter.error {
+                print("   Error: \(error.localizedDescription)")
+            }
             throw RecorderError.encodingFailed
         }
 
         isRecording = true
+        print("✅ VideoEncoder: Recording started. isRecording = \(isRecording)")
         startTime = nil
         lastVideoTimestamp = .zero
         isPaused = false
@@ -159,11 +176,14 @@ public final class VideoEncoder: Sendable {
                 print("  ⚠️ Video input not ready or nil")
             }
 
-            if let audioInput = audioInput, audioInput.isReadyForMoreMediaData {
-                audioInput.markAsFinished()
-                print("  ✓ Audio input marked as finished")
-            } else {
-                print("  ⚠️ Audio input not ready or nil")
+            // Mark all audio inputs as finished
+            for (sourceID, audioInput) in audioInputs {
+                if audioInput.isReadyForMoreMediaData {
+                    audioInput.markAsFinished()
+                    print("  ✓ Audio input [\(sourceID)] marked as finished")
+                } else {
+                    print("  ⚠️ Audio input [\(sourceID)] not ready")
+                }
             }
 
             // Finish writing
@@ -190,7 +210,7 @@ public final class VideoEncoder: Sendable {
         // Clean up
         self.assetWriter = nil
         self.videoInput = nil
-        self.audioInput = nil
+        self.audioInputs = [:]
         self.pixelBufferAdaptor = nil
 
         print("✅ Recording finished successfully at: \(outputURL.path)")
@@ -281,36 +301,24 @@ public final class VideoEncoder: Sendable {
         }
     }
 
-    /// Encodes an audio sample
-    public nonisolated func encodeAudioSample(_ sampleBuffer: CMSampleBuffer) async {
+    /// Encodes an audio sample from a specific source
+    /// - Parameters:
+    ///   - sampleBuffer: Audio sample buffer (must be 48kHz PCM stereo)
+    ///   - sourceID: Unique identifier for the audio source (e.g., "microphone", "screen", "remote-camera-123")
+    public nonisolated func encodeAudioSample(_ sampleBuffer: CMSampleBuffer, sourceID: String) async {
         guard isRecording, !isPaused else { return }
         guard startTime != nil else {
             // Wait until video session has started to keep A/V in sync
             return
         }
 
-        // Log audio format on first sample
-        if audioFormatDescription == nil, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
-            audioFormatDescription = formatDesc
-            if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
-                print("📊 Audio format from capture:")
-                print("   Sample Rate: \(asbd.pointee.mSampleRate) Hz")
-                print("   Channels: \(asbd.pointee.mChannelsPerFrame)")
-                print("   Format ID: \(asbd.pointee.mFormatID)")
-                print("   Format Flags: \(asbd.pointee.mFormatFlags)")
-                print("   Bytes per Packet: \(asbd.pointee.mBytesPerPacket)")
-                print("   Frames per Packet: \(asbd.pointee.mFramesPerPacket)")
-                print("   Bytes per Frame: \(asbd.pointee.mBytesPerFrame)")
-                print("   Bits per Channel: \(asbd.pointee.mBitsPerChannel)")
-            }
+        guard let writer = assetWriter, writer.status == .writing, CMSampleBufferIsValid(sampleBuffer) else {
+            return
         }
 
-        guard
-            let audioInput = audioInput,
-            let writer = assetWriter,
-            writer.status == .writing,
-            CMSampleBufferIsValid(sampleBuffer)
-        else {
+        // Get audio input for this source (must have been pre-created during startRecording)
+        guard let audioInput = audioInputs[sourceID] else {
+            print("⚠️ No audio input exists for source: \(sourceID). Audio inputs must be pre-created before recording starts.")
             return
         }
 
@@ -328,13 +336,14 @@ public final class VideoEncoder: Sendable {
         }
 
         // Append audio sample to file
+        // AVAssetWriterInput will automatically encode PCM to AAC
         if !audioInput.append(adjustedBuffer) {
-            print("⚠️ Audio input rejected sample buffer; dropping frame")
+            print("⚠️ Audio input [\(sourceID)] rejected sample buffer; dropping frame")
             return
         }
 
-        // Also stream if streaming is active
-        if isStreaming, let publisher = rtmpPublisher {
+        // Stream the first audio track for RTMP (typically microphone)
+        if isStreaming, let publisher = rtmpPublisher, sourceID == "microphone" {
             Task {
                 do {
                     // Send audio sequence header on first audio packet
@@ -352,6 +361,11 @@ public final class VideoEncoder: Sendable {
                 }
             }
         }
+    }
+
+    /// Legacy method for backward compatibility - routes to "microphone" source
+    public nonisolated func encodeAudioSample(_ sampleBuffer: CMSampleBuffer) async {
+        await encodeAudioSample(sampleBuffer, sourceID: "microphone")
     }
 
     // MARK: - Private Methods

@@ -16,7 +16,7 @@ public final class RecordingSession: Sendable {
     private var latestCameraMetadata: [String: CameraMetadata] = [:]
     private var remoteCameraIdentifiers: Set<String> = []
     public private(set) var remoteCameraServer: RemoteCameraServer?
-    private let audioCapture: AudioManager
+    nonisolated(unsafe) private let audioRouter: AudioRouter
     nonisolated(unsafe) private let compositor: CompositorManager
     nonisolated(unsafe) private let encoder: VideoEncoder
 
@@ -64,7 +64,7 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
     public init() throws {
         self.screenCapture = ScreenCaptureManager()
         self.cameraCaptures = [:]
-        self.audioCapture = AudioManager()
+        self.audioRouter = AudioRouter()
         self.compositor = try CompositorManager()
         self.encoder = VideoEncoder()
 
@@ -83,17 +83,13 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
             }
         }
 
-        // Wire up audio capture
-        audioCapture.onSample = { @Sendable [weak self] audioSample in
+        // Wire up audio router
+        audioRouter.onConvertedSample = { @Sendable [weak self] audioSample, sourceID in
             // Process asynchronously to handle encoding
             // Note: CMSampleBuffer is not Sendable, but we process it immediately without retaining
             Task {
-                await self?.processAudioSampleSync(audioSample)
+                await self?.processAudioSampleSync(audioSample, sourceID: sourceID)
             }
-        }
-
-        audioCapture.onLevelUpdate = { @Sendable [weak self] level in
-            self?.audioLevel = level
         }
     }
 
@@ -114,11 +110,22 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
         }
 
         if enableMicrophone {
-            try? audioCapture.startCapture()
+            // Add microphone to audio router (but don't start it yet)
+            print("🎙️ RecordingSession: Adding microphone to audio router")
+            let micSource = await audioRouter.addMicrophone()
+            print("🎙️ RecordingSession: Microphone source created: \(micSource.sourceID)")
         }
 
-        // Start encoder
-        try await encoder.startRecording(to: outputURL, title: title)
+        // Start encoder FIRST with pre-created audio tracks for all sources
+        let audioSourceIDs = audioRouter.allSourceIDs
+        print("🎙️ RecordingSession: Creating encoder with audio tracks for: \(audioSourceIDs)")
+        try await encoder.startRecording(to: outputURL, title: title, audioSourceIDs: audioSourceIDs)
+        print("🎙️ RecordingSession: Encoder started and ready")
+
+        // NOW start audio sources (after encoder is ready to receive samples)
+        print("🎙️ RecordingSession: Starting all audio sources...")
+        try? await audioRouter.startAll()
+        print("🎙️ RecordingSession: Audio sources started. Active sources: \(audioRouter.activeSourceIDs)")
     }
 
     /// Stops the current recording session
@@ -126,7 +133,9 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
         // Stop captures
         screenCapture.stopCapture()
         stopCameraCaptures()
-        audioCapture.stopCapture()
+
+        // Stop all audio sources
+        try? await audioRouter.stopAll()
 
         // Finish encoding
         return try await encoder.finishRecording()
@@ -154,7 +163,7 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
         }
 
         if enableMicrophone {
-            guard await AudioManager.requestPermission() else {
+            guard await MicrophoneAudioSource.requestPermission() else {
                 return false
             }
         }
@@ -180,11 +189,14 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
         await encoder.encodeVideoFrame(composited, timestamp: timestamp)
     }
 
-    private nonisolated func processAudioSampleSync(_ audioSample: CMSampleBuffer) async {
-        guard encoder.isRecording, enableMicrophone else { return }
+    private nonisolated func processAudioSampleSync(_ audioSample: CMSampleBuffer, sourceID: String) async {
+        guard encoder.isRecording else {
+            print("⚠️ RecordingSession: Audio sample from [\(sourceID)] dropped - not recording")
+            return
+        }
 
-        // Encode audio
-        await encoder.encodeAudioSample(audioSample)
+        // Encode audio with source ID for multi-track support
+        await encoder.encodeAudioSample(audioSample, sourceID: sourceID)
     }
 
     // MARK: - Public Utilities
@@ -201,7 +213,25 @@ public var metadataHandler: (@Sendable (CameraMetadataEvent) -> Void)?
 
     /// Get available microphones
     public static func availableMicrophones() -> [AudioDeviceInfo] {
-        return AudioManager.availableMicrophones()
+        return MicrophoneAudioSource.availableMicrophones()
+    }
+
+    // MARK: - Audio Source Management
+
+    /// Enable screen audio capture (macOS only)
+    public var enableScreenAudio: Bool = false {
+        didSet {
+            if enableScreenAudio && !oldValue {
+                Task { @MainActor in
+                    let _ = await audioRouter.addScreenAudio()
+                }
+            }
+        }
+    }
+
+    /// Get audio router for advanced audio source management
+    public var audioSourceRouter: AudioRouter {
+        audioRouter
     }
 
     /// Get camera preview session (first active camera if available)

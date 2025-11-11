@@ -1,4 +1,5 @@
 import Foundation
+import CoreMedia
 
 /// Shared constants for remote camera functionality
 public enum RemoteCameraConstants {

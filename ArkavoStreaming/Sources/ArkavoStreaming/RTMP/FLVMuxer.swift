@@ -210,7 +210,8 @@ public struct FLVMuxer: Sendable {
         var audioData = Data()
 
         // Sound format (4 bits) + sound rate (2 bits) + sound size (1 bit) + sound type (1 bit)
-        // AAC, 44kHz, 16-bit, stereo
+        // AAC, 44/48kHz, 16-bit, stereo
+        // 0x03 = 44/48 kHz, 0x02 = 16-bit, 0x01 = stereo
         let audioFlags: UInt8 = (AudioFormat.aac.rawValue << 4) | 0x03 | 0x02 | 0x01
         audioData.append(audioFlags)
 
@@ -239,8 +240,9 @@ public struct FLVMuxer: Sendable {
         if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDescription, sizeOut: &cookieSize) {
             audioSpecificConfig = Data(bytes: cookie, count: cookieSize)
         } else {
-            // Default AAC-LC, 44.1kHz, stereo
-            audioSpecificConfig = Data([0x12, 0x10])
+            // Default AAC-LC, 48kHz, stereo
+            // 0x11, 0x90 = AAC-LC (2), 48kHz (3), stereo (2)
+            audioSpecificConfig = Data([0x11, 0x90])
         }
 
         // Create audio data

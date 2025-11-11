@@ -271,21 +271,41 @@ extension VideoStreamDecoder {
     /// - Returns: CMFormatDescription for H.264 video
     public static func createFormatDescription(sps: Data, pps: Data) throws -> CMFormatDescription {
         let parameterSets = [sps, pps]
-        let parameterSetPointers = parameterSets.map { $0.withUnsafeBytes { $0.baseAddress! } }
-        let parameterSetSizes = parameterSets.map { $0.count }
 
         var formatDescription: CMFormatDescription?
-        let status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
-            allocator: kCFAllocatorDefault,
-            parameterSetCount: 2,
-            parameterSetPointers: parameterSetPointers,
-            parameterSetSizes: parameterSetSizes,
-            nalUnitHeaderLength: 4,
-            formatDescriptionOut: &formatDescription
-        )
 
-        guard status == noErr, let formatDescription = formatDescription else {
-            throw DecoderError.sessionCreationFailed(status)
+        // Use withUnsafeBytes to get proper pointers
+        try sps.withUnsafeBytes { spsBytes in
+            try pps.withUnsafeBytes { ppsBytes in
+                guard let spsPointer = spsBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                      let ppsPointer = ppsBytes.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                    throw DecoderError.noFormatDescription
+                }
+
+                let pointers: [UnsafePointer<UInt8>] = [spsPointer, ppsPointer]
+                let sizes: [Int] = [sps.count, pps.count]
+
+                let status = pointers.withUnsafeBufferPointer { pointersBuffer in
+                    sizes.withUnsafeBufferPointer { sizesBuffer in
+                        CMVideoFormatDescriptionCreateFromH264ParameterSets(
+                            allocator: kCFAllocatorDefault,
+                            parameterSetCount: 2,
+                            parameterSetPointers: pointersBuffer.baseAddress!,
+                            parameterSetSizes: sizesBuffer.baseAddress!,
+                            nalUnitHeaderLength: 4,
+                            formatDescriptionOut: &formatDescription
+                        )
+                    }
+                }
+
+                guard status == noErr else {
+                    throw DecoderError.sessionCreationFailed(status)
+                }
+            }
+        }
+
+        guard let formatDescription = formatDescription else {
+            throw DecoderError.sessionCreationFailed(-1)
         }
 
         return formatDescription
