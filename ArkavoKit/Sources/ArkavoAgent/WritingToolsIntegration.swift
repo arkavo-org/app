@@ -31,20 +31,9 @@ public final class WritingToolsIntegration: ObservableObject {
     /// Check if Writing Tools are available on this device
     private func checkAvailability() {
         #if canImport(FoundationModels)
-        #if os(iOS)
-            if #available(iOS 26.0, *) {
+        #if os(iOS) || os(macOS)
+            if #available(iOS 26.0, macOS 26.0, *) {
                 // Check Foundation Models availability (powers Writing Tools features)
-                if case .available = SystemLanguageModel.default.availability {
-                    isAvailable = true
-                    session = LanguageModelSession()
-                } else {
-                    isAvailable = false
-                }
-            } else {
-                isAvailable = false
-            }
-        #elseif os(macOS)
-            if #available(macOS 26.0, *) {
                 if case .available = SystemLanguageModel.default.availability {
                     isAvailable = true
                     session = LanguageModelSession()

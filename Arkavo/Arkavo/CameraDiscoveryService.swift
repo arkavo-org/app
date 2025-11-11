@@ -152,16 +152,7 @@ final class CameraDiscoveryService: NSObject, ObservableObject {
                         let hostString = "\(host)"
                         let portInt = Int(port.rawValue)
                         print("✅ [NWBrowser] Resolved: \(name) -> \(hostString):\(portInt)")
-
-                        let key = "\(name)|\(hostString)|\(portInt)"
-                        let server = DiscoveredServer(
-                            id: key,
-                            name: name,
-                            host: hostString,
-                            port: portInt
-                        )
-                        self.discoveredServersMap[key] = server
-                        self.updateDiscoveredServers()
+                        self.addServer(name: name, host: hostString, port: portInt)
                     }
                     connection.cancel()
                 case .failed:
@@ -173,6 +164,18 @@ final class CameraDiscoveryService: NSObject, ObservableObject {
         }
 
         connection.start(queue: .main)
+    }
+
+    private func addServer(name: String, host: String, port: Int) {
+        let key = "\(name)|\(host)|\(port)"
+        let server = DiscoveredServer(
+            id: key,
+            name: name,
+            host: host,
+            port: port
+        )
+        discoveredServersMap[key] = server
+        updateDiscoveredServers()
     }
 
     private func updateDiscoveredServers() {
@@ -237,15 +240,7 @@ extension CameraDiscoveryService: @preconcurrency NetServiceBrowserDelegate, @pr
         }
 
         print("✅ [Bonjour] Resolved: \(sender.name) -> \(hostName):\(sender.port)")
-        let key = "\(sender.name)|\(hostName)|\(sender.port)"
-        let server = DiscoveredServer(
-            id: key,
-            name: sender.name,
-            host: hostName,
-            port: sender.port
-        )
-        discoveredServersMap[key] = server
-        updateDiscoveredServers()
+        addServer(name: sender.name, host: hostName, port: sender.port)
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
