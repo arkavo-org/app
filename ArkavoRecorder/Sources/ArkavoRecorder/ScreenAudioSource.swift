@@ -1,6 +1,6 @@
+import CoreMedia
 #if os(macOS)
 @preconcurrency import AVFoundation
-import CoreMedia
 import ScreenCaptureKit
 
 /// Audio source for capturing system/screen audio on macOS
@@ -157,3 +157,4 @@ public final class ScreenAudioSource: AudioSource {
 }
 
 #endif
+

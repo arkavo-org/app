@@ -25,6 +25,12 @@ struct AvatarRecordView: View {
         }
         .onAppear {
             initializeRenderer()
+            renderer?.resume()
+            viewModel.activate()
+        }
+        .onDisappear {
+            renderer?.pause()
+            viewModel.deactivate()
         }
     }
 

@@ -41,6 +41,9 @@ class AvatarViewModel: ObservableObject {
     // Multi-source body tracking management
     private var bodySources: [String: ARBodySource] = [:]
 
+    // Lifecycle state
+    private var isActive = false
+
     private final class MetadataObserverToken: @unchecked Sendable {
         let value: NSObjectProtocol
         init(_ value: NSObjectProtocol) {
@@ -126,6 +129,22 @@ class AvatarViewModel: ObservableObject {
         self.renderer = renderer
     }
 
+    // MARK: - Lifecycle Management
+
+    func activate() {
+        isActive = true
+        #if DEBUG
+        print("▶️ [AvatarViewModel] Activated - will process metadata")
+        #endif
+    }
+
+    func deactivate() {
+        isActive = false
+        #if DEBUG
+        print("⏸️ [AvatarViewModel] Deactivated - will ignore metadata")
+        #endif
+    }
+
     // MARK: - Multi-Source Management
 
     private var logFrameCount = 0  // For throttling logs
@@ -135,6 +154,9 @@ class AvatarViewModel: ObservableObject {
     /// This method manages multiple camera sources (e.g., iPhone + iPad)
     /// and uses the ARFaceSource infrastructure for proper multi-source handling.
     private func handleMetadataEvent(_ event: CameraMetadataEvent) {
+        // Early exit if not active (avatar mode not visible)
+        guard isActive else { return }
+
         let shouldLog = logFrameCount % 30 == 0  // Log every 30th frame (~1 per second at 30fps)
         logFrameCount += 1
 

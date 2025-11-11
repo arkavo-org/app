@@ -34,6 +34,10 @@ class VRMAvatarRenderer: NSObject {
     private(set) var error: Error?
     private var updateCount = 0  // For logging control
 
+    // Lifecycle state
+    private(set) var isPaused = false
+    weak var mtkView: MTKView?
+
     // Idle animation state
     private var idleAnimationTimer: Timer?
     private var breathingPhase: Float = 0
@@ -82,18 +86,24 @@ class VRMAvatarRenderer: NSObject {
         error = nil
 
         do {
+            #if DEBUG
             print("[VRMAvatarRenderer] Loading model from: \(url.path)")
+            #endif
 
             // Load VRM model
             let vrmModel = try await VRMModel.load(from: url, device: device)
             model = vrmModel
 
+            #if DEBUG
             print("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
+            #endif
 
             // Load into renderer
             renderer?.loadModel(vrmModel)
 
+            #if DEBUG
             print("[VRMAvatarRenderer] Model loaded into renderer")
+            #endif
 
             isLoaded = true
 
@@ -114,6 +124,7 @@ class VRMAvatarRenderer: NSObject {
 
     /// Performs a visual self-check by animating through expressions
     private func performVisualSelfCheck(model: VRMModel) async {
+        #if DEBUG
         print("\n🎬 [Visual Self-Check] Starting expression animation test...")
 
         guard let expressionController else {
@@ -214,6 +225,7 @@ class VRMAvatarRenderer: NSObject {
         }
 
         print("\n✅ [Visual Self-Check] Complete - starting idle animation\n")
+        #endif
     }
 
     // MARK: - Idle Animation
@@ -221,7 +233,9 @@ class VRMAvatarRenderer: NSObject {
     private func startIdleAnimation() {
         stopIdleAnimation()
 
+        #if DEBUG
         print("💤 [Idle Animation] Starting breathing and blink animation")
+        #endif
 
         nextBlinkTime = CACurrentMediaTime() + Double.random(in: 2.0...5.0)
 
@@ -270,6 +284,36 @@ class VRMAvatarRenderer: NSObject {
                 nextBlinkTime = now + Double.random(in: 2.0...6.0)
             }
         }
+    }
+
+    // MARK: - Lifecycle Management
+
+    /// Pause rendering and animations (call when view is hidden)
+    func pause() {
+        guard !isPaused else { return }
+        isPaused = true
+
+        stopIdleAnimation()
+        mtkView?.isPaused = true
+
+        #if DEBUG
+        print("⏸️ [VRMAvatarRenderer] Paused")
+        #endif
+    }
+
+    /// Resume rendering and animations (call when view is visible)
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+
+        mtkView?.isPaused = false
+        if isLoaded {
+            startIdleAnimation()
+        }
+
+        #if DEBUG
+        print("▶️ [VRMAvatarRenderer] Resumed")
+        #endif
     }
 
     // MARK: - Camera Setup
@@ -489,11 +533,15 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     /// - Parameter blendShapes: ARKit face blend shapes from VRMMetalKit
     func applyFaceTracking(blendShapes: ARKitFaceBlendShapes) {
         guard let expressionController else {
+            #if DEBUG
             print("[VRMAvatarRenderer] No expression controller available for face tracking")
+            #endif
             return
         }
 
+        #if DEBUG
         print("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes")
+        #endif
 
         // Use ARKitFaceDriver to map, smooth, and apply blend shapes
         faceDriver.update(
@@ -549,11 +597,15 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     /// - Parameter skeleton: ARKit body skeleton from VRMMetalKit
     func applyBodyTracking(skeleton: ARKitBodySkeleton) {
         guard let model else {
+            #if DEBUG
             print("[VRMAvatarRenderer] No model available for body tracking")
+            #endif
             return
         }
 
+        #if DEBUG
         print("[VRMAvatarRenderer] Applying body tracking - \(skeleton.joints.count) joints")
+        #endif
 
         // Use ARKitBodyDriver to map, smooth, and apply skeleton
         bodyDriver.update(

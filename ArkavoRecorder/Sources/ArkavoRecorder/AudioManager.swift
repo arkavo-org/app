@@ -33,9 +33,11 @@ public final class AudioManager: NSObject, Sendable {
     private func setupSession() {
         captureSession.beginConfiguration()
 
-        // Setup audio output with Linear PCM format
+        // Setup audio output
+        // On macOS, we can configure Linear PCM format explicitly.
+        // On iOS, `audioSettings` is unavailable; rely on default format and convert if needed downstream.
+        #if os(macOS)
         // Configure to output 16-bit Linear PCM at 44.1kHz stereo
-        // This matches the VideoEncoder's expected format and avoids conversion issues
         let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 44100.0,
@@ -46,6 +48,7 @@ public final class AudioManager: NSObject, Sendable {
             AVLinearPCMIsBigEndianKey: false
         ]
         audioOutput.audioSettings = audioSettings
+        #endif
         audioOutput.setSampleBufferDelegate(self, queue: outputQueue)
 
         if captureSession.canAddOutput(audioOutput) {

@@ -14,7 +14,8 @@ public final class MicrophoneAudioSource: NSObject, AudioSource, Sendable {
     }
 
     public var format: AudioFormat {
-        // Return the configured output format
+        // Note: On iOS, AVCaptureAudioDataOutput does not expose `audioSettings`; the actual capture format
+        // may be device-dependent. We target 48kHz/16-bit/stereo for downstream processing.
         AudioFormat(sampleRate: 48000.0, channels: 2, bitDepth: 16, formatID: kAudioFormatLinearPCM)
     }
 
@@ -59,9 +60,10 @@ public final class MicrophoneAudioSource: NSObject, AudioSource, Sendable {
     private func setupSession() {
         captureSession.beginConfiguration()
 
-        // Setup audio output with Linear PCM format at 48kHz
+        // Setup audio output
+        // On macOS, we can configure explicit Linear PCM settings. On iOS, `audioSettings` is unavailable.
+        #if os(macOS)
         // Output format: 16-bit Linear PCM, 48kHz, stereo
-        // This is the professional standard for video and works best with FairPlay/YouTube/Twitch
         let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 48000.0,
@@ -72,6 +74,8 @@ public final class MicrophoneAudioSource: NSObject, AudioSource, Sendable {
             AVLinearPCMIsBigEndianKey: false
         ]
         audioOutput.audioSettings = audioSettings
+        #endif
+
         audioOutput.setSampleBufferDelegate(self, queue: outputQueue)
 
         if captureSession.canAddOutput(audioOutput) {
@@ -258,3 +262,4 @@ extension MicrophoneAudioSource: AVCaptureAudioDataOutputSampleBufferDelegate {
         return min(1.0, rms * 10) // Scale and clamp to 0-1
     }
 }
+
