@@ -1,4 +1,4 @@
-import ArkavoAgent
+import ArkavoKit
 import SwiftUI
 
 /// Detailed view for a specific agent showing metadata and connection controls

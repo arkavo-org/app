@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import ArkavoRecorder
-import ArkavoRecorderShared
+import ArkavoKit
+import ArkavoKit
 import SwiftUI
 import VRMMetalKit
 

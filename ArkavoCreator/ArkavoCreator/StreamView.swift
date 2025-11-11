@@ -1,9 +1,12 @@
 import SwiftUI
-import ArkavoRecorder
+import ArkavoKit
 
 struct StreamView: View {
     @State private var viewModel = StreamViewModel()
-    @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
+    @StateObject private var twitchClient = TwitchAuthClient(
+        clientId: Secrets.twitchClientId,
+        clientSecret: Secrets.twitchClientSecret
+    )
     @StateObject private var webViewPresenter = WebViewPresenter()
     @ObservedObject private var previewStore = CameraPreviewStore.shared
 

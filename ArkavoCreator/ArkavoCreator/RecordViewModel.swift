@@ -1,5 +1,5 @@
 import ArkavoC2PA
-import ArkavoRecorder
+import ArkavoKit
 import AVFoundation
 import Foundation
 import SwiftUI

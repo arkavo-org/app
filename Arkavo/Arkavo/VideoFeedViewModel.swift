@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import AVFoundation
 import Foundation
 import OpenTDFKit

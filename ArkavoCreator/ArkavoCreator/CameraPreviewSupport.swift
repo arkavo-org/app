@@ -1,5 +1,5 @@
 import SwiftUI
-import ArkavoRecorder
+import ArkavoKit
 
 @MainActor
 final class CameraPreviewStore: ObservableObject {

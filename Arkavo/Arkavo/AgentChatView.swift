@@ -1,4 +1,4 @@
-import ArkavoAgent
+import ArkavoKit
 import SwiftUI
 
 /// Chat interface for messaging with an A2A agent

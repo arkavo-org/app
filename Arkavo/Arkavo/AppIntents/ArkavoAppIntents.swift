@@ -1,5 +1,5 @@
 import AppIntents
-import ArkavoAgent
+import ArkavoKit
 import Foundation
 
 /// Main app intents for Arkavo - enables Siri, Spotlight, and Apple Intelligence integration

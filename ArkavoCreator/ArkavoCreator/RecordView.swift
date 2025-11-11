@@ -1,4 +1,4 @@
-import ArkavoRecorder
+import ArkavoKit
 import AVFoundation
 import SwiftUI
 

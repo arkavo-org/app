@@ -1,7 +1,7 @@
 import SwiftUI
-import ArkavoRecorder
+import ArkavoKit
 import ArkavoStreaming
-import ArkavoSocial
+import ArkavoKit
 
 @Observable
 @MainActor

@@ -1,5 +1,5 @@
-import ArkavoRecorder
-import ArkavoSocial
+import ArkavoKit
+import ArkavoKit
 import AVFoundation
 import CryptoKit
 import FlatBuffers

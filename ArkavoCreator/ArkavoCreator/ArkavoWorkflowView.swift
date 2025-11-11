@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import AuthenticationServices
 import CoreML
 import CryptoKit

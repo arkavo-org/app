@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import ArkavoSocial
+import ArkavoKit
 import CommonCrypto
 
 @MainActor
@@ -21,7 +21,8 @@ class TwitchAuthClient: ObservableObject {
 
     // OAuth Configuration
     private let clientId: String
-    private let redirectURI = "https://webauthn.arkavo.net/oauth/arkavocreator/twitch"
+    private let clientSecret: String
+    private let redirectURI = "https://webauthn.arkavo.net/oauth/arkavocreator/twitch"  // Server-based redirect
     private let authURL = "https://id.twitch.tv/oauth2/authorize"
     private let tokenURL = "https://id.twitch.tv/oauth2/token"
     private let scopes = [
@@ -29,23 +30,20 @@ class TwitchAuthClient: ObservableObject {
         "channel:read:stream_key"  // Note: This scope may not actually work - Twitch restricts stream key access
     ]
 
-    // PKCE (Proof Key for Code Exchange) - for public clients
-    private var codeVerifier: String = ""
-    private var codeChallenge: String = ""
-
     // MARK: - Initialization
 
-    init(clientId: String) {
+    init(clientId: String, clientSecret: String) {
         self.clientId = clientId
+        self.clientSecret = clientSecret
         loadStoredCredentials()
     }
 
     // MARK: - Public Methods
 
-    /// Generates the OAuth authorization URL with PKCE
-    var authorizationURL: URL {
-        // Generate PKCE values
-        generatePKCEValues()
+    /// Generates the OAuth authorization URL
+    /// Uses standard Authorization Code Grant Flow (no PKCE)
+    func generateAuthorizationURL() -> URL {
+        print("🔍 Generating authorization URL (Authorization Code Grant Flow)")
 
         var components = URLComponents(string: authURL)!
         components.queryItems = [
@@ -53,11 +51,17 @@ class TwitchAuthClient: ObservableObject {
             URLQueryItem(name: "redirect_uri", value: redirectURI),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "scope", value: scopes.joined(separator: " ")),
-            URLQueryItem(name: "code_challenge", value: codeChallenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "force_verify", value: "true")
         ]
-        return components.url!
+
+        let url = components.url!
+        print("🔍 Authorization URL: \(url.absoluteString)")
+        return url
+    }
+
+    /// Convenience property that generates a new authorization URL
+    var authorizationURL: URL {
+        generateAuthorizationURL()
     }
 
     /// Handles the OAuth callback
@@ -123,66 +127,46 @@ class TwitchAuthClient: ObservableObject {
 
     // MARK: - Private Methods
 
-    // MARK: - PKCE Implementation
-
-    /// Generates PKCE code_verifier and code_challenge for OAuth flow
-    private func generatePKCEValues() {
-        // Generate code_verifier: random 128-character string
-        codeVerifier = generateRandomString(length: 128)
-
-        // Generate code_challenge: BASE64URL(SHA256(code_verifier))
-        codeChallenge = sha256(codeVerifier)
-    }
-
-    /// Generates a cryptographically secure random string
-    private func generateRandomString(length: Int) -> String {
-        let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-        var randomString = ""
-
-        for _ in 0..<length {
-            let randomIndex = Int.random(in: 0..<characters.count)
-            let character = characters[characters.index(characters.startIndex, offsetBy: randomIndex)]
-            randomString.append(character)
-        }
-
-        return randomString
-    }
-
-    /// Generates SHA256 hash and returns base64url-encoded string
-    private func sha256(_ string: String) -> String {
-        guard let data = string.data(using: .utf8) else { return "" }
-
-        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        data.withUnsafeBytes {
-            _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
-        }
-
-        // Convert to base64url encoding (RFC 4648)
-        let base64 = Data(hash).base64EncodedString()
-        return base64
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-
     private func exchangeCodeForToken(_ code: String) async throws {
-        var components = URLComponents(string: tokenURL)!
-        components.queryItems = [
+        print("🔍 Exchanging code for token (Authorization Code Grant Flow)...")
+        print("🔍 Client ID: \(clientId)")
+        print("🔍 Redirect URI: \(redirectURI)")
+        print("🔍 Code: \(code)")
+
+        // Build the request body as form data
+        // Use client_secret for Authorization Code Grant Flow (not PKCE)
+        var bodyComponents = URLComponents()
+        bodyComponents.queryItems = [
             URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret),
             URLQueryItem(name: "code", value: code),
-            URLQueryItem(name: "code_verifier", value: codeVerifier), // PKCE verifier instead of client_secret
             URLQueryItem(name: "grant_type", value: "authorization_code"),
             URLQueryItem(name: "redirect_uri", value: redirectURI)
         ]
 
-        var request = URLRequest(url: components.url!)
+        print("🔍 Token request parameters: client_id, client_secret, code, grant_type, redirect_uri")
+
+        var request = URLRequest(url: URL(string: tokenURL)!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        // Set the body with the form data (remove the leading '?')
+        request.httpBody = bodyComponents.query?.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ Token exchange: Invalid HTTP response")
+            throw TwitchError.tokenExchangeFailed
+        }
+
+        // Log the response for debugging
+        print("🔍 Token exchange response status: \(httpResponse.statusCode)")
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("🔍 Token exchange response body: \(responseString)")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            print("❌ Token exchange failed with status: \(httpResponse.statusCode)")
             throw TwitchError.tokenExchangeFailed
         }
 

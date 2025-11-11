@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import SwiftUI
 
 enum Tab {

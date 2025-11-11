@@ -1,4 +1,4 @@
-import ArkavoRecorder
+import ArkavoKit
 import Foundation
 
 /// Utility for detecting the best ARKit mode for a device

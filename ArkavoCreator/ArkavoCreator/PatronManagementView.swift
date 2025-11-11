@@ -5,7 +5,7 @@
 //  Created by Paul Flynn on 11/29/24.
 //
 
-import ArkavoSocial
+import ArkavoKit
 import SwiftUI
 
 // MARK: - Main View

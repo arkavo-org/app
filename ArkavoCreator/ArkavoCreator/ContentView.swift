@@ -1,5 +1,5 @@
-import ArkavoContent
-import ArkavoSocial
+import ArkavoKit
+import ArkavoKit
 import SwiftUI
 
 // MARK: - Main Content View
@@ -13,7 +13,10 @@ struct ContentView: View {
     @StateObject var micropubClient: MicropubClient
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
-    @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
+    @StateObject private var twitchClient = TwitchAuthClient(
+        clientId: Secrets.twitchClientId,
+        clientSecret: Secrets.twitchClientSecret
+    )
 
     var body: some View {
         NavigationSplitView {

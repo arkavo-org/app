@@ -16,7 +16,7 @@
 
 import Foundation
 import VRMMetalKit
-import ArkavoRecorderShared
+import ArkavoKit
 import simd
 
 final class AtomicBool: @unchecked Sendable {
