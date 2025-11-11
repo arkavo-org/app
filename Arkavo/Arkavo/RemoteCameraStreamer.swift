@@ -128,7 +128,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
-    private var videoEncoder: VideoStreamEncoder?
+    // private var videoEncoder: VideoStreamEncoder?  // Disabled: VideoStreamEncoder not in Xcode project
     private var currentTrackingState: ARFaceTrackingState = .unknown
     private var lastFrameSent: CFTimeInterval = 0
     private let frameInterval: CFTimeInterval = RemoteCameraConstants.frameInterval
@@ -208,10 +208,13 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
         // Only auto-detect if user hasn't manually selected a mode
         if !hasManualModeSelection {
-            let detectedMode = ARKitModeDetector.detectBestMode()
-            print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
-            self.mode = detectedMode
-            self.autoDetectedMode = detectedMode
+            // Disabled: ARKitModeDetector not in Xcode project
+            // let detectedMode = ARKitModeDetector.detectBestMode()
+            // print("🎭 [Direct] Auto-detected mode: \(detectedMode)")
+            // self.mode = detectedMode
+            // self.autoDetectedMode = detectedMode
+            print("🎭 [Direct] Using default mode: \(mode)")
+            self.autoDetectedMode = mode
         } else {
             print("🎭 [Direct] Using manual mode selection: \(mode)")
             self.autoDetectedMode = mode
@@ -238,10 +241,13 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
         // Only auto-detect if user hasn't manually selected a mode
         if !hasManualModeSelection {
-            let detectedMode = ARKitModeDetector.detectBestMode()
-            print("🎭 [SmartConnect] Auto-detected mode: \(detectedMode)")
-            self.mode = detectedMode
-            self.autoDetectedMode = detectedMode
+            // Disabled: ARKitModeDetector not in Xcode project
+            // let detectedMode = ARKitModeDetector.detectBestMode()
+            // print("🎭 [SmartConnect] Auto-detected mode: \(detectedMode)")
+            // self.mode = detectedMode
+            // self.autoDetectedMode = detectedMode
+            print("🎭 [SmartConnect] Using default mode: \(mode)")
+            self.autoDetectedMode = mode
         } else {
             print("🎭 [SmartConnect] Using manual mode selection: \(mode)")
             self.autoDetectedMode = mode
@@ -418,12 +424,13 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connection.start(queue: .global(qos: .userInitiated))
 
         do {
-            // Create video encoder for H.264 streaming
-            let encoder = try VideoStreamEncoder { [weak self] naluData, isKeyFrame, timestamp in
-                self?.sendVideoNALU(naluData, isKeyFrame: isKeyFrame, timestamp: timestamp)
-            }
-            try encoder.start()
-            self.videoEncoder = encoder
+            // Disabled: VideoStreamEncoder not in Xcode project
+            // // Create video encoder for H.264 streaming
+            // let encoder = try VideoStreamEncoder { [weak self] naluData, isKeyFrame, timestamp in
+            //     self?.sendVideoNALU(naluData, isKeyFrame: isKeyFrame, timestamp: timestamp)
+            // }
+            // try encoder.start()
+            // self.videoEncoder = encoder
 
             // Start ARKit capture
             let captureManager = ARKitCaptureManager()
@@ -437,13 +444,14 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     }
 
     func stopStreaming() {
-        // Stop video encoder
-        if let encoder = videoEncoder {
-            Task {
-                try? await encoder.stop()
-            }
-        }
-        videoEncoder = nil
+        // Disabled: VideoStreamEncoder not in Xcode project
+        // // Stop video encoder
+        // if let encoder = videoEncoder {
+        //     Task {
+        //         try? await encoder.stop()
+        //     }
+        // }
+        // videoEncoder = nil
 
         // Stop capture
         captureManager?.stop()
@@ -494,31 +502,14 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         send(message: message)
     }
 
-    private func send(message: RemoteCameraMessage) {
-        guard let connection else { return }
-        processingQueue.async { [weak self] in
-            guard let self else { return }
-            do {
-                var data = try self.encoder.encode(message)
-                data.append(0x0A)
-                connection.send(content: data, completion: .contentProcessed { error in
-                    if let error {
-                        print("⚠️ RemoteCameraStreamer send error: \(error)")
-                    }
-                })
-            } catch {
-                print("⚠️ RemoteCameraStreamer encoding error: \(error)")
-            }
-        }
-    }
-
     private func encodeFrame(buffer: CVPixelBuffer, timestamp: CMTime) {
         let now = CACurrentMediaTime()
         guard now - lastFrameSent >= frameInterval else { return }
         lastFrameSent = now
 
         // Encode with H.264 (callback will handle sending)
-        try? videoEncoder?.encode(buffer, timestamp: timestamp)
+        // Disabled: VideoStreamEncoder not in Xcode project
+        // try? videoEncoder?.encode(buffer, timestamp: timestamp)
     }
 
     private func sendVideoNALU(_ naluData: Data, isKeyFrame: Bool, timestamp: CMTime) {
