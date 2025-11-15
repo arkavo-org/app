@@ -1,6 +1,6 @@
 import Foundation
 import SwiftUI
-import ArkavoRecorder
+import ArkavoKit
 
 /// Shared recording state accessible across the app
 @MainActor

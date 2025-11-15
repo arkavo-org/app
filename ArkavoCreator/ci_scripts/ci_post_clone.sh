@@ -24,6 +24,7 @@ enum Secrets {
     static let patreonClientId = "${PATREON_CLIENT_ID}"
     static let patreonClientSecret = "${PATREON_CLIENT_SECRET}"
     static let twitchClientId = "${TWITCH_CLIENT_ID}"
+    static let twitchClientSecret = "${TWITCH_CLIENT_SECRET}"
 }
 EOT
 

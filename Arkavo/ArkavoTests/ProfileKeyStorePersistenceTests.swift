@@ -4,8 +4,7 @@ import XCTest
 
 // MARK: - Mock PersistenceController
 
-@MainActor
-class MockPersistenceControllerForKeyStore {
+class MockPersistenceControllerForKeyStore: @unchecked Sendable {
     // Make savePeerProfile always succeed without context handling
     var savePeerProfileCalled = false
     var lastSavedProfile: Profile?
@@ -70,7 +69,7 @@ final class ProfileKeyStorePersistenceTests: XCTestCase {
     var mockPersistenceController: MockPersistenceControllerForKeyStore!
     var testProfile: Profile!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
         mockPersistenceController = MockPersistenceControllerForKeyStore()
         testProfile = Profile(name: "Test Peer")

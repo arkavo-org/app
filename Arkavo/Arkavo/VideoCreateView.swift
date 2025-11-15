@@ -1,4 +1,5 @@
-import ArkavoSocial
+import ArkavoKit
+import ArkavoKit
 import AVFoundation
 import CryptoKit
 import FlatBuffers
@@ -214,6 +215,10 @@ struct ModernRecordingInterface: View {
                     .textFieldStyle(.roundedBorder)
                     .padding()
                     .background(.ultraThinMaterial)
+
+                StreamingCard(streamer: viewModel.remoteStreamer)
+                    .padding(.horizontal)
+
                 Spacer()
 
                 VStack(spacing: 32) {
@@ -256,6 +261,401 @@ struct FlipCameraButton: View {
                 .foregroundStyle(.white)
                 .padding(12)
                 .background(.ultraThinMaterial, in: Circle())
+        }
+    }
+}
+
+struct StreamingCard: View {
+    @ObservedObject var streamer: RemoteCameraStreamer
+    @State private var showDeveloperMode = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var longPressTimer: Timer?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main smart button
+            Button(action: handleTap) {
+                VStack(spacing: 12) {
+                    // Icon that changes based on state
+                    ZStack {
+                        Image(systemName: iconName)
+                            .font(.system(size: 48))
+                            .foregroundStyle(iconColor)
+                            .symbolEffect(.pulse, isActive: isAnimating)
+
+                        if showProgress {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                        }
+                    }
+
+                    // Title that adapts to connection state
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    // Subtitle with mode info when streaming
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            }
+            .buttonStyle(.plain)
+            .background(buttonBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(borderColor, lineWidth: 2)
+            )
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 3.0)
+                    .onEnded { _ in
+                        showDeveloperMode = true
+                    }
+            )
+
+            // Developer mode (expandable)
+            if showDeveloperMode {
+                DeveloperModeView(streamer: streamer, onClose: {
+                    withAnimation {
+                        showDeveloperMode = false
+                    }
+                })
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .alert("Connection Error", isPresented: $showErrorAlert) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: streamer.connectionState) { _, newState in
+            if case .failed(let error) = newState {
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleTap() {
+        switch streamer.connectionState {
+        case .idle, .failed:
+            Task {
+                await streamer.smartConnect()
+            }
+        case .streaming:
+            Task {
+                await streamer.smartDisconnect()
+            }
+        case .discovering, .connecting:
+            // Do nothing during transitional states
+            break
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    private var iconName: String {
+        switch streamer.connectionState {
+        case .idle:
+            return "play.circle.fill"
+        case .discovering:
+            return "wifi.circle"
+        case .connecting:
+            return "arrow.triangle.2.circlepath"
+        case .streaming:
+            return "video.circle.fill"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch streamer.connectionState {
+        case .idle:
+            return .blue
+        case .discovering, .connecting:
+            return .orange
+        case .streaming:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+
+    private var title: String {
+        switch streamer.connectionState {
+        case .idle:
+            return "Stream to ArkavoCreator"
+        case .discovering:
+            return "Finding Mac..."
+        case .connecting(let macName):
+            return "Connecting to \(macName)..."
+        case .streaming:
+            return "Streaming Active"
+        case .failed:
+            return "Connection Failed"
+        }
+    }
+
+    private var subtitle: String? {
+        switch streamer.connectionState {
+        case .idle:
+            return "Tap to connect automatically"
+        case .streaming:
+            if let mode = streamer.autoDetectedMode {
+                switch mode {
+                case .face:
+                    return "📱 Front Camera • Face Tracking"
+                case .body:
+                    return "📱 Back Camera • Body Tracking"
+                case .combined:
+                    return "📱📱 Dual Device • Face + Body"
+                }
+            }
+            return nil
+        case .failed(let error):
+            return error.recoverySuggestion
+        default:
+            return nil
+        }
+    }
+
+    private var showProgress: Bool {
+        switch streamer.connectionState {
+        case .discovering, .connecting:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var isAnimating: Bool {
+        switch streamer.connectionState {
+        case .streaming:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var buttonBackground: some View {
+        Group {
+            switch streamer.connectionState {
+            case .idle:
+                Color.blue.opacity(0.1)
+            case .streaming:
+                Color.green.opacity(0.2)
+            case .failed:
+                Color.red.opacity(0.2)
+            default:
+                Color.clear
+            }
+        }
+    }
+
+    private var borderColor: Color {
+        switch streamer.connectionState {
+        case .streaming:
+            return .green
+        case .failed:
+            return .red
+        default:
+            return .clear
+        }
+    }
+}
+
+// MARK: - Developer Mode View
+
+struct DeveloperModeView: View {
+    @ObservedObject var streamer: RemoteCameraStreamer
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Developer Mode")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Divider()
+
+            // Manual host entry
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Manual Connection")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    TextField("Mac Hostname or IP", text: $streamer.host)
+                        .textFieldStyle(.roundedBorder)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    TextField("Port", text: Binding(
+                        get: { streamer.port },
+                        set: { newValue in
+                            let digits = newValue.filter { $0.isNumber }
+                            streamer.port = String(digits.prefix(5))
+                        }
+                    ))
+                    .frame(width: 64)
+                    .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            // Mode picker with VTuber style descriptions
+            VStack(alignment: .leading, spacing: 8) {
+                Text("VTuber Style")
+                    .font(.caption)
+                    .fontWeight(.medium)
+
+                Picker("Mode", selection: $streamer.mode) {
+                    Text("Face Only").tag(ARKitCaptureManager.Mode.face)
+                    Text("Full Body").tag(ARKitCaptureManager.Mode.body)
+                    Text("Dual Device").tag(ARKitCaptureManager.Mode.combined)
+                }
+                .pickerStyle(.segmented)
+
+                // Mode-specific instructions
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: modeIcon)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(modeInstructions)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if streamer.mode == .body {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text("Mount iPhone on stand facing you (like webcam)")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                        .padding(.top, 2)
+                    }
+                }
+            }
+
+            // Discovered servers
+            if !streamer.discoveredServers.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Discovered Servers")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(streamer.discoveredServers) { server in
+                        Button {
+                            streamer.selectServer(server)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(server.name)
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                    Text("\(server.host):\(server.port)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if streamer.host == server.host, streamer.port == "\(server.port)" {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            .padding(8)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+
+            // Manual toggle button
+            Button {
+                streamer.toggleStreaming()
+            } label: {
+                Label(
+                    streamer.state == .streaming ? "Stop Manual Stream" : "Start Manual Stream",
+                    systemImage: "play.fill"
+                )
+                .font(.caption)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            // NFC button
+            #if canImport(CoreNFC) && !targetEnvironment(macCatalyst)
+            Button {
+                streamer.scanWithNFC()
+            } label: {
+                Label("Scan via NFC", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            #endif
+
+            // Debug info
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Debug Info")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+
+                Text("State: \(String(describing: streamer.state))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text("Status: \(streamer.statusMessage)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var modeIcon: String {
+        switch streamer.mode {
+        case .face:
+            return "face.smiling"
+        case .body:
+            return "figure.walk"
+        case .combined:
+            return "person.2.fill"
+        }
+    }
+
+    private var modeInstructions: String {
+        switch streamer.mode {
+        case .face:
+            return "Front camera • Expressions & lip sync • Seated streaming"
+        case .body:
+            return "Back camera • Full body motion • Standing/walking"
+        case .combined:
+            return "2 devices • Face + body simultaneously • Pro setup"
         }
     }
 }
@@ -529,8 +929,9 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
     // MARK: - Properties
 
     let client: ArkavoClient
-    let account: Account
-    let profile: Profile
+   let account: Account
+   let profile: Profile
+    let remoteStreamer = RemoteCameraStreamer()
 
     @Published private(set) var recordingState: RecordingState = .initial
     @Published private(set) var recordingProgress: CGFloat = 0

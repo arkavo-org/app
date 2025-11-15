@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import CryptoKit
 @preconcurrency import MultipeerConnectivity
 import OpenTDFKit
@@ -319,7 +319,8 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
 
     // Internal tracking
     private var resourceProgress: [String: Progress] = [:]
-    private var activeInputStreams: [InputStream: MCPeerID] = [:] // Tracks open streams by peer
+    private let streamManager = StreamManager()
+    nonisolated(unsafe) private var activeStreams: [ObjectIdentifier: InputStream] = [:] // Stream storage - marked unsafe as streams are inherently non-Sendable but access is synchronized
     private var isSettingUpSession: Bool = false // Prevents concurrent session setup
 
     // Error recovery configuration
@@ -559,8 +560,9 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         peerIDToProfileID.removeAll()
         connectedPeerProfiles.removeAll()
         peerKeyExchangeStates.removeAll()
-        activeInputStreams.keys.forEach { $0.close() }
-        activeInputStreams.removeAll()
+        Task {
+            await streamManager.removeAllStreams()
+        }
         resourceProgress.removeAll()
         localKeyStoreInfo = nil
         isRegeneratingKeys = false
@@ -821,7 +823,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
                 continue // Skip this peer
             }
 
-            // 5. Encrypt using ArkavoClient, providing the specific peer's KasMetadata
+            // 5. Encrypt using ArkavoClient, providing the specific peer's KAS key
             print("      Encrypting payload using ArkavoClient with peer's KasMetadata...")
             do {
                 let nanoTDFData = try await arkavoClient.encryptAndSendPayload(
@@ -1428,7 +1430,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             let publicKeyStore = await keyStore.exportPublicKeyStore()
             let publicData = await publicKeyStore.serialize()
             // Use await on the property access
-            await print("   Extracted public KeyStore data.")
+            print("   Extracted public KeyStore data.")
             return publicData
 
         } catch {
@@ -1523,10 +1525,17 @@ extension P2PGroupViewModel: MCSessionDelegate {
                 print("   Cleanup for \(peerID.displayName) (Profile: \(profileID ?? "N/A")) complete.")
 
                 // Close associated input streams
-                let streamsToRemove = self.activeInputStreams.filter { $1.hashValue == peerHash }.keys
-                if !streamsToRemove.isEmpty {
-                    print("   Closing \(streamsToRemove.count) input stream(s) for \(peerID.displayName)")
-                    streamsToRemove.forEach { self.closeAndRemoveStream($0) }
+                Task {
+                    // Fetch stream IDs off the main actor to avoid returning non-Sendable values to MainActor
+                    let streamIDsToRemove = await self.streamManager.streamIDs(for: peerID)
+                    if !streamIDsToRemove.isEmpty {
+                        await MainActor.run {
+                            print("   Closing \(streamIDsToRemove.count) input stream(s) for \(peerID.displayName)")
+                            for streamID in streamIDsToRemove {
+                                self.closeAndRemoveStream(streamID)
+                            }
+                        }
+                    }
                 }
 
                 // Update overall connection status
@@ -1553,11 +1562,15 @@ extension P2PGroupViewModel: MCSessionDelegate {
 
     nonisolated func session(_: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
         print("Received stream '\(streamName)' from \(peerID.displayName)")
+        let streamID = ObjectIdentifier(stream)
+        // Store stream immediately in nonisolated(unsafe) storage
+        activeStreams[streamID] = stream
+        stream.delegate = self // Use nonisolated delegate reference
+        stream.schedule(in: .main, forMode: .default)
+        stream.open()
+        // Register with manager
         Task { @MainActor in
-            self.activeInputStreams[stream] = peerID
-            stream.delegate = self // Use nonisolated delegate reference
-            stream.schedule(in: .main, forMode: .default)
-            stream.open()
+            await self.streamManager.setPeerID(peerID, forStreamID: streamID)
             print("Opened and tracking input stream from \(peerID.displayName)")
         }
     }
@@ -1777,23 +1790,25 @@ extension P2PGroupViewModel: MCNearbyServiceAdvertiserDelegate {
 
 extension P2PGroupViewModel: Foundation.StreamDelegate {
     nonisolated func stream(_ aStream: Foundation.Stream, handle eventCode: Foundation.Stream.Event) {
-        guard let inputStream = aStream as? InputStream else { return }
+        guard aStream is InputStream else { return }
+        let streamID = ObjectIdentifier(aStream)
+        let streamError = aStream.streamError?.localizedDescription
 
         Task { @MainActor in
             // Find associated peer before potential stream removal
-            let peerID = self.activeInputStreams[inputStream]
+            let peerID = await self.streamManager.getPeerID(forStreamID: streamID)
             let peerDesc = peerID?.displayName ?? "Unknown Peer"
 
             switch eventCode {
             case .hasBytesAvailable:
                 // print("StreamDelegate: HasBytesAvailable from \(peerDesc)")
-                self.readInputStream(inputStream) // Read data -> handleIncomingData -> ArkavoClient
+                self.readInputStream(streamID) // Read data -> handleIncomingData -> ArkavoClient
             case .endEncountered:
                 print("StreamDelegate: EndEncountered from \(peerDesc)")
-                self.closeAndRemoveStream(inputStream)
+                self.closeAndRemoveStream(streamID)
             case .errorOccurred:
-                print("StreamDelegate: ErrorOccurred from \(peerDesc): \(aStream.streamError?.localizedDescription ?? "N/A")")
-                self.closeAndRemoveStream(inputStream)
+                print("StreamDelegate: ErrorOccurred from \(peerDesc): \(streamError ?? "N/A")")
+                self.closeAndRemoveStream(streamID)
             case .openCompleted:
                 print("StreamDelegate: OpenCompleted for stream from \(peerDesc)")
             case .hasSpaceAvailable: // Usually for OutputStream
@@ -1805,44 +1820,67 @@ extension P2PGroupViewModel: Foundation.StreamDelegate {
     }
 
     /// Reads available data from an input stream and passes it to `handleIncomingData`.
-    private func readInputStream(_ stream: InputStream) {
-        guard let peerID = activeInputStreams[stream] else {
-            print("StreamDelegate Error: Data from untracked stream. Closing.")
-            closeAndRemoveStream(stream)
-            return
-        }
-        let bufferSize = 1024
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-        var data = Data()
-
-        while stream.hasBytesAvailable {
-            let bytesRead = stream.read(buffer, maxLength: bufferSize)
-            if bytesRead > 0 {
-                data.append(buffer, count: bytesRead)
-            } else if bytesRead < 0 {
-                print("StreamDelegate Error reading from \(peerID.displayName): \(stream.streamError?.localizedDescription ?? "N/A")")
-                closeAndRemoveStream(stream)
+    private func readInputStream(_ streamID: ObjectIdentifier) {
+        Task {
+            guard let peerID = await streamManager.getPeerID(forStreamID: streamID) else {
+                await MainActor.run {
+                    print("StreamDelegate Error: Data from untracked stream. Closing.")
+                    closeAndRemoveStream(streamID)
+                }
                 return
-            } else { // bytesRead == 0 usually means end of stream or temporary pause
-                break
             }
-        }
+            guard let stream = activeStreams[streamID] else {
+                print("StreamDelegate Error: Stream not found in activeStreams.")
+                return
+            }
+            let bufferSize = 1024
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { buffer.deallocate() }
+            var data = Data()
 
-        if !data.isEmpty {
-            // print("StreamDelegate: Read \(data.count) bytes from \(peerID.displayName)")
-            handleIncomingData(data, from: peerID) // Route the data
+            while stream.hasBytesAvailable {
+                let bytesRead = stream.read(buffer, maxLength: bufferSize)
+                if bytesRead > 0 {
+                    data.append(buffer, count: bytesRead)
+                } else if bytesRead < 0 {
+                    await MainActor.run {
+                        print("StreamDelegate Error reading from \(peerID.displayName): \(stream.streamError?.localizedDescription ?? "N/A")")
+                        closeAndRemoveStream(streamID)
+                    }
+                    return
+                } else { // bytesRead == 0 usually means end of stream or temporary pause
+                    break
+                }
+            }
+
+            if !data.isEmpty {
+                await MainActor.run {
+                    // print("StreamDelegate: Read \(data.count) bytes from \(peerID.displayName)")
+                    handleIncomingData(data, from: peerID) // Route the data
+                }
+            }
         }
     }
 
     /// Closes an input stream and removes it from tracking.
-    private func closeAndRemoveStream(_ stream: InputStream) {
+    private func closeAndRemoveStream(_ streamID: ObjectIdentifier) {
+        guard let stream = activeStreams[streamID] else {
+            print("StreamDelegate: Stream not found in activeStreams.")
+            return
+        }
         stream.remove(from: .main, forMode: .default)
         stream.close()
-        if let peerID = activeInputStreams.removeValue(forKey: stream) {
-            print("StreamDelegate: Closed and removed stream for \(peerID.displayName)")
-        } else {
-            print("StreamDelegate: Closed an untracked stream.")
+        activeStreams.removeValue(forKey: streamID)
+        Task {
+            if let peerID = await streamManager.removeStream(withID: streamID) {
+                await MainActor.run {
+                    print("StreamDelegate: Closed and removed stream for \(peerID.displayName)")
+                }
+            } else {
+                await MainActor.run {
+                    print("StreamDelegate: Closed an untracked stream.")
+                }
+            }
         }
     }
 }

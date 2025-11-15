@@ -1,11 +1,11 @@
-import ArkavoContent
-import ArkavoSocial
+import ArkavoKit
+import ArkavoKit
 import SwiftUI
 
 // MARK: - Main Content View
 
 struct ContentView: View {
-    @State private var selectedSection: NavigationSection = .dashboard
+    @State private var selectedSection: NavigationSection = UserDefaults.standard.loadSelectedTab()
     @StateObject private var appState = AppState()
     @Environment(\.colorScheme) var colorScheme
     @StateObject var patreonClient: PatreonClient
@@ -13,7 +13,10 @@ struct ContentView: View {
     @StateObject var micropubClient: MicropubClient
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
-    @StateObject private var twitchClient = TwitchAuthClient(clientId: Secrets.twitchClientId)
+    @StateObject private var twitchClient = TwitchAuthClient(
+        clientId: Secrets.twitchClientId,
+        clientSecret: Secrets.twitchClientSecret
+    )
 
     var body: some View {
         NavigationSplitView {
@@ -86,12 +89,15 @@ struct ContentView: View {
             }
         }
         .environmentObject(appState)
+        .onChange(of: selectedSection) { _, newValue in
+            UserDefaults.standard.saveSelectedTab(newValue)
+        }
     }
 }
 
 // MARK: - Navigation Section Updates
 
-enum NavigationSection: String, CaseIterable {
+enum NavigationSection: String, CaseIterable, Codable {
     case dashboard = "Dashboard"
     case record = "Record"
     case stream = "Stream"
@@ -115,7 +121,7 @@ enum NavigationSection: String, CaseIterable {
         case .dashboard: "square.grid.2x2"
         case .record: "record.circle"
         case .stream: "antenna.radiowaves.left.and.right"
-        case .library: "video.stack"
+        case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
@@ -768,5 +774,26 @@ struct SettingsContent: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - UserDefaults Extension for Tab Persistence
+
+extension UserDefaults {
+    private static let selectedTabKey = "ArkavoCreator.SelectedTab"
+
+    func saveSelectedTab(_ section: NavigationSection) {
+        if let encoded = try? JSONEncoder().encode(section) {
+            set(encoded, forKey: Self.selectedTabKey)
+        }
+    }
+
+    func loadSelectedTab() -> NavigationSection {
+        guard let data = data(forKey: Self.selectedTabKey),
+              let section = try? JSONDecoder().decode(NavigationSection.self, from: data)
+        else {
+            return .dashboard // Default to dashboard if no saved tab
+        }
+        return section
     }
 }

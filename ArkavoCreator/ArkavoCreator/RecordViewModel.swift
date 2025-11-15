@@ -1,5 +1,5 @@
 import ArkavoC2PA
-import ArkavoRecorder
+import ArkavoKit
 import AVFoundation
 import Foundation
 import SwiftUI
@@ -20,6 +20,16 @@ final class RecordViewModel {
     var pipPosition: PiPPosition = .bottomRight
     var enableCamera: Bool = true
     var enableMicrophone: Bool = true
+    var availableCameras: [CameraInfo] = []
+    var selectedCameraIDs: [String] = []
+    var cameraLayout: MultiCameraLayout = .pictureInPicture
+    var remoteBridgeEnabled: Bool = true
+    var remoteBridgePort: String = "0"  // 0 = auto-assign available port
+    var remoteCameraSources: [String] = []
+    private(set) var actualPort: UInt16 = 0  // The actual port being used
+    private var previewStore: CameraPreviewStore?
+    private var hasInitializedSession = false
+    private var remoteCameraServer: RemoteCameraServer?
 
     // Watermark configuration
     var watermarkEnabled: Bool = true // Enabled by default per MVP spec
@@ -37,6 +47,7 @@ final class RecordViewModel {
 
     init() {
         generateDefaultTitle()
+        refreshCameraDevices()
     }
 
     // MARK: - Recording Control
@@ -49,15 +60,21 @@ final class RecordViewModel {
         }
 
         do {
-            // Create recording session
-            let session = try RecordingSession()
+            let session = try acquireRecordingSession()
             session.pipPosition = pipPosition
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
             session.watermarkOpacity = watermarkOpacity
-            recordingSession = session
+            session.cameraLayoutStrategy = resolvedCameraLayout()
+
+            if enableCamera {
+                ensureDefaultCameraSelection()
+                session.setCameraSources(selectedCameraIDs)
+            } else {
+                session.setCameraSources([])
+            }
 
             // Register with shared state for streaming access
             RecordingState.shared.setRecordingSession(session)
@@ -75,7 +92,6 @@ final class RecordViewModel {
             startTimer()
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
-            recordingSession = nil
             RecordingState.shared.setRecordingSession(nil)
         }
     }
@@ -87,26 +103,33 @@ final class RecordViewModel {
         isProcessing = true
 
         do {
+            print("⏹️ Stopping recording session...")
             let outputURL = try await session.stopRecording()
+            print("✅ Recording session stopped, output at: \(outputURL.path)")
 
             // Sign with C2PA
+            print("🔏 Signing recording with C2PA...")
             let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
+            print("✅ Recording signed successfully: \(signedURL.path)")
 
             isRecording = false
             isPaused = false
             duration = 0.0
-            recordingSession = nil
-
             // Unregister from shared state
             RecordingState.shared.setRecordingSession(nil)
 
             // Recording complete - saved successfully
-            print("Recording saved and signed: \(signedURL.path)")
+            print("✅ Recording saved and signed: \(signedURL.path)")
 
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
+            try? activatePreviewPipeline()
+        } catch let error as RecorderError {
+            print("❌ RecorderError during stop: \(error)")
+            self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         } catch {
-            self.error = "Failed to stop recording: \(error.localizedDescription)"
+            print("❌ Error during stop: \(error)")
+            self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         }
 
         isProcessing = false
@@ -203,8 +226,10 @@ final class RecordViewModel {
 
     private func generateDefaultTitle() {
         let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
         title = "Recording \(formatter.string(from: Date()))"
     }
 
@@ -226,7 +251,7 @@ final class RecordViewModel {
     func getAvailableDevices() -> (screens: [ScreenInfo], cameras: [CameraInfo], microphones: [AudioDeviceInfo]) {
         (
             RecordingSession.availableScreens(),
-            RecordingSession.availableCameras(),
+            availableCameras,
             RecordingSession.availableMicrophones(),
         )
     }
@@ -282,5 +307,190 @@ final class RecordViewModel {
         }
 
         return nil
+    }
+
+    // MARK: - Camera Management
+
+    func refreshCameraDevices() {
+        availableCameras = RecordingSession.availableCameras()
+        ensureDefaultCameraSelection()
+        refreshCameraPreview()
+    }
+
+    func isCameraSelected(_ camera: CameraInfo) -> Bool {
+        selectedCameraIDs.contains(camera.id)
+    }
+
+    func toggleCameraSelection(_ camera: CameraInfo, isSelected: Bool) {
+        if isSelected {
+            guard !selectedCameraIDs.contains(camera.id),
+                  selectedCameraIDs.count < MultiCameraLayout.maxSupportedSources
+            else { return }
+            selectedCameraIDs.append(camera.id)
+        } else {
+            selectedCameraIDs.removeAll { $0 == camera.id }
+        }
+        recordingSession?.setCameraSources(selectedCameraIDs)
+        refreshCameraPreview()
+    }
+
+    func canSelectMoreCameras(for camera: CameraInfo) -> Bool {
+        isCameraSelected(camera) || selectedCameraIDs.count < MultiCameraLayout.maxSupportedSources
+    }
+
+    func cameraTransportLabel(for camera: CameraInfo) -> String {
+        camera.transport.displayName
+    }
+
+    private var remoteIDsSet: Set<String> {
+        Set(remoteCameraSources)
+    }
+
+    private func ensureDefaultCameraSelection() {
+        guard enableCamera else { return }
+        if selectedCameraIDs.isEmpty,
+           let first = availableCameras.first
+        {
+            selectedCameraIDs = [first.id]
+        } else {
+            // Remove selections no longer available
+            let availableIDs = Set(availableCameras.map(\.id)).union(remoteIDsSet)
+            selectedCameraIDs.removeAll { !availableIDs.contains($0) }
+        }
+    }
+
+    private func resolvedCameraLayout() -> MultiCameraLayout {
+        selectedCameraIDs.count > 1 ? cameraLayout : .pictureInPicture
+    }
+
+    var currentPreviewSourceID: String? {
+        if let local = selectedCameraIDs.first {
+            return local
+        }
+        return remoteCameraSources.first
+    }
+
+    func bindPreviewStore(_ store: CameraPreviewStore) {
+        previewStore = store
+        Task {
+            try? activatePreviewPipeline()
+        }
+    }
+
+    @discardableResult
+    private func acquireRecordingSession() throws -> RecordingSession {
+        if let session = recordingSession {
+            return session
+        }
+
+        let session = try RecordingSession()
+        session.metadataHandler = { event in
+            print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
+            NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
+            print("   └─ Notification posted: .cameraMetadataUpdated")
+        }
+        session.remoteSourcesHandler = { [weak self] sources in
+            Task { @MainActor in
+                self?.handleRemoteSourceUpdate(sources)
+            }
+        }
+        if previewStore == nil {
+            previewStore = CameraPreviewStore.shared
+        }
+        if let store = previewStore {
+            session.previewHandler = { event in
+                Task { @MainActor in
+                    store.update(with: event)
+                }
+            }
+        }
+        recordingSession = session
+        return session
+    }
+
+    func activatePreviewPipeline() throws {
+        let session = try acquireRecordingSession()
+
+        if remoteBridgeEnabled {
+            let portValue = UInt16(remoteBridgePort) ?? 0
+            let serviceName = suggestedHostname
+            print("🔧 [RecordViewModel] Enabling remote camera bridge with port: \(portValue == 0 ? "auto" : String(portValue))")
+            try? session.enableRemoteCameraBridge(port: portValue, serviceName: serviceName)
+
+            // Get the actual port that was assigned
+            if let server = session.remoteCameraServer {
+                actualPort = server.port
+                print("✅ [RecordViewModel] Remote camera server active on port \(actualPort)")
+            }
+        }
+
+        if enableCamera && !selectedCameraIDs.isEmpty {
+            try? session.startCameraPreview(for: selectedCameraIDs)
+        }
+    }
+
+    func refreshCameraPreview() {
+        guard let session = recordingSession else { return }
+
+        if enableCamera, !selectedCameraIDs.isEmpty {
+            try? session.startCameraPreview(for: selectedCameraIDs)
+        } else {
+            session.stopCameraPreview()
+        }
+    }
+
+    private func handleRemoteSourceUpdate(_ sources: [String]) {
+        let newSources = sources.sorted()
+
+        // Only process if sources actually changed
+        guard newSources != remoteCameraSources else {
+            return  // No change, skip processing
+        }
+
+        print("📱 [RemoteCameras] Received source update: \(sources.count) source(s)")
+        for source in sources {
+            print("  └─ \(source)")
+        }
+
+        remoteCameraSources = newSources
+
+        let availableIDs = Set(availableCameras.map(\.id)).union(remoteCameraSources)
+        selectedCameraIDs.removeAll { !availableIDs.contains($0) }
+
+        let missing = sources.filter { !selectedCameraIDs.contains($0) }
+        let remainingSlots = max(0, MultiCameraLayout.maxSupportedSources - selectedCameraIDs.count)
+        if remainingSlots > 0 {
+            selectedCameraIDs.append(contentsOf: missing.prefix(remainingSlots))
+            print("✅ [RemoteCameras] Auto-selected \(missing.prefix(remainingSlots).count) new source(s)")
+        }
+
+        print("📋 [RemoteCameras] Total selected cameras: \(selectedCameraIDs)")
+        recordingSession?.setCameraSources(selectedCameraIDs)
+        refreshCameraPreview()
+    }
+
+    func isRemoteCameraSelected(_ id: String) -> Bool {
+        selectedCameraIDs.contains(id)
+    }
+
+    func toggleRemoteCameraSelection(_ id: String, isSelected: Bool) {
+        if isSelected {
+            guard !selectedCameraIDs.contains(id),
+                  selectedCameraIDs.count < MultiCameraLayout.maxSupportedSources
+            else { return }
+            selectedCameraIDs.append(id)
+        } else {
+            selectedCameraIDs.removeAll { $0 == id }
+        }
+        recordingSession?.setCameraSources(selectedCameraIDs)
+        refreshCameraPreview()
+    }
+
+    var suggestedHostname: String {
+        Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    }
+
+    var connectionInfo: String {
+        "arkavo://connect?host=\(suggestedHostname)&port=\(actualPort)"
     }
 }

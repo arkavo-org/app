@@ -7,7 +7,4 @@
    <FileRef
       location = "group:ArkavoCreator/ArkavoCreator.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "container:ArkavoSocial">
-   </FileRef>
 </Workspace>

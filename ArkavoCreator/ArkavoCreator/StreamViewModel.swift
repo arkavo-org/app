@@ -1,7 +1,7 @@
 import SwiftUI
-import ArkavoRecorder
+import ArkavoKit
 import ArkavoStreaming
-import ArkavoSocial
+import ArkavoKit
 
 @Observable
 @MainActor
@@ -98,6 +98,10 @@ final class StreamViewModel {
         } else {
             return String(format: "%02d:%02d", minutes, seconds)
         }
+    }
+
+    var previewSourceID: String? {
+        recordingState.getRecordingSession()?.cameraSourceIdentifiers.first
     }
 
     // MARK: - Actions

@@ -195,14 +195,19 @@ class VRMDownloader: ObservableObject {
 
         let modelsDirectory = documentsPath.appendingPathComponent("VRMModels", isDirectory: true)
 
+        print("[VRMDownloader] Checking models directory: \(modelsDirectory.path)")
+
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: modelsDirectory,
             includingPropertiesForKeys: nil,
         ) else {
+            print("[VRMDownloader] Could not read directory (may not exist yet)")
             return []
         }
 
-        return files.filter { $0.pathExtension.lowercased() == "vrm" }
+        let vrmFiles = files.filter { $0.pathExtension.lowercased() == "vrm" }
+        print("[VRMDownloader] Found \(vrmFiles.count) .vrm files in directory")
+        return vrmFiles
     }
 
     /// Deletes a downloaded VRM model

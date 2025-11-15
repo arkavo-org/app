@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import SwiftUI
 
 enum Tab {
@@ -55,7 +55,7 @@ struct ContentView: View {
                 // Main Content
                 switch sharedState.selectedTab {
                 case .home:
-                    if sharedState.isOfflineMode {
+                    if sharedState.isOfflineMode && !sharedState.showCreateView {
                         // Show offline home view when in offline mode
                         OfflineHomeView()
                             .environmentObject(sharedState)

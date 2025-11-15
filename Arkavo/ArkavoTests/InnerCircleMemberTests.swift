@@ -14,9 +14,7 @@ extension Notification.Name {
 // MARK: - Mock PersistenceController
 
 // Minimal mock focusing on deleteKeyStoreDataFor
-// Note: PersistenceController is @MainActor, mocks interacting with it might need @MainActor too
-@MainActor
-class MockPersistenceController {
+class MockPersistenceController: @unchecked Sendable {
     var deleteKeyStoreDataForCalled = false
     var lastProfileDeletedKeyStoreFor: Data?
     var shouldThrowError = false
@@ -61,9 +59,7 @@ class MockPersistenceController {
 // MARK: - Mock PeerDiscoveryManager
 
 // Minimal mock focusing on disconnectPeer
-// Note: PeerDiscoveryManager is @MainActor
-@MainActor
-class MockPeerDiscoveryManager: ObservableObject {
+class MockPeerDiscoveryManager: ObservableObject, @unchecked Sendable {
     var disconnectPeerCalled = false
     var lastPeerDisconnected: MCPeerID?
 
@@ -83,7 +79,7 @@ final class InnerCircleMemberTests: XCTestCase {
     var testProfile: Profile!
     var testPeerID: MCPeerID!
 
-    @MainActor override func setUpWithError() throws {
+    override func setUpWithError() throws {
         try super.setUpWithError()
         mockPersistenceController = MockPersistenceController()
         mockPeerDiscoveryManager = MockPeerDiscoveryManager()

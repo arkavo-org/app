@@ -1,4 +1,4 @@
-import ArkavoAgent
+import ArkavoKit
 import SwiftUI
 
 /// View for discovering and browsing local A2A agents on the network

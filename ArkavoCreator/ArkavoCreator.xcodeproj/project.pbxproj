@@ -7,12 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA072CFB643300BE9912 /* ArkavoSocial */; };
-		DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = DA91AA0D2CFB659800BE9912 /* ArkavoSocial */; };
-		DA9837742EAEA270001DC9E3 /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = DA9837732EAEA270001DC9E3 /* ArkavoC2PA */; };
-		DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */ = {isa = PBXBuildFile; productRef = DACF22322CFE9B4B00814332 /* ArkavoContent */; };
-		DADB16FD2EAE8F9D00D0593B /* ArkavoRecorder in Frameworks */ = {isa = PBXBuildFile; productRef = DADB16FC2EAE8F9D00D0593B /* ArkavoRecorder */; };
 		DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAVRM0042CFB643500BE9912 /* VRMMetalKit */; };
+		REFAC00000000000000000003 /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = REFAC00000000000000000002 /* ArkavoKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,12 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA91AA082CFB643300BE9912 /* ArkavoSocial in Frameworks */,
-				DA91AA0E2CFB659800BE9912 /* ArkavoSocial in Frameworks */,
-				DADB16FD2EAE8F9D00D0593B /* ArkavoRecorder in Frameworks */,
-				DACF22332CFE9B4B00814332 /* ArkavoContent in Frameworks */,
-				DA9837742EAEA270001DC9E3 /* ArkavoC2PA in Frameworks */,
 				DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */,
+				REFAC00000000000000000003 /* ArkavoKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,12 +119,9 @@
 			);
 			name = ArkavoCreator;
 			packageProductDependencies = (
-				DA91AA072CFB643300BE9912 /* ArkavoSocial */,
-				DA91AA0D2CFB659800BE9912 /* ArkavoSocial */,
-				DACF22322CFE9B4B00814332 /* ArkavoContent */,
 				DAVRM0042CFB643500BE9912 /* VRMMetalKit */,
-				DADB16FC2EAE8F9D00D0593B /* ArkavoRecorder */,
-				DA9837732EAEA270001DC9E3 /* ArkavoC2PA */,
+				REFAC00000000000000000002 /* ArkavoKit */,
+				REFAC00000000000000000006 /* ArkavoC2PA */,
 			);
 			productName = ArkavoCreator;
 			productReference = DA91A9BA2CFB625000BE9912 /* ArkavoCreator.app */;
@@ -192,7 +181,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1610;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					DA91A9B92CFB625000BE9912 = {
 						CreatedOnToolsVersion = 16.1;
@@ -217,11 +206,8 @@
 			mainGroup = DA91A9B12CFB625000BE9912;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DA91AA0C2CFB659800BE9912 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
-				DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
 				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
-				DADB16FB2EAE8F9D00D0593B /* XCLocalSwiftPackageReference "../ArkavoRecorder" */,
-				DA9837722EAEA270001DC9E3 /* XCLocalSwiftPackageReference "../ArkavoC2PA" */,
+				REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -438,6 +424,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Arkavo Creator";
@@ -474,6 +462,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Arkavo Creator";
@@ -605,21 +595,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DA91AA0C2CFB659800BE9912 /* XCLocalSwiftPackageReference "../ArkavoSocial" */ = {
+		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoSocial;
-		};
-		DA9837722EAEA270001DC9E3 /* XCLocalSwiftPackageReference "../ArkavoC2PA" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoC2PA;
-		};
-		DACF22312CFE9B4B00814332 /* XCLocalSwiftPackageReference "../ArkavoContent" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoContent;
-		};
-		DADB16FB2EAE8F9D00D0593B /* XCLocalSwiftPackageReference "../ArkavoRecorder" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoRecorder;
+			relativePath = ../ArkavoKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -629,36 +607,26 @@
 			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
 			requirement = {
 				kind = exactVersion;
-				version = 0.2.0;
+				version = 0.3.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DA91AA072CFB643300BE9912 /* ArkavoSocial */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ArkavoSocial;
-		};
-		DA91AA0D2CFB659800BE9912 /* ArkavoSocial */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ArkavoSocial;
-		};
-		DA9837732EAEA270001DC9E3 /* ArkavoC2PA */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ArkavoC2PA;
-		};
-		DACF22322CFE9B4B00814332 /* ArkavoContent */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ArkavoContent;
-		};
-		DADB16FC2EAE8F9D00D0593B /* ArkavoRecorder */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ArkavoRecorder;
-		};
 		DAVRM0042CFB643500BE9912 /* VRMMetalKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */;
 			productName = VRMMetalKit;
+		};
+		REFAC00000000000000000002 /* ArkavoKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */;
+			productName = ArkavoKit;
+		};
+		REFAC00000000000000000006 /* ArkavoC2PA */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */;
+			productName = ArkavoC2PA;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

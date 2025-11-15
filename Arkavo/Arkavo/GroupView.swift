@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import FlatBuffers
 import OpenTDFKit
 import SwiftData

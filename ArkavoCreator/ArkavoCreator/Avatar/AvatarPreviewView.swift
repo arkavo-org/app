@@ -38,6 +38,11 @@ struct AvatarPreviewView: NSViewRepresentable {
         // Enable depth testing
         mtkView.depthStencilPixelFormat = .depth32Float
 
+        // Store reference in renderer for pause/resume control
+        Task { @MainActor in
+            renderer.mtkView = mtkView
+        }
+
         return mtkView
     }
 

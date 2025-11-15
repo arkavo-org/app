@@ -7,6 +7,7 @@ import ArkavoC2PA
 
 extension Notification.Name {
     static let recordingCompleted = Notification.Name("recordingCompleted")
+    static let cameraMetadataUpdated = Notification.Name("cameraMetadataUpdated")
 }
 
 /// Represents a recorded video file

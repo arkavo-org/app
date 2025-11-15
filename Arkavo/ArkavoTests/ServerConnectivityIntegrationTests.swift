@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import XCTest
 
 /// Integration tests that verify connectivity to the Arkavo backend server

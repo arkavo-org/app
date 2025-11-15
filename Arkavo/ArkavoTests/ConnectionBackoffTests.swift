@@ -1,6 +1,6 @@
 import XCTest
 @testable import Arkavo
-import ArkavoSocial
+import ArkavoKit
 
 /// Tests for connection retry backoff behavior
 /// Verifies that the app properly throttles connection attempts after failures

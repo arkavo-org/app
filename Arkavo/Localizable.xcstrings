@@ -354,6 +354,9 @@
     "Connecting..." : {
 
     },
+    "Connection Error" : {
+
+    },
     "Connection Failed" : {
 
     },
@@ -396,6 +399,9 @@
     "Data mode" : {
 
     },
+    "Debug Info" : {
+
+    },
     "Delete" : {
 
     },
@@ -409,6 +415,9 @@
 
     },
     "Delete Video" : {
+
+    },
+    "Developer Mode" : {
 
     },
     "Disconnect" : {
@@ -429,6 +438,9 @@
     "Discovered Devices (%lld)" : {
 
     },
+    "Discovered Servers" : {
+
+    },
     "Done" : {
       "localizations" : {
         "es-US" : {
@@ -438,6 +450,9 @@
           }
         }
       }
+    },
+    "Dual Device" : {
+
     },
     "Effective Date: 2025-01-15" : {
 
@@ -485,6 +500,9 @@
     "Face ID Terms & Conditions" : {
 
     },
+    "Face Only" : {
+
+    },
     "Failed to load image" : {
 
     },
@@ -498,6 +516,9 @@
 
     },
     "For security, confirm the device name with the person before connecting." : {
+
+    },
+    "Full Body" : {
 
     },
     "Go to the Profile page to create a local profile and start using Out-of-Band messaging." : {
@@ -641,6 +662,9 @@
     "logo" : {
 
     },
+    "Mac Hostname or IP" : {
+
+    },
     "Make sure an agent is running on your local network" : {
 
     },
@@ -648,6 +672,9 @@
 
     },
     "Make sure this is the person you want to connect with. They will receive a connection request." : {
+
+    },
+    "Manual Connection" : {
 
     },
     "Map" : {
@@ -673,7 +700,13 @@
     "Military-grade encryption for your data" : {
 
     },
+    "Mode" : {
+
+    },
     "More Options" : {
+
+    },
+    "Mount iPhone on stand facing you (like webcam)" : {
 
     },
     "My Account" : {
@@ -785,6 +818,9 @@
           }
         }
       }
+    },
+    "Port" : {
+
     },
     "Post" : {
 
@@ -930,6 +966,9 @@
         }
       }
     },
+    "Scan via NFC" : {
+
+    },
     "Scanning for Devices..." : {
 
     },
@@ -1047,6 +1086,9 @@
         }
       }
     },
+    "Start Manual Stream" : {
+
+    },
     "Start New Chat" : {
 
     },
@@ -1057,6 +1099,12 @@
 
     },
     "Started: %@ ago" : {
+
+    },
+    "State: %@" : {
+
+    },
+    "Status: %@" : {
 
     },
     "Stop" : {
@@ -1071,6 +1119,9 @@
       }
     },
     "Stop Discovery" : {
+
+    },
+    "Stop Manual Stream" : {
 
     },
     "Stopped" : {
@@ -1099,6 +1150,9 @@
           }
         }
       }
+    },
+    "Stream to ArkavoCreator" : {
+
     },
     "Streaming" : {
 
@@ -1252,6 +1306,9 @@
       }
     },
     "Voice" : {
+
+    },
+    "VTuber Style" : {
 
     },
     "Welcome to Arkavo!" : {

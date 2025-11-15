@@ -1,4 +1,4 @@
-import ArkavoAgent
+import ArkavoKit
 import SwiftUI
 
 /// View displaying active and recent agent chat sessions

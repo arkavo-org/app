@@ -1,4 +1,4 @@
-import ArkavoSocial
+import ArkavoKit
 import SwiftUI
 
 struct CreatorView: View {
