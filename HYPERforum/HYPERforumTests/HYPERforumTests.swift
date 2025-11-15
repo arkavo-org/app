@@ -158,6 +158,7 @@ final class HYPERforumTests: XCTestCase {
 
     // MARK: - Helper Methods
 
+    @MainActor
     private func createMockClient() -> ArkavoClient {
         return ArkavoClient(
             authURL: URL(string: "https://test.arkavo.net")!,

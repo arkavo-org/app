@@ -211,7 +211,7 @@ class WebAuthnManager: ObservableObject {
             let did = try arkavoClient.generateDID()
 
             // Register with WebAuthn
-            let token = try await arkavoClient.registerUser(handle: handle, did: did)
+            _ = try await arkavoClient.registerUser(handle: handle, did: did)
 
             // Token is returned, registration successful
             print("Registration successful, token received")

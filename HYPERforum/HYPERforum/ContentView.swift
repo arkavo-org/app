@@ -14,6 +14,7 @@ struct ContentView: View {
                 WelcomeView(showingAuthSheet: $showingAuthSheet)
             }
         }
+        .accessibilityIdentifier("view_content")
     }
 }
 
@@ -54,15 +55,18 @@ struct WelcomeView: View {
                             )
                         )
                         .shadow(color: Color(red: 1.0, green: 0.4, blue: 0.0).opacity(0.5), radius: 20)
+                        .accessibilityIdentifier("logo_xi")
 
                     Text("HYPΞRforum")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
+                        .accessibilityIdentifier("text_appTitle")
 
                     Text("Cyber-Renaissance Communication")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.white.opacity(0.7))
                         .padding(.top, 5)
+                        .accessibilityIdentifier("text_appSubtitle")
                 }
 
                 Spacer()
@@ -94,6 +98,7 @@ struct WelcomeView: View {
                     )
                 }
                 .padding(.horizontal, 40)
+                .accessibilityIdentifier("list_welcomeFeatures")
 
                 Spacer()
 
@@ -122,6 +127,7 @@ struct WelcomeView: View {
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("button_signInPasskey")
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
                 .sheet(isPresented: $showingAuthSheet) {
@@ -175,6 +181,7 @@ struct MainForumView: View {
                     ForEach(SidebarItem.allCases) { item in
                         Label(item.title, systemImage: item.icon)
                             .tag(item)
+                            .accessibilityIdentifier("sidebar_\(item.rawValue)")
                     }
                 }
 
@@ -186,9 +193,11 @@ struct MainForumView: View {
                                 .frame(width: 8, height: 8)
                             Text(group.name)
                         }
+                        .accessibilityIdentifier("sidebarGroup_\(group.id)")
                     }
                 }
             }
+            .accessibilityIdentifier("list_sidebar")
             .navigationTitle("HYPΞRforum")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -200,9 +209,11 @@ struct MainForumView: View {
                                 appState.signOut()
                             }
                         }
+                        .accessibilityIdentifier("button_signOut")
                     } label: {
                         Image(systemName: "person.circle")
                     }
+                    .accessibilityIdentifier("menu_userProfile")
                 }
             }
         } detail: {
@@ -213,11 +224,12 @@ struct MainForumView: View {
             case .discussions:
                 DiscussionsView()
             case .council:
-                CouncilView()
+                CouncilView(messages: [])
             case .settings:
                 SettingsView()
             }
         }
+        .accessibilityIdentifier("view_mainForum")
     }
 }
 
@@ -270,6 +282,7 @@ struct GroupsView: View {
             }
             .padding()
         }
+        .accessibilityIdentifier("view_groups")
         .navigationTitle("Groups")
         .navigationDestination(item: $selectedGroup) { group in
             ChatView(group: group)
@@ -309,15 +322,10 @@ struct GroupCard: View {
                 .lineLimit(2)
 
             if let lastMessage = group.lastMessage {
-                HStack {
-                    Text("Last: ")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    + Text(lastMessage.content)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
+                Text("Last: \(lastMessage.content)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
         }
         .padding()
@@ -333,6 +341,7 @@ struct GroupCard: View {
             }
         }
         .contentShape(Rectangle())
+        .accessibilityIdentifier("card_group_\(group.id)")
     }
 }
 
@@ -345,30 +354,7 @@ struct DiscussionsView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct CouncilView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 60))
-                .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.0))
-
-            Text("AI Council")
-                .font(.largeTitle)
-
-            Text("Your personal AI agents are ready to assist")
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button("Activate Council") {
-                // Activate council
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        .accessibilityIdentifier("view_discussions")
     }
 }
 
@@ -377,21 +363,28 @@ struct SettingsView: View {
         Form {
             Section("Appearance") {
                 Toggle("Dark Mode", isOn: .constant(true))
+                    .accessibilityIdentifier("toggle_darkMode")
                 ColorPicker("Accent Color", selection: .constant(Color(red: 1.0, green: 0.4, blue: 0.0)))
+                    .accessibilityIdentifier("picker_accentColor")
             }
 
             Section("Privacy") {
                 Toggle("Enable Encryption", isOn: .constant(true))
+                    .accessibilityIdentifier("toggle_enableEncryption")
                 Toggle("Show Online Status", isOn: .constant(false))
+                    .accessibilityIdentifier("toggle_onlineStatus")
             }
 
             Section("Notifications") {
                 Toggle("Group Messages", isOn: .constant(true))
+                    .accessibilityIdentifier("toggle_groupMessages")
                 Toggle("Council Insights", isOn: .constant(true))
+                    .accessibilityIdentifier("toggle_councilInsights")
             }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .accessibilityIdentifier("view_settings")
     }
 }
 
@@ -426,7 +419,10 @@ struct AuthenticationView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 300)
                 .autocorrectionDisabled()
+                #if os(iOS) || targetEnvironment(macCatalyst)
                 .textInputAutocapitalization(.never)
+                #endif
+                .accessibilityIdentifier("field_accountName")
 
             if showError {
                 Text(errorMessage)
@@ -434,6 +430,7 @@ struct AuthenticationView: View {
                     .font(.caption)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                    .accessibilityIdentifier("text_authError")
             }
 
             Spacer()
@@ -442,6 +439,7 @@ struct AuthenticationView: View {
                 VStack(spacing: 10) {
                     ProgressView()
                         .scaleEffect(1.5)
+                        .accessibilityIdentifier("progress_authenticating")
                     Text(isRegistering ? "Creating account..." : "Authenticating...")
                         .foregroundColor(.secondary)
                 }
@@ -455,22 +453,26 @@ struct AuthenticationView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(accountName.isEmpty)
+                    .accessibilityIdentifier(isRegistering ? "button_register" : "button_signIn")
 
                     Button(isRegistering ? "Already have an account? Sign in" : "Need an account? Register") {
                         isRegistering.toggle()
                         showError = false
                     }
                     .foregroundColor(.secondary)
+                    .accessibilityIdentifier("button_toggleAuthMode")
                 }
             }
 
             Button("Cancel") {
                 dismiss()
             }
+            .accessibilityIdentifier("button_cancelAuth")
             .padding(.bottom)
         }
         .frame(width: 450, height: 550)
         .padding()
+        .accessibilityIdentifier("view_authentication")
     }
 
     func performAuthentication() async {
