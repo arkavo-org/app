@@ -477,6 +477,26 @@ public final class VideoEncoder: Sendable {
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
 
+        // Send sequence headers immediately if we have format descriptions from recording
+        // This ensures Twitch receives codec info right after publish command
+        if let videoFormat = videoFormatDescription {
+            print("📡 Sending video sequence header immediately after publish")
+            try await publisher.publishVideoSequenceHeader(
+                formatDescription: videoFormat,
+                timestamp: .zero
+            )
+            sentVideoSequenceHeader = true
+        }
+
+        if let audioFormat = audioFormatDescription {
+            print("📡 Sending audio sequence header immediately after publish")
+            try await publisher.publishAudioSequenceHeader(
+                formatDescription: audioFormat,
+                timestamp: .zero
+            )
+            sentAudioSequenceHeader = true
+        }
+
         print("✅ RTMP stream started with video encoding")
     }
 
