@@ -76,6 +76,8 @@ public actor RTMPPublisher {
     private var destination: Destination?
     private var streamKey: String?
     private var streamId: UInt32 = 1  // Stream ID from createStream response
+    private var transactionId: Double = 0  // Transaction counter for invoke commands (incremented before each use)
+    private var firstMediaTimestamp: CMTime?  // First media frame timestamp (for normalizing to stream start = 0)
 
     // Statistics
     private var bytesSent: UInt64 = 0
@@ -159,6 +161,21 @@ public actor RTMPPublisher {
         print("✅ RTMP publishing started")
     }
 
+    /// Normalize timestamp to stream start (OBS pattern: first frame = 0ms)
+    private func normalizeTimestamp(_ timestamp: CMTime) -> UInt32 {
+        // Store first media timestamp as reference point
+        if firstMediaTimestamp == nil {
+            firstMediaTimestamp = timestamp
+            print("📊 First media timestamp: \(timestamp.seconds)s - normalizing to 0ms")
+            return 0
+        }
+
+        // Calculate relative timestamp in milliseconds
+        let relativeTime = timestamp - firstMediaTimestamp!
+        let timestampMs = UInt32(max(0, relativeTime.seconds * 1000))
+        return timestampMs
+    }
+
     /// Publish video frame
     public func publishVideo(buffer: CMSampleBuffer, timestamp: CMTime) async throws {
         guard state == .publishing else {
@@ -176,7 +193,7 @@ public actor RTMPPublisher {
 
         // Create video payload and send via RTMP message
         let payload = try FLVMuxer.createVideoPayload(sampleBuffer: buffer, isKeyframe: isKeyframe)
-        let timestampMs = UInt32(timestamp.seconds * 1000)
+        let timestampMs = normalizeTimestamp(timestamp)
         try await sendRTMPVideoMessage(data: payload, timestamp: timestampMs)
 
         framesSent += 1
@@ -193,8 +210,8 @@ public actor RTMPPublisher {
         let payload = try FLVMuxer.createVideoSequenceHeaderPayload(formatDescription: formatDescription)
 
         // Send as RTMP message (message type 9 = video, chunk stream 6 for video)
-        let timestampMs = UInt32(timestamp.seconds * 1000)
-        try await sendRTMPVideoMessage(data: payload, timestamp: timestampMs)
+        // Sequence headers should always be sent with timestamp 0
+        try await sendRTMPVideoMessage(data: payload, timestamp: 0)
         print("✅ Sent video sequence header via RTMP message")
     }
 
@@ -208,8 +225,8 @@ public actor RTMPPublisher {
         let payload = FLVMuxer.createAudioSequenceHeaderPayload(formatDescription: formatDescription)
 
         // Send as RTMP message (message type 8 = audio, chunk stream 4 for audio)
-        let timestampMs = UInt32(timestamp.seconds * 1000)
-        try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
+        // Sequence headers should always be sent with timestamp 0
+        try await sendRTMPAudioMessage(data: payload, timestamp: 0)
         print("✅ Sent audio sequence header via RTMP message")
     }
 
@@ -225,7 +242,7 @@ public actor RTMPPublisher {
 
         // Create audio payload and send via RTMP message
         let payload = try FLVMuxer.createAudioPayload(sampleBuffer: buffer)
-        let timestampMs = UInt32(timestamp.seconds * 1000)
+        let timestampMs = normalizeTimestamp(timestamp)
         try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
     }
 
@@ -239,6 +256,7 @@ public actor RTMPPublisher {
         bytesSent = 0
         framesSent = 0
         startTime = nil
+        firstMediaTimestamp = nil  // Reset timestamp normalization for next stream
     }
 
     // MARK: - Private Methods
@@ -365,7 +383,11 @@ public actor RTMPPublisher {
         )
         print("✅ Sent Window Acknowledgement Size: \(clientWindowSize)")
 
-        // Create RTMP connect command
+        // Reset transaction counter for new connection
+        transactionId = 0
+
+        // Create RTMP connect command (transaction ID 1)
+        transactionId += 1  // = 1
         let tcUrl = "rtmp://\(destination.url.split(separator: "/").prefix(3).joined(separator: "/"))"
         let connectCommand = AMF0.createConnectCommand(
             app: app,
@@ -373,7 +395,7 @@ public actor RTMPPublisher {
         )
 
         // Send connect command (wrapped in RTMP chunk)
-        print("📤 Sending connect command: \(connectCommand.count) bytes")
+        print("📤 Sending connect command (txnId=\(transactionId)): \(connectCommand.count) bytes")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,  // AMF0 command
@@ -385,11 +407,14 @@ public actor RTMPPublisher {
 
         // Wait for connect response (_result or _error)
         print("⏳ Waiting for connect response...")
-        let connectResponseData = try await receiveRTMPChunk()
+        let (connectResponseData, connectResponseBytes) = try await receiveRTMPChunk()
+        bytesReceived += UInt64(connectResponseBytes)
         print("✅ Received connect response")
 
-        // Release stream
-        let releaseStreamCommand = AMF0.createReleaseStreamCommand(streamName: streamKey)
+        // Release stream (transaction ID 2)
+        transactionId += 1  // = 2
+        let releaseStreamCommand = AMF0.createReleaseStreamCommand(streamName: streamKey, transactionId: transactionId)
+        print("📤 Sending releaseStream command (txnId=\(transactionId))")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,
@@ -397,8 +422,10 @@ public actor RTMPPublisher {
             payload: releaseStreamCommand
         )
 
-        // FCPublish
-        let fcPublishCommand = AMF0.createFCPublishCommand(streamName: streamKey)
+        // FCPublish (transaction ID 3)
+        transactionId += 1  // = 3
+        let fcPublishCommand = AMF0.createFCPublishCommand(streamName: streamKey, transactionId: transactionId)
+        print("📤 Sending FCPublish command (txnId=\(transactionId))")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,
@@ -406,8 +433,10 @@ public actor RTMPPublisher {
             payload: fcPublishCommand
         )
 
-        // CreateStream
-        let createStreamCommand = AMF0.createCreateStreamCommand()
+        // CreateStream (transaction ID 4)
+        transactionId += 1  // = 4
+        let createStreamCommand = AMF0.createCreateStreamCommand(transactionId: transactionId)
+        print("📤 Sending createStream command (txnId=\(transactionId))")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,
@@ -419,8 +448,9 @@ public actor RTMPPublisher {
 
         // Wait for createStream _result response (might receive other messages first)
         var receivedStreamId = false
-        for _ in 0..<10 {  // Try up to 10 messages
-            let (messageType, messageData) = try await receiveRTMPMessage()
+        responseLoop: for _ in 0..<10 {  // Try up to 10 messages
+            let (messageType, messageData, messageBytes) = try await receiveRTMPMessage()
+            bytesReceived += UInt64(messageBytes)
 
             // Process control messages even while waiting for createStream response
             switch messageType {
@@ -450,12 +480,12 @@ public actor RTMPPublisher {
                 continue
 
             case 20:  // AMF0 Command
-                // Check if this is a _result message for createStream (transaction ID 2)
+                // Check if this is a _result message for createStream (transaction ID 4)
                 if let parsedStreamId = try? parseCreateStreamResponse(messageData) {
                     streamId = parsedStreamId
                     print("✅ Received stream ID from _result: \(streamId)")
                     receivedStreamId = true
-                    break
+                    break responseLoop  // Exit the for loop, not just the switch
                 }
                 print("📥 Skipping AMF message (not createStream _result)")
 
@@ -468,12 +498,13 @@ public actor RTMPPublisher {
             print("⚠️ Could not parse stream ID from _result, using default: \(streamId)")
         }
 
-        // Send publish command to start streaming
-        print("📤 Preparing to send publish command with streamKey=\(streamKey) streamId=\(streamId)")
+        // Send publish command to start streaming (transaction ID 5)
+        transactionId += 1  // = 5
+        print("📤 Preparing to send publish command with streamKey=\(streamKey) streamId=\(streamId) txnId=\(transactionId)")
         let publishCommand = AMF0.createPublishCommand(
             streamName: streamKey,
             publishingName: "live",
-            transactionId: 0.0
+            transactionId: transactionId
         )
         print("📤 Publish command created, payload size: \(publishCommand.count) bytes")
         try await sendRTMPMessage(
@@ -483,10 +514,11 @@ public actor RTMPPublisher {
             payload: publishCommand
         )
 
-        print("✅ Publish command sent, stream is now live!")
+        print("✅ Publish command sent (txnId=\(transactionId)), stream is now live!")
 
         // Wait for publish success status (NetStream.Publish.Start)
-        let publishStatusData = try await receiveRTMPChunk()
+        let (publishStatusData, publishStatusBytes) = try await receiveRTMPChunk()
+        bytesReceived += UInt64(publishStatusBytes)
         print("✅ Received publish status")
 
         // Start background task to read server messages (acknowledgements, bandwidth notifications, etc.)
@@ -501,11 +533,20 @@ public actor RTMPPublisher {
     private func handleServerMessages() async {
         while state == .publishing {
             do {
-                // Try to read any incoming server messages (returns payload only)
-                let (messageType, messageData) = try await receiveRTMPMessage()
-                bytesReceived += UInt64(messageData.count)
+                // Try to read any incoming server messages with timeout
+                // If no message arrives within 100ms, continue (server may not send anything during normal streaming)
+                let result = try await withTimeout(seconds: 0.1) {
+                    try await self.receiveRTMPMessage()
+                }
 
-                print("📥 Server message: type=\(messageType) len=\(messageData.count) totalReceived=\(bytesReceived)")
+                guard let (messageType, messageData, messageBytes) = result else {
+                    // Timeout - no message received, this is normal during streaming
+                    continue
+                }
+
+                bytesReceived += UInt64(messageBytes)
+
+                print("📥 Server message: type=\(messageType) payloadLen=\(messageData.count) totalBytes=\(messageBytes) totalReceived=\(bytesReceived)")
 
                 // Handle specific message types
                 switch messageType {
@@ -744,16 +785,24 @@ public actor RTMPPublisher {
             let chunkSize = min(remaining, sendChunkSize)
 
             var chunk = Data()
+            let fmt: UInt8
 
             if chunkCount == 0 {
                 // First chunk: Type 0 header + data
+                fmt = 0
                 chunk.append(header)
                 chunk.append(payload[offset..<(offset + chunkSize)])
             } else {
                 // Continuation chunks: Type 3 header (1 byte) + data
                 // Type 3: Format bits 11 (0xC0) + chunk stream ID
+                fmt = 3
                 chunk.append(0xC0 | (chunkStreamId & 0x3F))
                 chunk.append(payload[offset..<(offset + chunkSize)])
+            }
+
+            // Detailed logging for large multi-chunk messages
+            if payload.count > sendChunkSize {
+                print("📤 Chunk[\(chunkCount)]: fmt=\(fmt) csid=\(chunkStreamId) dataLen=\(chunkSize) offset=\(offset) totalPayload=\(payload.count)")
             }
 
             try await sendData(chunk)
@@ -772,7 +821,7 @@ public actor RTMPPublisher {
     /// Send video data as RTMP message (type 9)
     private func sendRTMPVideoMessage(data: Data, timestamp: UInt32) async throws {
         try await sendRTMPMessage(
-            chunkStreamId: 4,  // OBS uses 0x04 for all media (audio and video)
+            chunkStreamId: 6,  // Video chunk stream (must be different from audio)
             messageTypeId: 9,  // Video message
             messageStreamId: streamId,
             payload: data,
@@ -783,7 +832,7 @@ public actor RTMPPublisher {
     /// Send audio data as RTMP message (type 8)
     private func sendRTMPAudioMessage(data: Data, timestamp: UInt32) async throws {
         try await sendRTMPMessage(
-            chunkStreamId: 4,  // Audio chunk stream
+            chunkStreamId: 4,  // Audio chunk stream (must be different from video)
             messageTypeId: 8,  // Audio message
             messageStreamId: streamId,
             payload: data,
@@ -826,22 +875,26 @@ public actor RTMPPublisher {
         print("❌ RTMP send error: \(error)")
     }
 
-    /// Receive RTMP message and return (messageType, payload)
-    private func receiveRTMPMessage() async throws -> (UInt8, Data) {
-        let payload = try await receiveRTMPChunk()
+    /// Receive RTMP message and return (messageType, payload, totalBytes)
+    private func receiveRTMPMessage() async throws -> (UInt8, Data, Int) {
+        let (payload, totalBytes) = try await receiveRTMPChunk()
         // We need to extract message type from the last received chunk
-        // For now, return the payload with a default type - we'll enhance this
         // The message type is stored during receiveRTMPChunk parsing
-        return (lastReceivedMessageType, payload)
+        return (lastReceivedMessageType, payload, totalBytes)
     }
 
     /// Receive and parse an RTMP chunk from the server
-    private func receiveRTMPChunk() async throws -> Data {
+    /// Returns (payload, totalBytesRead) where totalBytesRead includes all headers
+    private func receiveRTMPChunk() async throws -> (Data, Int) {
+        // Track total bytes for acknowledgements (includes headers + payload)
+        var totalBytesRead = 0
+
         // Read chunk basic header (1 byte minimum)
         print("📥 Waiting to receive RTMP chunk...")
         guard let basicHeaderData = try await receiveDataExact(length: 1), basicHeaderData.count > 0 else {
             throw RTMPError.connectionFailed("Failed to receive chunk basic header")
         }
+        totalBytesRead += 1
 
         let firstByte = basicHeaderData[0]
         let format = (firstByte >> 6) & 0x03
@@ -864,6 +917,7 @@ public actor RTMPPublisher {
                 throw RTMPError.connectionFailed("Failed to receive message header")
             }
             messageHeader = header
+            totalBytesRead += headerSize
         }
 
         // Parse message length and type from header (for type 0 and 1)
@@ -891,15 +945,17 @@ public actor RTMPPublisher {
             }
             payload.append(chunk)
             remaining -= chunk.count
+            totalBytesRead += chunk.count
 
             // If more chunks needed, read type 3 header (1 byte)
             if remaining > 0 {
                 _ = try await receiveDataExact(length: 1)
+                totalBytesRead += 1
             }
         }
 
-        print("📥 Received complete chunk: \(payload.count) bytes")
-        return payload
+        print("📥 Received complete chunk: \(payload.count) bytes (total with headers: \(totalBytesRead) bytes)")
+        return (payload, totalBytesRead)
     }
 
     /// Receive exact amount of data, accumulating until we have it all
@@ -928,7 +984,7 @@ public actor RTMPPublisher {
     }
 
     /// Parse the createStream response to extract stream ID
-    /// Twitch format: "_result", transaction ID (2.0), info object, stream ID
+    /// Format: "_result", transaction ID (4.0), info object, stream ID
     private func parseCreateStreamResponse(_ data: Data) throws -> UInt32 {
         guard data.count > 10 else {
             throw RTMPError.publishFailed("Response too short")
@@ -950,7 +1006,7 @@ public actor RTMPPublisher {
         }
         offset += nameLen
 
-        // Read transaction ID - should be 2.0 for createStream
+        // Read transaction ID - should be 4.0 for createStream (after connect=1, releaseStream=2, FCPublish=3)
         guard offset + 9 <= data.count, data[offset] == 0x00 else {
             throw RTMPError.publishFailed("No transaction ID")
         }
@@ -962,9 +1018,9 @@ public actor RTMPPublisher {
         let txnId = Double(bitPattern: txnIdBits)
         offset += 8
 
-        // Verify transaction ID is 2.0 (createStream)
-        guard txnId == 2.0 else {
-            throw RTMPError.publishFailed("Wrong transaction ID: \(txnId), expected 2.0")
+        // Verify transaction ID is 4.0 (createStream)
+        guard txnId == 4.0 else {
+            throw RTMPError.publishFailed("Wrong transaction ID: \(txnId), expected 4.0")
         }
 
         // Skip command object (could be null 0x05 or object 0x03)
@@ -1066,5 +1122,21 @@ public actor RTMPPublisher {
         let duration = Date().timeIntervalSince(startTime)
         guard duration > 0 else { return 0 }
         return Double(bytesSent * 8) / duration  // bits per second
+    }
+
+    /// Execute an async operation with a timeout
+    private func withTimeout<T: Sendable>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T? {
+        return try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return nil
+            }
+            let result = try await group.next()
+            group.cancelAll()
+            return result ?? nil
+        }
     }
 }
