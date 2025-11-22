@@ -34,6 +34,8 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var sentVideoSequenceHeader: Bool = false
     nonisolated(unsafe) private var sentAudioSequenceHeader: Bool = false
     nonisolated(unsafe) private var streamStartTime: CMTime?  // Stream start time for relative timestamps
+    nonisolated(unsafe) private var lastStreamVideoTimestamp: CMTime = .zero  // Last video timestamp sent to stream
+    nonisolated(unsafe) private var lastStreamAudioTimestamp: CMTime = .zero  // Last audio timestamp sent to stream
 
     // Encoding settings
     private let videoWidth: Int = 1920
@@ -406,7 +408,15 @@ public final class VideoEncoder: Sendable {
                     // Send audio data with relative timestamp
                     let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                     let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
+
+                    // Ensure timestamps are monotonically increasing for streaming
+                    if CMTimeCompare(relativeTimestamp, lastStreamAudioTimestamp) <= 0 {
+                        print("⚠️ Skipping audio frame with non-increasing stream timestamp: \(relativeTimestamp.seconds) <= \(lastStreamAudioTimestamp.seconds)")
+                        return
+                    }
+
                     try await publisher.publishAudio(buffer: sampleBuffer, timestamp: relativeTimestamp)
+                    lastStreamAudioTimestamp = relativeTimestamp
                 } catch {
                     // Connection lost - stop streaming
                     if error.localizedDescription.contains("not connected") ||
@@ -479,6 +489,8 @@ public final class VideoEncoder: Sendable {
         sentAudioSequenceHeader = false
         // Use current recording time as stream start, or current time if not recording
         streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
+        lastStreamVideoTimestamp = .zero
+        lastStreamAudioTimestamp = .zero
 
         // Send sequence headers immediately if we have format descriptions from recording
         // This ensures Twitch receives codec info right after publish command
@@ -606,7 +618,15 @@ public final class VideoEncoder: Sendable {
                 // Send video frame with relative timestamp
                 let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                 let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
+
+                // Ensure timestamps are monotonically increasing for streaming
+                if CMTimeCompare(relativeTimestamp, lastStreamVideoTimestamp) <= 0 {
+                    print("⚠️ Skipping video frame with non-increasing stream timestamp: \(relativeTimestamp.seconds) <= \(lastStreamVideoTimestamp.seconds)")
+                    return
+                }
+
                 try await publisher.publishVideo(buffer: sampleBuffer, timestamp: relativeTimestamp)
+                lastStreamVideoTimestamp = relativeTimestamp
             } catch {
                 print("❌ Failed to stream video frame: \(error)")
             }

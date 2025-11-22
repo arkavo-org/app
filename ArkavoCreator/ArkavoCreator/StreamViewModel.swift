@@ -49,6 +49,7 @@ final class StreamViewModel {
     var customRTMPURL: String = ""
     var streamKey: String = ""
     var title: String = ""
+    var isBandwidthTest: Bool = false  // Twitch bandwidth test mode
 
     var isStreaming: Bool = false
     var isConnecting: Bool = false
@@ -131,7 +132,9 @@ final class StreamViewModel {
             )
 
             // Connect and start streaming
-            try await session.startStreaming(to: destination, streamKey: streamKey)
+            // Append bandwidth test flag if enabled (Twitch-specific)
+            let effectiveStreamKey = isBandwidthTest ? "\(streamKey)?bandwidthtest=true" : streamKey
+            try await session.startStreaming(to: destination, streamKey: effectiveStreamKey)
 
             isStreaming = true
             isConnecting = false

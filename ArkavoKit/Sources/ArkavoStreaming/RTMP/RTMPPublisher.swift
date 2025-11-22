@@ -82,9 +82,12 @@ public actor RTMPPublisher {
     private var bytesReceived: UInt64 = 0
     private var framesSent: UInt64 = 0
     private var startTime: Date?
-    private var windowAckSize: UInt32 = 2500000  // Default 2.5MB
+    private var windowAckSize: UInt32 = 2500000  // Our window size (what we tell server)
+    private var serverWindowAckSize: UInt32 = 250000  // Server's window size (for our acks) - default 250KB
     private var lastAckSent: UInt64 = 0
     private var lastReceivedMessageType: UInt8 = 0  // Track message type from last received chunk
+    private var receiveChunkSize: Int = 128  // Current chunk size for receiving (updated by server's SetChunkSize)
+    private var sendChunkSize: Int = 4096  // Our chunk size for sending (set via SetChunkSize message)
 
     public var currentState: State {
         state
@@ -349,6 +352,19 @@ public actor RTMPPublisher {
         )
         print("✅ Sent SetChunkSize: \(newChunkSize)")
 
+        // Send Window Acknowledgement Size to inform server of our window size
+        var windowAckData = Data()
+        let clientWindowSize: UInt32 = 2500000  // 2.5MB window
+        windowAckData.append(contentsOf: clientWindowSize.bigEndianBytes)
+
+        try await sendRTMPMessage(
+            chunkStreamId: 2,
+            messageTypeId: 5,  // Window Acknowledgement Size
+            messageStreamId: 0,
+            payload: windowAckData
+        )
+        print("✅ Sent Window Acknowledgement Size: \(clientWindowSize)")
+
         // Create RTMP connect command
         let tcUrl = "rtmp://\(destination.url.split(separator: "/").prefix(3).joined(separator: "/"))"
         let connectCommand = AMF0.createConnectCommand(
@@ -401,13 +417,55 @@ public actor RTMPPublisher {
 
         print("✅ CreateStream command sent, waiting for stream ID...")
 
-        // Wait for createStream response and extract stream ID
-        let createStreamResponseData = try await receiveRTMPChunk()
-        if let parsedStreamId = try? parseCreateStreamResponse(createStreamResponseData) {
-            streamId = parsedStreamId
-            print("✅ Received stream ID: \(streamId)")
-        } else {
-            print("⚠️ Could not parse stream ID, using default: \(streamId)")
+        // Wait for createStream _result response (might receive other messages first)
+        var receivedStreamId = false
+        for _ in 0..<10 {  // Try up to 10 messages
+            let (messageType, messageData) = try await receiveRTMPMessage()
+
+            // Process control messages even while waiting for createStream response
+            switch messageType {
+            case 1:  // Set Chunk Size - CRITICAL to process immediately!
+                if messageData.count >= 4 {
+                    let chunkSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                   UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                    receiveChunkSize = Int(chunkSize)
+                    print("📥 Server Set Chunk Size: \(chunkSize) (processed during createStream wait)")
+                }
+                continue
+
+            case 4:  // User Control
+                try await handleUserControlMessage(messageData)
+                continue
+
+            case 5:  // Window Acknowledgement Size
+                if messageData.count >= 4 {
+                    serverWindowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                         UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                    print("📥 Server Window Ack Size: \(serverWindowAckSize) (processed during createStream wait)")
+                }
+                continue
+
+            case 6:  // Set Peer Bandwidth
+                print("📥 Server Set Peer Bandwidth (processed during createStream wait)")
+                continue
+
+            case 20:  // AMF0 Command
+                // Check if this is a _result message for createStream (transaction ID 2)
+                if let parsedStreamId = try? parseCreateStreamResponse(messageData) {
+                    streamId = parsedStreamId
+                    print("✅ Received stream ID from _result: \(streamId)")
+                    receivedStreamId = true
+                    break
+                }
+                print("📥 Skipping AMF message (not createStream _result)")
+
+            default:
+                print("📥 Skipping message type \(messageType) while waiting for createStream response")
+            }
+        }
+
+        if !receivedStreamId {
+            print("⚠️ Could not parse stream ID from _result, using default: \(streamId)")
         }
 
         // Send publish command to start streaming
@@ -417,7 +475,7 @@ public actor RTMPPublisher {
             transactionId: 0.0
         )
         try await sendRTMPMessage(
-            chunkStreamId: 3,
+            chunkStreamId: 4,  // OBS uses 0x04 for publish (source channel), not 0x03
             messageTypeId: 20,
             messageStreamId: streamId,
             payload: publishCommand
@@ -453,17 +511,21 @@ public actor RTMPPublisher {
                     if messageData.count >= 4 {
                         let chunkSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
                                        UInt32(messageData[2]) << 8 | UInt32(messageData[3])
-                        print("📥 Server Set Chunk Size: \(chunkSize)")
+                        receiveChunkSize = Int(chunkSize)
+                        print("📥 Server Set Chunk Size: \(chunkSize) - Updated receive chunk size")
                     }
 
                 case 3: // Acknowledgement
                     print("📥 Server sent Acknowledgement")
 
+                case 4: // User Control Message (ping, pong, stream begin, etc.)
+                    try await handleUserControlMessage(messageData)
+
                 case 5: // Window Acknowledgement Size
                     if messageData.count >= 4 {
-                        windowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
-                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
-                        print("📥 Server Window Ack Size: \(windowAckSize)")
+                        serverWindowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                             UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                        print("📥 Server Window Ack Size: \(serverWindowAckSize) - This is the window we should use for sending acks")
                     }
 
                 case 6: // Set Peer Bandwidth
@@ -481,16 +543,22 @@ public actor RTMPPublisher {
                 }
 
                 // Send acknowledgement if we've received enough data
-                if bytesReceived - lastAckSent >= UInt64(windowAckSize) {
+                // OBS sends every window_size/10 bytes (not every full window)
+                let ackThreshold = UInt64(serverWindowAckSize) / 10
+                if bytesReceived - lastAckSent >= ackThreshold {
                     try await sendWindowAcknowledgement(bytesReceived: UInt32(bytesReceived))
                     lastAckSent = bytesReceived
+                    print("✅ Sent Acknowledgement: \(bytesReceived) bytes (threshold: \(ackThreshold), window: \(serverWindowAckSize))")
                 }
 
             } catch {
                 // If we get an error, the connection might be closed
-                if error.localizedDescription.contains("Connection closed") ||
-                   error.localizedDescription.contains("Connection reset") ||
-                   error.localizedDescription.contains("No message available") {
+                let errorMsg = error.localizedDescription
+                print("📥 Error reading server message: \(errorMsg)")
+
+                if errorMsg.contains("Connection closed") ||
+                   errorMsg.contains("Connection reset") ||
+                   errorMsg.contains("No message available") {
                     print("⚠️ Server connection closed")
                     break
                 }
@@ -502,22 +570,119 @@ public actor RTMPPublisher {
 
     /// Handle AMF0 command messages (onStatus, etc.)
     private func handleAMFCommand(_ data: Data) {
-        // Simple parsing to extract command name and status info
-        if let commandStr = String(data: data, encoding: .utf8) {
-            if commandStr.contains("onStatus") {
-                print("📥 onStatus message received")
+        // AMF0 is a binary format, but we can extract strings from it
+        // For debugging, dump the hex and try to extract readable strings
+        let hexString = data.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " ")
+        print("📥 AMF0 command (first 64 bytes): \(hexString)")
 
-                if commandStr.contains("error") {
-                    print("❌ onStatus: ERROR level detected")
-                }
-                if commandStr.contains("NetStream.Publish.Denied") {
-                    print("❌ NetStream.Publish.Denied - Stream rejected!")
-                }
-                if commandStr.contains("NetStream.Publish.Start") {
-                    print("✅ NetStream.Publish.Start - Stream started")
+        // Try to extract any readable strings from the binary data
+        var strings: [String] = []
+        var i = 0
+        while i < data.count {
+            // AMF0 string format: 0x02 (string marker) + 2 bytes length + string data
+            if data[i] == 0x02 && i + 2 < data.count {
+                let length = Int(data[i+1]) << 8 | Int(data[i+2])
+                if length > 0 && i + 3 + length <= data.count {
+                    if let str = String(data: data[(i+3)..<(i+3+length)], encoding: .utf8) {
+                        strings.append(str)
+                        print("📥 AMF0 string found: '\(str)'")
+                    }
+                    i += 3 + length
+                    continue
                 }
             }
+            i += 1
         }
+
+        // Check for specific status messages
+        let combinedStr = strings.joined(separator: " ")
+        if combinedStr.contains("onStatus") {
+            print("📥 onStatus message received")
+
+            if combinedStr.contains("error") {
+                print("❌ onStatus: ERROR level detected")
+            }
+            if combinedStr.contains("NetStream.Publish.Denied") {
+                print("❌ NetStream.Publish.Denied - Stream rejected!")
+            }
+            if combinedStr.contains("NetStream.Publish.Start") {
+                print("✅ NetStream.Publish.Start - Stream started")
+            }
+            if combinedStr.contains("NetConnection.Connect.Success") {
+                print("✅ NetConnection.Connect.Success - Connection accepted")
+            }
+        }
+    }
+
+    /// Handle User Control Messages (type 4)
+    /// Format: 2 bytes event type + event data
+    private func handleUserControlMessage(_ data: Data) async throws {
+        guard data.count >= 2 else {
+            print("📥 Invalid User Control Message: too short")
+            return
+        }
+
+        let eventType = UInt16(data[0]) << 8 | UInt16(data[1])
+
+        switch eventType {
+        case 0: // Stream Begin
+            if data.count >= 6 {
+                let streamId = UInt32(data[2]) << 24 | UInt32(data[3]) << 16 |
+                              UInt32(data[4]) << 8 | UInt32(data[5])
+                print("📥 User Control: Stream Begin (stream ID: \(streamId))")
+            }
+
+        case 1: // Stream EOF
+            print("📥 User Control: Stream EOF")
+
+        case 2: // Stream Dry
+            print("📥 User Control: Stream Dry")
+
+        case 3: // SetBufferLength
+            if data.count >= 10 {
+                let streamId = UInt32(data[2]) << 24 | UInt32(data[3]) << 16 |
+                              UInt32(data[4]) << 8 | UInt32(data[5])
+                let bufferLength = UInt32(data[6]) << 24 | UInt32(data[7]) << 16 |
+                                  UInt32(data[8]) << 8 | UInt32(data[9])
+                print("📥 User Control: SetBufferLength (stream: \(streamId), buffer: \(bufferLength)ms)")
+            }
+
+        case 6: // Ping Request
+            if data.count >= 6 {
+                let timestamp = UInt32(data[2]) << 24 | UInt32(data[3]) << 16 |
+                               UInt32(data[4]) << 8 | UInt32(data[5])
+                print("📥 User Control: Ping Request (timestamp: \(timestamp))")
+                // Send Pong Response
+                try await sendPongResponse(timestamp: timestamp)
+            }
+
+        case 7: // Ping Response (Pong)
+            if data.count >= 6 {
+                let timestamp = UInt32(data[2]) << 24 | UInt32(data[3]) << 16 |
+                               UInt32(data[4]) << 8 | UInt32(data[5])
+                print("📥 User Control: Pong Response (timestamp: \(timestamp))")
+            }
+
+        default:
+            print("📥 User Control: Unknown event type \(eventType)")
+        }
+    }
+
+    /// Send Pong Response to server's Ping Request
+    private func sendPongResponse(timestamp: UInt32) async throws {
+        var pongData = Data()
+        // Event type 7 (Pong Response)
+        pongData.append(contentsOf: [0x00, 0x07])
+        // Echo back the timestamp
+        pongData.append(contentsOf: timestamp.bigEndianBytes)
+
+        try await sendRTMPMessage(
+            chunkStreamId: 2,
+            messageTypeId: 4,  // User Control Message
+            messageStreamId: 0,
+            payload: pongData
+        )
+        print("✅ Sent Pong Response (timestamp: \(timestamp))")
     }
 
     /// Send Window Acknowledgement message to server
@@ -542,44 +707,70 @@ public actor RTMPPublisher {
         payload: Data,
         timestamp: UInt32 = 0
     ) async throws {
-        // RTMP chunk format (Type 0 - full header)
-        var chunk = Data()
+        let messageLength = UInt32(payload.count)
 
-        // Basic header (1-3 bytes)
-        // Format: 00 (Type 0) + chunk stream ID
-        chunk.append(chunkStreamId & 0x3F)
+        // Build Type 0 header (full header with all fields)
+        var header = Data()
+
+        // Basic header (1 byte): Format bits (00 for Type 0) + chunk stream ID
+        header.append(chunkStreamId & 0x3F)
 
         // Message header (11 bytes for Type 0)
         // Timestamp (3 bytes)
-        chunk.append(UInt8((timestamp >> 16) & 0xFF))
-        chunk.append(UInt8((timestamp >> 8) & 0xFF))
-        chunk.append(UInt8(timestamp & 0xFF))
+        header.append(UInt8((timestamp >> 16) & 0xFF))
+        header.append(UInt8((timestamp >> 8) & 0xFF))
+        header.append(UInt8(timestamp & 0xFF))
 
         // Message length (3 bytes)
-        let messageLength = UInt32(payload.count)
-        chunk.append(UInt8((messageLength >> 16) & 0xFF))
-        chunk.append(UInt8((messageLength >> 8) & 0xFF))
-        chunk.append(UInt8(messageLength & 0xFF))
+        header.append(UInt8((messageLength >> 16) & 0xFF))
+        header.append(UInt8((messageLength >> 8) & 0xFF))
+        header.append(UInt8(messageLength & 0xFF))
 
         // Message type ID (1 byte)
-        chunk.append(messageTypeId)
+        header.append(messageTypeId)
 
         // Message stream ID (4 bytes, little endian)
         var streamId = messageStreamId.littleEndian
-        chunk.append(Data(bytes: &streamId, count: 4))
+        header.append(Data(bytes: &streamId, count: 4))
 
-        // Payload
-        chunk.append(payload)
+        // Split payload into chunks and send
+        var offset = 0
+        var chunkCount = 0
 
-        print("📤 RTMP message: type=\(messageTypeId) csid=\(chunkStreamId) msid=\(messageStreamId) ts=\(timestamp) payloadLen=\(payload.count) totalLen=\(chunk.count)")
+        while offset < payload.count {
+            let remaining = payload.count - offset
+            let chunkSize = min(remaining, sendChunkSize)
 
-        try await sendData(chunk)
+            var chunk = Data()
+
+            if chunkCount == 0 {
+                // First chunk: Type 0 header + data
+                chunk.append(header)
+                chunk.append(payload[offset..<(offset + chunkSize)])
+            } else {
+                // Continuation chunks: Type 3 header (1 byte) + data
+                // Type 3: Format bits 11 (0xC0) + chunk stream ID
+                chunk.append(0xC0 | (chunkStreamId & 0x3F))
+                chunk.append(payload[offset..<(offset + chunkSize)])
+            }
+
+            try await sendData(chunk)
+
+            offset += chunkSize
+            chunkCount += 1
+        }
+
+        if chunkCount > 1 {
+            print("📤 RTMP message chunked: type=\(messageTypeId) csid=\(chunkStreamId) ts=\(timestamp) payloadLen=\(payload.count) chunks=\(chunkCount) chunkSize=\(sendChunkSize)")
+        } else {
+            print("📤 RTMP message: type=\(messageTypeId) csid=\(chunkStreamId) ts=\(timestamp) payloadLen=\(payload.count)")
+        }
     }
 
     /// Send video data as RTMP message (type 9)
     private func sendRTMPVideoMessage(data: Data, timestamp: UInt32) async throws {
         try await sendRTMPMessage(
-            chunkStreamId: 6,  // Video chunk stream
+            chunkStreamId: 4,  // OBS uses 0x04 for all media (audio and video)
             messageTypeId: 9,  // Video message
             messageStreamId: streamId,
             payload: data,
@@ -685,15 +876,14 @@ public actor RTMPPublisher {
             }
         }
 
-        // Read the payload in chunks (RTMP uses 128-byte chunks by default)
+        // Read the payload in chunks (use current receive chunk size set by server)
         var payload = Data()
-        let chunkSize = 128
         var remaining = messageLength
 
-        print("📥 Reading payload: messageLength=\(messageLength)")
+        print("📥 Reading payload: messageLength=\(messageLength) chunkSize=\(receiveChunkSize)")
 
         while remaining > 0 {
-            let toRead = min(remaining, chunkSize)
+            let toRead = min(remaining, receiveChunkSize)
             guard let chunk = try await receiveDataExact(length: toRead), chunk.count > 0 else {
                 throw RTMPError.connectionFailed("Failed to receive chunk payload")
             }
@@ -736,46 +926,97 @@ public actor RTMPPublisher {
     }
 
     /// Parse the createStream response to extract stream ID
+    /// Twitch format: "_result", transaction ID (2.0), info object, stream ID
     private func parseCreateStreamResponse(_ data: Data) throws -> UInt32 {
-        // CreateStream response format:
-        // - String: "_result" (command name)
-        // - Number: transaction ID
-        // - Null: command object
-        // - Number: stream ID  <-- This is what we need
+        guard data.count > 10 else {
+            throw RTMPError.publishFailed("Response too short")
+        }
 
         var offset = 0
 
-        // Skip command name string
-        if data.count > offset && data[offset] == 0x02 {  // String type
+        // Verify this is "_result"
+        guard data[offset] == 0x02 else {
+            throw RTMPError.publishFailed("Not a string command")
+        }
+        offset += 1
+        let nameLen = Int(data[offset]) << 8 | Int(data[offset + 1])
+        offset += 2
+        guard nameLen == 7,
+              offset + nameLen <= data.count,
+              String(data: data[offset..<(offset + nameLen)], encoding: .utf8) == "_result" else {
+            throw RTMPError.publishFailed("Not _result")
+        }
+        offset += nameLen
+
+        // Read transaction ID - should be 2.0 for createStream
+        guard offset + 9 <= data.count, data[offset] == 0x00 else {
+            throw RTMPError.publishFailed("No transaction ID")
+        }
+        offset += 1
+        var txnIdBits: UInt64 = 0
+        for i in 0..<8 {
+            txnIdBits = (txnIdBits << 8) | UInt64(data[offset + i])
+        }
+        let txnId = Double(bitPattern: txnIdBits)
+        offset += 8
+
+        // Verify transaction ID is 2.0 (createStream)
+        guard txnId == 2.0 else {
+            throw RTMPError.publishFailed("Wrong transaction ID: \(txnId), expected 2.0")
+        }
+
+        // Skip command object (could be null 0x05 or object 0x03)
+        guard offset < data.count else {
+            throw RTMPError.publishFailed("No command object")
+        }
+
+        if data[offset] == 0x05 {  // Null
             offset += 1
-            if data.count >= offset + 2 {
-                let length = Int(data[offset]) << 8 | Int(data[offset + 1])
-                offset += 2 + length
+        } else if data[offset] == 0x03 {  // Object
+            offset += 1
+            // Skip object properties until we hit object end marker (0x00 0x00 0x09)
+            while offset + 2 < data.count {
+                // Check for object end marker
+                if data[offset] == 0x00 && data[offset + 1] == 0x00 && data[offset + 2] == 0x09 {
+                    offset += 3
+                    break
+                }
+                // Skip property name (2 bytes length + string)
+                let propNameLen = Int(data[offset]) << 8 | Int(data[offset + 1])
+                offset += 2 + propNameLen
+                // Skip property value (need to parse type)
+                guard offset < data.count else { break }
+                let valueType = data[offset]
+                offset += 1
+                switch valueType {
+                case 0x00:  // Number
+                    offset += 8
+                case 0x01:  // Boolean
+                    offset += 1
+                case 0x02:  // String
+                    if offset + 2 <= data.count {
+                        let strLen = Int(data[offset]) << 8 | Int(data[offset + 1])
+                        offset += 2 + strLen
+                    }
+                default:
+                    break  // Stop if unknown type
+                }
             }
-        }
-
-        // Skip transaction ID number
-        if data.count > offset && data[offset] == 0x00 {  // Number type
-            offset += 9  // 1 byte type + 8 bytes double
-        }
-
-        // Skip null
-        if data.count > offset && data[offset] == 0x05 {  // Null type
-            offset += 1
         }
 
         // Read stream ID number
-        if data.count >= offset + 9 && data[offset] == 0x00 {  // Number type
-            offset += 1
-            var streamIdDouble: UInt64 = 0
-            for i in 0..<8 {
-                streamIdDouble = (streamIdDouble << 8) | UInt64(data[offset + i])
-            }
-            let streamIdValue = Double(bitPattern: streamIdDouble)
-            return UInt32(streamIdValue)
+        guard offset + 9 <= data.count, data[offset] == 0x00 else {
+            throw RTMPError.publishFailed("No stream ID at offset \(offset)")
         }
-
-        throw RTMPError.publishFailed("Could not parse stream ID from createStream response")
+        offset += 1
+        var streamIdBits: UInt64 = 0
+        for i in 0..<8 {
+            streamIdBits = (streamIdBits << 8) | UInt64(data[offset + i])
+        }
+        let streamIdValue = Double(bitPattern: streamIdBits)
+        let streamId = UInt32(streamIdValue)
+        print("✅ Parsed stream ID: \(streamId) (transaction ID: \(txnId))")
+        return streamId
     }
 
     private func receiveData(length: Int) async throws -> Data? {

@@ -240,9 +240,13 @@ public struct FLVMuxer: Sendable {
 
         // Sound format (4 bits) + sound rate (2 bits) + sound size (1 bit) + sound type (1 bit)
         // AAC, 44/48kHz, 16-bit, stereo
-        // 0x03 = 44/48 kHz, 0x02 = 16-bit, 0x01 = stereo
-        let audioFlags: UInt8 = (AudioFormat.aac.rawValue << 4) | 0x03 | 0x02 | 0x01
-        audioData.append(audioFlags)
+        // OBS uses 0xAF: bits 7-4=1010 (AAC), bits 3-2=11 (44/48kHz), bit 1=1 (16-bit), bit 0=1 (stereo)
+        let soundFormat: UInt8 = AudioFormat.aac.rawValue  // 10
+        let soundRate: UInt8 = 3  // 44/48 kHz
+        let soundSize: UInt8 = 1  // 16-bit
+        let soundType: UInt8 = 1  // stereo
+        let audioFlags: UInt8 = (soundFormat << 4) | (soundRate << 2) | (soundSize << 1) | soundType
+        audioData.append(audioFlags)  // Should be 0xAF
 
         // AAC packet type
         audioData.append(AACPacketType.raw.rawValue)
@@ -285,8 +289,13 @@ public struct FLVMuxer: Sendable {
 
         // Create audio data
         var audioData = Data()
-        let audioFlags: UInt8 = (AudioFormat.aac.rawValue << 4) | 0x03 | 0x02 | 0x01
-        audioData.append(audioFlags)
+        // OBS uses 0xAF for AAC audio format byte
+        let soundFormat: UInt8 = AudioFormat.aac.rawValue  // 10
+        let soundRate: UInt8 = 3  // 44/48 kHz
+        let soundSize: UInt8 = 1  // 16-bit
+        let soundType: UInt8 = 1  // stereo
+        let audioFlags: UInt8 = (soundFormat << 4) | (soundRate << 2) | (soundSize << 1) | soundType
+        audioData.append(audioFlags)  // Should be 0xAF
         audioData.append(AACPacketType.sequenceHeader.rawValue)
         audioData.append(audioSpecificConfig)
 
@@ -333,7 +342,7 @@ public struct FLVMuxer: Sendable {
         tag.append(UInt8((timestamp >> 16) & 0xFF))
         tag.append(UInt8((timestamp >> 8) & 0xFF))
         tag.append(UInt8(timestamp & 0xFF))
-        tag.append(UInt8((timestamp >> 24) & 0xFF))  // Extended timestamp
+        tag.append(UInt8((timestamp >> 24) & 0x7F))  // Extended timestamp (bit 7 must be 0)
 
         // Stream ID (3 bytes, always 0)
         tag.append(contentsOf: [0x00, 0x00, 0x00])
