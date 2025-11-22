@@ -116,28 +116,37 @@ class AppState: ObservableObject {
     @Published var showCouncil: Bool = false
 
     init() {
-        // Load saved state if needed
-        isAuthenticated = UserDefaults.standard.bool(forKey: "isAuthenticated")
-        currentUser = UserDefaults.standard.string(forKey: "currentUser")
+        // Load saved state from Keychain
+        if let credentials = KeychainManager.getArkavoCredentials() {
+            isAuthenticated = true
+            currentUser = credentials.handle
+        } else {
+            isAuthenticated = false
+            currentUser = nil
+        }
     }
 
     func signIn(user: String) {
         isAuthenticated = true
         currentUser = user
-        UserDefaults.standard.set(true, forKey: "isAuthenticated")
-        UserDefaults.standard.set(user, forKey: "currentUser")
+        // Store credentials securely in Keychain
+        try? KeychainManager.saveArkavoCredentials(handle: user, did: user)
     }
 
     func signOut() {
         isAuthenticated = false
         currentUser = nil
         selectedGroup = nil
-        UserDefaults.standard.removeObject(forKey: "isAuthenticated")
-        UserDefaults.standard.removeObject(forKey: "currentUser")
+        // Remove credentials from Keychain
+        KeychainManager.deleteArkavoCredentials()
     }
 }
 
 // MARK: - Service Locator
+
+enum ServiceLocatorError: Error {
+    case serviceNotRegistered(String)
+}
 
 final class ServiceLocator {
     private var services: [String: Any] = [:]
@@ -147,10 +156,10 @@ final class ServiceLocator {
         services[key] = service
     }
 
-    func resolve<T>() -> T {
+    func resolve<T>() throws -> T {
         let key = String(describing: T.self)
         guard let service = services[key] as? T else {
-            fatalError("No registered service for type \(T.self)")
+            throw ServiceLocatorError.serviceNotRegistered("No registered service for type \(T.self)")
         }
         return service
     }
@@ -168,8 +177,12 @@ final class ViewModelFactory {
 
     @MainActor
     func makeForumViewModel() -> ForumViewModel {
-        let client = serviceLocator.resolve() as ArkavoClient
-        return ForumViewModel(client: client)
+        do {
+            let client: ArkavoClient = try serviceLocator.resolve()
+            return ForumViewModel(client: client)
+        } catch {
+            fatalError("Failed to resolve ArkavoClient: \(error)")
+        }
     }
 }
 
@@ -252,20 +265,10 @@ class WebAuthnManager: ObservableObject {
 
     /// Handle authentication errors and provide user-friendly messages
     private func handleAuthError(_ error: Error) -> String {
-        if let arkavoError = error as? ArkavoError {
-            switch arkavoError {
-            case .authenticationFailed(let message):
-                if message.contains("User Not Found") {
-                    return "Account not found. Please register first."
-                }
-                return message
-            case .connectionFailed(let message):
-                return "Connection failed: \(message)"
-            case .invalidResponse:
-                return "Invalid response from server"
-            default:
-                return error.localizedDescription
-            }
+        // Check if this is an ArkavoClient error by examining the error description
+        let errorDescription = error.localizedDescription
+        if errorDescription.contains("User Not Found") {
+            return "Account not found. Please register first."
         }
 
         // Handle NSError codes

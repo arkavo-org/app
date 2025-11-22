@@ -27,8 +27,55 @@ class MessagingViewModel: ObservableObject {
     }
 
     func setCurrentUser(userId: String, userName: String) {
-        currentUserId = userId
-        currentUserName = userName
+        guard !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            error = "User ID and name cannot be empty"
+            return
+        }
+        currentUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentUserName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Validates message input before sending
+    private func validateMessageInput(content: String, groupId: String) throws {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Validate content
+        guard !trimmedContent.isEmpty else {
+            throw ValidationError.emptyContent
+        }
+        guard trimmedContent.count <= 10000 else {
+            throw ValidationError.contentTooLong
+        }
+
+        // Validate groupId
+        guard !groupId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError.invalidGroupId
+        }
+        guard UUID(uuidString: groupId) != nil else {
+            throw ValidationError.invalidGroupId
+        }
+
+        // Validate user identity is set
+        guard !currentUserId.isEmpty, !currentUserName.isEmpty else {
+            throw ValidationError.userNotSet
+        }
+    }
+
+    enum ValidationError: LocalizedError {
+        case emptyContent
+        case contentTooLong
+        case invalidGroupId
+        case userNotSet
+
+        var errorDescription: String? {
+            switch self {
+            case .emptyContent: return "Message cannot be empty"
+            case .contentTooLong: return "Message exceeds maximum length of 10,000 characters"
+            case .invalidGroupId: return "Invalid group ID"
+            case .userNotSet: return "User identity not set"
+            }
+        }
     }
 
     private func setupClientDelegate() {
@@ -38,8 +85,15 @@ class MessagingViewModel: ObservableObject {
 
     /// Send a message to a group (with optional encryption)
     func sendMessage(content: String, groupId: String) async {
-        guard !content.isEmpty else { return }
+        // Validate input
+        do {
+            try validateMessageInput(content: content, groupId: groupId)
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
 
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         isLoading = true
         error = nil
 
@@ -49,7 +103,7 @@ class MessagingViewModel: ObservableObject {
             let payload = MessagePayload(
                 type: "message",
                 groupId: groupId,
-                content: content,
+                content: trimmedContent,
                 senderId: currentUserId,
                 senderName: currentUserName,
                 timestamp: Date().timeIntervalSince1970,
@@ -66,7 +120,7 @@ class MessagingViewModel: ObservableObject {
 
             if shouldEncrypt {
                 // Encrypt and send via encryptAndSendPayload (already sends)
-                let policyData = encryptionManager.getPolicy(for: groupId)
+                let policyData = try encryptionManager.getPolicy(for: groupId)
                 _ = try await arkavoClient.encryptAndSendPayload(
                     payload: jsonData,
                     policyData: policyData
@@ -86,7 +140,7 @@ class MessagingViewModel: ObservableObject {
                 groupId: groupId,
                 senderId: currentUserId,
                 senderName: currentUserName,
-                content: content,
+                content: trimmedContent,
                 timestamp: Date(),
                 threadId: nil,
                 isEncrypted: isEncrypted
@@ -107,7 +161,15 @@ class MessagingViewModel: ObservableObject {
 
     /// Send an encrypted message to a group
     func sendEncryptedMessage(content: String, groupId: String, policyData: Data) async {
-        guard !content.isEmpty else { return }
+        // Validate input
+        do {
+            try validateMessageInput(content: content, groupId: groupId)
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
+
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
 
         isLoading = true
         error = nil
@@ -118,7 +180,7 @@ class MessagingViewModel: ObservableObject {
             let payload = MessagePayload(
                 type: "message",
                 groupId: groupId,
-                content: content,
+                content: trimmedContent,
                 senderId: currentUserId,
                 senderName: currentUserName,
                 timestamp: Date().timeIntervalSince1970,
@@ -141,7 +203,7 @@ class MessagingViewModel: ObservableObject {
                 groupId: groupId,
                 senderId: currentUserId,
                 senderName: currentUserName,
-                content: content,
+                content: trimmedContent,
                 timestamp: Date(),
                 threadId: nil,
                 isEncrypted: true
@@ -190,11 +252,13 @@ class MessagingViewModel: ObservableObject {
 // MARK: - ArkavoClientDelegate
 
 extension MessagingViewModel: ArkavoClientDelegate {
+    @MainActor
     func clientDidChangeState(_ client: ArkavoClient, state: ArkavoClientState) {
         connectionState = state
         print("Connection state changed: \(state)")
     }
 
+    @MainActor
     func clientDidReceiveMessage(_ client: ArkavoClient, message: Data) {
         print("Received message: \(message.count) bytes")
 
@@ -212,6 +276,7 @@ extension MessagingViewModel: ArkavoClientDelegate {
         }
     }
 
+    @MainActor
     func clientDidReceiveError(_ client: ArkavoClient, error: Error) {
         self.error = error.localizedDescription
         print("Client error: \(error)")
