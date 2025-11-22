@@ -79,8 +79,11 @@ public actor RTMPPublisher {
 
     // Statistics
     private var bytesSent: UInt64 = 0
+    private var bytesReceived: UInt64 = 0
     private var framesSent: UInt64 = 0
     private var startTime: Date?
+    private var windowAckSize: UInt32 = 2500000  // Default 2.5MB
+    private var lastAckSent: UInt64 = 0
 
     public var currentState: State {
         state
@@ -439,12 +442,21 @@ public actor RTMPPublisher {
             do {
                 // Try to read any incoming server messages
                 let messageData = try await receiveRTMPChunk()
-                print("📥 Received server message during streaming: \(messageData.count) bytes")
-                // TODO: Parse and handle specific message types (Window Ack Size, Set Peer Bandwidth, etc.)
+                bytesReceived += UInt64(messageData.count)
+                print("📥 Received server message during streaming: \(messageData.count) bytes (total: \(bytesReceived))")
+
+                // Send acknowledgement if we've received enough data
+                if bytesReceived - lastAckSent >= UInt64(windowAckSize) {
+                    try await sendWindowAcknowledgement(bytesReceived: UInt32(bytesReceived))
+                    lastAckSent = bytesReceived
+                }
+
+                // TODO: Parse and handle specific message types (Set Peer Bandwidth, etc.)
             } catch {
                 // If we get an error, the connection might be closed
                 if error.localizedDescription.contains("Connection closed") ||
-                   error.localizedDescription.contains("Connection reset") {
+                   error.localizedDescription.contains("Connection reset") ||
+                   error.localizedDescription.contains("No message available") {
                     print("⚠️ Server connection closed")
                     break
                 }
@@ -452,6 +464,20 @@ public actor RTMPPublisher {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
         }
+    }
+
+    /// Send Window Acknowledgement message to server
+    private func sendWindowAcknowledgement(bytesReceived: UInt32) async throws {
+        var ackData = Data()
+        ackData.append(contentsOf: bytesReceived.bigEndianBytes)
+
+        try await sendRTMPMessage(
+            chunkStreamId: 2,
+            messageTypeId: 3,  // Window Acknowledgement Size
+            messageStreamId: 0,
+            payload: ackData
+        )
+        print("✅ Sent Window Acknowledgement: \(bytesReceived) bytes")
     }
 
     /// Send RTMP chunk message
