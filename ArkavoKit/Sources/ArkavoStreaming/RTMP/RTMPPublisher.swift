@@ -449,6 +449,8 @@ public actor RTMPPublisher {
         // Payload
         chunk.append(payload)
 
+        print("📤 RTMP message: type=\(messageTypeId) csid=\(chunkStreamId) msid=\(messageStreamId) ts=\(timestamp) payloadLen=\(payload.count) totalLen=\(chunk.count)")
+
         try await sendData(chunk)
     }
 
@@ -512,6 +514,7 @@ public actor RTMPPublisher {
     /// Receive and parse an RTMP chunk from the server
     private func receiveRTMPChunk() async throws -> Data {
         // Read chunk basic header (1 byte minimum)
+        print("📥 Waiting to receive RTMP chunk...")
         guard let basicHeaderData = try await receiveDataExact(length: 1), basicHeaderData.count > 0 else {
             throw RTMPError.connectionFailed("Failed to receive chunk basic header")
         }
@@ -519,6 +522,7 @@ public actor RTMPPublisher {
         let firstByte = basicHeaderData[0]
         let format = (firstByte >> 6) & 0x03
         let chunkStreamId = firstByte & 0x3F
+        print("📥 Chunk header: format=\(format) csid=\(chunkStreamId)")
 
         // Read message header based on format type
         var headerSize = 0
@@ -551,6 +555,8 @@ public actor RTMPPublisher {
         let chunkSize = 128
         var remaining = messageLength
 
+        print("📥 Reading payload: messageLength=\(messageLength)")
+
         while remaining > 0 {
             let toRead = min(remaining, chunkSize)
             guard let chunk = try await receiveDataExact(length: toRead), chunk.count > 0 else {
@@ -565,6 +571,7 @@ public actor RTMPPublisher {
             }
         }
 
+        print("📥 Received complete chunk: \(payload.count) bytes")
         return payload
     }
 
@@ -646,11 +653,13 @@ public actor RTMPPublisher {
             // Then accumulate until we have the full length
             connection.receive(minimumIncompleteLength: 1, maximumLength: length) { data, _, isComplete, error in
                 if let error = error {
+                    print("❌ Receive error: \(error.localizedDescription)")
                     continuation.resume(throwing: RTMPError.connectionFailed(error.localizedDescription))
                     return
                 }
 
                 if let data = data {
+                    print("📥 Received \(data.count) bytes (requested \(length))")
                     // If we got some data but not enough, we need to read more
                     if data.count < length {
                         // For now, just return what we got - the caller will need to read more
@@ -660,8 +669,10 @@ public actor RTMPPublisher {
                         continuation.resume(returning: data)
                     }
                 } else if isComplete {
+                    print("❌ Connection closed by server (isComplete=true, no data)")
                     continuation.resume(throwing: RTMPError.connectionFailed("Connection closed"))
                 } else {
+                    print("⚠️ No data available (isComplete=false)")
                     continuation.resume(returning: nil)
                 }
             }
