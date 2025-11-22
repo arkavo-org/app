@@ -13,11 +13,17 @@ class TwitchAuthClient: ObservableObject {
     @Published var error: Error?
     @Published var username: String?
     @Published var userId: String?
+    @Published var followerCount: Int?
+    @Published var channelDescription: String?
+    @Published var profileImageURL: String?
+    @Published var isLive = false
+    @Published var viewerCount: Int?
 
     // MARK: - Private Properties
 
     private var accessToken: String?
     private var cancellables = Set<AnyCancellable>()
+    private var notificationObserver: NSObjectProtocol?
 
     // OAuth Configuration
     private let clientId: String
@@ -35,7 +41,29 @@ class TwitchAuthClient: ObservableObject {
     init(clientId: String, clientSecret: String) {
         self.clientId = clientId
         self.clientSecret = clientSecret
+
+        // Set up notification observer for OAuth callback
+        notificationObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("TwitchOAuthCallback"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let url = notification.userInfo?["url"] as? URL else { return }
+            Task { @MainActor [weak self] in
+                do {
+                    try await self?.handleCallback(url)
+                } catch {
+                    self?.error = error
+                }
+            }
+        }
+
         loadStoredCredentials()
+    }
+
+    nonisolated deinit {
+        // Note: Cannot safely remove observer from deinit in actor-isolated class
+        // The observer will be cleaned up when the notification center deallocates
     }
 
     // MARK: - Public Methods
@@ -97,6 +125,11 @@ class TwitchAuthClient: ObservableObject {
         accessToken = nil
         username = nil
         userId = nil
+        followerCount = nil
+        channelDescription = nil
+        profileImageURL = nil
+        isLive = false
+        viewerCount = nil
         KeychainManager.deleteStreamKey(for: "twitch")
         clearStoredCredentials()
     }
@@ -122,6 +155,72 @@ class TwitchAuthClient: ObservableObject {
         if let user = userResponse.data.first {
             self.username = user.display_name
             self.userId = user.id
+            self.profileImageURL = user.profile_image_url
+            self.channelDescription = user.description
+
+            // Fetch additional info
+            Task {
+                try? await fetchChannelInfo()
+                try? await fetchStreamStatus()
+            }
+        }
+    }
+
+    /// Fetches channel information (follower count)
+    func fetchChannelInfo() async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        // Fetch follower count
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/channels/followers?broadcaster_id=\(userId)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let followerResponse = try JSONDecoder().decode(TwitchFollowerResponse.self, from: data)
+        self.followerCount = followerResponse.total
+    }
+
+    /// Fetches current stream status
+    func fetchStreamStatus() async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/streams?user_id=\(userId)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let streamResponse = try JSONDecoder().decode(TwitchStreamResponse.self, from: data)
+        if let stream = streamResponse.data.first {
+            self.isLive = true
+            self.viewerCount = stream.viewer_count
+        } else {
+            self.isLive = false
+            self.viewerCount = nil
+        }
+    }
+
+    /// Refreshes all channel data
+    func refreshChannelData() async {
+        do {
+            try await fetchUserInfo()
+        } catch {
+            self.error = error
         }
     }
 
@@ -185,12 +284,33 @@ class TwitchAuthClient: ObservableObject {
     // MARK: - Keychain Storage
 
     private func saveStoredCredentials(token: String) {
-        UserDefaults.standard.set(token, forKey: "twitch_access_token")
+        // Migrate from UserDefaults to Keychain for better security
+        KeychainManager.save(value: token, service: "com.arkavo.twitch", account: "access_token")
+
+        // Clean up old UserDefaults storage if it exists
+        UserDefaults.standard.removeObject(forKey: "twitch_access_token")
     }
 
     private func loadStoredCredentials() {
-        if let token = UserDefaults.standard.string(forKey: "twitch_access_token") {
+        // Try Keychain first (new method)
+        if let tokenData = try? KeychainManager.load(service: "com.arkavo.twitch", account: "access_token"),
+           let token = String(data: tokenData, encoding: .utf8) {
             self.accessToken = token
+            Task {
+                do {
+                    try await fetchUserInfo()
+                    isAuthenticated = true
+                } catch {
+                    // Token might be expired
+                    clearStoredCredentials()
+                }
+            }
+        }
+        // Fallback to UserDefaults for existing users (migration path)
+        else if let token = UserDefaults.standard.string(forKey: "twitch_access_token") {
+            self.accessToken = token
+            // Migrate to Keychain
+            saveStoredCredentials(token: token)
             Task {
                 do {
                     try await fetchUserInfo()
@@ -204,6 +324,7 @@ class TwitchAuthClient: ObservableObject {
     }
 
     private func clearStoredCredentials() {
+        try? KeychainManager.delete(service: "com.arkavo.twitch", account: "access_token")
         UserDefaults.standard.removeObject(forKey: "twitch_access_token")
     }
 }
@@ -227,6 +348,34 @@ private struct TwitchUser: Codable {
     let login: String
     let display_name: String
     let email: String?
+    let profile_image_url: String?
+    let description: String?
+}
+
+private struct TwitchFollowerResponse: Codable {
+    let total: Int
+    let data: [TwitchFollower]
+}
+
+private struct TwitchFollower: Codable {
+    let user_id: String
+    let user_name: String
+    let followed_at: String
+}
+
+private struct TwitchStreamResponse: Codable {
+    let data: [TwitchStream]
+}
+
+private struct TwitchStream: Codable {
+    let id: String
+    let user_id: String
+    let user_name: String
+    let game_name: String
+    let type: String
+    let title: String
+    let viewer_count: Int
+    let started_at: String
 }
 
 // MARK: - Errors

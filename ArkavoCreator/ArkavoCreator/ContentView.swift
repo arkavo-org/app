@@ -145,6 +145,22 @@ enum NavigationSection: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - Dashboard Section Item
+
+struct DashboardSectionItem: Identifiable {
+    let id: String
+    let title: String
+    let isAuthenticated: Bool
+    let hasActiveContent: Bool
+    let content: AnyView
+
+    var sortPriority: Int {
+        if !isAuthenticated { return 2 }  // Not authenticated: lowest priority
+        if hasActiveContent { return 0 }  // Active content: highest priority
+        return 1  // Authenticated but no active content: middle priority
+    }
+}
+
 // MARK: - Section Container View
 
 struct SectionContainer: View {
@@ -159,215 +175,393 @@ struct SectionContainer: View {
     @State private var authCode: String = ""
     @Namespace private var animation
 
+    // Helper to determine if a platform has active content
+    private func hasActiveContent(for platform: String) -> Bool {
+        switch platform {
+        case "Twitch":
+            return twitchClient.isLive
+        case "YouTube":
+            // Could check for recent uploads if API provided that data
+            return false
+        case "Patreon":
+            // Could check for recent posts if API provided that data
+            return false
+        case "Reddit":
+            // Could check for unread notifications if API provided that data
+            return false
+        default:
+            return false
+        }
+    }
+
+    // MARK: - Individual Platform Dashboard Views
+
+    private var twitchDashboardContent: some View {
+        Group {
+            if twitchClient.isAuthenticated, let username = twitchClient.username {
+                HStack(alignment: .top, spacing: 16) {
+                    // Profile Image
+                    if let profileImageURL = twitchClient.profileImageURL,
+                       let url = URL(string: profileImageURL) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 60, height: 60)
+                        .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .foregroundColor(.purple)
+                            .frame(width: 60, height: 60)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Username and Status
+                        HStack {
+                            Text(username)
+                                .font(.headline)
+
+                            if twitchClient.isLive {
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 8, height: 8)
+                                    Text("LIVE")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.red)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                        }
+
+                        // Follower Count
+                        if let followerCount = twitchClient.followerCount {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.caption)
+                                Text("\(formatNumber(followerCount)) followers")
+                                    .font(.subheadline)
+                            }
+                            .foregroundColor(.secondary)
+                        }
+
+                        // Viewer Count (when live)
+                        if twitchClient.isLive, let viewerCount = twitchClient.viewerCount {
+                            HStack(spacing: 4) {
+                                Image(systemName: "eye.fill")
+                                    .font(.caption)
+                                Text("\(formatNumber(viewerCount)) viewers")
+                                    .font(.subheadline)
+                                    .foregroundColor(.red)
+                            }
+                        }
+
+                        // Channel Description
+                        if let description = twitchClient.channelDescription, !description.isEmpty {
+                            Text(description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        // Refresh Button
+                        Button {
+                            Task {
+                                await twitchClient.refreshChannelData()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Refresh")
+                            }
+                            .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                    }
+                }
+            } else {
+                Button("Login with Twitch") {
+                    webViewPresenter.present(
+                        url: twitchClient.authorizationURL,
+                        handleCallback: { url in
+                            Task {
+                                do {
+                                    try await twitchClient.handleCallback(url)
+                                    webViewPresenter.dismiss()
+                                } catch {
+                                    print("Twitch OAuth error: \(error)")
+                                }
+                            }
+                        }
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var youtubeDashboardContent: some View {
+        Group {
+            if youtubeClient.isAuthenticated {
+                if let channelInfo = youtubeClient.channelInfo {
+                    VStack(alignment: .leading) {
+                        Text(channelInfo.title)
+                            .font(.headline)
+                        Text("\(channelInfo.subscriberCount) subscribers")
+                        Text("\(channelInfo.videoCount) videos")
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    if youtubeClient.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        VStack(spacing: 16) {
+                            Button("Login with YouTube") {
+                                Task {
+                                    let authURL = await youtubeClient.authURL
+                                    webViewPresenter.present(
+                                        url: authURL,
+                                        handleCallback: { url in
+                                            Task {
+                                                do {
+                                                    try await youtubeClient.handleCallback(url)
+                                                    webViewPresenter.dismiss()
+                                                } catch {
+                                                    print("YouTube OAuth error: \(error)")
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button("Sign in with Authorization Code") {
+                                youtubeClient.showAuthCodeForm = true
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+
+                    if youtubeClient.showAuthCodeForm {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Authorization Code")
+                                .font(.headline)
+
+                            Text("Please paste the authorization code from Google:")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            TextEditor(text: $authCode)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(height: 80)
+                                .scrollContentBackground(.hidden)
+                                .background(Color(NSColor.textBackgroundColor))
+                                .cornerRadius(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color.gray.opacity(0.2))
+                                )
+
+                            if let error = youtubeClient.error {
+                                Text(error.localizedDescription)
+                                    .foregroundColor(.red)
+                                    .font(.caption)
+                            }
+
+                            HStack {
+                                Spacer()
+
+                                Button("Cancel") {
+                                    youtubeClient.showAuthCodeForm = false
+                                    authCode = ""
+                                }
+                                .buttonStyle(.plain)
+
+                                Button("Submit") {
+                                    Task {
+                                        do {
+                                            try await youtubeClient.authenticateWithCode(authCode)
+                                            authCode = ""
+                                        } catch {
+                                            print("Authentication error: \(error)")
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(authCode.isEmpty || youtubeClient.isLoading)
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: 400)
+                    }
+                }
+            }
+        }
+    }
+
+    private var patreonDashboardContent: some View {
+        Group {
+            if patreonClient.isAuthenticated {
+                PatreonRootView(patreonClient: patreonClient)
+            } else {
+                Button("Login with Patreon") {
+                    webViewPresenter.present(
+                        url: patreonClient.authURL,
+                        handleCallback: { url in
+                            Task {
+                                do {
+                                    try await patreonClient.handleCallback(url)
+                                    webViewPresenter.dismiss()
+                                } catch {
+                                    print("Patreon OAuth error: \(error)")
+                                }
+                            }
+                        }
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var redditDashboardContent: some View {
+        Group {
+            if redditClient.isAuthenticated {
+                RedditRootView(redditClient: redditClient)
+            } else {
+                Button("Login with Reddit") {
+                    webViewPresenter.present(
+                        url: redditClient.authURL,
+                        handleCallback: { url in
+                            redditClient.handleCallback(url)
+                            webViewPresenter.dismiss()
+                        }
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var microblogDashboardContent: some View {
+        Group {
+            if micropubClient.isAuthenticated {
+                MicroblogRootView(micropubClient: micropubClient)
+            } else {
+                Button("Login with Micro.blog") {
+                    webViewPresenter.present(
+                        url: micropubClient.authURL,
+                        handleCallback: { url in
+                            Task {
+                                do {
+                                    try await micropubClient.handleCallback(url)
+                                    webViewPresenter.dismiss()
+                                } catch {
+                                    print("Micro.blog OAuth error: \(error)")
+                                }
+                            }
+                        }
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var blueskyDashboardContent: some View {
+        Group {
+            if blueskyClient.isAuthenticated {
+                BlueskyRootView(blueskyClient: blueskyClient)
+            } else {
+                BlueskyLoginView(blueskyClient: blueskyClient)
+            }
+        }
+    }
+
+    // Computed property for sorted dashboard sections
+    private var sortedDashboardSections: [DashboardSectionItem] {
+        var sections: [DashboardSectionItem] = []
+
+        // Twitch Section
+        sections.append(DashboardSectionItem(
+            id: "twitch",
+            title: "Twitch",
+            isAuthenticated: twitchClient.isAuthenticated,
+            hasActiveContent: hasActiveContent(for: "Twitch"),
+            content: AnyView(twitchDashboardContent)
+        ))
+
+        // YouTube Section
+        sections.append(DashboardSectionItem(
+            id: "youtube",
+            title: "YouTube",
+            isAuthenticated: youtubeClient.isAuthenticated,
+            hasActiveContent: hasActiveContent(for: "YouTube"),
+            content: AnyView(youtubeDashboardContent)
+        ))
+
+        // Patreon Section
+        sections.append(DashboardSectionItem(
+            id: "patreon",
+            title: "Patreon",
+            isAuthenticated: patreonClient.isAuthenticated,
+            hasActiveContent: hasActiveContent(for: "Patreon"),
+            content: AnyView(patreonDashboardContent)
+        ))
+
+        // Reddit Section
+        sections.append(DashboardSectionItem(
+            id: "reddit",
+            title: "Reddit",
+            isAuthenticated: redditClient.isAuthenticated,
+            hasActiveContent: hasActiveContent(for: "Reddit"),
+            content: AnyView(redditDashboardContent)
+        ))
+
+        // Micro.blog Section
+        sections.append(DashboardSectionItem(
+            id: "microblog",
+            title: "Micro.blog",
+            isAuthenticated: micropubClient.isAuthenticated,
+            hasActiveContent: false,
+            content: AnyView(microblogDashboardContent)
+        ))
+
+        // Bluesky Section
+        sections.append(DashboardSectionItem(
+            id: "bluesky",
+            title: "Bluesky",
+            isAuthenticated: blueskyClient.isAuthenticated,
+            hasActiveContent: false,
+            content: AnyView(blueskyDashboardContent)
+        ))
+
+        // Sort by priority (active content first, then authenticated, then not authenticated)
+        return sections.sorted { $0.sortPriority < $1.sortPriority }
+    }
+
     var body: some View {
         ZStack {
             switch selectedSection {
             case .dashboard:
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Patreon Section
-                        DashboardCard(title: "Patreon") {
-                            if patreonClient.isAuthenticated {
-                                PatreonRootView(patreonClient: patreonClient)
-                            } else {
-                                Button("Login with Patreon") {
-                                    webViewPresenter.present(
-                                        url: patreonClient.authURL,
-                                        handleCallback: { url in
-                                            Task {
-                                                do {
-                                                    try await patreonClient.handleCallback(url)
-                                                    webViewPresenter.dismiss()
-                                                } catch {
-                                                    print("Patreon OAuth error: \(error)")
-                                                    // Keep the window open on error to show any error pages
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        }
-                        // Reddit Section
-                        DashboardCard(title: "Reddit") {
-                            if redditClient.isAuthenticated {
-                                RedditRootView(redditClient: redditClient)
-                            } else {
-                                Button("Login with Reddit") {
-                                    webViewPresenter.present(
-                                        url: redditClient.authURL,
-                                        handleCallback: { url in
-                                            redditClient.handleCallback(url)
-                                            webViewPresenter.dismiss()
-                                        },
-                                    )
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        }
-                        // Micro.blog Section
-                        DashboardCard(title: "Micro.blog") {
-                            if micropubClient.isAuthenticated {
-                                MicroblogRootView(micropubClient: micropubClient)
-                            } else {
-                                Button("Login with Micro.blog") {
-                                    webViewPresenter.present(
-                                        url: micropubClient.authURL,
-                                        handleCallback: { url in
-                                            Task {
-                                                do {
-                                                    try await micropubClient.handleCallback(url)
-                                                    webViewPresenter.dismiss()
-                                                } catch {
-                                                    print("Micro.blog OAuth error: \(error)")
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        }
-                        // Bluesky Section
-                        DashboardCard(title: "Bluesky") {
-                            if blueskyClient.isAuthenticated {
-                                BlueskyRootView(blueskyClient: blueskyClient)
-                            } else {
-                                BlueskyLoginView(blueskyClient: blueskyClient)
-                            }
-                        }
-                        // YouTube Section
-                        DashboardCard(title: "YouTube") {
-                            if youtubeClient.isAuthenticated {
-                                if let channelInfo = youtubeClient.channelInfo {
-                                    VStack(alignment: .leading) {
-                                        Text(channelInfo.title)
-                                            .font(.headline)
-                                        Text("\(channelInfo.subscriberCount) subscribers")
-                                        Text("\(channelInfo.videoCount) videos")
-                                    }
-                                }
-                            } else {
-                                VStack(spacing: 12) {
-                                    if youtubeClient.isLoading {
-                                        ProgressView()
-                                            .controlSize(.small)
-                                    } else {
-                                        VStack(spacing: 16) {
-                                            Button("Login with YouTube") {
-                                                Task {
-                                                    let authURL = await youtubeClient.authURL
-                                                    webViewPresenter.present(
-                                                        url: authURL,
-                                                        handleCallback: { url in
-                                                            Task {
-                                                                do {
-                                                                    try await youtubeClient.handleCallback(url)
-                                                                    webViewPresenter.dismiss()
-                                                                } catch {
-                                                                    print("YouTube OAuth error: \(error)")
-                                                                }
-                                                            }
-                                                        },
-                                                    )
-                                                }
-                                            }
-                                            .buttonStyle(.borderedProminent)
-
-                                            Button("Sign in with Authorization Code") {
-                                                youtubeClient.showAuthCodeForm = true
-                                            }
-                                            .buttonStyle(.borderless)
-                                        }
-                                    }
-
-                                    if youtubeClient.showAuthCodeForm {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            Text("Authorization Code")
-                                                .font(.headline)
-
-                                            Text("Please paste the authorization code from Google:")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-
-                                            TextEditor(text: $authCode)
-                                                .font(.system(.body, design: .monospaced))
-                                                .frame(height: 80)
-                                                .scrollContentBackground(.hidden)
-                                                .background(Color(NSColor.textBackgroundColor))
-                                                .cornerRadius(6)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 6)
-                                                        .stroke(Color.gray.opacity(0.2)),
-                                                )
-
-                                            if let error = youtubeClient.error {
-                                                Text(error.localizedDescription)
-                                                    .foregroundColor(.red)
-                                                    .font(.caption)
-                                            }
-
-                                            HStack {
-                                                Spacer()
-
-                                                Button("Cancel") {
-                                                    youtubeClient.showAuthCodeForm = false
-                                                    authCode = ""
-                                                }
-                                                .buttonStyle(.plain)
-
-                                                Button("Submit") {
-                                                    Task {
-                                                        do {
-                                                            try await youtubeClient.authenticateWithCode(authCode)
-                                                            authCode = ""
-                                                        } catch {
-                                                            print("Authentication error: \(error)")
-                                                        }
-                                                    }
-                                                }
-                                                .buttonStyle(.borderedProminent)
-                                                .disabled(authCode.isEmpty || youtubeClient.isLoading)
-                                            }
-                                        }
-                                        .padding()
-                                        .frame(maxWidth: 400)
-                                    }
-                                }
-                            }
-                        }
-                        // Twitch Section
-                        DashboardCard(title: "Twitch") {
-                            if twitchClient.isAuthenticated, let username = twitchClient.username {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    HStack {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                        Text("Logged in as \(username)")
-                                            .font(.headline)
-                                    }
-                                    Text("Ready to stream")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            } else {
-                                Button("Login with Twitch") {
-                                    webViewPresenter.present(
-                                        url: twitchClient.authorizationURL,
-                                        handleCallback: { url in
-                                            Task {
-                                                do {
-                                                    try await twitchClient.handleCallback(url)
-                                                    webViewPresenter.dismiss()
-                                                } catch {
-                                                    print("Twitch OAuth error: \(error)")
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                                .buttonStyle(.borderedProminent)
+                        // Render sorted sections
+                        ForEach(sortedDashboardSections) { section in
+                            DashboardCard(title: section.title) {
+                                section.content
                             }
                         }
                     }
@@ -795,5 +989,24 @@ extension UserDefaults {
             return .dashboard // Default to dashboard if no saved tab
         }
         return section
+    }
+}
+
+// MARK: - Helper Functions
+
+/// Formats a number with appropriate suffix (K, M, etc.)
+private func formatNumber(_ number: Int) -> String {
+    switch number {
+    case 0..<1_000:
+        return "\(number)"
+    case 1_000..<1_000_000:
+        let thousands = Double(number) / 1_000.0
+        return String(format: "%.1fK", thousands)
+    case 1_000_000..<1_000_000_000:
+        let millions = Double(number) / 1_000_000.0
+        return String(format: "%.1fM", millions)
+    default:
+        let billions = Double(number) / 1_000_000_000.0
+        return String(format: "%.1fB", billions)
     }
 }
