@@ -392,13 +392,12 @@ public final class VideoEncoder: Sendable {
         if isStreaming, let publisher = rtmpPublisher, sourceID == "microphone" {
             Task {
                 do {
-                    // Send audio sequence header on first audio packet
+                    // Send audio sequence header on first audio packet (always with timestamp 0)
                     if !sentAudioSequenceHeader, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
                         audioFormatDescription = formatDesc
-                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                         try await publisher.publishAudioSequenceHeader(
                             formatDescription: formatDesc,
-                            timestamp: timestamp
+                            timestamp: .zero
                         )
                         sentAudioSequenceHeader = true
                         print("✅ Audio sequence header sent for streaming")
@@ -594,12 +593,11 @@ public final class VideoEncoder: Sendable {
 
         Task {
             do {
-                // Send sequence header on first frame
+                // Send sequence header on first frame (always with timestamp 0)
                 if !sentVideoSequenceHeader {
                     if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
                         videoFormatDescription = formatDesc
-                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        try await sendVideoSequenceHeader(formatDesc: formatDesc, timestamp: timestamp, to: publisher)
+                        try await sendVideoSequenceHeader(formatDesc: formatDesc, timestamp: .zero, to: publisher)
                         sentVideoSequenceHeader = true
                     }
                 }
