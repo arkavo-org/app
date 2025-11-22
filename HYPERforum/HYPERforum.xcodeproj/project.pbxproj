@@ -7,10 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		HF0000012 /* ArkavoSocial in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000011 /* ArkavoSocial */; };
-		HF0000014 /* ArkavoAgent in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000013 /* ArkavoAgent */; };
-		HF0000016 /* ArkavoContent in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000015 /* ArkavoContent */; };
-		HF0000018 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = HF0000017 /* ArkavoMediaKit */; };
+		DA395E932ED146D100ABE5C8 /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = DA395E922ED146D100ABE5C8 /* ArkavoC2PA */; };
+		DA395E952ED146D100ABE5C8 /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA395E942ED146D100ABE5C8 /* ArkavoKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,10 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				HF0000012 /* ArkavoSocial in Frameworks */,
-				HF0000014 /* ArkavoAgent in Frameworks */,
-				HF0000016 /* ArkavoContent in Frameworks */,
-				HF0000018 /* ArkavoMediaKit in Frameworks */,
+				DA395E932ED146D100ABE5C8 /* ArkavoC2PA in Frameworks */,
+				DA395E952ED146D100ABE5C8 /* ArkavoKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -123,10 +119,8 @@
 			);
 			name = HYPERforum;
 			packageProductDependencies = (
-				HF0000011 /* ArkavoSocial */,
-				HF0000013 /* ArkavoAgent */,
-				HF0000015 /* ArkavoContent */,
-				HF0000017 /* ArkavoMediaKit */,
+				DA395E922ED146D100ABE5C8 /* ArkavoC2PA */,
+				DA395E942ED146D100ABE5C8 /* ArkavoKit */,
 			);
 			productName = HYPERforum;
 			productReference = HF0000004 /* HYPERforum.app */;
@@ -211,10 +205,7 @@
 			mainGroup = HF0000000;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */,
-				HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */,
-				HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */,
-				HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
+				DA395E912ED146D100ABE5C8 /* XCLocalSwiftPackageReference "../ArkavoKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = HF0000002 /* Products */;
@@ -299,7 +290,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -316,7 +307,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforum;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = "macosx";
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -332,7 +323,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -349,7 +340,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.HYPERforum;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = "macosx";
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -582,44 +573,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */ = {
+		DA395E912ED146D100ABE5C8 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoSocial;
-		};
-		HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoAgent;
-		};
-		HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoContent;
-		};
-		HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoMediaKit;
+			relativePath = ../ArkavoKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		HF0000011 /* ArkavoSocial */ = {
+		DA395E922ED146D100ABE5C8 /* ArkavoC2PA */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = HF0000010 /* XCLocalSwiftPackageReference "../ArkavoSocial" */;
-			productName = ArkavoSocial;
+			productName = ArkavoC2PA;
 		};
-		HF0000013 /* ArkavoAgent */ = {
+		DA395E942ED146D100ABE5C8 /* ArkavoKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = HF0000019 /* XCLocalSwiftPackageReference "../ArkavoAgent" */;
-			productName = ArkavoAgent;
-		};
-		HF0000015 /* ArkavoContent */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = HF0000028 /* XCLocalSwiftPackageReference "../ArkavoContent" */;
-			productName = ArkavoContent;
-		};
-		HF0000017 /* ArkavoMediaKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = HF0000038 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
-			productName = ArkavoMediaKit;
+			productName = ArkavoKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -7,4 +7,77 @@
    <FileRef
       location = "group:ArkavoCreator/ArkavoCreator.xcodeproj">
    </FileRef>
+   <Group
+      location = "group:HYPERforum"
+      name = "HYPERforum">
+      <Group
+         location = "group:HYPERforumUITests"
+         name = "HYPERforumUITests">
+         <FileRef
+            location = "group:HYPERforumUITests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:AICouncilTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:MessagingTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:TestHelpers.swift">
+         </FileRef>
+         <FileRef
+            location = "group:AuthenticationTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:NavigationTests.swift">
+         </FileRef>
+      </Group>
+      <FileRef
+         location = "group:HYPERforum.xcodeproj">
+      </FileRef>
+      <Group
+         location = "group:HYPERforumTests"
+         name = "HYPERforumTests">
+         <FileRef
+            location = "group:HYPERforumTests.swift">
+         </FileRef>
+      </Group>
+      <FileRef
+         location = "group:README.md">
+      </FileRef>
+      <Group
+         location = "group:HYPERforum"
+         name = "HYPERforum">
+         <FileRef
+            location = "group:HYPERforum.entitlements">
+         </FileRef>
+         <FileRef
+            location = "group:Assets.xcassets">
+         </FileRef>
+         <FileRef
+            location = "group:AICouncilManager.swift">
+         </FileRef>
+         <FileRef
+            location = "group:Models.swift">
+         </FileRef>
+         <FileRef
+            location = "group:MessagingViewModel.swift">
+         </FileRef>
+         <FileRef
+            location = "group:EncryptionManager.swift">
+         </FileRef>
+         <FileRef
+            location = "group:ChatView.swift">
+         </FileRef>
+         <FileRef
+            location = "group:ContentView.swift">
+         </FileRef>
+         <FileRef
+            location = "group:Info.plist">
+         </FileRef>
+         <FileRef
+            location = "group:HYPERforumApp.swift">
+         </FileRef>
+      </Group>
+   </Group>
 </Workspace>
