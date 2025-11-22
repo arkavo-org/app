@@ -303,11 +303,14 @@ public actor RTMPPublisher {
         // Send C0 + C1
         try await sendData(c0 + c1)
 
-        // Receive S0 + S1 + S2
+        // Receive S0 + S1 + S2 (must receive all 3073 bytes)
         let responseLength = 1 + 1536 + 1536
-        guard let response = try await receiveData(length: responseLength) else {
+        guard let response = try await receiveDataExact(length: responseLength),
+              response.count == responseLength else {
             throw RTMPError.handshakeFailed
         }
+
+        print("✅ Received handshake response: \(response.count) bytes")
 
         // Validate S0
         guard response[0] == 0x03 else {
