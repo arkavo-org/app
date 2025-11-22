@@ -469,11 +469,13 @@ public actor RTMPPublisher {
         }
 
         // Send publish command to start streaming
+        print("📤 Preparing to send publish command with streamKey=\(streamKey) streamId=\(streamId)")
         let publishCommand = AMF0.createPublishCommand(
             streamName: streamKey,
             publishingName: "live",
             transactionId: 0.0
         )
+        print("📤 Publish command created, payload size: \(publishCommand.count) bytes")
         try await sendRTMPMessage(
             chunkStreamId: 4,  // OBS uses 0x04 for publish (source channel), not 0x03
             messageTypeId: 20,
