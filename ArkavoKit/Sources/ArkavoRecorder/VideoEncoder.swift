@@ -477,7 +477,8 @@ public final class VideoEncoder: Sendable {
         isStreaming = true
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
-        streamStartTime = nil  // Will be set on first frame
+        // Use current recording time as stream start, or current time if not recording
+        streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
 
         // Send sequence headers immediately if we have format descriptions from recording
         // This ensures Twitch receives codec info right after publish command
@@ -622,18 +623,21 @@ public final class VideoEncoder: Sendable {
 
     /// Calculate relative timestamp for streaming (from stream start, not system uptime)
     private func getRelativeStreamTimestamp(_ timestamp: CMTime) -> CMTime {
-        // Initialize stream start time on first frame
-        if streamStartTime == nil {
-            streamStartTime = timestamp
-            return .zero
-        }
-
-        // Return time relative to stream start
+        // Stream start time should be initialized when streaming starts
         guard let startTime = streamStartTime else {
+            print("⚠️ streamStartTime not set, using timestamp 0")
             return .zero
         }
 
-        return CMTimeSubtract(timestamp, startTime)
+        let relative = CMTimeSubtract(timestamp, startTime)
+
+        // Prevent negative timestamps (can happen if frames arrive out of order or before stream start)
+        if relative.seconds < 0 {
+            print("⚠️ Negative timestamp: frame at \(timestamp.seconds)s, stream started at \(startTime.seconds)s, diff=\(relative.seconds)s - using 0")
+            return .zero
+        }
+
+        return relative
     }
 }
 
