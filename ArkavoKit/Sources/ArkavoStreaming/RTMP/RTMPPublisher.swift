@@ -494,12 +494,12 @@ public actor RTMPPublisher {
 
     /// Receive and parse an RTMP chunk from the server
     private func receiveRTMPChunk() async throws -> Data {
-        // Read chunk basic header (1-3 bytes)
-        guard let basicHeader = try await receiveData(length: 1) else {
+        // Read chunk basic header (1 byte minimum)
+        guard let basicHeaderData = try await receiveDataExact(length: 1), basicHeaderData.count > 0 else {
             throw RTMPError.connectionFailed("Failed to receive chunk basic header")
         }
 
-        let firstByte = basicHeader[0]
+        let firstByte = basicHeaderData[0]
         let format = (firstByte >> 6) & 0x03
         let chunkStreamId = firstByte & 0x3F
 
@@ -515,7 +515,7 @@ public actor RTMPPublisher {
 
         var messageHeader = Data()
         if headerSize > 0 {
-            guard let header = try await receiveData(length: headerSize) else {
+            guard let header = try await receiveDataExact(length: headerSize), header.count == headerSize else {
                 throw RTMPError.connectionFailed("Failed to receive message header")
             }
             messageHeader = header
@@ -536,19 +536,44 @@ public actor RTMPPublisher {
 
         while remaining > 0 {
             let toRead = min(remaining, chunkSize)
-            guard let chunk = try await receiveData(length: toRead) else {
+            guard let chunk = try await receiveDataExact(length: toRead), chunk.count > 0 else {
                 throw RTMPError.connectionFailed("Failed to receive chunk payload")
             }
             payload.append(chunk)
-            remaining -= toRead
+            remaining -= chunk.count
 
             // If more chunks needed, read type 3 header (1 byte)
             if remaining > 0 {
-                _ = try await receiveData(length: 1)
+                _ = try await receiveDataExact(length: 1)
             }
         }
 
         return payload
+    }
+
+    /// Receive exact amount of data, accumulating until we have it all
+    private func receiveDataExact(length: Int) async throws -> Data? {
+        var accumulated = Data()
+        var remaining = length
+
+        while remaining > 0 {
+            guard let chunk = try await receiveData(length: remaining) else {
+                if accumulated.isEmpty {
+                    return nil
+                }
+                break
+            }
+
+            accumulated.append(chunk)
+            remaining -= chunk.count
+
+            if chunk.isEmpty {
+                // No more data available
+                break
+            }
+        }
+
+        return accumulated.isEmpty ? nil : accumulated
     }
 
     /// Parse the createStream response to extract stream ID
@@ -600,11 +625,27 @@ public actor RTMPPublisher {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            connection.receive(minimumIncompleteLength: length, maximumLength: length) { data, _, _, error in
+            // Use minimumIncompleteLength of 1 to start receiving as soon as any data arrives
+            // Then accumulate until we have the full length
+            connection.receive(minimumIncompleteLength: 1, maximumLength: length) { data, _, isComplete, error in
                 if let error = error {
                     continuation.resume(throwing: RTMPError.connectionFailed(error.localizedDescription))
+                    return
+                }
+
+                if let data = data {
+                    // If we got some data but not enough, we need to read more
+                    if data.count < length {
+                        // For now, just return what we got - the caller will need to read more
+                        // This is a limitation of the current architecture
+                        continuation.resume(returning: data)
+                    } else {
+                        continuation.resume(returning: data)
+                    }
+                } else if isComplete {
+                    continuation.resume(throwing: RTMPError.connectionFailed("Connection closed"))
                 } else {
-                    continuation.resume(returning: data)
+                    continuation.resume(returning: nil)
                 }
             }
         }
