@@ -1,7 +1,9 @@
 @preconcurrency import AVFoundation
 import CoreVideo
 import VideoToolbox
+import AudioToolbox
 import ArkavoStreaming
+import ArkavoMedia
 
 /// Encodes video and audio to MOV files using AVAssetWriter
 /// Supports optional simultaneous streaming via RTMP using VTCompressionSession
@@ -13,9 +15,9 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var audioInputs: [String: AVAssetWriterInput] = [:]  // sourceID -> audio input
     nonisolated(unsafe) private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
 
-    // VTCompressionSession for streaming
-    nonisolated(unsafe) private var compressionSession: VTCompressionSession?
-    nonisolated(unsafe) private var streamVideoInput: AVAssetWriterInput?  // For getting encoded frames
+    // ArkavoMedia encoders for streaming
+    nonisolated(unsafe) private var streamVideoEncoder: ArkavoMedia.VideoEncoder?
+    nonisolated(unsafe) private var streamAudioEncoder: ArkavoMedia.AudioEncoder?
 
     nonisolated(unsafe) private var outputURL: URL?
     nonisolated(unsafe) private var startTime: CMTime?
@@ -37,16 +39,69 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var lastStreamVideoTimestamp: CMTime = .zero  // Last video timestamp sent to stream
     nonisolated(unsafe) private var lastStreamAudioTimestamp: CMTime = .zero  // Last audio timestamp sent to stream
 
-    // Encoding settings
-    private let videoWidth: Int = 1920
-    private let videoHeight: Int = 1080
-    private let frameRate: Int32 = 30
-    private let videoBitrate: Int = 5_000_000 // 5 Mbps
-    private let audioBitrate: Int = 128_000 // 128 kbps
+    // Encoding settings - adaptive based on system capabilities
+    private let videoWidth: Int
+    private let videoHeight: Int
+    private let frameRate: Int32
+    private let videoBitrate: Int
+    private let videoBitrateMax: Int  // Maximum bitrate for CBR limiting
+    private let audioBitrate: Int
+
+    // Quality presets for adaptive streaming
+    public enum StreamQuality: Sendable {
+        case high          // 1080p@30fps, 4500kbps - Good CPU, good network
+        case balanced      // 1080p@30fps, 3500kbps - Default, best compatibility
+        case performance   // 720p@30fps, 2500kbps - Lower CPU/network
+        case auto          // Automatically select based on system
+
+        var config: (width: Int, height: Int, fps: Int32, bitrate: Int, maxBitrate: Int) {
+            switch self {
+            case .high:
+                return (1920, 1080, 30, 4_500_000, 5_000_000)
+            case .balanced:
+                return (1920, 1080, 30, 3_500_000, 4_000_000)
+            case .performance:
+                return (1280, 720, 30, 2_500_000, 3_000_000)
+            case .auto:
+                return StreamQuality.detectOptimalQuality()
+            }
+        }
+
+        private static func detectOptimalQuality() -> (width: Int, height: Int, fps: Int32, bitrate: Int, maxBitrate: Int) {
+            let cpuCount = ProcessInfo.processInfo.processorCount
+
+            // High-end: 8+ cores (M1/M2/M3 Pro/Max, i9, etc.)
+            if cpuCount >= 8 {
+                print("🎥 Auto-detected HIGH quality (CPU cores: \(cpuCount))")
+                return StreamQuality.high.config
+            }
+            // Mid-range: 4-7 cores (M1/M2 base, i5/i7)
+            else if cpuCount >= 4 {
+                print("🎥 Auto-detected BALANCED quality (CPU cores: \(cpuCount))")
+                return StreamQuality.balanced.config
+            }
+            // Low-end: <4 cores
+            else {
+                print("🎥 Auto-detected PERFORMANCE quality (CPU cores: \(cpuCount))")
+                return StreamQuality.performance.config
+            }
+        }
+    }
 
     // MARK: - Public Methods
 
-    public init() {}
+    public init(quality: StreamQuality = .auto) {
+        // Configure encoding parameters based on quality preset
+        let config = quality.config
+        self.videoWidth = config.width
+        self.videoHeight = config.height
+        self.frameRate = config.fps
+        self.videoBitrate = config.bitrate
+        self.videoBitrateMax = config.maxBitrate
+        self.audioBitrate = 128_000  // 128 kbps AAC - standard for all qualities
+
+        print("🎥 VideoEncoder initialized: \(videoWidth)x\(videoHeight)@\(frameRate)fps, bitrate=\(videoBitrate/1000)kbps (max=\(videoBitrateMax/1000)kbps)")
+    }
 
     /// Starts recording to the specified output file
     /// - Parameters:
@@ -76,13 +131,13 @@ public final class VideoEncoder: Sendable {
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: videoBitrate,
                 AVVideoExpectedSourceFrameRateKey: frameRate,
-                // Use Main profile level 4.1 for maximum compatibility
-                // (instead of High Auto which may select incompatible parameters)
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264Main41,
-                // Disable frame reordering for better compatibility
+                // Use High profile for better compression/quality
+                // High profile is widely supported and provides smaller file sizes
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264High41,
+                // Disable frame reordering for RTMP compatibility
                 AVVideoAllowFrameReorderingKey: false,
-                // Use CAVLC entropy mode (more compatible than CABAC)
-                AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCAVLC
+                // Set max keyframe interval (2 seconds)
+                AVVideoMaxKeyFrameIntervalKey: Int(frameRate * 2)
             ],
             // Add color space metadata for proper color reproduction
             AVVideoColorPropertiesKey: [
@@ -122,7 +177,9 @@ public final class VideoEncoder: Sendable {
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 48000.0,
                 AVNumberOfChannelsKey: 2,
-                AVEncoderBitRateKey: audioBitrate  // 128 kbps
+                AVEncoderBitRateKey: audioBitrate,  // 128 kbps
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,  // Force AAC-LC profile
+                AVEncoderBitRateStrategyKey: AVAudioBitRateStrategy_Constant  // CBR
             ]
 
             let newInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
@@ -328,23 +385,11 @@ public final class VideoEncoder: Sendable {
         lastVideoTimestamp = adjustedTimestamp
 
         // Also stream if streaming is active
-        if isStreaming, let session = compressionSession {
-            // Encode frame using VTCompressionSession for streaming
-            let presentationTimeStamp = adjustedTimestamp
-            let duration = CMTime(value: 1, timescale: frameRate)
-
-            let status = VTCompressionSessionEncodeFrame(
-                session,
-                imageBuffer: pixelBuffer,
-                presentationTimeStamp: presentationTimeStamp,
-                duration: duration,
-                frameProperties: nil,
-                sourceFrameRefcon: nil,
-                infoFlagsOut: nil
-            )
-
-            if status != noErr {
-                print("❌ VTCompressionSession encode failed: \(status)")
+        if isStreaming, let encoder = streamVideoEncoder {
+            do {
+                try encoder.encode(pixelBuffer, timestamp: adjustedTimestamp)
+            } catch {
+                print("❌ Stream video encoder failed: \(error)")
             }
         }
     }
@@ -391,41 +436,9 @@ public final class VideoEncoder: Sendable {
         }
 
         // Stream the first audio track for RTMP (typically microphone)
-        if isStreaming, let publisher = rtmpPublisher, sourceID == "microphone" {
-            Task {
-                do {
-                    // Send audio sequence header on first audio packet (always with timestamp 0)
-                    if !sentAudioSequenceHeader, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
-                        audioFormatDescription = formatDesc
-                        try await publisher.publishAudioSequenceHeader(
-                            formatDescription: formatDesc,
-                            timestamp: .zero
-                        )
-                        sentAudioSequenceHeader = true
-                        print("✅ Audio sequence header sent for streaming")
-                    }
-
-                    // Send audio data with relative timestamp
-                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
-
-                    // Ensure timestamps are monotonically increasing for streaming
-                    if CMTimeCompare(relativeTimestamp, lastStreamAudioTimestamp) <= 0 {
-                        print("⚠️ Skipping audio frame with non-increasing stream timestamp: \(relativeTimestamp.seconds) <= \(lastStreamAudioTimestamp.seconds)")
-                        return
-                    }
-
-                    try await publisher.publishAudio(buffer: sampleBuffer, timestamp: relativeTimestamp)
-                    lastStreamAudioTimestamp = relativeTimestamp
-                } catch {
-                    // Connection lost - stop streaming
-                    if error.localizedDescription.contains("not connected") ||
-                       error.localizedDescription.contains("Socket is not connected") {
-                        print("⚠️ RTMP connection lost, stopping stream")
-                        await stopStreaming()
-                    }
-                }
-            }
+        if isStreaming, let encoder = streamAudioEncoder, sourceID == "microphone" {
+            // Feed PCM audio to encoder for AAC conversion
+            encoder.feed(sampleBuffer)
         }
     }
 
@@ -480,39 +493,72 @@ public final class VideoEncoder: Sendable {
         let publisher = RTMPPublisher()
         try await publisher.connect(to: destination, streamKey: streamKey)
 
-        // Set up VTCompressionSession for real-time encoding
-        try setupCompressionSession()
+        // Create video encoder
+        let videoEncoder = ArkavoMedia.VideoEncoder(quality: .auto)
+        try videoEncoder.start()
 
+        // Create audio encoder
+        let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: 128_000)
+
+        // Wire up video encoder callback
+        videoEncoder.onFrame = { [weak publisher] frame in
+            Task {
+                do {
+                    // Send sequence header on first keyframe
+                    if frame.isKeyframe, let formatDesc = frame.formatDescription {
+                        try await publisher?.sendVideoSequenceHeader(formatDescription: formatDesc)
+                        print("✅ Sent video sequence header")
+                    }
+
+                    // Send video frame
+                    try await publisher?.send(video: frame)
+                } catch {
+                    print("❌ Failed to send video frame: \(error)")
+                }
+            }
+        }
+
+        // Wire up audio encoder callback
+        audioEncoder.onFrame = { [weak publisher] frame in
+            Task {
+                do {
+                    // Send sequence header on first frame
+                    if let formatDesc = frame.formatDescription {
+                        // Extract AudioSpecificConfig from format description
+                        var asc = Data()
+                        var size: Int = 0
+                        if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDesc, sizeOut: &size), size > 0 {
+                            asc = Data(bytes: cookie, count: size)
+                        } else {
+                            // Manual ASC construction for AAC-LC 48kHz stereo
+                            let byte1: UInt8 = 0x11  // (2<<3)|(3>>1) = AAC-LC, 48kHz
+                            let byte2: UInt8 = 0x90  // ((3&1)<<7)|(2<<3) = 48kHz, stereo
+                            asc = Data([byte1, byte2])
+                        }
+
+                        try await publisher?.sendAudioSequenceHeader(asc: asc)
+                        print("✅ Sent audio sequence header")
+                    }
+
+                    // Send audio frame
+                    try await publisher?.send(audio: frame)
+                } catch {
+                    print("❌ Failed to send audio frame: \(error)")
+                }
+            }
+        }
+
+        streamVideoEncoder = videoEncoder
+        streamAudioEncoder = audioEncoder
         rtmpPublisher = publisher
         isStreaming = true
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
-        // Use current recording time as stream start, or current time if not recording
         streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
         lastStreamVideoTimestamp = .zero
         lastStreamAudioTimestamp = .zero
 
-        // Send sequence headers immediately if we have format descriptions from recording
-        // This ensures Twitch receives codec info right after publish command
-        if let videoFormat = videoFormatDescription {
-            print("📡 Sending video sequence header immediately after publish")
-            try await publisher.publishVideoSequenceHeader(
-                formatDescription: videoFormat,
-                timestamp: .zero
-            )
-            sentVideoSequenceHeader = true
-        }
-
-        if let audioFormat = audioFormatDescription {
-            print("📡 Sending audio sequence header immediately after publish")
-            try await publisher.publishAudioSequenceHeader(
-                formatDescription: audioFormat,
-                timestamp: .zero
-            )
-            sentAudioSequenceHeader = true
-        }
-
-        print("✅ RTMP stream started with video encoding")
+        print("✅ RTMP stream started with video and audio encoding")
     }
 
     /// Stop streaming
@@ -522,11 +568,10 @@ public final class VideoEncoder: Sendable {
         print("📡 Stopping RTMP stream...")
         await publisher.disconnect()
 
-        // Clean up compression session
-        if let session = compressionSession {
-            VTCompressionSessionInvalidate(session)
-            compressionSession = nil
-        }
+        // Stop encoders
+        streamVideoEncoder?.stop()
+        streamAudioEncoder = nil
+        streamVideoEncoder = nil
 
         rtmpPublisher = nil
         isStreaming = false
@@ -547,117 +592,254 @@ public final class VideoEncoder: Sendable {
 
     // MARK: - VTCompressionSession Setup
 
-    private func setupCompressionSession() throws {
-        var session: VTCompressionSession?
+    // MARK: - AudioConverter Setup (Disabled - using ArkavoMedia encoders)
 
-        let status = VTCompressionSessionCreate(
-            allocator: kCFAllocatorDefault,
-            width: Int32(videoWidth),
-            height: Int32(videoHeight),
-            codecType: kCMVideoCodecType_H264,
-            encoderSpecification: nil,
-            imageBufferAttributes: nil,
-            compressedDataAllocator: nil,
-            outputCallback: compressionOutputCallback,
-            refcon: Unmanaged.passUnretained(self).toOpaque(),
-            compressionSessionOut: &session
-        )
+    // MARK: - Disabled Audio Conversion (Complex, needs better approach)
 
-        guard status == noErr, let session = session else {
+    /*
+    // TODO: Revisit audio streaming with simpler architecture
+    // - Consider AVAudioEngine + AVAudioConverter
+    // - Or use separate AVAssetWriterInput for streaming
+    // - Or use third-party library like FFmpeg
+
+    private func setupAudioConverter() throws {
+        // Input format: PCM 48kHz stereo 16-bit (what we receive from AudioRouter)
+        var inputFormat = AudioStreamBasicDescription()
+        inputFormat.mSampleRate = 48000.0
+        inputFormat.mFormatID = kAudioFormatLinearPCM
+        inputFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked
+        inputFormat.mBytesPerPacket = 4  // 2 channels × 2 bytes (16-bit)
+        inputFormat.mFramesPerPacket = 1
+        inputFormat.mBytesPerFrame = 4
+        inputFormat.mChannelsPerFrame = 2
+        inputFormat.mBitsPerChannel = 16
+
+        // Output format: AAC-LC 48kHz stereo
+        var outputFormat = AudioStreamBasicDescription()
+        outputFormat.mSampleRate = 48000.0
+        outputFormat.mFormatID = kAudioFormatMPEG4AAC
+        outputFormat.mFormatFlags = UInt32(MPEG4ObjectID.AAC_LC.rawValue)  // AAC-LC
+        outputFormat.mBytesPerPacket = 0  // Variable (compressed)
+        outputFormat.mFramesPerPacket = 1024  // AAC frame size
+        outputFormat.mBytesPerFrame = 0  // Variable
+        outputFormat.mChannelsPerFrame = 2
+        outputFormat.mBitsPerChannel = 0  // Not applicable for compressed
+
+        // Create AudioConverter
+        var converter: AudioConverterRef?
+        let status = AudioConverterNew(&inputFormat, &outputFormat, &converter)
+
+        guard status == noErr, let converter = converter else {
+            print("❌ Failed to create AudioConverter: \(status)")
             throw RecorderError.encodingFailed
         }
 
-        // Set compression properties for streaming
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_Main_4_1)
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: videoBitrate as CFNumber)
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: frameRate as CFNumber)
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: Int32(frameRate * 2) as CFNumber)  // Keyframe every 2 seconds
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
-
-        // Prepare session
-        VTCompressionSessionPrepareToEncodeFrames(session)
-
-        compressionSession = session
-        print("✅ VTCompressionSession created for streaming")
-    }
-
-    private let compressionOutputCallback: VTCompressionOutputCallback = { (
-        outputCallbackRefCon: UnsafeMutableRawPointer?,
-        sourceFrameRefCon: UnsafeMutableRawPointer?,
-        status: OSStatus,
-        infoFlags: VTEncodeInfoFlags,
-        sampleBuffer: CMSampleBuffer?
-    ) in
-        guard status == noErr, let sampleBuffer = sampleBuffer else {
-            print("❌ Compression failed with status: \(status)")
-            return
-        }
-
-        guard let encoder = outputCallbackRefCon else { return }
-        let videoEncoder = Unmanaged<VideoEncoder>.fromOpaque(encoder).takeUnretainedValue()
-
-        // Handle the compressed sample buffer on the encoder
-        videoEncoder.handleCompressedFrame(sampleBuffer)
-    }
-
-    private func handleCompressedFrame(_ sampleBuffer: CMSampleBuffer) {
-        guard isStreaming, let publisher = rtmpPublisher else { return }
-
-        Task {
-            do {
-                // Send sequence header on first frame (always with timestamp 0)
-                if !sentVideoSequenceHeader {
-                    if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
-                        videoFormatDescription = formatDesc
-                        try await sendVideoSequenceHeader(formatDesc: formatDesc, timestamp: .zero, to: publisher)
-                        sentVideoSequenceHeader = true
-                    }
-                }
-
-                // Send video frame with relative timestamp
-                let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
-
-                // Ensure timestamps are monotonically increasing for streaming
-                if CMTimeCompare(relativeTimestamp, lastStreamVideoTimestamp) <= 0 {
-                    print("⚠️ Skipping video frame with non-increasing stream timestamp: \(relativeTimestamp.seconds) <= \(lastStreamVideoTimestamp.seconds)")
-                    return
-                }
-
-                try await publisher.publishVideo(buffer: sampleBuffer, timestamp: relativeTimestamp)
-                lastStreamVideoTimestamp = relativeTimestamp
-            } catch {
-                print("❌ Failed to stream video frame: \(error)")
-            }
-        }
-    }
-
-    private func sendVideoSequenceHeader(formatDesc: CMFormatDescription, timestamp: CMTime, to publisher: RTMPPublisher) async throws {
-        // Send video sequence header via RTMP publisher
-        try await publisher.publishVideoSequenceHeader(
-            formatDescription: formatDesc,
-            timestamp: timestamp
+        // Set bitrate
+        var bitrate = UInt32(audioBitrate)
+        AudioConverterSetProperty(
+            converter,
+            kAudioConverterEncodeBitRate,
+            UInt32(MemoryLayout<UInt32>.size),
+            &bitrate
         )
-    }
 
-    /// Calculate relative timestamp for streaming (from stream start, not system uptime)
-    private func getRelativeStreamTimestamp(_ timestamp: CMTime) -> CMTime {
-        // Stream start time should be initialized when streaming starts
-        guard let startTime = streamStartTime else {
-            print("⚠️ streamStartTime not set, using timestamp 0")
-            return .zero
+        // Set output data quality to high (forces AAC-LC)
+        var quality = kAudioConverterQuality_High
+        AudioConverterSetProperty(
+            converter,
+            kAudioConverterCodecQuality,
+            UInt32(MemoryLayout<UInt32>.size),
+            &quality
+        )
+
+        audioConverter = converter
+        audioConverterInputFormat = inputFormat
+        audioConverterOutputFormat = outputFormat
+
+        // Extract AudioSpecificConfig from the converter
+        var asc = Data()
+        var ascSize: UInt32 = 0
+        AudioConverterGetPropertyInfo(converter, kAudioConverterCompressionMagicCookie, &ascSize, nil)
+
+        if ascSize > 0 {
+            var cookieData = [UInt8](repeating: 0, count: Int(ascSize))
+            AudioConverterGetProperty(converter, kAudioConverterCompressionMagicCookie, &ascSize, &cookieData)
+            asc = Data(cookieData)
+            print("🎵 AudioConverter magic cookie (AudioSpecificConfig): \(asc.map { String(format: "%02x", $0) }.joined(separator: " "))")
         }
 
-        let relative = CMTimeSubtract(timestamp, startTime)
+        print("✅ AudioConverter created: PCM 48kHz stereo → AAC-LC 48kHz stereo, bitrate=\(audioBitrate/1000)kbps")
+    }
 
-        // Prevent negative timestamps (can happen if frames arrive out of order or before stream start)
-        if relative.seconds < 0 {
-            print("⚠️ Negative timestamp: frame at \(timestamp.seconds)s, stream started at \(startTime.seconds)s, diff=\(relative.seconds)s - using 0")
-            return .zero
+    /// Convert PCM CMSampleBuffer to AAC CMSampleBuffer for streaming
+    private func convertPCMToAAC(_ pcmSampleBuffer: CMSampleBuffer) throws -> CMSampleBuffer {
+        guard let converter = audioConverter else {
+            throw RecorderError.encodingFailed
         }
 
-        return relative
+        // Extract PCM data from input sample buffer
+        guard let dataBuffer = CMSampleBufferGetDataBuffer(pcmSampleBuffer) else {
+            throw RecorderError.encodingFailed
+        }
+
+        var length: Int = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        let status = CMBlockBufferGetDataPointer(
+            dataBuffer,
+            atOffset: 0,
+            lengthAtOffsetOut: nil,
+            totalLengthOut: &length,
+            dataPointerOut: &dataPointer
+        )
+
+        guard status == kCMBlockBufferNoErr, let pcmData = dataPointer else {
+            throw RecorderError.encodingFailed
+        }
+
+        // AAC output buffer (allocate max size)
+        let maxOutputSize = 2048  // Max AAC frame size
+        var outputData = Data(count: maxOutputSize)
+        var outputDataSize = UInt32(maxOutputSize)
+
+        // Create audio buffer list for output
+        var outputBuffer = AudioBuffer()
+        outputBuffer.mNumberChannels = 2
+        outputBuffer.mDataByteSize = outputDataSize
+        outputData.withUnsafeMutableBytes { ptr in
+            outputBuffer.mData = ptr.baseAddress
+        }
+
+        var outputBufferList = AudioBufferList()
+        outputBufferList.mNumberBuffers = 1
+        outputBufferList.mBuffers = outputBuffer
+
+        // Create input data context for callback
+        let inputDataPtr = UnsafeMutableRawPointer(mutating: pcmData)
+        var inputDataSize = UInt32(length)
+
+        var contextTuple = (inputDataPtr, inputDataSize)
+
+        // Convert PCM to AAC
+        let convertStatus = withUnsafeMutablePointer(to: &contextTuple) { contextPtr in
+            AudioConverterFillComplexBuffer(
+                converter,
+                { (inConverter, ioNumberDataPackets, ioData, outDataPacketDescription, inUserData) -> OSStatus in
+                    guard let userData = inUserData else { return -1 }
+                    let context = userData.assumingMemoryBound(to: (UnsafeMutableRawPointer, UInt32).self).pointee
+
+                    // For stereo 16-bit PCM: 2 channels × 2 bytes = 4 bytes per packet
+                    let bytesPerPacket: UInt32 = 4
+                    let availablePackets = context.1 / bytesPerPacket
+
+                    // Provide minimum of requested vs available
+                    let packetsToProvide = min(ioNumberDataPackets.pointee, availablePackets)
+
+                    ioData.pointee.mNumberBuffers = 1
+                    ioData.pointee.mBuffers.mData = context.0
+                    ioData.pointee.mBuffers.mDataByteSize = packetsToProvide * bytesPerPacket
+                    ioData.pointee.mBuffers.mNumberChannels = 2
+
+                    // CRITICAL: Report actual packet count provided
+                    ioNumberDataPackets.pointee = packetsToProvide
+
+                    return noErr
+                },
+                contextPtr,
+                &outputDataSize,
+                &outputBufferList,
+                nil
+            )
+        }
+
+        guard convertStatus == noErr else {
+            print("❌ Audio conversion failed: \(convertStatus)")
+            throw RecorderError.encodingFailed
+        }
+
+        // Trim output data to actual size
+        outputData = outputData.prefix(Int(outputDataSize))
+
+        print("🎵 Converted PCM (\(length) bytes) → AAC (\(outputData.count) bytes)")
+
+        // Create CMSampleBuffer with AAC data
+        var blockBuffer: CMBlockBuffer?
+        let createStatus = CMBlockBufferCreateWithMemoryBlock(
+            allocator: kCFAllocatorDefault,
+            memoryBlock: nil,
+            blockLength: outputData.count,
+            blockAllocator: kCFAllocatorDefault,
+            customBlockSource: nil,
+            offsetToData: 0,
+            dataLength: outputData.count,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
+
+        guard createStatus == kCMBlockBufferNoErr, let blockBuffer = blockBuffer else {
+            throw RecorderError.encodingFailed
+        }
+
+        // Copy AAC data into block buffer
+        outputData.withUnsafeBytes { ptr in
+            CMBlockBufferReplaceDataBytes(
+                with: ptr.baseAddress!,
+                blockBuffer: blockBuffer,
+                offsetIntoDestination: 0,
+                dataLength: outputData.count
+            )
+        }
+
+        // Create format description for AAC
+        var formatDesc: CMAudioFormatDescription?
+        guard let outputFormat = audioConverterOutputFormat else {
+            throw RecorderError.encodingFailed
+        }
+
+        var asbd = outputFormat
+        let formatStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDesc
+        )
+
+        guard formatStatus == noErr, let formatDesc = formatDesc else {
+            throw RecorderError.encodingFailed
+        }
+
+        // Create sample buffer with AAC data
+        var sampleBuffer: CMSampleBuffer?
+        var timingInfo = CMSampleTimingInfo()
+        timingInfo.presentationTimeStamp = CMSampleBufferGetPresentationTimeStamp(pcmSampleBuffer)
+        timingInfo.decodeTimeStamp = CMSampleBufferGetDecodeTimeStamp(pcmSampleBuffer)
+        timingInfo.duration = CMSampleBufferGetDuration(pcmSampleBuffer)
+
+        let sampleStatus = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: blockBuffer,
+            dataReady: true,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: formatDesc,
+            sampleCount: 1,
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: &timingInfo,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+
+        guard sampleStatus == noErr, let sampleBuffer = sampleBuffer else {
+            throw RecorderError.encodingFailed
+        }
+
+        return sampleBuffer
     }
+    */
+
 }
 

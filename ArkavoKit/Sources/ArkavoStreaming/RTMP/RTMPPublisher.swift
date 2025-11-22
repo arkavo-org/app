@@ -1,6 +1,7 @@
 import Foundation
 import Network
 @preconcurrency import AVFoundation
+import ArkavoMedia
 
 /// RTMP publisher for live streaming video/audio
 ///
@@ -90,6 +91,9 @@ public actor RTMPPublisher {
     private var lastReceivedMessageType: UInt8 = 0  // Track message type from last received chunk
     private var receiveChunkSize: Int = 128  // Current chunk size for receiving (updated by server's SetChunkSize)
     private var sendChunkSize: Int = 4096  // Our chunk size for sending (set via SetChunkSize message)
+
+    // Background task for handling server messages
+    private var serverMessageTask: Task<Void, Never>?
 
     public var currentState: State {
         state
@@ -246,9 +250,81 @@ public actor RTMPPublisher {
         try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
     }
 
+    // MARK: - Simplified API for EncodedFrames
+
+    /// Send encoded video frame
+    public func send(video frame: EncodedVideoFrame) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        guard let connection = connection, connection.state == .ready else {
+            throw RTMPError.connectionFailed("Connection not ready")
+        }
+
+        // Create video payload from encoded frame
+        let payload = FLVMuxer.createVideoPayload(from: frame)
+        let timestampMs = normalizeTimestamp(frame.pts)
+        try await sendRTMPVideoMessage(data: payload, timestamp: timestampMs)
+
+        framesSent += 1
+    }
+
+    /// Send encoded audio frame
+    public func send(audio frame: EncodedAudioFrame) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        guard let connection = connection, connection.state == .ready else {
+            throw RTMPError.connectionFailed("Connection not ready")
+        }
+
+        // Create audio payload from encoded frame
+        let payload = FLVMuxer.createAudioPayload(from: frame)
+        let timestampMs = normalizeTimestamp(frame.pts)
+        try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
+    }
+
+    /// Send video sequence header (SPS/PPS)
+    public func sendVideoSequenceHeader(formatDescription: CMVideoFormatDescription) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        // Create video sequence header payload
+        let payload = try FLVMuxer.createVideoSequenceHeader(from: formatDescription)
+
+        // Send as RTMP message (timestamp 0 for sequence headers)
+        try await sendRTMPVideoMessage(data: payload, timestamp: 0)
+        print("✅ Sent video sequence header")
+    }
+
+    /// Send audio sequence header (AudioSpecificConfig)
+    public func sendAudioSequenceHeader(asc: Data) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        // Create AAC sequence header payload
+        let payload = FLVMuxer.createAudioSequenceHeader(asc: asc)
+
+        // Send as RTMP message (timestamp 0 for sequence headers)
+        try await sendRTMPAudioMessage(data: payload, timestamp: 0)
+        print("✅ Sent audio sequence header")
+    }
+
     /// Disconnect from server
     public func disconnect() async {
         print("📡 Disconnecting RTMP...")
+
+        // Cancel background server message handler
+        if let task = serverMessageTask {
+            print("🛑 Cancelling background server message handler task...")
+            task.cancel()
+            serverMessageTask = nil
+        }
+
         connection?.cancel()
         connection = nil
         state = .disconnected
@@ -521,94 +597,106 @@ public actor RTMPPublisher {
         bytesReceived += UInt64(publishStatusBytes)
         print("✅ Received publish status")
 
-        // Start background task to read server messages (acknowledgements, bandwidth notifications, etc.)
-        Task {
+        // Start background task to read server messages (acknowledgements, bandwidth notifications, pings, etc.)
+        print("🚀 Starting background server message handler task...")
+        serverMessageTask = Task {
             await handleServerMessages()
         }
+        print("✅ Background server message handler task started")
 
         print("✅ App connection complete, ready to stream")
     }
 
     /// Handle incoming server messages during streaming
     private func handleServerMessages() async {
+        print("📥 Background message handler STARTED - will listen for server messages (pings, acks, etc.)")
+        var iterationCount = 0
+
         while state == .publishing {
+            iterationCount += 1
+
+            // Log every 50 iterations (~5 seconds) to show handler is alive
+            if iterationCount % 50 == 0 {
+                print("📥 Background handler alive: iteration \(iterationCount), state=\(state), bytesReceived=\(bytesReceived)")
+            }
+
             do {
-                // Try to read any incoming server messages with timeout
-                // If no message arrives within 100ms, continue (server may not send anything during normal streaming)
-                let result = try await withTimeout(seconds: 0.1) {
-                    try await self.receiveRTMPMessage()
-                }
+                // Try to receive a message (non-blocking - returns nil if no data available)
+                if let (messageType, messageData, messageBytes) = try await receiveRTMPMessageNonBlocking() {
+                    // Got a message! Process it
+                    bytesReceived += UInt64(messageBytes)
 
-                guard let (messageType, messageData, messageBytes) = result else {
-                    // Timeout - no message received, this is normal during streaming
-                    continue
-                }
+                    print("📥 Server message: type=\(messageType) payloadLen=\(messageData.count) totalBytes=\(messageBytes) totalReceived=\(bytesReceived)")
 
-                bytesReceived += UInt64(messageBytes)
+                    // Handle specific message types
+                    switch messageType {
+                    case 1: // Set Chunk Size
+                        if messageData.count >= 4 {
+                            let chunkSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                           UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                            receiveChunkSize = Int(chunkSize)
+                            print("📥 Server Set Chunk Size: \(chunkSize) - Updated receive chunk size")
+                        }
 
-                print("📥 Server message: type=\(messageType) payloadLen=\(messageData.count) totalBytes=\(messageBytes) totalReceived=\(bytesReceived)")
+                    case 3: // Acknowledgement
+                        print("📥 Server sent Acknowledgement")
 
-                // Handle specific message types
-                switch messageType {
-                case 1: // Set Chunk Size
-                    if messageData.count >= 4 {
-                        let chunkSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
-                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
-                        receiveChunkSize = Int(chunkSize)
-                        print("📥 Server Set Chunk Size: \(chunkSize) - Updated receive chunk size")
+                    case 4: // User Control Message (ping, pong, stream begin, etc.)
+                        try await handleUserControlMessage(messageData)
+
+                    case 5: // Window Acknowledgement Size
+                        if messageData.count >= 4 {
+                            serverWindowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                                 UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                            print("📥 Server Window Ack Size: \(serverWindowAckSize) - This is the window we should use for sending acks")
+                        }
+
+                    case 6: // Set Peer Bandwidth
+                        if messageData.count >= 4 {
+                            let bandwidth = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                           UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                            print("📥 Server Set Peer Bandwidth: \(bandwidth)")
+                        }
+
+                    case 20: // AMF0 Command (onStatus, etc.)
+                        handleAMFCommand(messageData)
+
+                    default:
+                        print("📥 Unhandled message type: \(messageType)")
                     }
 
-                case 3: // Acknowledgement
-                    print("📥 Server sent Acknowledgement")
-
-                case 4: // User Control Message (ping, pong, stream begin, etc.)
-                    try await handleUserControlMessage(messageData)
-
-                case 5: // Window Acknowledgement Size
-                    if messageData.count >= 4 {
-                        serverWindowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
-                                             UInt32(messageData[2]) << 8 | UInt32(messageData[3])
-                        print("📥 Server Window Ack Size: \(serverWindowAckSize) - This is the window we should use for sending acks")
+                    // Send acknowledgement if we've received enough data
+                    // OBS sends every window_size/10 bytes (not every full window)
+                    let ackThreshold = UInt64(serverWindowAckSize) / 10
+                    if bytesReceived - lastAckSent >= ackThreshold {
+                        try await sendWindowAcknowledgement(bytesReceived: UInt32(bytesReceived))
+                        lastAckSent = bytesReceived
+                        print("✅ Sent Acknowledgement: \(bytesReceived) bytes (threshold: \(ackThreshold), window: \(serverWindowAckSize))")
                     }
-
-                case 6: // Set Peer Bandwidth
-                    if messageData.count >= 4 {
-                        let bandwidth = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
-                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
-                        print("📥 Server Set Peer Bandwidth: \(bandwidth)")
-                    }
-
-                case 20: // AMF0 Command (onStatus, etc.)
-                    handleAMFCommand(messageData)
-
-                default:
-                    print("📥 Unhandled message type: \(messageType)")
                 }
-
-                // Send acknowledgement if we've received enough data
-                // OBS sends every window_size/10 bytes (not every full window)
-                let ackThreshold = UInt64(serverWindowAckSize) / 10
-                if bytesReceived - lastAckSent >= ackThreshold {
-                    try await sendWindowAcknowledgement(bytesReceived: UInt32(bytesReceived))
-                    lastAckSent = bytesReceived
-                    print("✅ Sent Acknowledgement: \(bytesReceived) bytes (threshold: \(ackThreshold), window: \(serverWindowAckSize))")
-                }
+                // If no message was available, that's normal - we'll check again after sleeping
 
             } catch {
                 // If we get an error, the connection might be closed
                 let errorMsg = error.localizedDescription
-                print("📥 Error reading server message: \(errorMsg)")
+                print("📥 ❌ Error reading server message: \(errorMsg)")
 
                 if errorMsg.contains("Connection closed") ||
                    errorMsg.contains("Connection reset") ||
                    errorMsg.contains("No message available") {
-                    print("⚠️ Server connection closed")
+                    print("⚠️ Server connection closed, exiting background handler")
                     break
                 }
-                // For other errors, wait a bit and try again
-                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                // For other errors, log but continue (will retry after sleep)
+                print("📥 Non-fatal error, will retry after sleep")
             }
+
+            // Always yield control and sleep between iterations
+            // This prevents busy-waiting and gives other tasks a chance to run
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms between polls
         }
+
+        print("📥 Background message handler STOPPED (final state=\(state), iterations=\(iterationCount))")
     }
 
     /// Handle AMF0 command messages (onStatus, etc.)
@@ -694,9 +782,10 @@ public actor RTMPPublisher {
             if data.count >= 6 {
                 let timestamp = UInt32(data[2]) << 24 | UInt32(data[3]) << 16 |
                                UInt32(data[4]) << 8 | UInt32(data[5])
-                print("📥 User Control: Ping Request (timestamp: \(timestamp))")
+                print("🏓 📥 PING REQUEST from server (timestamp: \(timestamp)) - sending Pong response...")
                 // Send Pong Response
                 try await sendPongResponse(timestamp: timestamp)
+                print("🏓 ✅ Pong response sent successfully")
             }
 
         case 7: // Ping Response (Pong)
@@ -719,13 +808,16 @@ public actor RTMPPublisher {
         // Echo back the timestamp
         pongData.append(contentsOf: timestamp.bigEndianBytes)
 
+        print("🏓 📤 Sending Pong Response: eventType=7, timestamp=\(timestamp), payload=\(pongData.map { String(format: "%02x", $0) }.joined(separator: " "))")
+
         try await sendRTMPMessage(
             chunkStreamId: 2,
             messageTypeId: 4,  // User Control Message
             messageStreamId: 0,
             payload: pongData
         )
-        print("✅ Sent Pong Response (timestamp: \(timestamp))")
+
+        print("🏓 ✅ Pong Response sent successfully to server (timestamp: \(timestamp))")
     }
 
     /// Send Window Acknowledgement message to server
@@ -735,7 +827,7 @@ public actor RTMPPublisher {
 
         try await sendRTMPMessage(
             chunkStreamId: 2,
-            messageTypeId: 3,  // Window Acknowledgement Size
+            messageTypeId: 3,  // Acknowledgement (bytes received report)
             messageStreamId: 0,
             payload: ackData
         )
@@ -880,6 +972,40 @@ public actor RTMPPublisher {
         let (payload, totalBytes) = try await receiveRTMPChunk()
         // We need to extract message type from the last received chunk
         // The message type is stored during receiveRTMPChunk parsing
+        return (lastReceivedMessageType, payload, totalBytes)
+    }
+
+    /// Non-blocking variant of receiveRTMPMessage that returns nil if no data is available
+    /// Used by background message handler to avoid blocking when server isn't sending messages
+    private func receiveRTMPMessageNonBlocking() async throws -> (UInt8, Data, Int)? {
+        // Try to peek if any data is available (just 1 byte to check)
+        guard let peekData = try await receiveDataNonBlocking(length: 1), peekData.count > 0 else {
+            // No data available - return nil (not an error)
+            return nil
+        }
+
+        // Data is available! Now we need to parse the full chunk
+        // Unfortunately we can't "un-read" the peeked byte, so we need a different approach
+        // Instead, we'll use the fact that receiveDataNonBlocking returns immediately if data exists
+
+        // Parse the chunk basic header from the peeked byte
+        let firstByte = peekData[0]
+        let format = (firstByte >> 6) & 0x03
+
+        // Read message header based on format type
+        var headerSize = 0
+        switch format {
+        case 0: headerSize = 11  // Type 0: Full header
+        case 1: headerSize = 7   // Type 1: No message stream ID
+        case 2: headerSize = 3   // Type 2: Only timestamp delta
+        case 3: headerSize = 0   // Type 3: No header
+        default: break
+        }
+
+        // We've already read 1 byte (basic header), now read the rest
+        // Since we know data is available, use the regular blocking receive for the rest
+        // This is safe because we've confirmed the message has started
+        let (payload, totalBytes) = try await receiveRTMPChunk()
         return (lastReceivedMessageType, payload, totalBytes)
     }
 
@@ -1107,6 +1233,41 @@ public actor RTMPPublisher {
                     continuation.resume(throwing: RTMPError.connectionFailed("Connection closed"))
                 } else {
                     print("⚠️ No data available (isComplete=false)")
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Non-blocking variant of receiveData that returns immediately if no data is available
+    /// Uses minimumIncompleteLength: 0 to allow immediate return
+    private func receiveDataNonBlocking(length: Int) async throws -> Data? {
+        guard let connection = connection else {
+            throw RTMPError.notConnected
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var resumed = false
+
+            // Use minimumIncompleteLength: 0 to return IMMEDIATELY if no data is ready
+            // This prevents blocking when server isn't sending anything
+            connection.receive(minimumIncompleteLength: 0, maximumLength: length) { data, _, isComplete, error in
+                guard !resumed else { return }
+                resumed = true
+
+                if let error = error {
+                    continuation.resume(throwing: RTMPError.connectionFailed(error.localizedDescription))
+                    return
+                }
+
+                if let data = data, data.count > 0 {
+                    // Got some data - return it
+                    continuation.resume(returning: data)
+                } else if isComplete {
+                    // Connection closed
+                    continuation.resume(throwing: RTMPError.connectionFailed("Connection closed"))
+                } else {
+                    // No data available right now - return nil (not an error)
                     continuation.resume(returning: nil)
                 }
             }

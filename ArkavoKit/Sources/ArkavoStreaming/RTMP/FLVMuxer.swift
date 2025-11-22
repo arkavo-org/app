@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import AVFoundation
 import CoreMedia
+import ArkavoMedia
 
 /// FLV (Flash Video) muxer for RTMP streaming
 ///
@@ -272,20 +273,144 @@ public struct FLVMuxer: Sendable {
         )
     }
 
+    /// Helper function to manually construct AudioSpecificConfig for AAC
+    private static func constructAudioSpecificConfig(
+        objectType: UInt8,  // 2 for AAC-LC
+        sampleRate: Double,
+        channels: UInt32
+    ) -> Data {
+        // Map sample rate to index per ISO 14496-3 Table 1.18
+        let sampleRateIndex: UInt8
+        switch Int(sampleRate) {
+        case 96000: sampleRateIndex = 0
+        case 88200: sampleRateIndex = 1
+        case 64000: sampleRateIndex = 2
+        case 48000: sampleRateIndex = 3
+        case 44100: sampleRateIndex = 4
+        case 32000: sampleRateIndex = 5
+        case 24000: sampleRateIndex = 6
+        case 22050: sampleRateIndex = 7
+        case 16000: sampleRateIndex = 8
+        case 12000: sampleRateIndex = 9
+        case 11025: sampleRateIndex = 10
+        case 8000: sampleRateIndex = 11
+        case 7350: sampleRateIndex = 12
+        default:
+            print("⚠️ Unsupported sample rate \(sampleRate), defaulting to 48kHz (index 3)")
+            sampleRateIndex = 3
+        }
+
+        // Map channel count to config (1=mono, 2=stereo, etc.)
+        let channelConfig = UInt8(min(channels, 7))
+
+        // Construct 2-byte AudioSpecificConfig
+        // Byte 1: OOOOOSSS (5 bits object type + 3 bits sample rate upper)
+        let byte1 = (objectType << 3) | ((sampleRateIndex >> 1) & 0x07)
+
+        // Byte 2: SCCCCFDE (1 bit sample rate lower + 4 bits channel + 3 bits flags)
+        let byte2 = ((sampleRateIndex & 0x01) << 7) | (channelConfig << 3)
+
+        print("🎵 Constructed AudioSpecificConfig: objectType=\(objectType), srIndex=\(sampleRateIndex), channels=\(channelConfig)")
+        print("   Byte 1: 0x\(String(format: "%02x", byte1)), Byte 2: 0x\(String(format: "%02x", byte2))")
+
+        return Data([byte1, byte2])
+    }
+
     /// Creates audio sequence header payload for RTMP (without FLV tag wrapper)
     public static func createAudioSequenceHeaderPayload(
         formatDescription: CMFormatDescription
     ) -> Data {
-        // Get AAC magic cookie (audio specific config)
         var audioSpecificConfig = Data()
         var cookieSize: Int = 0
-        if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDescription, sizeOut: &cookieSize) {
+
+        // Try to get magic cookie from format description
+        if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDescription, sizeOut: &cookieSize),
+           cookieSize > 0 {
             audioSpecificConfig = Data(bytes: cookie, count: cookieSize)
+            print("🎵 Got AAC magic cookie: \(cookieSize) bytes: \(audioSpecificConfig.map { String(format: "%02x", $0) }.joined(separator: " "))")
+
+            // VALIDATE the AudioSpecificConfig
+            if cookieSize >= 2 {
+                let byte1 = audioSpecificConfig[0]
+                let byte2 = audioSpecificConfig[1]
+
+                // Decode object type (bits 7-3 of byte 1)
+                let objectType = (byte1 >> 3) & 0x1F
+
+                // Decode sample rate index (bits 2-0 of byte1 + bit 7 of byte2)
+                let srIndex = ((byte1 & 0x07) << 1) | ((byte2 >> 7) & 0x01)
+
+                // Decode channel config (bits 6-3 of byte2)
+                let channelConfig = (byte2 >> 3) & 0x0F
+
+                print("🎵 Decoded AudioSpecificConfig: objectType=\(objectType) (2=AAC-LC), srIndex=\(srIndex) (3=48kHz,4=44.1kHz), channels=\(channelConfig) (2=stereo)")
+
+                // Verify it's valid AAC-LC for RTMP streaming
+                if objectType != 2 {
+                    print("⚠️ WARNING: Object type is \(objectType), not 2 (AAC-LC)! This may cause decoder errors.")
+                }
+                if srIndex != 3 && srIndex != 4 {
+                    print("⚠️ WARNING: Sample rate index is \(srIndex), not 3 (48kHz) or 4 (44.1kHz)! This may cause decoder errors.")
+                }
+                if channelConfig != 2 {
+                    print("⚠️ WARNING: Channel config is \(channelConfig), not 2 (stereo)! This may cause decoder errors.")
+                }
+
+                // If any validation failed, reconstruct manually
+                if objectType != 2 || (srIndex != 3 && srIndex != 4) || channelConfig != 2 {
+                    print("❌ Invalid AudioSpecificConfig from encoder, constructing manually")
+                    // Get correct parameters from ASBD
+                    if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee {
+                        audioSpecificConfig = constructAudioSpecificConfig(
+                            objectType: 2,  // Force AAC-LC
+                            sampleRate: asbd.mSampleRate,
+                            channels: asbd.mChannelsPerFrame
+                        )
+                    } else {
+                        // Ultimate fallback: AAC-LC, 48kHz, stereo
+                        audioSpecificConfig = Data([0x11, 0x90])
+                    }
+                } else if cookieSize > 2 {
+                    // Magic cookie is longer than 2 bytes - may contain PCE or other extensions
+                    // Truncate to basic AudioSpecificConfig to avoid corruption
+                    print("⚠️ Magic cookie is \(cookieSize) bytes (expected 2). Truncating to basic AudioSpecificConfig.")
+                    audioSpecificConfig = Data([byte1, byte2])
+                }
+            } else {
+                print("❌ Magic cookie too short (\(cookieSize) bytes), constructing manually")
+                if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee {
+                    audioSpecificConfig = constructAudioSpecificConfig(
+                        objectType: 2,
+                        sampleRate: asbd.mSampleRate,
+                        channels: asbd.mChannelsPerFrame
+                    )
+                } else {
+                    audioSpecificConfig = Data([0x11, 0x90])
+                }
+            }
         } else {
-            // Default AAC-LC, 48kHz, stereo
-            // 0x11, 0x90 = AAC-LC (2), 48kHz (3), stereo (2)
-            audioSpecificConfig = Data([0x11, 0x90])
+            // No magic cookie - construct manually from ASBD
+            print("⚠️ No magic cookie in format description, constructing AudioSpecificConfig manually")
+
+            if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee {
+                let sampleRate = asbd.mSampleRate
+                let channels = asbd.mChannelsPerFrame
+
+                print("🎵 ASBD: sampleRate=\(sampleRate), channels=\(channels), formatID=\(asbd.mFormatID)")
+
+                audioSpecificConfig = constructAudioSpecificConfig(
+                    objectType: 2,  // AAC-LC
+                    sampleRate: sampleRate,
+                    channels: channels
+                )
+            } else {
+                // Ultimate fallback: AAC-LC, 48kHz, stereo
+                print("⚠️ No ASBD available, using fallback AudioSpecificConfig: 0x11 0x90")
+                audioSpecificConfig = Data([0x11, 0x90])
+            }
         }
+
+        print("✅ Final AudioSpecificConfig: \(audioSpecificConfig.map { String(format: "%02x", $0) }.joined(separator: " "))")
 
         // Create audio data
         var audioData = Data()
@@ -378,6 +503,146 @@ public struct FLVMuxer: Sendable {
             data: metadata,
             timestamp: 0
         )
+    }
+
+    // MARK: - Simplified API for EncodedFrame
+
+    /// Create video payload from EncodedVideoFrame
+    public static func createVideoPayload(from frame: EncodedVideoFrame) -> Data {
+        var payload = Data()
+
+        // Frame type and codec ID
+        let frameType: UInt8 = frame.isKeyframe ? 0x10 : 0x20  // 1=keyframe, 2=inter
+        let codecID: UInt8 = 0x07  // AVC (H.264)
+        payload.append(frameType | codecID)
+
+        // AVC packet type: 1 = NALU
+        payload.append(0x01)
+
+        // Composition time: 0 (no B-frames)
+        payload.append(contentsOf: [0x00, 0x00, 0x00])
+
+        // Append H.264 data
+        payload.append(frame.data)
+
+        return payload
+    }
+
+    /// Create audio payload from EncodedAudioFrame
+    public static func createAudioPayload(from frame: EncodedAudioFrame) -> Data {
+        var payload = Data()
+
+        // Sound format (4 bits) | sample rate (2 bits) | sample size (1 bit) | sound type (1 bit)
+        // AAC = 10 (0xA), 44kHz+ = 3, 16-bit = 1, stereo = 1
+        payload.append(0xAF)  // 10101111 = AAC, 44kHz+, 16-bit, stereo
+
+        // AAC packet type: 1 = AAC raw
+        payload.append(0x01)
+
+        // Append AAC data
+        payload.append(frame.data)
+
+        return payload
+    }
+
+    /// Create video sequence header from format description
+    public static func createVideoSequenceHeader(from formatDesc: CMVideoFormatDescription) throws -> Data {
+        var payload = Data()
+
+        // Frame type and codec ID
+        let frameType: UInt8 = 0x10  // Keyframe
+        let codecID: UInt8 = 0x07    // AVC (H.264)
+        payload.append(frameType | codecID)
+
+        // AVC packet type: 0 = sequence header
+        payload.append(0x00)
+
+        // Composition time: 0
+        payload.append(contentsOf: [0x00, 0x00, 0x00])
+
+        // Extract SPS/PPS from format description and create AVCDecoderConfigurationRecord
+        var parameterSetCount: Int = 0
+        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            formatDesc,
+            parameterSetIndex: 0,
+            parameterSetPointerOut: nil,
+            parameterSetSizeOut: nil,
+            parameterSetCountOut: &parameterSetCount,
+            nalUnitHeaderLengthOut: nil
+        )
+
+        guard parameterSetCount >= 2 else {
+            throw FLVError.formatDescriptionFailed
+        }
+
+        // Get SPS
+        var spsPointer: UnsafePointer<UInt8>?
+        var spsSize: Int = 0
+        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            formatDesc,
+            parameterSetIndex: 0,
+            parameterSetPointerOut: &spsPointer,
+            parameterSetSizeOut: &spsSize,
+            parameterSetCountOut: nil,
+            nalUnitHeaderLengthOut: nil
+        )
+
+        guard let sps = spsPointer else {
+            throw FLVError.formatDescriptionFailed
+        }
+
+        // Get PPS
+        var ppsPointer: UnsafePointer<UInt8>?
+        var ppsSize: Int = 0
+        CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+            formatDesc,
+            parameterSetIndex: 1,
+            parameterSetPointerOut: &ppsPointer,
+            parameterSetSizeOut: &ppsSize,
+            parameterSetCountOut: nil,
+            nalUnitHeaderLengthOut: nil
+        )
+
+        guard let pps = ppsPointer else {
+            throw FLVError.formatDescriptionFailed
+        }
+
+        // Build AVCDecoderConfigurationRecord
+        payload.append(0x01)  // configurationVersion
+        payload.append(sps[1])  // AVCProfileIndication
+        payload.append(sps[2])  // profile_compatibility
+        payload.append(sps[3])  // AVCLevelIndication
+        payload.append(0xFF)  // lengthSizeMinusOne (4 bytes)
+
+        // SPS
+        payload.append(0xE1)  // numOfSequenceParameterSets (1)
+        payload.append(UInt8((spsSize >> 8) & 0xFF))
+        payload.append(UInt8(spsSize & 0xFF))
+        payload.append(Data(bytes: sps, count: spsSize))
+
+        // PPS
+        payload.append(0x01)  // numOfPictureParameterSets (1)
+        payload.append(UInt8((ppsSize >> 8) & 0xFF))
+        payload.append(UInt8(ppsSize & 0xFF))
+        payload.append(Data(bytes: pps, count: ppsSize))
+
+        return payload
+    }
+
+    /// Create audio sequence header from AudioSpecificConfig
+    public static func createAudioSequenceHeader(asc: Data) -> Data {
+        var payload = Data()
+
+        // Sound format
+        payload.append(0xAF)  // AAC, 44kHz+, 16-bit, stereo
+
+        // AAC packet type: 0 = sequence header
+        payload.append(0x00)
+
+        // AudioSpecificConfig
+        payload.append(asc)
+
+        return payload
     }
 }
 
