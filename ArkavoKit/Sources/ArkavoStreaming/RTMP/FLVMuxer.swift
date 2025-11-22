@@ -39,10 +39,9 @@ public struct FLVMuxer: Sendable {
         case endOfSequence = 2   // End of sequence
     }
 
-    /// Creates FLV video tag for H.264 data
-    public static func createVideoTag(
+    /// Creates video payload for RTMP (without FLV tag wrapper)
+    public static func createVideoPayload(
         sampleBuffer: CMSampleBuffer,
-        timestamp: CMTime,
         isKeyframe: Bool
     ) throws -> Data {
         // Extract H.264 data from sample buffer
@@ -83,6 +82,17 @@ public struct FLVMuxer: Sendable {
         // AVC video data
         videoData.append(nalData)
 
+        return videoData
+    }
+
+    /// Creates FLV video tag for H.264 data (for FLV files)
+    public static func createVideoTag(
+        sampleBuffer: CMSampleBuffer,
+        timestamp: CMTime,
+        isKeyframe: Bool
+    ) throws -> Data {
+        let videoData = try createVideoPayload(sampleBuffer: sampleBuffer, isKeyframe: isKeyframe)
+
         // Create FLV tag
         let timestampMs = UInt32(timestamp.seconds * 1000)
         return createTag(
@@ -92,10 +102,9 @@ public struct FLVMuxer: Sendable {
         )
     }
 
-    /// Creates FLV video sequence header (SPS/PPS)
-    public static func createVideoSequenceHeader(
-        formatDescription: CMFormatDescription,
-        timestamp: CMTime
+    /// Creates video sequence header payload for RTMP (without FLV tag wrapper)
+    public static func createVideoSequenceHeaderPayload(
+        formatDescription: CMFormatDescription
     ) throws -> Data {
         // Extract SPS and PPS from format description
         var parameterSetCount: Int = 0
@@ -172,6 +181,16 @@ public struct FLVMuxer: Sendable {
         videoData.append(contentsOf: [0x00, 0x00, 0x00])  // Composition time
         videoData.append(avcC)
 
+        return videoData
+    }
+
+    /// Creates FLV video sequence header (SPS/PPS) for FLV files
+    public static func createVideoSequenceHeader(
+        formatDescription: CMFormatDescription,
+        timestamp: CMTime
+    ) throws -> Data {
+        let videoData = try createVideoSequenceHeaderPayload(formatDescription: formatDescription)
+
         let timestampMs = UInt32(timestamp.seconds * 1000)
         return createTag(
             type: .video,
@@ -191,10 +210,9 @@ public struct FLVMuxer: Sendable {
         case raw = 1
     }
 
-    /// Creates FLV audio tag for AAC data
-    public static func createAudioTag(
-        sampleBuffer: CMSampleBuffer,
-        timestamp: CMTime
+    /// Creates audio payload for RTMP (without FLV tag wrapper)
+    public static func createAudioPayload(
+        sampleBuffer: CMSampleBuffer
     ) throws -> Data {
         // Extract AAC data
         guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
@@ -232,6 +250,16 @@ public struct FLVMuxer: Sendable {
         // AAC audio data
         audioData.append(aacData)
 
+        return audioData
+    }
+
+    /// Creates FLV audio tag for AAC data (for FLV files)
+    public static func createAudioTag(
+        sampleBuffer: CMSampleBuffer,
+        timestamp: CMTime
+    ) throws -> Data {
+        let audioData = try createAudioPayload(sampleBuffer: sampleBuffer)
+
         let timestampMs = UInt32(timestamp.seconds * 1000)
         return createTag(
             type: .audio,
@@ -240,11 +268,10 @@ public struct FLVMuxer: Sendable {
         )
     }
 
-    /// Creates FLV audio sequence header (AAC audio specific config)
-    public static func createAudioSequenceHeader(
-        formatDescription: CMFormatDescription,
-        timestamp: CMTime
-    ) throws -> Data {
+    /// Creates audio sequence header payload for RTMP (without FLV tag wrapper)
+    public static func createAudioSequenceHeaderPayload(
+        formatDescription: CMFormatDescription
+    ) -> Data {
         // Get AAC magic cookie (audio specific config)
         var audioSpecificConfig = Data()
         var cookieSize: Int = 0
@@ -262,6 +289,16 @@ public struct FLVMuxer: Sendable {
         audioData.append(audioFlags)
         audioData.append(AACPacketType.sequenceHeader.rawValue)
         audioData.append(audioSpecificConfig)
+
+        return audioData
+    }
+
+    /// Creates FLV audio sequence header (AAC audio specific config) for FLV files
+    public static func createAudioSequenceHeader(
+        formatDescription: CMFormatDescription,
+        timestamp: CMTime
+    ) -> Data {
+        let audioData = createAudioSequenceHeaderPayload(formatDescription: formatDescription)
 
         let timestampMs = UInt32(timestamp.seconds * 1000)
         return createTag(

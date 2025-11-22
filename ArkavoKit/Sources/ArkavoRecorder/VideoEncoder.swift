@@ -590,22 +590,11 @@ public final class VideoEncoder: Sendable {
     }
 
     private func sendVideoSequenceHeader(formatDesc: CMFormatDescription, timestamp: CMTime, to publisher: RTMPPublisher) async throws {
-        // Extract SPS/PPS from format description
-        guard let extensions = CMFormatDescriptionGetExtensions(formatDesc) as? [String: Any],
-              let atoms = extensions["SampleDescriptionExtensionAtoms"] as? [String: Any],
-              let avcC = atoms["avcC"] as? Data else {
-            print("⚠️ Could not extract avcC from format description")
-            return
-        }
-
-        // Create video sequence header packet
-        let sequenceHeader = try FLVMuxer.createVideoSequenceHeader(
+        // Send video sequence header via RTMP publisher
+        try await publisher.publishVideoSequenceHeader(
             formatDescription: formatDesc,
             timestamp: timestamp
         )
-
-        try await publisher.sendData(sequenceHeader)
-        print("✅ Sent video sequence header")
     }
 }
 

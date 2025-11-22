@@ -163,31 +163,47 @@ public actor RTMPPublisher {
             throw RTMPError.connectionFailed("Connection not ready")
         }
 
-        // Convert to FLV video packet
-        guard let flvPacket = try? createFLVVideoPacket(from: buffer, timestamp: timestamp) else {
-            print("⚠️ Failed to create FLV video packet")
-            return
-        }
+        // Determine if this is a keyframe
+        let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false) as? [[CFString: Any]]
+        let isKeyframe = attachments?.first?[kCMSampleAttachmentKey_NotSync] == nil
 
-        try await sendData(flvPacket)
+        // Create video payload and send via RTMP message
+        let payload = try FLVMuxer.createVideoPayload(sampleBuffer: buffer, isKeyframe: isKeyframe)
+        let timestampMs = UInt32(timestamp.seconds * 1000)
+        try await sendRTMPVideoMessage(data: payload, timestamp: timestampMs)
+
         framesSent += 1
     }
 
     /// Publish audio sample
+    /// Publish video sequence header (AVC/H.264 configuration - SPS/PPS)
+    public func publishVideoSequenceHeader(formatDescription: CMFormatDescription, timestamp: CMTime) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        // Create video sequence header payload
+        let payload = try FLVMuxer.createVideoSequenceHeaderPayload(formatDescription: formatDescription)
+
+        // Send as RTMP message (message type 9 = video, chunk stream 6 for video)
+        let timestampMs = UInt32(timestamp.seconds * 1000)
+        try await sendRTMPVideoMessage(data: payload, timestamp: timestampMs)
+        print("✅ Sent video sequence header via RTMP message")
+    }
+
     /// Publish audio sequence header (AAC configuration)
     public func publishAudioSequenceHeader(formatDescription: CMFormatDescription, timestamp: CMTime) async throws {
         guard state == .publishing else {
             throw RTMPError.notConnected
         }
 
-        // Create AAC sequence header using FLVMuxer
-        let sequenceHeader = try FLVMuxer.createAudioSequenceHeader(
-            formatDescription: formatDescription,
-            timestamp: timestamp
-        )
+        // Create AAC sequence header payload
+        let payload = FLVMuxer.createAudioSequenceHeaderPayload(formatDescription: formatDescription)
 
-        try await sendData(sequenceHeader)
-        print("✅ Sent audio sequence header")
+        // Send as RTMP message (message type 8 = audio, chunk stream 4 for audio)
+        let timestampMs = UInt32(timestamp.seconds * 1000)
+        try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
+        print("✅ Sent audio sequence header via RTMP message")
     }
 
     public func publishAudio(buffer: CMSampleBuffer, timestamp: CMTime) async throws {
@@ -200,13 +216,10 @@ public actor RTMPPublisher {
             throw RTMPError.connectionFailed("Connection not ready")
         }
 
-        // Convert to FLV audio packet
-        guard let flvPacket = try? createFLVAudioPacket(from: buffer, timestamp: timestamp) else {
-            print("⚠️ Failed to create FLV audio packet")
-            return
-        }
-
-        try await sendData(flvPacket)
+        // Create audio payload and send via RTMP message
+        let payload = try FLVMuxer.createAudioPayload(sampleBuffer: buffer)
+        let timestampMs = UInt32(timestamp.seconds * 1000)
+        try await sendRTMPAudioMessage(data: payload, timestamp: timestampMs)
     }
 
     /// Disconnect from server
@@ -398,31 +411,13 @@ public actor RTMPPublisher {
         print("✅ App connection complete, ready to stream")
     }
 
-    private func createFLVVideoPacket(from buffer: CMSampleBuffer, timestamp: CMTime) throws -> Data {
-        // Determine if this is a keyframe
-        let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false) as? [[CFString: Any]]
-        let isKeyframe = attachments?.first?[kCMSampleAttachmentKey_NotSync] == nil
-
-        return try FLVMuxer.createVideoTag(
-            sampleBuffer: buffer,
-            timestamp: timestamp,
-            isKeyframe: isKeyframe
-        )
-    }
-
-    private func createFLVAudioPacket(from buffer: CMSampleBuffer, timestamp: CMTime) throws -> Data {
-        return try FLVMuxer.createAudioTag(
-            sampleBuffer: buffer,
-            timestamp: timestamp
-        )
-    }
-
     /// Send RTMP chunk message
     private func sendRTMPMessage(
         chunkStreamId: UInt8,
         messageTypeId: UInt8,
         messageStreamId: UInt32,
-        payload: Data
+        payload: Data,
+        timestamp: UInt32 = 0
     ) async throws {
         // RTMP chunk format (Type 0 - full header)
         var chunk = Data()
@@ -433,7 +428,6 @@ public actor RTMPPublisher {
 
         // Message header (11 bytes for Type 0)
         // Timestamp (3 bytes)
-        let timestamp: UInt32 = 0
         chunk.append(UInt8((timestamp >> 16) & 0xFF))
         chunk.append(UInt8((timestamp >> 8) & 0xFF))
         chunk.append(UInt8(timestamp & 0xFF))
@@ -457,8 +451,30 @@ public actor RTMPPublisher {
         try await sendData(chunk)
     }
 
-    /// Send raw data packet to RTMP stream (public for sequence headers)
-    public func sendData(_ data: Data) async throws {
+    /// Send video data as RTMP message (type 9)
+    private func sendRTMPVideoMessage(data: Data, timestamp: UInt32) async throws {
+        try await sendRTMPMessage(
+            chunkStreamId: 6,  // Video chunk stream
+            messageTypeId: 9,  // Video message
+            messageStreamId: streamId,
+            payload: data,
+            timestamp: timestamp
+        )
+    }
+
+    /// Send audio data as RTMP message (type 8)
+    private func sendRTMPAudioMessage(data: Data, timestamp: UInt32) async throws {
+        try await sendRTMPMessage(
+            chunkStreamId: 4,  // Audio chunk stream
+            messageTypeId: 8,  // Audio message
+            messageStreamId: streamId,
+            payload: data,
+            timestamp: timestamp
+        )
+    }
+
+    /// Send raw data packet to RTMP stream
+    private func sendData(_ data: Data) async throws {
         guard let connection = connection else {
             state = .error("Connection lost")
             throw RTMPError.notConnected
