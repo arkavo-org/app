@@ -332,6 +332,19 @@ public actor RTMPPublisher {
             throw RTMPError.notConnected
         }
 
+        // Send SetChunkSize message (set to 4096 bytes)
+        var chunkSizeData = Data()
+        let newChunkSize: UInt32 = 4096
+        chunkSizeData.append(contentsOf: newChunkSize.bigEndianBytes)
+
+        try await sendRTMPMessage(
+            chunkStreamId: 2,
+            messageTypeId: 1,  // Set Chunk Size
+            messageStreamId: 0,
+            payload: chunkSizeData
+        )
+        print("✅ Sent SetChunkSize: \(newChunkSize)")
+
         // Create RTMP connect command
         let tcUrl = "rtmp://\(destination.url.split(separator: "/").prefix(3).joined(separator: "/"))"
         let connectCommand = AMF0.createConnectCommand(
@@ -340,7 +353,7 @@ public actor RTMPPublisher {
         )
 
         // Send connect command (wrapped in RTMP chunk)
-        print("📤 Sending connect command (\\(connectCommand.count) bytes)")
+        print("📤 Sending connect command: \(connectCommand.count) bytes")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,  // AMF0 command
