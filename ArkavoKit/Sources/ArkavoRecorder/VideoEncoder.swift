@@ -33,6 +33,7 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var audioFormatDescription: CMFormatDescription?
     nonisolated(unsafe) private var sentVideoSequenceHeader: Bool = false
     nonisolated(unsafe) private var sentAudioSequenceHeader: Bool = false
+    nonisolated(unsafe) private var streamStartTime: CMTime?  // Stream start time for relative timestamps
 
     // Encoding settings
     private let videoWidth: Int = 1920
@@ -403,9 +404,10 @@ public final class VideoEncoder: Sendable {
                         print("✅ Audio sequence header sent for streaming")
                     }
 
-                    // Send audio data
+                    // Send audio data with relative timestamp
                     let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    try await publisher.publishAudio(buffer: sampleBuffer, timestamp: timestamp)
+                    let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
+                    try await publisher.publishAudio(buffer: sampleBuffer, timestamp: relativeTimestamp)
                 } catch {
                     // Connection lost - stop streaming
                     if error.localizedDescription.contains("not connected") ||
@@ -476,6 +478,7 @@ public final class VideoEncoder: Sendable {
         isStreaming = true
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
+        streamStartTime = nil  // Will be set on first frame
 
         // Send sequence headers immediately if we have format descriptions from recording
         // This ensures Twitch receives codec info right after publish command
@@ -517,6 +520,7 @@ public final class VideoEncoder: Sendable {
         isStreaming = false
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
+        streamStartTime = nil
 
         print("✅ RTMP stream stopped")
     }
@@ -600,9 +604,10 @@ public final class VideoEncoder: Sendable {
                     }
                 }
 
-                // Send video frame
+                // Send video frame with relative timestamp
                 let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                try await publisher.publishVideo(buffer: sampleBuffer, timestamp: timestamp)
+                let relativeTimestamp = getRelativeStreamTimestamp(timestamp)
+                try await publisher.publishVideo(buffer: sampleBuffer, timestamp: relativeTimestamp)
             } catch {
                 print("❌ Failed to stream video frame: \(error)")
             }
@@ -615,6 +620,22 @@ public final class VideoEncoder: Sendable {
             formatDescription: formatDesc,
             timestamp: timestamp
         )
+    }
+
+    /// Calculate relative timestamp for streaming (from stream start, not system uptime)
+    private func getRelativeStreamTimestamp(_ timestamp: CMTime) -> CMTime {
+        // Initialize stream start time on first frame
+        if streamStartTime == nil {
+            streamStartTime = timestamp
+            return .zero
+        }
+
+        // Return time relative to stream start
+        guard let startTime = streamStartTime else {
+            return .zero
+        }
+
+        return CMTimeSubtract(timestamp, startTime)
     }
 }
 
