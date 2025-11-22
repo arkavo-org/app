@@ -120,9 +120,20 @@ public struct FLVMuxer: Sendable {
         var avcC = Data()
 
         avcC.append(0x01)  // configurationVersion
-        avcC.append(0x42)  // AVCProfileIndication (baseline)
-        avcC.append(0x00)  // profile_compatibility
-        avcC.append(0x1E)  // AVCLevelIndication (3.0)
+
+        // Extract profile, compatibility, and level from SPS (first 3 bytes after NAL header)
+        if let sps = parameterSetPointer, parameterSetSize >= 4 {
+            // SPS format: [NAL header] [profile] [compatibility] [level] ...
+            avcC.append(sps[1])  // AVCProfileIndication (from SPS)
+            avcC.append(sps[2])  // profile_compatibility (from SPS)
+            avcC.append(sps[3])  // AVCLevelIndication (from SPS)
+        } else {
+            // Fallback to Main Profile 4.1 if we can't read SPS
+            avcC.append(0x4D)  // AVCProfileIndication (Main = 77 = 0x4D)
+            avcC.append(0x00)  // profile_compatibility
+            avcC.append(0x29)  // AVCLevelIndication (4.1 = 41 = 0x29)
+        }
+
         avcC.append(0xFF)  // lengthSizeMinusOne (4 bytes)
 
         // SPS

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA395E082ED1465700ABE5C8 /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = REFAC00000000000000000006 /* ArkavoC2PA */; };
 		DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAVRM0042CFB643500BE9912 /* VRMMetalKit */; };
 		REFAC00000000000000000003 /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = REFAC00000000000000000002 /* ArkavoKit */; };
 /* End PBXBuildFile section */
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA395E082ED1465700ABE5C8 /* ArkavoC2PA in Frameworks */,
 				DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */,
 				REFAC00000000000000000003 /* ArkavoKit in Frameworks */,
 			);
@@ -606,8 +608,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
 			requirement = {
-				kind = exactVersion;
-				version = 0.3.1;
+				branch = main;
+				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
