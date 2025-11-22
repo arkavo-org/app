@@ -75,6 +75,7 @@ public actor RTMPPublisher {
     // Stream configuration
     private var destination: Destination?
     private var streamKey: String?
+    private var streamId: UInt32 = 1  // Stream ID from createStream response
 
     // Statistics
     private var bytesSent: UInt64 = 0
@@ -173,6 +174,22 @@ public actor RTMPPublisher {
     }
 
     /// Publish audio sample
+    /// Publish audio sequence header (AAC configuration)
+    public func publishAudioSequenceHeader(formatDescription: CMFormatDescription, timestamp: CMTime) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+
+        // Create AAC sequence header using FLVMuxer
+        let sequenceHeader = try FLVMuxer.createAudioSequenceHeader(
+            formatDescription: formatDescription,
+            timestamp: timestamp
+        )
+
+        try await sendData(sequenceHeader)
+        print("✅ Sent audio sequence header")
+    }
+
     public func publishAudio(buffer: CMSampleBuffer, timestamp: CMTime) async throws {
         guard state == .publishing else {
             throw RTMPError.notConnected
@@ -316,9 +333,10 @@ public actor RTMPPublisher {
 
         print("✅ Connect command sent")
 
-        // TODO: Properly wait for and parse connect response
-        // For now, add a small delay to let server process the commands
-        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        // Wait for connect response (_result or _error)
+        print("⏳ Waiting for connect response...")
+        let connectResponseData = try await receiveRTMPChunk()
+        print("✅ Received connect response")
 
         // Release stream
         let releaseStreamCommand = AMF0.createReleaseStreamCommand(streamName: streamKey)
@@ -347,7 +365,37 @@ public actor RTMPPublisher {
             payload: createStreamCommand
         )
 
-        print("✅ App connection complete")
+        print("✅ CreateStream command sent, waiting for stream ID...")
+
+        // Wait for createStream response and extract stream ID
+        let createStreamResponseData = try await receiveRTMPChunk()
+        if let parsedStreamId = try? parseCreateStreamResponse(createStreamResponseData) {
+            streamId = parsedStreamId
+            print("✅ Received stream ID: \(streamId)")
+        } else {
+            print("⚠️ Could not parse stream ID, using default: \(streamId)")
+        }
+
+        // Send publish command to start streaming
+        let publishCommand = AMF0.createPublishCommand(
+            streamName: streamKey,
+            publishingName: "live",
+            transactionId: 0.0
+        )
+        try await sendRTMPMessage(
+            chunkStreamId: 3,
+            messageTypeId: 20,
+            messageStreamId: streamId,
+            payload: publishCommand
+        )
+
+        print("✅ Publish command sent, stream is now live!")
+
+        // Wait for publish success status (NetStream.Publish.Start)
+        let publishStatusData = try await receiveRTMPChunk()
+        print("✅ Received publish status")
+
+        print("✅ App connection complete, ready to stream")
     }
 
     private func createFLVVideoPacket(from buffer: CMSampleBuffer, timestamp: CMTime) throws -> Data {
@@ -441,6 +489,108 @@ public actor RTMPPublisher {
     private func handleSendError(_ error: Error) {
         state = .error("Send failed: \(error.localizedDescription)")
         print("❌ RTMP send error: \(error)")
+    }
+
+    /// Receive and parse an RTMP chunk from the server
+    private func receiveRTMPChunk() async throws -> Data {
+        // Read chunk basic header (1-3 bytes)
+        guard let basicHeader = try await receiveData(length: 1) else {
+            throw RTMPError.connectionFailed("Failed to receive chunk basic header")
+        }
+
+        let firstByte = basicHeader[0]
+        let format = (firstByte >> 6) & 0x03
+        let chunkStreamId = firstByte & 0x3F
+
+        // Read message header based on format type
+        var headerSize = 0
+        switch format {
+        case 0: headerSize = 11  // Type 0: Full header
+        case 1: headerSize = 7   // Type 1: No message stream ID
+        case 2: headerSize = 3   // Type 2: Only timestamp delta
+        case 3: headerSize = 0   // Type 3: No header
+        default: break
+        }
+
+        var messageHeader = Data()
+        if headerSize > 0 {
+            guard let header = try await receiveData(length: headerSize) else {
+                throw RTMPError.connectionFailed("Failed to receive message header")
+            }
+            messageHeader = header
+        }
+
+        // Parse message length from header (for type 0 and 1)
+        var messageLength = 128  // Default chunk size
+        if format == 0 || format == 1 {
+            if messageHeader.count >= 6 {
+                messageLength = Int(messageHeader[3]) << 16 | Int(messageHeader[4]) << 8 | Int(messageHeader[5])
+            }
+        }
+
+        // Read the payload in chunks (RTMP uses 128-byte chunks by default)
+        var payload = Data()
+        let chunkSize = 128
+        var remaining = messageLength
+
+        while remaining > 0 {
+            let toRead = min(remaining, chunkSize)
+            guard let chunk = try await receiveData(length: toRead) else {
+                throw RTMPError.connectionFailed("Failed to receive chunk payload")
+            }
+            payload.append(chunk)
+            remaining -= toRead
+
+            // If more chunks needed, read type 3 header (1 byte)
+            if remaining > 0 {
+                _ = try await receiveData(length: 1)
+            }
+        }
+
+        return payload
+    }
+
+    /// Parse the createStream response to extract stream ID
+    private func parseCreateStreamResponse(_ data: Data) throws -> UInt32 {
+        // CreateStream response format:
+        // - String: "_result" (command name)
+        // - Number: transaction ID
+        // - Null: command object
+        // - Number: stream ID  <-- This is what we need
+
+        var offset = 0
+
+        // Skip command name string
+        if data.count > offset && data[offset] == 0x02 {  // String type
+            offset += 1
+            if data.count >= offset + 2 {
+                let length = Int(data[offset]) << 8 | Int(data[offset + 1])
+                offset += 2 + length
+            }
+        }
+
+        // Skip transaction ID number
+        if data.count > offset && data[offset] == 0x00 {  // Number type
+            offset += 9  // 1 byte type + 8 bytes double
+        }
+
+        // Skip null
+        if data.count > offset && data[offset] == 0x05 {  // Null type
+            offset += 1
+        }
+
+        // Read stream ID number
+        if data.count >= offset + 9 && data[offset] == 0x00 {  // Number type
+            offset += 1
+            var streamIdDouble: UInt64 = 0
+            for i in 0..<8 {
+                streamIdDouble = (streamIdDouble << 8) | UInt64(data[offset + i])
+            }
+            let streamIdValue = Double(bitPattern: streamIdDouble)
+            return UInt32(streamIdValue)
+        }
+
+        throw RTMPError.publishFailed("Could not parse stream ID from createStream response")
     }
 
     private func receiveData(length: Int) async throws -> Data? {

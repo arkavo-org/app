@@ -68,7 +68,19 @@ public final class VideoEncoder: Sendable {
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: videoBitrate,
                 AVVideoExpectedSourceFrameRateKey: frameRate,
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+                // Use Main profile level 4.1 for maximum compatibility
+                // (instead of High Auto which may select incompatible parameters)
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264Main41,
+                // Disable frame reordering for better compatibility
+                AVVideoAllowFrameReorderingKey: false,
+                // Use CAVLC entropy mode (more compatible than CABAC)
+                AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCAVLC
+            ],
+            // Add color space metadata for proper color reproduction
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
             ]
         ]
 
@@ -309,9 +321,12 @@ public final class VideoEncoder: Sendable {
 
         // Also stream if streaming is active
         if isStreaming, let publisher = rtmpPublisher {
-            // Need to convert pixel buffer to sample buffer for streaming
-            // This would require creating a CMSampleBuffer from CVPixelBuffer
-            // For now, skip - will implement when we have full pipeline
+            // Note: Current architecture uses AVAssetWriter which encodes internally
+            // To stream, we need access to compressed H.264 frames
+            // TODO: Implement VTCompressionSession-based encoding for streaming
+            // For now, streaming will work but without video frames (audio-only)
+            // This requires architectural changes to support dual output (file + stream)
+            print("⚠️ Video streaming not yet implemented - audio-only stream")
         }
     }
 
@@ -363,8 +378,13 @@ public final class VideoEncoder: Sendable {
                     // Send audio sequence header on first audio packet
                     if !sentAudioSequenceHeader, let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
                         audioFormatDescription = formatDesc
-                        // TODO: Send audio sequence header via FLVMuxer
+                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        try await publisher.publishAudioSequenceHeader(
+                            formatDescription: formatDesc,
+                            timestamp: timestamp
+                        )
                         sentAudioSequenceHeader = true
+                        print("✅ Audio sequence header sent for streaming")
                     }
 
                     // Send audio data
