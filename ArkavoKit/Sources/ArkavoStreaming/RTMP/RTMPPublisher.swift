@@ -337,6 +337,7 @@ public actor RTMPPublisher {
         )
 
         // Send connect command (wrapped in RTMP chunk)
+        print("📤 Sending connect command (\\(connectCommand.count) bytes)")
         try await sendRTMPMessage(
             chunkStreamId: 3,
             messageTypeId: 20,  // AMF0 command
