@@ -425,7 +425,33 @@ public actor RTMPPublisher {
         let publishStatusData = try await receiveRTMPChunk()
         print("✅ Received publish status")
 
+        // Start background task to read server messages (acknowledgements, bandwidth notifications, etc.)
+        Task {
+            await handleServerMessages()
+        }
+
         print("✅ App connection complete, ready to stream")
+    }
+
+    /// Handle incoming server messages during streaming
+    private func handleServerMessages() async {
+        while state == .publishing {
+            do {
+                // Try to read any incoming server messages
+                let messageData = try await receiveRTMPChunk()
+                print("📥 Received server message during streaming: \(messageData.count) bytes")
+                // TODO: Parse and handle specific message types (Window Ack Size, Set Peer Bandwidth, etc.)
+            } catch {
+                // If we get an error, the connection might be closed
+                if error.localizedDescription.contains("Connection closed") ||
+                   error.localizedDescription.contains("Connection reset") {
+                    print("⚠️ Server connection closed")
+                    break
+                }
+                // For other errors, wait a bit and try again
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+        }
     }
 
     /// Send RTMP chunk message
