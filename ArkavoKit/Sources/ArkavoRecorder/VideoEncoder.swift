@@ -1,9 +1,10 @@
 @preconcurrency import AVFoundation
 import CoreVideo
+import VideoToolbox
 import ArkavoStreaming
 
 /// Encodes video and audio to MOV files using AVAssetWriter
-/// Supports optional simultaneous streaming via RTMP
+/// Supports optional simultaneous streaming via RTMP using VTCompressionSession
 public final class VideoEncoder: Sendable {
     // MARK: - Properties
 
@@ -11,6 +12,10 @@ public final class VideoEncoder: Sendable {
     nonisolated(unsafe) private var videoInput: AVAssetWriterInput?
     nonisolated(unsafe) private var audioInputs: [String: AVAssetWriterInput] = [:]  // sourceID -> audio input
     nonisolated(unsafe) private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+
+    // VTCompressionSession for streaming
+    nonisolated(unsafe) private var compressionSession: VTCompressionSession?
+    nonisolated(unsafe) private var streamVideoInput: AVAssetWriterInput?  // For getting encoded frames
 
     nonisolated(unsafe) private var outputURL: URL?
     nonisolated(unsafe) private var startTime: CMTime?
@@ -320,13 +325,24 @@ public final class VideoEncoder: Sendable {
         lastVideoTimestamp = adjustedTimestamp
 
         // Also stream if streaming is active
-        if isStreaming, let publisher = rtmpPublisher {
-            // Note: Current architecture uses AVAssetWriter which encodes internally
-            // To stream, we need access to compressed H.264 frames
-            // TODO: Implement VTCompressionSession-based encoding for streaming
-            // For now, streaming will work but without video frames (audio-only)
-            // This requires architectural changes to support dual output (file + stream)
-            print("⚠️ Video streaming not yet implemented - audio-only stream")
+        if isStreaming, let session = compressionSession {
+            // Encode frame using VTCompressionSession for streaming
+            let presentationTimeStamp = adjustedTimestamp
+            let duration = CMTime(value: 1, timescale: frameRate)
+
+            let status = VTCompressionSessionEncodeFrame(
+                session,
+                imageBuffer: pixelBuffer,
+                presentationTimeStamp: presentationTimeStamp,
+                duration: duration,
+                frameProperties: nil,
+                sourceFrameRefcon: nil,
+                infoFlagsOut: nil
+            )
+
+            if status != noErr {
+                print("❌ VTCompressionSession encode failed: \(status)")
+            }
         }
     }
 
@@ -453,12 +469,15 @@ public final class VideoEncoder: Sendable {
         let publisher = RTMPPublisher()
         try await publisher.connect(to: destination, streamKey: streamKey)
 
+        // Set up VTCompressionSession for real-time encoding
+        try setupCompressionSession()
+
         rtmpPublisher = publisher
         isStreaming = true
         sentVideoSequenceHeader = false
         sentAudioSequenceHeader = false
 
-        print("✅ RTMP stream started")
+        print("✅ RTMP stream started with video encoding")
     }
 
     /// Stop streaming
@@ -467,6 +486,12 @@ public final class VideoEncoder: Sendable {
 
         print("📡 Stopping RTMP stream...")
         await publisher.disconnect()
+
+        // Clean up compression session
+        if let session = compressionSession {
+            VTCompressionSessionInvalidate(session)
+            compressionSession = nil
+        }
 
         rtmpPublisher = nil
         isStreaming = false
@@ -483,4 +508,104 @@ public final class VideoEncoder: Sendable {
             return await publisher.statistics
         }
     }
+
+    // MARK: - VTCompressionSession Setup
+
+    private func setupCompressionSession() throws {
+        var session: VTCompressionSession?
+
+        let status = VTCompressionSessionCreate(
+            allocator: kCFAllocatorDefault,
+            width: Int32(videoWidth),
+            height: Int32(videoHeight),
+            codecType: kCMVideoCodecType_H264,
+            encoderSpecification: nil,
+            imageBufferAttributes: nil,
+            compressedDataAllocator: nil,
+            outputCallback: compressionOutputCallback,
+            refcon: Unmanaged.passUnretained(self).toOpaque(),
+            compressionSessionOut: &session
+        )
+
+        guard status == noErr, let session = session else {
+            throw RecorderError.encodingFailed
+        }
+
+        // Set compression properties for streaming
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_Main_4_1)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: videoBitrate as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: frameRate as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: Int32(frameRate * 2) as CFNumber)  // Keyframe every 2 seconds
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
+
+        // Prepare session
+        VTCompressionSessionPrepareToEncodeFrames(session)
+
+        compressionSession = session
+        print("✅ VTCompressionSession created for streaming")
+    }
+
+    private let compressionOutputCallback: VTCompressionOutputCallback = { (
+        outputCallbackRefCon: UnsafeMutableRawPointer?,
+        sourceFrameRefCon: UnsafeMutableRawPointer?,
+        status: OSStatus,
+        infoFlags: VTEncodeInfoFlags,
+        sampleBuffer: CMSampleBuffer?
+    ) in
+        guard status == noErr, let sampleBuffer = sampleBuffer else {
+            print("❌ Compression failed with status: \(status)")
+            return
+        }
+
+        guard let encoder = outputCallbackRefCon else { return }
+        let videoEncoder = Unmanaged<VideoEncoder>.fromOpaque(encoder).takeUnretainedValue()
+
+        // Handle the compressed sample buffer on the encoder
+        videoEncoder.handleCompressedFrame(sampleBuffer)
+    }
+
+    private func handleCompressedFrame(_ sampleBuffer: CMSampleBuffer) {
+        guard isStreaming, let publisher = rtmpPublisher else { return }
+
+        Task {
+            do {
+                // Send sequence header on first frame
+                if !sentVideoSequenceHeader {
+                    if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                        videoFormatDescription = formatDesc
+                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        try await sendVideoSequenceHeader(formatDesc: formatDesc, timestamp: timestamp, to: publisher)
+                        sentVideoSequenceHeader = true
+                    }
+                }
+
+                // Send video frame
+                let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                try await publisher.publishVideo(buffer: sampleBuffer, timestamp: timestamp)
+            } catch {
+                print("❌ Failed to stream video frame: \(error)")
+            }
+        }
+    }
+
+    private func sendVideoSequenceHeader(formatDesc: CMFormatDescription, timestamp: CMTime, to publisher: RTMPPublisher) async throws {
+        // Extract SPS/PPS from format description
+        guard let extensions = CMFormatDescriptionGetExtensions(formatDesc) as? [String: Any],
+              let atoms = extensions["SampleDescriptionExtensionAtoms"] as? [String: Any],
+              let avcC = atoms["avcC"] as? Data else {
+            print("⚠️ Could not extract avcC from format description")
+            return
+        }
+
+        // Create video sequence header packet
+        let sequenceHeader = try FLVMuxer.createVideoSequenceHeader(
+            formatDescription: formatDesc,
+            timestamp: timestamp
+        )
+
+        try await publisher.sendData(sequenceHeader)
+        print("✅ Sent video sequence header")
+    }
 }
+

@@ -457,7 +457,8 @@ public actor RTMPPublisher {
         try await sendData(chunk)
     }
 
-    private func sendData(_ data: Data) async throws {
+    /// Send raw data packet to RTMP stream (public for sequence headers)
+    public func sendData(_ data: Data) async throws {
         guard let connection = connection else {
             state = .error("Connection lost")
             throw RTMPError.notConnected
