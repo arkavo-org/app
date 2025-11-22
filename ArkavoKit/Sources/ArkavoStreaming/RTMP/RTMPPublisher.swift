@@ -84,6 +84,7 @@ public actor RTMPPublisher {
     private var startTime: Date?
     private var windowAckSize: UInt32 = 2500000  // Default 2.5MB
     private var lastAckSent: UInt64 = 0
+    private var lastReceivedMessageType: UInt8 = 0  // Track message type from last received chunk
 
     public var currentState: State {
         state
@@ -440,10 +441,44 @@ public actor RTMPPublisher {
     private func handleServerMessages() async {
         while state == .publishing {
             do {
-                // Try to read any incoming server messages
-                let messageData = try await receiveRTMPChunk()
+                // Try to read any incoming server messages (returns payload only)
+                let (messageType, messageData) = try await receiveRTMPMessage()
                 bytesReceived += UInt64(messageData.count)
-                print("📥 Received server message during streaming: \(messageData.count) bytes (total: \(bytesReceived))")
+
+                print("📥 Server message: type=\(messageType) len=\(messageData.count) totalReceived=\(bytesReceived)")
+
+                // Handle specific message types
+                switch messageType {
+                case 1: // Set Chunk Size
+                    if messageData.count >= 4 {
+                        let chunkSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                        print("📥 Server Set Chunk Size: \(chunkSize)")
+                    }
+
+                case 3: // Acknowledgement
+                    print("📥 Server sent Acknowledgement")
+
+                case 5: // Window Acknowledgement Size
+                    if messageData.count >= 4 {
+                        windowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                        print("📥 Server Window Ack Size: \(windowAckSize)")
+                    }
+
+                case 6: // Set Peer Bandwidth
+                    if messageData.count >= 4 {
+                        let bandwidth = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
+                                       UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                        print("📥 Server Set Peer Bandwidth: \(bandwidth)")
+                    }
+
+                case 20: // AMF0 Command (onStatus, etc.)
+                    handleAMFCommand(messageData)
+
+                default:
+                    print("📥 Unhandled message type: \(messageType)")
+                }
 
                 // Send acknowledgement if we've received enough data
                 if bytesReceived - lastAckSent >= UInt64(windowAckSize) {
@@ -451,7 +486,6 @@ public actor RTMPPublisher {
                     lastAckSent = bytesReceived
                 }
 
-                // TODO: Parse and handle specific message types (Set Peer Bandwidth, etc.)
             } catch {
                 // If we get an error, the connection might be closed
                 if error.localizedDescription.contains("Connection closed") ||
@@ -462,6 +496,26 @@ public actor RTMPPublisher {
                 }
                 // For other errors, wait a bit and try again
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+        }
+    }
+
+    /// Handle AMF0 command messages (onStatus, etc.)
+    private func handleAMFCommand(_ data: Data) {
+        // Simple parsing to extract command name and status info
+        if let commandStr = String(data: data, encoding: .utf8) {
+            if commandStr.contains("onStatus") {
+                print("📥 onStatus message received")
+
+                if commandStr.contains("error") {
+                    print("❌ onStatus: ERROR level detected")
+                }
+                if commandStr.contains("NetStream.Publish.Denied") {
+                    print("❌ NetStream.Publish.Denied - Stream rejected!")
+                }
+                if commandStr.contains("NetStream.Publish.Start") {
+                    print("✅ NetStream.Publish.Start - Stream started")
+                }
             }
         }
     }
@@ -579,6 +633,15 @@ public actor RTMPPublisher {
         print("❌ RTMP send error: \(error)")
     }
 
+    /// Receive RTMP message and return (messageType, payload)
+    private func receiveRTMPMessage() async throws -> (UInt8, Data) {
+        let payload = try await receiveRTMPChunk()
+        // We need to extract message type from the last received chunk
+        // For now, return the payload with a default type - we'll enhance this
+        // The message type is stored during receiveRTMPChunk parsing
+        return (lastReceivedMessageType, payload)
+    }
+
     /// Receive and parse an RTMP chunk from the server
     private func receiveRTMPChunk() async throws -> Data {
         // Read chunk basic header (1 byte minimum)
@@ -610,11 +673,15 @@ public actor RTMPPublisher {
             messageHeader = header
         }
 
-        // Parse message length from header (for type 0 and 1)
+        // Parse message length and type from header (for type 0 and 1)
         var messageLength = 128  // Default chunk size
         if format == 0 || format == 1 {
             if messageHeader.count >= 6 {
                 messageLength = Int(messageHeader[3]) << 16 | Int(messageHeader[4]) << 8 | Int(messageHeader[5])
+            }
+            // For type 0, message type ID is at byte 6
+            if format == 0 && messageHeader.count >= 7 {
+                lastReceivedMessageType = messageHeader[6]
             }
         }
 
