@@ -399,40 +399,49 @@ public final class VideoEncoder: Sendable {
     ///   - sampleBuffer: Audio sample buffer (must be 48kHz PCM stereo)
     ///   - sourceID: Unique identifier for the audio source (e.g., "microphone", "screen", "remote-camera-123")
     public nonisolated func encodeAudioSample(_ sampleBuffer: CMSampleBuffer, sourceID: String) async {
-        guard isRecording, !isPaused else { return }
-        guard startTime != nil else {
-            // Wait until video session has started to keep A/V in sync
+        // Allow audio processing if either recording OR streaming
+        guard (isRecording || isStreaming) && !isPaused else { return }
+
+        guard CMSampleBufferIsValid(sampleBuffer) else {
             return
         }
 
-        guard let writer = assetWriter, writer.status == .writing, CMSampleBufferIsValid(sampleBuffer) else {
-            return
-        }
+        // Handle file recording if active
+        if isRecording {
+            guard startTime != nil else {
+                // Wait until video session has started to keep A/V in sync
+                return
+            }
 
-        // Get audio input for this source (must have been pre-created during startRecording)
-        guard let audioInput = audioInputs[sourceID] else {
-            print("⚠️ No audio input exists for source: \(sourceID). Audio inputs must be pre-created before recording starts.")
-            return
-        }
+            guard let writer = assetWriter, writer.status == .writing else {
+                return
+            }
 
-        // Wait if input is not ready
-        if !audioInput.isReadyForMoreMediaData {
-            return
-        }
+            // Get audio input for this source (must have been pre-created during startRecording)
+            guard let audioInput = audioInputs[sourceID] else {
+                print("⚠️ No audio input exists for source: \(sourceID). Audio inputs must be pre-created before recording starts.")
+                return
+            }
 
-        // Adjust timestamp for pauses
-        var adjustedBuffer = sampleBuffer
-        if !totalPausedDuration.seconds.isZero {
-            // Create adjusted sample buffer with new timing
-            // This is simplified - full implementation would need proper timing adjustment
-            adjustedBuffer = sampleBuffer
-        }
+            // Wait if input is not ready
+            if !audioInput.isReadyForMoreMediaData {
+                return
+            }
 
-        // Append audio sample to file
-        // AVAssetWriterInput will automatically encode PCM to AAC
-        if !audioInput.append(adjustedBuffer) {
-            print("⚠️ Audio input [\(sourceID)] rejected sample buffer; dropping frame")
-            return
+            // Adjust timestamp for pauses
+            var adjustedBuffer = sampleBuffer
+            if !totalPausedDuration.seconds.isZero {
+                // Create adjusted sample buffer with new timing
+                // This is simplified - full implementation would need proper timing adjustment
+                adjustedBuffer = sampleBuffer
+            }
+
+            // Append audio sample to file
+            // AVAssetWriterInput will automatically encode PCM to AAC
+            if !audioInput.append(adjustedBuffer) {
+                print("⚠️ Audio input [\(sourceID)] rejected sample buffer; dropping frame")
+                return
+            }
         }
 
         // Stream the first audio track for RTMP (typically microphone)
@@ -493,6 +502,15 @@ public final class VideoEncoder: Sendable {
         let publisher = RTMPPublisher()
         try await publisher.connect(to: destination, streamKey: streamKey)
 
+        // Send stream metadata (@setDataFrame onMetaData) immediately after connect
+        try await publisher.sendMetadata(
+            width: videoWidth,
+            height: videoHeight,
+            framerate: Double(frameRate),
+            videoBitrate: Double(videoBitrate) / 1000.0,  // Convert to kbps
+            audioBitrate: 128.0  // 128 kbps
+        )
+
         // Create video encoder
         let videoEncoder = ArkavoMedia.VideoEncoder(quality: .auto)
         try videoEncoder.start()
@@ -501,13 +519,14 @@ public final class VideoEncoder: Sendable {
         let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: 128_000)
 
         // Wire up video encoder callback
-        videoEncoder.onFrame = { [weak publisher] frame in
-            Task {
+        videoEncoder.onFrame = { [weak self, weak publisher] frame in
+            Task { [weak self] in
                 do {
-                    // Send sequence header on first keyframe
-                    if frame.isKeyframe, let formatDesc = frame.formatDescription {
+                    // Send sequence header ONLY ONCE on first keyframe
+                    if frame.isKeyframe, self?.sentVideoSequenceHeader == false, let formatDesc = frame.formatDescription {
                         try await publisher?.sendVideoSequenceHeader(formatDescription: formatDesc)
-                        print("✅ Sent video sequence header")
+                        self?.sentVideoSequenceHeader = true
+                        print("✅ Sent video sequence header (ONCE)")
                     }
 
                     // Send video frame
@@ -519,11 +538,11 @@ public final class VideoEncoder: Sendable {
         }
 
         // Wire up audio encoder callback
-        audioEncoder.onFrame = { [weak publisher] frame in
-            Task {
+        audioEncoder.onFrame = { [weak self, weak publisher] frame in
+            Task { [weak self] in
                 do {
-                    // Send sequence header on first frame
-                    if let formatDesc = frame.formatDescription {
+                    // Send sequence header ONLY ONCE on first frame
+                    if self?.sentAudioSequenceHeader == false, let formatDesc = frame.formatDescription {
                         // Extract AudioSpecificConfig from format description
                         var asc = Data()
                         var size: Int = 0
@@ -537,7 +556,8 @@ public final class VideoEncoder: Sendable {
                         }
 
                         try await publisher?.sendAudioSequenceHeader(asc: asc)
-                        print("✅ Sent audio sequence header")
+                        self?.sentAudioSequenceHeader = true
+                        print("✅ Sent audio sequence header (ONCE)")
                     }
 
                     // Send audio frame

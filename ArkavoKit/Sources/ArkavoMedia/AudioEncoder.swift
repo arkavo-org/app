@@ -190,7 +190,7 @@ public final class AudioEncoder: Sendable {
 
             onFrame?(frame)
 
-            print("🎵 Encoded AAC frame: \(aacData.count) bytes at \(timestamp.seconds)s")
+            // Removed excessive logging - frame encoding is normal operation
         }
 
         // Reset buffer for next accumulation

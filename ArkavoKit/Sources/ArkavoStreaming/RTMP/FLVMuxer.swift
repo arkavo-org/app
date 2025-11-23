@@ -211,6 +211,16 @@ public struct FLVMuxer: Sendable {
         case raw = 1
     }
 
+    // MARK: - Audio Constants
+
+    /// Standard AAC audio format flags: AAC codec, 44/48kHz, 16-bit, stereo
+    /// Binary: 10101111 = bits[7:4]=1010 (AAC), bits[3:2]=11 (44/48kHz), bit[1]=1 (16-bit), bit[0]=1 (stereo)
+    private static let AAC_AUDIO_FLAGS: UInt8 = 0xAF
+
+    /// Fallback AudioSpecificConfig when magic cookie unavailable or invalid
+    /// 0x11 0x90 = AAC-LC, 48kHz, stereo
+    private static let FALLBACK_AUDIO_SPECIFIC_CONFIG = Data([0x11, 0x90])
+
     /// Creates audio payload for RTMP (without FLV tag wrapper)
     public static func createAudioPayload(
         sampleBuffer: CMSampleBuffer
@@ -368,7 +378,7 @@ public struct FLVMuxer: Sendable {
                         )
                     } else {
                         // Ultimate fallback: AAC-LC, 48kHz, stereo
-                        audioSpecificConfig = Data([0x11, 0x90])
+                        audioSpecificConfig = FALLBACK_AUDIO_SPECIFIC_CONFIG
                     }
                 } else if cookieSize > 2 {
                     // Magic cookie is longer than 2 bytes - may contain PCE or other extensions
@@ -385,7 +395,7 @@ public struct FLVMuxer: Sendable {
                         channels: asbd.mChannelsPerFrame
                     )
                 } else {
-                    audioSpecificConfig = Data([0x11, 0x90])
+                    audioSpecificConfig = FALLBACK_AUDIO_SPECIFIC_CONFIG
                 }
             }
         } else {
@@ -406,7 +416,7 @@ public struct FLVMuxer: Sendable {
             } else {
                 // Ultimate fallback: AAC-LC, 48kHz, stereo
                 print("⚠️ No ASBD available, using fallback AudioSpecificConfig: 0x11 0x90")
-                audioSpecificConfig = Data([0x11, 0x90])
+                audioSpecificConfig = FALLBACK_AUDIO_SPECIFIC_CONFIG
             }
         }
 
@@ -493,16 +503,64 @@ public struct FLVMuxer: Sendable {
         audioBitrate: Double
     ) -> Data {
         // Create AMF0 encoded onMetaData script
-        let metadata = Data()
+        // Format: @setDataFrame string + onMetaData string + ECMA array with properties
+        var metadata = Data()
 
-        // TODO: This would require full AMF0 encoding implementation
-        // For now, return empty - will implement with AMF.swift
+        // String marker (0x02) + length + "@setDataFrame"
+        let setDataFrame = "@setDataFrame"
+        metadata.append(0x02)  // AMF0 String marker
+        metadata.append(contentsOf: UInt16(setDataFrame.count).bigEndianBytes)
+        metadata.append(setDataFrame.data(using: .utf8)!)
 
-        return createTag(
-            type: .scriptData,
-            data: metadata,
-            timestamp: 0
-        )
+        // String marker (0x02) + length + "onMetaData"
+        let onMetaData = "onMetaData"
+        metadata.append(0x02)  // AMF0 String marker
+        metadata.append(contentsOf: UInt16(onMetaData.count).bigEndianBytes)
+        metadata.append(onMetaData.data(using: .utf8)!)
+
+        // ECMA Array marker (0x08) + approximate count (we'll use 10 properties)
+        metadata.append(0x08)  // AMF0 ECMA Array marker
+        metadata.append(contentsOf: UInt32(10).bigEndianBytes)  // Property count
+
+        // Helper to add property (name + value)
+        func addNumberProperty(name: String, value: Double) {
+            metadata.append(contentsOf: UInt16(name.count).bigEndianBytes)
+            metadata.append(name.data(using: .utf8)!)
+            metadata.append(0x00)  // AMF0 Number marker
+            metadata.append(contentsOf: value.bitPattern.bigEndianBytes)
+        }
+
+        func addStringProperty(name: String, value: String) {
+            metadata.append(contentsOf: UInt16(name.count).bigEndianBytes)
+            metadata.append(name.data(using: .utf8)!)
+            metadata.append(0x02)  // AMF0 String marker
+            metadata.append(contentsOf: UInt16(value.count).bigEndianBytes)
+            metadata.append(value.data(using: .utf8)!)
+        }
+
+        func addBooleanProperty(name: String, value: Bool) {
+            metadata.append(contentsOf: UInt16(name.count).bigEndianBytes)
+            metadata.append(name.data(using: .utf8)!)
+            metadata.append(0x01)  // AMF0 Boolean marker
+            metadata.append(value ? 0x01 : 0x00)
+        }
+
+        // Add standard metadata properties
+        addNumberProperty(name: "width", value: Double(width))
+        addNumberProperty(name: "height", value: Double(height))
+        addNumberProperty(name: "framerate", value: framerate)
+        addNumberProperty(name: "videodatarate", value: videoBitrate / 1000.0)  // kbps
+        addNumberProperty(name: "audiodatarate", value: audioBitrate / 1000.0)  // kbps
+        addNumberProperty(name: "audiosamplerate", value: 48000.0)
+        addNumberProperty(name: "audiosamplesize", value: 16.0)
+        addBooleanProperty(name: "stereo", value: true)
+        addStringProperty(name: "videocodecid", value: "avc1")  // H.264
+        addStringProperty(name: "audiocodecid", value: "mp4a")  // AAC
+
+        // Object end marker (0x00 0x00 0x09)
+        metadata.append(contentsOf: [0x00, 0x00, 0x09])
+
+        return metadata  // Return raw AMF0 data, not wrapped in FLV tag
     }
 
     // MARK: - Simplified API for EncodedFrame
@@ -534,7 +592,7 @@ public struct FLVMuxer: Sendable {
 
         // Sound format (4 bits) | sample rate (2 bits) | sample size (1 bit) | sound type (1 bit)
         // AAC = 10 (0xA), 44kHz+ = 3, 16-bit = 1, stereo = 1
-        payload.append(0xAF)  // 10101111 = AAC, 44kHz+, 16-bit, stereo
+        payload.append(AAC_AUDIO_FLAGS)
 
         // AAC packet type: 1 = AAC raw
         payload.append(0x01)
@@ -634,7 +692,7 @@ public struct FLVMuxer: Sendable {
         var payload = Data()
 
         // Sound format
-        payload.append(0xAF)  // AAC, 44kHz+, 16-bit, stereo
+        payload.append(AAC_AUDIO_FLAGS)
 
         // AAC packet type: 0 = sequence header
         payload.append(0x00)

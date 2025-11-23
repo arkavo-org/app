@@ -255,7 +255,9 @@ public final class VideoEncoder: Sendable {
 
         onFrame?(frame)
 
-        let frameType = isKeyframe ? "keyframe" : "frame"
-        print("🎥 Encoded \(frameType): \(h264Data.count) bytes at \(timestamp.seconds)s")
+        // Log only keyframes for debugging
+        if isKeyframe {
+            print("🎥 Encoded keyframe: \(h264Data.count) bytes at \(timestamp.seconds)s")
+        }
     }
 }

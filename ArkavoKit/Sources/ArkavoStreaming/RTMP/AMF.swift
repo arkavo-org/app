@@ -243,4 +243,40 @@ public struct AMF0: Sendable {
 
         return data
     }
+
+    public static func createFCUnpublishCommand(streamName: String, transactionId: Double) -> Data {
+        var data = Data()
+
+        // Command name: "FCUnpublish"
+        data.append(encodeString("FCUnpublish"))
+
+        // Transaction ID
+        data.append(encodeNumber(transactionId))
+
+        // Command object: null
+        data.append(encodeNull())
+
+        // Stream name
+        data.append(encodeString(streamName))
+
+        return data
+    }
+
+    public static func createDeleteStreamCommand(streamId: UInt32, transactionId: Double) -> Data {
+        var data = Data()
+
+        // Command name: "deleteStream"
+        data.append(encodeString("deleteStream"))
+
+        // Transaction ID
+        data.append(encodeNumber(transactionId))
+
+        // Command object: null
+        data.append(encodeNull())
+
+        // Stream ID
+        data.append(encodeNumber(Double(streamId)))
+
+        return data
+    }
 }
