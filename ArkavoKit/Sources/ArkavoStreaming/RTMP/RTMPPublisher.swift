@@ -97,6 +97,7 @@ public actor RTMPPublisher {
 
     // Debug logging control
     private var verboseLogging: Bool = false  // Set to true for detailed frame-by-frame logs
+    private var protocolDebugLogging: Bool = false  // Set to true for hex dumps and protocol details
     private var lastSummaryTime: Date?
     private var lastFramesSent: UInt64 = 0
 
@@ -107,6 +108,13 @@ public actor RTMPPublisher {
     /// Enable/disable verbose frame logging (disabled by default to reduce spam)
     public func setVerboseLogging(_ enabled: Bool) {
         verboseLogging = enabled
+    }
+
+    /// Enable/disable protocol debug logging with hex dumps (disabled by default)
+    /// Useful for debugging RTMP protocol issues with different streaming services
+    public func setProtocolDebugLogging(_ enabled: Bool) {
+        protocolDebugLogging = enabled
+        print("🔧 Protocol debug logging: \(enabled ? "ENABLED" : "DISABLED")")
     }
 
     /// Log streaming summary every 5 seconds
@@ -1251,8 +1259,10 @@ public actor RTMPPublisher {
         let format = (firstByte >> 6) & 0x03
         var chunkStreamId = UInt16(firstByte & 0x3F)
 
-        // Debug: Log the actual byte value
-        print("📥 Basic header byte: 0x\(String(format: "%02X", firstByte)) -> format=\(format) csid=\(chunkStreamId)")
+        // Debug: Log the actual byte value (only if protocol debug enabled)
+        if protocolDebugLogging {
+            print("📥 Basic header byte: 0x\(String(format: "%02X", firstByte)) -> format=\(format) csid=\(chunkStreamId)")
+        }
 
         // Handle extended basic header for csid 0 and 1 (RTMP spec section 5.3.1)
         if chunkStreamId == 0 {
@@ -1262,7 +1272,9 @@ public actor RTMPPublisher {
             }
             chunkStreamId = UInt16(extendedByte[0]) + 64
             totalBytesRead += 1
-            print("📥 Extended byte: 0x\(String(format: "%02X", extendedByte[0])) -> final csid=\(chunkStreamId)")
+            if protocolDebugLogging {
+                print("📥 Extended byte: 0x\(String(format: "%02X", extendedByte[0])) -> final csid=\(chunkStreamId)")
+            }
         } else if chunkStreamId == 1 {
             // 3-byte basic header: csid = (third byte * 256 + second byte) + 64
             guard let extendedBytes = try await receiveDataExact(length: 2), extendedBytes.count == 2 else {
@@ -1270,8 +1282,10 @@ public actor RTMPPublisher {
             }
             chunkStreamId = (UInt16(extendedBytes[1]) << 8) + UInt16(extendedBytes[0]) + 64
             totalBytesRead += 2
-            print("📥 Chunk header: format=\(format) csid=\(chunkStreamId) (extended 3-byte)")
-        } else {
+            if protocolDebugLogging {
+                print("📥 Chunk header: format=\(format) csid=\(chunkStreamId) (extended 3-byte)")
+            }
+        } else if protocolDebugLogging {
             print("📥 Chunk header: format=\(format) csid=\(chunkStreamId)")
         }
 
@@ -1293,9 +1307,11 @@ public actor RTMPPublisher {
             messageHeader = header
             totalBytesRead += headerSize
 
-            // Debug: Hex dump of message header
-            let hexString = messageHeader.map { String(format: "%02X", $0) }.joined(separator: " ")
-            print("📥 Message header (\(headerSize) bytes): \(hexString)")
+            // Debug: Hex dump of message header (only if protocol debug enabled)
+            if protocolDebugLogging {
+                let hexString = messageHeader.map { String(format: "%02X", $0) }.joined(separator: " ")
+                print("📥 Message header (\(headerSize) bytes): \(hexString)")
+            }
         }
 
         // Parse message length and type from header (for type 0 and 1)
@@ -1303,12 +1319,16 @@ public actor RTMPPublisher {
         if format == 0 || format == 1 {
             if messageHeader.count >= 6 {
                 messageLength = Int(messageHeader[3]) << 16 | Int(messageHeader[4]) << 8 | Int(messageHeader[5])
-                print("📥 Parsed message length: bytes[3-5] = \(String(format: "%02X %02X %02X", messageHeader[3], messageHeader[4], messageHeader[5])) = \(messageLength)")
+                if protocolDebugLogging {
+                    print("📥 Parsed message length: bytes[3-5] = \(String(format: "%02X %02X %02X", messageHeader[3], messageHeader[4], messageHeader[5])) = \(messageLength)")
+                }
             }
             // For type 0, message type ID is at byte 6
             if format == 0 && messageHeader.count >= 7 {
                 lastReceivedMessageType = messageHeader[6]
-                print("📥 Parsed message type: byte[6] = \(String(format: "%02X", messageHeader[6])) = \(lastReceivedMessageType)")
+                if protocolDebugLogging {
+                    print("📥 Parsed message type: byte[6] = \(String(format: "%02X", messageHeader[6])) = \(lastReceivedMessageType)")
+                }
             }
         }
 
