@@ -204,6 +204,28 @@ struct StreamView: View {
                             .font(.caption2)
                             .foregroundColor(.orange)
                     }
+
+                    // Bandwidth test mode (Twitch)
+                    if viewModel.selectedPlatform == .twitch {
+                        Toggle(isOn: $viewModel.isBandwidthTest) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "speedometer")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Bandwidth Test Mode")
+                                        .font(.subheadline)
+
+                                    Text("Test stream without going live or notifying followers")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityLabel("Bandwidth test mode")
+                        .accessibilityHint("When enabled, stream won't appear online to viewers")
+                    }
                 }
 
                 // Stream title (optional)

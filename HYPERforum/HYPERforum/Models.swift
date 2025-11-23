@@ -34,13 +34,22 @@ struct ForumMessage: Identifiable, Codable {
 
 // MARK: - Group Models
 
-struct ForumGroup: Identifiable {
+struct ForumGroup: Identifiable, Hashable {
     let id: String
     let name: String
     let color: Color
     let memberCount: Int
     let description: String
     var lastMessage: ForumMessage?
+    
+    // Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: ForumGroup, rhs: ForumGroup) -> Bool {
+        lhs.id == rhs.id
+    }
 
     init(id: String = UUID().uuidString,
          name: String,

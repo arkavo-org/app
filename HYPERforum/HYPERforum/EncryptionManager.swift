@@ -16,20 +16,20 @@ class EncryptionManager: ObservableObject {
     }
 
     /// Generate or retrieve policy for a group
-    func getPolicy(for groupId: String) -> Data {
+    func getPolicy(for groupId: String) throws -> Data {
         // Check if we already have a policy for this group
         if let existingPolicy = groupPolicies[groupId] {
             return existingPolicy
         }
 
         // Create a new policy for the group
-        let policy = createGroupPolicy(groupId: groupId)
+        let policy = try createGroupPolicy(groupId: groupId)
         groupPolicies[groupId] = policy
         return policy
     }
 
     /// Create a policy for a group
-    private func createGroupPolicy(groupId: String) -> Data {
+    private func createGroupPolicy(groupId: String) throws -> Data {
         // Create a simple embedded policy
         // In production, this would include access control lists, attributes, etc.
         let policyJSON: [String: Any] = [
@@ -40,13 +40,7 @@ class EncryptionManager: ObservableObject {
             ]
         ]
 
-        do {
-            return try JSONSerialization.data(withJSONObject: policyJSON)
-        } catch {
-            print("Error creating policy: \(error)")
-            // Return minimal valid policy
-            return Data("{}".utf8)
-        }
+        return try JSONSerialization.data(withJSONObject: policyJSON)
     }
 
     /// Encrypt a message payload
@@ -59,7 +53,7 @@ class EncryptionManager: ObservableObject {
         }
 
         do {
-            let policyData = getPolicy(for: groupId)
+            let policyData = try getPolicy(for: groupId)
 
             // Use ArkavoClient's encryption with embedded policy
             let encryptedData = try await arkavoClient.encryptAndSendPayload(
@@ -105,22 +99,8 @@ class EncryptionManager: ObservableObject {
         do {
             print("Decrypting message: \(encryptedData.count) bytes")
 
-            // Parse NanoTDF using OpenTDFKit
-            let nanoTDF = try NanoTDF(data: encryptedData)
-
-            // Get the KAS URL from ArkavoClient configuration
-            guard let kasURL = arkavoClient.kasURL else {
-                throw EncryptionError.missingKASURL
-            }
-
-            // Create rewrap request with ephemeral key and policy
-            let rewrapRequest = try nanoTDF.createRewrapRequest()
-
-            // Send rewrap request to KAS to get the symmetric key
-            let rewrapResponse = try await sendRewrapRequest(rewrapRequest, to: kasURL)
-
-            // Decrypt the payload with the rewrapped key
-            let decryptedData = try nanoTDF.decrypt(with: rewrapResponse.symmetricKey)
+            // Use ArkavoClient's decryption which handles the KAS rewrap protocol
+            let decryptedData = try await arkavoClient.decryptNanoTDF(encryptedData)
 
             print("Message decrypted successfully: \(decryptedData.count) bytes")
             return decryptedData

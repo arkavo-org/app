@@ -684,7 +684,7 @@ struct ResearchTab: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            if let result = result {
+            if let researchResult = result {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
@@ -694,7 +694,7 @@ struct ResearchTab: View {
                                 .font(.headline)
                         }
 
-                        Text(result.content)
+                        Text(researchResult.content)
                             .font(.body)
                             .textSelection(.enabled)
 
