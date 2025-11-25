@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import CommonCrypto
 import Foundation
 import Network
@@ -18,8 +20,10 @@ public actor YouTubeClient: ObservableObject {
     private let clientSecret: String
     private let keychainServiceBase = "com.arkavo.youtube"
     private var codeVerifier: String?
-    private var callbackServer: OAuthCallbackServer?
     private var currentRedirectUri: String?
+    #if os(macOS)
+    private var callbackServer: OAuthCallbackServer?
+    #endif
 
     private enum KeychainKey {
         static let accessToken = "access_token"
@@ -136,7 +140,8 @@ public actor YouTubeClient: ObservableObject {
         return components.url!
     }
 
-    /// Authenticate using a local HTTP server to receive the OAuth callback
+    #if os(macOS)
+    /// Authenticate using a local HTTP server to receive the OAuth callback (macOS only)
     public func authenticateWithLocalServer() async throws {
         await MainActor.run {
             isLoading = true
@@ -218,6 +223,7 @@ public actor YouTubeClient: ObservableObject {
         callbackServer?.stop()
         callbackServer = nil
     }
+    #endif
 
     public func handleCallback(_ url: URL) async throws {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),

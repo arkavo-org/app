@@ -1,7 +1,8 @@
+#if os(macOS)
 import Foundation
 import Network
 
-/// A lightweight HTTP server for handling OAuth redirects on localhost
+/// A lightweight HTTP server for handling OAuth redirects on localhost (macOS only)
 public final class OAuthCallbackServer: @unchecked Sendable {
     public enum OAuthError: Error, LocalizedError {
         case serverStartFailed(Error)
@@ -390,3 +391,4 @@ public final class OAuthCallbackServer: @unchecked Sendable {
         connection = nil
     }
 }
+#endif
