@@ -172,7 +172,6 @@ struct SectionContainer: View {
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
     @StateObject private var webViewPresenter = WebViewPresenter()
-    @State private var authCode: String = ""
     @Namespace private var animation
 
     // Helper to determine if a platform has active content
@@ -326,85 +325,24 @@ struct SectionContainer: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        VStack(spacing: 16) {
-                            Button("Login with YouTube") {
-                                Task {
-                                    let authURL = await youtubeClient.authURL
-                                    webViewPresenter.present(
-                                        url: authURL,
-                                        handleCallback: { url in
-                                            Task {
-                                                do {
-                                                    try await youtubeClient.handleCallback(url)
-                                                    webViewPresenter.dismiss()
-                                                } catch {
-                                                    print("YouTube OAuth error: \(error)")
-                                                }
-                                            }
-                                        }
-                                    )
+                        Button("Login with YouTube") {
+                            Task {
+                                do {
+                                    try await youtubeClient.authenticateWithLocalServer()
+                                } catch YouTubeError.userCancelled {
+                                    // User cancelled, no action needed
+                                } catch {
+                                    print("YouTube OAuth error: \(error)")
                                 }
-                            }
-                            .buttonStyle(.borderedProminent)
-
-                            Button("Sign in with Authorization Code") {
-                                youtubeClient.showAuthCodeForm = true
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-
-                    if youtubeClient.showAuthCodeForm {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Authorization Code")
-                                .font(.headline)
-
-                            Text("Please paste the authorization code from Google:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            TextEditor(text: $authCode)
-                                .font(.system(.body, design: .monospaced))
-                                .frame(height: 80)
-                                .scrollContentBackground(.hidden)
-                                .background(Color(NSColor.textBackgroundColor))
-                                .cornerRadius(6)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(Color.gray.opacity(0.2))
-                                )
-
-                            if let error = youtubeClient.error {
-                                Text(error.localizedDescription)
-                                    .foregroundColor(.red)
-                                    .font(.caption)
-                            }
-
-                            HStack {
-                                Spacer()
-
-                                Button("Cancel") {
-                                    youtubeClient.showAuthCodeForm = false
-                                    authCode = ""
-                                }
-                                .buttonStyle(.plain)
-
-                                Button("Submit") {
-                                    Task {
-                                        do {
-                                            try await youtubeClient.authenticateWithCode(authCode)
-                                            authCode = ""
-                                        } catch {
-                                            print("Authentication error: \(error)")
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(authCode.isEmpty || youtubeClient.isLoading)
                             }
                         }
-                        .padding()
-                        .frame(maxWidth: 400)
+                        .buttonStyle(.borderedProminent)
+
+                        if let error = youtubeClient.error {
+                            Text(error.localizedDescription)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
                     }
                 }
             }

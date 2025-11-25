@@ -22,8 +22,7 @@ struct ArkavoCreatorApp: App {
     let blueskyClient: BlueskyClient = .init()
     let youtubeClient = YouTubeClient(
         clientId: Secrets.youtubeClientId,
-        clientSecret: Secrets.youtubeClientSecret,
-        redirectUri: "urn:ietf:wg:oauth:2.0:oob",
+        clientSecret: Secrets.youtubeClientSecret
     )
     let arkavoClient: ArkavoClient
 
