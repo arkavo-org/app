@@ -57,6 +57,7 @@ struct RecordView: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 400)
+            .accessibilityIdentifier("RecordingModePicker")
         }
         .padding()
         .background(.ultraThinMaterial)
