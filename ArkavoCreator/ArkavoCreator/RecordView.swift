@@ -134,9 +134,13 @@ struct RecordView: View {
             // Toggles Grid
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ToggleCard(title: "Camera", icon: "camera", isOn: $viewModel.enableCamera)
+                    .accessibilityIdentifier("Toggle_Camera")
                 ToggleCard(title: "Microphone", icon: "mic", isOn: $viewModel.enableMicrophone)
+                    .accessibilityIdentifier("Toggle_Mic")
                 ToggleCard(title: "Desktop", icon: "desktopcomputer", isOn: $viewModel.enableDesktop)
+                    .accessibilityIdentifier("Toggle_Desktop")
                 ToggleCard(title: "Remote Cam", icon: "iphone", isOn: $viewModel.remoteBridgeEnabled)
+                    .accessibilityIdentifier("Toggle_RemoteCam")
             }
 
             if viewModel.enableCamera {
@@ -158,13 +162,14 @@ struct RecordView: View {
                 .font(.title3.bold())
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.red)
+                .background(viewModel.canStartRecording ? Color.red : Color.gray)
                 .foregroundColor(.white)
                 .cornerRadius(16)
-                .shadow(color: .red.opacity(0.3), radius: 10, x: 0, y: 5)
+                .shadow(color: viewModel.canStartRecording ? .red.opacity(0.3) : .clear, radius: 10, x: 0, y: 5)
             }
             .buttonStyle(.plain)
-            .disabled(viewModel.isProcessing)
+            .disabled(viewModel.isProcessing || !viewModel.canStartRecording)
+            .accessibilityIdentifier("Btn_Record")
         }
         .padding(24)
         .background(.ultraThinMaterial)
@@ -221,6 +226,7 @@ struct RecordView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("Btn_Stop")
                 }
             }
             

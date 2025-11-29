@@ -696,4 +696,42 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     func resetBodyTracking() {
         bodyDriver.resetFilters()
     }
+
+    // MARK: - Offscreen Rendering for Recording
+
+    /// Render the avatar to an offscreen texture for video capture
+    /// - Parameters:
+    ///   - colorTexture: Output color texture (BGRA format, .shared storage)
+    ///   - depthTexture: Output depth texture (depth32Float)
+    ///   - commandBuffer: Metal command buffer for rendering
+    func renderToTexture(
+        colorTexture: MTLTexture,
+        depthTexture: MTLTexture,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        guard let renderer, isLoaded else { return }
+
+        // Create render pass descriptor for offscreen rendering
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+
+        renderPassDescriptor.colorAttachments[0].texture = colorTexture
+        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].storeAction = .store
+        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(
+            red: 0, green: 0.8, blue: 0, alpha: 1 // Green screen background
+        )
+
+        renderPassDescriptor.depthAttachment.texture = depthTexture
+        renderPassDescriptor.depthAttachment.loadAction = .clear
+        renderPassDescriptor.depthAttachment.storeAction = .dontCare
+        renderPassDescriptor.depthAttachment.clearDepth = 1.0
+
+        // Use VRMRenderer's offscreen rendering capability
+        renderer.drawOffscreenHeadless(
+            to: colorTexture,
+            depth: depthTexture,
+            commandBuffer: commandBuffer,
+            renderPassDescriptor: renderPassDescriptor
+        )
+    }
 }

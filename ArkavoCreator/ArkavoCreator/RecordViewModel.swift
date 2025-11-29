@@ -44,6 +44,11 @@ final class RecordViewModel {
     var error: String?
     var isProcessing: Bool = false
 
+    /// Validation: at least one input must be enabled to start recording
+    var canStartRecording: Bool {
+        enableDesktop || enableCamera || enableMicrophone
+    }
+
     // Timer for updating duration
     private var timer: Timer?
 
