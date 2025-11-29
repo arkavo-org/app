@@ -204,13 +204,17 @@ final class StreamViewModel {
     // MARK: - Stream Key Management
 
     func loadStreamKey() {
-        // Load stream key from Keychain
+        // Clear current key before loading platform-specific key
+        streamKey = ""
+
+        // Load stream key from Keychain for selected platform
         if let savedKey = KeychainManager.getStreamKey(for: selectedPlatform.rawValue) {
             streamKey = savedKey
         }
 
-        // Load custom RTMP URL if custom platform
+        // Handle custom RTMP URL
         if selectedPlatform == .custom {
+            customRTMPURL = ""
             if let savedURL = KeychainManager.getCustomRTMPURL() {
                 customRTMPURL = savedURL
             }

@@ -516,7 +516,7 @@ struct SectionContainer: View {
                     .transition(.moveAndFade())
                     .id("record")
             case .stream:
-                StreamView()
+                StreamView(youtubeClient: youtubeClient)
                     .transition(.moveAndFade())
                     .id("stream")
             case .library:
