@@ -31,45 +31,61 @@ struct CameraPreviewPanel: View {
     let placeholderText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
                 Spacer()
                 if let sourceLabel {
-                    Text(sourceLabel)
+                    Label(sourceLabel, systemImage: "link")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.thinMaterial)
+                        .clipShape(Capsule())
                 }
             }
+            .padding(.horizontal, 4)
 
             ZStack {
                 if let image {
                     Image(nsImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(.white.opacity(0.2), lineWidth: 1)
                         )
+                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                 } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "video.circle")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
+                    VStack(spacing: 16) {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(.secondary)
+                            .symbolEffect(.pulse, options: .repeating)
+                        
                         Text(placeholderText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .frame(maxWidth: 200)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 180)
-                    .background(Color(nsColor: .windowBackgroundColor))
-                    .cornerRadius(12)
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                    )
                 }
             }
         }
+        .padding(12)
+        .background(.regularMaterial.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.05), radius: 15, x: 0, y: 5)
     }
 }

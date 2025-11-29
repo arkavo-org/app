@@ -10,347 +10,277 @@ struct StreamView: View {
     @StateObject private var webViewPresenter = WebViewPresenter()
     @ObservedObject private var previewStore = CameraPreviewStore.shared
 
+    // Animation states
+    @State private var pulsing: Bool = false
+    @State private var showAdvancedSettings: Bool = false
+
     var body: some View {
-        VStack(spacing: 24) {
-            if !viewModel.isStreaming {
-                setupSection
-            } else {
-                streamingStatusSection
-            }
-
-            Spacer()
-
-            CameraPreviewPanel(
-                title: "Camera Preview",
-                image: previewStore.image(for: viewModel.previewSourceID),
-                sourceLabel: viewModel.previewSourceID,
-                placeholderText: "Start a recording with remote camera to see preview"
+        ZStack {
+            // Ambient Background
+            LinearGradient(
+                colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-
-            controlButton
-
-            if let error = viewModel.error {
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-
-            if viewModel.isConnecting {
-                ProgressView("Connecting to stream...")
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    if !viewModel.isStreaming {
+                        quickStreamSetup
+                    } else {
+                        streamingStatusSection
+                    }
+                    
+                    // Main Preview Area
+                    CameraPreviewPanel(
+                        title: "Stream Preview",
+                        image: previewStore.image(for: viewModel.previewSourceID),
+                        sourceLabel: viewModel.previewSourceID,
+                        placeholderText: "Start your camera to see preview"
+                    )
+                    
+                    if let error = viewModel.error {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(24)
             }
         }
-        .padding()
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 600, minHeight: 500)
         .navigationTitle("Stream")
-        .onAppear {
-            viewModel.loadStreamKey()
-        }
-        .onChange(of: viewModel.selectedPlatform) { _, _ in
-            viewModel.loadStreamKey()
-        }
+        .onAppear { viewModel.loadStreamKey() }
+        .onChange(of: viewModel.selectedPlatform) { _, _ in viewModel.loadStreamKey() }
         .onChange(of: viewModel.streamKey) { _, newValue in
-            if !newValue.isEmpty {
-                viewModel.saveStreamKey()
-            }
+            if !newValue.isEmpty { viewModel.saveStreamKey() }
         }
         .onChange(of: viewModel.customRTMPURL) { _, newValue in
-            if !newValue.isEmpty && viewModel.selectedPlatform == .custom {
-                viewModel.saveStreamKey()
-            }
+            if !newValue.isEmpty && viewModel.selectedPlatform == .custom { viewModel.saveStreamKey() }
         }
     }
 
     // MARK: - View Components
 
-    private var setupSection: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-
-            Text("Live Streaming")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text("Stream to Twitch, YouTube, or custom RTMP server")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            VStack(spacing: 16) {
-                // Platform selection
+    private var quickStreamSetup: some View {
+        VStack(spacing: 24) {
+            // Header
+            VStack(spacing: 8) {
+                Text("Ready to Stream?")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(.primary)
+                
+                Text("Broadcast to your audience in seconds.")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            
+            // Main Glass Card
+            VStack(spacing: 24) {
+                // Title Input
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Platform")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Picker("Platform", selection: $viewModel.selectedPlatform) {
-                        ForEach(StreamViewModel.StreamPlatform.allCases) { platform in
-                            Label(platform.rawValue, systemImage: platform.icon)
-                                .tag(platform)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("Streaming platform")
-                    .accessibilityHint("Select the platform to stream to: Twitch, YouTube, or custom RTMP server")
-                }
-
-                // Twitch OAuth Login
-                if viewModel.selectedPlatform == .twitch {
-                    if twitchClient.isAuthenticated, let username = twitchClient.username {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Logged in as \(username)")
-                                .font(.subheadline)
-                            Spacer()
-                            Button("Logout") {
-                                twitchClient.logout()
-                            }
-                            .buttonStyle(.borderless)
-                            .controlSize(.small)
-                            .accessibilityLabel("Logout from Twitch")
-                            .accessibilityHint("Sign out of your Twitch account")
-                        }
+                    Label("Stream Title", systemImage: "pencil.line")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    
+                    TextField("What are you streaming today?", text: $viewModel.title)
+                        .textFieldStyle(.plain)
+                        .font(.title3)
                         .padding()
-                        .background(Color.green.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Button(action: {
-                            webViewPresenter.present(
-                                url: twitchClient.authorizationURL,
-                                handleCallback: { url in
-                                    Task {
-                                        do {
-                                            try await twitchClient.handleCallback(url)
-                                            webViewPresenter.dismiss()
-                                        } catch {
-                                            print("Twitch OAuth error: \(error)")
-                                        }
-                                    }
-                                }
+                        .background(.background.opacity(0.5))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2), lineWidth: 1))
+                }
+                
+                // Platform Selector
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Destination", systemImage: "network")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: 12) {
+                        ForEach(StreamViewModel.StreamPlatform.allCases) { platform in
+                            PlatformButton(
+                                platform: platform,
+                                isSelected: viewModel.selectedPlatform == platform,
+                                action: { viewModel.selectedPlatform = platform }
                             )
-                        }) {
-                            Label("Login with Twitch", systemImage: "person.circle")
                         }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityLabel("Login with Twitch")
-                        .accessibilityHint("Authenticate with your Twitch account to enable streaming")
                     }
                 }
-
-                // Custom RTMP URL (only for custom platform)
-                if viewModel.selectedPlatform == .custom {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("RTMP Server URL")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        TextField("rtmp://your-server.com/live", text: $viewModel.customRTMPURL)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Custom RTMP server URL")
-                            .accessibilityHint("Enter the RTMP server URL for custom streaming")
+                
+                Divider().overlay(.white.opacity(0.2))
+                
+                // Action Button
+                Button(action: {
+                    Task { await viewModel.startStreaming() }
+                }) {
+                    HStack {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                        Text("Go Live Now")
                     }
+                    .font(.title3.bold())
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(16)
+                    .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
                 }
-
-                // Stream key
-                VStack(alignment: .leading, spacing: 8) {
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canStartStreaming)
+                
+                // Advanced Settings Toggle
+                Button(action: { withAnimation { showAdvancedSettings.toggle() } }) {
                     HStack {
-                        Text("Stream Key")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        Button(action: {
-                            openStreamKeyHelp()
-                        }) {
-                            Label("Where to find", systemImage: "questionmark.circle")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Stream key help")
-                        .accessibilityHint("Open platform documentation to find your stream key")
+                        Text("Advanced Settings")
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(showAdvancedSettings ? 180 : 0))
                     }
-
-                    HStack {
-                        SecureField("Enter your stream key", text: $viewModel.streamKey)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Stream key")
-                            .accessibilityHint("Enter your platform-specific stream key for authentication")
-
-                        if !viewModel.streamKey.isEmpty {
-                            Button(action: {
-                                viewModel.clearStreamKey()
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Clear saved stream key")
-                            .accessibilityLabel("Clear stream key")
-                            .accessibilityHint("Remove the saved stream key from Keychain")
-                        }
-                    }
-
-                    HStack {
-                        Image(systemName: "lock.shield.fill")
-                            .foregroundColor(.orange)
-                            .font(.caption2)
-
-                        Text("Never share your stream key. It's securely stored in your Keychain.")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
-
-                    // Bandwidth test mode (Twitch)
-                    if viewModel.selectedPlatform == .twitch {
-                        Toggle(isOn: $viewModel.isBandwidthTest) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "speedometer")
-                                    .foregroundColor(.blue)
-                                    .font(.caption)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Bandwidth Test Mode")
-                                        .font(.subheadline)
-
-                                    Text("Test stream without going live or notifying followers")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .accessibilityLabel("Bandwidth test mode")
-                        .accessibilityHint("When enabled, stream won't appear online to viewers")
-                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-
-                // Stream title (optional)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Stream Title (Optional)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    TextField("Going live!", text: $viewModel.title)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Stream title")
-                        .accessibilityHint("Optional title for your live stream")
+                .buttonStyle(.plain)
+                
+                if showAdvancedSettings {
+                    advancedSettingsContent
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .frame(maxWidth: 400)
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .shadow(color: .black.opacity(0.05), radius: 20, x: 0, y: 10)
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
+        }
+        .frame(maxWidth: 600)
+    }
+
+    private var advancedSettingsContent: some View {
+        VStack(spacing: 16) {
+            if viewModel.selectedPlatform == .twitch {
+                twitchAuthSection
+            }
+            
+            if viewModel.selectedPlatform == .custom {
+                VStack(alignment: .leading) {
+                    Text("RTMP URL").font(.caption).foregroundStyle(.secondary)
+                    TextField("rtmp://...", text: $viewModel.customRTMPURL)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+            
+            VStack(alignment: .leading) {
+                HStack {
+                    Text("Stream Key").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Help") { openStreamKeyHelp() }.buttonStyle(.link).font(.caption)
+                }
+                SecureField("Enter key", text: $viewModel.streamKey)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            if viewModel.selectedPlatform == .twitch {
+                Toggle("Bandwidth Test Mode", isOn: $viewModel.isBandwidthTest)
+                    .toggleStyle(.switch)
+            }
+        }
+        .padding(.top, 8)
+    }
+    
+    private var twitchAuthSection: some View {
+        Group {
+            if twitchClient.isAuthenticated, let username = twitchClient.username {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                    Text(username).bold()
+                    Spacer()
+                    Button("Logout") { twitchClient.logout() }.controlSize(.small)
+                }
+                .padding()
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(8)
+            } else {
+                Button("Login with Twitch") {
+                    webViewPresenter.present(
+                        url: twitchClient.authorizationURL,
+                        handleCallback: { url in
+                            Task {
+                                try? await twitchClient.handleCallback(url)
+                                webViewPresenter.dismiss()
+                            }
+                        }
+                    )
+                }
+                .buttonStyle(.bordered)
+            }
         }
     }
 
     private var streamingStatusSection: some View {
         VStack(spacing: 24) {
-            // Live indicator
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 12, height: 12)
-                    .opacity(pulsing ? 1.0 : 0.3)
-
-                Text("LIVE")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.red)
-            }
-
-            // Stream info
-            if !viewModel.title.isEmpty {
-                Text(viewModel.title)
-                    .font(.headline)
-            }
-
-            Text(viewModel.selectedPlatform.rawValue)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            // Statistics
-            VStack(spacing: 16) {
-                HStack(spacing: 32) {
-                    StreamStatCard(
-                        label: "Duration",
-                        value: viewModel.formattedDuration,
-                        icon: "clock.fill"
-                    )
-
-                    StreamStatCard(
-                        label: "Bitrate",
-                        value: viewModel.formattedBitrate,
-                        icon: "waveform.path"
-                    )
-
-                    StreamStatCard(
-                        label: "FPS",
-                        value: String(format: "%.1f", viewModel.fps),
-                        icon: "speedometer"
-                    )
-                }
-
-                HStack(spacing: 32) {
-                    StreamStatCard(
-                        label: "Frames Sent",
-                        value: "\(viewModel.framesSent)",
-                        icon: "film"
-                    )
-
-                    StreamStatCard(
-                        label: "Data Sent",
-                        value: formatBytes(viewModel.bytesSent),
-                        icon: "arrow.up.circle.fill"
-                    )
-                }
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-
-    private var controlButton: some View {
-        Button(action: {
-            Task {
-                if viewModel.isStreaming {
-                    await viewModel.stopStreaming()
-                } else {
-                    await viewModel.startStreaming()
-                }
-            }
-        }) {
+            // Live Status Card
             HStack {
-                Image(systemName: viewModel.isStreaming ? "stop.circle.fill" : "play.circle.fill")
-                    .font(.title3)
-                Text(viewModel.isStreaming ? "Stop Stream" : "Start Stream")
-                    .font(.headline)
-            }
-            .frame(maxWidth: 300)
-            .padding()
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(viewModel.isStreaming ? .red : .blue)
-        .disabled(!viewModel.canStartStreaming && !viewModel.isStreaming)
-        .accessibilityLabel(viewModel.isStreaming ? "Stop stream" : "Start stream")
-        .accessibilityHint(viewModel.isStreaming ? "End the live stream" : "Begin broadcasting to the selected platform")
-    }
-
-    // MARK: - Animation State
-
-    @State private var pulsing: Bool = false
-
-    private var pulsingAnimation: some View {
-        Color.clear
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    pulsing = true
+                VStack(alignment: .leading) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 12, height: 12)
+                            .opacity(pulsing ? 1.0 : 0.3)
+                        Text("LIVE")
+                            .font(.title2.bold())
+                            .foregroundStyle(.red)
+                    }
+                    
+                    Text(viewModel.title.isEmpty ? "Untitled Stream" : viewModel.title)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
                 }
+                
+                Spacer()
+                
+                Button(action: {
+                    Task { await viewModel.stopStreaming() }
+                }) {
+                    Text("End Stream")
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(.red)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .shadow(color: .red.opacity(0.1), radius: 20, x: 0, y: 10)
+
+            // Stats Grid
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                StreamStatCard(label: "Duration", value: viewModel.formattedDuration, icon: "clock.fill")
+                StreamStatCard(label: "Bitrate", value: viewModel.formattedBitrate, icon: "waveform.path")
+                StreamStatCard(label: "FPS", value: String(format: "%.1f", viewModel.fps), icon: "speedometer")
+                StreamStatCard(label: "Frames", value: "\(viewModel.framesSent)", icon: "film")
+                StreamStatCard(label: "Data", value: formatBytes(viewModel.bytesSent), icon: "arrow.up.circle.fill")
+            }
+        }
+        .frame(maxWidth: 800)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                pulsing = true
+            }
+        }
     }
 
-    // MARK: - Helper Functions
+    // MARK: - Helpers
 
     private func formatBytes(_ bytes: UInt64) -> String {
         let formatter = ByteCountFormatter()
@@ -361,21 +291,41 @@ struct StreamView: View {
     private func openStreamKeyHelp() {
         let urlString: String
         switch viewModel.selectedPlatform {
-        case .twitch:
-            urlString = "https://dashboard.twitch.tv/settings/stream"
-        case .youtube:
-            urlString = "https://studio.youtube.com/channel/UC/livestreaming/stream"
-        case .custom:
-            return // No help URL for custom
+        case .twitch: urlString = "https://dashboard.twitch.tv/settings/stream"
+        case .youtube: urlString = "https://studio.youtube.com/channel/UC/livestreaming/stream"
+        case .custom: return
         }
-
-        if let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        }
+        if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
     }
 }
 
-// MARK: - Stream Stat Card Component
+struct PlatformButton: View {
+    let platform: StreamViewModel.StreamPlatform
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: platform.icon)
+                    .font(.title2)
+                Text(platform.rawValue)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .background(.regularMaterial)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 struct StreamStatCard: View {
     let label: String
@@ -383,7 +333,7 @@ struct StreamStatCard: View {
     let icon: String
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundColor(.accentColor)
@@ -397,11 +347,12 @@ struct StreamStatCard: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .frame(minWidth: 100)
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
-
-// MARK: - Preview
 
 #Preview {
     NavigationStack {
