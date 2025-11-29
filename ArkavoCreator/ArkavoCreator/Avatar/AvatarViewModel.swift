@@ -5,9 +5,9 @@
 //  Created for VRM Avatar Integration (#140)
 //
 
+import ArkavoKit
 import Foundation
-import ArkavoKit
-import ArkavoKit
+import Metal
 import SwiftUI
 import VRMMetalKit
 
@@ -34,6 +34,9 @@ class AvatarViewModel: ObservableObject {
 
     weak var renderer: VRMAvatarRenderer?
     private var metadataObserver: MetadataObserverToken?
+
+    // VRM frame capture for recording
+    private var captureManager: VRMFrameCaptureManager?
 
     // Multi-source face tracking management
     private var faceSources: [String: ARFaceSource] = [:]
@@ -321,5 +324,63 @@ class AvatarViewModel: ObservableObject {
     func cleanupInactiveSources() {
         faceSources = faceSources.filter { $0.value.isActive }
         bodySources = bodySources.filter { $0.value.isActive }
+    }
+
+    // MARK: - Recording Integration
+
+    /// Connect avatar texture capture to a recording session
+    /// - Parameter session: The recording session to connect to
+    func connectToRecordingSession(_ session: RecordingSession) {
+        guard let renderer else {
+            print("[AvatarViewModel] Cannot connect to recording session - no renderer")
+            return
+        }
+
+        // Initialize capture manager if needed
+        if captureManager == nil {
+            do {
+                guard let device = MTLCreateSystemDefaultDevice() else {
+                    print("[AvatarViewModel] Failed to create Metal device for capture")
+                    return
+                }
+                captureManager = try VRMFrameCaptureManager(device: device)
+                captureManager?.renderer = renderer
+                print("[AvatarViewModel] Created VRM capture manager")
+            } catch {
+                print("[AvatarViewModel] Failed to create capture manager: \(error)")
+                return
+            }
+        }
+
+        captureManager?.renderer = renderer
+
+        // Start continuous capture so latestFrame is always available
+        captureManager?.startCapture()
+
+        // Set up the avatar texture provider for the recording session
+        // Uses thread-safe latestFrame property that can be accessed from any actor
+        let manager = captureManager
+        session.avatarTextureProvider = {
+            return manager?.latestFrame
+        }
+
+        print("[AvatarViewModel] Connected avatar capture to recording session")
+    }
+
+    /// Disconnect from recording session
+    func disconnectFromRecordingSession(_ session: RecordingSession) {
+        session.avatarTextureProvider = nil
+        captureManager?.stopCapture()
+        print("[AvatarViewModel] Disconnected avatar capture from recording session")
+    }
+
+    /// Start capturing avatar frames for streaming/preview
+    func startCapture() {
+        captureManager?.startCapture()
+    }
+
+    /// Stop capturing avatar frames
+    func stopCapture() {
+        captureManager?.stopCapture()
     }
 }
