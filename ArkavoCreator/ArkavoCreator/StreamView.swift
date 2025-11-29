@@ -9,6 +9,7 @@ struct StreamView: View {
     )
     @StateObject private var webViewPresenter = WebViewPresenter()
     @ObservedObject private var previewStore = CameraPreviewStore.shared
+    @ObservedObject var youtubeClient: YouTubeClient
 
     // Animation states
     @State private var pulsing: Bool = false
@@ -55,12 +56,34 @@ struct StreamView: View {
         .frame(minWidth: 600, minHeight: 500)
         .navigationTitle("Stream")
         .onAppear { viewModel.loadStreamKey() }
-        .onChange(of: viewModel.selectedPlatform) { _, _ in viewModel.loadStreamKey() }
+        .onChange(of: viewModel.selectedPlatform) { _, newPlatform in
+            viewModel.loadStreamKey()
+            // Auto-fetch YouTube stream key if authenticated
+            if newPlatform == .youtube && youtubeClient.isAuthenticated && viewModel.streamKey.isEmpty {
+                Task {
+                    await fetchYouTubeStreamKey()
+                }
+            }
+        }
         .onChange(of: viewModel.streamKey) { _, newValue in
             if !newValue.isEmpty { viewModel.saveStreamKey() }
         }
         .onChange(of: viewModel.customRTMPURL) { _, newValue in
             if !newValue.isEmpty && viewModel.selectedPlatform == .custom { viewModel.saveStreamKey() }
+        }
+    }
+
+    private func fetchYouTubeStreamKey() async {
+        do {
+            if let key = try await youtubeClient.fetchStreamKey() {
+                await MainActor.run {
+                    viewModel.streamKey = key
+                }
+            }
+        } catch {
+            await MainActor.run {
+                viewModel.error = "Could not fetch YouTube stream key: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -167,7 +190,11 @@ struct StreamView: View {
             if viewModel.selectedPlatform == .twitch {
                 twitchAuthSection
             }
-            
+
+            if viewModel.selectedPlatform == .youtube {
+                youtubeAuthSection
+            }
+
             if viewModel.selectedPlatform == .custom {
                 VStack(alignment: .leading) {
                     Text("RTMP URL").font(.caption).foregroundStyle(.secondary)
@@ -175,23 +202,58 @@ struct StreamView: View {
                         .textFieldStyle(.roundedBorder)
                 }
             }
-            
+
             VStack(alignment: .leading) {
                 HStack {
                     Text("Stream Key").font(.caption).foregroundStyle(.secondary)
                     Spacer()
+                    if viewModel.selectedPlatform == .youtube && youtubeClient.isAuthenticated {
+                        Button("Fetch from YouTube") {
+                            Task { await fetchYouTubeStreamKey() }
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
                     Button("Help") { openStreamKeyHelp() }.buttonStyle(.link).font(.caption)
                 }
                 SecureField("Enter key", text: $viewModel.streamKey)
                     .textFieldStyle(.roundedBorder)
             }
-            
+
             if viewModel.selectedPlatform == .twitch {
                 Toggle("Bandwidth Test Mode", isOn: $viewModel.isBandwidthTest)
                     .toggleStyle(.switch)
             }
         }
         .padding(.top, 8)
+    }
+
+    private var youtubeAuthSection: some View {
+        Group {
+            if youtubeClient.isAuthenticated, let channelInfo = youtubeClient.channelInfo {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.red)
+                    Text(channelInfo.title).bold()
+                    Spacer()
+                    Button("Fetch Key") {
+                        Task { await fetchYouTubeStreamKey() }
+                    }
+                    .controlSize(.small)
+                }
+                .padding()
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(8)
+            } else {
+                Button("Login with YouTube") {
+                    Task {
+                        try? await youtubeClient.authenticateWithLocalServer()
+                        // After login, try to fetch stream key
+                        await fetchYouTubeStreamKey()
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
     }
     
     private var twitchAuthSection: some View {
@@ -356,6 +418,6 @@ struct StreamStatCard: View {
 
 #Preview {
     NavigationStack {
-        StreamView()
+        StreamView(youtubeClient: YouTubeClient(clientId: "", clientSecret: ""))
     }
 }

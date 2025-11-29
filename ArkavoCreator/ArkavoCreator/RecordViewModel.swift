@@ -20,6 +20,7 @@ final class RecordViewModel {
     var pipPosition: PiPPosition = .bottomRight
     var enableCamera: Bool = true
     var enableMicrophone: Bool = true
+    var enableDesktop: Bool = true
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -31,8 +32,11 @@ final class RecordViewModel {
     private var hasInitializedSession = false
     private var remoteCameraServer: RemoteCameraServer?
 
-    // Watermark configuration
-    var watermarkEnabled: Bool = true // Enabled by default per MVP spec
+    // Desktop preview
+    var desktopPreviewImage: NSImage?
+
+    // Watermark configuration (always enabled, no UI toggle)
+    var watermarkEnabled: Bool = true
     var watermarkPosition: WatermarkPosition = .bottomCenter
     var watermarkOpacity: Float = 0.6
 
@@ -64,6 +68,7 @@ final class RecordViewModel {
             session.pipPosition = pipPosition
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
+            session.enableDesktop = enableDesktop
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
             session.watermarkOpacity = watermarkOpacity
@@ -436,6 +441,23 @@ final class RecordViewModel {
             try? session.startCameraPreview(for: selectedCameraIDs)
         } else {
             session.stopCameraPreview()
+        }
+    }
+
+    func refreshDesktopPreview() {
+        guard let session = recordingSession else { return }
+
+        if enableDesktop {
+            // Set up preview handler
+            session.screenPreviewHandler = { [weak self] cgImage in
+                Task { @MainActor in
+                    self?.desktopPreviewImage = NSImage(cgImage: cgImage, size: .zero)
+                }
+            }
+            try? session.startScreenPreview()
+        } else {
+            session.stopScreenPreview()
+            desktopPreviewImage = nil
         }
     }
 

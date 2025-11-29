@@ -42,6 +42,9 @@ struct RecordView: View {
             viewModel.bindPreviewStore(previewStore)
             try? viewModel.activatePreviewPipeline()
         }
+        .onChange(of: viewModel.enableDesktop) { _, _ in
+            viewModel.refreshDesktopPreview()
+        }
     }
 
     private var modePickerContainer: some View {
@@ -111,19 +114,28 @@ struct RecordView: View {
                 .cornerRadius(12)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2), lineWidth: 1))
             
-            // Preview Panel
-            CameraPreviewPanel(
-                title: "Camera Preview",
-                image: previewStore.image(for: viewModel.currentPreviewSourceID),
-                sourceLabel: viewModel.currentPreviewSourceID,
-                placeholderText: "Connect an iPhone/iPad with Arkavo Remote Camera"
-            )
-            
+            // Preview Panels
+            HStack(spacing: 16) {
+                CameraPreviewPanel(
+                    title: "Camera Preview",
+                    image: previewStore.image(for: viewModel.currentPreviewSourceID),
+                    sourceLabel: viewModel.currentPreviewSourceID,
+                    placeholderText: "Connect camera or iPhone"
+                )
+
+                CameraPreviewPanel(
+                    title: "Desktop Preview",
+                    image: viewModel.desktopPreviewImage,
+                    sourceLabel: viewModel.enableDesktop ? "Screen" : nil,
+                    placeholderText: "Enable Desktop to see preview"
+                )
+            }
+
             // Toggles Grid
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ToggleCard(title: "Camera", icon: "camera", isOn: $viewModel.enableCamera)
                 ToggleCard(title: "Microphone", icon: "mic", isOn: $viewModel.enableMicrophone)
-                ToggleCard(title: "Watermark", icon: "checkmark.shield", isOn: $viewModel.watermarkEnabled)
+                ToggleCard(title: "Desktop", icon: "desktopcomputer", isOn: $viewModel.enableDesktop)
                 ToggleCard(title: "Remote Cam", icon: "iphone", isOn: $viewModel.remoteBridgeEnabled)
             }
 
