@@ -99,93 +99,77 @@ struct FaceInspectorContent: View {
 
 struct AvatarInspectorContent: View {
     @ObservedObject var viewModel: AvatarViewModel
-    @State private var vrmURL = ""
     @AppStorage("showBodyTracking") private var showBodyTracking = false
     @AppStorage("showFaceTracking") private var showFaceTracking = false
     var onLoadModel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             // Section: Tracking Overlays
             sectionHeader("Tracking")
 
-            Toggle("Body Tracking", isOn: $showBodyTracking)
-                .toggleStyle(.switch)
+            VStack(spacing: 8) {
+                Toggle("Body Tracking", isOn: $showBodyTracking)
+                    .toggleStyle(.switch)
 
-            Toggle("Face Tracking", isOn: $showFaceTracking)
-                .toggleStyle(.switch)
-
-            Divider()
-
-            // Section: Download VRM Model
-            sectionHeader("Download VRM Model")
-            VStack(spacing: 12) {
-                TextField("VRM URL", text: $vrmURL)
-                    .textFieldStyle(.roundedBorder)
-
-                Button {
-                    Task {
-                        await viewModel.downloadModel(from: vrmURL)
-                        vrmURL = ""
-                    }
-                } label: {
-                    if viewModel.isLoading {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Download")
-                    }
-                }
-                .disabled(vrmURL.isEmpty || viewModel.isLoading)
-                .buttonStyle(.borderedProminent)
+                Toggle("Face Tracking", isOn: $showFaceTracking)
+                    .toggleStyle(.switch)
             }
 
             Divider()
 
             // Section: Select Avatar
-            sectionHeader("Select Avatar")
+            sectionHeader("Avatar")
+
             if viewModel.downloadedModels.isEmpty {
-                Text("No models downloaded yet")
+                Text("No avatars available")
                     .foregroundStyle(.secondary)
                     .font(.caption)
             } else {
-                List(selection: $viewModel.selectedModelURL) {
+                VStack(spacing: 4) {
                     ForEach(viewModel.downloadedModels, id: \.self) { url in
-                        Text(url.lastPathComponent)
-                            .lineLimit(1)
-                            .tag(url)
+                        AvatarRow(
+                            url: url,
+                            isSelected: viewModel.selectedModelURL == url,
+                            isLoaded: viewModel.isModelLoaded && viewModel.selectedModelURL == url,
+                            onSelect: {
+                                viewModel.selectedModelURL = url
+                                onLoadModel()
+                            }
+                        )
                     }
                 }
-                .frame(height: 120)
-            }
-
-            Divider()
-
-            // Section: Avatar Settings
-            sectionHeader("Avatar Settings")
-
-            // Face tracking status
-            HStack(spacing: 8) {
-                Image(systemName: "face.smiling")
-                    .foregroundStyle(.secondary)
-                Text(viewModel.faceTrackingStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            ColorPicker("Background", selection: $viewModel.backgroundColor)
-
-            if viewModel.selectedModelURL != nil {
-                Button {
-                    onLoadModel()
-                } label: {
-                    Label("Load Avatar", systemImage: "arrow.down.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
             }
 
             Spacer()
         }
         .padding()
+    }
+}
+
+private struct AvatarRow: View {
+    let url: URL
+    let isSelected: Bool
+    let isLoaded: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack {
+                Image(systemName: isLoaded ? "checkmark.circle.fill" : (isSelected ? "circle.inset.filled" : "circle"))
+                    .foregroundStyle(isLoaded ? .green : (isSelected ? .accentColor : .secondary))
+
+                Text(url.deletingPathExtension().lastPathComponent)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }
 
