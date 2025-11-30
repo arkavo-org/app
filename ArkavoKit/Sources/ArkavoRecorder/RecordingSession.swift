@@ -75,12 +75,18 @@ public final class RecordingSession: Sendable {
     nonisolated(unsafe) private let compositor: CompositorManager
     nonisolated(unsafe) private let encoder: VideoEncoder
 
-    nonisolated(unsafe) public var isRecording: Bool {
-        encoder.isRecording
+    // Recording state tracked locally for synchronous access
+    // This is updated when recording starts/stops
+    nonisolated(unsafe) private var _isRecording: Bool = false
+    nonisolated(unsafe) private var recordingStartTime: Date?
+
+    nonisolated public var isRecording: Bool {
+        _isRecording
     }
 
     public var duration: TimeInterval {
-        encoder.duration
+        guard _isRecording, let startTime = recordingStartTime else { return 0 }
+        return Date().timeIntervalSince(startTime)
     }
 
     nonisolated(unsafe) public var audioLevel: Float = 0.0
@@ -223,6 +229,10 @@ public final class RecordingSession: Sendable {
         let audioSourceIDs = audioRouter.allSourceIDs
         print("🎙️ RecordingSession: Creating encoder with audio tracks for: \(audioSourceIDs)")
         try await encoder.startRecording(to: outputURL, title: title, audioSourceIDs: audioSourceIDs, videoEnabled: mode.needsVideo)
+
+        // Update local recording state
+        _isRecording = true
+        recordingStartTime = Date()
         print("🎙️ RecordingSession: Encoder started and ready")
 
         // NOW start audio sources (after encoder is ready to receive samples)
@@ -249,17 +259,27 @@ public final class RecordingSession: Sendable {
         try? await audioRouter.stopAll()
 
         // Finish encoding
-        return try await encoder.finishRecording()
+        let result = try await encoder.finishRecording()
+
+        // Update local recording state
+        _isRecording = false
+        recordingStartTime = nil
+
+        return result
     }
 
     /// Pauses the current recording
     public func pauseRecording() {
-        encoder.pause()
+        Task {
+            await encoder.pause()
+        }
     }
 
     /// Resumes a paused recording
     public func resumeRecording() {
-        encoder.resume()
+        Task {
+            await encoder.resume()
+        }
     }
 
     // MARK: - Private Methods
@@ -303,7 +323,7 @@ public final class RecordingSession: Sendable {
     }
 
     private nonisolated func processFrameSync(screen screenBuffer: CMSampleBuffer) async {
-        guard encoder.isRecording else { return }
+        guard _isRecording else { return }
 
         let mode = await MainActor.run { self.inputMode }
 
@@ -325,7 +345,7 @@ public final class RecordingSession: Sendable {
 
     /// Processes a frame for camera-only or avatar-only modes (called by timer)
     private nonisolated func processCameraOrAvatarFrame() async {
-        guard encoder.isRecording else { return }
+        guard _isRecording else { return }
 
         let mode = await MainActor.run { self.inputMode }
         let canvasSize = standardCanvasSize
@@ -389,7 +409,7 @@ public final class RecordingSession: Sendable {
     }
 
     private nonisolated func processAudioSampleSync(_ audioSample: CMSampleBuffer, sourceID: String) async {
-        guard encoder.isRecording else {
+        guard _isRecording else {
             print("⚠️ RecordingSession: Audio sample from [\(sourceID)] dropped - not recording")
             return
         }
@@ -498,16 +518,35 @@ public final class RecordingSession: Sendable {
     }
 
     private func startCameraCapturesIfNeeded() throws {
-        stopCameraCaptures()
-
         let identifiers = effectiveCameraIdentifiers()
-        guard enableCamera, !identifiers.isEmpty else { return }
+        guard enableCamera, !identifiers.isEmpty else {
+            stopCameraCaptures()
+            return
+        }
 
-        for identifier in identifiers {
-            if remoteCameraIdentifiers.contains(identifier) {
-                // Remote feeds push frames asynchronously; no local capture session needed.
-                continue
+        // Determine which cameras to stop and which to start
+        let currentIDs = Set(cameraCaptures.keys)
+        let requestedIDs = Set(identifiers).subtracting(remoteCameraIdentifiers)
+
+        let toStop = currentIDs.subtracting(requestedIDs)
+        let toStart = requestedIDs.subtracting(currentIDs)
+
+        // If nothing changed, skip the expensive restart
+        if toStop.isEmpty && toStart.isEmpty {
+            return
+        }
+
+        // Stop only cameras that are no longer needed
+        for identifier in toStop {
+            if let manager = cameraCaptures.removeValue(forKey: identifier) {
+                manager.stopCapture()
             }
+            latestCameraBuffers.removeValue(forKey: identifier)
+            latestCameraMetadata.removeValue(forKey: identifier)
+        }
+
+        // Start only new cameras
+        for identifier in toStart {
             let manager = CameraManager()
             manager.onFrame = { [weak self] buffer in
                 Task { @MainActor [weak self] in

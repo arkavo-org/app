@@ -115,8 +115,9 @@ public final class CameraManager: NSObject, Sendable {
 
         captureSession.commitConfiguration()
 
-        // Start the session
-        Task {
+        // Start the session on a background thread to avoid blocking UI
+        // Use detached to ensure it runs on a non-main thread
+        Task.detached { [captureSession] in
             captureSession.startRunning()
         }
         #else
@@ -124,18 +125,19 @@ public final class CameraManager: NSObject, Sendable {
         #endif
     }
 
-    /// Stops camera capture
+    /// Stops camera capture synchronously to avoid race conditions
     public func stopCapture() {
-        Task {
+        // Stop synchronously to ensure clean state before any new capture starts
+        if captureSession.isRunning {
             captureSession.stopRunning()
-
-            captureSession.beginConfiguration()
-            if let input = cameraInput {
-                captureSession.removeInput(input)
-                cameraInput = nil
-            }
-            captureSession.commitConfiguration()
         }
+
+        captureSession.beginConfiguration()
+        if let input = cameraInput {
+            captureSession.removeInput(input)
+            cameraInput = nil
+        }
+        captureSession.commitConfiguration()
     }
 
     /// Returns available cameras, including Continuity Camera when available

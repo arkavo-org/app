@@ -19,7 +19,7 @@ class AvatarViewModel: ObservableObject {
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
     @Published var selectedModelURL: URL?
-    @Published var backgroundColor: Color = .green
+    @Published var backgroundColor: Color = .black
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
     @Published var isLoading = false
@@ -130,6 +130,25 @@ class AvatarViewModel: ObservableObject {
 
     func attachRenderer(_ renderer: VRMAvatarRenderer?) {
         self.renderer = renderer
+    }
+
+    /// Load the currently selected VRM model into the renderer
+    func loadSelectedModel() async {
+        guard let url = selectedModelURL, let renderer else {
+            error = "No model selected or renderer not available"
+            return
+        }
+
+        isLoading = true
+        error = nil
+
+        do {
+            try await renderer.loadModel(from: url)
+        } catch {
+            self.error = "Failed to load model: \(error.localizedDescription)"
+        }
+
+        isLoading = false
     }
 
     // MARK: - Lifecycle Management

@@ -1,263 +1,231 @@
 import ArkavoKit
+import ArkavoStreaming
 import AVFoundation
 import SwiftUI
 
 struct RecordView: View {
+    // MARK: - Properties
+
+    @ObservedObject var youtubeClient: YouTubeClient
+
+    // MARK: - Private State
+
     @State private var viewModel = RecordViewModel()
-    @ObservedObject private var previewStore = CameraPreviewStore.shared
-    @State private var recordingMode: RecordingMode = .camera
-    
-    // Animation state
+    @State private var streamViewModel = StreamViewModel()
+    @StateObject private var avatarViewModel = AvatarViewModel()
+    @State private var enableScreen: Bool = false
+    @State private var showStreamSetup: Bool = false
+    @State private var showInspector: Bool = false
     @State private var pulsing: Bool = false
+    @State private var pipOffset: CGSize = .zero
+    @State private var lastPipOffset: CGSize = .zero
+
+    // Shared state (not part of init)
+    private var previewStore: CameraPreviewStore { CameraPreviewStore.shared }
+    private var studioState: StudioState { StudioState.shared }
 
     var body: some View {
-        ZStack {
-            // Ambient Background
-            LinearGradient(
-                colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Mode Picker Header
-                modePickerContainer
-                
-                // Main Content
-                if recordingMode == .avatar {
-                    AvatarRecordView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        cameraRecordingView
-                            .padding(24)
-                    }
+        VStack(spacing: 0) {
+            // MARK: - Studio Header
+            studioHeader
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .bottom)
+
+            // MARK: - Main Stage + Inspector
+            HStack(spacing: 0) {
+                ZStack {
+                    // Ambient Background
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+
+                    stageCompositionView
+                        .clipped()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if showInspector {
+                    InspectorPanel(
+                        persona: studioState.persona,
+                        recordViewModel: viewModel,
+                        avatarViewModel: avatarViewModel,
+                        isVisible: $showInspector,
+                        onLoadAvatarModel: {
+                            Task { await avatarViewModel.loadSelectedModel() }
+                        }
+                    )
+                    .transition(.move(edge: .trailing))
                 }
             }
+
+            // MARK: - Bottom Control Bar
+            studioControlBar
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .top)
         }
-        .navigationTitle("Record")
+        .navigationTitle("Studio")
         .onAppear {
-            viewModel.refreshCameraDevices()
-            viewModel.bindPreviewStore(previewStore)
-            try? viewModel.activatePreviewPipeline()
+            syncViewModelState()
+            if studioState.persona == .face {
+                viewModel.bindPreviewStore(previewStore)
+                try? viewModel.activatePreviewPipeline()
+            }
+            // Load saved stream key for current platform
+            streamViewModel.loadStreamKey()
         }
-        .onChange(of: viewModel.enableDesktop) { _, _ in
-            viewModel.refreshDesktopPreview()
-        }
-    }
-
-    private var modePickerContainer: some View {
-        HStack {
-            Picker("Recording Mode", selection: $recordingMode) {
-                ForEach(RecordingMode.allCases) { mode in
-                    Label(mode.rawValue, systemImage: mode.icon)
-                        .tag(mode)
+        .onChange(of: studioState.persona) { _, _ in syncViewModelState() }
+        .onChange(of: enableScreen) { _, _ in syncViewModelState() }
+        .sheet(isPresented: $showStreamSetup) {
+            StreamDestinationPicker(
+                streamViewModel: streamViewModel,
+                youtubeClient: youtubeClient,
+                onStartStream: { destination, streamKey in
+                    Task { await startStreaming(destination: destination, streamKey: streamKey) }
                 }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 400)
-            .accessibilityIdentifier("RecordingModePicker")
-        }
-        .padding()
-        .background(.ultraThinMaterial)
-        .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .bottom)
-    }
-
-    private var cameraRecordingView: some View {
-        VStack(spacing: 24) {
-            if !viewModel.isRecording {
-                setupCard
-            } else {
-                statusCard
-            }
-            
-            // Error message
-            if let error = viewModel.error {
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .padding(8)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(8)
-            }
-        }
-        .frame(minWidth: 500)
-        .onChange(of: viewModel.selectedCameraIDs) { _, _ in viewModel.refreshCameraPreview() }
-        .onChange(of: viewModel.enableCamera) { _, isEnabled in
-            if isEnabled { viewModel.refreshCameraDevices() }
-            else {
-                viewModel.selectedCameraIDs.removeAll()
-                viewModel.refreshCameraPreview()
-            }
-        }
-        .onChange(of: viewModel.remoteBridgeEnabled) { _, _ in try? viewModel.activatePreviewPipeline() }
-    }
-
-    // MARK: - Cards
-
-    private var setupCard: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 4) {
-                Text("Studio Recording")
-                    .font(.title2.bold())
-                Text("Capture screen, camera, and audio.")
-                    .foregroundStyle(.secondary)
-            }
-            
-            // Title Input
-            TextField("Recording Title", text: $viewModel.title)
-                .textFieldStyle(.plain)
-                .font(.title3)
-                .padding()
-                .background(.background.opacity(0.5))
-                .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2), lineWidth: 1))
-            
-            // Preview Panels
-            HStack(spacing: 16) {
-                CameraPreviewPanel(
-                    title: "Camera Preview",
-                    image: previewStore.image(for: viewModel.currentPreviewSourceID),
-                    sourceLabel: viewModel.currentPreviewSourceID,
-                    placeholderText: "Connect camera or iPhone"
-                )
-
-                CameraPreviewPanel(
-                    title: "Desktop Preview",
-                    image: viewModel.desktopPreviewImage,
-                    sourceLabel: viewModel.enableDesktop ? "Screen" : nil,
-                    placeholderText: "Enable Desktop to see preview"
-                )
-            }
-
-            // Toggles Grid
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ToggleCard(title: "Camera", icon: "camera", isOn: $viewModel.enableCamera)
-                    .accessibilityIdentifier("Toggle_Camera")
-                ToggleCard(title: "Microphone", icon: "mic", isOn: $viewModel.enableMicrophone)
-                    .accessibilityIdentifier("Toggle_Mic")
-                ToggleCard(title: "Desktop", icon: "desktopcomputer", isOn: $viewModel.enableDesktop)
-                    .accessibilityIdentifier("Toggle_Desktop")
-                ToggleCard(title: "Remote Cam", icon: "iphone", isOn: $viewModel.remoteBridgeEnabled)
-                    .accessibilityIdentifier("Toggle_RemoteCam")
-            }
-
-            if viewModel.enableCamera {
-                cameraSourcesSection
-            }
-            
-            if viewModel.remoteBridgeEnabled {
-                remoteBridgeSection
-            }
-            
-            // Start Button
-            Button(action: {
-                Task { await viewModel.startRecording() }
-            }) {
-                HStack {
-                    Image(systemName: "record.circle.fill")
-                    Text("Start Recording")
-                }
-                .font(.title3.bold())
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(viewModel.canStartRecording ? Color.red : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(16)
-                .shadow(color: viewModel.canStartRecording ? .red.opacity(0.3) : .clear, radius: 10, x: 0, y: 5)
-            }
-            .buttonStyle(.plain)
-            .disabled(viewModel.isProcessing || !viewModel.canStartRecording)
-            .accessibilityIdentifier("Btn_Record")
-        }
-        .padding(24)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.05), radius: 20, x: 0, y: 10)
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
-    }
-
-    private var statusCard: some View {
-        VStack(spacing: 24) {
-            HStack {
-                VStack(alignment: .leading) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(viewModel.isPaused ? Color.orange : Color.red)
-                            .frame(width: 12, height: 12)
-                            .opacity(viewModel.isPaused ? 1.0 : (pulsing ? 1.0 : 0.3))
-                        
-                        Text(viewModel.isPaused ? "PAUSED" : "RECORDING")
-                            .font(.title2.bold())
-                            .foregroundColor(viewModel.isPaused ? .orange : .red)
-                    }
-                    
-                    Text(viewModel.formattedDuration())
-                        .font(.system(size: 32, weight: .light, design: .monospaced))
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 12) {
-                    Button(action: {
-                        if viewModel.isPaused {
-                            Task { viewModel.resumeRecording() }
-                        } else {
-                            viewModel.pauseRecording()
-                        }
-                    }) {
-                        Image(systemName: viewModel.isPaused ? "play.fill" : "pause.fill")
-                            .font(.title2)
-                            .padding()
-                            .background(.regularMaterial)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button(action: {
-                        Task { await viewModel.stopRecording() }
-                    }) {
-                        Image(systemName: "stop.fill")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.red)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("Btn_Stop")
-                }
-            }
-            
-            if viewModel.enableMicrophone {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Audio Level").font(.caption).foregroundStyle(.secondary)
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4).fill(Color.gray.opacity(0.2))
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(levelColor(for: viewModel.audioLevelPercentage()))
-                                .frame(width: geometry.size.width * viewModel.audioLevelPercentage())
-                                .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
-                        }
-                    }
-                    .frame(height: 6)
-                }
-            }
-            
-            CameraPreviewPanel(
-                title: "Monitor",
-                image: previewStore.image(for: viewModel.currentPreviewSourceID),
-                sourceLabel: viewModel.currentPreviewSourceID,
-                placeholderText: "Preview Active"
             )
         }
-        .padding(24)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .red.opacity(0.1), radius: 20, x: 0, y: 10)
+    }
+
+    // MARK: - Studio Header
+
+    private var studioHeader: some View {
+        HStack(spacing: 16) {
+            Spacer()
+
+            // Center: Stream Status (when streaming)
+            if streamViewModel.isStreaming {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                        .opacity(pulsing ? 1.0 : 0.5)
+                    Text("LIVE")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.red)
+                    Text(streamViewModel.formattedDuration)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                        pulsing = true
+                    }
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Stage Composition View
+
+    private var stageCompositionView: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                // Layer 1: Main stage background / Screen Share
+                if enableScreen {
+                    if let desktopImage = viewModel.desktopPreviewImage {
+                        Image(nsImage: desktopImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        VStack {
+                            Image(systemName: "desktopcomputer")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("Desktop Preview")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black.opacity(0.2))
+                    }
+                } else if !studioState.isAudioOnly {
+                    // Empty stage placeholder when no screen share
+                    Color.black.opacity(0.3)
+                }
+
+                // Layer 2: Presenter PIP (Face/Avatar always in corner)
+                if !studioState.isAudioOnly {
+                    let pipWidth = geometry.size.width * 0.25
+                    let pipHeight = pipWidth * (9 / 16)
+
+                    presenterView
+                        .frame(width: pipWidth, height: pipHeight)
+                        .cornerRadius(12)
+                        .shadow(radius: 10)
+                        .offset(x: -20, y: -20)
+                        .offset(pipOffset)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    pipOffset = CGSize(
+                                        width: lastPipOffset.width + value.translation.width,
+                                        height: lastPipOffset.height + value.translation.height
+                                    )
+                                }
+                                .onEnded { _ in
+                                    lastPipOffset = pipOffset
+                                }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                }
+
+                // Audio-only mode visualization
+                if studioState.isAudioOnly {
+                    audioOnlyView
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var presenterView: some View {
+        if studioState.persona == .avatar {
+            AvatarRecordView(viewModel: avatarViewModel, isTransparent: false)
+                .background(Color.black)
+        } else if studioState.persona == .face {
+            if let image = previewStore.image(for: viewModel.currentPreviewSourceID) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .background(Color.black)
+            } else {
+                ZStack {
+                    Color.black
+                    VStack {
+                        Image(systemName: "video.slash")
+                        Text("No Camera")
+                    }
+                    .foregroundStyle(.gray)
+                }
+            }
+        }
+    }
+
+    private var audioOnlyView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "waveform")
+                .font(.system(size: 80))
+                .foregroundStyle(.secondary)
+                .opacity(pulsing ? 1.0 : 0.5)
+            Text("Audio Recording")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 pulsing = true
@@ -265,253 +233,277 @@ struct RecordView: View {
         }
     }
 
-    // MARK: - Components
+    // MARK: - Studio Control Bar
+
+    private var studioControlBar: some View {
+        HStack(spacing: 16) {
+            // Left: Persona Selector (segmented)
+            HStack(spacing: 4) {
+                ForEach(Persona.allCases) { persona in
+                    Button {
+                        studioState.persona = persona
+                    } label: {
+                        Image(systemName: persona.icon)
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 32)
+                            .background(studioState.persona == persona ? Color.accentColor.opacity(0.3) : Color.clear)
+                            .background(.regularMaterial)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(studioState.persona == persona ? Color.accentColor : Color.clear, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(persona.rawValue)
+                    .accessibilityIdentifier("Persona_\(persona.rawValue)")
+                }
+            }
+
+            // Stage Toggles
+            HStack(spacing: 8) {
+                // Screen Toggle
+                Button {
+                    enableScreen.toggle()
+                } label: {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 14))
+                        .padding(8)
+                        .background(enableScreen ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(enableScreen ? Color.accentColor : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Toggle_Screen")
+                .help("Toggle Screen Share")
+
+                // Mic Toggle
+                Button {
+                    viewModel.enableMicrophone.toggle()
+                } label: {
+                    Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
+                        .font(.system(size: 14))
+                        .padding(8)
+                        .background(viewModel.enableMicrophone ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(viewModel.enableMicrophone ? Color.accentColor : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Toggle_Mic")
+                .help("Toggle Microphone")
+
+                // Audio Level Meter
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.gray.opacity(0.3))
+                    Capsule()
+                        .fill(levelColor(for: viewModel.audioLevelPercentage()))
+                        .frame(width: 40 * viewModel.audioLevelPercentage())
+                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
+                }
+                .frame(width: 40, height: 6)
+                .opacity(viewModel.enableMicrophone ? 1.0 : 0.3)
+            }
+
+            Spacer()
+
+            // Center: Dual Action Buttons (REC + LIVE)
+            HStack(spacing: 12) {
+                recordingActionButton
+                streamingActionButton
+            }
+
+            Spacer()
+
+            // Right: Recording Duration + Settings
+            HStack(spacing: 12) {
+                // Recording Duration
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.isRecording ? .red : .clear)
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.isRecording ? viewModel.formattedDuration() : "00:00")
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .foregroundStyle(viewModel.isRecording ? .primary : .secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .opacity(viewModel.isRecording ? 1.0 : 0.5)
+
+                // Inspector Toggle
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showInspector.toggle()
+                    }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14))
+                        .padding(8)
+                        .foregroundStyle(showInspector ? .primary : .secondary)
+                        .background(showInspector ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Inspector (⌘I)")
+                .keyboardShortcut("i", modifiers: .command)
+            }
+        }
+    }
+
+    private var recordingActionButton: some View {
+        // Fixed-width container to prevent layout shifts
+        HStack(spacing: 8) {
+            if !viewModel.isRecording {
+                // Start Recording button
+                Button {
+                    Task { await viewModel.startRecording() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "record.circle.fill")
+                        Text("REC")
+                    }
+                    .font(.headline)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(viewModel.canStartRecording ? Color.red : Color.gray)
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isProcessing || !viewModel.canStartRecording)
+                .accessibilityIdentifier("Btn_Record")
+            } else {
+                // Pause/Resume button
+                Button {
+                    if viewModel.isPaused { viewModel.resumeRecording() }
+                    else { viewModel.pauseRecording() }
+                } label: {
+                    Image(systemName: viewModel.isPaused ? "play.fill" : "pause.fill")
+                        .font(.body)
+                        .frame(width: 16, height: 16)
+                        .padding(8)
+                        .background(.regularMaterial)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                // Stop button
+                Button {
+                    Task { await viewModel.stopRecording() }
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.body)
+                        .frame(width: 16, height: 16)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(Color.red)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Btn_Stop")
+            }
+        }
+        .frame(width: 110)
+    }
+
+    private var streamingActionButton: some View {
+        Button {
+            if streamViewModel.isStreaming {
+                Task { await stopStreaming() }
+            } else {
+                showStreamSetup = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                // Live indicator dot (always present for consistent width)
+                Circle()
+                    .fill(streamViewModel.isStreaming ? .white : .clear)
+                    .frame(width: 8, height: 8)
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                Text(streamViewModel.isStreaming ? "END" : "LIVE")
+            }
+            .font(.headline)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                streamViewModel.isStreaming
+                    ? AnyShapeStyle(Color.red)
+                    : AnyShapeStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+            )
+            .foregroundColor(.white)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(streamViewModel.isConnecting)
+        .accessibilityIdentifier("Btn_GoLive")
+        .frame(width: 120)
+    }
+
+    // MARK: - Helpers
+
+    private func syncViewModelState() {
+        // Derive camera/desktop state from persona and screen toggle
+        viewModel.enableCamera = studioState.enableCamera
+        viewModel.enableDesktop = enableScreen
+
+        if studioState.persona == .face {
+            viewModel.bindPreviewStore(previewStore)
+            // Refresh camera list and activate preview pipeline
+            viewModel.refreshCameraDevices()
+            try? viewModel.activatePreviewPipeline()
+        } else {
+            // Not in face mode - ensure camera preview is stopped
+            viewModel.refreshCameraPreview()
+        }
+
+        if enableScreen {
+            viewModel.refreshDesktopPreview()
+        }
+    }
 
     private func levelColor(for level: Double) -> Color {
         if level < 0.5 { .green } else if level < 0.8 { .yellow } else { .red }
     }
-}
 
-struct ToggleCard: View {
-    let title: String
-    let icon: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        Button(action: { isOn.toggle() }) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(isOn ? .accentColor : .secondary)
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(isOn ? .primary : .secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(isOn ? Color.accentColor.opacity(0.1) : Color.clear)
-            .background(.regularMaterial)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isOn ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-            )
+    // MARK: - Streaming
+
+    private func startStreaming(destination: RTMPPublisher.Destination, streamKey: String) async {
+        // Ensure we have an active session (either from recording or create one for streaming)
+        if RecordingState.shared.recordingSession == nil {
+            // Start a preview-mode session for streaming without recording
+            await viewModel.startPreviewSession()
         }
-        .buttonStyle(.plain)
-    }
-}
 
-extension RecordView {
-    private var cameraSourcesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Camera Sources")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button {
-                    viewModel.refreshCameraDevices()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .help("Refresh connected cameras")
+        do {
+            guard let session = RecordingState.shared.recordingSession else {
+                streamViewModel.error = "Failed to create streaming session"
+                return
             }
-
-            if viewModel.availableCameras.isEmpty {
-                Text("No cameras detected. Connect an iPhone via Continuity Camera, USB-C, or Wi-Fi to get started.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(viewModel.availableCameras) { camera in
-                    Toggle(isOn: Binding(
-                        get: { viewModel.isCameraSelected(camera) },
-                        set: { viewModel.toggleCameraSelection(camera, isSelected: $0) }
-                    )) {
-                        HStack {
-                            Text(camera.displayName)
-                            Spacer()
-                            Text(viewModel.cameraTransportLabel(for: camera))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .disabled(!viewModel.canSelectMoreCameras(for: camera))
-                }
-
-                if viewModel.selectedCameraIDs.count > 1 {
-                    Picker("Layout", selection: $viewModel.cameraLayout) {
-                        ForEach(MultiCameraLayout.allCases) { layout in
-                            Text(layout.rawValue).tag(layout)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.top, 4)
-                }
-            }
+            try await session.startStreaming(to: destination, streamKey: streamKey)
+            streamViewModel.isStreaming = true
+        } catch {
+            streamViewModel.error = error.localizedDescription
         }
     }
 
-    private var remoteCameraSourcesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Remote iOS Cameras")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-
-            if viewModel.remoteCameraSources.isEmpty {
-                Text("Waiting for Arkavo on iPhone/iPad to connect.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(viewModel.remoteCameraSources, id: \.self) { source in
-                    Toggle(isOn: Binding(
-                        get: { viewModel.isRemoteCameraSelected(source) },
-                        set: { viewModel.toggleRemoteCameraSelection(source, isSelected: $0) }
-                    )) {
-                        HStack {
-                            Text(source)
-                                .lineLimit(1)
-                            Spacer()
-                            Text("Remote")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .disabled(!viewModel.isRemoteCameraSelected(source) && viewModel.selectedCameraIDs.count >= MultiCameraLayout.maxSupportedSources)
-                }
-            }
-        }
-    }
-
-    private var remoteBridgeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(viewModel.remoteBridgeEnabled ? Color.green : Color.gray)
-                            .frame(width: 8, height: 8)
-
-                        Text(viewModel.remoteBridgeEnabled ? "Accepting Remote Cameras" : "Remote Cameras Disabled")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-
-                    if viewModel.remoteBridgeEnabled {
-                        Text("\(viewModel.remoteCameraSources.count) connected")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                Button(action: {
-                    viewModel.remoteBridgeEnabled.toggle()
-                }) {
-                    Text(viewModel.remoteBridgeEnabled ? "Disable" : "Enable")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(viewModel.remoteBridgeEnabled ? "Disable remote cameras" : "Enable remote cameras")
-            }
-            .padding(8)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
-
-            if viewModel.remoteBridgeEnabled {
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Connect from iPhone/iPad")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 4)
-
-                        HStack {
-                            Text("Host:")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text(viewModel.suggestedHostname)
-                                .font(.caption2.monospaced())
-                                .textSelection(.enabled)
-                            Spacer()
-                        }
-
-                        HStack {
-                            Text("Port:")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text(viewModel.actualPort > 0 ? "\(viewModel.actualPort)" : "auto")
-                                .font(.caption2.monospaced())
-                                .textSelection(.enabled)
-                            if viewModel.actualPort > 0 {
-                                Text("(auto-assigned)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-
-                        Divider()
-                            .padding(.vertical, 4)
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Quick Connect Options:")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-
-                                Text("1. Auto-discovery: Open Arkavo app on iPhone")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-
-                                Text("2. QR Code: Scan with iPhone camera →")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-
-                                Text("3. Manual: Enter host & port in Arkavo app")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            Spacer()
-
-                            if viewModel.actualPort > 0,
-                               let qrImage = QRCodeGenerator.generateQRCode(from: viewModel.connectionInfo, size: CGSize(width: 120, height: 120)) {
-                                VStack(spacing: 4) {
-                                    Image(nsImage: qrImage)
-                                        .interpolation(.none)
-                                        .resizable()
-                                        .frame(width: 120, height: 120)
-                                        .background(Color.white)
-                                        .cornerRadius(8)
-
-                                    Text("Scan to connect")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.top, 4)
-                    }
-                    .padding(8)
-                } label: {
-                    Text("Connection Info & QR Code")
-                        .font(.caption2)
-                }
-            }
-        }
+    private func stopStreaming() async {
+        await streamViewModel.stopStreaming()
     }
 }
-#Preview {
-    NavigationStack {
-        RecordView()
-    }
-}
+
+// Preview requires YouTubeClient to be accessible
+// #Preview {
+//     NavigationStack {
+//         RecordView(youtubeClient: YouTubeClient(clientId: "test", clientSecret: "test"))
+//     }
+// }

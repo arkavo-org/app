@@ -1,4 +1,5 @@
-import ArkavoC2PA
+// C2PA support temporarily disabled
+// import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
 import Foundation
@@ -117,10 +118,9 @@ final class RecordViewModel {
             let outputURL = try await session.stopRecording()
             print("✅ Recording session stopped, output at: \(outputURL.path)")
 
-            // Sign with C2PA
-            print("🔏 Signing recording with C2PA...")
-            let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
-            print("✅ Recording signed successfully: \(signedURL.path)")
+            // C2PA signing disabled temporarily to fix race condition issues
+            // TODO: Re-enable C2PA signing after file validation is added
+            // let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
 
             isRecording = false
             isPaused = false
@@ -129,7 +129,7 @@ final class RecordViewModel {
             RecordingState.shared.setRecordingSession(nil)
 
             // Recording complete - saved successfully
-            print("✅ Recording saved and signed: \(signedURL.path)")
+            print("✅ Recording saved: \(outputURL.path)")
 
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
@@ -145,8 +145,9 @@ final class RecordViewModel {
         isProcessing = false
     }
 
-    // MARK: - C2PA Signing
-
+    // MARK: - C2PA Signing (Temporarily Disabled)
+    // TODO: Re-enable when c2patool is bundled with the app
+    /*
     private func signRecording(outputURL: URL, recordingTitle: String, recordingDuration: TimeInterval) async throws -> URL {
         // Build C2PA manifest
         var builder = C2PAManifestBuilder(title: recordingTitle)
@@ -187,6 +188,7 @@ final class RecordViewModel {
             return outputURL
         }
     }
+    */
 
     private func getMacModel() -> String {
         #if os(macOS)
@@ -213,6 +215,39 @@ final class RecordViewModel {
         session.resumeRecording()
         isPaused = false
         startTimer()
+    }
+
+    /// Creates a recording session for streaming without file recording.
+    /// This allows streaming to work independently of the record button.
+    func startPreviewSession() async {
+        do {
+            let session = try acquireRecordingSession()
+            session.pipPosition = pipPosition
+            session.enableCamera = enableCamera
+            session.enableMicrophone = enableMicrophone
+            session.enableDesktop = enableDesktop
+            session.cameraLayoutStrategy = resolvedCameraLayout()
+
+            if enableCamera {
+                ensureDefaultCameraSelection()
+                session.setCameraSources(selectedCameraIDs)
+            } else {
+                session.setCameraSources([])
+            }
+
+            // Register with shared state for streaming access
+            RecordingState.shared.setRecordingSession(session)
+
+            // Start camera/desktop preview (but not recording to file)
+            if enableCamera {
+                try session.startCameraPreview(for: selectedCameraIDs)
+            }
+            if enableDesktop {
+                try session.startScreenPreview()
+            }
+        } catch {
+            self.error = "Failed to start preview session: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Timer
@@ -250,10 +285,13 @@ final class RecordViewModel {
         // Create recordings directory if needed
         try FileManager.default.createDirectory(at: recordingsPath, withIntermediateDirectories: true)
 
-        // Generate filename
+        // Generate filename with appropriate extension based on recording mode
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let filename = "arkavo_recording_\(formatter.string(from: Date())).mov"
+        // Use .m4a for audio-only (no camera, no desktop), .mov for video
+        let isAudioOnly = !enableCamera && !enableDesktop
+        let ext = isAudioOnly ? "m4a" : "mov"
+        let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
 
         return recordingsPath.appendingPathComponent(filename)
     }

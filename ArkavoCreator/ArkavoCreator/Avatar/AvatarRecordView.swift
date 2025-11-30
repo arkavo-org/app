@@ -2,118 +2,37 @@ import Metal
 import SwiftUI
 
 /// Minimal avatar preview shell that reflects remote face metadata.
+/// Controls are now in InspectorPanel - this view is just the preview.
 struct AvatarRecordView: View {
-    @StateObject private var viewModel = AvatarViewModel()
-    @State private var vrmURL = ""
+    @ObservedObject var viewModel: AvatarViewModel
     @State private var renderer: VRMAvatarRenderer?
     @State private var showError = false
 
+    /// User preference to show body tracking overlay
+    @AppStorage("showBodyTracking") private var showBodyTracking = false
+    /// User preference to show face tracking overlay
+    @AppStorage("showFaceTracking") private var showFaceTracking = false
+
+    var isTransparent: Bool = false
+
     var body: some View {
-        HSplitView {
-            controlsPane
-                .padding()
-                .frame(minWidth: 300, maxWidth: 350)
-
-            previewPane
-        }
-        .alert("Error", isPresented: $showError, presenting: viewModel.error) { _ in
-            Button("OK") {
-                viewModel.error = nil
-            }
-        } message: { error in
-            Text(error)
-        }
-        .onAppear {
-            initializeRenderer()
-            renderer?.resume()
-            viewModel.activate()
-        }
-        .onDisappear {
-            renderer?.pause()
-            viewModel.deactivate()
-        }
-    }
-
-    private var controlsPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            sectionHeader("Download VRM Model")
-            downloadSection
-
-            Divider()
-            sectionHeader("Select Avatar")
-            avatarList
-
-            Divider()
-            sectionHeader("Avatar Settings")
-            faceTrackingStatusView
-            ColorPicker("Background", selection: $viewModel.backgroundColor)
-            Slider(value: $viewModel.avatarScale, in: 0.5 ... 2.0) {
-                Text("Avatar Scale")
-            }
-            .help("Adjust avatar scale")
-
-            if viewModel.selectedModelURL != nil {
-                Button {
-                    loadSelectedModel()
-                } label: {
-                    Label("Load Avatar", systemImage: "arrow.down.circle.fill")
+        previewPane
+            .alert("Error", isPresented: $showError, presenting: viewModel.error) { _ in
+                Button("OK") {
+                    viewModel.error = nil
                 }
-                .buttonStyle(.borderedProminent)
+            } message: { error in
+                Text(error)
             }
-
-            Spacer()
-        }
-    }
-
-    private var downloadSection: some View {
-        VStack(spacing: 12) {
-            TextField("VRM URL", text: $vrmURL)
-                .textFieldStyle(.roundedBorder)
-
-            Button {
-                Task {
-                    await viewModel.downloadModel(from: vrmURL)
-                    vrmURL = ""
-                }
-            } label: {
-                if viewModel.isLoading {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text("Download")
-                }
+            .onAppear {
+                initializeRenderer()
+                renderer?.resume()
+                viewModel.activate()
             }
-            .disabled(vrmURL.isEmpty || viewModel.isLoading)
-            .buttonStyle(.borderedProminent)
-        }
-    }
-
-    private var avatarList: some View {
-        Group {
-            if viewModel.downloadedModels.isEmpty {
-                Text("No models downloaded yet")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            } else {
-                List(selection: $viewModel.selectedModelURL) {
-                    ForEach(viewModel.downloadedModels, id: \.self) { url in
-                        Text(url.lastPathComponent)
-                            .lineLimit(1)
-                            .tag(url)
-                    }
-                }
-                .frame(height: 150)
+            .onDisappear {
+                renderer?.pause()
+                viewModel.deactivate()
             }
-        }
-    }
-
-    private var faceTrackingStatusView: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "face.smiling")
-                .foregroundStyle(.secondary)
-            Text(viewModel.faceTrackingStatus)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
     }
 
     private var previewPane: some View {
@@ -122,7 +41,7 @@ struct AvatarRecordView: View {
                 if let renderer {
                     AvatarPreviewView(
                         renderer: renderer,
-                        backgroundColor: viewModel.backgroundColor
+                        backgroundColor: isTransparent ? .clear : viewModel.backgroundColor
                     )
                 } else {
                     placeholderView
@@ -130,16 +49,37 @@ struct AvatarRecordView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Debug: Skeleton visualization overlay
-            SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
+            // Tracking overlays (controlled via Inspector)
+            if !isTransparent {
+                VStack(alignment: .trailing, spacing: 8) {
+                    // Body tracking skeleton visualization
+                    if showBodyTracking {
+                        SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
+                    }
+
+                    // Face tracking status indicator
+                    if showFaceTracking {
+                        faceTrackingIndicator
+                    }
+                }
                 .padding(16)
+            }
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
-            .foregroundStyle(.primary)
+    /// Face tracking status indicator
+    private var faceTrackingIndicator: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "face.smiling")
+                .font(.caption)
+            Text(viewModel.faceTrackingStatus)
+                .font(.caption2)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .foregroundStyle(.secondary)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
     }
 
     private var placeholderView: some View {
@@ -165,31 +105,9 @@ struct AvatarRecordView: View {
         renderer = VRMAvatarRenderer(device: device)
         viewModel.attachRenderer(renderer)
     }
-
-    private func loadSelectedModel() {
-        guard let url = viewModel.selectedModelURL,
-              let renderer
-        else {
-            return
-        }
-
-        Task {
-            viewModel.isLoading = true
-            viewModel.error = nil
-
-            do {
-                try await renderer.loadModel(from: url)
-            } catch {
-                viewModel.error = "Failed to load model: \(error.localizedDescription)"
-                showError = true
-            }
-
-            viewModel.isLoading = false
-        }
-    }
 }
 
 #Preview {
-    AvatarRecordView()
-        .frame(width: 1024, height: 768)
+    AvatarRecordView(viewModel: AvatarViewModel())
+        .frame(width: 800, height: 600)
 }
