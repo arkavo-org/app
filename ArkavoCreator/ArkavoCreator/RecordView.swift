@@ -76,6 +76,9 @@ struct RecordView: View {
             if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
                 try? viewModel.activatePreviewPipeline()
+            } else if studioState.visualSource == .avatar {
+                // Avatar mode needs remote camera bridge for face tracking metadata
+                try? viewModel.activatePreviewPipeline()
             }
             // Load saved stream key for current platform
             streamViewModel.loadStreamKey()
@@ -553,8 +556,11 @@ struct RecordView: View {
             // Refresh camera list and activate preview pipeline
             viewModel.refreshCameraDevices()
             try? viewModel.activatePreviewPipeline()
+        } else if studioState.visualSource == .avatar {
+            // Avatar mode needs remote camera bridge for face tracking metadata
+            try? viewModel.activatePreviewPipeline()
         } else {
-            // Not in face mode - ensure camera preview is stopped
+            // Audio-only mode - ensure camera preview is stopped
             viewModel.refreshCameraPreview()
         }
 
