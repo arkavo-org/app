@@ -157,12 +157,37 @@ struct RecordView: View {
                     stagePlaceholderView
                 }
 
-                // Layer 2: Presenter PIP (Face/Avatar always in corner)
-                if !studioState.isAudioOnly {
+                // Layer 2: Visual source overlay
+                if studioState.visualSource == .avatar {
+                    // VTuber-style: Large transparent overlay with drop shadow
+                    let avatarWidth = geometry.size.width * 0.4
+                    let avatarHeight = avatarWidth * (16 / 9)  // Taller aspect for waist-up
+
+                    AvatarRecordView(viewModel: avatarViewModel, isTransparent: true)
+                        .frame(width: avatarWidth, height: avatarHeight)
+                        .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+                        .offset(x: -20, y: -20)
+                        .offset(pipOffset)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    pipOffset = CGSize(
+                                        width: lastPipOffset.width + value.translation.width,
+                                        height: lastPipOffset.height + value.translation.height
+                                    )
+                                }
+                                .onEnded { _ in
+                                    lastPipOffset = pipOffset
+                                }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
+                } else if studioState.visualSource == .face {
+                    // Traditional PIP: Boxed camera feed
                     let pipWidth = geometry.size.width * 0.25
                     let pipHeight = pipWidth * (9 / 16)
 
-                    presenterView
+                    facePIPView
                         .frame(width: pipWidth, height: pipHeight)
                         .cornerRadius(12)
                         .shadow(radius: 10)
@@ -192,25 +217,20 @@ struct RecordView: View {
     }
 
     @ViewBuilder
-    private var presenterView: some View {
-        if studioState.visualSource == .avatar {
-            AvatarRecordView(viewModel: avatarViewModel, isTransparent: false)
+    private var facePIPView: some View {
+        if let image = previewStore.image(for: viewModel.currentPreviewSourceID) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
                 .background(Color.black)
-        } else if studioState.visualSource == .face {
-            if let image = previewStore.image(for: viewModel.currentPreviewSourceID) {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .background(Color.black)
-            } else {
-                ZStack {
-                    Color.black
-                    VStack {
-                        Image(systemName: "video.slash")
-                        Text("No Camera")
-                    }
-                    .foregroundStyle(.gray)
+        } else {
+            ZStack {
+                Color.black
+                VStack {
+                    Image(systemName: "video.slash")
+                    Text("No Camera")
                 }
+                .foregroundStyle(.gray)
             }
         }
     }
