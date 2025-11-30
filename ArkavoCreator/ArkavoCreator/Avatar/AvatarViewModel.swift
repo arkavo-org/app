@@ -18,12 +18,20 @@ class AvatarViewModel: ObservableObject {
 
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
-    @Published var selectedModelURL: URL?
+    @Published var selectedModelURL: URL? {
+        didSet {
+            // Persist selection
+            if let url = selectedModelURL {
+                UserDefaults.standard.set(url.path, forKey: "lastSelectedAvatarModelPath")
+            }
+        }
+    }
     @Published var backgroundColor: Color = .black
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
     @Published var isLoading = false
     @Published var faceTrackingStatus: String = "Awaiting face metadata"
+    @Published private(set) var isModelLoaded = false
 
     // Debug: Latest body skeleton for visualization
     @Published var latestBodySkeleton: ARKitBodySkeleton?
@@ -34,6 +42,7 @@ class AvatarViewModel: ObservableObject {
 
     weak var renderer: VRMAvatarRenderer?
     private var metadataObserver: MetadataObserverToken?
+    private var hasAttemptedAutoLoad = false
 
     // VRM frame capture for recording
     private var captureManager: VRMFrameCaptureManager?
@@ -93,7 +102,18 @@ class AvatarViewModel: ObservableObject {
         }
         downloadedModels = models.sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        // Auto-select first model if none selected
+        // Restore last selected model from persistence
+        if selectedModelURL == nil,
+           let savedPath = UserDefaults.standard.string(forKey: "lastSelectedAvatarModelPath") {
+            let savedURL = URL(fileURLWithPath: savedPath)
+            // Only restore if the file still exists
+            if downloadedModels.contains(savedURL) {
+                selectedModelURL = savedURL
+                print("[AvatarViewModel] Restored last selected model: \(savedURL.lastPathComponent)")
+            }
+        }
+
+        // Fallback: Auto-select first model if none selected
         if selectedModelURL == nil, let first = downloadedModels.first {
             selectedModelURL = first
         }
@@ -144,11 +164,29 @@ class AvatarViewModel: ObservableObject {
 
         do {
             try await renderer.loadModel(from: url)
+            isModelLoaded = true
+            print("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
         } catch {
             self.error = "Failed to load model: \(error.localizedDescription)"
+            isModelLoaded = false
         }
 
         isLoading = false
+    }
+
+    /// Auto-load the last selected model if available (called when avatar mode activates)
+    func autoLoadIfNeeded() async {
+        // Only attempt auto-load once per session and if we have a selection
+        guard !hasAttemptedAutoLoad,
+              !isModelLoaded,
+              selectedModelURL != nil,
+              renderer != nil else {
+            return
+        }
+
+        hasAttemptedAutoLoad = true
+        print("[AvatarViewModel] Auto-loading last selected model...")
+        await loadSelectedModel()
     }
 
     // MARK: - Lifecycle Management

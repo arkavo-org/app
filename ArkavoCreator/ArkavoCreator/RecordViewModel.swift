@@ -33,8 +33,10 @@ final class RecordViewModel {
     private var hasInitializedSession = false
     private var remoteCameraServer: RemoteCameraServer?
 
-    // Desktop preview
+    // Desktop/Screen selection
     var desktopPreviewImage: NSImage?
+    var availableScreens: [ScreenInfo] = []
+    var selectedScreenID: CGDirectDisplayID?
 
     // Watermark configuration (always enabled, no UI toggle)
     var watermarkEnabled: Bool = true
@@ -58,6 +60,34 @@ final class RecordViewModel {
     init() {
         generateDefaultTitle()
         refreshCameraDevices()
+        refreshScreenDevices()
+    }
+
+    // MARK: - Screen Selection
+
+    func refreshScreenDevices() {
+        availableScreens = ScreenCaptureManager.availableScreens()
+        // Auto-select primary screen if nothing selected
+        if selectedScreenID == nil {
+            selectedScreenID = availableScreens.first(where: { $0.isPrimary })?.displayID
+                ?? availableScreens.first?.displayID
+        }
+    }
+
+    func selectScreen(_ screen: ScreenInfo) {
+        selectedScreenID = screen.displayID
+        // Restart preview with new screen if desktop is enabled
+        if enableDesktop, let session = recordingSession {
+            // Stop current capture and restart with new display
+            session.stopScreenPreview()
+            session.selectedDisplayID = selectedScreenID
+            session.screenPreviewHandler = { [weak self] cgImage in
+                Task { @MainActor in
+                    self?.desktopPreviewImage = NSImage(cgImage: cgImage, size: .zero)
+                }
+            }
+            try? session.startScreenPreview()
+        }
     }
 
     // MARK: - Recording Control
@@ -75,6 +105,7 @@ final class RecordViewModel {
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
+            session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
             session.watermarkOpacity = watermarkOpacity
@@ -491,6 +522,9 @@ final class RecordViewModel {
         guard let session = recordingSession else { return }
 
         if enableDesktop {
+            // Set selected display before starting preview
+            session.selectedDisplayID = selectedScreenID
+
             // Set up preview handler
             session.screenPreviewHandler = { [weak self] cgImage in
                 Task { @MainActor in

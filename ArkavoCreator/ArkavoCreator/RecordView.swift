@@ -51,7 +51,7 @@ struct RecordView: View {
 
                 if showInspector {
                     InspectorPanel(
-                        persona: studioState.persona,
+                        visualSource: studioState.visualSource,
                         recordViewModel: viewModel,
                         avatarViewModel: avatarViewModel,
                         isVisible: $showInspector,
@@ -73,14 +73,14 @@ struct RecordView: View {
         .navigationTitle("Studio")
         .onAppear {
             syncViewModelState()
-            if studioState.persona == .face {
+            if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
                 try? viewModel.activatePreviewPipeline()
             }
             // Load saved stream key for current platform
             streamViewModel.loadStreamKey()
         }
-        .onChange(of: studioState.persona) { _, _ in syncViewModelState() }
+        .onChange(of: studioState.visualSource) { _, _ in syncViewModelState() }
         .onChange(of: enableScreen) { _, _ in syncViewModelState() }
         .sheet(isPresented: $showStreamSetup) {
             StreamDestinationPicker(
@@ -111,7 +111,7 @@ struct RecordView: View {
                         .foregroundStyle(.red)
                     Text(streamViewModel.formattedDuration)
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.7))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -144,17 +144,17 @@ struct RecordView: View {
                         VStack {
                             Image(systemName: "desktopcomputer")
                                 .font(.system(size: 60))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.primary.opacity(0.7))
                             Text("Desktop Preview")
                                 .font(.title3)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.primary.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.black.opacity(0.2))
                     }
                 } else if !studioState.isAudioOnly {
                     // Empty stage placeholder when no screen share
-                    Color.black.opacity(0.3)
+                    stagePlaceholderView
                 }
 
                 // Layer 2: Presenter PIP (Face/Avatar always in corner)
@@ -193,10 +193,10 @@ struct RecordView: View {
 
     @ViewBuilder
     private var presenterView: some View {
-        if studioState.persona == .avatar {
+        if studioState.visualSource == .avatar {
             AvatarRecordView(viewModel: avatarViewModel, isTransparent: false)
                 .background(Color.black)
-        } else if studioState.persona == .face {
+        } else if studioState.visualSource == .face {
             if let image = previewStore.image(for: viewModel.currentPreviewSourceID) {
                 Image(nsImage: image)
                     .resizable()
@@ -219,11 +219,11 @@ struct RecordView: View {
         VStack(spacing: 20) {
             Image(systemName: "waveform")
                 .font(.system(size: 80))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.7))
                 .opacity(pulsing ? 1.0 : 0.5)
             Text("Audio Recording")
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -233,55 +233,121 @@ struct RecordView: View {
         }
     }
 
+    private var stagePlaceholderView: some View {
+        VStack(spacing: 16) {
+            // Show available screens as icons
+            HStack(spacing: 12) {
+                ForEach(viewModel.availableScreens) { screen in
+                    VStack(spacing: 4) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "desktopcomputer")
+                                .font(.system(size: 36))
+                                .foregroundStyle(.primary.opacity(0.5))
+
+                            // Primary indicator
+                            if screen.isPrimary {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.yellow)
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
+                        Text(screen.name)
+                            .font(.caption2)
+                            .foregroundStyle(.primary.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Text("Select a Screen Below")
+                .font(.headline)
+                .foregroundStyle(.primary.opacity(0.7))
+            Text("Or record with just your camera")
+                .font(.caption)
+                .foregroundStyle(.primary.opacity(0.5))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.3))
+    }
+
     // MARK: - Studio Control Bar
 
     private var studioControlBar: some View {
         HStack(spacing: 16) {
-            // Left: Persona Selector (segmented)
+            // Left: Visual Source Toggle (Face/Avatar - both can be off for audio-only)
             HStack(spacing: 4) {
-                ForEach(Persona.allCases) { persona in
+                ForEach(VisualSource.allCases) { source in
+                    let isSelected = studioState.visualSource == source
                     Button {
-                        studioState.persona = persona
+                        studioState.toggleVisualSource(source)
                     } label: {
-                        Image(systemName: persona.icon)
+                        Image(systemName: source.icon)
                             .font(.system(size: 14))
                             .frame(width: 32, height: 32)
-                            .background(studioState.persona == persona ? Color.accentColor.opacity(0.3) : Color.clear)
+                            .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
                             .background(.regularMaterial)
                             .cornerRadius(6)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .stroke(studioState.persona == persona ? Color.accentColor : Color.clear, lineWidth: 1)
+                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
                             )
                     }
                     .buttonStyle(.plain)
-                    .help(persona.rawValue)
-                    .accessibilityIdentifier("Persona_\(persona.rawValue)")
+                    .help(isSelected ? "Disable \(source.rawValue)" : "Enable \(source.rawValue)")
+                    .accessibilityIdentifier("Source_\(source.rawValue)")
                 }
             }
 
-            // Stage Toggles
-            HStack(spacing: 8) {
-                // Screen Toggle
-                Button {
-                    enableScreen.toggle()
-                } label: {
-                    Image(systemName: "desktopcomputer")
-                        .font(.system(size: 14))
-                        .padding(8)
-                        .background(enableScreen ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(enableScreen ? Color.accentColor : Color.clear, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("Toggle_Screen")
-                .help("Toggle Screen Share")
+            // Screen Selection
+            HStack(spacing: 4) {
+                ForEach(viewModel.availableScreens) { screen in
+                    let isSelected = enableScreen && viewModel.selectedScreenID == screen.displayID
+                    Button {
+                        if isSelected {
+                            // Deselect (turn off screen share)
+                            enableScreen = false
+                        } else {
+                            // Select this screen
+                            viewModel.selectScreen(screen)
+                            enableScreen = true
+                        }
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: isSelected ? "rectangle.inset.filled.on.rectangle" : "desktopcomputer")
+                                .font(.system(size: 14))
+                                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                                .padding(8)
+                                .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+                                .background(.regularMaterial)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                                )
 
-                // Mic Toggle
+                            // Primary screen indicator (star badge)
+                            if screen.isPrimary {
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 8, height: 8)
+                                    .overlay(
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 5))
+                                            .foregroundColor(.black)
+                                    )
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("Screen_\(screen.id)")
+                    .help(screen.isPrimary ? "\(screen.name) (Primary)" : screen.name)
+                }
+            }
+
+            // Mic Toggle + Audio Meter
+            HStack(spacing: 8) {
                 Button {
                     viewModel.enableMicrophone.toggle()
                 } label: {
@@ -300,11 +366,17 @@ struct RecordView: View {
                 .accessibilityIdentifier("Toggle_Mic")
                 .help("Toggle Microphone")
 
-                // Audio Level Meter
+                // Audio Level Meter (green gradient)
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.gray.opacity(0.3))
                     Capsule()
-                        .fill(levelColor(for: viewModel.audioLevelPercentage()))
+                        .fill(
+                            LinearGradient(
+                                colors: [.green, .green.opacity(0.7)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .frame(width: 40 * viewModel.audioLevelPercentage())
                         .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
                 }
@@ -452,11 +524,11 @@ struct RecordView: View {
     // MARK: - Helpers
 
     private func syncViewModelState() {
-        // Derive camera/desktop state from persona and screen toggle
+        // Derive camera/desktop state from visual source and screen toggle
         viewModel.enableCamera = studioState.enableCamera
         viewModel.enableDesktop = enableScreen
 
-        if studioState.persona == .face {
+        if studioState.visualSource == .face {
             viewModel.bindPreviewStore(previewStore)
             // Refresh camera list and activate preview pipeline
             viewModel.refreshCameraDevices()

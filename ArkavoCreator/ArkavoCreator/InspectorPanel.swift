@@ -1,9 +1,9 @@
 import ArkavoKit
 import SwiftUI
 
-/// Context-aware right panel showing persona-specific settings
+/// Context-aware right panel showing source-specific settings
 struct InspectorPanel: View {
-    let persona: Persona
+    let visualSource: VisualSource?
     @Bindable var recordViewModel: RecordViewModel
     @ObservedObject var avatarViewModel: AvatarViewModel
     @Binding var isVisible: Bool
@@ -11,7 +11,7 @@ struct InspectorPanel: View {
 
     var body: some View {
         ScrollView {
-            switch persona {
+            switch visualSource {
             case .face:
                 FaceInspectorContent(viewModel: recordViewModel)
             case .avatar:
@@ -19,7 +19,8 @@ struct InspectorPanel: View {
                     viewModel: avatarViewModel,
                     onLoadModel: onLoadAvatarModel
                 )
-            case .audio:
+            case nil:
+                // Audio-only mode
                 AudioInspectorContent(viewModel: recordViewModel)
             }
         }

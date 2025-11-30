@@ -28,6 +28,10 @@ struct AvatarRecordView: View {
                 initializeRenderer()
                 renderer?.resume()
                 viewModel.activate()
+                // Auto-load last selected model
+                Task {
+                    await viewModel.autoLoadIfNeeded()
+                }
             }
             .onDisappear {
                 renderer?.pause()

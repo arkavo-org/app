@@ -116,6 +116,7 @@ public final class RecordingSession: Sendable {
     nonisolated(unsafe) public var enableMicrophone: Bool = true
     nonisolated(unsafe) public var enableDesktop: Bool = true
     nonisolated(unsafe) public var enableAvatar: Bool = false
+    nonisolated(unsafe) public var selectedDisplayID: CGDirectDisplayID?
 
     /// Computed input mode based on current toggle states
     public var inputMode: RecordingInputMode {
@@ -211,7 +212,7 @@ public final class RecordingSession: Sendable {
 
         // Start screen capture if desktop recording is enabled
         if mode.needsDesktop {
-            try screenCapture.startCapture()
+            try screenCapture.startCapture(displayID: selectedDisplayID)
         }
 
         if mode.needsCamera {
@@ -473,7 +474,7 @@ public final class RecordingSession: Sendable {
     /// Starts screen capture purely for preview purposes (no recording).
     public func startScreenPreview() throws {
         isScreenPreviewOnly = true
-        try screenCapture.startCapture()
+        try screenCapture.startCapture(displayID: selectedDisplayID)
     }
 
     /// Stops screen preview capture.

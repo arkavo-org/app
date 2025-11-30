@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// Persona represents the creator's on-screen identity
-/// This is set once and persisted - not changed during a session
-enum Persona: String, CaseIterable, Identifiable, Codable {
+/// Visual source represents what's shown in the PIP
+enum VisualSource: String, CaseIterable, Identifiable, Codable {
     case face = "Face"
     case avatar = "Avatar"
-    case audio = "Audio"
 
     var id: String { rawValue }
 
@@ -13,7 +11,6 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .face: return "person.fill"
         case .avatar: return "sparkles"
-        case .audio: return "waveform"
         }
     }
 
@@ -21,7 +18,6 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .face: return "Show your camera feed"
         case .avatar: return "Use VRM avatar with face tracking"
-        case .audio: return "Audio-only podcast mode"
         }
     }
 }
@@ -42,18 +38,22 @@ enum OutputMode: String, CaseIterable, Identifiable, Codable {
 }
 
 /// Persisted studio preferences
-/// Identity (Persona) is set once and rarely changes
+/// Visual source (Face/Avatar) is toggleable - can be none for audio-only
 /// Stage controls (Screen/Mic) remain runtime state in RecordViewModel
 @MainActor
 @Observable
 final class StudioState {
     static let shared = StudioState()
 
-    // MARK: - Persisted Identity
+    // MARK: - Persisted Visual Source (nil = audio only)
 
-    var persona: Persona {
+    var visualSource: VisualSource? {
         didSet {
-            UserDefaults.standard.set(persona.rawValue, forKey: "studio.persona")
+            if let source = visualSource {
+                UserDefaults.standard.set(source.rawValue, forKey: "studio.visualSource")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "studio.visualSource")
+            }
         }
     }
 
@@ -81,12 +81,13 @@ final class StudioState {
 
     private init() {
         // Load persisted values
-        if let personaRaw = UserDefaults.standard.string(forKey: "studio.persona"),
-           let persona = Persona(rawValue: personaRaw)
+        if let sourceRaw = UserDefaults.standard.string(forKey: "studio.visualSource"),
+           let source = VisualSource(rawValue: sourceRaw)
         {
-            self.persona = persona
+            self.visualSource = source
         } else {
-            persona = .face
+            // Default to face
+            visualSource = .face
         }
 
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")
@@ -103,18 +104,29 @@ final class StudioState {
 
     // MARK: - Computed Properties
 
-    /// Whether camera should be enabled based on persona
+    /// Whether camera should be enabled
     var enableCamera: Bool {
-        persona == .face
+        visualSource == .face
     }
 
-    /// Whether avatar should be enabled based on persona
+    /// Whether avatar should be enabled
     var enableAvatar: Bool {
-        persona == .avatar
+        visualSource == .avatar
     }
 
-    /// Whether this is audio-only mode
+    /// Whether this is audio-only mode (no visual source selected)
     var isAudioOnly: Bool {
-        persona == .audio
+        visualSource == nil
+    }
+
+    // MARK: - Actions
+
+    /// Toggle a visual source on/off
+    func toggleVisualSource(_ source: VisualSource) {
+        if visualSource == source {
+            visualSource = nil  // Deselect -> audio only
+        } else {
+            visualSource = source  // Select this source
+        }
     }
 }

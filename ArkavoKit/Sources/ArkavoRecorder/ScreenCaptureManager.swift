@@ -55,15 +55,13 @@ public final class ScreenCaptureManager: NSObject, Sendable {
 
     // MARK: - Public Methods
 
-    /// Starts screen capture for the main display
-    public func startCapture() throws {
+    /// Starts screen capture for the specified display (or main display if nil)
+    public func startCapture(displayID: CGDirectDisplayID? = nil) throws {
         #if os(macOS)
-        guard let mainDisplay = CGMainDisplayID() as CGDirectDisplayID? else {
-            throw RecorderError.screenCaptureUnavailable
-        }
+        let targetDisplay = displayID ?? CGMainDisplayID()
 
         // Create screen input
-        guard let input = AVCaptureScreenInput(displayID: mainDisplay) else {
+        guard let input = AVCaptureScreenInput(displayID: targetDisplay) else {
             throw RecorderError.screenCaptureUnavailable
         }
 
@@ -112,15 +110,24 @@ public final class ScreenCaptureManager: NSObject, Sendable {
         }
     }
 
-    /// Returns available screens
+    /// Returns available screens with display IDs
     public static func availableScreens() -> [ScreenInfo] {
         #if os(macOS)
+        let mainDisplayID = CGMainDisplayID()
         let displays = NSScreen.screens
-        return displays.enumerated().map { index, screen in
-            ScreenInfo(
+
+        return displays.enumerated().compactMap { index, screen in
+            // Get the display ID from the screen's deviceDescription
+            guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+                return nil
+            }
+
+            return ScreenInfo(
                 id: index,
+                displayID: screenNumber,
                 name: screen.localizedName,
-                bounds: screen.frame
+                bounds: screen.frame,
+                isPrimary: screenNumber == mainDisplayID
             )
         }
         #else
@@ -145,10 +152,20 @@ extension ScreenCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate {
 
 // MARK: - Supporting Types
 
-public struct ScreenInfo: Sendable {
+public struct ScreenInfo: Sendable, Identifiable, Hashable {
     public let id: Int
+    public let displayID: CGDirectDisplayID
     public let name: String
     public let bounds: CGRect
+    public let isPrimary: Bool
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(displayID)
+    }
+
+    public static func == (lhs: ScreenInfo, rhs: ScreenInfo) -> Bool {
+        lhs.displayID == rhs.displayID
+    }
 }
 
 #endif
