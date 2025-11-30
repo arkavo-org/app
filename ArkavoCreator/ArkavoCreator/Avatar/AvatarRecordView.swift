@@ -54,20 +54,18 @@ struct AvatarRecordView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Tracking overlays (controlled via Inspector)
-            if !isTransparent {
-                VStack(alignment: .trailing, spacing: 8) {
-                    // Body tracking skeleton visualization
-                    if showBodyTracking {
-                        SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
-                    }
-
-                    // Face tracking blend shape visualization
-                    if showFaceTracking {
-                        FaceDebugView(blendShapes: viewModel.latestFaceBlendShapes)
-                    }
+            VStack(alignment: .trailing, spacing: 8) {
+                // Body tracking skeleton visualization
+                if showBodyTracking {
+                    SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
                 }
-                .padding(16)
+
+                // Face tracking blend shape visualization
+                if showFaceTracking {
+                    FaceDebugView(blendShapes: viewModel.latestFaceBlendShapes)
+                }
             }
+            .padding(16)
         }
     }
 
