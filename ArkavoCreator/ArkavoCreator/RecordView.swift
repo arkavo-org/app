@@ -549,6 +549,7 @@ struct RecordView: View {
     private func syncViewModelState() {
         // Derive camera/desktop state from visual source and screen toggle
         viewModel.enableCamera = studioState.enableCamera
+        viewModel.enableAvatar = studioState.enableAvatar
         viewModel.enableDesktop = enableScreen
 
         if studioState.visualSource == .face {

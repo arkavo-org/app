@@ -24,6 +24,7 @@ final class RecordViewModel {
     var enableCamera: Bool = true
     var enableMicrophone: Bool = true
     var enableDesktop: Bool = true
+    var enableAvatar: Bool = false
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -51,7 +52,7 @@ final class RecordViewModel {
 
     /// Validation: at least one input must be enabled to start recording
     var canStartRecording: Bool {
-        enableDesktop || enableCamera || enableMicrophone
+        enableDesktop || enableCamera || enableAvatar || enableMicrophone
     }
 
     // Timer for updating duration
@@ -107,6 +108,7 @@ final class RecordViewModel {
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
+            session.enableAvatar = enableAvatar
             session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
@@ -265,6 +267,7 @@ final class RecordViewModel {
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
+            session.enableAvatar = enableAvatar
             session.cameraLayoutStrategy = resolvedCameraLayout()
 
             if enableCamera {

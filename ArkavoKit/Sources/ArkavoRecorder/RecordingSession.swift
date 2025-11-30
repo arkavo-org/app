@@ -334,9 +334,18 @@ public final class RecordingSession: Sendable {
         guard mode.needsDesktop else { return }
 
         let cameraLayers = await MainActor.run { self.cameraLayersForComposition() }
+
+        // Get avatar texture if avatar mode is enabled
+        let avatarTexture: CVPixelBuffer? = if enableAvatar, let provider = avatarTextureProvider {
+            provider()
+        } else {
+            nil
+        }
+
         guard let composited = compositor.composite(
             screen: screenBuffer,
-            cameraLayers: cameraLayers
+            cameraLayers: cameraLayers,
+            avatarTexture: avatarTexture
         ) else {
             return
         }

@@ -60,7 +60,8 @@ public final class CompositorManager: Sendable {
     /// Composites screen and camera frames into a single frame with PiP layout
     public func composite(
         screen screenBuffer: CMSampleBuffer,
-        cameraLayers: [CameraLayer]
+        cameraLayers: [CameraLayer],
+        avatarTexture: CVPixelBuffer? = nil
     ) -> CVPixelBuffer? {
         // Get screen image buffer
         guard let screenPixelBuffer = CMSampleBufferGetImageBuffer(screenBuffer) else {
@@ -70,7 +71,12 @@ public final class CompositorManager: Sendable {
         let screenImage = CIImage(cvPixelBuffer: screenPixelBuffer)
         let screenSize = screenImage.extent.size
 
-        return compositeWithBase(baseImage: screenImage, screenSize: screenSize, cameraLayers: cameraLayers)
+        return compositeWithBase(
+            baseImage: screenImage,
+            screenSize: screenSize,
+            cameraLayers: cameraLayers,
+            avatarTexture: avatarTexture
+        )
     }
 
     /// Composites camera frames without a screen base layer (camera-only mode)
@@ -116,9 +122,48 @@ public final class CompositorManager: Sendable {
     private func compositeWithBase(
         baseImage: CIImage,
         screenSize: CGSize,
-        cameraLayers: [CameraLayer]
+        cameraLayers: [CameraLayer],
+        avatarTexture: CVPixelBuffer? = nil
     ) -> CVPixelBuffer? {
         var composited = baseImage
+
+        // Add avatar as PiP overlay if provided
+        if let avatarBuffer = avatarTexture {
+            let avatarImage = CIImage(cvPixelBuffer: avatarBuffer)
+
+            // Calculate PiP dimensions for avatar (treat as single overlay)
+            let totalOverlays = cameraLayers.count + 1
+            let pipSize = pipSize(for: screenSize, cameraCount: totalOverlays)
+
+            // Scale avatar to PiP size maintaining aspect ratio
+            let avatarAspect = avatarImage.extent.width / avatarImage.extent.height
+            let pipAspect = pipSize.width / pipSize.height
+
+            var scaledAvatarSize = pipSize
+            if avatarAspect > pipAspect {
+                scaledAvatarSize.height = pipSize.width / avatarAspect
+            } else {
+                scaledAvatarSize.width = pipSize.height * avatarAspect
+            }
+
+            let scaleX = scaledAvatarSize.width / avatarImage.extent.width
+            let scaleY = scaledAvatarSize.height / avatarImage.extent.height
+            let scaledAvatar = avatarImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+
+            // Position avatar at the configured PiP position (first position)
+            let position = calculatePiPPosition(
+                screenSize: screenSize,
+                pipSize: scaledAvatarSize,
+                position: pipPosition
+            )
+
+            let positionedAvatar = scaledAvatar.transformed(by: CGAffineTransform(translationX: position.x, y: position.y))
+
+            // Add rounded corners and effects
+            let avatarWithEffects = addPiPEffects(to: positionedAvatar, size: scaledAvatarSize)
+
+            composited = avatarWithEffects.composited(over: composited)
+        }
 
         for (index, layer) in cameraLayers.enumerated() {
             guard let cameraPixelBuffer = CMSampleBufferGetImageBuffer(layer.buffer) else {
