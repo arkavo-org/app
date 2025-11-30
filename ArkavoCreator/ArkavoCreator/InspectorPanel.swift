@@ -108,12 +108,42 @@ struct AvatarInspectorContent: View {
             // Section: Tracking Overlays
             sectionHeader("Tracking")
 
-            VStack(spacing: 8) {
-                Toggle("Body Tracking", isOn: $showBodyTracking)
-                    .toggleStyle(.switch)
+            HStack(spacing: 8) {
+                // Body Tracking Toggle
+                Button {
+                    showBodyTracking.toggle()
+                } label: {
+                    Image(systemName: "figure.walk")
+                        .font(.system(size: 16))
+                        .frame(width: 36, height: 36)
+                        .background(showBodyTracking ? Color.accentColor.opacity(0.3) : Color.clear)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(showBodyTracking ? Color.accentColor : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Body Tracking Overlay")
 
-                Toggle("Face Tracking", isOn: $showFaceTracking)
-                    .toggleStyle(.switch)
+                // Face Tracking Toggle
+                Button {
+                    showFaceTracking.toggle()
+                } label: {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 16))
+                        .frame(width: 36, height: 36)
+                        .background(showFaceTracking ? Color.accentColor.opacity(0.3) : Color.clear)
+                        .background(.regularMaterial)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(showFaceTracking ? Color.accentColor : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Face Tracking Overlay")
             }
 
             Divider()
