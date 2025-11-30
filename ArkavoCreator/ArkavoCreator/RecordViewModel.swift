@@ -451,6 +451,15 @@ final class RecordViewModel {
 
     func bindPreviewStore(_ store: CameraPreviewStore) {
         previewStore = store
+        // Always update the preview handler on the session if it exists
+        if let session = recordingSession {
+            session.previewHandler = { [weak store] event in
+                guard let store else { return }
+                Task { @MainActor in
+                    store.update(with: event)
+                }
+            }
+        }
         Task {
             try? activatePreviewPipeline()
         }

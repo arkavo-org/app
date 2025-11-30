@@ -21,7 +21,7 @@ struct RecordView: View {
     @State private var lastPipOffset: CGSize = .zero
 
     // Shared state (not part of init)
-    private var previewStore: CameraPreviewStore { CameraPreviewStore.shared }
+    @ObservedObject private var previewStore = CameraPreviewStore.shared
     private var studioState: StudioState { StudioState.shared }
 
     var body: some View {
