@@ -61,29 +61,14 @@ struct AvatarRecordView: View {
                         SkeletonDebugView(skeleton: viewModel.latestBodySkeleton)
                     }
 
-                    // Face tracking status indicator
+                    // Face tracking blend shape visualization
                     if showFaceTracking {
-                        faceTrackingIndicator
+                        FaceDebugView(blendShapes: viewModel.latestFaceBlendShapes)
                     }
                 }
                 .padding(16)
             }
         }
-    }
-
-    /// Face tracking status indicator
-    private var faceTrackingIndicator: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "face.smiling")
-                .font(.caption)
-            Text(viewModel.faceTrackingStatus)
-                .font(.caption2)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .foregroundStyle(.secondary)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
     }
 
     private var placeholderView: some View {

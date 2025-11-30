@@ -36,6 +36,9 @@ class AvatarViewModel: ObservableObject {
     // Debug: Latest body skeleton for visualization
     @Published var latestBodySkeleton: ARKitBodySkeleton?
 
+    // Debug: Latest face blend shapes for visualization
+    @Published var latestFaceBlendShapes: ARKitFaceBlendShapes?
+
     // MARK: - Dependencies
 
     let downloader = VRMDownloader()
@@ -240,6 +243,9 @@ class AvatarViewModel: ObservableObject {
             let blendShapes = ARKitDataConverter.toARKitFaceBlendShapes(event)
             if let blendShapes {
                 source.update(blendShapes: blendShapes)
+
+                // Store for debug visualization
+                latestFaceBlendShapes = blendShapes
 
                 if shouldLog {
                     print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
