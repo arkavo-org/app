@@ -190,6 +190,14 @@ struct ArkavoCreatorApp: App {
         // uncomment Screenshots
 //        .defaultSize(width: 1280, height: 800)
 //        .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(after: .windowArrangement) {
+                Button("Stream Monitor") {
+                    StreamMonitorWindow.shared.toggle()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
+        }
     }
 }
 

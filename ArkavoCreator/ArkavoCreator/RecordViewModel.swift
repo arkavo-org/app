@@ -2,8 +2,10 @@
 // import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
+import CoreVideo
 import Foundation
 import SwiftUI
+import VideoToolbox
 
 @MainActor
 @Observable
@@ -132,6 +134,9 @@ final class RecordViewModel {
 
             // Start duration timer
             startTimer()
+
+            // Start stream monitor tracking
+            StreamMonitorViewModel.shared.startMonitoring()
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             RecordingState.shared.setRecordingSession(nil)
@@ -165,6 +170,9 @@ final class RecordViewModel {
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
             try? activatePreviewPipeline()
+
+            // Stop stream monitor tracking
+            StreamMonitorViewModel.shared.stopMonitoring()
         } catch let error as RecorderError {
             print("❌ RecorderError during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
@@ -492,6 +500,23 @@ final class RecordViewModel {
                 }
             }
         }
+
+        // Wire up monitor frame handler for Stream Monitor window
+        // Note: CVPixelBuffer is not Sendable, but we process it immediately for conversion
+        session.monitorFrameHandler = { @Sendable pixelBuffer, timestamp in
+            // Convert to CGImage on this thread to avoid data race
+            var cgImage: CGImage?
+            let status = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
+            guard status == noErr, let cgImage else { return }
+
+            let width = CVPixelBufferGetWidth(pixelBuffer)
+            let height = CVPixelBufferGetHeight(pixelBuffer)
+
+            Task { @MainActor in
+                StreamMonitorViewModel.shared.receiveFrame(cgImage, width: width, height: height, timestamp: timestamp)
+            }
+        }
+
         recordingSession = session
         return session
     }

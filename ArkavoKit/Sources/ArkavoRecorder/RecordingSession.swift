@@ -155,6 +155,8 @@ public final class RecordingSession: Sendable {
     public var previewHandler: (@Sendable (CameraPreviewEvent) -> Void)?
     nonisolated(unsafe) public var screenPreviewHandler: (@Sendable (CGImage) -> Void)?
     public var remoteSourcesHandler: (@Sendable ([String]) -> Void)?
+    /// Handler for monitor frames - receives the final composed frame before encoding
+    nonisolated(unsafe) public var monitorFrameHandler: (@Sendable (CVPixelBuffer, CMTime) -> Void)?
     nonisolated(unsafe) private var isScreenPreviewOnly: Bool = false
 
     // MARK: - Initialization
@@ -341,6 +343,10 @@ public final class RecordingSession: Sendable {
 
         // Encode the composited frame
         let timestamp = CMSampleBufferGetPresentationTimeStamp(screenBuffer)
+
+        // Send to monitor if handler is set
+        monitorFrameHandler?(composited, timestamp)
+
         await encoder.encodeVideoFrame(composited, timestamp: timestamp)
     }
 
@@ -387,6 +393,10 @@ public final class RecordingSession: Sendable {
         }
 
         guard let output = composited else { return }
+
+        // Send to monitor if handler is set
+        monitorFrameHandler?(output, timestamp)
+
         await encoder.encodeVideoFrame(output, timestamp: timestamp)
     }
 
