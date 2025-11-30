@@ -1,8 +1,11 @@
-import ArkavoC2PA
+// C2PA support temporarily disabled
+// import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
+import CoreVideo
 import Foundation
 import SwiftUI
+import VideoToolbox
 
 @MainActor
 @Observable
@@ -21,6 +24,8 @@ final class RecordViewModel {
     var enableCamera: Bool = true
     var enableMicrophone: Bool = true
     var enableDesktop: Bool = true
+    var enableAvatar: Bool = false
+    var avatarTextureProvider: (@Sendable () -> CVPixelBuffer?)?
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -32,8 +37,10 @@ final class RecordViewModel {
     private var hasInitializedSession = false
     private var remoteCameraServer: RemoteCameraServer?
 
-    // Desktop preview
+    // Desktop/Screen selection
     var desktopPreviewImage: NSImage?
+    var availableScreens: [ScreenInfo] = []
+    var selectedScreenID: CGDirectDisplayID?
 
     // Watermark configuration (always enabled, no UI toggle)
     var watermarkEnabled: Bool = true
@@ -46,7 +53,7 @@ final class RecordViewModel {
 
     /// Validation: at least one input must be enabled to start recording
     var canStartRecording: Bool {
-        enableDesktop || enableCamera || enableMicrophone
+        enableDesktop || enableCamera || enableAvatar || enableMicrophone
     }
 
     // Timer for updating duration
@@ -57,6 +64,34 @@ final class RecordViewModel {
     init() {
         generateDefaultTitle()
         refreshCameraDevices()
+        refreshScreenDevices()
+    }
+
+    // MARK: - Screen Selection
+
+    func refreshScreenDevices() {
+        availableScreens = ScreenCaptureManager.availableScreens()
+        // Auto-select primary screen if nothing selected
+        if selectedScreenID == nil {
+            selectedScreenID = availableScreens.first(where: { $0.isPrimary })?.displayID
+                ?? availableScreens.first?.displayID
+        }
+    }
+
+    func selectScreen(_ screen: ScreenInfo) {
+        selectedScreenID = screen.displayID
+        // Restart preview with new screen if desktop is enabled
+        if enableDesktop, let session = recordingSession {
+            // Stop current capture and restart with new display
+            session.stopScreenPreview()
+            session.selectedDisplayID = selectedScreenID
+            session.screenPreviewHandler = { [weak self] cgImage in
+                Task { @MainActor in
+                    self?.desktopPreviewImage = NSImage(cgImage: cgImage, size: .zero)
+                }
+            }
+            try? session.startScreenPreview()
+        }
     }
 
     // MARK: - Recording Control
@@ -74,6 +109,12 @@ final class RecordViewModel {
             session.enableCamera = enableCamera
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
+            session.enableAvatar = enableAvatar
+            if enableAvatar, let provider = avatarTextureProvider {
+                session.avatarTextureProvider = provider
+            }
+            print("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL")")
+            session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
             session.watermarkOpacity = watermarkOpacity
@@ -100,6 +141,9 @@ final class RecordViewModel {
 
             // Start duration timer
             startTimer()
+
+            // Start stream monitor tracking
+            StreamMonitorViewModel.shared.startMonitoring()
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             RecordingState.shared.setRecordingSession(nil)
@@ -117,10 +161,9 @@ final class RecordViewModel {
             let outputURL = try await session.stopRecording()
             print("✅ Recording session stopped, output at: \(outputURL.path)")
 
-            // Sign with C2PA
-            print("🔏 Signing recording with C2PA...")
-            let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
-            print("✅ Recording signed successfully: \(signedURL.path)")
+            // C2PA signing disabled temporarily to fix race condition issues
+            // TODO: Re-enable C2PA signing after file validation is added
+            // let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
 
             isRecording = false
             isPaused = false
@@ -129,11 +172,14 @@ final class RecordViewModel {
             RecordingState.shared.setRecordingSession(nil)
 
             // Recording complete - saved successfully
-            print("✅ Recording saved and signed: \(signedURL.path)")
+            print("✅ Recording saved: \(outputURL.path)")
 
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
             try? activatePreviewPipeline()
+
+            // Stop stream monitor tracking
+            StreamMonitorViewModel.shared.stopMonitoring()
         } catch let error as RecorderError {
             print("❌ RecorderError during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
@@ -145,8 +191,9 @@ final class RecordViewModel {
         isProcessing = false
     }
 
-    // MARK: - C2PA Signing
-
+    // MARK: - C2PA Signing (Temporarily Disabled)
+    // TODO: Re-enable when c2patool is bundled with the app
+    /*
     private func signRecording(outputURL: URL, recordingTitle: String, recordingDuration: TimeInterval) async throws -> URL {
         // Build C2PA manifest
         var builder = C2PAManifestBuilder(title: recordingTitle)
@@ -187,6 +234,7 @@ final class RecordViewModel {
             return outputURL
         }
     }
+    */
 
     private func getMacModel() -> String {
         #if os(macOS)
@@ -213,6 +261,40 @@ final class RecordViewModel {
         session.resumeRecording()
         isPaused = false
         startTimer()
+    }
+
+    /// Creates a recording session for streaming without file recording.
+    /// This allows streaming to work independently of the record button.
+    func startPreviewSession() async {
+        do {
+            let session = try acquireRecordingSession()
+            session.pipPosition = pipPosition
+            session.enableCamera = enableCamera
+            session.enableMicrophone = enableMicrophone
+            session.enableDesktop = enableDesktop
+            session.enableAvatar = enableAvatar
+            session.cameraLayoutStrategy = resolvedCameraLayout()
+
+            if enableCamera {
+                ensureDefaultCameraSelection()
+                session.setCameraSources(selectedCameraIDs)
+            } else {
+                session.setCameraSources([])
+            }
+
+            // Register with shared state for streaming access
+            RecordingState.shared.setRecordingSession(session)
+
+            // Start camera/desktop preview (but not recording to file)
+            if enableCamera {
+                try session.startCameraPreview(for: selectedCameraIDs)
+            }
+            if enableDesktop {
+                try session.startScreenPreview()
+            }
+        } catch {
+            self.error = "Failed to start preview session: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Timer
@@ -250,10 +332,13 @@ final class RecordViewModel {
         // Create recordings directory if needed
         try FileManager.default.createDirectory(at: recordingsPath, withIntermediateDirectories: true)
 
-        // Generate filename
+        // Generate filename with appropriate extension based on recording mode
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let filename = "arkavo_recording_\(formatter.string(from: Date())).mov"
+        // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
+        let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
+        let ext = isAudioOnly ? "m4a" : "mov"
+        let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
 
         return recordingsPath.appendingPathComponent(filename)
     }
@@ -382,6 +467,15 @@ final class RecordViewModel {
 
     func bindPreviewStore(_ store: CameraPreviewStore) {
         previewStore = store
+        // Always update the preview handler on the session if it exists
+        if let session = recordingSession {
+            session.previewHandler = { [weak store] event in
+                guard let store else { return }
+                Task { @MainActor in
+                    store.update(with: event)
+                }
+            }
+        }
         Task {
             try? activatePreviewPipeline()
         }
@@ -389,32 +483,50 @@ final class RecordViewModel {
 
     @discardableResult
     private func acquireRecordingSession() throws -> RecordingSession {
-        if let session = recordingSession {
-            return session
-        }
-
-        let session = try RecordingSession()
-        session.metadataHandler = { event in
-            print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
-            NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
-            print("   └─ Notification posted: .cameraMetadataUpdated")
-        }
-        session.remoteSourcesHandler = { [weak self] sources in
-            Task { @MainActor in
-                self?.handleRemoteSourceUpdate(sources)
+        let session: RecordingSession
+        if let existing = recordingSession {
+            session = existing
+        } else {
+            session = try RecordingSession()
+            session.metadataHandler = { event in
+                print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
+                NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
+                print("   └─ Notification posted: .cameraMetadataUpdated")
             }
-        }
-        if previewStore == nil {
-            previewStore = CameraPreviewStore.shared
-        }
-        if let store = previewStore {
-            session.previewHandler = { event in
+            session.remoteSourcesHandler = { [weak self] sources in
                 Task { @MainActor in
-                    store.update(with: event)
+                    self?.handleRemoteSourceUpdate(sources)
                 }
             }
+            if previewStore == nil {
+                previewStore = CameraPreviewStore.shared
+            }
+            if let store = previewStore {
+                session.previewHandler = { event in
+                    Task { @MainActor in
+                        store.update(with: event)
+                    }
+                }
+            }
+            recordingSession = session
         }
-        recordingSession = session
+
+        // Always ensure monitor frame handler is set (may be called after session already exists)
+        // Note: CVPixelBuffer is not Sendable, but we process it immediately for conversion
+        session.monitorFrameHandler = { @Sendable pixelBuffer, timestamp in
+            // Convert to CGImage on this thread to avoid data race
+            var cgImage: CGImage?
+            let status = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
+            guard status == noErr, let cgImage else { return }
+
+            let width = CVPixelBufferGetWidth(pixelBuffer)
+            let height = CVPixelBufferGetHeight(pixelBuffer)
+
+            Task { @MainActor in
+                StreamMonitorViewModel.shared.receiveFrame(cgImage, width: width, height: height, timestamp: timestamp)
+            }
+        }
+
         return session
     }
 
@@ -453,6 +565,9 @@ final class RecordViewModel {
         guard let session = recordingSession else { return }
 
         if enableDesktop {
+            // Set selected display before starting preview
+            session.selectedDisplayID = selectedScreenID
+
             // Set up preview handler
             session.screenPreviewHandler = { [weak self] cgImage in
                 Task { @MainActor in

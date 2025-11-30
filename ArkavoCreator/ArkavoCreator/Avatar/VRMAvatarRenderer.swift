@@ -718,7 +718,7 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         renderPassDescriptor.colorAttachments[0].loadAction = .clear
         renderPassDescriptor.colorAttachments[0].storeAction = .store
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(
-            red: 0, green: 0.8, blue: 0, alpha: 1 // Green screen background
+            red: 0, green: 0, blue: 0, alpha: 0 // Transparent background for compositing
         )
 
         renderPassDescriptor.depthAttachment.texture = depthTexture

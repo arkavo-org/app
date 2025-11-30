@@ -18,22 +18,35 @@ class AvatarViewModel: ObservableObject {
 
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
-    @Published var selectedModelURL: URL?
-    @Published var backgroundColor: Color = .green
+    @Published var selectedModelURL: URL? {
+        didSet {
+            // Persist selection
+            if let url = selectedModelURL {
+                UserDefaults.standard.set(url.path, forKey: "lastSelectedAvatarModelPath")
+            }
+        }
+    }
+    @Published var backgroundColor: Color = .black
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
     @Published var isLoading = false
     @Published var faceTrackingStatus: String = "Awaiting face metadata"
+    @Published private(set) var isModelLoaded = false
 
     // Debug: Latest body skeleton for visualization
     @Published var latestBodySkeleton: ARKitBodySkeleton?
+
+    // Debug: Latest face blend shapes for visualization
+    @Published var latestFaceBlendShapes: ARKitFaceBlendShapes?
 
     // MARK: - Dependencies
 
     let downloader = VRMDownloader()
 
-    weak var renderer: VRMAvatarRenderer?
+    /// The VRM renderer - owned by the view model to ensure stable lifecycle during recording
+    private(set) var renderer: VRMAvatarRenderer?
     private var metadataObserver: MetadataObserverToken?
+    private var hasAttemptedAutoLoad = false
 
     // VRM frame capture for recording
     private var captureManager: VRMFrameCaptureManager?
@@ -93,7 +106,18 @@ class AvatarViewModel: ObservableObject {
         }
         downloadedModels = models.sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        // Auto-select first model if none selected
+        // Restore last selected model from persistence
+        if selectedModelURL == nil,
+           let savedPath = UserDefaults.standard.string(forKey: "lastSelectedAvatarModelPath") {
+            let savedURL = URL(fileURLWithPath: savedPath)
+            // Only restore if the file still exists
+            if downloadedModels.contains(savedURL) {
+                selectedModelURL = savedURL
+                print("[AvatarViewModel] Restored last selected model: \(savedURL.lastPathComponent)")
+            }
+        }
+
+        // Fallback: Auto-select first model if none selected
         if selectedModelURL == nil, let first = downloadedModels.first {
             selectedModelURL = first
         }
@@ -130,6 +154,43 @@ class AvatarViewModel: ObservableObject {
 
     func attachRenderer(_ renderer: VRMAvatarRenderer?) {
         self.renderer = renderer
+    }
+
+    /// Load the currently selected VRM model into the renderer
+    func loadSelectedModel() async {
+        guard let url = selectedModelURL, let renderer else {
+            error = "No model selected or renderer not available"
+            return
+        }
+
+        isLoading = true
+        error = nil
+
+        do {
+            try await renderer.loadModel(from: url)
+            isModelLoaded = true
+            print("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
+        } catch {
+            self.error = "Failed to load model: \(error.localizedDescription)"
+            isModelLoaded = false
+        }
+
+        isLoading = false
+    }
+
+    /// Auto-load the last selected model if available (called when avatar mode activates)
+    func autoLoadIfNeeded() async {
+        // Only attempt auto-load once per session and if we have a selection
+        guard !hasAttemptedAutoLoad,
+              !isModelLoaded,
+              selectedModelURL != nil,
+              renderer != nil else {
+            return
+        }
+
+        hasAttemptedAutoLoad = true
+        print("[AvatarViewModel] Auto-loading last selected model...")
+        await loadSelectedModel()
     }
 
     // MARK: - Lifecycle Management
@@ -183,6 +244,9 @@ class AvatarViewModel: ObservableObject {
             let blendShapes = ARKitDataConverter.toARKitFaceBlendShapes(event)
             if let blendShapes {
                 source.update(blendShapes: blendShapes)
+
+                // Store for debug visualization
+                latestFaceBlendShapes = blendShapes
 
                 if shouldLog {
                     print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
@@ -382,5 +446,43 @@ class AvatarViewModel: ObservableObject {
     /// Stop capturing avatar frames
     func stopCapture() {
         captureManager?.stopCapture()
+    }
+
+    /// Returns a texture provider closure for use with RecordingSession
+    /// Ensures capture is started and returns the latest frame
+    func getTextureProvider() -> (@Sendable () -> CVPixelBuffer?)? {
+        // Create capture manager if needed
+        if captureManager == nil {
+            guard let renderer else {
+                print("[AvatarViewModel] getTextureProvider: No renderer available")
+                return nil
+            }
+
+            do {
+                guard let device = MTLCreateSystemDefaultDevice() else {
+                    print("[AvatarViewModel] getTextureProvider: Failed to create Metal device")
+                    return nil
+                }
+                captureManager = try VRMFrameCaptureManager(device: device)
+                captureManager?.renderer = renderer
+                print("[AvatarViewModel] getTextureProvider: Created capture manager")
+            } catch {
+                print("[AvatarViewModel] getTextureProvider: Failed to create capture manager: \(error)")
+                return nil
+            }
+        }
+
+        guard let manager = captureManager else {
+            print("[AvatarViewModel] getTextureProvider: No capture manager")
+            return nil
+        }
+
+        // Start capture if not already running
+        manager.startCapture()
+
+        print("[AvatarViewModel] getTextureProvider: Returning provider")
+        return { [weak manager] in
+            manager?.latestFrame
+        }
     }
 }

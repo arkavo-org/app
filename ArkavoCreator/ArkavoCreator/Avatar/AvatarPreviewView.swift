@@ -22,17 +22,20 @@ struct AvatarPreviewView: NSViewRepresentable {
         mtkView.enableSetNeedsDisplay = false
         mtkView.isPaused = false
 
+        // Enable transparency support
+        mtkView.layer?.isOpaque = false
+
         // Set background color (convert to RGB colorspace first)
         if let rgbColor = NSColor(backgroundColor).usingColorSpace(.deviceRGB) {
             mtkView.clearColor = MTLClearColor(
                 red: Double(rgbColor.redComponent),
                 green: Double(rgbColor.greenComponent),
                 blue: Double(rgbColor.blueComponent),
-                alpha: Double(rgbColor.alphaComponent),
+                alpha: Double(rgbColor.alphaComponent)
             )
         } else {
-            // Fallback to green if conversion fails
-            mtkView.clearColor = MTLClearColor(red: 0, green: 1, blue: 0, alpha: 1)
+            // Fallback to transparent if conversion fails
+            mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         }
 
         // Enable depth testing

@@ -20,23 +20,23 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(selectedSection: $selectedSection,
-                    patreonClient: patreonClient,
-                    redditClient: redditClient,
-                    blueskyClient: blueskyClient,
-                    youtubeClient: youtubeClient)
+            Sidebar(
+                selectedSection: $selectedSection,
+                patreonClient: patreonClient,
+                redditClient: redditClient,
+                blueskyClient: blueskyClient,
+                youtubeClient: youtubeClient
+            )
         } detail: {
-            VStack(spacing: 0) {
-                SectionContainer(
-                    selectedSection: selectedSection,
-                    patreonClient: patreonClient,
-                    redditClient: redditClient,
-                    micropubClient: micropubClient,
-                    blueskyClient: blueskyClient,
-                    youtubeClient: youtubeClient,
-                    twitchClient: twitchClient,
-                )
-            }
+            SectionContainer(
+                selectedSection: selectedSection,
+                patreonClient: patreonClient,
+                redditClient: redditClient,
+                micropubClient: micropubClient,
+                blueskyClient: blueskyClient,
+                youtubeClient: youtubeClient,
+                twitchClient: twitchClient
+            )
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
             .toolbar {
@@ -99,12 +99,11 @@ struct ContentView: View {
 
 enum NavigationSection: String, CaseIterable, Codable {
     case dashboard = "Dashboard"
-    case record = "Record"
-    case stream = "Stream"
+    case studio = "Studio"
     case library = "Library"
     case workflow = "Workflow"
     case patrons = "Patron Management"
-    case protection = "Content Protection"
+    case protection = "Protection"
     case social = "Marketing"
     case settings = "Settings"
 
@@ -119,8 +118,7 @@ enum NavigationSection: String, CaseIterable, Codable {
     var systemImage: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .record: "record.circle"
-        case .stream: "antenna.radiowaves.left.and.right"
+        case .studio: "video.bubble.left.fill"
         case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
         case .patrons: "person.2.circle"
@@ -133,12 +131,11 @@ enum NavigationSection: String, CaseIterable, Codable {
     var subtitle: String {
         switch self {
         case .dashboard: "Overview"
-        case .record: "Screen + Camera + Audio Recording"
-        case .stream: "Live Streaming to Twitch, YouTube & More"
+        case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
         case .patrons: "Manage Your Community"
-        case .protection: "Content Security"
+        case .protection: "Protection"
         case .social: "Share Your Content"
         case .settings: "App Settings"
         }
@@ -511,14 +508,10 @@ struct SectionContainer: View {
                 PatronManagementView(patreonClient: patreonClient)
                     .transition(.moveAndFade())
                     .id("patrons")
-            case .record:
-                RecordView()
+            case .studio:
+                RecordView(youtubeClient: youtubeClient)
                     .transition(.moveAndFade())
-                    .id("record")
-            case .stream:
-                StreamView(youtubeClient: youtubeClient)
-                    .transition(.moveAndFade())
-                    .id("stream")
+                    .id("studio")
             case .library:
                 RecordingsLibraryView()
                     .transition(.moveAndFade())
@@ -752,7 +745,143 @@ extension AnyTransition {
     }
 }
 
-// MARK: - Sidebar View
+// MARK: - Icon Rail View (Compact Navigation)
+
+struct IconRail: View {
+    @EnvironmentObject private var appState: AppState
+    @Binding var selectedSection: NavigationSection
+    @ObservedObject var patreonClient: PatreonClient
+    @ObservedObject var redditClient: RedditClient
+    @ObservedObject var blueskyClient: BlueskyClient
+    @ObservedObject var youtubeClient: YouTubeClient
+    @State private var isCreator: Bool = false
+    @State private var isExpanded: Bool = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    var availableSections: [NavigationSection] {
+        var sections = NavigationSection.availableSections(isCreator: isCreator)
+        if !redditClient.isAuthenticated {
+            sections = sections.filter { $0 != .social }
+        }
+        return sections
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            // Main navigation items
+            ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                IconRailButton(
+                    section: section,
+                    isSelected: selectedSection == section,
+                    isExpanded: isExpanded
+                ) {
+                    selectedSection = section
+                }
+            }
+
+            Spacer()
+
+            // Feedback button (if enabled)
+            if appState.isFeedbackEnabled {
+                Button {
+                    if let url = URL(string: "mailto:info@arkavo.com") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Image(systemName: "envelope")
+                        .font(.system(size: 18))
+                        .frame(width: 40, height: 40)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Send Feedback")
+            }
+
+            // Settings at bottom
+            IconRailButton(
+                section: .settings,
+                isSelected: selectedSection == .settings,
+                isExpanded: isExpanded
+            ) {
+                selectedSection = .settings
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .frame(width: isExpanded ? 160 : 56)
+        .background(.ultraThinMaterial)
+        .task {
+            if patreonClient.isAuthenticated {
+                isCreator = await patreonClient.isCreator()
+            }
+        }
+        .onChange(of: patreonClient.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                Task {
+                    isCreator = await patreonClient.isCreator()
+                }
+            } else {
+                isCreator = false
+                if selectedSection == .patrons {
+                    selectedSection = .dashboard
+                }
+            }
+        }
+        .onHover { hovering in
+            // Cancel any pending hover task
+            hoverTask?.cancel()
+
+            if hovering {
+                // Delay expansion to avoid accidental triggers
+                hoverTask = Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded = true
+                    }
+                }
+            } else {
+                // Collapse immediately when leaving
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded = false
+                }
+            }
+        }
+    }
+}
+
+/// Individual button in the icon rail
+private struct IconRailButton: View {
+    let section: NavigationSection
+    let isSelected: Bool
+    let isExpanded: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: isSelected ? section.systemImage + ".fill" : section.systemImage)
+                    .font(.system(size: 18, weight: isSelected ? .semibold : .regular))
+                    .frame(width: 24)
+
+                if isExpanded {
+                    Text(section.rawValue)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                }
+            }
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .frame(width: isExpanded ? 144 : 40, height: 40)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help(section.rawValue)
+    }
+}
+
+// MARK: - Legacy Sidebar View (for reference)
 
 struct Sidebar: View {
     @EnvironmentObject private var appState: AppState
@@ -906,6 +1035,8 @@ struct SettingsContent: View {
 
             Spacer()
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

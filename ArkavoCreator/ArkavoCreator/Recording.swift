@@ -1,7 +1,8 @@
 import Foundation
 import AVFoundation
 import AppKit
-import ArkavoC2PA
+// C2PA support temporarily disabled
+// import ArkavoC2PA
 
 // MARK: - Notification Names
 
@@ -100,10 +101,10 @@ final class RecordingsManager: ObservableObject {
                 options: [.skipsHiddenFiles]
             )
 
-            let movFiles = fileURLs.filter { $0.pathExtension == "mov" }
+            let mediaFiles = fileURLs.filter { $0.pathExtension == "mov" || $0.pathExtension == "m4a" }
 
             var loadedRecordings: [Recording] = []
-            for url in movFiles {
+            for url in mediaFiles {
                 guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
                       let fileSize = attributes[.size] as? Int64,
                       let creationDate = attributes[.creationDate] as? Date else {
@@ -178,18 +179,8 @@ final class RecordingsManager: ObservableObject {
     }
 
     func verifyC2PA(for recording: Recording) async -> Recording.C2PAStatus {
-        do {
-            let signer = try C2PASigner()
-            let result = try await signer.verify(file: recording.url)
-
-            if result.hasManifest {
-                return .signed(validatedAt: Date(), isValid: result.isValid)
-            } else {
-                return .unsigned
-            }
-        } catch {
-            print("Error verifying C2PA: \(error)")
-            return .unknown
-        }
+        // C2PA verification temporarily disabled - c2patool not available
+        // TODO: Re-enable when c2patool is bundled with the app
+        return .unsigned
     }
 }

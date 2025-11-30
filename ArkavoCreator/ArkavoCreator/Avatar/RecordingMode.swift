@@ -11,6 +11,7 @@ import Foundation
 enum RecordingMode: String, CaseIterable, Identifiable {
     case camera = "Camera"
     case avatar = "Avatar"
+    case stream = "Stream"
 
     var id: String { rawValue }
 
@@ -20,6 +21,8 @@ enum RecordingMode: String, CaseIterable, Identifiable {
             "video.fill"
         case .avatar:
             "person.fill"
+        case .stream:
+            "antenna.radiowaves.left.and.right"
         }
     }
 
@@ -29,6 +32,8 @@ enum RecordingMode: String, CaseIterable, Identifiable {
             "Record using your camera"
         case .avatar:
             "Record as a VRM avatar"
+        case .stream:
+            "Broadcast live stream"
         }
     }
 }
