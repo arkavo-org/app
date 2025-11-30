@@ -475,33 +475,35 @@ final class RecordViewModel {
 
     @discardableResult
     private func acquireRecordingSession() throws -> RecordingSession {
-        if let session = recordingSession {
-            return session
-        }
-
-        let session = try RecordingSession()
-        session.metadataHandler = { event in
-            print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
-            NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
-            print("   └─ Notification posted: .cameraMetadataUpdated")
-        }
-        session.remoteSourcesHandler = { [weak self] sources in
-            Task { @MainActor in
-                self?.handleRemoteSourceUpdate(sources)
+        let session: RecordingSession
+        if let existing = recordingSession {
+            session = existing
+        } else {
+            session = try RecordingSession()
+            session.metadataHandler = { event in
+                print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
+                NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
+                print("   └─ Notification posted: .cameraMetadataUpdated")
             }
-        }
-        if previewStore == nil {
-            previewStore = CameraPreviewStore.shared
-        }
-        if let store = previewStore {
-            session.previewHandler = { event in
+            session.remoteSourcesHandler = { [weak self] sources in
                 Task { @MainActor in
-                    store.update(with: event)
+                    self?.handleRemoteSourceUpdate(sources)
                 }
             }
+            if previewStore == nil {
+                previewStore = CameraPreviewStore.shared
+            }
+            if let store = previewStore {
+                session.previewHandler = { event in
+                    Task { @MainActor in
+                        store.update(with: event)
+                    }
+                }
+            }
+            recordingSession = session
         }
 
-        // Wire up monitor frame handler for Stream Monitor window
+        // Always ensure monitor frame handler is set (may be called after session already exists)
         // Note: CVPixelBuffer is not Sendable, but we process it immediately for conversion
         session.monitorFrameHandler = { @Sendable pixelBuffer, timestamp in
             // Convert to CGImage on this thread to avoid data race
@@ -517,7 +519,6 @@ final class RecordViewModel {
             }
         }
 
-        recordingSession = session
         return session
     }
 
