@@ -5,7 +5,6 @@ import SwiftUI
 /// Controls are now in InspectorPanel - this view is just the preview.
 struct AvatarRecordView: View {
     @ObservedObject var viewModel: AvatarViewModel
-    @State private var renderer: VRMAvatarRenderer?
     @State private var showError = false
 
     /// User preference to show body tracking overlay
@@ -25,8 +24,8 @@ struct AvatarRecordView: View {
                 Text(error)
             }
             .onAppear {
-                initializeRenderer()
-                renderer?.resume()
+                initializeRendererIfNeeded()
+                viewModel.renderer?.resume()
                 viewModel.activate()
                 // Auto-load last selected model
                 Task {
@@ -34,7 +33,7 @@ struct AvatarRecordView: View {
                 }
             }
             .onDisappear {
-                renderer?.pause()
+                viewModel.renderer?.pause()
                 viewModel.deactivate()
             }
     }
@@ -42,7 +41,7 @@ struct AvatarRecordView: View {
     private var previewPane: some View {
         ZStack(alignment: .topTrailing) {
             Group {
-                if let renderer {
+                if let renderer = viewModel.renderer {
                     AvatarPreviewView(
                         renderer: renderer,
                         backgroundColor: isTransparent ? .clear : viewModel.backgroundColor
@@ -82,15 +81,17 @@ struct AvatarRecordView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
-    private func initializeRenderer() {
+    /// Initialize renderer in the view model if not already created
+    private func initializeRendererIfNeeded() {
+        guard viewModel.renderer == nil else { return }
+
         guard let device = MTLCreateSystemDefaultDevice() else {
             viewModel.error = "Metal not available on this system"
             showError = true
             return
         }
 
-        renderer = VRMAvatarRenderer(device: device)
-        viewModel.attachRenderer(renderer)
+        viewModel.attachRenderer(VRMAvatarRenderer(device: device))
     }
 }
 

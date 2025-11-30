@@ -18,6 +18,10 @@ public final class ScreenCaptureManager: NSObject, Sendable {
 
     nonisolated(unsafe) public var onFrame: (@Sendable (CMSampleBuffer) -> Void)?
 
+    /// Continuation for async first-frame signaling
+    private var firstFrameContinuation: CheckedContinuation<Void, Never>?
+    private var hasDeliveredFirstFrame: Bool = false
+
     // MARK: - Initialization
 
     public override init() {
@@ -87,10 +91,37 @@ public final class ScreenCaptureManager: NSObject, Sendable {
 
         captureSession.commitConfiguration()
 
+        // Reset first frame tracking
+        hasDeliveredFirstFrame = false
+
         // Start the session
         Task {
             captureSession.startRunning()
         }
+        #else
+        throw RecorderError.screenCaptureUnavailable
+        #endif
+    }
+
+    /// Starts screen capture and waits for the first frame to be delivered
+    /// This ensures the screen capture is actually producing frames before returning
+    public func startCaptureAndWaitForFirstFrame(displayID: CGDirectDisplayID? = nil) async throws {
+        #if os(macOS)
+        // Start capture
+        try startCapture(displayID: displayID)
+
+        // Wait for first frame
+        await withCheckedContinuation { continuation in
+            if hasDeliveredFirstFrame {
+                // Already got a frame
+                continuation.resume()
+            } else {
+                // Store continuation to be resumed when first frame arrives
+                firstFrameContinuation = continuation
+            }
+        }
+
+        print("🖥️ [ScreenCaptureManager] First frame delivered, capture ready")
         #else
         throw RecorderError.screenCaptureUnavailable
         #endif
@@ -108,6 +139,10 @@ public final class ScreenCaptureManager: NSObject, Sendable {
             }
             captureSession.commitConfiguration()
         }
+
+        // Reset state
+        hasDeliveredFirstFrame = false
+        firstFrameContinuation = nil
     }
 
     /// Returns available screens with display IDs
@@ -134,6 +169,16 @@ public final class ScreenCaptureManager: NSObject, Sendable {
         return []
         #endif
     }
+
+    /// Signal that first frame was received (called from delegate on background queue)
+    private func signalFirstFrame() {
+        Task { @MainActor in
+            guard !self.hasDeliveredFirstFrame else { return }
+            self.hasDeliveredFirstFrame = true
+            self.firstFrameContinuation?.resume()
+            self.firstFrameContinuation = nil
+        }
+    }
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
@@ -147,6 +192,11 @@ extension ScreenCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Forward frame to handler - calling directly on callback queue
         // CMSampleBuffer is not Sendable but we handle it synchronously
         onFrame?(sampleBuffer)
+
+        // Signal first frame for async startup
+        Task { @MainActor [weak self] in
+            self?.signalFirstFrame()
+        }
     }
 }
 

@@ -43,7 +43,8 @@ class AvatarViewModel: ObservableObject {
 
     let downloader = VRMDownloader()
 
-    weak var renderer: VRMAvatarRenderer?
+    /// The VRM renderer - owned by the view model to ensure stable lifecycle during recording
+    private(set) var renderer: VRMAvatarRenderer?
     private var metadataObserver: MetadataObserverToken?
     private var hasAttemptedAutoLoad = false
 

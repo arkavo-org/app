@@ -66,6 +66,9 @@ public enum RecordingInputMode: String, Sendable, CaseIterable, Identifiable {
 public final class RecordingSession: Sendable {
     // MARK: - Properties
 
+    /// Registry for coordinating capture source readiness
+    private let sourceRegistry = CaptureSourceRegistry()
+
     private let screenCapture: ScreenCaptureManager
     private var cameraCaptures: [String: CameraManager]
     private var latestCameraMetadata: [String: CameraMetadata] = [:]
@@ -146,6 +149,9 @@ public final class RecordingSession: Sendable {
     /// Timer for driving frame capture in non-desktop modes
     nonisolated(unsafe) private var cameraFrameTimer: Timer?
 
+    /// Debug logging throttle
+    nonisolated(unsafe) private var lastDebugLogTime: Date?
+
     /// Standard canvas size for camera/avatar-only modes (1080p)
     private let standardCanvasSize = CGSize(width: 1920, height: 1080)
 
@@ -212,33 +218,83 @@ public final class RecordingSession: Sendable {
         // Clear preview-only mode so frames go to encoder
         isScreenPreviewOnly = false
 
-        // Start screen capture if desktop recording is enabled
+        // Clear any previous source registrations
+        await sourceRegistry.clear()
+
+        // STEP 1: Register all required capture sources
+        print("📋 [RecordingSession] Registering capture sources...")
+
+        // Register screen capture if desktop mode
         if mode.needsDesktop {
-            try screenCapture.startCapture(displayID: selectedDisplayID)
+            let displayID = selectedDisplayID
+            let screenSource = RegisteredSource(
+                sourceID: "screen",
+                sourceType: .screen,
+                start: { [screenCapture] in
+                    try await screenCapture.startCaptureAndWaitForFirstFrame(displayID: displayID)
+                }
+            )
+            await sourceRegistry.register(screenSource)
         }
 
-        if mode.needsCamera {
-            try startCameraCapturesIfNeeded()
+        // Register camera captures - check enableCamera directly, not mode.needsCamera
+        // This allows camera+avatar to work together in the multi-source architecture
+        if enableCamera {
+            try await registerCameraSources()
         }
 
+        // Register avatar capture if enabled
+        print("🎭 [RecordingSession] Avatar check: enableAvatar=\(enableAvatar), provider=\(avatarTextureProvider != nil ? "SET" : "NIL")")
+        if enableAvatar, let provider = avatarTextureProvider {
+            let avatarSource = RegisteredSource(
+                sourceID: "avatar",
+                sourceType: .avatar,
+                start: {
+                    try await AvatarCaptureHelper.waitForFirstFrame(provider: provider)
+                }
+            )
+            await sourceRegistry.register(avatarSource)
+            print("🎭 [RecordingSession] Avatar source registered")
+        } else if enableAvatar {
+            print("⚠️ [RecordingSession] Avatar enabled but no texture provider set!")
+        }
+
+        // STEP 2: Add microphone to audio router (but don't start yet)
         if mode.needsMicrophone {
-            // Add microphone to audio router (but don't start it yet)
             print("🎙️ RecordingSession: Adding microphone to audio router")
             let micSource = await audioRouter.addMicrophone()
             print("🎙️ RecordingSession: Microphone source created: \(micSource.sourceID)")
         }
 
-        // Start encoder FIRST with pre-created audio tracks for all sources
+        // STEP 3: Start encoder FIRST with pre-created audio tracks for all sources
         let audioSourceIDs = audioRouter.allSourceIDs
         print("🎙️ RecordingSession: Creating encoder with audio tracks for: \(audioSourceIDs)")
         try await encoder.startRecording(to: outputURL, title: title, audioSourceIDs: audioSourceIDs, videoEnabled: mode.needsVideo)
-
-        // Update local recording state
-        _isRecording = true
-        recordingStartTime = Date()
         print("🎙️ RecordingSession: Encoder started and ready")
 
-        // NOW start audio sources (after encoder is ready to receive samples)
+        // STEP 4: Start all capture sources and WAIT for readiness
+        print("⏳ [RecordingSession] Starting all capture sources and waiting for readiness...")
+        let result = await sourceRegistry.startAllAndWaitForReady(timeout: 5.0)
+
+        switch result {
+        case .allReady:
+            print("✅ [RecordingSession] All capture sources ready!")
+        case .partialReady(let failed):
+            for (id, error) in failed {
+                print("⚠️ [RecordingSession] Source '\(id)' failed: \(error)")
+            }
+            // Continue with available sources (graceful degradation)
+        }
+
+        // Brief yield to ensure any pending MainActor buffer updates complete
+        // This handles the race between capture callbacks and buffer storage
+        await Task.yield()
+
+        // STEP 5: NOW mark recording as active (all sources are ready)
+        _isRecording = true
+        recordingStartTime = Date()
+
+        // STEP 6: Start audio sources (after encoder is ready to receive samples)
         print("🎙️ RecordingSession: Starting all audio sources...")
         try? await audioRouter.startAll()
         print("🎙️ RecordingSession: Audio sources started. Active sources: \(audioRouter.activeSourceIDs)")
@@ -246,6 +302,55 @@ public final class RecordingSession: Sendable {
         // Start camera/avatar frame driver if not using desktop (no screen capture to drive timing)
         if !mode.needsDesktop && mode.needsVideo {
             startCameraFrameDriver()
+        }
+
+        print("🎬 [RecordingSession] Recording started successfully!")
+    }
+
+    /// Register camera sources with the registry
+    private func registerCameraSources() async throws {
+        let identifiers = effectiveCameraIdentifiers()
+        guard enableCamera, !identifiers.isEmpty else { return }
+
+        // Determine which cameras to stop and which to start
+        let currentIDs = Set(cameraCaptures.keys)
+        let requestedIDs = Set(identifiers).subtracting(remoteCameraIdentifiers)
+
+        let toStop = currentIDs.subtracting(requestedIDs)
+        let toStart = requestedIDs.subtracting(currentIDs)
+
+        // Stop cameras that are no longer needed
+        for identifier in toStop {
+            if let manager = cameraCaptures.removeValue(forKey: identifier) {
+                manager.stopCapture()
+            }
+            latestCameraBuffers.removeValue(forKey: identifier)
+            latestCameraMetadata.removeValue(forKey: identifier)
+        }
+
+        // Create new camera managers
+        for identifier in toStart {
+            let manager = CameraManager()
+            manager.onFrame = { [weak self] buffer in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.latestCameraBuffers[identifier] = buffer
+                    self.dispatchPreview(for: identifier, buffer: buffer)
+                }
+            }
+            cameraCaptures[identifier] = manager
+        }
+
+        // Register all active cameras with the registry
+        for (identifier, manager) in cameraCaptures {
+            let cameraSource = RegisteredSource(
+                sourceID: "camera-\(identifier)",
+                sourceType: .camera,
+                start: { [manager] in
+                    try await manager.startCaptureAndWaitForFirstFrame(with: identifier)
+                }
+            )
+            await sourceRegistry.register(cameraSource)
         }
     }
 
@@ -267,6 +372,8 @@ public final class RecordingSession: Sendable {
         // Update local recording state
         _isRecording = false
         recordingStartTime = nil
+
+        print("🛑 [RecordingSession] Recording stopped")
 
         return result
     }
@@ -333,12 +440,13 @@ public final class RecordingSession: Sendable {
         // Desktop modes use screen as base
         guard mode.needsDesktop else { return }
 
-        // Capture avatar state on MainActor to ensure thread safety
-        let (cameraLayers, isAvatarEnabled, provider) = await MainActor.run {
+        // Capture state on MainActor to ensure thread safety
+        let (cameraLayers, isAvatarEnabled, provider, isCameraEnabled) = await MainActor.run {
             (
                 self.cameraLayersForComposition(),
                 self.enableAvatar,
-                self.avatarTextureProvider
+                self.avatarTextureProvider,
+                self.enableCamera
             )
         }
 
@@ -348,6 +456,14 @@ public final class RecordingSession: Sendable {
             avatarTexture = provider()
         } else {
             avatarTexture = nil
+        }
+
+        // Log once per second to avoid spam
+        let now = Date()
+        if lastDebugLogTime == nil || now.timeIntervalSince(lastDebugLogTime!) >= 1.0 {
+            lastDebugLogTime = now
+            let avatarSize = avatarTexture.map { "\(CVPixelBufferGetWidth($0))x\(CVPixelBufferGetHeight($0))" } ?? "nil"
+            print("🎥 [Composition] camera=\(isCameraEnabled), layers=\(cameraLayers.count), avatar=\(isAvatarEnabled), avatarTex=\(avatarSize)")
         }
 
         guard let composited = compositor.composite(

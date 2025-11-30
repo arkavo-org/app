@@ -71,7 +71,9 @@ final class StreamMonitorWindow: NSObject {
             object: newWindow,
             queue: .main
         ) { [weak self] _ in
-            self?.saveWindowFrame()
+            Task { @MainActor in
+                self?.saveWindowFrame()
+            }
         }
 
         window = newWindow
