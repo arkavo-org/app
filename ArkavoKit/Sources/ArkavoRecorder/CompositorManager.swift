@@ -131,6 +131,12 @@ public final class CompositorManager: Sendable {
         if let avatarBuffer = avatarTexture {
             let avatarImage = CIImage(cvPixelBuffer: avatarBuffer)
 
+            // Check if avatar image is valid
+            guard avatarImage.extent.width > 0 && avatarImage.extent.height > 0 else {
+                print("⚠️ [Compositor] Avatar image has zero extent: \(avatarImage.extent)")
+                return compositeWithBase(baseImage: baseImage, screenSize: screenSize, cameraLayers: cameraLayers, avatarTexture: nil)
+            }
+
             // Calculate PiP dimensions for avatar (treat as single overlay)
             let totalOverlays = cameraLayers.count + 1
             let pipSize = pipSize(for: screenSize, cameraCount: totalOverlays)

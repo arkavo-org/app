@@ -446,4 +446,42 @@ class AvatarViewModel: ObservableObject {
     func stopCapture() {
         captureManager?.stopCapture()
     }
+
+    /// Returns a texture provider closure for use with RecordingSession
+    /// Ensures capture is started and returns the latest frame
+    func getTextureProvider() -> (@Sendable () -> CVPixelBuffer?)? {
+        // Create capture manager if needed
+        if captureManager == nil {
+            guard let renderer else {
+                print("[AvatarViewModel] getTextureProvider: No renderer available")
+                return nil
+            }
+
+            do {
+                guard let device = MTLCreateSystemDefaultDevice() else {
+                    print("[AvatarViewModel] getTextureProvider: Failed to create Metal device")
+                    return nil
+                }
+                captureManager = try VRMFrameCaptureManager(device: device)
+                captureManager?.renderer = renderer
+                print("[AvatarViewModel] getTextureProvider: Created capture manager")
+            } catch {
+                print("[AvatarViewModel] getTextureProvider: Failed to create capture manager: \(error)")
+                return nil
+            }
+        }
+
+        guard let manager = captureManager else {
+            print("[AvatarViewModel] getTextureProvider: No capture manager")
+            return nil
+        }
+
+        // Start capture if not already running
+        manager.startCapture()
+
+        print("[AvatarViewModel] getTextureProvider: Returning provider")
+        return { [weak manager] in
+            manager?.latestFrame
+        }
+    }
 }

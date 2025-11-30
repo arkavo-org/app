@@ -461,7 +461,13 @@ struct RecordView: View {
             if !viewModel.isRecording {
                 // Start Recording button
                 Button {
-                    Task { await viewModel.startRecording() }
+                    Task {
+                        // Set up avatar texture provider before recording starts
+                        if studioState.enableAvatar {
+                            viewModel.avatarTextureProvider = avatarViewModel.getTextureProvider()
+                        }
+                        await viewModel.startRecording()
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "record.circle.fill")

@@ -333,13 +333,21 @@ public final class RecordingSession: Sendable {
         // Desktop modes use screen as base
         guard mode.needsDesktop else { return }
 
-        let cameraLayers = await MainActor.run { self.cameraLayersForComposition() }
+        // Capture avatar state on MainActor to ensure thread safety
+        let (cameraLayers, isAvatarEnabled, provider) = await MainActor.run {
+            (
+                self.cameraLayersForComposition(),
+                self.enableAvatar,
+                self.avatarTextureProvider
+            )
+        }
 
         // Get avatar texture if avatar mode is enabled
-        let avatarTexture: CVPixelBuffer? = if enableAvatar, let provider = avatarTextureProvider {
-            provider()
+        let avatarTexture: CVPixelBuffer?
+        if isAvatarEnabled, let provider {
+            avatarTexture = provider()
         } else {
-            nil
+            avatarTexture = nil
         }
 
         guard let composited = compositor.composite(

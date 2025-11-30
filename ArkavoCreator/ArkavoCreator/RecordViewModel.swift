@@ -25,6 +25,7 @@ final class RecordViewModel {
     var enableMicrophone: Bool = true
     var enableDesktop: Bool = true
     var enableAvatar: Bool = false
+    var avatarTextureProvider: (@Sendable () -> CVPixelBuffer?)?
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -109,6 +110,10 @@ final class RecordViewModel {
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
             session.enableAvatar = enableAvatar
+            if enableAvatar, let provider = avatarTextureProvider {
+                session.avatarTextureProvider = provider
+            }
+            print("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL")")
             session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
@@ -330,8 +335,8 @@ final class RecordViewModel {
         // Generate filename with appropriate extension based on recording mode
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        // Use .m4a for audio-only (no camera, no desktop), .mov for video
-        let isAudioOnly = !enableCamera && !enableDesktop
+        // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
+        let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
         let ext = isAudioOnly ? "m4a" : "mov"
         let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
 

@@ -137,8 +137,10 @@ final class VRMFrameCaptureManager {
             commandBuffer: commandBuffer
         )
 
-        // Synchronize texture for CPU access
-        if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
+        // Synchronize texture for CPU access (only needed for managed storage mode)
+        // Shared storage mode doesn't need synchronization on Apple Silicon
+        if colorTexture.storageMode == .managed,
+           let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
             blitEncoder.synchronize(resource: colorTexture)
             blitEncoder.endEncoding()
         }
@@ -231,8 +233,10 @@ final class VRMFrameCaptureManager {
             commandBuffer: commandBuffer
         )
 
-        // Synchronize texture for CPU access
-        if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
+        // Synchronize texture for CPU access (only needed for managed storage mode)
+        // Shared storage mode doesn't need synchronization on Apple Silicon
+        if colorTexture.storageMode == .managed,
+           let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
             blitEncoder.synchronize(resource: colorTexture)
             blitEncoder.endEncoding()
         }
