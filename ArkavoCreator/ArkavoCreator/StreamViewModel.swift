@@ -209,7 +209,15 @@ final class StreamViewModel {
 
         // Load stream key from Keychain for selected platform
         if let savedKey = KeychainManager.getStreamKey(for: selectedPlatform.rawValue) {
-            streamKey = savedKey
+            // Validate it's not a URL (bad cached value)
+            if !savedKey.hasPrefix("http://") && !savedKey.hasPrefix("https://") {
+                streamKey = savedKey
+                print("[StreamViewModel] Loaded stream key for \(selectedPlatform.rawValue): \(savedKey.prefix(8))...")
+            } else {
+                // Clear invalid cached URL
+                print("[StreamViewModel] Clearing invalid cached stream key (was URL): \(savedKey)")
+                KeychainManager.deleteStreamKey(for: selectedPlatform.rawValue)
+            }
         }
 
         // Handle custom RTMP URL
@@ -222,9 +230,10 @@ final class StreamViewModel {
     }
 
     func saveStreamKey() {
-        // Save stream key to Keychain
-        if !streamKey.isEmpty {
+        // Save stream key to Keychain (but never save URLs)
+        if !streamKey.isEmpty && !streamKey.hasPrefix("http://") && !streamKey.hasPrefix("https://") {
             try? KeychainManager.saveStreamKey(streamKey, for: selectedPlatform.rawValue)
+            print("[StreamViewModel] Saved stream key for \(selectedPlatform.rawValue): \(streamKey.prefix(8))...")
         }
 
         // Save custom RTMP URL if custom platform

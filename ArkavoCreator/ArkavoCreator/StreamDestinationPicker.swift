@@ -65,17 +65,33 @@ struct StreamDestinationPicker: View {
                                 .stroke(.white.opacity(0.2), lineWidth: 1)
                         )
 
-                    if streamViewModel.selectedPlatform == .youtube && youtubeClient.isAuthenticated {
+                    if streamViewModel.selectedPlatform == .youtube {
                         Button {
-                            Task { await fetchYouTubeStreamKey() }
+                            Task {
+                                if youtubeClient.isAuthenticated {
+                                    await fetchYouTubeStreamKey()
+                                } else {
+                                    // Need to authenticate first
+                                    print("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
+                                    do {
+                                        try await youtubeClient.authenticateWithLocalServer()
+                                        // After auth, fetch the stream key
+                                        await fetchYouTubeStreamKey()
+                                    } catch {
+                                        await MainActor.run {
+                                            streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
+                                        }
+                                    }
+                                }
+                            }
                         } label: {
-                            Image(systemName: "arrow.clockwise")
+                            Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
                                 .padding(10)
                                 .background(.ultraThinMaterial)
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
-                        .help("Fetch stream key from YouTube")
+                        .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
                     }
                 }
             }
@@ -175,8 +191,10 @@ struct StreamDestinationPicker: View {
     private func fetchYouTubeStreamKey() async {
         do {
             if let key = try await youtubeClient.fetchStreamKey() {
+                print("[StreamDestinationPicker] Fetched YouTube stream key: \(key.prefix(8))...")
                 await MainActor.run {
                     streamViewModel.streamKey = key
+                    streamViewModel.saveStreamKey()
                 }
             }
         } catch {
@@ -185,6 +203,15 @@ struct StreamDestinationPicker: View {
             }
         }
     }
+}
+
+// MARK: - Preview
+#Preview {
+    StreamDestinationPicker(
+        streamViewModel: StreamViewModel(),
+        youtubeClient: YouTubeClient(clientId: "", clientSecret: ""),
+        onStartStream: { _, _ in }
+    )
 }
 
 /// A selectable card for each streaming platform
