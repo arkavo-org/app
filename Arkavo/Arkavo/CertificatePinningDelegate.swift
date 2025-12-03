@@ -1,5 +1,6 @@
-import Foundation
+import ArkavoSocial
 import CryptoKit
+import Foundation
 
 /// SSL Certificate Pinning Delegate for secure HTTPS connections
 /// Validates server certificates against known public key hashes to prevent MITM attacks
@@ -16,11 +17,7 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate, @unchecked
     ]
 
     /// Domains that require certificate pinning
-    private let pinnedDomains: Set<String> = [
-        "webauthn.arkavo.net",
-        "kas.arkavo.net",
-        "app.arkavo.com",
-    ]
+    private var pinnedDomains: Set<String> { ArkavoConfiguration.shared.pinnedDomains }
 
     /// Enable certificate pinning (set to false to disable for development)
     var isPinningEnabled: Bool = true

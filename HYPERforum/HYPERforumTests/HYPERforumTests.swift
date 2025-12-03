@@ -64,8 +64,8 @@ final class HYPERforumTests: XCTestCase {
         let manager = EncryptionManager(arkavoClient: client)
 
         let groupId = "test-group"
-        let policy1 = manager.getPolicy(for: groupId)
-        let policy2 = manager.getPolicy(for: groupId)
+        let policy1 = try manager.getPolicy(for: groupId)
+        let policy2 = try manager.getPolicy(for: groupId)
 
         // Should return same policy for same group (cached)
         XCTAssertEqual(policy1, policy2, "Policy should be cached for the same group")
@@ -77,8 +77,8 @@ final class HYPERforumTests: XCTestCase {
         let client = createMockClient()
         let manager = EncryptionManager(arkavoClient: client)
 
-        let policy1 = manager.getPolicy(for: "group1")
-        let policy2 = manager.getPolicy(for: "group2")
+        let policy1 = try manager.getPolicy(for: "group1")
+        let policy2 = try manager.getPolicy(for: "group2")
 
         // Different groups should have different policies
         XCTAssertNotEqual(policy1, policy2, "Different groups should have different policies")
@@ -89,8 +89,8 @@ final class HYPERforumTests: XCTestCase {
         let client = createMockClient()
         let manager = EncryptionManager(arkavoClient: client)
 
-        _ = manager.getPolicy(for: "group1")
-        _ = manager.getPolicy(for: "group2")
+        _ = try manager.getPolicy(for: "group1")
+        _ = try manager.getPolicy(for: "group2")
 
         XCTAssertEqual(manager.groupsWithPolicies.count, 2)
 
