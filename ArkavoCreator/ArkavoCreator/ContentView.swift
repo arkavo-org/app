@@ -170,6 +170,9 @@ struct SectionContainer: View {
     @ObservedObject var twitchClient: TwitchAuthClient
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
+    @State private var arkavoAccountName = ""
+
+    private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
 
     // Helper to determine if a platform has active content
     private func hasActiveContent(for platform: String) -> Bool {
@@ -425,9 +428,132 @@ struct SectionContainer: View {
         }
     }
 
+    private var arkavoDashboardContent: some View {
+        Group {
+            if arkavoAuthState.isAuthenticated {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.title)
+                            .foregroundStyle(.green)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Connected")
+                                .font(.headline)
+                            Text(arkavoAuthState.accountName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text("End-to-end encrypted streaming is available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("Sign Out") {
+                        Task {
+                            await arkavoAuthState.logout()
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    if arkavoAuthState.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Sign in to enable encrypted streaming")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button("Login with Arkavo") {
+                            arkavoAuthState.showingLoginSheet = true
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        if let error = arkavoAuthState.errorMessage {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
+                    }
+                }
+                .sheet(isPresented: Bindable(arkavoAuthState).showingLoginSheet) {
+                    arkavoLoginSheet
+                }
+            }
+        }
+        .task {
+            await arkavoAuthState.checkStoredCredentials()
+        }
+    }
+
+    private var arkavoLoginSheet: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 48))
+                .foregroundColor(.accentColor)
+
+            Text("Login to Arkavo")
+                .font(.title2)
+                .bold()
+
+            Text("Enter your account name to continue")
+                .foregroundColor(.secondary)
+
+            TextField("Account Name", text: $arkavoAccountName)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 300)
+                .disabled(arkavoAuthState.isLoading)
+
+            HStack(spacing: 16) {
+                Button("Cancel") {
+                    arkavoAuthState.showingLoginSheet = false
+                }
+                .buttonStyle(.plain)
+                .disabled(arkavoAuthState.isLoading)
+
+                Button {
+                    Task {
+                        await arkavoAuthState.login(accountName: arkavoAccountName)
+                        arkavoAccountName = ""
+                    }
+                } label: {
+                    if arkavoAuthState.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Continue")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(arkavoAccountName.isEmpty || arkavoAuthState.isLoading)
+            }
+
+            if let errorMessage = arkavoAuthState.errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+        }
+        .padding()
+        .frame(width: 400)
+    }
+
     // Computed property for sorted dashboard sections
     private var sortedDashboardSections: [DashboardSectionItem] {
         var sections: [DashboardSectionItem] = []
+
+        // Arkavo Section (first for encrypted streaming)
+        sections.append(DashboardSectionItem(
+            id: "arkavo",
+            title: "Arkavo",
+            isAuthenticated: arkavoAuthState.isAuthenticated,
+            hasActiveContent: false,
+            content: AnyView(arkavoDashboardContent)
+        ))
 
         // Twitch Section
         sections.append(DashboardSectionItem(

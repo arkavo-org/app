@@ -11,6 +11,8 @@ struct StreamDestinationPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = false
 
+    private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
+
     var body: some View {
         VStack(spacing: 24) {
             // Header
@@ -36,64 +38,100 @@ struct StreamDestinationPicker: View {
 
                 HStack(spacing: 12) {
                     ForEach(StreamViewModel.StreamPlatform.allCases) { platform in
+                        let isArkavoDisabled = platform == .arkavo && !arkavoAuthState.isAuthenticated
                         PlatformCard(
                             platform: platform,
                             isSelected: streamViewModel.selectedPlatform == platform,
+                            isDisabled: isArkavoDisabled,
                             action: {
-                                streamViewModel.selectedPlatform = platform
-                                streamViewModel.loadStreamKey()
+                                if !isArkavoDisabled {
+                                    streamViewModel.selectedPlatform = platform
+                                    streamViewModel.loadStreamKey()
+                                }
                             }
                         )
                     }
+                }
+
+                // Show login prompt if Arkavo is selected but not authenticated
+                if streamViewModel.selectedPlatform == .arkavo && !arkavoAuthState.isAuthenticated {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Login to Arkavo on Dashboard to enable encrypted streaming")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(8)
+                    .background(.orange.opacity(0.1))
+                    .cornerRadius(6)
                 }
             }
 
-            // Stream Key Input
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Stream Key")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+            // Stream Key Input (not shown for Arkavo)
+            if streamViewModel.selectedPlatform != .arkavo {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Stream Key")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
 
-                HStack {
-                    SecureField("Enter your stream key", text: $streamViewModel.streamKey)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(.background.opacity(0.5))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
-                        )
+                    HStack {
+                        SecureField("Enter your stream key", text: $streamViewModel.streamKey)
+                            .textFieldStyle(.plain)
+                            .padding(12)
+                            .background(.background.opacity(0.5))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
 
-                    if streamViewModel.selectedPlatform == .youtube {
-                        Button {
-                            Task {
-                                if youtubeClient.isAuthenticated {
-                                    await fetchYouTubeStreamKey()
-                                } else {
-                                    // Need to authenticate first
-                                    print("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
-                                    do {
-                                        try await youtubeClient.authenticateWithLocalServer()
-                                        // After auth, fetch the stream key
+                        if streamViewModel.selectedPlatform == .youtube {
+                            Button {
+                                Task {
+                                    if youtubeClient.isAuthenticated {
                                         await fetchYouTubeStreamKey()
-                                    } catch {
-                                        await MainActor.run {
-                                            streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
+                                    } else {
+                                        // Need to authenticate first
+                                        print("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
+                                        do {
+                                            try await youtubeClient.authenticateWithLocalServer()
+                                            // After auth, fetch the stream key
+                                            await fetchYouTubeStreamKey()
+                                        } catch {
+                                            await MainActor.run {
+                                                streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
+                                            }
                                         }
                                     }
                                 }
+                            } label: {
+                                Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
+                                    .padding(10)
+                                    .background(.ultraThinMaterial)
+                                    .cornerRadius(8)
                             }
-                        } label: {
-                            Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(8)
+                            .buttonStyle(.plain)
+                            .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
                         }
-                        .buttonStyle(.plain)
-                        .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
                     }
                 }
+            } else {
+                // Arkavo encrypted streaming info
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundStyle(.green)
+                        Text("End-to-end encrypted stream")
+                            .font(.subheadline)
+                    }
+                    Text("Your stream will be encrypted using NanoTDF before transmission to 100.arkavo.net")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(.green.opacity(0.1))
+                .cornerRadius(8)
             }
 
             // Custom RTMP URL (if custom platform)
@@ -162,7 +200,12 @@ struct StreamDestinationPicker: View {
     }
 
     private var canStartStream: Bool {
-        !streamViewModel.streamKey.isEmpty &&
+        // Arkavo requires authentication
+        if streamViewModel.selectedPlatform == .arkavo && !arkavoAuthState.isAuthenticated {
+            return false
+        }
+        let hasValidKey = streamViewModel.selectedPlatform == .arkavo || !streamViewModel.streamKey.isEmpty
+        return hasValidKey &&
         (streamViewModel.selectedPlatform != .custom || !streamViewModel.customRTMPURL.isEmpty)
     }
 
@@ -205,19 +248,11 @@ struct StreamDestinationPicker: View {
     }
 }
 
-// MARK: - Preview
-#Preview {
-    StreamDestinationPicker(
-        streamViewModel: StreamViewModel(),
-        youtubeClient: YouTubeClient(clientId: "", clientSecret: ""),
-        onStartStream: { _, _ in }
-    )
-}
-
 /// A selectable card for each streaming platform
 private struct PlatformCard: View {
     let platform: StreamViewModel.StreamPlatform
     let isSelected: Bool
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -227,6 +262,11 @@ private struct PlatformCard: View {
                     .font(.title2)
                 Text(platform.rawValue)
                     .font(.caption)
+                if isDisabled {
+                    Text("Login required")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -237,7 +277,9 @@ private struct PlatformCard: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isSelected ? Color.accentColor : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
             )
+            .opacity(isDisabled ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }

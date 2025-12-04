@@ -31,7 +31,7 @@ public enum NTDFStreamingError: Error, LocalizedError {
 }
 
 /// Manager for NTDF-encrypted RTMP streaming
-/// Combines NanoTDFCollection encryption with RTMPPublisher
+/// Combines NanoTDF encryption with RTMPPublisher
 public actor NTDFStreamingManager {
 
     /// Current state of the streaming manager

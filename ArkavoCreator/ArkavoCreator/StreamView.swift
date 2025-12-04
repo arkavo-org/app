@@ -353,6 +353,7 @@ struct StreamView: View {
     private func openStreamKeyHelp() {
         let urlString: String
         switch viewModel.selectedPlatform {
+        case .arkavo: return  // Arkavo doesn't need stream key help
         case .twitch: urlString = "https://dashboard.twitch.tv/settings/stream"
         case .youtube: urlString = "https://studio.youtube.com/channel/UC/livestreaming/stream"
         case .custom: return

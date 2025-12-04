@@ -34,7 +34,9 @@ public actor VideoEncoder {
 
     // Streaming support
     private var rtmpPublisher: RTMPPublisher?
+    private var ntdfStreamingManager: NTDFStreamingManager?
     private var isStreaming: Bool = false
+    private var isNTDFStreaming: Bool = false
     private var videoFormatDescription: CMFormatDescription?
     private var audioFormatDescription: CMFormatDescription?
     private var sentVideoSequenceHeader: Bool = false
@@ -751,11 +753,178 @@ public actor VideoEncoder {
         print("✅ RTMP stream stopped")
     }
 
+    // MARK: - NTDF Streaming Methods
+
+    /// Start NTDF-encrypted streaming to Arkavo
+    /// - Parameters:
+    ///   - kasURL: KAS URL for key access (e.g., https://100.arkavo.net)
+    ///   - rtmpURL: RTMP server URL (e.g., rtmp://100.arkavo.net:1935)
+    ///   - streamKey: Stream key (e.g., live/test)
+    public func startNTDFStreaming(kasURL: URL, rtmpURL: String, streamKey: String) async throws {
+        guard !isNTDFStreaming else {
+            print("⚠️ Already NTDF streaming")
+            return
+        }
+
+        print("🔐 Starting NTDF-encrypted stream...")
+
+        // Create and initialize NTDF streaming manager
+        let manager = NTDFStreamingManager(kasURL: kasURL)
+        try await manager.initialize()
+
+        // Connect to RTMP with encrypted header in metadata
+        try await manager.connect(
+            rtmpURL: rtmpURL,
+            streamKey: streamKey,
+            width: videoWidth,
+            height: videoHeight,
+            framerate: Double(frameRate),
+            videoBitrate: Double(videoBitrate),
+            audioBitrate: Double(audioBitrate)
+        )
+
+        // Create video encoder
+        let videoEncoder = ArkavoMedia.VideoEncoder(quality: .auto)
+        try videoEncoder.start()
+
+        // Create audio encoder
+        let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: audioBitrate)
+
+        // Create AsyncStreams to serialize frame sending
+        let (videoStream, videoContinuation) = AsyncStream<EncodedVideoFrame>.makeStream()
+        let (audioStream, audioContinuation) = AsyncStream<EncodedAudioFrame>.makeStream()
+        self.videoFrameContinuation = videoContinuation
+        self.audioFrameContinuation = audioContinuation
+
+        // Wire up video encoder callback
+        let videoCont = videoContinuation
+        videoEncoder.onFrame = { frame in
+            videoCont.yield(frame)
+        }
+
+        // Wire up audio encoder callback
+        let audioCont = audioContinuation
+        audioEncoder.onFrame = { frame in
+            audioCont.yield(frame)
+        }
+
+        // Start video send task with encryption
+        videoSendTask = Task { [weak self, weak manager] in
+            for await frame in videoStream {
+                guard let self = self, let manager = manager else { break }
+                guard !Task.isCancelled else { break }
+
+                do {
+                    // Send sequence header ONLY ONCE on first keyframe (unencrypted)
+                    let needsHeader = await self.shouldSendVideoSequenceHeader()
+                    if frame.isKeyframe, needsHeader, let formatDesc = frame.formatDescription {
+                        try await manager.sendVideoSequenceHeader(formatDescription: formatDesc)
+                        await self.markVideoSequenceHeaderSent()
+                        print("✅ Sent video sequence header (ONCE)")
+                    }
+
+                    // Send encrypted video frame
+                    try await manager.sendEncryptedVideo(frame: frame)
+                } catch is CancellationError {
+                    break
+                } catch {
+                    print("❌ Failed to send encrypted video frame: \(error)")
+                }
+            }
+        }
+
+        // Start audio send task with encryption
+        audioSendTask = Task { [weak self, weak manager] in
+            for await frame in audioStream {
+                guard let self = self, let manager = manager else { break }
+                guard !Task.isCancelled else { break }
+
+                do {
+                    // Send sequence header ONLY ONCE on first frame (unencrypted)
+                    let needsHeader = await self.shouldSendAudioSequenceHeader()
+                    if needsHeader, let formatDesc = frame.formatDescription {
+                        var asc = Data()
+                        var size: Int = 0
+                        if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDesc, sizeOut: &size), size > 0 {
+                            asc = Data(bytes: cookie, count: size)
+                        } else {
+                            let byte1: UInt8 = 0x11
+                            let byte2: UInt8 = 0x90
+                            asc = Data([byte1, byte2])
+                        }
+
+                        try await manager.sendAudioSequenceHeader(asc: asc)
+                        await self.markAudioSequenceHeaderSent()
+                        print("✅ Sent audio sequence header (ONCE)")
+                    }
+
+                    // Send encrypted audio frame
+                    try await manager.sendEncryptedAudio(frame: frame)
+                } catch is CancellationError {
+                    break
+                } catch {
+                    print("❌ Failed to send encrypted audio frame: \(error)")
+                }
+            }
+        }
+
+        streamVideoEncoder = videoEncoder
+        streamAudioEncoder = audioEncoder
+        ntdfStreamingManager = manager
+        isNTDFStreaming = true
+        sentVideoSequenceHeader = false
+        sentAudioSequenceHeader = false
+        streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
+        lastStreamVideoTimestamp = .zero
+        lastStreamAudioTimestamp = .zero
+
+        print("✅ NTDF-encrypted stream started")
+    }
+
+    /// Stop NTDF streaming
+    public func stopNTDFStreaming() async {
+        guard isNTDFStreaming, let manager = ntdfStreamingManager else { return }
+
+        print("🔐 Stopping NTDF stream...")
+
+        // Finish the frame queues first
+        videoFrameContinuation?.finish()
+        audioFrameContinuation?.finish()
+        videoFrameContinuation = nil
+        audioFrameContinuation = nil
+
+        // Wait for send tasks to complete
+        videoSendTask?.cancel()
+        audioSendTask?.cancel()
+        videoSendTask = nil
+        audioSendTask = nil
+
+        await manager.disconnect()
+
+        // Stop encoders
+        streamVideoEncoder?.stop()
+        streamAudioEncoder = nil
+        streamVideoEncoder = nil
+
+        ntdfStreamingManager = nil
+        isNTDFStreaming = false
+        sentVideoSequenceHeader = false
+        sentAudioSequenceHeader = false
+        streamStartTime = nil
+
+        print("✅ NTDF stream stopped")
+    }
+
     /// Get streaming statistics
     public var streamStatistics: RTMPPublisher.StreamStatistics? {
         get async {
-            guard let publisher = rtmpPublisher else { return nil }
-            return await publisher.statistics
+            if let publisher = rtmpPublisher {
+                return await publisher.statistics
+            }
+            if let manager = ntdfStreamingManager {
+                return await manager.statistics
+            }
+            return nil
         }
     }
 

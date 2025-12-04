@@ -10,6 +10,7 @@ final class StreamViewModel {
     // MARK: - Stream Configuration
 
     enum StreamPlatform: String, CaseIterable, Identifiable {
+        case arkavo = "Arkavo"
         case twitch = "Twitch"
         case youtube = "YouTube"
         case custom = "Custom RTMP"
@@ -18,6 +19,8 @@ final class StreamViewModel {
 
         var rtmpURL: String {
             switch self {
+            case .arkavo:
+                return "rtmp://100.arkavo.net:1935"
             case .twitch:
                 return "rtmp://live.twitch.tv/app"
             case .youtube:
@@ -28,11 +31,18 @@ final class StreamViewModel {
         }
 
         var requiresStreamKey: Bool {
-            true
+            switch self {
+            case .arkavo:
+                return false  // Arkavo uses authenticated session, not stream key
+            default:
+                return true
+            }
         }
 
         var icon: String {
             switch self {
+            case .arkavo:
+                return "lock.shield"
             case .twitch:
                 return "tv"
             case .youtube:
@@ -40,6 +50,10 @@ final class StreamViewModel {
             case .custom:
                 return "server.rack"
             }
+        }
+
+        var isEncrypted: Bool {
+            self == .arkavo
         }
     }
 
@@ -71,7 +85,8 @@ final class StreamViewModel {
     // MARK: - Computed Properties
 
     var canStartStreaming: Bool {
-        !streamKey.isEmpty && !isStreaming && !isConnecting &&
+        let hasValidKey = selectedPlatform == .arkavo || !streamKey.isEmpty
+        return hasValidKey && !isStreaming && !isConnecting &&
         (selectedPlatform != .custom || !customRTMPURL.isEmpty)
     }
 
@@ -125,16 +140,30 @@ final class StreamViewModel {
         isConnecting = true
 
         do {
-            // Create RTMP destination
-            let destination = RTMPPublisher.Destination(
-                url: effectiveRTMPURL,
-                platform: selectedPlatform.rawValue.lowercased()
-            )
+            if selectedPlatform == .arkavo {
+                // Use NTDF-encrypted streaming for Arkavo
+                guard let kasURL = URL(string: "https://100.arkavo.net") else {
+                    self.error = "Invalid KAS URL"
+                    isConnecting = false
+                    return
+                }
+                try await session.startNTDFStreaming(
+                    kasURL: kasURL,
+                    rtmpURL: effectiveRTMPURL,
+                    streamKey: "live/creator"  // Default stream key for Arkavo
+                )
+            } else {
+                // Create RTMP destination for other platforms
+                let destination = RTMPPublisher.Destination(
+                    url: effectiveRTMPURL,
+                    platform: selectedPlatform.rawValue.lowercased()
+                )
 
-            // Connect and start streaming
-            // Append bandwidth test flag if enabled (Twitch-specific)
-            let effectiveStreamKey = isBandwidthTest ? "\(streamKey)?bandwidthtest=true" : streamKey
-            try await session.startStreaming(to: destination, streamKey: effectiveStreamKey)
+                // Connect and start streaming
+                // Append bandwidth test flag if enabled (Twitch-specific)
+                let effectiveStreamKey = isBandwidthTest ? "\(streamKey)?bandwidthtest=true" : streamKey
+                try await session.startStreaming(to: destination, streamKey: effectiveStreamKey)
+            }
 
             isStreaming = true
             isConnecting = false
@@ -279,6 +308,11 @@ final class StreamViewModel {
 
     /// Validates stream key format and length
     private func validateStreamKey(_ key: String) -> String? {
+        // Arkavo doesn't require a stream key
+        if selectedPlatform == .arkavo {
+            return nil
+        }
+
         // Check if empty
         if key.trimmingCharacters(in: .whitespaces).isEmpty {
             return "Stream key cannot be empty"
