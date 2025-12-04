@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import OSLog
 import SwiftUI
 
@@ -29,13 +30,12 @@ struct ArkavoApp: App {
     }
 
     init() {
+        let config = ArkavoConfiguration.shared
         client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://100.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256,
-            // Note: Modified for compatibility with latest OpenTDFKit
-            // Capacity of 8192 keys is set in GroupViewModel.swift
+            authURL: config.identityURL,
+            websocketURL: config.websocketURL,
+            relyingPartyID: config.relyingPartyID,
+            curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
         // Initialize router
@@ -299,7 +299,7 @@ struct ArkavoApp: App {
                     }
                     // If no recovery suggestion was provided, add default guidance
                     if ns.localizedRecoverySuggestion == nil {
-                        msg += "\n\nTo register:\n1. Go to Settings → Passwords\n2. Search for 'webauthn.arkavo.net'\n3. Delete all existing passkeys\n4. Return and try again"
+                        msg += "\n\nTo register:\n1. Go to Settings → Passwords\n2. Search for '\(ArkavoConfiguration.shared.relyingPartyID)'\n3. Delete all existing passkeys\n4. Return and try again"
                     }
                     action = "Got It"
                 } else if ns.domain == "HTTPError" {
