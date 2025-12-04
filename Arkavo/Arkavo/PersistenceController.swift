@@ -69,14 +69,52 @@ class PersistenceController {
 
     func saveChanges() async throws {
         if mainContext.hasChanges {
-            try mainContext.save()
-            print("PersistenceController: Changes saved successfully")
+            do {
+                try mainContext.save()
+                print("PersistenceController: Changes saved successfully")
+            } catch {
+                print("PersistenceController: Save failed, rolling back changes: \(error)")
+                mainContext.rollback()
+                throw error
+            }
         } else {
             print("PersistenceController: No changes to save")
         }
     }
 
     // MARK: - Data Integrity Methods
+
+    /// Removes invalid Profile objects that have nil required fields
+    /// This cleans up orphaned profiles from failed registrations or corrupted data
+    func cleanupInvalidProfiles() async throws {
+        print("PersistenceController: Checking for invalid profiles...")
+
+        // First, rollback any pending changes that might contain invalid objects
+        if mainContext.hasChanges {
+            print("PersistenceController: Rolling back pending changes before cleanup")
+            mainContext.rollback()
+        }
+
+        let descriptor = FetchDescriptor<Profile>()
+        let allProfiles = try mainContext.fetch(descriptor)
+
+        var deletedCount = 0
+        for profile in allProfiles {
+            // Check if required fields are nil/empty - these are corrupted profiles
+            if profile.name.isEmpty || profile.publicID.isEmpty {
+                print("PersistenceController: Deleting invalid profile with empty name or publicID")
+                mainContext.delete(profile)
+                deletedCount += 1
+            }
+        }
+
+        if deletedCount > 0 {
+            try mainContext.save()
+            print("PersistenceController: Deleted \(deletedCount) invalid profiles")
+        } else {
+            print("PersistenceController: No invalid profiles found")
+        }
+    }
 
     /// Validates streams by checking their type without accessing potentially invalid Thought references
     /// Returns streams grouped by type

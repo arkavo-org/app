@@ -89,6 +89,9 @@
     "+%lld" : {
 
     },
+    "0 connected" : {
+
+    },
     "1. Agreement to Terms" : {
 
     },
@@ -239,6 +242,12 @@
     "Assurance" : {
 
     },
+    "Auto-connect to Creator" : {
+
+    },
+    "Automatically connect when app launches" : {
+
+    },
     "Available" : {
 
     },
@@ -331,6 +340,9 @@
 
     },
     "Connect to an agent and start a chat session to see it here" : {
+
+    },
+    "Connect to local devices and networks" : {
 
     },
     "Connect to Peers (Optional)" : {
@@ -441,6 +453,9 @@
     "Discovered Servers" : {
 
     },
+    "Discovering edge agents..." : {
+
+    },
     "Done" : {
       "localizations" : {
         "es-US" : {
@@ -519,9 +534,6 @@
 
     },
     "Full Body" : {
-
-    },
-    "Go to the Profile page to create a local profile and start using Out-of-Band messaging." : {
 
     },
     "Granularity" : {
@@ -733,6 +745,12 @@
         }
       }
     },
+    "Nearby Devices" : {
+
+    },
+    "Network Connections" : {
+
+    },
     "Next" : {
 
     },
@@ -748,6 +766,9 @@
     "No contacts found" : {
 
     },
+    "No edge agents discovered on local network" : {
+
+    },
     "No members added to the Inner Circle yet." : {
 
     },
@@ -758,9 +779,6 @@
 
     },
     "No Peers Discovered" : {
-
-    },
-    "No Profile Yet" : {
 
     },
     "Not available" : {
@@ -795,6 +813,9 @@
 
     },
     "Owner:" : {
+
+    },
+    "Peer-to-peer mesh networking for secure local communication" : {
 
     },
     "Peers" : {
@@ -894,6 +915,9 @@
         }
       }
     },
+    "Reconnect" : {
+
+    },
     "Recording Error" : {
 
     },
@@ -911,7 +935,16 @@
         }
       }
     },
+    "Register / Sign In" : {
+
+    },
+    "Register or sign in to access the Arkavo social network" : {
+
+    },
     "Registration issue: %@" : {
+
+    },
+    "Remote Camera Active" : {
 
     },
     "Remove" : {
@@ -979,6 +1012,9 @@
 
     },
     "Search contacts" : {
+
+    },
+    "Searching for devices..." : {
 
     },
     "Searching for nearby devices..." : {
@@ -1064,6 +1100,9 @@
         }
       }
     },
+    "Skip for now" : {
+
+    },
     "Start" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1074,6 +1113,9 @@
           }
         }
       }
+    },
+    "Start Discovery" : {
+
     },
     "Start group chats now, with more exciting features coming soon!" : {
       "extractionState" : "stale",
@@ -1108,7 +1150,6 @@
 
     },
     "Stop" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -1191,9 +1232,6 @@
     "Tap to connect" : {
 
     },
-    "Tap to Reconnect" : {
-
-    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
@@ -1258,6 +1296,9 @@
 
     },
     "Uploading..." : {
+
+    },
+    "Use Communities tab to discover and connect with nearby peers" : {
 
     },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
@@ -1335,9 +1376,6 @@
 
     },
     "You own your content" : {
-
-    },
-    "You're currently using Arkavo in offline mode." : {
 
     },
     "Your handle must be unique within arkavo.social" : {

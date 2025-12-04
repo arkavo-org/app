@@ -83,7 +83,7 @@
 		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
 		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61E2CAF5D2C00A9060C /* AccountView.swift */; };
-		DAE94DD12DC5A5D200FB0EFE /* OfflineHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */; };
+		DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */; };
 		DAE94DD92DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */; };
 		DAE94DDA2DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */; };
 		DAE94DDB2DC5B56C00FB0EFE /* KeyRenewalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */; };
@@ -91,9 +91,11 @@
 		DAE94DDD2DC5B56C00FB0EFE /* InnerCircleMemberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */; };
 		DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */; };
 		DAE94DDF2DC5B56C00FB0EFE /* KeyExchangeTestSuite.md in Resources */ = {isa = PBXBuildFile; fileRef = DAE94DD52DC5B56C00FB0EFE /* KeyExchangeTestSuite.md */; };
+		DAE94DE02DC6A00000FB0EFE /* StreamCreationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
 		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
+		DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */; };
 		DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
@@ -199,7 +201,7 @@
 		DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoWebSocket.swift; sourceTree = "<group>"; };
 		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DACCD61E2CAF5D2C00A9060C /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
-		DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineHomeView.swift; sourceTree = "<group>"; };
+		DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkConnectionsView.swift; sourceTree = "<group>"; };
 		DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialKeyExchangeTests.swift; sourceTree = "<group>"; };
 		DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InnerCircleMemberTests.swift; sourceTree = "<group>"; };
 		DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyExchangeTests.swift; sourceTree = "<group>"; };
@@ -207,8 +209,10 @@
 		DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRenewalTests.swift; sourceTree = "<group>"; };
 		DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStoreDataTests.swift; sourceTree = "<group>"; };
 		DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileKeyStorePersistenceTests.swift; sourceTree = "<group>"; };
+		DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCreationTests.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
+		DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDiscoveryService.swift; sourceTree = "<group>"; };
 		DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraStreamer.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
@@ -277,10 +281,11 @@
 				DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */,
 				DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */,
 				DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */,
-				DAE94DD02DC5A5D200FB0EFE /* OfflineHomeView.swift */,
+				DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
+				DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */,
 				DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */,
 				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
 				DAAFCBCD2D09073A003FC56F /* GroupView.swift */,
@@ -371,6 +376,7 @@
 				DAE94DD62DC5B56C00FB0EFE /* KeyRenewalTests.swift */,
 				DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */,
 				DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */,
+				DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */,
 			);
 			path = ArkavoTests;
 			sourceTree = "<group>";
@@ -572,7 +578,7 @@
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
-				DAE94DD12DC5A5D200FB0EFE /* OfflineHomeView.swift in Sources */,
+				DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */,
 				DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */,
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
@@ -613,6 +619,7 @@
 				DA8A1F942CE1A55F00E1D7FC /* ProtectorProcessor.swift in Sources */,
 				DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */,
 				DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */,
+				DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */,
 				DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
@@ -644,6 +651,7 @@
 				DAE94DDC2DC5B56C00FB0EFE /* KeyStoreDataTests.swift in Sources */,
 				DAE94DDD2DC5B56C00FB0EFE /* InnerCircleMemberTests.swift in Sources */,
 				DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */,
+				DAE94DE02DC6A00000FB0EFE /* StreamCreationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
