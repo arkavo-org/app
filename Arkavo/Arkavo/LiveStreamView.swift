@@ -8,10 +8,17 @@ struct LiveStreamView: View {
 
     let streamURL: String
     let streamName: String
+    let ntdfToken: String
 
-    init(streamURL: String, streamName: String) {
+    /// Initialize with stream details and NTDF token for decryption
+    /// - Parameters:
+    ///   - streamURL: RTMP URL (e.g., rtmp://100.arkavo.net:1935)
+    ///   - streamName: Stream name/key (e.g., live/creator)
+    ///   - ntdfToken: NTDF token for KAS authentication and key rewrap
+    init(streamURL: String, streamName: String, ntdfToken: String) {
         self.streamURL = streamURL
         self.streamName = streamName
+        self.ntdfToken = ntdfToken
         _viewModel = StateObject(wrappedValue: LiveStreamViewModel())
     }
 
@@ -131,7 +138,7 @@ struct LiveStreamView: View {
             }
         }
         .task {
-            await viewModel.connect(url: streamURL, streamName: streamName)
+            await viewModel.connect(url: streamURL, streamName: streamName, ntdfToken: ntdfToken)
         }
         .onDisappear {
             Task {
@@ -194,5 +201,5 @@ struct LiveStreamMetadata {
 }
 
 #Preview {
-    LiveStreamView(streamURL: "rtmp://localhost:1935", streamName: "live/test")
+    LiveStreamView(streamURL: "rtmp://localhost:1935", streamName: "live/test", ntdfToken: "preview-token")
 }

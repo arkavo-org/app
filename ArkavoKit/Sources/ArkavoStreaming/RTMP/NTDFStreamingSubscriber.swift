@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreMedia
+import CryptoKit
 import Foundation
 import OpenTDFKit
 
@@ -62,8 +63,9 @@ public actor NTDFStreamingSubscriber {
     // MARK: - Properties
 
     private let kasURL: URL
+    private let ntdfToken: String
     private let rtmpSubscriber: RTMPSubscriber
-    private var decryptor: NanoTDFCollectionDecryptor?
+    private var decryptor: StreamingCollectionDecryptor?
     private var state: State = .idle
 
     // Video/Audio decoder configuration
@@ -80,9 +82,13 @@ public actor NTDFStreamingSubscriber {
 
     // MARK: - Initialization
 
-    /// Initialize with KAS URL for key access
-    public init(kasURL: URL) {
+    /// Initialize with KAS URL and NTDF token for key access
+    /// - Parameters:
+    ///   - kasURL: URL of the KAS server for key rewrap
+    ///   - ntdfToken: NTDF token for authentication with KAS
+    public init(kasURL: URL, ntdfToken: String) {
         self.kasURL = kasURL
+        self.ntdfToken = ntdfToken
         self.rtmpSubscriber = RTMPSubscriber()
     }
 
@@ -162,11 +168,12 @@ public actor NTDFStreamingSubscriber {
 
         print("🔐 Initializing decryptor with header: \(headerBytes.count) bytes")
 
-        // Initialize decryptor
+        // Initialize decryptor with NTDF token
         do {
-            decryptor = try await NanoTDFCollectionDecryptor(
+            decryptor = try await StreamingCollectionDecryptor(
                 headerBytes: headerBytes,
-                kasURL: kasURL
+                kasURL: kasURL,
+                ntdfToken: ntdfToken
             )
             state = .playing
             await onStateChange?(state)
@@ -332,68 +339,231 @@ public actor NTDFStreamingSubscriber {
     }
 }
 
-// MARK: - NanoTDF Collection Decryptor
+// MARK: - Streaming Collection Decryptor
 
-/// Decryptor for NanoTDF Collection items
+/// Decryptor for NanoTDF Collection items in streaming context
 ///
-/// Uses the collection header and KAS to decrypt individual items.
-actor NanoTDFCollectionDecryptor {
-    private let header: Data
+/// Wraps OpenTDFKit's NanoTDFCollectionDecryptor with KAS rewrap integration.
+/// Parses the collection header, performs KAS rewrap to obtain the symmetric key,
+/// and provides per-frame decryption using the shared key.
+actor StreamingCollectionDecryptor {
+    /// The parsed NanoTDF header
+    private let header: Header
+
+    /// The raw header bytes (needed for KAS rewrap request)
+    private let headerBytes: Data
+
+    /// KAS URL for key rewrap
     private let kasURL: URL
-    private var symmetricKey: Data?
 
-    init(headerBytes: Data, kasURL: URL) async throws {
-        self.header = headerBytes
+    /// NTDF token for KAS authentication
+    private let ntdfToken: String
+
+    /// The underlying OpenTDFKit decryptor (initialized after KAS rewrap)
+    private var decryptor: OpenTDFKit.NanoTDFCollectionDecryptor?
+
+    /// Cipher configuration from header
+    private let cipher: Cipher
+
+    /// Tag size for parsing encrypted items
+    private let tagSize: Int
+
+    /// Initialize with header bytes, KAS URL, and NTDF token
+    /// - Parameters:
+    ///   - headerBytes: Raw NanoTDF collection header bytes from stream metadata
+    ///   - kasURL: URL of the KAS server for key rewrap
+    ///   - ntdfToken: NTDF token for KAS authentication
+    /// - Throws: If header parsing fails or KAS rewrap fails
+    init(headerBytes: Data, kasURL: URL, ntdfToken: String) async throws {
+        self.headerBytes = headerBytes
         self.kasURL = kasURL
+        self.ntdfToken = ntdfToken
 
-        // Initialize decryption key via KAS rewrap
-        try await initializeKey()
-    }
-
-    private func initializeKey() async throws {
-        // Parse the NanoTDF header to extract key info
-        // The header contains the KAS public key and ephemeral key
-        // We need to request key rewrap from KAS
-
-        // For now, we'll store the header and use it for each decrypt call
-        // In a full implementation, we'd do KAS rewrap here
-        print("🔐 NanoTDFCollectionDecryptor initialized (header: \(header.count) bytes)")
-
-        // TODO: Implement KAS rewrap to get symmetric key
-        // This requires:
-        // 1. Parse header to get ephemeral public key
-        // 2. Send rewrap request to KAS with our client key
-        // 3. Receive rewrapped key
-        // 4. Derive symmetric key from shared secret
-    }
-
-    /// Decrypt a single collection item
-    func decrypt(_ encryptedData: Data) async throws -> Data {
-        // Collection item wire format:
-        // - 3 bytes: IV (counter)
-        // - 3 bytes: length of ciphertext + tag
-        // - N bytes: ciphertext
-        // - 8-16 bytes: authentication tag
-
-        guard encryptedData.count >= 6 else {
-            throw NTDFSubscriberError.decryptionFailed("Data too short")
+        // Parse the NanoTDF header using BinaryParser
+        print("🔐 Parsing NanoTDF header: \(headerBytes.count) bytes")
+        let parser = BinaryParser(data: headerBytes)
+        do {
+            self.header = try parser.parseHeader()
+        } catch {
+            throw NTDFSubscriberError.decryptionFailed("Failed to parse NanoTDF header: \(error)")
         }
 
-        // For now, return data as-is for testing
-        // TODO: Implement actual decryption using derived symmetric key
-        //
-        // let iv = encryptedData.subdata(in: 0..<3)
-        // let lengthBytes = encryptedData.subdata(in: 3..<6)
-        // let payloadLength = Int(lengthBytes[0]) << 16 | Int(lengthBytes[1]) << 8 | Int(lengthBytes[2])
-        // let ciphertext = encryptedData.subdata(in: 6..<encryptedData.count)
-        //
-        // return try CryptoHelper.decryptAESGCM(
-        //     ciphertext: ciphertext,
-        //     key: symmetricKey!,
-        //     iv: iv.padded(to: 12)
-        // )
+        // Get cipher and tag size from header
+        self.cipher = header.payloadSignatureConfig.payloadCipher ?? .aes256GCM128
+        self.tagSize = cipher.tagSize
 
-        print("⚠️ Decryption not yet implemented - returning raw data")
-        return encryptedData
+        print("🔐 Header parsed - cipher: \(cipher), tag size: \(tagSize) bytes")
+
+        // Perform KAS rewrap to get symmetric key
+        try await performKASRewrap()
+    }
+
+    /// Perform KAS rewrap to obtain the symmetric key for decryption
+    private func performKASRewrap() async throws {
+        print("🔐 Performing KAS rewrap with NTDF token...")
+
+        // Generate ephemeral key pair for this rewrap request
+        let privateKey = P256.KeyAgreement.PrivateKey()
+        let publicKeyData = privateKey.publicKey.compressedRepresentation
+
+        // Create ephemeral key pair structure
+        let clientKeyPair = EphemeralKeyPair(
+            privateKey: privateKey.rawRepresentation,
+            publicKey: publicKeyData,
+            curve: .secp256r1
+        )
+
+        // Create KAS rewrap client with NTDF token
+        let kasRewrapClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+
+        do {
+            // Send rewrap request
+            let (wrappedKey, sessionPublicKey) = try await kasRewrapClient.rewrapNanoTDF(
+                header: headerBytes,
+                parsedHeader: header,
+                clientKeyPair: clientKeyPair
+            )
+
+            print("🔐 Received wrapped key: \(wrappedKey.count) bytes, session key: \(sessionPublicKey.count) bytes")
+
+            // Unwrap the key using ECDH with session public key
+            let symmetricKey = try unwrapKey(
+                wrappedKey: wrappedKey,
+                sessionPublicKey: sessionPublicKey,
+                clientPrivateKey: privateKey
+            )
+
+            print("✅ Symmetric key derived: \(symmetricKey.bitCount) bits")
+
+            // Create the OpenTDFKit decryptor with the unwrapped key
+            self.decryptor = OpenTDFKit.NanoTDFCollectionDecryptor.withUnwrappedKey(
+                symmetricKey: symmetricKey,
+                cipher: cipher
+            )
+
+            print("✅ Decryptor initialized successfully")
+
+        } catch {
+            print("❌ KAS rewrap failed: \(error)")
+            throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Unwrap the symmetric key from KAS response
+    private func unwrapKey(
+        wrappedKey: Data,
+        sessionPublicKey: Data,
+        clientPrivateKey: P256.KeyAgreement.PrivateKey
+    ) throws -> SymmetricKey {
+        // KAS returns the key wrapped with ECDH-derived key
+        // Format: nonce (12 bytes) + ciphertext + tag (16 bytes)
+
+        guard wrappedKey.count > 28 else {
+            throw NTDFSubscriberError.decryptionFailed("Wrapped key too short: \(wrappedKey.count) bytes")
+        }
+
+        // Parse session public key (may be compressed or uncompressed)
+        let kasSessionKey: P256.KeyAgreement.PublicKey
+        do {
+            if sessionPublicKey.count == 33 {
+                kasSessionKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: sessionPublicKey)
+            } else if sessionPublicKey.count == 65 {
+                kasSessionKey = try P256.KeyAgreement.PublicKey(x963Representation: sessionPublicKey)
+            } else {
+                throw NTDFSubscriberError.decryptionFailed("Invalid session public key size: \(sessionPublicKey.count)")
+            }
+        } catch {
+            throw NTDFSubscriberError.decryptionFailed("Failed to parse session public key: \(error)")
+        }
+
+        // Perform ECDH to derive shared secret
+        let sharedSecret: SharedSecret
+        do {
+            sharedSecret = try clientPrivateKey.sharedSecretFromKeyAgreement(with: kasSessionKey)
+        } catch {
+            throw NTDFSubscriberError.decryptionFailed("ECDH failed: \(error)")
+        }
+
+        // Derive unwrapping key via HKDF
+        // Use NanoTDF salt: SHA256(magicNumber + version)
+        let magicAndVersion = Data([0x4C, 0x31, Header.version])  // "L1M"
+        let salt = Data(SHA256.hash(data: magicAndVersion))
+
+        let unwrapKey = sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: salt,
+            sharedInfo: Data(),
+            outputByteCount: 32
+        )
+
+        // Parse wrapped key format from KAS
+        // Platform returns: nonce (12 bytes) + ciphertext + tag (16 bytes)
+        let nonce = wrappedKey.prefix(12)
+        let ciphertextWithTag = wrappedKey.dropFirst(12)
+
+        // Decrypt using AES-GCM
+        do {
+            let gcmNonce = try AES.GCM.Nonce(data: nonce)
+            let sealedBox = try AES.GCM.SealedBox(combined: nonce + ciphertextWithTag)
+            let payloadKeyData = try AES.GCM.open(sealedBox, using: unwrapKey)
+            return SymmetricKey(data: payloadKeyData)
+        } catch {
+            throw NTDFSubscriberError.decryptionFailed("Failed to unwrap payload key: \(error)")
+        }
+    }
+
+    /// Decrypt a single encrypted collection item
+    /// - Parameter encryptedData: The encrypted frame data in collection wire format
+    /// - Returns: Decrypted plaintext data
+    /// - Throws: If decryption fails
+    func decrypt(_ encryptedData: Data) async throws -> Data {
+        guard let decryptor else {
+            throw NTDFSubscriberError.decryptionFailed("Decryptor not initialized")
+        }
+
+        // Parse collection item wire format:
+        // - 3 bytes: IV counter (big-endian)
+        // - 3 bytes: length of ciphertext + tag (big-endian)
+        // - N bytes: ciphertext + tag
+
+        guard encryptedData.count >= 6 else {
+            throw NTDFSubscriberError.decryptionFailed("Encrypted data too short: \(encryptedData.count) bytes")
+        }
+
+        // Parse IV counter (3 bytes, big-endian)
+        let ivCounter = UInt32(encryptedData[0]) << 16 |
+                        UInt32(encryptedData[1]) << 8 |
+                        UInt32(encryptedData[2])
+
+        // Parse payload length (3 bytes, big-endian)
+        let payloadLength = Int(encryptedData[3]) << 16 |
+                           Int(encryptedData[4]) << 8 |
+                           Int(encryptedData[5])
+
+        // Validate we have enough data
+        let expectedTotal = 6 + payloadLength
+        guard encryptedData.count >= expectedTotal else {
+            throw NTDFSubscriberError.decryptionFailed(
+                "Incomplete encrypted data: have \(encryptedData.count), need \(expectedTotal)"
+            )
+        }
+
+        // Extract ciphertext + tag
+        let ciphertextWithTag = encryptedData.subdata(in: 6..<(6 + payloadLength))
+
+        // Create CollectionItem for decryption
+        let item = CollectionItem(
+            ivCounter: ivCounter,
+            ciphertextWithTag: ciphertextWithTag,
+            tagSize: tagSize
+        )
+
+        // Decrypt using OpenTDFKit
+        do {
+            return try await decryptor.decryptItem(item)
+        } catch {
+            throw NTDFSubscriberError.decryptionFailed("Decryption failed: \(error)")
+        }
     }
 }
+

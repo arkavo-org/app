@@ -29,6 +29,9 @@ class LiveStreamViewModel: ObservableObject {
 
     private let kasURL = URL(string: "https://100.arkavo.net")!
 
+    /// NTDF token for KAS authentication (must be set before connecting)
+    var ntdfToken: String?
+
     // MARK: - Initialization
 
     init() {}
@@ -36,13 +39,24 @@ class LiveStreamViewModel: ObservableObject {
     // MARK: - Public Methods
 
     /// Connect to RTMP stream
-    func connect(url: String, streamName: String) async {
+    /// - Parameters:
+    ///   - url: RTMP URL to connect to
+    ///   - streamName: Stream name/key to subscribe to
+    ///   - ntdfToken: Optional NTDF token (uses stored token if not provided)
+    func connect(url: String, streamName: String, ntdfToken: String? = nil) async {
         isConnecting = true
         errorMessage = nil
 
+        // Use provided token or stored token
+        guard let token = ntdfToken ?? self.ntdfToken else {
+            isConnecting = false
+            errorMessage = "NTDF token required for encrypted stream playback"
+            return
+        }
+
         #if canImport(ArkavoStreaming)
-            // Create subscriber
-            subscriber = NTDFStreamingSubscriber(kasURL: kasURL)
+            // Create subscriber with NTDF token
+            subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: token)
 
             // Set up frame handler
             await subscriber?.setFrameHandler { [weak self] frame in
