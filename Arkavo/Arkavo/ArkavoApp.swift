@@ -78,6 +78,13 @@ struct ArkavoApp: App {
             }
             .environmentObject(remoteStreamer)
             .task {
+                // Clean up any invalid profiles from previous failed registrations
+                do {
+                    try await persistenceController.cleanupInvalidProfiles()
+                } catch {
+                    print("Warning: Failed to cleanup invalid profiles: \(error)")
+                }
+
                 await checkAccountStatus()
 
                 // Auto-connect to ArkavoCreator for mounted phone use
@@ -114,6 +121,18 @@ struct ArkavoApp: App {
             // END screenshots
             .onOpenURL { url in
                 handleIncomingURL(url)
+            }
+            .onChange(of: sharedState.shouldShowRegistration) { _, shouldShow in
+                if shouldShow {
+                    sharedState.shouldShowRegistration = false
+                    selectedView = .registration
+                }
+            }
+            .onChange(of: sharedState.isOfflineMode) { _, isOffline in
+                // When user skips registration, go to main view in offline mode
+                if isOffline && selectedView == .registration {
+                    selectedView = .main
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .handleIncomingURL)) { notification in
                 if let url = notification.object as? URL {
@@ -318,6 +337,9 @@ struct ArkavoApp: App {
 
             // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
+
+            // Insert profile into context before setting relationship
+            persistenceController.mainContext.insert(profile)
             account.profile = profile
 
             // Create streams
@@ -445,6 +467,9 @@ struct ArkavoApp: App {
             ),
         )
 
+        // Insert stream into context before creating thoughts that reference it
+        persistenceController.mainContext.insert(stream)
+
         // Create initial thought that marks this as a video stream
         let initialMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
@@ -459,21 +484,15 @@ struct ArkavoApp: App {
             metadata: initialMetadata,
         )
 
-        // Save the initial thought
-        let saved = try await PersistenceController.shared.saveThought(initialThought)
-        print("Saved initial thought \(saved)")
+        // Insert thought into context
+        persistenceController.mainContext.insert(initialThought)
 
         // Set the source thought to mark this as a video stream
         stream.source = initialThought
-        print("Set video stream source thought. Stream ID: \(stream.id)")
 
-        // Add to account
+        // Add to account (stream is already in context)
         try account.addStream(stream)
-        print("Added stream to account. Total streams: \(account.streams.count)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("Video stream creation completed")
+        print("Video stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -492,37 +511,32 @@ struct ArkavoApp: App {
             ),
         )
 
+        // Insert stream into context before creating thoughts that reference it
+        persistenceController.mainContext.insert(stream)
+
         // Create initial thought that marks this as a post stream
         let initialMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
             streamPublicID: stream.publicID,
-            mediaType: .post, // Posts are primarily text-based
+            mediaType: .post,
             createdAt: Date(),
             contributors: [],
         )
 
         let initialThought = Thought(
-            nano: Data(), // Empty initial data
+            nano: Data(),
             metadata: initialMetadata,
         )
 
-        print("Created initial post stream thought with ID: \(initialThought.id)")
-
-        // Save the initial thought
-        let saved = try await PersistenceController.shared.saveThought(initialThought)
-        print("Saved initial thought \(saved)")
+        // Insert thought into context
+        persistenceController.mainContext.insert(initialThought)
 
         // Set the source thought to mark this as a post stream
         stream.source = initialThought
-        print("Set post stream source thought. Stream ID: \(stream.id)")
 
-        // Add to account
+        // Add to account (stream is already in context)
         try account.addStream(stream)
-        print("Added stream to account. Total streams: \(account.streams.count)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("Post stream creation completed")
+        print("Post stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -544,6 +558,9 @@ struct ArkavoApp: App {
             location: "",
         )
 
+        // Insert profile into context before using it in a relationship
+        persistenceController.mainContext.insert(innerCircleProfile)
+
         // Create the stream with appropriate policies
         let stream = Stream(
             creatorPublicID: profile.publicID,
@@ -555,15 +572,14 @@ struct ArkavoApp: App {
             ),
         )
 
+        // Insert stream into context before adding to account
+        persistenceController.mainContext.insert(stream)
+
         // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
 
-        // Add to account
+        // Add to account (stream is already in context)
         try account.addStream(stream)
-        print("Added InnerCircle stream to account. Stream ID: \(stream.id)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("InnerCircle stream creation completed")
+        print("InnerCircle stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -976,6 +992,7 @@ class SharedState: ObservableObject {
     @Published var isOfflineMode: Bool = false
     @Published var lastRegistrationErrorDetails: String?
     @Published var nextAllowedAccountCheck: Date? = nil
+    @Published var shouldShowRegistration: Bool = false
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]

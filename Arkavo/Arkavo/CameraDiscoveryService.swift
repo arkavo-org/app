@@ -25,10 +25,6 @@ final class CameraDiscoveryService: NSObject, ObservableObject {
         startNWBrowser()
     }
 
-    deinit {
-        stop()
-    }
-
     func stop() {
         netServiceBrowser?.stop()
         netServiceBrowser = nil
