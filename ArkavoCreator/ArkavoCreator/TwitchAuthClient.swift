@@ -1,7 +1,8 @@
-import Foundation
-import Combine
 import ArkavoKit
+import ArkavoSocial
+import Combine
 import CommonCrypto
+import Foundation
 
 @MainActor
 class TwitchAuthClient: ObservableObject {
@@ -28,7 +29,7 @@ class TwitchAuthClient: ObservableObject {
     // OAuth Configuration
     private let clientId: String
     private let clientSecret: String
-    private let redirectURI = "https://webauthn.arkavo.net/oauth/arkavocreator/twitch"  // Server-based redirect
+    private var redirectURI: String { ArkavoConfiguration.shared.oauthRedirectURL(for: "twitch") }
     private let authURL = "https://id.twitch.tv/oauth2/authorize"
     private let tokenURL = "https://id.twitch.tv/oauth2/token"
     private let scopes = [

@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import AuthenticationServices
 import CryptoKit
 import Foundation
@@ -24,8 +25,8 @@ import SwiftData
 // TODO: rename to AuthenticationService
 class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let signingKeyAppTag: String = "com.arkavo.Arkavo"
-    private let relyingPartyIdentifier: String = "webauthn.arkavo.net"
-    private let baseURL = URL(string: "https://webauthn.arkavo.net")!
+    private var relyingPartyIdentifier: String { ArkavoConfiguration.shared.relyingPartyID }
+    private var baseURL: URL { ArkavoConfiguration.shared.identityURL }
     private var authenticationToken: Data?
     private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "Auth")
 

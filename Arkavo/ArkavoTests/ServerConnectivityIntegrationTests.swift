@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import XCTest
 
 /// Integration tests that verify connectivity to the Arkavo backend server
@@ -13,12 +14,13 @@ class ServerConnectivityIntegrationTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
 
-        // Initialize the ArkavoClient with the production server URL
+        // Initialize the ArkavoClient with configuration
+        let config = ArkavoConfiguration.shared
         client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://100.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256,
+            authURL: config.identityURL,
+            websocketURL: config.websocketURL,
+            relyingPartyID: config.relyingPartyID,
+            curve: .p256
         )
     }
 
@@ -80,7 +82,7 @@ class ServerConnectivityIntegrationTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_INTEGRATION_TESTS"] == "true",
                           "Integration tests are disabled. Set RUN_INTEGRATION_TESTS=true to run.")
 
-        let authURL = URL(string: "https://webauthn.arkavo.net")!
+        let authURL = ArkavoConfiguration.shared.identityURL
         var request = URLRequest(url: authURL)
         request.httpMethod = "GET"
         request.timeoutInterval = 10.0

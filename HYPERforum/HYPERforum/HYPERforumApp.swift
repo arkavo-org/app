@@ -25,10 +25,11 @@ struct HYPERforumApp: App {
 
     init() {
         // Initialize Arkavo client with WebAuthn support
+        let config = ArkavoConfiguration.shared
         let client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://100.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
+            authURL: config.identityURL,
+            websocketURL: config.websocketURL,
+            relyingPartyID: config.relyingPartyID,
             curve: .p256
         )
         arkavoClient = client
