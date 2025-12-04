@@ -12,7 +12,7 @@ public struct ArkavoConfiguration: Sendable {
     public let relyingPartyID = "identity.arkavo.net"
 
     /// WebSocket server URL for real-time communication
-    public let websocketURL = URL(string: "wss://100.arkavo.net")!
+    public let websocketURL = URL(string: "wss://100.arkavo.net/ws")!
 
     /// Domains for certificate pinning
     public let pinnedDomains: Set<String> = ["identity.arkavo.net", "kas.arkavo.net", "app.arkavo.com"]
