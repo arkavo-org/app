@@ -29,6 +29,9 @@ final class Profile: Identifiable, Codable {
     /// Marked for external storage. This data is highly sensitive.
     @Attribute(.externalStorage) var keyStorePrivate: Data?
 
+    // Inverse relationship to Account
+    var account: Account?
+
     // Default empty init required by SwiftData
     init() {
         let newID = UUID() // Generate UUID first

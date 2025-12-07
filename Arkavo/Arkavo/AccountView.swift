@@ -1,9 +1,12 @@
+import ArkavoStore
+import StoreKit
 import SwiftData
 import SwiftUI
 
 struct AccountView: View {
     @Query private var accounts: [Account]
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var storeKitManager = StoreKitManager()
     #if !os(macOS)
         @StateObject private var ageVerificationManager = AgeVerificationManager()
     #endif
@@ -13,15 +16,23 @@ struct AccountView: View {
     @State private var locationGranularity: LocationGranularity = .wide
     @State private var showingLocationPermissionAlert = false
     @State private var identityAssuranceLevel: IdentityAssuranceLevel = .ial0
-    @State private var encryptionLevel: EncryptionLevel = .el0
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
     @State private var showingDeleteProfileAlert = false
     @State private var isResettingProfile = false
+    @State private var showingEncryptionUpgrade = false
 
     private var account: Account? {
         accounts.first
+    }
+
+    private var encryptionIcon: String {
+        switch account?.entitlementTier ?? .low {
+        case .low: "lock"
+        case .medium: "lock.fill"
+        case .high: "lock.shield.fill"
+        }
     }
 
     var body: some View {
@@ -100,11 +111,21 @@ struct AccountView: View {
             }
 
             Section(header: Text("Features")) {
-                Picker("Encryption", selection: $encryptionLevel) {
-                    ForEach(EncryptionLevel.allCases, id: \.self) { level in
-                        Text(level.rawValue)
+                Button {
+                    showingEncryptionUpgrade = true
+                } label: {
+                    HStack {
+                        Label("Encryption", systemImage: encryptionIcon)
+                        Spacer()
+                        Text(account?.entitlementTier.displayName ?? "Basic")
+                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
+                .foregroundColor(.primary)
+
                 Picker("Stream", selection: $streamLevel) {
                     ForEach(StreamLevel.allCases, id: \.self) { level in
                         Text(level.rawValue)
@@ -121,6 +142,9 @@ struct AccountView: View {
             }
         }
         .navigationTitle("Account")
+        .sheet(isPresented: $showingEncryptionUpgrade) {
+            EncryptionUpgradeView(storeKitManager: storeKitManager, account: account)
+        }
         .alert("Location Permission", isPresented: $showingLocationPermissionAlert) {
             Button("OK") {
                 // Empty closure: Default behavior is to dismiss the alert.
@@ -339,4 +363,276 @@ enum AgeVerificationStatus: String, CaseIterable {
     case pending = "Verification Pending"
     case verified = "Verified 18+"
     case failed = "Verification Failed"
+}
+
+// MARK: - Encryption Upgrade View
+
+struct EncryptionUpgradeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var storeKitManager: StoreKitManager
+    let account: Account?
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var showSuccess = false
+
+    private var currentTier: EntitlementTier {
+        account?.entitlementTier ?? .low
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.linearGradient(
+                                colors: [.purple, .blue],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+
+                        Text("Encryption Level")
+                            .font(.title)
+                            .fontWeight(.bold)
+
+                        Text("Upgrade your encryption for enhanced security")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top)
+
+                    // Current tier badge
+                    HStack {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.green)
+                        Text("Current: \(currentTier.displayName)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(20)
+
+                    // Encryption tiers
+                    if storeKitManager.isLoadingProducts {
+                        ProgressView("Loading plans...")
+                            .padding()
+                    } else {
+                        VStack(spacing: 16) {
+                            EncryptionTierCard(
+                                tier: .low,
+                                product: nil,
+                                isCurrent: currentTier == .low,
+                                onUpgrade: nil
+                            )
+
+                            if let mediumProduct = storeKitManager.products.first(where: { $0.id.contains("medium.monthly") }) {
+                                EncryptionTierCard(
+                                    tier: .medium,
+                                    product: mediumProduct,
+                                    isCurrent: currentTier == .medium,
+                                    onUpgrade: { await purchase(mediumProduct) }
+                                )
+                            } else {
+                                EncryptionTierCard(
+                                    tier: .medium,
+                                    product: nil,
+                                    isCurrent: currentTier == .medium,
+                                    onUpgrade: nil
+                                )
+                            }
+
+                            if let highProduct = storeKitManager.products.first(where: { $0.id.contains("high.monthly") }) {
+                                EncryptionTierCard(
+                                    tier: .high,
+                                    product: highProduct,
+                                    isCurrent: currentTier == .high,
+                                    onUpgrade: { await purchase(highProduct) }
+                                )
+                            } else {
+                                EncryptionTierCard(
+                                    tier: .high,
+                                    product: nil,
+                                    isCurrent: currentTier == .high,
+                                    onUpgrade: nil
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+
+                    // Restore purchases
+                    Button {
+                        Task {
+                            await restorePurchases()
+                        }
+                    } label: {
+                        Text("Restore Purchases")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    .disabled(isProcessing)
+                    .padding(.bottom)
+                }
+                .padding()
+            }
+            .navigationTitle("Encryption")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage ?? "An unexpected error occurred.")
+            }
+            .alert("Success", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("Your encryption has been upgraded!")
+            }
+            .task {
+                await storeKitManager.loadProducts()
+            }
+        }
+    }
+
+    private func purchase(_ product: StoreKit.Product) async {
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            if let _ = try await storeKitManager.purchase(product) {
+                let tier = ProductTierMapping.tier(for: product.id)
+                account?.updateEntitlementTier(tier)
+                try? await PersistenceController.shared.saveChanges()
+                showSuccess = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func restorePurchases() async {
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await storeKitManager.restorePurchases()
+            let tier = await storeKitManager.currentEncryptionTier()
+            if tier != .low {
+                account?.updateEntitlementTier(tier)
+                try? await PersistenceController.shared.saveChanges()
+                showSuccess = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+}
+
+struct EncryptionTierCard: View {
+    let tier: EntitlementTier
+    let product: StoreKit.Product?
+    let isCurrent: Bool
+    let onUpgrade: (() async -> Void)?
+
+    private var icon: String {
+        switch tier {
+        case .low: "lock"
+        case .medium: "lock.fill"
+        case .high: "lock.shield.fill"
+        }
+    }
+
+    private var color: Color {
+        switch tier {
+        case .low: .gray
+        case .medium: .blue
+        case .high: .purple
+        }
+    }
+
+    private var price: String {
+        if let product {
+            return "\(product.displayPrice)/month"
+        }
+        return tier == .low ? "Free" : "N/A"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tier.displayName)
+                        .font(.headline)
+                    Text(price)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                if isCurrent {
+                    Text("CURRENT")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(4)
+                } else if onUpgrade != nil {
+                    Button {
+                        Task {
+                            await onUpgrade?()
+                        }
+                    } label: {
+                        Text("Upgrade")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(color)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            Text(tier.encryptionLevel.description)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+
+            Text(tier.encryptionLevel.technicalDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .italic()
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isCurrent ? color : Color.gray.opacity(0.3), lineWidth: isCurrent ? 2 : 1)
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isCurrent ? color.opacity(0.05) : Color.clear)
+        )
+    }
 }

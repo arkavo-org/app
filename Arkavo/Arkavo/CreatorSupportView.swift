@@ -1,11 +1,17 @@
+import ArkavoStore
+import StoreKit
 import SwiftUI
 
 struct CreatorSupportView: View {
     let creator: Creator
     let onDismiss: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var storeKitManager = StoreKitManager()
     @State private var selectedTier: CreatorTier = .basic
     @State private var isProcessing = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var showSuccess = false
 
     var body: some View {
         NavigationStack {
@@ -35,37 +41,72 @@ struct CreatorSupportView: View {
                     .cornerRadius(12)
                     .shadow(radius: 2)
 
-                    // Membership Tiers
+                    // Encryption Tiers
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Support Tiers")
+                        Text("Encryption Tiers")
                             .font(.headline)
 
-                        ForEach(CreatorTier.allCases, id: \.self) { tier in
-                            TierCard(
-                                tier: tier,
-                                isSelected: selectedTier == tier,
-                                onSelect: { selectedTier = tier },
-                            )
+                        if storeKitManager.isLoadingProducts {
+                            ProgressView("Loading plans...")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                        } else if storeKitManager.products.isEmpty {
+                            // Fallback to static tiers if products not available
+                            ForEach(CreatorTier.allCases, id: \.self) { tier in
+                                TierCard(
+                                    tier: tier,
+                                    product: nil,
+                                    isSelected: selectedTier == tier,
+                                    onSelect: { selectedTier = tier }
+                                )
+                            }
+                        } else {
+                            // Show StoreKit products
+                            ForEach(CreatorTier.allCases, id: \.self) { tier in
+                                let product = productForTier(tier)
+                                TierCard(
+                                    tier: tier,
+                                    product: product,
+                                    isSelected: selectedTier == tier,
+                                    onSelect: { selectedTier = tier }
+                                )
+                            }
                         }
                     }
 
                     // Support Button
-                    Button {
-                        startSupport()
-                    } label: {
-                        Group {
-                            if isProcessing {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Text("Become a Supporter")
+                    if selectedTier != .basic {
+                        Button {
+                            Task {
+                                await startSupport()
                             }
+                        } label: {
+                            Group {
+                                if isProcessing {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Text("Subscribe")
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.purple)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.purple)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .disabled(isProcessing)
+                    }
+
+                    // Restore Purchases Button
+                    Button {
+                        Task {
+                            await restorePurchases()
+                        }
+                    } label: {
+                        Text("Restore Purchases")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
                     }
                     .disabled(isProcessing)
                 }
@@ -80,40 +121,118 @@ struct CreatorSupportView: View {
                     }
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage ?? "An unexpected error occurred.")
+            }
+            .alert("Success", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("Thank you! Your encryption has been upgraded.")
+            }
+            .task {
+                await storeKitManager.loadProducts()
+            }
         }
     }
 
-    private func startSupport() {
+    private func productForTier(_ tier: CreatorTier) -> Product? {
+        let productID: String
+        switch tier {
+        case .basic:
+            return nil // Free tier
+        case .premium:
+            productID = ProductIdentifier.encryptionMediumMonthly
+        case .exclusive:
+            productID = ProductIdentifier.encryptionHighMonthly
+        }
+        return storeKitManager.product(for: productID)
+    }
+
+    private func startSupport() async {
         isProcessing = true
-        // Simulate API call
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            isProcessing = false
-            dismiss()
+        defer { isProcessing = false }
+
+        guard let product = productForTier(selectedTier) else {
+            errorMessage = "Product not available. Please try again later."
+            showError = true
+            return
+        }
+
+        do {
+            if let _ = try await storeKitManager.purchase(product) {
+                showSuccess = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func restorePurchases() async {
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await storeKitManager.restorePurchases()
+            if !storeKitManager.purchasedProductIDs.isEmpty {
+                showSuccess = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
         }
     }
 }
 
 struct TierCard: View {
     let tier: CreatorTier
+    let product: Product?
     let isSelected: Bool
     let onSelect: () -> Void
 
-    private var price: String {
+    private var encryptionLevel: ArkavoStore.EncryptionLevel {
         switch tier {
-        case .basic: "$5"
-        case .premium: "$10"
-        case .exclusive: "$25"
+        case .basic: .low
+        case .premium: .medium
+        case .exclusive: .high
         }
     }
 
-    private var perks: [String] {
+    private var price: String {
+        if let product {
+            return product.displayPrice
+        }
         switch tier {
-        case .basic:
-            ["Access to public posts", "Join community discussions", "Monthly Q&A sessions"]
-        case .premium:
-            ["All Basic tier perks", "Exclusive content", "Priority support", "Behind-the-scenes content"]
-        case .exclusive:
-            ["All Premium tier perks", "1-on-1 mentoring", "Custom requests", "Early access to new content"]
+        case .basic: return "Free"
+        case .premium: return "$4.99"
+        case .exclusive: return "$9.99"
+        }
+    }
+
+    private var priceLabel: String {
+        if tier == .basic {
+            return "Free"
+        }
+        return "\(price)/month"
+    }
+
+    private var icon: String {
+        switch encryptionLevel {
+        case .low: "lock"
+        case .medium: "lock.fill"
+        case .high: "lock.shield.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch encryptionLevel {
+        case .low: .gray
+        case .medium: .blue
+        case .high: .purple
         }
     }
 
@@ -121,11 +240,15 @@ struct TierCard: View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(iconColor)
+
                     VStack(alignment: .leading) {
-                        Text(tier.rawValue)
+                        Text(encryptionLevel.displayName)
                             .font(.title3)
                             .bold()
-                        Text("\(price)/month")
+                        Text(priceLabel)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -138,19 +261,19 @@ struct TierCard: View {
                     }
                 }
 
-                Divider()
+                Text(encryptionLevel.description)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(perks, id: \.self) { perk in
-                        Label(perk, systemImage: "checkmark")
-                            .font(.subheadline)
-                    }
-                }
+                Text(encryptionLevel.technicalDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.purple : Color.gray.opacity(0.3), lineWidth: 2),
+                    .stroke(isSelected ? Color.purple : Color.gray.opacity(0.3), lineWidth: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())

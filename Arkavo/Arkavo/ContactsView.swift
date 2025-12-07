@@ -140,10 +140,10 @@ struct ContactsView: View {
         isLoading = true
         do {
             let peerProfiles = try await PersistenceController.shared.fetchAllPeerProfiles()
-            // Filter out "Me" and "InnerCircle" profiles
+            // Filter out "Me" profile
             await MainActor.run {
                 contacts = peerProfiles.filter { profile in
-                    profile.name != "Me" && profile.name != "InnerCircle"
+                    profile.name != "Me"
                 }
             }
         } catch {

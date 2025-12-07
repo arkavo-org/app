@@ -150,6 +150,7 @@ struct CreatorDetailView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
     @State private var selectedSection: DetailSection = .about
+    @State private var showingAccountSettings = false
 
     enum DetailSection {
         case about, videos, posts
@@ -192,11 +193,27 @@ struct CreatorDetailView: View {
                 Text("Public ID: \(viewModel.profile.publicID.base58EncodedString)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .padding(.top, InnerCircleConstants.systemMargin) // Using existing constant for consistency
+                    .padding(.top, 16)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if viewModel.isProfileOwner {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingAccountSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingAccountSettings) {
+            NavigationStack {
+                AccountView()
+            }
+        }
     }
 
     @ViewBuilder

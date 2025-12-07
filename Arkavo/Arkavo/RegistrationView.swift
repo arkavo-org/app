@@ -162,6 +162,12 @@ struct RegistrationView: View {
                                             currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
                                         }
                                     }
+                                } else {
+                                    Button("Skip for now") {
+                                        // Return to offline mode / network connections
+                                        sharedState.isOfflineMode = true
+                                    }
+                                    .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 if currentStep == .welcome {

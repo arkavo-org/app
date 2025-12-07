@@ -491,7 +491,8 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         self.client = client
         self.messageDelegate = messageDelegate
 
-        if let handle = KeychainManager.getHandle() {
+        // Use shared Arkavo handle (from Arkavo app registration) first, then fall back to local handle
+        if let handle = KeychainManager.getArkavoHandle() ?? KeychainManager.getHandle() {
             accountName = handle
         }
 
@@ -625,9 +626,12 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             return
         }
 
-        // Then check UserDefaults for account name
-        guard let storedName = UserDefaults.standard.string(forKey: "arkavo_account_name") else {
-            print("WorkflowViewModel: No stored account name found in UserDefaults")
+        // Check for handle: shared Arkavo handle first, then UserDefaults
+        let storedName = KeychainManager.getArkavoHandle()
+            ?? UserDefaults.standard.string(forKey: "arkavo_account_name")
+
+        guard let storedName else {
+            print("WorkflowViewModel: No stored account name found")
             return
         }
 
