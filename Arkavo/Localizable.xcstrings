@@ -260,9 +260,6 @@
     "Back" : {
 
     },
-    "Become a Supporter" : {
-
-    },
     "Bio" : {
 
     },
@@ -408,6 +405,12 @@
         }
       }
     },
+    "CURRENT" : {
+
+    },
+    "Current: %@" : {
+
+    },
     "Data mode" : {
 
     },
@@ -476,6 +479,12 @@
 
     },
     "Encryption" : {
+
+    },
+    "Encryption Level" : {
+
+    },
+    "Encryption Tiers" : {
 
     },
     "End User License Agreement (EULA)" : {
@@ -654,6 +663,9 @@
       }
     },
     "Learn more, view our" : {
+
+    },
+    "Loading plans..." : {
 
     },
     "Loading profile..." : {
@@ -971,6 +983,9 @@
     "Reset Profile" : {
 
     },
+    "Restore Purchases" : {
+
+    },
     "Retry" : {
 
     },
@@ -1211,6 +1226,12 @@
     "Submit" : {
 
     },
+    "Subscribe" : {
+
+    },
+    "Success" : {
+
+    },
     "Support" : {
 
     },
@@ -1218,9 +1239,6 @@
 
     },
     "Support and Protect features will be available in an upcoming update." : {
-
-    },
-    "Support Tiers" : {
 
     },
     "Tap 'Discover Peers' to find nearby devices." : {
@@ -1236,6 +1254,9 @@
 
     },
     "Thank you for helping keep our community safe." : {
+
+    },
+    "Thank you! Your encryption has been upgraded." : {
 
     },
     "There are no members to display." : {
@@ -1276,6 +1297,9 @@
     "Try a different search term" : {
 
     },
+    "Try Again" : {
+
+    },
     "Type a message..." : {
       "localizations" : {
         "es-US" : {
@@ -1293,6 +1317,12 @@
 
     },
     "Update" : {
+
+    },
+    "Upgrade" : {
+
+    },
+    "Upgrade your encryption for enhanced security" : {
 
     },
     "Uploading..." : {
@@ -1376,6 +1406,9 @@
 
     },
     "You own your content" : {
+
+    },
+    "Your encryption has been upgraded!" : {
 
     },
     "Your handle must be unique within arkavo.social" : {

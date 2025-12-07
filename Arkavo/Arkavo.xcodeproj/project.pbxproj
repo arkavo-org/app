@@ -17,8 +17,6 @@
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
 		DA132E212D7FCF7F0003F04D /* GroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */; };
 		DA136A022DB08EDB004F4FB9 /* GroupInnerCircleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA136A012DB08EDB004F4FB9 /* GroupInnerCircleView.swift */; };
-		DA5448DD2CFB612F00959552 /* Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5448DC2CFB612F00959552 /* Extension.swift */; };
-		DA5448DE2CFB612F00959553 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5448DD2CFB612F00959553 /* Extensions.swift */; };
 		DA1A4DDD2C67EAE000722E3E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDC2C67EAE000722E3E /* Account.swift */; };
 		DA1A4DDF2C67EDB600722E3E /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DDE2C67EDB600722E3E /* Profile.swift */; };
 		DA1A4DE32C69265200722E3E /* AccountProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */; };
@@ -33,6 +31,7 @@
 		DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */; };
 		DA24F91F2CB1D046003211CD /* Topics.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA24F91E2CB1D044003211CD /* Topics.swift */; };
 		DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA284D602C3F5AB800CCF7EC /* WebSocketManager.swift */; };
+		DA34603D2EE4B78B00A1D638 /* ArkavoStore in Frameworks */ = {isa = PBXBuildFile; productRef = DA34603C2EE4B78B00A1D638 /* ArkavoStore */; };
 		DA3680AF2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */; };
 		DA36BD512CC84A4300467778 /* AgeVerificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD502CC84A4300467778 /* AgeVerificationManager.swift */; };
 		DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA36BD522CC8534400467778 /* IDCardScannerViewController.swift */; };
@@ -40,6 +39,7 @@
 		DA44D8852CF6E16F0007C89B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA44D8842CF6E16F0007C89B /* Secrets.swift */; };
 		DA484F352CDD94900023B016 /* ProtectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA484F342CDD948A0023B016 /* ProtectorView.swift */; };
 		DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */; };
+		DA5448DE2CFB612F00959553 /* Arkavo/Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5448DD2CFB612F00959553 /* Arkavo/Extensions.swift */; };
 		DA57B9A92DE28A9D002D5C8F /* WaveEmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */; };
 		DA57B9AB2DE28AB6002D5C8F /* ContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */; };
 		DA57B9AD2DE293B3002D5C8F /* ContactsCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */; };
@@ -132,8 +132,6 @@
 		DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamMapView.swift; sourceTree = "<group>"; };
 		DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupViewModel.swift; sourceTree = "<group>"; };
 		DA136A012DB08EDB004F4FB9 /* GroupInnerCircleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupInnerCircleView.swift; sourceTree = "<group>"; };
-		DA5448DC2CFB612F00959552 /* Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extension.swift; sourceTree = "<group>"; };
-		DA5448DD2CFB612F00959553 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Arkavo/Extensions.swift; sourceTree = "<group>"; };
 		DA1A4DDC2C67EAE000722E3E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		DA1A4DDE2C67EDB600722E3E /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountProfileView.swift; sourceTree = "<group>"; };
@@ -155,6 +153,7 @@
 		DA44D8842CF6E16F0007C89B /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		DA5448DD2CFB612F00959553 /* Arkavo/Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Arkavo/Extensions.swift; sourceTree = "<group>"; };
 		DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveEmptyStateView.swift; sourceTree = "<group>"; };
 		DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsCreateView.swift; sourceTree = "<group>"; };
@@ -226,6 +225,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA34603D2EE4B78B00A1D638 /* ArkavoStore in Frameworks */,
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
 				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
 				DAF7A3A52EC2D80A00A59F0C /* ArkavoKit in Frameworks */,
@@ -249,6 +249,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DA345FA02EE4B49A00A1D638 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				DA5448DD2CFB612F00959553 /* Arkavo/Extensions.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		DA34603B2EE4B78B00A1D638 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		DAC1F9DA2C34DA7000499631 = {
 			isa = PBXGroup;
 			children = (
@@ -257,6 +272,8 @@
 				DAC1F9F92C34DA7100499631 /* ArkavoTests */,
 				DAC1FA032C34DA7100499631 /* ArkavoUITests */,
 				DAC1F9E42C34DA7000499631 /* Products */,
+				DA345FA02EE4B49A00A1D638 /* Recovered References */,
+				DA34603B2EE4B78B00A1D638 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -343,7 +360,6 @@
 				DA8A1F912CE1661300E1D7FC /* ProtectorRedditScanner.swift */,
 				DA6C9E5B2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift */,
 				DA24F91E2CB1D044003211CD /* Topics.swift */,
-				DA179AE52CA0DE8B0083EB99 /* Extension.swift */,
 				DA44D8842CF6E16F0007C89B /* Secrets.swift */,
 				DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */,
 				DA3680AE2CBB82DC00AED0E4 /* MyRecommender 1.mlpackage */,
@@ -411,6 +427,7 @@
 				DABFC28F2C34F54E00232D79 /* OpenTDFKit */,
 				DAEE13892CA1021500DCB5EC /* FlatBuffers */,
 				DAF7A3A42EC2D80A00A59F0C /* ArkavoKit */,
+				DA34603C2EE4B78B00A1D638 /* ArkavoStore */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -595,8 +612,7 @@
 				DA20461A2C603C05006AB6E4 /* Thought.swift in Sources */,
 				DA132E212D7FCF7F0003F04D /* GroupViewModel.swift in Sources */,
 				DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */,
-				DA179AE52CA0DE8B0083EB99 /* Extension.swift in Sources */,
-				DA5448DE2CFB612F00959553 /* Extensions.swift in Sources */,
+				DA5448DE2CFB612F00959553 /* Arkavo/Extensions.swift in Sources */,
 				DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */,
 				DAF7A3A72EC2D83D00A59F0C /* StreamManager 2.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
@@ -1066,6 +1082,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DA34603C2EE4B78B00A1D638 /* ArkavoStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */;
+			productName = ArkavoStore;
+		};
 		DABFC28F2C34F54E00232D79 /* OpenTDFKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */;

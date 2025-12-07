@@ -342,26 +342,31 @@ struct ArkavoApp: App {
             persistenceController.mainContext.insert(profile)
             account.profile = profile
 
-            // Create streams
-            do {
-                let videoStream = try await createVideoStream(account: account, profile: profile)
-                let postStream = try await createPostStream(account: account, profile: profile)
+            // Create streams only if they don't already exist
+            if account.streams.isEmpty {
+                do {
+                    let videoStream = try await createVideoStream(account: account, profile: profile)
+                    let postStream = try await createPostStream(account: account, profile: profile)
 
-                // Create InnerCircle stream for P2P communication
-                let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                    // Create InnerCircle stream for P2P communication
+                    let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
 
-                print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
-            } catch {
-                print("Failed to create streams: \(error)")
-                regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
-                connectionError = ConnectionError(
-                    title: "Setup Error",
-                    message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
-                    action: "Retry",
-                    isBlocking: true,
-                )
-                sharedState.lastRegistrationErrorDetails = error.localizedDescription
-                return false
+                    print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
+                } catch {
+                    print("Failed to create streams: \(error)")
+                    regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
+                    connectionError = ConnectionError(
+                        title: "Setup Error",
+                        message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
+                        action: "Retry",
+                        isBlocking: true,
+                    )
+                    sharedState.lastRegistrationErrorDetails = error.localizedDescription
+                    return false
+                }
+            } else {
+                print("Account already has \(account.streams.count) streams, skipping stream creation")
+                regLogger.log("[Registration] Reusing existing \(account.streams.count) streams")
             }
 
             ViewModelFactory.shared.setAccount(account)
