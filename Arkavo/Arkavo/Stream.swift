@@ -13,26 +13,37 @@ final class Stream: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID
     @Attribute(.unique) var publicID: Data
     var creatorPublicID: Data
-    var profile: Profile
+
+    // Stream metadata stored directly (replaces profile: Profile?)
+    var streamName: String = ""
+    var streamBlurb: String = ""
+    var streamInterests: String = ""
+    var streamLocation: String = ""
+    var streamHasHighEncryption: Bool = false
+    var streamHasHighIdentityAssurance: Bool = false
+
     // Make this optional to handle deserialization of existing store data
     var policies: Policies? = Policies(
         admission: .closed,
         interaction: .closed,
         age: .forAll
     )
-    // InnerCircle profiles - direct profiles for members
-    var innerCircleProfiles: [Profile] = []
+
     // Initial thought that determines stream type
+    @Relationship(deleteRule: .nullify)
     var source: Thought?
+
     @Relationship(deleteRule: .cascade, inverse: \Thought.stream)
     var thoughts: [Thought] = []
+
+    // Inverse relationship to Account
+    var account: Account?
 
     // Default empty init required by SwiftData
     init() {
         id = UUID()
         publicID = Data()
         creatorPublicID = Data()
-        profile = Profile(name: "Default")
         policies = Policies(
             admission: .closed,
             interaction: .closed,
@@ -44,13 +55,23 @@ final class Stream: Identifiable, Hashable {
         id: UUID = UUID(),
         publicID: Data? = nil,
         creatorPublicID: Data,
-        profile: Profile,
+        name: String,
+        blurb: String = "",
+        interests: String = "",
+        location: String = "",
+        hasHighEncryption: Bool = false,
+        hasHighIdentityAssurance: Bool = false,
         policies: Policies? = nil
     ) {
         self.id = id
         self.publicID = publicID ?? Stream.generatePublicID(from: id)
         self.creatorPublicID = creatorPublicID
-        self.profile = profile
+        self.streamName = name
+        self.streamBlurb = blurb
+        self.streamInterests = interests
+        self.streamLocation = location
+        self.streamHasHighEncryption = hasHighEncryption
+        self.streamHasHighIdentityAssurance = hasHighIdentityAssurance
         if let policies {
             self.policies = policies
         }
@@ -87,25 +108,6 @@ extension Stream {
             thought.stream = nil
         }
     }
-
-    // InnerCircle management methods
-
-    // Add a profile to the InnerCircle
-    func addToInnerCircle(_ profile: Profile) {
-        if !innerCircleProfiles.contains(where: { $0.id == profile.id }) {
-            innerCircleProfiles.append(profile)
-        }
-    }
-
-    // Remove a profile from the InnerCircle
-    func removeFromInnerCircle(_ profile: Profile) {
-        innerCircleProfiles.removeAll { $0.id == profile.id }
-    }
-
-    // Check if a profile is part of the InnerCircle
-    func isInInnerCircle(_ profile: Profile) -> Bool {
-        innerCircleProfiles.contains { $0.id == profile.id }
-    }
 }
 
 struct Policies: Codable {
@@ -139,14 +141,6 @@ extension Stream {
     var isGroupChatStream: Bool {
         // A group chat stream has no initial thought/sources
         source == nil
-    }
-
-    var isInnerCircleStream: Bool {
-        isGroupChatStream && profile.name == "InnerCircle"
-    }
-
-    var hasInnerCircleMembers: Bool {
-        !innerCircleProfiles.isEmpty
     }
 
     // Safely access policies with a default if nil

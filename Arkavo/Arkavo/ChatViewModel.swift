@@ -241,62 +241,7 @@ class ChatViewModel: ObservableObject { // REMOVED: ArkavoClientDelegate conform
             throw ChatError.streamError("Stream not found")
         }
 
-        // --- Determine Send Method and Policy ---
-        // For InnerCircle streams, we use the first available profile's keystore
-        // NOTE: This assumes at least one peer has completed key exchange.
-        // Future enhancement: validate all profiles have keystores or implement multi-recipient encryption
-        if stream.isInnerCircleStream {
-            print("ChatViewModel: Sending message in InnerCircle stream...")
-            for profile in stream.innerCircleProfiles {
-                if let keyStorePublic = profile.keyStorePublic {
-                    let keystore = PublicKeyStore(curve: .secp256r1)
-                    try await keystore.deserialize(from: keyStorePublic)
-                    if let rl = ResourceLocator(
-                        protocolEnum: .sharedResourceDirectory,
-                        body: profile.publicID.base58EncodedString,
-                    ) {
-                        kasMetadata = try await keystore.createKasMetadata(resourceLocator: rl)
-                        // Create thought service model
-                        let thoughtModel = ThoughtServiceModel(
-                            creatorPublicID: account.profile!.publicID,
-                            streamPublicID: profile.publicID, // route to each individual, perhaps rename to targetPublicID
-                            mediaType: .say,
-                            createdAt: creationDate,
-                            content: messageData,
-                        )
-                        policyData = try createFlatBuffersPolicy(for: thoughtModel)
-                        profile.keyStorePublic = await keystore.serialize()
-                        try PersistenceController.shared.saveStream(stream)
-                        break
-                    }
-                }
-            }
-            // Check P2P connection status
-            if !peerManager.connectedPeers.isEmpty {
-                print("   P2P Peers connected. Sending via PeerManager.")
-                // P2P Send Logic (using PeerManager)
-                do {
-                    // PeerManager handles encryption and policy internally for P2P
-                    try await peerManager.sendSecureTextMessage(content, in: stream)
-                    print("   InnerCircle P2P message sent successfully via PeerManager.")
-                    // Add local message immediately after successful P2P send
-                    // Note: P2P send doesn't return nanoData, so we need a way to get/generate the thought ID
-                    // Let's generate a temporary ID or use a placeholder for now.
-                    // A better approach might be for sendSecureTextMessage to return the Thought ID.
-                    let tempThoughtID = UUID().uuidString.data(using: .utf8)! // Placeholder ID
-                    addLocalChatMessage(content: content, thoughtPublicID: tempThoughtID, timestamp: creationDate)
-                    return // Exit after successful P2P send
-                } catch {
-                    print("❌ ChatViewModel: Failed to send InnerCircle message via P2P: \(error). Falling back to ArkavoClient.")
-                    // Fall through to ArkavoClient send if P2P fails
-                }
-            } else {
-                print("   No P2P Peers connected. Sending via ArkavoClient.")
-                // Fall through to ArkavoClient send
-            }
-        }
-
-        // --- ArkavoClient Send Logic (Used for non-InnerCircle or P2P fallback) ---
+        // --- ArkavoClient Send Logic ---
         print("ChatViewModel: Sending message via ArkavoClient...")
         guard client.currentState == .connected else {
             throw ChatError.invalidState("ArkavoClient not connected")

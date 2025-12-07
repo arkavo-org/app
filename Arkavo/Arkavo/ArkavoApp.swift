@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import OSLog
 import SwiftUI
 
@@ -29,13 +30,12 @@ struct ArkavoApp: App {
     }
 
     init() {
+        let config = ArkavoConfiguration.shared
         client = ArkavoClient(
-            authURL: URL(string: "https://webauthn.arkavo.net")!,
-            websocketURL: URL(string: "wss://100.arkavo.net")!,
-            relyingPartyID: "webauthn.arkavo.net",
-            curve: .p256,
-            // Note: Modified for compatibility with latest OpenTDFKit
-            // Capacity of 8192 keys is set in GroupViewModel.swift
+            authURL: config.identityURL,
+            websocketURL: config.websocketURL,
+            relyingPartyID: config.relyingPartyID,
+            curve: .p256
         )
         ViewModelFactory.shared.serviceLocator.register(client)
         // Initialize router
@@ -78,6 +78,13 @@ struct ArkavoApp: App {
             }
             .environmentObject(remoteStreamer)
             .task {
+                // Clean up any invalid profiles from previous failed registrations
+                do {
+                    try await persistenceController.cleanupInvalidProfiles()
+                } catch {
+                    print("Warning: Failed to cleanup invalid profiles: \(error)")
+                }
+
                 await checkAccountStatus()
 
                 // Auto-connect to ArkavoCreator for mounted phone use
@@ -114,6 +121,18 @@ struct ArkavoApp: App {
             // END screenshots
             .onOpenURL { url in
                 handleIncomingURL(url)
+            }
+            .onChange(of: sharedState.shouldShowRegistration) { _, shouldShow in
+                if shouldShow {
+                    sharedState.shouldShowRegistration = false
+                    selectedView = .registration
+                }
+            }
+            .onChange(of: sharedState.isOfflineMode) { _, isOffline in
+                // When user skips registration, go to main view in offline mode
+                if isOffline && selectedView == .registration {
+                    selectedView = .main
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .handleIncomingURL)) { notification in
                 if let url = notification.object as? URL {
@@ -299,7 +318,7 @@ struct ArkavoApp: App {
                     }
                     // If no recovery suggestion was provided, add default guidance
                     if ns.localizedRecoverySuggestion == nil {
-                        msg += "\n\nTo register:\n1. Go to Settings → Passwords\n2. Search for 'webauthn.arkavo.net'\n3. Delete all existing passkeys\n4. Return and try again"
+                        msg += "\n\nTo register:\n1. Go to Settings → Passwords\n2. Search for '\(ArkavoConfiguration.shared.relyingPartyID)'\n3. Delete all existing passkeys\n4. Return and try again"
                     }
                     action = "Got It"
                 } else if ns.domain == "HTTPError" {
@@ -316,30 +335,46 @@ struct ArkavoApp: App {
                 return false
             }
 
+            // Clean up any orphaned objects from previous failed registrations before saving
+            try await persistenceController.cleanupInvalidProfiles()
+
             // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
+
+            // Insert profile into context before setting relationship
+            persistenceController.mainContext.insert(profile)
             account.profile = profile
 
-            // Create streams
-            do {
-                let videoStream = try await createVideoStream(account: account, profile: profile)
-                let postStream = try await createPostStream(account: account, profile: profile)
+            // Save profile immediately to ensure it persists even if later steps fail
+            try await persistenceController.saveChanges()
+            regLogger.log("[Registration] Profile saved to database")
 
-                // Create InnerCircle stream for P2P communication
-                let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+            // Create streams only if they don't already exist
+            if account.streams.isEmpty {
+                do {
+                    let videoStream = try await createVideoStream(account: account, profile: profile)
+                    let postStream = try await createPostStream(account: account, profile: profile)
 
-                print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
-            } catch {
-                print("Failed to create streams: \(error)")
-                regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
-                connectionError = ConnectionError(
-                    title: "Setup Error",
-                    message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
-                    action: "Retry",
-                    isBlocking: true,
-                )
-                sharedState.lastRegistrationErrorDetails = error.localizedDescription
-                return false
+                    print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
+
+                    // Save streams immediately to ensure they persist even if connection fails
+                    try await persistenceController.saveChanges()
+                    regLogger.log("[Registration] Streams saved to database")
+                } catch {
+                    print("Failed to create streams: \(error)")
+                    regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
+                    connectionError = ConnectionError(
+                        title: "Setup Error",
+                        message: "Failed to set up your account streams. Details: \(error.localizedDescription)",
+                        action: "Retry",
+                        isBlocking: true,
+                    )
+                    sharedState.lastRegistrationErrorDetails = error.localizedDescription
+                    return false
+                }
+            } else {
+                print("Account already has \(account.streams.count) streams, skipping stream creation")
+                regLogger.log("[Registration] Reusing existing \(account.streams.count) streams")
             }
 
             ViewModelFactory.shared.setAccount(account)
@@ -413,16 +448,16 @@ struct ArkavoApp: App {
         let profile = Profile(name: profileName)
         profile.finalizeRegistration(did: localDID, handle: profileName.lowercased().replacingOccurrences(of: " ", with: "-"))
 
-        // Associate with account
+        // Insert profile into context before setting relationship
+        persistenceController.mainContext.insert(profile)
         account.profile = profile
 
         // Create required streams for local operation
         print("Creating local streams...")
         let videoStream = try await createVideoStream(account: account, profile: profile)
         let postStream = try await createPostStream(account: account, profile: profile)
-        let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
 
-        print("Created local streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
+        print("Created local streams - video: \(videoStream.id), post: \(postStream.id)")
 
         // Save everything
         try await persistenceController.saveChanges()
@@ -437,13 +472,17 @@ struct ArkavoApp: App {
         // Create the stream with appropriate policies
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids,
-            ),
+                age: .forAll,
+            )
         )
+
+        // Insert stream into context before creating thoughts that reference it
+        persistenceController.mainContext.insert(stream)
 
         // Create initial thought that marks this as a video stream
         let initialMetadata = Thought.Metadata(
@@ -459,21 +498,15 @@ struct ArkavoApp: App {
             metadata: initialMetadata,
         )
 
-        // Save the initial thought
-        let saved = try await PersistenceController.shared.saveThought(initialThought)
-        print("Saved initial thought \(saved)")
+        // Insert thought into context
+        persistenceController.mainContext.insert(initialThought)
 
         // Set the source thought to mark this as a video stream
         stream.source = initialThought
-        print("Set video stream source thought. Stream ID: \(stream.id)")
 
-        // Add to account
+        // Add to account (stream is already in context)
         try account.addStream(stream)
-        print("Added stream to account. Total streams: \(account.streams.count)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("Video stream creation completed")
+        print("Video stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -484,86 +517,41 @@ struct ArkavoApp: App {
         // Create the stream with appropriate policies
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids,
-            ),
+                age: .forAll,
+            )
         )
+
+        // Insert stream into context before creating thoughts that reference it
+        persistenceController.mainContext.insert(stream)
 
         // Create initial thought that marks this as a post stream
         let initialMetadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
             streamPublicID: stream.publicID,
-            mediaType: .post, // Posts are primarily text-based
+            mediaType: .post,
             createdAt: Date(),
             contributors: [],
         )
 
         let initialThought = Thought(
-            nano: Data(), // Empty initial data
+            nano: Data(),
             metadata: initialMetadata,
         )
 
-        print("Created initial post stream thought with ID: \(initialThought.id)")
-
-        // Save the initial thought
-        let saved = try await PersistenceController.shared.saveThought(initialThought)
-        print("Saved initial thought \(saved)")
+        // Insert thought into context
+        persistenceController.mainContext.insert(initialThought)
 
         // Set the source thought to mark this as a post stream
         stream.source = initialThought
-        print("Set post stream source thought. Stream ID: \(stream.id)")
 
-        // Add to account
+        // Add to account (stream is already in context)
         try account.addStream(stream)
-        print("Added stream to account. Total streams: \(account.streams.count)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("Post stream creation completed")
-
-        return stream
-    }
-
-    func createInnerCircleStream(account: Account, profile: Profile) async throws -> Stream {
-        print("Creating InnerCircle stream for profile: \(profile.name)")
-
-        // Check if InnerCircle already exists
-        if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
-            print("InnerCircle stream already exists with ID: \(existingInnerCircle.id)")
-            return existingInnerCircle
-        }
-
-        // Create a special profile for InnerCircle
-        let innerCircleProfile = Profile(
-            name: "InnerCircle",
-            blurb: "Local peer-to-peer communication",
-            interests: "local",
-            location: "",
-        )
-
-        // Create the stream with appropriate policies
-        let stream = Stream(
-            creatorPublicID: profile.publicID,
-            profile: innerCircleProfile,
-            policies: Policies(
-                admission: .openInvitation,
-                interaction: .open,
-                age: .forAll,
-            ),
-        )
-
-        // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
-
-        // Add to account
-        try account.addStream(stream)
-        print("Added InnerCircle stream to account. Stream ID: \(stream.id)")
-
-        // Save changes
-        try await persistenceController.saveChanges()
-        print("InnerCircle stream creation completed")
+        print("Post stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -607,24 +595,6 @@ struct ArkavoApp: App {
                 print("✅ Created new post stream: \(newPostStream.id)")
             } else {
                 print("✅ Post stream found: \(postStream!.id)")
-            }
-
-            // Check InnerCircle stream
-            let innerCircleStream = account.streams.first(where: { stream in
-                stream.isInnerCircleStream
-            })
-
-            if innerCircleStream == nil {
-                print("⚠️ InnerCircle stream missing - attempting to create")
-                guard let profile = account.profile else {
-                    print("❌ Cannot create InnerCircle stream: Profile not found")
-                    return
-                }
-
-                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
-            } else {
-                print("✅ InnerCircle stream found: \(innerCircleStream!.id)")
             }
 
             // Save any changes
@@ -696,7 +666,7 @@ struct ArkavoApp: App {
 
             // First, try to validate streams safely without accessing Thoughts
             do {
-                let (existingVideoStream, existingPostStream, existingInnerCircleStream) =
+                let (existingVideoStream, existingPostStream, _) =
                     try await persistenceController.validateStreamsWithoutAccessingThoughts()
 
                 // If we can't identify stream types safely, remove potentially corrupted streams
@@ -717,12 +687,6 @@ struct ArkavoApp: App {
                     let newPostStream = try await createPostStream(account: account, profile: profile)
                     print("✅ Created new post stream: \(newPostStream.id)")
                 }
-
-                if existingInnerCircleStream == nil {
-                    print("⚠️ InnerCircle stream missing - creating new one")
-                    let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                    print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
-                }
             } catch {
                 print("❌ Error validating streams: \(error.localizedDescription)")
                 // If validation fails completely, remove all streams and recreate
@@ -734,9 +698,6 @@ struct ArkavoApp: App {
 
                 let newPostStream = try await createPostStream(account: account, profile: profile)
                 print("✅ Created new post stream after error: \(newPostStream.id)")
-
-                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                print("✅ Created new InnerCircle stream after error: \(newInnerCircleStream.id)")
             }
 
             try await persistenceController.saveChanges()
@@ -770,7 +731,12 @@ struct ArkavoApp: App {
 
                         // Reset account state so registration can create a new one
                         account.profile = nil
-                        try? await persistenceController.saveChanges()
+                        do {
+                            try await persistenceController.saveChanges()
+                        } catch {
+                            print("Warning: Failed to save profile reset: \(error.localizedDescription)")
+                            // Continue to registration anyway - the profile will be recreated
+                        }
 
                         // Route to registration
                         selectedView = .registration
@@ -976,6 +942,7 @@ class SharedState: ObservableObject {
     @Published var isOfflineMode: Bool = false
     @Published var lastRegistrationErrorDetails: String?
     @Published var nextAllowedAccountCheck: Date? = nil
+    @Published var shouldShowRegistration: Bool = false
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]

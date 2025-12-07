@@ -56,9 +56,10 @@ struct ContentView: View {
                 switch sharedState.selectedTab {
                 case .home:
                     if sharedState.isOfflineMode && !sharedState.showCreateView {
-                        // Show offline home view when in offline mode
-                        OfflineHomeView()
+                        // Show network connections view when in offline mode
+                        NetworkConnectionsView()
                             .environmentObject(sharedState)
+                            .environmentObject(agentService)
                     } else {
                         VideoContentView()
                     }
@@ -76,9 +77,10 @@ struct ContentView: View {
                     AgentDiscoveryView(agentService: agentService)
                 case .social:
                     if sharedState.isOfflineMode {
-                        // Redirect to offline home if they somehow get to this tab in offline mode
-                        OfflineHomeView()
+                        // Redirect to network connections if they somehow get to this tab in offline mode
+                        NetworkConnectionsView()
                             .environmentObject(sharedState)
+                            .environmentObject(agentService)
                             .onAppear {
                                 // Switch to home tab
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

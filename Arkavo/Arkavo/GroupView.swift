@@ -122,39 +122,6 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         }
         notificationObservers.append(natsObserver)
 
-        // NEW: Observer for shared profiles saved locally
-        let profileSavedObserver = NotificationCenter.default.addObserver(
-            forName: .profileSharedAndSaved,
-            object: nil,
-            queue: .main, // Ensure handler runs on main thread
-        ) { [weak self] notification in
-            guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
-                print("❌ ProfileShare: Received .profileSharedAndSaved notification without profilePublicID.")
-                return
-            }
-            Task { @MainActor [weak self] in
-                await self?.handleProfileSharedAndSaved(profilePublicID: profilePublicID)
-            }
-        }
-        notificationObservers.append(profileSavedObserver)
-
-        // NEW: Observer for shared KeyStores saved locally
-        let keyStoreSavedObserver = NotificationCenter.default.addObserver(
-            forName: .keyStoreSharedAndSaved,
-            object: nil,
-            queue: .main, // Ensure handler runs on main thread
-        ) { notification in
-            guard let profilePublicID = notification.userInfo?["profilePublicID"] as? Data else {
-                print("❌ KeyStoreShare: Received .keyStoreSharedAndSaved notification without profilePublicID.")
-                return
-            }
-            Task { @MainActor in
-                // Optionally handle this notification, e.g., update UI to show peer has KeyStore
-                print("GroupViewModel: Handling .keyStoreSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
-                // Example: Refresh peer list or specific peer row UI
-            }
-        }
-        notificationObservers.append(keyStoreSavedObserver)
     }
 
     deinit {
@@ -168,7 +135,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 
         // Check if we already have the stream locally
         if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
-            print("Found existing stream: \(existingStream.profile.name)")
+            print("Found existing stream: \(existingStream.streamName)")
             return existingStream
         }
 
@@ -210,7 +177,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         while Date().timeIntervalSince(startTime) < TimeInterval(timeoutSeconds) {
             // Check if stream has been created
             if let stream = try await PersistenceController.shared.fetchStream(withPublicID: publicID) {
-                print("Stream received and saved: \(stream.profile.name)")
+                print("Stream received and saved: \(stream.streamName)")
                 return stream
             }
             try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
@@ -249,7 +216,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
 
         // Check if stream already exists
         if let existingStream = try await PersistenceController.shared.fetchStream(withPublicID: newStreamPublicID) {
-            print("Stream already exists: \(existingStream.profile.name)")
+            print("Stream already exists: \(existingStream.streamName)")
             return
         }
 
@@ -257,18 +224,16 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         let stream = Stream(
             publicID: Data(streamPublicId),
             creatorPublicID: Data(creatorPublicId),
-            profile: Profile(
-                name: streamName,
-                blurb: streamProfile.blurb ?? "", // Use blurb from streamProfile, not self.profile
-                interests: streamProfile.interests ?? "",
-                location: streamProfile.location ?? "",
-                hasHighEncryption: streamProfile.encryptionLevel == .el2,
-                hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2,
-            ),
+            name: streamName,
+            blurb: streamProfile.blurb ?? "",
+            interests: streamProfile.interests ?? "",
+            location: streamProfile.location ?? "",
+            hasHighEncryption: streamProfile.encryptionLevel == .el2,
+            hasHighIdentityAssurance: streamProfile.identityAssuranceLevel == .ial2,
             policies: Policies(
-                admission: .open, // Default policy, adjust as needed
-                interaction: .open, // Default policy, adjust as needed
-                age: .forAll, // Default policy, adjust as needed
+                admission: .open,
+                interaction: .open,
+                age: .forAll,
             ),
         )
 
@@ -297,10 +262,10 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         var builder = FlatBufferBuilder(initialSize: 1024)
 
         // Create nested structures first
-        let nameOffset = builder.create(string: stream.profile.name)
-        let blurbOffset = builder.create(string: stream.profile.blurb ?? "")
-        let interestsOffset = builder.create(string: stream.profile.interests)
-        let locationOffset = builder.create(string: stream.profile.location)
+        let nameOffset = builder.create(string: stream.streamName)
+        let blurbOffset = builder.create(string: stream.streamBlurb)
+        let interestsOffset = builder.create(string: stream.streamInterests)
+        let locationOffset = builder.create(string: stream.streamLocation)
 
         // Create Profile
         let profileOffset = Arkavo_Profile.createProfile(
@@ -310,8 +275,8 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
             interestsOffset: interestsOffset,
             locationOffset: locationOffset,
             locationLevel: .approximate,
-            identityAssuranceLevel: stream.profile.hasHighIdentityAssurance ? .ial2 : .ial1,
-            encryptionLevel: stream.profile.hasHighEncryption ? .el2 : .el1,
+            identityAssuranceLevel: stream.streamHasHighIdentityAssurance ? .ial2 : .ial1,
+            encryptionLevel: stream.streamHasHighEncryption ? .el2 : .el1,
         )
 
         // Create Activity
@@ -459,8 +424,7 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
     /// Deletes streams at the specified offsets from the filtered list of regular streams.
     func deleteStream(at offsets: IndexSet) async {
         // 1. Get the list of regular stream IDs currently displayed
-        // Ensure we filter based on the *current* state of viewModel.streams
-        let regularStreamIDs = await MainActor.run { streams.filter { !$0.isInnerCircleStream }.map { $0.persistentModelID } }
+        let regularStreamIDs = await MainActor.run { streams.map { $0.persistentModelID } }
 
         // 2. Identify the actual Stream objects to delete based on the offsets
         let streamIDsToDelete = offsets.map { regularStreamIDs[$0] }
@@ -472,9 +436,9 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         for persistentModelID in streamIDsToDelete {
             // Fetch the stream directly from the persistence controller using persistentModelID
             if let streamInContext = PersistenceController.shared.fetchStream(withPersistentModelID: persistentModelID) {
-                    let streamName = streamInContext.profile.name
+                    let name = streamInContext.streamName
                     let publicID = streamInContext.publicID
-                    print("GroupViewModel: Attempting to fetch and delete stream '\(streamName)' (ID: \(publicID.base58EncodedString))")
+                    print("GroupViewModel: Attempting to fetch and delete stream '\(name)' (ID: \(publicID.base58EncodedString))")
                     // Ensure it's managed by the correct context before deleting
                     if streamInContext.modelContext == PersistenceController.shared.mainContext {
                         PersistenceController.shared.mainContext.delete(streamInContext)
@@ -525,79 +489,21 @@ final class GroupViewModel: ViewModel, ObservableObject { // Removed ArkavoClien
         await loadStreams()
     }
 
-    // NEW: Handle the notification that a shared profile was saved
-    private func handleProfileSharedAndSaved(profilePublicID: Data) async {
-        print("GroupViewModel: Handling .profileSharedAndSaved notification for ID: \(profilePublicID.base58EncodedString)")
-        do {
-            // 1. Find the local user's "InnerCircle" stream
-            // This assumes the user has exactly one stream named "InnerCircle".
-            // A more robust implementation might involve selecting the target stream.
-            guard let innerCircleStream = account.streams.first(where: { $0.isInnerCircleStream }) else {
-                print("❌ ProfileShare: Could not find local 'InnerCircle' stream to add shared profile.")
-                // Optionally inform the user
-                return
-            }
-            print("   Found InnerCircle stream: \(innerCircleStream.profile.name)")
-
-            // 2. Fetch the newly saved Profile from persistence
-            guard let sharedProfile = try await PersistenceController.shared.fetchProfile(withPublicID: profilePublicID) else {
-                print("❌ ProfileShare: Could not fetch the shared profile (\(profilePublicID.base58EncodedString)) from persistence after notification.")
-                return
-            }
-            print("   Fetched shared profile: \(sharedProfile.name)")
-
-            // 3. Add the profile to the stream's innerCircleProfiles (if not already present)
-            if !innerCircleStream.isInInnerCircle(sharedProfile) {
-                innerCircleStream.addToInnerCircle(sharedProfile)
-                print("   Added profile \(sharedProfile.name) to InnerCircle stream members.")
-
-                // 4. Save the changes to the stream
-                try await PersistenceController.shared.saveChanges()
-                print("   Saved changes to InnerCircle stream.")
-
-                // 5. Post notification to refresh the UI
-                NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
-                print("   Posted .refreshInnerCircleMembers notification.")
-
-            } else {
-                print("   Profile \(sharedProfile.name) is already in the InnerCircle stream. No changes needed.")
-            }
-
-        } catch {
-            print("❌ ProfileShare: Error handling saved profile notification: \(error)")
-            // Optionally inform the user
-        }
-    }
 }
 
 // MARK: - Extensions
-
-// Add notification name for refreshing InnerCircle members
-// Kept here as GroupViewModel posts it. InnerCircleView observes it.
-extension Notification.Name {
-    static let refreshInnerCircleMembers = Notification.Name("refreshInnerCircleMembers")
-}
 
 // MARK: - Main View
 
 struct GroupView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject private var viewModel: GroupViewModel = ViewModelFactory.shared.makeViewModel()
-    // Observe the PeerDiscoveryManager for OT-TDF data - MOVED to GroupCreateView
-    // @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager()
-    @StateObject private var peerManager: PeerDiscoveryManager = ViewModelFactory.shared.getPeerDiscoveryManager() // Keep for InnerCircleView
     @State private var isShareSheetPresented = false
-    // @State private var innerCircleMessageText: String = "" // REMOVED: State for InnerCircle chat input
-    // @FocusState private var isInnerCircleInputFocused: Bool // REMOVED: Focus state for the input field
-    // @State private var isPeerSearchActive = false // MOVED to GroupCreateView
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    // Define systemMargin at the GroupView level
-    private let systemMargin: CGFloat = 16 // Keep if needed by other parts, otherwise remove
+    private let systemMargin: CGFloat = 16
 
     // Static constant for the base URL used in sharing
     static let streamBaseURL = "https://app.arkavo.com/stream/"
-    // Static constant for "just now" string - MOVED to GroupCreateView
-    // static let justNowString = "just now"
 
     var body: some View {
         // Use mainContent as the base view
@@ -638,17 +544,10 @@ struct GroupView: View {
                 }
             }
         }
-        // Refresh UI when key exchange states change
-        .onChange(of: peerManager.peerKeyExchangeStates) { _, _ in
-            // This ensures the UI updates when a state changes for any peer
-            print("GroupView: Detected change in peerKeyExchangeStates")
-        }
     }
 
-    // Stream list - Changed ScrollView/LazyVStack to List
+    // Stream list
     private func streamListView(geometry: GeometryProxy) -> some View {
-        let regularStreams = viewModel.streams.filter { !$0.isInnerCircleStream }
-
         // Show loading indicator while data is loading
         if viewModel.isLoading {
             return AnyView(
@@ -658,8 +557,8 @@ struct GroupView: View {
             )
         }
 
-        // Show WaveEmptyStateView if no regular streams exist after loading
-        if regularStreams.isEmpty {
+        // Show WaveEmptyStateView if no streams exist after loading
+        if viewModel.streams.isEmpty {
             return AnyView(
                 WaveEmptyStateView()
                     .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width),
@@ -668,74 +567,38 @@ struct GroupView: View {
 
         return AnyView(
             List {
-                // --- 1. InnerCircle Stream Section ---
-                // Find the InnerCircle stream
-                if let innerCircleStream = viewModel.streams.first(where: { $0.isInnerCircleStream }) {
-                    Section {
-                        // Use the dedicated view for InnerCircle members
-                        InnerCircleView(stream: innerCircleStream, peerManager: peerManager)
-                            .environmentObject(sharedState)
-                            .background(InnerCircleConstants.cardBackgroundColor) // Match background
-                            .cornerRadius(InnerCircleConstants.cornerRadius) // Apply corner radius
-                        // --- REMOVED: InnerCircle Chat Input ---
+                Section {
+                    ForEach(viewModel.streams) { stream in
+                        streamRow(stream: stream)
+                            .listRowInsets(EdgeInsets(top: 5, leading: systemMargin, bottom: 5, trailing: systemMargin))
+                            .listRowBackground(Color(.systemBackground))
                     }
-                    .listRowInsets(EdgeInsets(top: systemMargin / 2, leading: systemMargin, bottom: systemMargin / 2, trailing: systemMargin)) // Add padding around the InnerCircleView
-                    .listRowBackground(InnerCircleConstants.backgroundColor) // Match list background
-                    .listRowSeparator(.hidden) // Hide separator for this section
+                    .onDelete(perform: deleteStream)
+                } header: {
+                    Text("Streams")
+                        .font(.headline)
+                        .foregroundColor(.primary)
                 }
-
-                // --- 2. Other Streams Section ---
-                if !regularStreams.isEmpty {
-                    Section {
-                        // Iterate ONLY over regular streams
-                        ForEach(regularStreams) { stream in
-                            streamRow(stream: stream) // Use existing streamRow for non-InnerCircle
-                                .listRowInsets(EdgeInsets(top: 5, leading: InnerCircleConstants.systemMargin, bottom: 5, trailing: InnerCircleConstants.systemMargin)) // Add padding within row
-                                .listRowBackground(InnerCircleConstants.backgroundColor) // Match background
-                        }
-                        // Apply onDelete ONLY to regular streams
-                        .onDelete(perform: deleteStream)
-                    } header: {
-                        Text("Streams") // Header for regular streams
-                            .font(InnerCircleConstants.headerFont)
-                            .foregroundColor(InnerCircleConstants.primaryTextColor)
-                        // List handles section header styling, remove extra padding
-                        // .padding(.top, InnerCircleConstants.systemMargin)
-                        // .padding(.horizontal, InnerCircleConstants.systemMargin)
-                    }
-                    .listRowSeparator(.hidden) // Hide separators if desired
-                }
+                .listRowSeparator(.hidden)
             }
-            .listStyle(.plain) // Use plain style to remove default List background/styling
-            .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width) // Keep specific width
-            .background(InnerCircleConstants.backgroundColor.ignoresSafeArea()), // Use constant color
+            .listStyle(.plain)
+            .frame(width: horizontalSizeClass == .regular ? 320 : geometry.size.width)
+            .background(Color(.systemBackground).ignoresSafeArea()),
         )
     }
 
-    // Individual stream row (now only uses GroupCardView)
+    // Individual stream row
     func streamRow(stream: Stream) -> some View {
-        if !stream.isInnerCircleStream {
-            return AnyView(
-                GroupCardView(
-                    stream: stream,
-                    onSelect: {
-                        viewModel.selectedStream = stream
-                        sharedState.selectedStreamPublicID = stream.publicID
-                        sharedState.showChatOverlay = true
-                    },
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 10)),
-            )
-        } else {
-            return AnyView(EmptyView())
-            // --- END: Implemented/Modified Methods --- MOVED to InnerCircleView
-        }
+        GroupCardView(
+            stream: stream,
+            onSelect: {
+                viewModel.selectedStream = stream
+                sharedState.selectedStreamPublicID = stream.publicID
+                sharedState.showChatOverlay = true
+            },
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
-
-    // --- REMOVED: innerCircleMembersSection() ---
-    // The logic is now directly embedded within streamListView for clarity.
-
-    // --- REMOVED: Send InnerCircle Message Action ---
 
     // Function to handle stream deletion
     private func deleteStream(at offsets: IndexSet) {
@@ -783,20 +646,9 @@ struct GroupCardView: View {
 
                         // Group Info
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(stream.profile.name)
+                            Text(stream.streamName.isEmpty ? "Unknown" : stream.streamName)
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            // Add InnerCircle badge if applicable
-                            if stream.isInnerCircleStream {
-                                Text("InnerCircle")
-                                    .font(.caption2)
-                                    .fontWeight(.medium)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.blue.opacity(0.15))
-                                    .foregroundColor(.blue)
-                                    .cornerRadius(8)
-                            }
                         }
 
                         Spacer()
@@ -832,12 +684,7 @@ struct GroupCardView: View {
     }
 
     private func iconForStream(_ stream: Stream) -> String {
-        // Use specific icon for InnerCircle
-        if stream.isInnerCircleStream {
-            return "network" // Or "wifi", "shared.with.you" etc.
-        }
-
-        // Fallback to hash-based icon for regular streams
+        // Hash-based icon for streams
         let hashValue = stream.publicID.hashValue
         let iconIndex = abs(hashValue) % 32
         let iconNames = [

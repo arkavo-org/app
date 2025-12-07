@@ -374,12 +374,12 @@ class PostFeedViewModel: ViewModel, ObservableObject {
         let stream = Stream(
             publicID: thought.publicID,
             creatorPublicID: profile.publicID,
-            profile: Profile(name: thought.publicID.base58EncodedString),
+            name: thought.publicID.base58EncodedString,
             policies: Policies(
                 admission: .open,
                 interaction: .open,
                 age: .forAll,
-            ),
+            )
         )
         stream.source = thought
         _ = try PersistenceController.shared.saveStream(stream)

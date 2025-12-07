@@ -4,18 +4,6 @@
     "" : {
 
     },
-    "\n%@" : {
-
-    },
-    "(%lld)" : {
-
-    },
-    "(Connected)" : {
-
-    },
-    "(Offline)" : {
-
-    },
     "@%@" : {
 
     },
@@ -28,9 +16,6 @@
           }
         }
       }
-    },
-    "%@ is in InnerCircle" : {
-
     },
     "%@:%lld" : {
       "localizations" : {
@@ -89,6 +74,9 @@
     "+%lld" : {
 
     },
+    "0 connected" : {
+
+    },
     "1. Agreement to Terms" : {
 
     },
@@ -142,16 +130,10 @@
         }
       }
     },
-    "Add %@ to InnerCircle" : {
-
-    },
     "Add a description..." : {
 
     },
     "Add someone you know who's right beside you—verify in person to grow your trusted network." : {
-
-    },
-    "Add to InnerCircle" : {
 
     },
     "Admission" : {
@@ -197,9 +179,6 @@
     "All connections use end-to-end encryption with One-Time TDF technology to ensure your conversations remain private." : {
 
     },
-    "Already in InnerCircle" : {
-
-    },
     "Are you sure you want to delete %@? You'll also be removed from any chats you only share with this person." : {
 
     },
@@ -207,9 +186,6 @@
 
     },
     "Are you sure you want to delete this video? This action cannot be undone." : {
-
-    },
-    "Are you sure you want to remove %@ from your InnerCircle? They will no longer be able to communicate directly with you." : {
 
     },
     "Are you sure you want to unblock this user? They will be able to interact with your content again." : {
@@ -239,19 +215,16 @@
     "Assurance" : {
 
     },
+    "Auto-connect to Creator" : {
+
+    },
+    "Automatically connect when app launches" : {
+
+    },
     "Available" : {
 
     },
-    "Available Private Keys: %lld" : {
-
-    },
-    "Available Public Keys: %lld" : {
-
-    },
     "Back" : {
-
-    },
-    "Become a Supporter" : {
 
     },
     "Bio" : {
@@ -333,6 +306,9 @@
     "Connect to an agent and start a chat session to see it here" : {
 
     },
+    "Connect to local devices and networks" : {
+
+    },
     "Connect to Peers (Optional)" : {
 
     },
@@ -396,6 +372,12 @@
         }
       }
     },
+    "CURRENT" : {
+
+    },
+    "Current: %@" : {
+
+    },
     "Data mode" : {
 
     },
@@ -423,12 +405,6 @@
     "Disconnect" : {
 
     },
-    "Disconnect from %@" : {
-
-    },
-    "Disconnect P2P with %@?" : {
-
-    },
     "Disconnected" : {
 
     },
@@ -439,6 +415,9 @@
 
     },
     "Discovered Servers" : {
+
+    },
+    "Discovering edge agents..." : {
 
     },
     "Done" : {
@@ -463,6 +442,12 @@
     "Encryption" : {
 
     },
+    "Encryption Level" : {
+
+    },
+    "Encryption Tiers" : {
+
+    },
     "End User License Agreement (EULA)" : {
 
     },
@@ -485,9 +470,6 @@
         }
       }
     },
-    "Error Revoking Trust" : {
-
-    },
     "Error: %@" : {
 
     },
@@ -506,9 +488,6 @@
     "Failed to load image" : {
 
     },
-    "Failed to revoke trust: %@" : {
-
-    },
     "Features" : {
 
     },
@@ -519,9 +498,6 @@
 
     },
     "Full Body" : {
-
-    },
-    "Go to the Profile page to create a local profile and start using Out-of-Band messaging." : {
 
     },
     "Granularity" : {
@@ -555,12 +531,6 @@
 
     },
     "Inactive" : {
-
-    },
-    "Inner Circle" : {
-
-    },
-    "Inner Circle Members (%lld)" : {
 
     },
     "InnerCircle" : {
@@ -642,6 +612,9 @@
       }
     },
     "Learn more, view our" : {
+
+    },
+    "Loading plans..." : {
 
     },
     "Loading profile..." : {
@@ -733,6 +706,12 @@
         }
       }
     },
+    "Nearby Devices" : {
+
+    },
+    "Network Connections" : {
+
+    },
     "Next" : {
 
     },
@@ -748,19 +727,10 @@
     "No contacts found" : {
 
     },
-    "No members added to the Inner Circle yet." : {
-
-    },
-    "No Members Found" : {
-
-    },
-    "No members match your search." : {
+    "No edge agents discovered on local network" : {
 
     },
     "No Peers Discovered" : {
-
-    },
-    "No Profile Yet" : {
 
     },
     "Not available" : {
@@ -773,9 +743,6 @@
 
     },
     "Not Connected" : {
-
-    },
-    "Offline" : {
 
     },
     "Offline Mode" : {
@@ -791,10 +758,10 @@
         }
       }
     },
-    "Online" : {
+    "Owner:" : {
 
     },
-    "Owner:" : {
+    "Peer-to-peer mesh networking for secure local communication" : {
 
     },
     "Peers" : {
@@ -894,6 +861,9 @@
         }
       }
     },
+    "Reconnect" : {
+
+    },
     "Recording Error" : {
 
     },
@@ -911,16 +881,16 @@
         }
       }
     },
+    "Register / Sign In" : {
+
+    },
+    "Register or sign in to access the Arkavo social network" : {
+
+    },
     "Registration issue: %@" : {
 
     },
-    "Remove" : {
-
-    },
-    "Remove Member" : {
-
-    },
-    "Renew keys with %@" : {
+    "Remote Camera Active" : {
 
     },
     "Report Content" : {
@@ -938,19 +908,10 @@
     "Reset Profile" : {
 
     },
+    "Restore Purchases" : {
+
+    },
     "Retry" : {
-
-    },
-    "Revoke" : {
-
-    },
-    "Revoke Trust" : {
-
-    },
-    "Revoke Trust?" : {
-
-    },
-    "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
 
     },
     "Running" : {
@@ -975,10 +936,10 @@
     "Scanning for nearby devices..." : {
 
     },
-    "Search" : {
+    "Search contacts" : {
 
     },
-    "Search contacts" : {
+    "Searching for devices..." : {
 
     },
     "Searching for nearby devices..." : {
@@ -1064,6 +1025,9 @@
         }
       }
     },
+    "Skip for now" : {
+
+    },
     "Start" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1074,6 +1038,9 @@
           }
         }
       }
+    },
+    "Start Discovery" : {
+
     },
     "Start group chats now, with more exciting features coming soon!" : {
       "extractionState" : "stale",
@@ -1108,7 +1075,6 @@
 
     },
     "Stop" : {
-      "extractionState" : "stale",
       "localizations" : {
         "es-US" : {
           "stringUnit" : {
@@ -1170,6 +1136,12 @@
     "Submit" : {
 
     },
+    "Subscribe" : {
+
+    },
+    "Success" : {
+
+    },
     "Support" : {
 
     },
@@ -1177,9 +1149,6 @@
 
     },
     "Support and Protect features will be available in an upcoming update." : {
-
-    },
-    "Support Tiers" : {
 
     },
     "Tap 'Discover Peers' to find nearby devices." : {
@@ -1191,25 +1160,19 @@
     "Tap to connect" : {
 
     },
-    "Tap to Reconnect" : {
-
-    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
 
     },
     "Thank you for helping keep our community safe." : {
 
     },
-    "There are no members to display." : {
+    "Thank you! Your encryption has been upgraded." : {
 
     },
     "This will be the name of your new group" : {
 
     },
     "This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone." : {
-
-    },
-    "This will end your direct peer-to-peer connection. %@ will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting." : {
 
     },
     "Thought service is unavailable" : {
@@ -1229,13 +1192,10 @@
     "Topic Tags:" : {
 
     },
-    "Trust Revoked" : {
-
-    },
-    "Trust status: %@" : {
-
-    },
     "Try a different search term" : {
+
+    },
+    "Try Again" : {
 
     },
     "Type a message..." : {
@@ -1257,7 +1217,16 @@
     "Update" : {
 
     },
+    "Upgrade" : {
+
+    },
+    "Upgrade your encryption for enhanced security" : {
+
+    },
     "Uploading..." : {
+
+    },
+    "Use Communities tab to discover and connect with nearby peers" : {
 
     },
     "Use your face ID to verify it's you.\nThere's no need for a password." : {
@@ -1267,6 +1236,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Verified" : {
 
     },
     "Verify in Person" : {
@@ -1337,7 +1309,7 @@
     "You own your content" : {
 
     },
-    "You're currently using Arkavo in offline mode." : {
+    "Your encryption has been upgraded!" : {
 
     },
     "Your handle must be unique within arkavo.social" : {

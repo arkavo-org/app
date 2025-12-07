@@ -38,10 +38,10 @@ struct StreamProfileBadge: View {
                             .stroke(viewModel.isHighlighted ? Color.blue : Color.gray, lineWidth: 2),
                     )
                 VStack(alignment: .leading) {
-                    Text(viewModel.stream?.profile.name ?? "")
+                    Text(viewModel.stream?.streamName ?? "")
                         .font(viewModel.isExpanded ? .headline : .subheadline)
                         .foregroundColor(.primary)
-                    if viewModel.isExpanded, let blurb = viewModel.stream?.profile.blurb {
+                    if viewModel.isExpanded, let blurb = viewModel.stream?.streamBlurb, !blurb.isEmpty {
                         Text(blurb)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
