@@ -335,6 +335,9 @@ struct ArkavoApp: App {
                 return false
             }
 
+            // Clean up any orphaned objects from previous failed registrations before saving
+            try await persistenceController.cleanupInvalidProfiles()
+
             // Create and set up account
             let account = try await persistenceController.getOrCreateAccount()
 
@@ -342,16 +345,21 @@ struct ArkavoApp: App {
             persistenceController.mainContext.insert(profile)
             account.profile = profile
 
+            // Save profile immediately to ensure it persists even if later steps fail
+            try await persistenceController.saveChanges()
+            regLogger.log("[Registration] Profile saved to database")
+
             // Create streams only if they don't already exist
             if account.streams.isEmpty {
                 do {
                     let videoStream = try await createVideoStream(account: account, profile: profile)
                     let postStream = try await createPostStream(account: account, profile: profile)
 
-                    // Create InnerCircle stream for P2P communication
-                    let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
+                    print("Created streams - video: \(videoStream.id), post: \(postStream.id)")
 
-                    print("Created streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
+                    // Save streams immediately to ensure they persist even if connection fails
+                    try await persistenceController.saveChanges()
+                    regLogger.log("[Registration] Streams saved to database")
                 } catch {
                     print("Failed to create streams: \(error)")
                     regLogger.error("[Registration] Stream setup failed: \(String(describing: error))")
@@ -440,16 +448,16 @@ struct ArkavoApp: App {
         let profile = Profile(name: profileName)
         profile.finalizeRegistration(did: localDID, handle: profileName.lowercased().replacingOccurrences(of: " ", with: "-"))
 
-        // Associate with account
+        // Insert profile into context before setting relationship
+        persistenceController.mainContext.insert(profile)
         account.profile = profile
 
         // Create required streams for local operation
         print("Creating local streams...")
         let videoStream = try await createVideoStream(account: account, profile: profile)
         let postStream = try await createPostStream(account: account, profile: profile)
-        let innerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
 
-        print("Created local streams - video: \(videoStream.id), post: \(postStream.id), innerCircle: \(innerCircleStream.id)")
+        print("Created local streams - video: \(videoStream.id), post: \(postStream.id)")
 
         // Save everything
         try await persistenceController.saveChanges()
@@ -464,12 +472,13 @@ struct ArkavoApp: App {
         // Create the stream with appropriate policies
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids,
-            ),
+                age: .forAll,
+            )
         )
 
         // Insert stream into context before creating thoughts that reference it
@@ -508,12 +517,13 @@ struct ArkavoApp: App {
         // Create the stream with appropriate policies
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
-                age: .onlyKids,
-            ),
+                age: .forAll,
+            )
         )
 
         // Insert stream into context before creating thoughts that reference it
@@ -542,49 +552,6 @@ struct ArkavoApp: App {
         // Add to account (stream is already in context)
         try account.addStream(stream)
         print("Post stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
-
-        return stream
-    }
-
-    func createInnerCircleStream(account: Account, profile: Profile) async throws -> Stream {
-        print("Creating InnerCircle stream for profile: \(profile.name)")
-
-        // Check if InnerCircle already exists
-        if let existingInnerCircle = account.streams.first(where: { $0.isInnerCircleStream }) {
-            print("InnerCircle stream already exists with ID: \(existingInnerCircle.id)")
-            return existingInnerCircle
-        }
-
-        // Create a special profile for InnerCircle
-        let innerCircleProfile = Profile(
-            name: "InnerCircle",
-            blurb: "Local peer-to-peer communication",
-            interests: "local",
-            location: "",
-        )
-
-        // Insert profile into context before using it in a relationship
-        persistenceController.mainContext.insert(innerCircleProfile)
-
-        // Create the stream with appropriate policies
-        let stream = Stream(
-            creatorPublicID: profile.publicID,
-            profile: innerCircleProfile,
-            policies: Policies(
-                admission: .openInvitation,
-                interaction: .open,
-                age: .forAll,
-            ),
-        )
-
-        // Insert stream into context before adding to account
-        persistenceController.mainContext.insert(stream)
-
-        // Unlike other streams, InnerCircle has no source thought (it's a group chat stream)
-
-        // Add to account (stream is already in context)
-        try account.addStream(stream)
-        print("InnerCircle stream created. Stream ID: \(stream.id), Total streams: \(account.streams.count)")
 
         return stream
     }
@@ -628,24 +595,6 @@ struct ArkavoApp: App {
                 print("✅ Created new post stream: \(newPostStream.id)")
             } else {
                 print("✅ Post stream found: \(postStream!.id)")
-            }
-
-            // Check InnerCircle stream
-            let innerCircleStream = account.streams.first(where: { stream in
-                stream.isInnerCircleStream
-            })
-
-            if innerCircleStream == nil {
-                print("⚠️ InnerCircle stream missing - attempting to create")
-                guard let profile = account.profile else {
-                    print("❌ Cannot create InnerCircle stream: Profile not found")
-                    return
-                }
-
-                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
-            } else {
-                print("✅ InnerCircle stream found: \(innerCircleStream!.id)")
             }
 
             // Save any changes
@@ -717,7 +666,7 @@ struct ArkavoApp: App {
 
             // First, try to validate streams safely without accessing Thoughts
             do {
-                let (existingVideoStream, existingPostStream, existingInnerCircleStream) =
+                let (existingVideoStream, existingPostStream, _) =
                     try await persistenceController.validateStreamsWithoutAccessingThoughts()
 
                 // If we can't identify stream types safely, remove potentially corrupted streams
@@ -738,12 +687,6 @@ struct ArkavoApp: App {
                     let newPostStream = try await createPostStream(account: account, profile: profile)
                     print("✅ Created new post stream: \(newPostStream.id)")
                 }
-
-                if existingInnerCircleStream == nil {
-                    print("⚠️ InnerCircle stream missing - creating new one")
-                    let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                    print("✅ Created new InnerCircle stream: \(newInnerCircleStream.id)")
-                }
             } catch {
                 print("❌ Error validating streams: \(error.localizedDescription)")
                 // If validation fails completely, remove all streams and recreate
@@ -755,9 +698,6 @@ struct ArkavoApp: App {
 
                 let newPostStream = try await createPostStream(account: account, profile: profile)
                 print("✅ Created new post stream after error: \(newPostStream.id)")
-
-                let newInnerCircleStream = try await createInnerCircleStream(account: account, profile: profile)
-                print("✅ Created new InnerCircle stream after error: \(newInnerCircleStream.id)")
             }
 
             try await persistenceController.saveChanges()
@@ -791,7 +731,12 @@ struct ArkavoApp: App {
 
                         // Reset account state so registration can create a new one
                         account.profile = nil
-                        try? await persistenceController.saveChanges()
+                        do {
+                            try await persistenceController.saveChanges()
+                        } catch {
+                            print("Warning: Failed to save profile reset: \(error.localizedDescription)")
+                            // Continue to registration anyway - the profile will be recreated
+                        }
 
                         // Route to registration
                         selectedView = .registration

@@ -5,7 +5,9 @@ import SwiftData
 @Model
 final class Account {
     @Attribute(.unique) var id: Int
+    @Relationship(deleteRule: .cascade, inverse: \Profile.account)
     var profile: Profile?
+    @Relationship(deleteRule: .cascade, inverse: \Stream.account)
     var streams: [Stream] = []
     var _identityAssuranceLevel: String = IdentityAssuranceLevel.ial0.rawValue
     var _ageVerificationStatus: String = AgeVerificationStatus.unverified.rawValue

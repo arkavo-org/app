@@ -193,7 +193,7 @@ struct CreatorDetailView: View {
                 Text("Public ID: \(viewModel.profile.publicID.base58EncodedString)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .padding(.top, InnerCircleConstants.systemMargin) // Using existing constant for consistency
+                    .padding(.top, 16)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }

@@ -4,18 +4,6 @@
     "" : {
 
     },
-    "\n%@" : {
-
-    },
-    "(%lld)" : {
-
-    },
-    "(Connected)" : {
-
-    },
-    "(Offline)" : {
-
-    },
     "@%@" : {
 
     },
@@ -28,9 +16,6 @@
           }
         }
       }
-    },
-    "%@ is in InnerCircle" : {
-
     },
     "%@:%lld" : {
       "localizations" : {
@@ -145,16 +130,10 @@
         }
       }
     },
-    "Add %@ to InnerCircle" : {
-
-    },
     "Add a description..." : {
 
     },
     "Add someone you know who's right beside you—verify in person to grow your trusted network." : {
-
-    },
-    "Add to InnerCircle" : {
 
     },
     "Admission" : {
@@ -200,9 +179,6 @@
     "All connections use end-to-end encryption with One-Time TDF technology to ensure your conversations remain private." : {
 
     },
-    "Already in InnerCircle" : {
-
-    },
     "Are you sure you want to delete %@? You'll also be removed from any chats you only share with this person." : {
 
     },
@@ -210,9 +186,6 @@
 
     },
     "Are you sure you want to delete this video? This action cannot be undone." : {
-
-    },
-    "Are you sure you want to remove %@ from your InnerCircle? They will no longer be able to communicate directly with you." : {
 
     },
     "Are you sure you want to unblock this user? They will be able to interact with your content again." : {
@@ -249,12 +222,6 @@
 
     },
     "Available" : {
-
-    },
-    "Available Private Keys: %lld" : {
-
-    },
-    "Available Public Keys: %lld" : {
 
     },
     "Back" : {
@@ -438,12 +405,6 @@
     "Disconnect" : {
 
     },
-    "Disconnect from %@" : {
-
-    },
-    "Disconnect P2P with %@?" : {
-
-    },
     "Disconnected" : {
 
     },
@@ -509,9 +470,6 @@
         }
       }
     },
-    "Error Revoking Trust" : {
-
-    },
     "Error: %@" : {
 
     },
@@ -528,9 +486,6 @@
 
     },
     "Failed to load image" : {
-
-    },
-    "Failed to revoke trust: %@" : {
 
     },
     "Features" : {
@@ -576,12 +531,6 @@
 
     },
     "Inactive" : {
-
-    },
-    "Inner Circle" : {
-
-    },
-    "Inner Circle Members (%lld)" : {
 
     },
     "InnerCircle" : {
@@ -781,15 +730,6 @@
     "No edge agents discovered on local network" : {
 
     },
-    "No members added to the Inner Circle yet." : {
-
-    },
-    "No Members Found" : {
-
-    },
-    "No members match your search." : {
-
-    },
     "No Peers Discovered" : {
 
     },
@@ -805,9 +745,6 @@
     "Not Connected" : {
 
     },
-    "Offline" : {
-
-    },
     "Offline Mode" : {
 
     },
@@ -820,9 +757,6 @@
           }
         }
       }
-    },
-    "Online" : {
-
     },
     "Owner:" : {
 
@@ -959,15 +893,6 @@
     "Remote Camera Active" : {
 
     },
-    "Remove" : {
-
-    },
-    "Remove Member" : {
-
-    },
-    "Renew keys with %@" : {
-
-    },
     "Report Content" : {
 
     },
@@ -987,18 +912,6 @@
 
     },
     "Retry" : {
-
-    },
-    "Revoke" : {
-
-    },
-    "Revoke Trust" : {
-
-    },
-    "Revoke Trust?" : {
-
-    },
-    "Revoking trust for \"%@\" will remove their keys from your device and prevent future secure communication in this circle until trust is re-established. If they are currently connected, they will be disconnected. Are you sure?" : {
 
     },
     "Running" : {
@@ -1021,9 +934,6 @@
 
     },
     "Scanning for nearby devices..." : {
-
-    },
-    "Search" : {
 
     },
     "Search contacts" : {
@@ -1259,16 +1169,10 @@
     "Thank you! Your encryption has been upgraded." : {
 
     },
-    "There are no members to display." : {
-
-    },
     "This will be the name of your new group" : {
 
     },
     "This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone." : {
-
-    },
-    "This will end your direct peer-to-peer connection. %@ will remain in your InnerCircle, but key exchange and secure messaging will require reconnecting." : {
 
     },
     "Thought service is unavailable" : {
@@ -1286,12 +1190,6 @@
 
     },
     "Topic Tags:" : {
-
-    },
-    "Trust Revoked" : {
-
-    },
-    "Trust status: %@" : {
 
     },
     "Try a different search term" : {
@@ -1338,6 +1236,9 @@
 
     },
     "Users found violating this EULA may face one or more of the following actions:" : {
+
+    },
+    "Verified" : {
 
     },
     "Verify in Person" : {

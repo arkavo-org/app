@@ -67,8 +67,27 @@ class PersistenceController {
 
     // MARK: - Utility Methods
 
+    /// Removes any invalid Profile objects from the context's inserted objects
+    /// These are placeholder objects created by SwiftData when materializing relationships
+    private func cleanupInvalidInsertedProfiles() {
+        // Get all inserted objects and filter for Profile type
+        let insertedProfiles = mainContext.insertedModelsArray.compactMap { $0 as? Profile }
+
+        for profile in insertedProfiles {
+            // Check if this is a placeholder with nil required fields
+            // SwiftData placeholders have empty publicID
+            if profile.publicID.isEmpty {
+                print("PersistenceController: Removing invalid inserted Profile placeholder")
+                mainContext.delete(profile)
+            }
+        }
+    }
+
     func saveChanges() async throws {
         if mainContext.hasChanges {
+            // Clean up any invalid placeholder profiles before saving
+            cleanupInvalidInsertedProfiles()
+
             do {
                 try mainContext.save()
                 print("PersistenceController: Changes saved successfully")
@@ -89,12 +108,14 @@ class PersistenceController {
     func cleanupInvalidProfiles() async throws {
         print("PersistenceController: Checking for invalid profiles...")
 
-        // First, rollback any pending changes that might contain invalid objects
+        // First, rollback any pending changes that contain invalid/temporary objects
+        // This clears orphaned objects from failed registrations that were never saved
         if mainContext.hasChanges {
-            print("PersistenceController: Rolling back pending changes before cleanup")
+            print("PersistenceController: Rolling back pending unsaved changes to clear orphaned objects")
             mainContext.rollback()
         }
 
+        // Now fetch and clean up any corrupted profiles that were actually persisted
         let descriptor = FetchDescriptor<Profile>()
         let allProfiles = try mainContext.fetch(descriptor)
 
@@ -126,23 +147,9 @@ class PersistenceController {
 
         var videoStream: Stream?
         var postStream: Stream?
-        var innerCircleStream: Stream?
 
         for stream in streams {
-            // Check for InnerCircle stream (doesn't depend on Thought)
-            if stream.isInnerCircleStream {
-                innerCircleStream = stream
-                print("PersistenceController: Found InnerCircle stream: \(stream.id)")
-                continue
-            }
-
-            // For other streams, we need to identify them differently since they use the user's profile
             // Video and post streams have a source thought, while group chat streams don't
-            // We can't safely access stream.source, but we can check if it's non-nil
-
-            // Try to identify by checking if this is a stream with a source (video/post stream)
-            // We'll use a workaround: if it's not a group chat stream and not InnerCircle,
-            // it must be either video or post stream
             if !stream.isGroupChatStream {
                 // This stream has a source thought, so it's either video or post
                 // We'll assign them based on what we haven't found yet
@@ -156,7 +163,7 @@ class PersistenceController {
             }
         }
 
-        return (videoStream, postStream, innerCircleStream)
+        return (videoStream, postStream, nil)
     }
 
     /// Removes all streams that might have invalid Thought references
@@ -167,15 +174,15 @@ class PersistenceController {
         let account = try await getOrCreateAccount()
         let streams = account.streams
 
-        // Keep only InnerCircle streams (which don't have source thoughts)
-        let safeStreams = streams.filter(\.isInnerCircleStream)
+        // Keep only group chat streams (which don't have source thoughts)
+        let safeStreams = streams.filter(\.isGroupChatStream)
         let removedCount = streams.count - safeStreams.count
 
         if removedCount > 0 {
             print("PersistenceController: Removing \(removedCount) streams that may have invalid thoughts")
 
-            // Remove non-InnerCircle streams
-            for stream in streams where !stream.isInnerCircleStream {
+            // Remove streams with source thoughts
+            for stream in streams where !stream.isGroupChatStream {
                 mainContext.delete(stream)
             }
 

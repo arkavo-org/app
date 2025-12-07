@@ -330,7 +330,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     /// Specific errors related to P2P operations.
     enum P2PError: Error, LocalizedError {
         case sessionNotInitialized
-        case invalidStream // Attempted operation on non-InnerCircle stream
+        case invalidStream // Attempted operation on invalid stream
         case browserNotInitialized
         case profileNotAvailable
         case serializationFailed(String)
@@ -358,7 +358,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             // Concise descriptions for each case
             switch self {
             case .sessionNotInitialized: "P2P session not initialized"
-            case .invalidStream: "Not a valid InnerCircle stream"
+            case .invalidStream: "Not a valid stream"
             case .browserNotInitialized: "Browser controller not initialized"
             case .profileNotAvailable: "User profile not available"
             case let .serializationFailed(context): "Serialization failed: \(context)"
@@ -759,13 +759,8 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         }
     }
 
-    /// Encrypts data using ArkavoClient and sends it via MCSession for InnerCircle streams.
+    /// Encrypts data using ArkavoClient and sends it via MCSession.
     func sendSecureData(_ data: Data, policy: String, toPeers peers: [MCPeerID]? = nil, in stream: Stream) async throws {
-        // Ensure this function is only used for InnerCircle streams where P2P makes sense
-        guard stream.isInnerCircleStream else {
-            print("❌ Error: sendSecureData called on a non-InnerCircle stream. This function requires P2P context.")
-            throw P2PError.invalidStream
-        }
         guard let mcSession else { throw P2PError.sessionNotInitialized }
 
         // Determine target peers (default to all connected if nil)
@@ -779,7 +774,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
             throw P2PError.policyCreationFailed("Failed to encode policy JSON string")
         }
 
-        print("Processing secure data send for \(targetPeers.count) peer(s) in InnerCircle stream '\(stream.profile.name)'...")
+        print("Processing secure data send for \(targetPeers.count) peer(s) in stream '\(stream.streamName)'...")
 
         // Process each target peer individually to use their specific KAS key
         for peer in targetPeers {
@@ -954,7 +949,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         }
 
         // 3. Establish relationship and save Thought *only if* stream was found
-        print("   Found managed stream: \(managedStream.profile.name). Associating thought...")
+        print("   Found managed stream: \(managedStream.streamName). Associating thought...")
         thought.stream = managedStream // Associate with the managed stream object
         managedStream.addThought(thought) // Add to the stream's collection
 
@@ -1105,34 +1100,6 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
 
         connectedPeerProfiles = updatedProfiles
         print("Finished refreshing peer profiles. Found \(updatedProfiles.count) profiles locally.")
-
-        // --- Add fetched profiles to the selected InnerCircle stream ---
-        if let currentStream = selectedStream, currentStream.isInnerCircleStream {
-            print("   InnerCircle stream selected. Attempting to add fetched profiles...")
-            var streamUpdated = false
-            for (_, profile) in updatedProfiles {
-                if !currentStream.isInInnerCircle(profile) {
-                    print("   Adding profile \(profile.name) (\(profile.publicID.base58EncodedString)) to stream \(currentStream.profile.name)")
-                    currentStream.addToInnerCircle(profile)
-                    streamUpdated = true
-                }
-            }
-            if streamUpdated {
-                do {
-                    try await persistenceController.saveChanges()
-                    print("   Saved updates to InnerCircle stream members.")
-                    // Optionally post a notification if InnerCircleView needs an explicit refresh trigger beyond @State changes
-                    // NotificationCenter.default.post(name: .refreshInnerCircleMembers, object: nil)
-                } catch {
-                    print("❌ Error saving InnerCircle stream after adding profiles: \(error)")
-                }
-            } else {
-                print("   No new profiles to add to the InnerCircle stream.")
-            }
-        } else {
-            print("   No InnerCircle stream selected, skipping profile addition to stream.")
-        }
-        // --- End profile addition ---
 
         // --- KeyStore count calculation removed ---
     }
