@@ -44,13 +44,13 @@ class LiveStreamViewModel: ObservableObject {
             // Create subscriber
             subscriber = NTDFStreamingSubscriber(kasURL: kasURL)
 
-            // Set up frame handler
-            await subscriber?.setFrameHandler { [weak self] frame in
+            // Set up frame handler with @Sendable closure
+            await subscriber?.setFrameHandler { @Sendable [weak self] frame in
                 await self?.handleFrame(frame)
             }
 
-            // Set up state handler
-            await subscriber?.setStateHandler { [weak self] state in
+            // Set up state handler with @Sendable closure
+            await subscriber?.setStateHandler { @Sendable [weak self] state in
                 await self?.handleStateChange(state)
             }
 

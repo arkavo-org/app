@@ -1,5 +1,6 @@
 import ArkavoKit
 import AVFoundation
+import Combine
 import Foundation
 import OpenTDFKit
 import SwiftUI
@@ -10,6 +11,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
     let account: Account
     let profile: Profile
     @Published private(set) var videos: [Video] = []
+    @Published private(set) var feedItems: [FeedItem] = []
     @Published var currentVideoIndex: Int = 0
     @Published var isLoading = false
     @Published var error: Error?
@@ -19,16 +21,34 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
     private var notificationObservers: [NSObjectProtocol] = []
     private var processedMessageIDs = Set<String>() // Track processed message IDs
     private var uniqueVideoIDs: Set<String> = Set() // Track video IDs
+    private var liveStreamCancellable: AnyCancellable?
 
     init(client: ArkavoClient, account: Account, profile: Profile) {
         self.client = client
         self.account = account
         self.profile = profile
         setupNotifications()
+        setupLiveStreamObserver()
         // Load initial videos
         Task {
             await loadVideos(count: 10)
         }
+    }
+
+    private func setupLiveStreamObserver() {
+        // Subscribe to live stream changes
+        liveStreamCancellable = LiveStreamEventHandler.shared.$activeStreams
+            .receive(on: RunLoop.main)
+            .sink { [weak self] streams in
+                self?.mergeLiveStreamsIntoFeed(streams)
+            }
+    }
+
+    private func mergeLiveStreamsIntoFeed(_ liveStreams: [LiveStream]) {
+        // Live streams at the top, then VOD videos
+        var newItems: [FeedItem] = liveStreams.map { .liveStream($0) }
+        newItems.append(contentsOf: videos.map { .video($0) })
+        feedItems = newItems
     }
 
     private func setupNotifications() {
@@ -220,6 +240,7 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
         uniqueVideoIDs.insert(video.id)
         videoQueue.enqueueVideo(video)
         videos = videoQueue.videos // Let the queue manage the video array
+        mergeLiveStreamsIntoFeed(LiveStreamEventHandler.shared.activeStreams)
     }
 
     private func extractVideoDescription(from asset: AVURLAsset) async throws -> String? {
@@ -511,23 +532,25 @@ final class VideoMessageQueue {
 extension VideoFeedViewModel {
     @MainActor
     func handleSwipe(_ direction: SwipeDirection) async {
-//        print("Handling swipe: \(direction)")
         switch direction {
         case .up:
-            if currentVideoIndex < videos.count - 1 {
-//                print("Moving to next video")
+            if currentVideoIndex < feedItems.count - 1 {
                 currentVideoIndex += 1
-                videoQueue.moveToNext()
-                if videoQueue.needsMoreVideos {
-                    await loadVideos()
+                // Only manage video queue for video items
+                if case .video = feedItems[currentVideoIndex] {
+                    videoQueue.moveToNext()
+                    if videoQueue.needsMoreVideos {
+                        await loadVideos()
+                    }
                 }
                 await prepareNextVideo()
             }
         case .down:
             if currentVideoIndex > 0 {
-//                print("Moving to previous video")
                 currentVideoIndex -= 1
-                try? videoQueue.moveToPrevious()
+                if case .video = feedItems[currentVideoIndex] {
+                    try? videoQueue.moveToPrevious()
+                }
                 await prepareNextVideo()
             }
         }
@@ -535,15 +558,15 @@ extension VideoFeedViewModel {
 
     @MainActor
     func prepareNextVideo() async {
-        if videoQueue.stats.pending > 1 {
-            let nextIndex = videoQueue.stats.current + 1
-            if nextIndex < videoQueue.videos.count {
-                let nextVideo = videoQueue.videos[nextIndex]
-                do {
-                    try await playerManager.preloadVideo(url: nextVideo.url)
-                } catch {
-                    print("Failed to preload video: \(error)")
-                }
+        // Preload next video if it's a VOD item
+        let nextIndex = currentVideoIndex + 1
+        guard nextIndex < feedItems.count else { return }
+
+        if case let .video(nextVideo) = feedItems[nextIndex] {
+            do {
+                try await playerManager.preloadVideo(url: nextVideo.url)
+            } catch {
+                print("Failed to preload video: \(error)")
             }
         }
     }

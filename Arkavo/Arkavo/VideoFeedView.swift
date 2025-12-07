@@ -37,28 +37,28 @@ struct VideoFeedView: View {
                     // Show loading indicator while data is loading
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.videos.isEmpty {
+                } else if viewModel.feedItems.isEmpty {
                     WaveEmptyStateView()
                 } else {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(spacing: 0) {
-                                ForEach(viewModel.videos) { video in
-                                    VideoPlayerView(
-                                        video: video,
+                                ForEach(viewModel.feedItems) { item in
+                                    FeedItemPlayerView(
                                         viewModel: viewModel,
-                                        size: geometry.size,
+                                        item: item,
+                                        size: geometry.size
                                     )
-                                    .id(video.id)
+                                    .id(item.id)
                                     .frame(width: geometry.size.width, height: geometry.size.height)
                                 }
                             }
                         }
                         .scrollDisabled(true)
                         .onChange(of: viewModel.currentVideoIndex) { _, newIndex in
-                            if newIndex >= 0, newIndex < viewModel.videos.count {
+                            if newIndex >= 0, newIndex < viewModel.feedItems.count {
                                 withAnimation {
-                                    proxy.scrollTo(viewModel.videos[newIndex].id, anchor: .center)
+                                    proxy.scrollTo(viewModel.feedItems[newIndex].id, anchor: .center)
                                 }
                             }
                         }
@@ -72,17 +72,141 @@ struct VideoFeedView: View {
                                         withAnimation {
                                             if verticalMovement > 0, viewModel.currentVideoIndex > 0 {
                                                 viewModel.currentVideoIndex -= 1
-                                            } else if verticalMovement < 0, viewModel.currentVideoIndex < viewModel.videos.count - 1 {
+                                            } else if verticalMovement < 0, viewModel.currentVideoIndex < viewModel.feedItems.count - 1 {
                                                 viewModel.currentVideoIndex += 1
                                             }
                                         }
                                     }
-                                },
+                                }
                         )
                     }
                 }
             }
         }
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Feed Item Player View
+
+struct FeedItemPlayerView: View {
+    @EnvironmentObject var sharedState: SharedState
+    @ObservedObject var viewModel: VideoFeedViewModel
+    let item: FeedItem
+    let size: CGSize
+    private let swipeThreshold: CGFloat = 50
+    private let systemMargin: CGFloat = 16
+
+    init(viewModel: VideoFeedViewModel, item: FeedItem, size: CGSize) {
+        self.viewModel = viewModel
+        self.item = item
+        self.size = size
+    }
+
+    private var isCurrentItem: Bool {
+        viewModel.currentVideoIndex < viewModel.feedItems.count &&
+            viewModel.feedItems[viewModel.currentVideoIndex].id == item.id
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Content layer - switches based on item type
+                switch item {
+                case let .video(video):
+                    PlayerContainerView(
+                        url: video.url,
+                        playerManager: viewModel.playerManager,
+                        size: size,
+                        isCurrentVideo: isCurrentItem
+                    )
+
+                case let .liveStream(stream):
+                    EmbeddedLiveStreamView(
+                        stream: stream,
+                        isActive: isCurrentItem,
+                        onStreamEnded: {
+                            // Remove from feed when stream ends
+                            LiveStreamEventHandler.shared.removeLiveStream(streamKey: stream.streamKey)
+                        }
+                    )
+                }
+
+                // LIVE badge for live streams
+                if item.isLive {
+                    LiveBadgeOverlay()
+                }
+
+                // Content overlay
+                HStack(spacing: 0) {
+                    // Left side - Vertically centered description text
+                    ZStack(alignment: .center) {
+                        GeometryReader { metrics in
+                            VerticalText(text: item.description)
+                                .frame(width: metrics.size.height, height: systemMargin)
+                                .rotationEffect(.degrees(-90), anchor: .center)
+                                .position(
+                                    x: systemMargin + geometry.safeAreaInsets.leading,
+                                    y: metrics.size.height / 2
+                                )
+                        }
+                    }
+                    .frame(width: systemMargin * 2.75)
+
+                    Spacer()
+
+                    // Right side - Action buttons
+                    VStack(alignment: .trailing) {
+                        Spacer()
+
+                        GroupChatIconList(
+                            currentVideo: item.video,
+                            currentThought: nil,
+                            streams: viewModel.streams(),
+                            onBroadcast: {
+                                if let video = item.video, let nano = video.nano {
+                                    Task {
+                                        try? await viewModel.client.sendMessage(nano)
+                                    }
+                                }
+                            }
+                        )
+                        .padding(.trailing, systemMargin + geometry.safeAreaInsets.trailing)
+                        .padding(.bottom, systemMargin * 6.25)
+                    }
+                }
+
+                // Contributors section - Positioned at bottom
+                VStack {
+                    Spacer()
+                    HStack {
+                        ContributorsView(
+                            client: viewModel.client,
+                            contributors: item.contributors
+                        )
+                        .padding(.horizontal, systemMargin)
+                        .padding(.bottom, systemMargin * 8)
+                        Spacer()
+                    }
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onEnded { gesture in
+                        let verticalMovement = gesture.translation.height
+                        if abs(verticalMovement) > swipeThreshold {
+                            Task {
+                                if verticalMovement < 0 {
+                                    await viewModel.handleSwipe(.up)
+                                } else {
+                                    await viewModel.handleSwipe(.down)
+                                }
+                            }
+                        }
+                    }
+            )
+        }
+        .frame(width: size.width, height: size.height)
         .ignoresSafeArea()
     }
 }
