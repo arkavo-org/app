@@ -577,9 +577,11 @@ public actor RTMPPublisher {
             throw RTMPError.notConnected
         }
 
-        // Send SetChunkSize message (set to 65536 bytes for large keyframes)
+        // Send SetChunkSize message
+        // Using 4096 instead of 65536 for better error recovery - smaller chunks mean
+        // chunk headers appear more frequently, making the stream more resilient to desync
         var chunkSizeData = Data()
-        let newChunkSize: UInt32 = 65536  // Maximum RTMP chunk size
+        let newChunkSize: UInt32 = 4096  // Moderate chunk size for reliability
         chunkSizeData.append(contentsOf: newChunkSize.bigEndianBytes)
 
         try await sendRTMPMessage(
