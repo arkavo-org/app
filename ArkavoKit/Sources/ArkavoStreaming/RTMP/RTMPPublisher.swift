@@ -1126,12 +1126,24 @@ public actor RTMPPublisher {
                 fmt = 0
                 chunk.append(header)
                 chunk.append(payload[offset..<(offset + chunkSize)])
+
+                // Debug: log first chunk header bytes for video/audio
+                if protocolDebugLogging && (messageTypeId == 8 || messageTypeId == 9) {
+                    let headerHex = header.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
+                    print("📤 Type 0 header: \(headerHex) (csid=\(chunkStreamId) type=\(messageTypeId) len=\(messageLength))")
+                }
             } else {
                 // Continuation chunks: Type 3 header (1 byte) + data
                 // Type 3: Format bits 11 (0xC0) + chunk stream ID
                 fmt = 3
-                chunk.append(0xC0 | (chunkStreamId & 0x3F))
+                let continuationHeader = 0xC0 | (chunkStreamId & 0x3F)
+                chunk.append(continuationHeader)
                 chunk.append(payload[offset..<(offset + chunkSize)])
+
+                // Debug: verify continuation header is correct
+                if protocolDebugLogging && chunkCount == 1 {
+                    print("📤 Type 3 continuation: 0x\(String(format: "%02X", continuationHeader)) (csid=\(chunkStreamId))")
+                }
             }
 
             // Detailed logging for large multi-chunk messages (only if verbose enabled)
