@@ -152,8 +152,6 @@ class ArkavoMessageManager: ObservableObject {
     // This method runs on the MainActor because the class is @MainActor isolated
     private func replayNextMessage() async {
         guard !messages.isEmpty else {
-            // No messages to replay, wait before checking again
-            print("No messages to replay.")
             // Resetting index here might not be needed if we just wait
             currentReplayIndex = 0
             return

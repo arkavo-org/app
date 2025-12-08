@@ -1,5 +1,4 @@
 import ArkavoKit
-import ArkavoKit
 import SwiftUI
 
 // MARK: - Main Content View
@@ -170,7 +169,6 @@ struct SectionContainer: View {
     @ObservedObject var twitchClient: TwitchAuthClient
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
-    @State private var arkavoAccountName = ""
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
 
@@ -491,55 +489,7 @@ struct SectionContainer: View {
     }
 
     private var arkavoLoginSheet: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "lock.shield")
-                .font(.system(size: 48))
-                .foregroundColor(.accentColor)
-
-            Text("Login to Arkavo")
-                .font(.title2)
-                .bold()
-
-            Text("Enter your account name to continue")
-                .foregroundColor(.secondary)
-
-            TextField("Account Name", text: $arkavoAccountName)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 300)
-                .disabled(arkavoAuthState.isLoading)
-
-            HStack(spacing: 16) {
-                Button("Cancel") {
-                    arkavoAuthState.showingLoginSheet = false
-                }
-                .buttonStyle(.plain)
-                .disabled(arkavoAuthState.isLoading)
-
-                Button {
-                    Task {
-                        await arkavoAuthState.login(accountName: arkavoAccountName)
-                        arkavoAccountName = ""
-                    }
-                } label: {
-                    if arkavoAuthState.isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Continue")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(arkavoAccountName.isEmpty || arkavoAuthState.isLoading)
-            }
-
-            if let errorMessage = arkavoAuthState.errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-        }
-        .padding()
-        .frame(width: 400)
+        ArkavoLoginSheet(authState: arkavoAuthState)
     }
 
     // Computed property for sorted dashboard sections
