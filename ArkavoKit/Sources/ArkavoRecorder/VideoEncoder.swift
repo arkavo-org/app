@@ -438,8 +438,8 @@ public actor VideoEncoder {
         }
         lastVideoTimestamp = adjustedTimestamp
 
-        // Also stream if streaming is active
-        if isStreaming, let encoder = streamVideoEncoder {
+        // Also stream if streaming is active (either regular RTMP or NTDF-encrypted)
+        if (isStreaming || isNTDFStreaming), let encoder = streamVideoEncoder {
             do {
                 try encoder.encode(pixelBuffer, timestamp: adjustedTimestamp)
                 streamFrameCount += 1
@@ -459,8 +459,8 @@ public actor VideoEncoder {
     ///   - sampleBuffer: Audio sample buffer (must be 48kHz PCM stereo)
     ///   - sourceID: Unique identifier for the audio source (e.g., "microphone", "screen", "remote-camera-123")
     public func encodeAudioSample(_ sampleBuffer: CMSampleBuffer, sourceID: String) {
-        // Allow audio processing if either recording OR streaming
-        guard (isRecording || isStreaming) && !isPaused else { return }
+        // Allow audio processing if either recording OR streaming (regular or NTDF-encrypted)
+        guard (isRecording || isStreaming || isNTDFStreaming) && !isPaused else { return }
 
         guard CMSampleBufferIsValid(sampleBuffer) else {
             return
@@ -543,7 +543,7 @@ public actor VideoEncoder {
         }
 
         // Stream the first audio track for RTMP (typically microphone)
-        if isStreaming, let encoder = streamAudioEncoder, sourceID == "microphone" {
+        if (isStreaming || isNTDFStreaming), let encoder = streamAudioEncoder, sourceID == "microphone" {
             // Feed PCM audio to encoder for AAC conversion
             encoder.feed(sampleBuffer)
         }

@@ -1,3 +1,4 @@
+import ArkavoSocial
 import AVFoundation
 import SwiftUI
 
@@ -14,6 +15,11 @@ struct EmbeddedLiveStreamView: View {
         self.stream = stream
         self.isActive = isActive
         self.onStreamEnded = onStreamEnded
+    }
+
+    /// Get the NTDF token from keychain for encrypted stream playback
+    private var ntdfToken: String? {
+        KeychainManager.getAuthenticationToken()
     }
 
     var body: some View {
@@ -131,7 +137,7 @@ struct EmbeddedLiveStreamView: View {
     private func connectToStream() {
         showEndedOverlay = false
         Task {
-            await viewModel.connect(url: stream.rtmpURL, streamName: stream.streamName)
+            await viewModel.connect(url: stream.rtmpURL, streamName: stream.streamName, ntdfToken: ntdfToken)
         }
     }
 

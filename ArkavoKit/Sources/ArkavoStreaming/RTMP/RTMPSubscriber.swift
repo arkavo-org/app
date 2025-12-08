@@ -107,6 +107,14 @@ public actor RTMPSubscriber {
     private var windowAckSize: UInt32 = 2500000
     private var serverWindowAckSize: UInt32 = 250000
 
+    // Per-chunk-stream state for handling type 1, 2, 3 headers
+    private struct ChunkStreamState {
+        var messageLength: UInt32 = 0
+        var messageTypeId: UInt8 = 0
+        var timestamp: UInt32 = 0
+    }
+    private var chunkStreamStates: [UInt32: ChunkStreamState] = [:]
+
     // Statistics
     private var bytesReceived: UInt64 = 0
     private var framesReceived: UInt64 = 0
@@ -430,9 +438,16 @@ public actor RTMPSubscriber {
         receiveTask = Task { [weak self] in
             guard let self else { return }
 
+            print("🔄 Starting receive loop...")
             while !Task.isCancelled {
                 do {
+                    print("🔄 Waiting for next message...")
                     let (messageType, messageData, timestamp, _) = try await self.receiveMediaMessage()
+
+                    // Debug: Log all message types
+                    if messageType == 8 || messageType == 9 {
+                        print("📥 Received media type \(messageType): \(messageData.count) bytes")
+                    }
 
                     switch messageType {
                     case 8:  // Audio
@@ -444,10 +459,7 @@ public actor RTMPSubscriber {
                     case 20:  // AMF0 Command
                         await self.handleCommand(messageData)
                     default:
-                        let verbose = await self.verboseLogging
-                        if verbose {
-                            print("📥 Received message type \(messageType): \(messageData.count) bytes")
-                        }
+                        print("📥 Received message type \(messageType): \(messageData.count) bytes")
                     }
                 } catch {
                     if !Task.isCancelled {
@@ -624,6 +636,12 @@ public actor RTMPSubscriber {
             totalBytes += 2
         }
 
+        // Get or create state for this chunk stream
+        var csState = chunkStreamStates[chunkStreamId] ?? ChunkStreamState()
+
+        // Debug: log chunk format
+        print("📦 Chunk csid=\(chunkStreamId) fmt=\(format)")
+
         // Read message header based on format
         var messageLength: UInt32 = 0
         var messageTypeId: UInt8 = 0
@@ -638,6 +656,10 @@ public actor RTMPSubscriber {
             timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
             messageLength = UInt32(header[3]) << 16 | UInt32(header[4]) << 8 | UInt32(header[5])
             messageTypeId = header[6]
+            // Store state for future type 1, 2, 3 chunks
+            csState.messageLength = messageLength
+            csState.messageTypeId = messageTypeId
+            csState.timestamp = timestamp
 
         case 1:  // 7 bytes (no stream id)
             guard let header = try await receiveDataExact(length: 7) else {
@@ -647,6 +669,10 @@ public actor RTMPSubscriber {
             timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
             messageLength = UInt32(header[3]) << 16 | UInt32(header[4]) << 8 | UInt32(header[5])
             messageTypeId = header[6]
+            // Store state for future type 2, 3 chunks
+            csState.messageLength = messageLength
+            csState.messageTypeId = messageTypeId
+            csState.timestamp = timestamp
 
         case 2:  // 3 bytes (timestamp delta only)
             guard let header = try await receiveDataExact(length: 3) else {
@@ -654,15 +680,26 @@ public actor RTMPSubscriber {
             }
             totalBytes += 3
             timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
-            // Use previous message length and type
+            // Use previous message length and type from stored state
+            messageLength = csState.messageLength
+            messageTypeId = csState.messageTypeId
+            csState.timestamp = timestamp
 
         case 3:  // 0 bytes (continuation)
-            // Use previous everything
-            break
+            // Use previous everything from stored state
+            timestamp = csState.timestamp
+            messageLength = csState.messageLength
+            messageTypeId = csState.messageTypeId
 
         default:
             break
         }
+
+        // Save state back
+        chunkStreamStates[chunkStreamId] = csState
+
+        // Debug: log parsed header info
+        print("📦 -> type=\(messageTypeId) len=\(messageLength)")
 
         // Extended timestamp
         if timestamp == 0xFF_FFFF {

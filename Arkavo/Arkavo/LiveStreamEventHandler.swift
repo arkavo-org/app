@@ -1,6 +1,10 @@
 import Combine
 import Foundation
 
+#if canImport(ArkavoStreaming)
+    import ArkavoStreaming
+#endif
+
 /// Handles WebSocket events for live stream discovery
 @MainActor
 final class LiveStreamEventHandler: ObservableObject {
@@ -11,6 +15,8 @@ final class LiveStreamEventHandler: ObservableObject {
     // MARK: - Private Properties
 
     private let defaultRTMPURL = "rtmp://100.arkavo.net:1935"
+    private let defaultStreamName = "live/creator"
+    private var checkTask: Task<Void, Never>?
 
     // MARK: - Singleton
 
@@ -62,7 +68,68 @@ final class LiveStreamEventHandler: ObservableObject {
         activeStreams.removeAll()
     }
 
+    /// Check if the default Arkavo live stream is being published
+    /// This bypasses WebSocket discovery and directly checks the RTMP server
+    func checkForArkavoLiveStream() {
+        // Don't start another check if one is already in progress
+        guard checkTask == nil else { return }
+
+        // Skip if we already have this stream
+        guard !activeStreams.contains(where: { $0.streamName == defaultStreamName }) else {
+            return
+        }
+
+        checkTask = Task {
+            await performStreamCheck()
+            checkTask = nil
+        }
+    }
+
+    /// Stop any ongoing stream check
+    func stopStreamCheck() {
+        checkTask?.cancel()
+        checkTask = nil
+    }
+
     // MARK: - Private Methods
+
+    private func performStreamCheck() async {
+        #if canImport(ArkavoStreaming)
+            let subscriber = RTMPSubscriber()
+
+            do {
+                // Try to connect and play - if the stream exists, we'll connect successfully
+                try await subscriber.connect(url: defaultRTMPURL, streamName: defaultStreamName)
+
+                // Wait briefly and check if we're in a playing state
+                try await Task.sleep(for: .milliseconds(500))
+
+                // Check if we got a state indicating success
+                let state = await subscriber.currentState
+
+                if state == .playing || state == .connected {
+                    // Stream is live! Add it to active streams
+                    let stream = LiveStream(
+                        streamKey: defaultStreamName,
+                        rtmpURL: defaultRTMPURL,
+                        streamName: defaultStreamName,
+                        creatorPublicID: Data(),
+                        manifestHeader: "",
+                        startedAt: Date(),
+                        contributors: [],
+                        title: "Live Stream"
+                    )
+                    addLiveStream(stream)
+                    print("LiveStreamEventHandler: Detected live stream at \(defaultStreamName)")
+                }
+
+                await subscriber.disconnect()
+            } catch {
+                // Stream not available or connection failed - this is expected when no stream is live
+                print("LiveStreamEventHandler: No live stream detected (\(error.localizedDescription))")
+            }
+        #endif
+    }
 
     /// Parse CBOR-encoded stream event
     private func parseCborStreamEvent(_ data: Data) {

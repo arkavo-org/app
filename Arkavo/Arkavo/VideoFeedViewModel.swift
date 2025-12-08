@@ -29,9 +29,11 @@ final class VideoFeedViewModel: ViewModel, VideoFeedUpdating, ObservableObject {
         self.profile = profile
         setupNotifications()
         setupLiveStreamObserver()
-        // Load initial videos
+        // Load initial videos and check for live streams
         Task {
             await loadVideos(count: 10)
+            // Check if a live stream is being published (bypasses WebSocket discovery)
+            LiveStreamEventHandler.shared.checkForArkavoLiveStream()
         }
     }
 
