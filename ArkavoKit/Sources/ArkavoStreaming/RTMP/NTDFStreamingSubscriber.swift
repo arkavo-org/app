@@ -200,8 +200,17 @@ public actor NTDFStreamingSubscriber {
     private func handleVideoFrame(_ frame: RTMPSubscriber.MediaFrame) async {
         // Check if this is a sequence header
         if frame.data.count > 1 {
+            let frameType = (frame.data[0] >> 4) & 0x0F
             let codecId = frame.data[0] & 0x0F
-            if codecId == 7, frame.data[1] == 0 {
+            let packetType = frame.data[1]
+
+            // Debug: log first video frame details
+            if videoConfig == nil {
+                let hexPrefix = frame.data.prefix(10).map { String(format: "%02X", $0) }.joined(separator: " ")
+                print("📥 Video frame: frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) bytes=\(hexPrefix)...")
+            }
+
+            if codecId == 7, packetType == 0 {
                 // AVC sequence header - not encrypted
                 do {
                     videoConfig = try FLVDemuxer.parseAVCSequenceHeader(frame.data)

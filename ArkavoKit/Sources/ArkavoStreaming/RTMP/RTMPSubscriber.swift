@@ -479,10 +479,11 @@ public actor RTMPSubscriber {
         let isKeyframe = frameType == 1
 
         // Check for sequence header (AVC)
-        if codecId == 7, data.count > 1, data[1] == 0 {
+        let isSequenceHeader = codecId == 7 && data[1] == 0
+        if isSequenceHeader {
             videoSequenceHeader = data
             print("📥 Video sequence header: \(data.count) bytes")
-            return
+            // Continue to pass to onFrame so NTDFStreamingSubscriber can parse it
         }
 
         framesReceived += 1
@@ -491,7 +492,7 @@ public actor RTMPSubscriber {
             type: .video,
             data: data,
             timestamp: timestamp,
-            isKeyframe: isKeyframe
+            isKeyframe: isKeyframe || isSequenceHeader  // Sequence headers are keyframes
         )
 
         await onFrame?(frame)
@@ -503,10 +504,11 @@ public actor RTMPSubscriber {
         let soundFormat = (data[0] >> 4) & 0x0F
 
         // Check for sequence header (AAC)
-        if soundFormat == 10, data.count > 1, data[1] == 0 {
+        let isSequenceHeader = soundFormat == 10 && data[1] == 0
+        if isSequenceHeader {
             audioSequenceHeader = data
             print("📥 Audio sequence header: \(data.count) bytes")
-            return
+            // Continue to pass to onFrame so NTDFStreamingSubscriber can parse it
         }
 
         let frame = MediaFrame(
