@@ -93,6 +93,14 @@ public actor RTMPPublisher {
     private var receiveChunkSize: Int = 128  // Current chunk size for receiving (updated by server's SetChunkSize)
     private var sendChunkSize: Int = 4096  // Our chunk size for sending (set via SetChunkSize message)
 
+    // Per-chunk-stream state for RTMP chunk reassembly (needed for format 2/3 headers)
+    private struct ChunkStreamState {
+        var messageLength: UInt32 = 0
+        var messageTypeId: UInt8 = 0
+        var timestamp: UInt32 = 0
+    }
+    private var chunkStreamStates: [UInt32: ChunkStreamState] = [:]
+
     // Background task for handling server messages
     private var serverMessageTask: Task<Void, Never>?
 
@@ -162,6 +170,9 @@ public actor RTMPPublisher {
     public func connect(to destination: Destination, streamKey: String) async throws {
         self.destination = destination
         self.streamKey = streamKey
+
+        // Reset chunk stream states for new connection
+        chunkStreamStates.removeAll()
 
         // Parse RTMP URL
         guard let url = parseRTMPURL(destination.url) else {
@@ -1376,23 +1387,81 @@ public actor RTMPPublisher {
             }
         }
 
-        // Parse message length and type from header (for type 0 and 1)
-        var messageLength = 128  // Default chunk size
-        if format == 0 || format == 1 {
-            if messageHeader.count >= 6 {
+        // Get or create chunk stream state for this chunk stream ID
+        var csState = chunkStreamStates[UInt32(chunkStreamId)] ?? ChunkStreamState()
+
+        // Parse message length and type from header based on format type
+        var messageLength: Int
+        var timestamp: UInt32 = 0
+
+        switch format {
+        case 0:
+            // Full header - parse all fields and store in state
+            if messageHeader.count >= 7 {
+                timestamp = UInt32(messageHeader[0]) << 16 | UInt32(messageHeader[1]) << 8 | UInt32(messageHeader[2])
                 messageLength = Int(messageHeader[3]) << 16 | Int(messageHeader[4]) << 8 | Int(messageHeader[5])
-                if protocolDebugLogging {
-                    print("📥 Parsed message length: bytes[3-5] = \(String(format: "%02X %02X %02X", messageHeader[3], messageHeader[4], messageHeader[5])) = \(messageLength)")
-                }
-            }
-            // For type 0, message type ID is at byte 6
-            if format == 0 && messageHeader.count >= 7 {
                 lastReceivedMessageType = messageHeader[6]
+
+                // Store in chunk stream state for future format 2/3 chunks
+                csState.timestamp = timestamp
+                csState.messageLength = UInt32(messageLength)
+                csState.messageTypeId = lastReceivedMessageType
+
                 if protocolDebugLogging {
-                    print("📥 Parsed message type: byte[6] = \(String(format: "%02X", messageHeader[6])) = \(lastReceivedMessageType)")
+                    print("📥 Format 0: timestamp=\(timestamp) length=\(messageLength) type=\(lastReceivedMessageType)")
                 }
+            } else {
+                messageLength = 128
             }
+
+        case 1:
+            // No stream ID - parse timestamp delta, length, type
+            if messageHeader.count >= 7 {
+                timestamp = UInt32(messageHeader[0]) << 16 | UInt32(messageHeader[1]) << 8 | UInt32(messageHeader[2])
+                messageLength = Int(messageHeader[3]) << 16 | Int(messageHeader[4]) << 8 | Int(messageHeader[5])
+                lastReceivedMessageType = messageHeader[6]
+
+                // Store in chunk stream state
+                csState.timestamp = timestamp
+                csState.messageLength = UInt32(messageLength)
+                csState.messageTypeId = lastReceivedMessageType
+
+                if protocolDebugLogging {
+                    print("📥 Format 1: timestamp=\(timestamp) length=\(messageLength) type=\(lastReceivedMessageType)")
+                }
+            } else {
+                messageLength = Int(csState.messageLength)
+            }
+
+        case 2:
+            // Only timestamp delta - use stored length and type from previous chunk
+            if messageHeader.count >= 3 {
+                timestamp = UInt32(messageHeader[0]) << 16 | UInt32(messageHeader[1]) << 8 | UInt32(messageHeader[2])
+                csState.timestamp = timestamp
+            }
+            messageLength = Int(csState.messageLength)
+            lastReceivedMessageType = csState.messageTypeId
+
+            if protocolDebugLogging {
+                print("📥 Format 2: using stored length=\(messageLength) type=\(lastReceivedMessageType)")
+            }
+
+        case 3:
+            // Continuation - use all stored values from previous chunk
+            timestamp = csState.timestamp
+            messageLength = Int(csState.messageLength)
+            lastReceivedMessageType = csState.messageTypeId
+
+            if protocolDebugLogging {
+                print("📥 Format 3: using stored timestamp=\(timestamp) length=\(messageLength) type=\(lastReceivedMessageType)")
+            }
+
+        default:
+            messageLength = 128
         }
+
+        // Save chunk stream state for future chunks
+        chunkStreamStates[UInt32(chunkStreamId)] = csState
 
         // Read the payload in chunks (use current receive chunk size set by server)
         var payload = Data()
