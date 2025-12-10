@@ -150,11 +150,10 @@ public actor NTDFStreamingSubscriber {
     private func handleMetadata(_ metadata: RTMPSubscriber.StreamMetadata) async {
         print("📥 Received stream metadata")
 
-        // Check for ntdf_header
+        // Check for ntdf_header in metadata (may be stripped by RTMP server)
         guard let ntdfHeaderBase64 = metadata.ntdfHeader else {
-            print("⚠️ No ntdf_header in metadata - stream may not be encrypted")
-            state = .playing
-            await onStateChange?(state)
+            print("⚠️ No ntdf_header in metadata - will check for header frame in video data")
+            // Don't transition to .playing yet - wait for header frame or timeout
             return
         }
 
@@ -163,6 +162,17 @@ public actor NTDFStreamingSubscriber {
             print("❌ Failed to decode ntdf_header base64")
             state = .error("Invalid ntdf_header encoding")
             await onStateChange?(state)
+            return
+        }
+
+        await initializeDecryptorWithHeader(headerBytes)
+    }
+
+    /// Initialize decryptor with NTDF header bytes (from metadata or header frame)
+    private func initializeDecryptorWithHeader(_ headerBytes: Data) async {
+        // Skip if already initialized
+        if decryptor != nil {
+            print("🔐 [NTDFSub] Decryptor already initialized, skipping")
             return
         }
 
@@ -197,8 +207,15 @@ public actor NTDFStreamingSubscriber {
         }
     }
 
+    private var videoFrameCount: UInt64 = 0
+
+    /// Magic bytes to identify NTDF header frame: "NTDF" (0x4E544446)
+    private static let ntdfHeaderMagic: [UInt8] = [0x4E, 0x54, 0x44, 0x46]
+
     private func handleVideoFrame(_ frame: RTMPSubscriber.MediaFrame) async {
-        // Check if this is a sequence header
+        videoFrameCount += 1
+
+        // Check if this is a sequence header or NTDF header frame
         if frame.data.count > 1 {
             let frameType = (frame.data[0] >> 4) & 0x0F
             let codecId = frame.data[0] & 0x0F
@@ -206,8 +223,34 @@ public actor NTDFStreamingSubscriber {
 
             // Debug: log first video frame details
             if videoConfig == nil {
-                let hexPrefix = frame.data.prefix(10).map { String(format: "%02X", $0) }.joined(separator: " ")
-                print("📥 Video frame: frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) bytes=\(hexPrefix)...")
+                let hexPrefix = frame.data.prefix(15).map { String(format: "%02X", $0) }.joined(separator: " ")
+                print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) bytes=\(hexPrefix)...")
+            }
+
+            // Check for NTDF header frame (special video frame with magic bytes)
+            // Format: [17 02 00 00 00][4E 54 44 46][length 2 bytes][header bytes]
+            if codecId == 7, packetType == 2, frame.data.count > 11 {
+                // Check for NTDF magic bytes at offset 5 (after FLV video header)
+                let magicOffset = 5
+                if frame.data.count > magicOffset + 4 &&
+                    frame.data[magicOffset] == Self.ntdfHeaderMagic[0] &&
+                    frame.data[magicOffset + 1] == Self.ntdfHeaderMagic[1] &&
+                    frame.data[magicOffset + 2] == Self.ntdfHeaderMagic[2] &&
+                    frame.data[magicOffset + 3] == Self.ntdfHeaderMagic[3] {
+
+                    // Extract header length (2 bytes big-endian) at offset 9
+                    let headerLength = Int(frame.data[9]) << 8 | Int(frame.data[10])
+
+                    // Extract header bytes
+                    if frame.data.count >= 11 + headerLength {
+                        let headerBytes = frame.data.subdata(in: 11..<(11 + headerLength))
+                        print("🔐 [NTDFSub] Received NTDF header frame: \(headerLength) bytes")
+                        await initializeDecryptorWithHeader(headerBytes)
+                    } else {
+                        print("🎬 [NTDFSub] ⚠️ NTDF header frame too short: expected \(11 + headerLength), got \(frame.data.count)")
+                    }
+                    return
+                }
             }
 
             if codecId == 7, packetType == 0 {
@@ -215,9 +258,9 @@ public actor NTDFStreamingSubscriber {
                 do {
                     videoConfig = try FLVDemuxer.parseAVCSequenceHeader(frame.data)
                     videoFormatDescription = try videoConfig?.createFormatDescription()
-                    print("📥 Video sequence header parsed: \(videoConfig?.sps.count ?? 0) SPS, \(videoConfig?.pps.count ?? 0) PPS")
+                    print("🎬 [NTDFSub] ✅ Video sequence header parsed: \(videoConfig?.sps.count ?? 0) SPS, \(videoConfig?.pps.count ?? 0) PPS, naluLengthSize=\(videoConfig?.naluLengthSize ?? 0)")
                 } catch {
-                    print("❌ Failed to parse video sequence header: \(error)")
+                    print("🎬 [NTDFSub] ❌ Failed to parse video sequence header: \(error)")
                 }
                 return
             }
@@ -228,18 +271,24 @@ public actor NTDFStreamingSubscriber {
         if let decryptor {
             do {
                 decryptedData = try await decryptor.decrypt(frame.data)
+                if videoFrameCount <= 3 || videoFrameCount % 100 == 0 {
+                    print("🎬 [NTDFSub] Decrypted frame #\(videoFrameCount): \(frame.data.count) -> \(decryptedData.count) bytes")
+                }
             } catch {
-                print("❌ Video decryption failed: \(error)")
+                print("🎬 [NTDFSub] ❌ Video decryption failed for frame #\(videoFrameCount): \(error)")
                 return
             }
         } else {
             // Not encrypted
             decryptedData = frame.data
+            if videoFrameCount <= 3 {
+                print("🎬 [NTDFSub] Unencrypted frame #\(videoFrameCount): \(decryptedData.count) bytes")
+            }
         }
 
         // Parse decrypted FLV video frame
         guard let config = videoConfig else {
-            print("⚠️ Received video frame before sequence header")
+            print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): Received video frame before sequence header")
             return
         }
 
@@ -258,6 +307,18 @@ public actor NTDFStreamingSubscriber {
                     formatDescription: formatDesc,
                     naluLengthSize: Int(config.naluLengthSize)
                 )
+                if sampleBuffer == nil && (videoFrameCount <= 3 || videoFrameCount % 100 == 0) {
+                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): createVideoSampleBuffer returned nil")
+                }
+            } else {
+                if videoFrameCount <= 3 {
+                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): No videoFormatDescription available")
+                }
+            }
+
+            // Log first few frames and periodically
+            if videoFrameCount <= 3 || videoFrameCount % 100 == 0 {
+                print("🎬 [NTDFSub] Frame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), sampleBuffer=\(sampleBuffer != nil)")
             }
 
             // Combine NALUs for callback
@@ -276,7 +337,7 @@ public actor NTDFStreamingSubscriber {
 
             await onDecryptedFrame?(decryptedFrame)
         } catch {
-            print("❌ Failed to parse video frame: \(error)")
+            print("🎬 [NTDFSub] ❌ Failed to parse video frame #\(videoFrameCount): \(error)")
         }
     }
 

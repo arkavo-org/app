@@ -44,18 +44,22 @@ class LiveStreamViewModel: ObservableObject {
     ///   - streamName: Stream name/key to subscribe to
     ///   - ntdfToken: Optional NTDF token (uses stored token if not provided)
     func connect(url: String, streamName: String, ntdfToken: String? = nil) async {
+        print("📺 [LiveStreamVM] Connecting to \(url)/\(streamName)")
         isConnecting = true
         errorMessage = nil
 
         // Use provided token or stored token
         guard let token = ntdfToken ?? self.ntdfToken else {
+            print("📺 [LiveStreamVM] ❌ No NTDF token available")
             isConnecting = false
             errorMessage = "NTDF token required for encrypted stream playback"
             return
         }
+        print("📺 [LiveStreamVM] Using NTDF token: \(token.prefix(20))...")
 
         #if canImport(ArkavoStreaming)
             // Create subscriber with NTDF token
+            print("📺 [LiveStreamVM] Creating NTDFStreamingSubscriber with KAS: \(kasURL)")
             subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: token)
 
             // Set up frame handler with @Sendable closure
@@ -69,15 +73,19 @@ class LiveStreamViewModel: ObservableObject {
             }
 
             do {
+                print("📺 [LiveStreamVM] Calling subscriber.connect()...")
                 try await subscriber?.connect(rtmpURL: url, streamName: streamName)
                 isConnecting = false
                 isPlaying = true
+                print("📺 [LiveStreamVM] ✅ Connected and playing")
             } catch {
+                print("📺 [LiveStreamVM] ❌ Connection error: \(error)")
                 isConnecting = false
                 errorMessage = error.localizedDescription
             }
         #else
             // Fallback for when ArkavoStreaming is not available
+            print("📺 [LiveStreamVM] ❌ ArkavoStreaming not available")
             isConnecting = false
             errorMessage = "Streaming not available"
         #endif
@@ -98,21 +106,44 @@ class LiveStreamViewModel: ObservableObject {
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
 
+            // Log every 30 frames (~1 second at 30fps)
+            if framesReceived % 30 == 0 {
+                print("📺 [LiveStreamVM] Received \(framesReceived) frames (type: \(frame.type), keyframe: \(frame.isKeyframe), dataSize: \(frame.data.count))")
+            }
+
             // Enqueue sample buffer for display
             if let sampleBuffer = frame.sampleBuffer,
                let displayLayer,
                frame.type == .video
             {
+                // Log first video frame
+                if framesReceived == 1 || framesReceived % 100 == 0 {
+                    print("📺 [LiveStreamVM] Video frame \(framesReceived): sampleBuffer present, displayLayer status: \(displayLayer.status.rawValue)")
+                }
+
                 // Check if layer is ready
                 if displayLayer.status == .failed {
+                    print("📺 [LiveStreamVM] ⚠️ Display layer failed, flushing...")
+                    if let error = displayLayer.error {
+                        print("📺 [LiveStreamVM] Display layer error: \(error)")
+                    }
                     displayLayer.flush()
                 }
 
                 displayLayer.enqueue(sampleBuffer)
+            } else if frame.type == .video {
+                // Log missing components
+                if frame.sampleBuffer == nil {
+                    print("📺 [LiveStreamVM] ⚠️ Frame \(framesReceived): No sampleBuffer for video frame")
+                }
+                if displayLayer == nil {
+                    print("📺 [LiveStreamVM] ⚠️ Frame \(framesReceived): No displayLayer set!")
+                }
             }
         }
 
         private func handleStateChange(_ state: NTDFStreamingSubscriber.State) async {
+            print("📺 [LiveStreamVM] State changed to: \(state)")
             switch state {
             case .idle:
                 isPlaying = false
@@ -128,6 +159,7 @@ class LiveStreamViewModel: ObservableObject {
                 isConnecting = false
                 isPlaying = false
                 errorMessage = message
+                print("📺 [LiveStreamVM] ❌ Error state: \(message)")
             }
         }
     #endif

@@ -522,28 +522,51 @@ public actor RTMPSubscriber {
     }
 
     private func handleMetadata(_ data: Data) async {
-        print("📥 Metadata: \(data.count) bytes")
+        print("📥 Metadata: \(data.count) bytes, first bytes: \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
 
         // Parse AMF0 metadata
         var parser = AMF0Parser(data: data)
 
         // Read all values
+        var valueIndex = 0
         while parser.bytesRemaining > 0 {
-            guard let value = try? parser.readValue() else { break }
+            do {
+                let value = try parser.readValue()
+                print("📥 [Metadata] Value \(valueIndex): \(describeAMF0Value(value))")
+                valueIndex += 1
 
-            // Look for object/array with metadata fields
-            if case let .object(dict) = value {
-                parseMetadataDict(dict)
-            } else if case let .array(arr) = value {
-                for item in arr {
-                    if case let .object(dict) = item {
-                        parseMetadataDict(dict)
+                // Look for object/array with metadata fields
+                if case let .object(dict) = value {
+                    print("📥 [Metadata] Found object with keys: \(dict.keys.sorted())")
+                    parseMetadataDict(dict)
+                } else if case let .array(arr) = value {
+                    print("📥 [Metadata] Found array with \(arr.count) items")
+                    for item in arr {
+                        if case let .object(dict) = item {
+                            parseMetadataDict(dict)
+                        }
                     }
                 }
+            } catch {
+                print("📥 [Metadata] Parse error: \(error)")
+                break
             }
         }
 
+        print("📥 [Metadata] Final metadata - ntdfHeader: \(metadata.ntdfHeader?.prefix(30) ?? "nil")")
         await onMetadata?(metadata)
+    }
+
+    private func describeAMF0Value(_ value: AMF0Parser.Value) -> String {
+        switch value {
+        case .number(let n): return "number(\(n))"
+        case .boolean(let b): return "boolean(\(b))"
+        case .string(let s): return "string(\"\(s.prefix(50))\")"
+        case .object(let d): return "object(keys: \(d.keys.sorted()))"
+        case .array(let a): return "array(\(a.count) items)"
+        case .null: return "null"
+        case .undefined: return "undefined"
+        }
     }
 
     private func parseMetadataDict(_ dict: [String: AMF0Parser.Value]) {

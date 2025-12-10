@@ -3,23 +3,58 @@ import ArkavoStreaming
 import ArkavoMedia
 import CoreMedia
 import OpenTDFKit
+import Darwin
 
 /// NTDF Streaming Test CLI
 /// Tests NTDF-RTMP streaming outside of XCTest framework
 
 @main
 struct NTDFTestCLI {
+    // Ensure unbuffered output
+    static func setupOutput() {
+        setbuf(stdout, nil)
+        setbuf(stderr, nil)
+    }
     static let kasURL = URL(string: "https://100.arkavo.net")!
     static let rtmpURL = "rtmp://localhost:1935"
+    static let remoteRtmpURL = "rtmp://100.arkavo.com:1935"
+    static let remoteStreamName = "live/creator"
 
     static func main() async {
+        setupOutput()
+        // Check command line arguments
+        let args = CommandLine.arguments
+        let runSubscriberTest = args.contains("--subscriber") || args.contains("-s")
+
         print("============================================")
         print("NTDF Streaming Test CLI")
         print("============================================")
         print("KAS URL: \(kasURL)")
         print("RTMP URL: \(rtmpURL)")
+        if runSubscriberTest {
+            print("Remote RTMP: \(remoteRtmpURL)")
+            print("Stream Name: \(remoteStreamName)")
+        }
         print("============================================\n")
 
+        if runSubscriberTest {
+            // Run subscriber test only
+            do {
+                print("--- NTDF Subscriber Test ---")
+                try await testSubscriber()
+                print("\n============================================")
+                print("SUBSCRIBER TEST COMPLETED!")
+                print("============================================")
+            } catch {
+                print("\n============================================")
+                print("SUBSCRIBER TEST FAILED: \(error)")
+                print("============================================")
+                exit(1)
+            }
+            return
+        }
+
+        // Run standard tests
         do {
             // Test 1: KAS Public Key
             print("--- Test 1: KAS Public Key Fetch ---")
@@ -44,6 +79,7 @@ struct NTDFTestCLI {
             print("============================================")
             print("ALL TESTS PASSED!")
             print("============================================")
+            print("\nTo run subscriber test: ntdf-test --subscriber")
         } catch {
             print("\n============================================")
             print("TEST FAILED: \(error)")
@@ -192,6 +228,100 @@ struct NTDFTestCLI {
             let result = try await group.next()!
             group.cancelAll()
             return result
+        }
+    }
+
+    // MARK: - Subscriber Test
+
+    static func testSubscriber() async throws {
+        print("  Step 1: Fetching KAS public key...")
+        let kasService = KASPublicKeyService(kasURL: kasURL)
+        let kasPublicKey = try await kasService.fetchPublicKey()
+        print("  KAS public key: \(kasPublicKey.count) bytes")
+
+        print("\n  Step 2: Generating NTDF token...")
+        let tokenBuilder = NTDFTokenBuilder(kasPublicKey: kasPublicKey, kasURL: kasURL.absoluteString)
+        let payload = NTDFTokenPayload(
+            subId: UUID(),
+            flags: [.webAuthn, .profile],
+            scopes: ["openid", "profile"],
+            iat: Int64(Date().timeIntervalSince1970),
+            exp: Int64(Date().timeIntervalSince1970) + 3600,  // 1 hour expiry
+            aud: "https://kas.arkavo.net"
+        )
+        let ntdfToken = try await tokenBuilder.build(payload: payload)
+        print("  NTDF token generated: \(ntdfToken.count) chars")
+        print("  Token prefix: \(ntdfToken.prefix(50))...")
+
+        print("\n  Step 3: Creating subscriber...")
+        let subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: ntdfToken)
+
+        // Track frame statistics using actor for thread safety
+        let stats = FrameStatistics()
+        let startTime = Date()
+
+        await subscriber.setFrameHandler { frame in
+            await stats.recordFrame(frame)
+        }
+
+        await subscriber.setStateHandler { state in
+            print("  State changed: \(state)")
+        }
+
+        print("\n  Step 4: Connecting to \(remoteRtmpURL)/\(remoteStreamName)...")
+        try await subscriber.connect(rtmpURL: remoteRtmpURL, streamName: remoteStreamName)
+
+        print("\n  Step 5: Receiving frames for 10 seconds...")
+        print("  (Press Ctrl+C to stop early)\n")
+        fflush(stdout)
+
+        // Wait for frames
+        try await Task.sleep(nanoseconds: 10_000_000_000)  // 10 seconds
+
+        print("\n  Step 6: Disconnecting...")
+        await subscriber.disconnect()
+
+        // Print statistics
+        let elapsed = Date().timeIntervalSince(startTime)
+        let videoFrameCount = await stats.videoFrameCount
+        let audioFrameCount = await stats.audioFrameCount
+        let totalBytesReceived = await stats.totalBytesReceived
+
+        print("\n  === Statistics ===")
+        print("  Duration: \(String(format: "%.1f", elapsed)) seconds")
+        print("  Video frames: \(videoFrameCount)")
+        print("  Audio frames: \(audioFrameCount)")
+        print("  Total bytes: \(totalBytesReceived)")
+        if elapsed > 0 {
+            let fps = Double(videoFrameCount) / elapsed
+            let kbps = Double(totalBytesReceived) * 8 / 1000 / elapsed
+            print("  Video FPS: \(String(format: "%.1f", fps))")
+            print("  Bitrate: \(String(format: "%.1f", kbps)) kbps")
+        }
+    }
+}
+
+/// Actor for thread-safe frame statistics tracking
+actor FrameStatistics {
+    var videoFrameCount = 0
+    var audioFrameCount = 0
+    var totalBytesReceived = 0
+
+    func recordFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) {
+        switch frame.type {
+        case .video:
+            videoFrameCount += 1
+            totalBytesReceived += frame.data.count
+            if videoFrameCount <= 5 || videoFrameCount % 30 == 0 {
+                let isKey = frame.isKeyframe ? " [KEY]" : ""
+                print("  [V\(videoFrameCount)] \(frame.data.count) bytes, ts=\(frame.timestamp)\(isKey)")
+            }
+        case .audio:
+            audioFrameCount += 1
+            totalBytesReceived += frame.data.count
+            if audioFrameCount <= 3 || audioFrameCount % 50 == 0 {
+                print("  [A\(audioFrameCount)] \(frame.data.count) bytes, ts=\(frame.timestamp)")
+            }
         }
     }
 }

@@ -392,6 +392,17 @@ public actor RTMPPublisher {
         print("✅ Sent audio sequence header")
     }
 
+    /// Send raw video data payload (for special frames like NTDF header)
+    /// - Parameters:
+    ///   - payload: Raw video payload (already formatted with FLV video header)
+    ///   - timestamp: Timestamp in milliseconds
+    public func sendRawVideoData(_ payload: Data, timestamp: UInt32) async throws {
+        guard state == .publishing else {
+            throw RTMPError.notConnected
+        }
+        try await sendRTMPVideoMessage(data: payload, timestamp: timestamp)
+    }
+
     /// Send stream metadata (@setDataFrame onMetaData)
     /// - Parameters:
     ///   - width: Video width in pixels

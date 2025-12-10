@@ -131,8 +131,12 @@ public actor NTDFStreamingManager {
             customFields: ["ntdf_header": base64Header]
         )
 
+        // Send NTDF header as first video data frame with special marker
+        // This bypasses RTMP server metadata stripping
+        try await sendNTDFHeaderFrame(headerBytes)
+
         state = .streaming
-        print("✅ NTDF streaming started with encrypted header")
+        print("✅ NTDF streaming started with embedded header")
     }
 
     /// Encrypt and send video frame
@@ -220,6 +224,38 @@ public actor NTDFStreamingManager {
             throw NTDFStreamingError.notStreaming
         }
         try await rtmpPublisher.sendAudioSequenceHeader(asc: asc)
+    }
+
+    /// Magic bytes to identify NTDF header frame: "NTDF" (0x4E544446)
+    public static let ntdfHeaderMagic: [UInt8] = [0x4E, 0x54, 0x44, 0x46]
+
+    /// Send NTDF header as a special video data frame that bypasses metadata stripping
+    /// Format: [FLV video header 5 bytes][Magic 4 bytes][Header length 2 bytes][Header bytes]
+    private func sendNTDFHeaderFrame(_ headerBytes: Data) async throws {
+        // Create a special video data tag containing the NTDF header
+        // This looks like a video frame but contains our header data
+        var payload = Data()
+
+        // FLV video tag header: keyframe (1) + AVC (7) = 0x17
+        payload.append(0x17)  // Frame type: keyframe, codec: AVC
+        payload.append(0x02)  // AVC packet type: NALU (but we use it for header)
+        payload.append(contentsOf: [0x00, 0x00, 0x00])  // Composition time: 0
+
+        // Magic bytes to identify this as NTDF header
+        payload.append(contentsOf: Self.ntdfHeaderMagic)
+
+        // Header length (2 bytes big-endian)
+        let headerLength = UInt16(headerBytes.count)
+        payload.append(UInt8((headerLength >> 8) & 0xFF))
+        payload.append(UInt8(headerLength & 0xFF))
+
+        // Header bytes
+        payload.append(headerBytes)
+
+        print("📤 [NTDFStreamingManager] Sending NTDF header frame: \(payload.count) bytes (header: \(headerBytes.count) bytes)")
+
+        // Send as video data via RTMP (timestamp 0 since this is initialization data)
+        try await rtmpPublisher.sendRawVideoData(payload, timestamp: 0)
     }
 
     /// Get the NanoTDF header bytes
