@@ -26,11 +26,10 @@ struct LiveStreamView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // Video display layer
-            if viewModel.isPlaying {
-                LiveStreamDisplayView(viewModel: viewModel)
-                    .ignoresSafeArea()
-            }
+            // Video display layer - always present so it's ready when frames arrive
+            LiveStreamDisplayView(viewModel: viewModel)
+                .ignoresSafeArea()
+                .opacity(viewModel.isPlaying ? 1 : 0)
 
             // Overlay UI
             VStack {
@@ -153,13 +152,19 @@ struct LiveStreamDisplayView: UIViewRepresentable {
     @ObservedObject var viewModel: LiveStreamViewModel
 
     func makeUIView(context: Context) -> LiveStreamUIView {
+        print("📺 [LiveStreamDisplayView] Creating UIView and displayLayer")
         let view = LiveStreamUIView()
         viewModel.displayLayer = view.displayLayer
+        print("📺 [LiveStreamDisplayView] displayLayer assigned to viewModel")
         return view
     }
 
     func updateUIView(_ uiView: LiveStreamUIView, context: Context) {
-        // Updates handled via displayLayer reference
+        // Ensure displayLayer is always set (in case of view recreation)
+        if viewModel.displayLayer !== uiView.displayLayer {
+            print("📺 [LiveStreamDisplayView] Re-assigning displayLayer")
+            viewModel.displayLayer = uiView.displayLayer
+        }
     }
 }
 
@@ -178,9 +183,11 @@ class LiveStreamUIView: UIView {
     }
 
     private func setupLayer() {
+        print("📺 [LiveStreamUIView] Setting up displayLayer")
         displayLayer.videoGravity = .resizeAspect
         displayLayer.backgroundColor = UIColor.black.cgColor
         layer.addSublayer(displayLayer)
+        print("📺 [LiveStreamUIView] displayLayer setup complete")
     }
 
     override func layoutSubviews() {
@@ -189,6 +196,7 @@ class LiveStreamUIView: UIView {
         CATransaction.setDisableActions(true)
         displayLayer.frame = bounds
         CATransaction.commit()
+        print("📺 [LiveStreamUIView] layoutSubviews: frame=\(bounds)")
     }
 }
 
