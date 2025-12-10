@@ -221,15 +221,16 @@ public actor NTDFStreamingSubscriber {
             let codecId = frame.data[0] & 0x0F
             let packetType = frame.data[1]
 
-            // Debug: log first video frame details
-            if videoConfig == nil {
-                let hexPrefix = frame.data.prefix(15).map { String(format: "%02X", $0) }.joined(separator: " ")
-                print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) bytes=\(hexPrefix)...")
+            // Debug: log first few video frames and any with packetType=2 (should be NTDF headers)
+            if videoFrameCount <= 5 || packetType == 2 {
+                let hexPrefix = frame.data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " ")
+                print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) size=\(frame.data.count) bytes=\(hexPrefix)...")
             }
 
             // Check for NTDF header frame (special video frame with magic bytes)
             // Format: [17 02 00 00 00][4E 54 44 46][length 2 bytes][header bytes]
-            if codecId == 7, packetType == 2, frame.data.count > 11 {
+            // Note: Check for magic bytes regardless of packetType as RTMP server may modify it
+            if codecId == 7, frame.data.count > 11 {
                 // Check for NTDF magic bytes at offset 5 (after FLV video header)
                 let magicOffset = 5
                 if frame.data.count > magicOffset + 4 &&
@@ -244,7 +245,7 @@ public actor NTDFStreamingSubscriber {
                     // Extract header bytes
                     if frame.data.count >= 11 + headerLength {
                         let headerBytes = frame.data.subdata(in: 11..<(11 + headerLength))
-                        print("🔐 [NTDFSub] Received NTDF header frame: \(headerLength) bytes")
+                        print("🔐 [NTDFSub] Received NTDF header frame: \(headerLength) bytes (packetType=\(packetType))")
                         await initializeDecryptorWithHeader(headerBytes)
                     } else {
                         print("🎬 [NTDFSub] ⚠️ NTDF header frame too short: expected \(11 + headerLength), got \(frame.data.count)")
@@ -463,300 +464,74 @@ actor StreamingCollectionDecryptor {
         self.tagSize = cipher.tagSize
 
         print("🔐 Header parsed - cipher: \(cipher), tag size: \(tagSize) bytes")
+        print("🔐 [DEBUG] Policy type: \(header.policy.type)")
+        if let policyBody = header.policy.body?.body {
+            print("🔐 [DEBUG] Policy body: \(policyBody.count) bytes - \(policyBody.prefix(50).base64EncodedString())...")
+        } else {
+            print("🔐 [DEBUG] Policy body: nil")
+        }
 
         // Perform KAS rewrap to get symmetric key
         try await performKASRewrap()
     }
 
     /// Perform KAS rewrap to obtain the symmetric key for decryption
-    /// Uses custom rewrap implementation that includes chain_session_id
+    /// Uses KASRewrapClient from OpenTDFKit for proper PEM/JWT handling
     private func performKASRewrap() async throws {
-        print("🔐 Performing KAS rewrap with NTDF token and chain session ID...")
+        print("🔐 Performing KAS rewrap using OpenTDFKit KASRewrapClient...")
 
-        // Generate ephemeral key pair for this rewrap request
+        // Generate client ephemeral key pair (matching OpenTDFKit CLI pattern)
         let privateKey = P256.KeyAgreement.PrivateKey()
-        let publicKeyData = privateKey.publicKey.compressedRepresentation
+        let clientKeyPair = EphemeralKeyPair(
+            privateKey: privateKey.rawRepresentation,
+            publicKey: privateKey.publicKey.compressedRepresentation,
+            curve: .secp256r1
+        )
 
-        // Generate a chain session ID for this streaming session
-        let chainSessionId = UUID().uuidString
+        // Convert to PEM format for KAS request (matching OpenTDFKit CLI)
+        let publicKeyPEM = try convertToSPKIPEM(compressedKey: clientKeyPair.publicKey)
+        let pemKeyPair = EphemeralKeyPair(
+            privateKey: clientKeyPair.privateKey,
+            publicKey: publicKeyPEM.data(using: .utf8)!,
+            curve: .secp256r1
+        )
+        print("🔐 Generated client ephemeral key pair with PEM public key")
 
         do {
-            // Use custom rewrap with chain_session_id support
-            let (wrappedKey, sessionPublicKey) = try await performRewrapWithChainSession(
+            // Use OpenTDFKit's KASRewrapClient for proper request/response handling
+            let kasClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+
+            let (wrappedKey, sessionPublicKey) = try await kasClient.rewrapNanoTDF(
                 header: headerBytes,
                 parsedHeader: header,
-                clientPublicKey: publicKeyData,
-                chainSessionId: chainSessionId
+                clientKeyPair: pemKeyPair
             )
 
-            print("🔐 Received wrapped key: \(wrappedKey.count) bytes, session key: \(sessionPublicKey.count) bytes")
+            print("🔐 KAS rewrap successful - wrapped key: \(wrappedKey.count) bytes, session key: \(sessionPublicKey.count) bytes")
 
-            // Unwrap the key using ECDH with session public key
-            let symmetricKey = try unwrapKey(
+            // Unwrap the key using OpenTDFKit's unwrapKey (handles HKDF salt correctly)
+            let symmetricKey = try KASRewrapClient.unwrapKey(
                 wrappedKey: wrappedKey,
                 sessionPublicKey: sessionPublicKey,
-                clientPrivateKey: privateKey
+                clientPrivateKey: clientKeyPair.privateKey
             )
 
-            print("✅ Symmetric key derived: \(symmetricKey.bitCount) bits")
+            print("✅ Symmetric key unwrapped: \(symmetricKey.bitCount) bits")
 
             // Create the OpenTDFKit decryptor with the unwrapped key
-            self.decryptor = OpenTDFKit.NanoTDFCollectionDecryptor.withUnwrappedKey(
+            self.decryptor = NanoTDFCollectionDecryptor.withUnwrappedKey(
                 symmetricKey: symmetricKey,
                 cipher: cipher
             )
 
             print("✅ Decryptor initialized successfully")
 
+        } catch let error as KASRewrapError {
+            print("❌ KAS rewrap failed: \(error.description)")
+            throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: \(error.description)")
         } catch {
             print("❌ KAS rewrap failed: \(error)")
             throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: \(error.localizedDescription)")
-        }
-    }
-
-    /// Perform KAS rewrap request with chain_session_id support
-    private func performRewrapWithChainSession(
-        header: Data,
-        parsedHeader: Header,
-        clientPublicKey: Data,
-        chainSessionId: String
-    ) async throws -> (wrappedKey: Data, sessionPublicKey: Data) {
-        // Build Key Access Object
-        let keyAccess: [String: Any] = [
-            "header": header.base64EncodedString(),
-            "type": "remote",
-            "url": kasURL.absoluteString,
-            "protocol": "kas"
-        ]
-
-        let keyAccessWrapper: [String: Any] = [
-            "keyAccessObjectId": "kao-0",
-            "keyAccessObject": keyAccess
-        ]
-
-        // Build policy from parsed header
-        let policyBody: String
-        if let policyBodyData = parsedHeader.policy.body?.body {
-            policyBody = policyBodyData.base64EncodedString()
-        } else {
-            policyBody = "{}".data(using: .utf8)!.base64EncodedString()
-        }
-
-        let policy: [String: Any] = [
-            "id": "policy",
-            "body": policyBody
-        ]
-
-        // Build request entry
-        let requestEntry: [String: Any] = [
-            "algorithm": "ec:secp256r1",
-            "policy": policy,
-            "keyAccessObjects": [keyAccessWrapper]
-        ]
-
-        // Build client public key PEM
-        let publicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: clientPublicKey)
-        let pemData = publicKey.derRepresentation
-        let pemBase64 = pemData.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-        let clientPublicKeyPEM = "-----BEGIN PUBLIC KEY-----\n\(pemBase64)\n-----END PUBLIC KEY-----"
-
-        // Build unsigned request
-        let unsignedRequest: [String: Any] = [
-            "clientPublicKey": clientPublicKeyPEM,
-            "requests": [requestEntry]
-        ]
-
-        let requestBodyJSON = try JSONSerialization.data(withJSONObject: unsignedRequest)
-
-        // Create signed JWT with chain_session_id
-        let signingKey = P256.Signing.PrivateKey()
-        let signedToken = try createSignedJWTWithChainSession(
-            requestBody: requestBodyJSON,
-            signingKey: signingKey,
-            chainSessionId: chainSessionId
-        )
-
-        let signedRequest = ["signed_request_token": signedToken]
-        let signedRequestData = try JSONSerialization.data(withJSONObject: signedRequest)
-
-        // Create HTTP request
-        let rewrapEndpoint = kasURL.appendingPathComponent("v2/rewrap")
-        var request = URLRequest(url: rewrapEndpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        request.addValue("Bearer \(ntdfToken)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = signedRequestData
-
-        print("🔐 Sending rewrap request to \(rewrapEndpoint) with chain_session_id=\(chainSessionId)")
-
-        // Perform request
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NTDFSubscriberError.decryptionFailed("Invalid HTTP response")
-        }
-
-        if httpResponse.statusCode != 200 {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ KAS rewrap HTTP \(httpResponse.statusCode): \(errorMessage)")
-            throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: HTTP \(httpResponse.statusCode) - \(errorMessage)")
-        }
-
-        // Parse response
-        guard let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let responses = responseDict["responses"] as? [[String: Any]],
-              let firstPolicy = responses.first,
-              let results = firstPolicy["results"] as? [[String: Any]],
-              let firstResult = results.first
-        else {
-            throw NTDFSubscriberError.decryptionFailed("Invalid KAS response structure")
-        }
-
-        guard let status = firstResult["status"] as? String, status == "permit" else {
-            let reason = (firstResult["metadata"] as? [String: String])?["error"] ?? "Access denied"
-            throw NTDFSubscriberError.decryptionFailed("Access denied: \(reason)")
-        }
-
-        // Extract wrapped key
-        guard let wrappedKeyBase64 = firstResult["kasWrappedKey"] as? String ?? firstResult["entityWrappedKey"] as? String,
-              let wrappedKey = Data(base64Encoded: wrappedKeyBase64)
-        else {
-            throw NTDFSubscriberError.decryptionFailed("Missing wrapped key in response")
-        }
-
-        // Extract session public key from PEM
-        guard let sessionKeyPEM = responseDict["sessionPublicKey"] as? String else {
-            throw NTDFSubscriberError.decryptionFailed("Missing session public key in response")
-        }
-
-        let sessionKey = try extractCompressedKeyFromPEM(sessionKeyPEM)
-
-        return (wrappedKey, sessionKey)
-    }
-
-    /// Create a signed JWT with chain_session_id included
-    private func createSignedJWTWithChainSession(
-        requestBody: Data,
-        signingKey: P256.Signing.PrivateKey,
-        chainSessionId: String
-    ) throws -> String {
-        // Create header
-        let header: [String: String] = ["alg": "ES256", "typ": "JWT"]
-        let headerJSON = try JSONSerialization.data(withJSONObject: header)
-        let headerBase64 = base64URLEncode(headerJSON)
-
-        // Create claims with chain_session_id
-        let now = Int(Date().timeIntervalSince1970)
-        let requestBodyString = String(data: requestBody, encoding: .utf8) ?? ""
-        let claims: [String: Any] = [
-            "requestBody": requestBodyString,
-            "iat": now,
-            "exp": now + 60,
-            "chain_session_id": chainSessionId  // Add chain session ID for validation
-        ]
-        let claimsJSON = try JSONSerialization.data(withJSONObject: claims)
-        let claimsBase64 = base64URLEncode(claimsJSON)
-
-        // Sign
-        let signingInput = "\(headerBase64).\(claimsBase64)".data(using: .utf8)!
-        let signature = try signingKey.signature(for: signingInput)
-        let signatureBase64 = base64URLEncode(signature.rawRepresentation)
-
-        return "\(headerBase64).\(claimsBase64).\(signatureBase64)"
-    }
-
-    /// Base64URL encode data
-    private func base64URLEncode(_ data: Data) -> String {
-        data.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-
-    /// Extract compressed P256 public key from PEM
-    private func extractCompressedKeyFromPEM(_ pem: String) throws -> Data {
-        let normalizedPEM = pem
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let markers = ["-----BEGIN PUBLIC KEY-----", "-----END PUBLIC KEY-----",
-                       "-----BEGIN EC PUBLIC KEY-----", "-----END EC PUBLIC KEY-----"]
-
-        var base64Content = normalizedPEM
-        for marker in markers {
-            base64Content = base64Content.replacingOccurrences(of: marker, with: "")
-        }
-        base64Content = base64Content.components(separatedBy: .whitespacesAndNewlines).joined()
-
-        guard !base64Content.isEmpty, let derData = Data(base64Encoded: base64Content) else {
-            throw NTDFSubscriberError.decryptionFailed("Invalid PEM encoding")
-        }
-
-        let publicKey = try P256.KeyAgreement.PublicKey(derRepresentation: derData)
-        return publicKey.compressedRepresentation
-    }
-
-    /// Unwrap the symmetric key from KAS response
-    private func unwrapKey(
-        wrappedKey: Data,
-        sessionPublicKey: Data,
-        clientPrivateKey: P256.KeyAgreement.PrivateKey
-    ) throws -> SymmetricKey {
-        // KAS returns the key wrapped with ECDH-derived key
-        // Format: nonce (12 bytes) + ciphertext + tag (16 bytes)
-
-        guard wrappedKey.count > 28 else {
-            throw NTDFSubscriberError.decryptionFailed("Wrapped key too short: \(wrappedKey.count) bytes")
-        }
-
-        // Parse session public key (may be compressed or uncompressed)
-        let kasSessionKey: P256.KeyAgreement.PublicKey
-        do {
-            if sessionPublicKey.count == 33 {
-                kasSessionKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: sessionPublicKey)
-            } else if sessionPublicKey.count == 65 {
-                kasSessionKey = try P256.KeyAgreement.PublicKey(x963Representation: sessionPublicKey)
-            } else {
-                throw NTDFSubscriberError.decryptionFailed("Invalid session public key size: \(sessionPublicKey.count)")
-            }
-        } catch {
-            throw NTDFSubscriberError.decryptionFailed("Failed to parse session public key: \(error)")
-        }
-
-        // Perform ECDH to derive shared secret
-        let sharedSecret: SharedSecret
-        do {
-            sharedSecret = try clientPrivateKey.sharedSecretFromKeyAgreement(with: kasSessionKey)
-        } catch {
-            throw NTDFSubscriberError.decryptionFailed("ECDH failed: \(error)")
-        }
-
-        // Derive unwrapping key via HKDF
-        // Use NanoTDF salt: SHA256(magicNumber + version)
-        let magicAndVersion = Data([0x4C, 0x31, Header.version])  // "L1M"
-        let salt = Data(SHA256.hash(data: magicAndVersion))
-
-        let unwrapKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: salt,
-            sharedInfo: Data(),
-            outputByteCount: 32
-        )
-
-        // Parse wrapped key format from KAS
-        // Platform returns: nonce (12 bytes) + ciphertext + tag (16 bytes)
-        let nonce = wrappedKey.prefix(12)
-        let ciphertextWithTag = wrappedKey.dropFirst(12)
-
-        // Decrypt using AES-GCM
-        do {
-            let sealedBox = try AES.GCM.SealedBox(combined: nonce + ciphertextWithTag)
-            let payloadKeyData = try AES.GCM.open(sealedBox, using: unwrapKey)
-            return SymmetricKey(data: payloadKeyData)
-        } catch {
-            throw NTDFSubscriberError.decryptionFailed("Failed to unwrap payload key: \(error)")
         }
     }
 
@@ -812,5 +587,30 @@ actor StreamingCollectionDecryptor {
         } catch {
             throw NTDFSubscriberError.decryptionFailed("Decryption failed: \(error)")
         }
+    }
+
+    /// Convert compressed P256 public key to PEM format
+    /// Note: KAS server expects raw SEC1 bytes (uncompressed point) in PEM wrapper,
+    /// NOT standard SPKI format with ASN.1 structure
+    private func convertToSPKIPEM(compressedKey: Data) throws -> String {
+        guard compressedKey.count == 33 else {
+            throw NTDFSubscriberError.decryptionFailed("Invalid compressed key size: \(compressedKey.count), expected 33")
+        }
+
+        // Convert compressed to uncompressed using x963Representation (65 bytes)
+        // This is raw SEC1 format: 0x04 + X (32 bytes) + Y (32 bytes)
+        let tempKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: compressedKey)
+        let sec1Bytes = tempKey.x963Representation
+
+        // KAS server expects raw SEC1 bytes in PEM wrapper (non-standard but matching server's format)
+        let base64String = sec1Bytes.base64EncodedString(options: [
+            .lineLength64Characters,
+            .endLineWithLineFeed
+        ])
+
+        // Build PEM string with raw SEC1 bytes (matching KAS server's public_key_to_pem output)
+        let pemString = "-----BEGIN PUBLIC KEY-----\n\(base64String)-----END PUBLIC KEY-----"
+        print("🔐 [DEBUG] Generated SEC1 PEM (\(pemString.count) chars, \(sec1Bytes.count) bytes SEC1)")
+        return pemString
     }
 }

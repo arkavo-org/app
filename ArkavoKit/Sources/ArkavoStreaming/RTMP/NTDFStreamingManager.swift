@@ -60,8 +60,8 @@ public actor NTDFStreamingManager {
     }
 
     /// Initialize encryption: fetch KAS key and create NanoTDF Collection
-    /// - Parameter policy: Policy data (empty Data for embedded plaintext)
-    public func initialize(policy: Data = Data()) async throws {
+    /// - Parameter policy: Policy data (if nil, creates default open-access policy)
+    public func initialize(policy: Data? = nil) async throws {
         state = .initializing
 
         do {
@@ -69,10 +69,30 @@ public actor NTDFStreamingManager {
             print("🔐 Initializing NTDF streaming...")
             let kasMetadata = try await kasService.createKasMetadata()
 
-            // 2. Build NanoTDF Collection
+            // 2. Create policy data - must be valid JSON, not empty
+            let policyData: Data
+            if let policy = policy, !policy.isEmpty {
+                policyData = policy
+            } else {
+                // Create default open-access policy (required by KAS)
+                let policyUUID = UUID().uuidString.lowercased()
+                let policyJSON = """
+                {
+                    "uuid": "\(policyUUID)",
+                    "body": {
+                        "dataAttributes": [],
+                        "dissem": []
+                    }
+                }
+                """
+                policyData = policyJSON.data(using: .utf8)!
+                print("🔐 Using default open-access policy: \(policyUUID)")
+            }
+
+            // 3. Build NanoTDF Collection
             collection = try await NanoTDFCollectionBuilder()
                 .kasMetadata(kasMetadata)
-                .policy(.embeddedPlaintext(policy))
+                .policy(.embeddedPlaintext(policyData))
                 .configuration(.default)
                 .build()
 
