@@ -469,29 +469,24 @@ actor StreamingCollectionDecryptor {
     }
 
     /// Perform KAS rewrap to obtain the symmetric key for decryption
+    /// Uses custom rewrap implementation that includes chain_session_id
     private func performKASRewrap() async throws {
-        print("🔐 Performing KAS rewrap with NTDF token...")
+        print("🔐 Performing KAS rewrap with NTDF token and chain session ID...")
 
         // Generate ephemeral key pair for this rewrap request
         let privateKey = P256.KeyAgreement.PrivateKey()
         let publicKeyData = privateKey.publicKey.compressedRepresentation
 
-        // Create ephemeral key pair structure
-        let clientKeyPair = EphemeralKeyPair(
-            privateKey: privateKey.rawRepresentation,
-            publicKey: publicKeyData,
-            curve: .secp256r1
-        )
-
-        // Create KAS rewrap client with NTDF token
-        let kasRewrapClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+        // Generate a chain session ID for this streaming session
+        let chainSessionId = UUID().uuidString
 
         do {
-            // Send rewrap request
-            let (wrappedKey, sessionPublicKey) = try await kasRewrapClient.rewrapNanoTDF(
+            // Use custom rewrap with chain_session_id support
+            let (wrappedKey, sessionPublicKey) = try await performRewrapWithChainSession(
                 header: headerBytes,
                 parsedHeader: header,
-                clientKeyPair: clientKeyPair
+                clientPublicKey: publicKeyData,
+                chainSessionId: chainSessionId
             )
 
             print("🔐 Received wrapped key: \(wrappedKey.count) bytes, session key: \(sessionPublicKey.count) bytes")
@@ -517,6 +512,190 @@ actor StreamingCollectionDecryptor {
             print("❌ KAS rewrap failed: \(error)")
             throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Perform KAS rewrap request with chain_session_id support
+    private func performRewrapWithChainSession(
+        header: Data,
+        parsedHeader: Header,
+        clientPublicKey: Data,
+        chainSessionId: String
+    ) async throws -> (wrappedKey: Data, sessionPublicKey: Data) {
+        // Build Key Access Object
+        let keyAccess: [String: Any] = [
+            "header": header.base64EncodedString(),
+            "type": "remote",
+            "url": kasURL.absoluteString,
+            "protocol": "kas"
+        ]
+
+        let keyAccessWrapper: [String: Any] = [
+            "keyAccessObjectId": "kao-0",
+            "keyAccessObject": keyAccess
+        ]
+
+        // Build policy from parsed header
+        let policyBody: String
+        if let policyBodyData = parsedHeader.policy.body?.body {
+            policyBody = policyBodyData.base64EncodedString()
+        } else {
+            policyBody = "{}".data(using: .utf8)!.base64EncodedString()
+        }
+
+        let policy: [String: Any] = [
+            "id": "policy",
+            "body": policyBody
+        ]
+
+        // Build request entry
+        let requestEntry: [String: Any] = [
+            "algorithm": "ec:secp256r1",
+            "policy": policy,
+            "keyAccessObjects": [keyAccessWrapper]
+        ]
+
+        // Build client public key PEM
+        let publicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: clientPublicKey)
+        let pemData = publicKey.derRepresentation
+        let pemBase64 = pemData.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+        let clientPublicKeyPEM = "-----BEGIN PUBLIC KEY-----\n\(pemBase64)\n-----END PUBLIC KEY-----"
+
+        // Build unsigned request
+        let unsignedRequest: [String: Any] = [
+            "clientPublicKey": clientPublicKeyPEM,
+            "requests": [requestEntry]
+        ]
+
+        let requestBodyJSON = try JSONSerialization.data(withJSONObject: unsignedRequest)
+
+        // Create signed JWT with chain_session_id
+        let signingKey = P256.Signing.PrivateKey()
+        let signedToken = try createSignedJWTWithChainSession(
+            requestBody: requestBodyJSON,
+            signingKey: signingKey,
+            chainSessionId: chainSessionId
+        )
+
+        let signedRequest = ["signed_request_token": signedToken]
+        let signedRequestData = try JSONSerialization.data(withJSONObject: signedRequest)
+
+        // Create HTTP request
+        let rewrapEndpoint = kasURL.appendingPathComponent("v2/rewrap")
+        var request = URLRequest(url: rewrapEndpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.addValue("Bearer \(ntdfToken)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = signedRequestData
+
+        print("🔐 Sending rewrap request to \(rewrapEndpoint) with chain_session_id=\(chainSessionId)")
+
+        // Perform request
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NTDFSubscriberError.decryptionFailed("Invalid HTTP response")
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ KAS rewrap HTTP \(httpResponse.statusCode): \(errorMessage)")
+            throw NTDFSubscriberError.decryptionFailed("KAS rewrap failed: HTTP \(httpResponse.statusCode) - \(errorMessage)")
+        }
+
+        // Parse response
+        guard let responseDict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let responses = responseDict["responses"] as? [[String: Any]],
+              let firstPolicy = responses.first,
+              let results = firstPolicy["results"] as? [[String: Any]],
+              let firstResult = results.first
+        else {
+            throw NTDFSubscriberError.decryptionFailed("Invalid KAS response structure")
+        }
+
+        guard let status = firstResult["status"] as? String, status == "permit" else {
+            let reason = (firstResult["metadata"] as? [String: String])?["error"] ?? "Access denied"
+            throw NTDFSubscriberError.decryptionFailed("Access denied: \(reason)")
+        }
+
+        // Extract wrapped key
+        guard let wrappedKeyBase64 = firstResult["kasWrappedKey"] as? String ?? firstResult["entityWrappedKey"] as? String,
+              let wrappedKey = Data(base64Encoded: wrappedKeyBase64)
+        else {
+            throw NTDFSubscriberError.decryptionFailed("Missing wrapped key in response")
+        }
+
+        // Extract session public key from PEM
+        guard let sessionKeyPEM = responseDict["sessionPublicKey"] as? String else {
+            throw NTDFSubscriberError.decryptionFailed("Missing session public key in response")
+        }
+
+        let sessionKey = try extractCompressedKeyFromPEM(sessionKeyPEM)
+
+        return (wrappedKey, sessionKey)
+    }
+
+    /// Create a signed JWT with chain_session_id included
+    private func createSignedJWTWithChainSession(
+        requestBody: Data,
+        signingKey: P256.Signing.PrivateKey,
+        chainSessionId: String
+    ) throws -> String {
+        // Create header
+        let header: [String: String] = ["alg": "ES256", "typ": "JWT"]
+        let headerJSON = try JSONSerialization.data(withJSONObject: header)
+        let headerBase64 = base64URLEncode(headerJSON)
+
+        // Create claims with chain_session_id
+        let now = Int(Date().timeIntervalSince1970)
+        let requestBodyString = String(data: requestBody, encoding: .utf8) ?? ""
+        let claims: [String: Any] = [
+            "requestBody": requestBodyString,
+            "iat": now,
+            "exp": now + 60,
+            "chain_session_id": chainSessionId  // Add chain session ID for validation
+        ]
+        let claimsJSON = try JSONSerialization.data(withJSONObject: claims)
+        let claimsBase64 = base64URLEncode(claimsJSON)
+
+        // Sign
+        let signingInput = "\(headerBase64).\(claimsBase64)".data(using: .utf8)!
+        let signature = try signingKey.signature(for: signingInput)
+        let signatureBase64 = base64URLEncode(signature.rawRepresentation)
+
+        return "\(headerBase64).\(claimsBase64).\(signatureBase64)"
+    }
+
+    /// Base64URL encode data
+    private func base64URLEncode(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Extract compressed P256 public key from PEM
+    private func extractCompressedKeyFromPEM(_ pem: String) throws -> Data {
+        let normalizedPEM = pem
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let markers = ["-----BEGIN PUBLIC KEY-----", "-----END PUBLIC KEY-----",
+                       "-----BEGIN EC PUBLIC KEY-----", "-----END EC PUBLIC KEY-----"]
+
+        var base64Content = normalizedPEM
+        for marker in markers {
+            base64Content = base64Content.replacingOccurrences(of: marker, with: "")
+        }
+        base64Content = base64Content.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        guard !base64Content.isEmpty, let derData = Data(base64Encoded: base64Content) else {
+            throw NTDFSubscriberError.decryptionFailed("Invalid PEM encoding")
+        }
+
+        let publicKey = try P256.KeyAgreement.PublicKey(derRepresentation: derData)
+        return publicKey.compressedRepresentation
     }
 
     /// Unwrap the symmetric key from KAS response
@@ -573,7 +752,6 @@ actor StreamingCollectionDecryptor {
 
         // Decrypt using AES-GCM
         do {
-            let gcmNonce = try AES.GCM.Nonce(data: nonce)
             let sealedBox = try AES.GCM.SealedBox(combined: nonce + ciphertextWithTag)
             let payloadKeyData = try AES.GCM.open(sealedBox, using: unwrapKey)
             return SymmetricKey(data: payloadKeyData)
