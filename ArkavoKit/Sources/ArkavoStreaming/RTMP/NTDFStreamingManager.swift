@@ -47,6 +47,7 @@ public actor NTDFStreamingManager {
     private let rtmpPublisher: RTMPPublisher
     private var collection: NanoTDFCollection?
     private var state: State = .idle
+    private var cachedHeaderBytes: Data?
 
     /// Current state of the manager
     public var currentState: State { state }
@@ -131,6 +132,9 @@ public actor NTDFStreamingManager {
             customFields: ["ntdf_header": base64Header]
         )
 
+        // Cache header bytes for periodic re-transmission
+        cachedHeaderBytes = headerBytes
+
         // Send NTDF header as first video data frame with special marker
         // This bypasses RTMP server metadata stripping
         try await sendNTDFHeaderFrame(headerBytes)
@@ -147,6 +151,11 @@ public actor NTDFStreamingManager {
         }
 
         do {
+            // Re-send NTDF header before each keyframe for late-joining subscribers
+            if frame.isKeyframe, let headerBytes = cachedHeaderBytes {
+                try await sendNTDFHeaderFrame(headerBytes)
+            }
+
             // Encrypt the video frame data
             let item = try await collection.encryptItem(plaintext: frame.data)
 
@@ -292,6 +301,7 @@ public actor NTDFStreamingManager {
         print("📡 Disconnecting NTDF stream...")
         await rtmpPublisher.disconnect()
         collection = nil
+        cachedHeaderBytes = nil
         state = .idle
         print("✅ NTDF stream disconnected")
     }
