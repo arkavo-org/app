@@ -471,6 +471,11 @@ actor StreamingCollectionDecryptor {
             print("🔐 [DEBUG] Policy body: nil")
         }
 
+        // Debug: dump raw header bytes for KAS debugging
+        let headerHex = headerBytes.prefix(50).map { String(format: "%02X", $0) }.joined(separator: " ")
+        print("🔐 [DEBUG] Raw header (\(headerBytes.count) bytes): \(headerHex)...")
+        print("🔐 [DEBUG] Header base64: \(headerBytes.base64EncodedString())")
+
         // Perform KAS rewrap to get symmetric key
         try await performKASRewrap()
     }

@@ -89,7 +89,7 @@ public actor NTDFStreamingManager {
                 print("🔐 Using default open-access policy: \(policyUUID)")
             }
 
-            // 3. Build NanoTDF Collection
+            // 3. Build NanoTDF Collection (uses v12 L1L format by default)
             collection = try await NanoTDFCollectionBuilder()
                 .kasMetadata(kasMetadata)
                 .policy(.embeddedPlaintext(policyData))
