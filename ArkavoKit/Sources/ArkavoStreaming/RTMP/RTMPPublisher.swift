@@ -1181,6 +1181,10 @@ public actor RTMPPublisher {
 
     /// Send video data as RTMP message (type 9)
     private func sendRTMPVideoMessage(data: Data, timestamp: UInt32) async throws {
+        // Log first 10 video messages and every 100th after
+        if framesSent <= 10 || framesSent % 100 == 0 {
+            print("📤 [RTMPPub] Sending video msg #\(framesSent): \(data.count) bytes at ts=\(timestamp)")
+        }
         try await sendRTMPMessage(
             chunkStreamId: 6,  // Video chunk stream (must be different from audio)
             messageTypeId: 9,  // Video message

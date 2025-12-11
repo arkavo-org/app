@@ -352,6 +352,7 @@ public actor RTMPSubscriber {
                 if messageData.count >= 4 {
                     serverWindowAckSize = UInt32(messageData[0]) << 24 | UInt32(messageData[1]) << 16 |
                         UInt32(messageData[2]) << 8 | UInt32(messageData[3])
+                    print("📥 Server Window Ack Size: \(serverWindowAckSize)")
                 }
             case 20:  // AMF0 Command
                 receivedConnectResult = true
@@ -439,9 +440,13 @@ public actor RTMPSubscriber {
             guard let self else { return }
 
             print("🔄 Starting receive loop...")
+            var messageCount = 0
             while !Task.isCancelled {
                 do {
-                    print("🔄 Waiting for next message...")
+                    messageCount += 1
+                    if messageCount <= 20 {
+                        print("🔄 Waiting for message #\(messageCount)...")
+                    }
                     let (messageType, messageData, timestamp, _) = try await self.receiveMediaMessage()
 
                     // Debug: Log all message types
@@ -766,6 +771,7 @@ public actor RTMPSubscriber {
         // Send acknowledgement if needed
         bytesReceived += UInt64(totalBytes)
         if bytesReceived - lastAckSent >= UInt64(serverWindowAckSize) {
+            print("📤 [RTMPSub] Sending acknowledgement: bytesReceived=\(bytesReceived), lastAckSent=\(lastAckSent), windowSize=\(serverWindowAckSize)")
             try await sendAcknowledgement()
             lastAckSent = bytesReceived
         }
@@ -888,15 +894,25 @@ public actor RTMPSubscriber {
         }
 
         var receivedData = Data()
+        let startTime = ContinuousClock.now
 
         while receivedData.count < length {
             let remaining = length - receivedData.count
 
+            // Check for timeout (10 seconds)
+            let elapsed = ContinuousClock.now - startTime
+            if elapsed > .seconds(10) {
+                print("⏰ [RTMPSub] Receive timeout after 10s waiting for \(length) bytes (got \(receivedData.count))")
+                throw RTMPSubscriberError.connectionFailed("Receive timeout")
+            }
+
             let data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data?, Error>) in
                 connection.receive(minimumIncompleteLength: 1, maximumLength: remaining) { data, _, isComplete, error in
                     if let error {
+                        print("❌ [RTMPSub] Connection receive error: \(error.localizedDescription)")
                         continuation.resume(throwing: RTMPSubscriberError.connectionFailed(error.localizedDescription))
                     } else if isComplete {
+                        print("⚠️ [RTMPSub] Connection closed by server (isComplete=true, bytesReceived=\(data?.count ?? 0))")
                         continuation.resume(returning: nil)
                     } else {
                         continuation.resume(returning: data)

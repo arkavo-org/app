@@ -106,9 +106,19 @@ class LiveStreamViewModel: ObservableObject {
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
 
+            // Log first 10 frames in detail
+            if framesReceived <= 10 {
+                print("📺 [LiveStreamVM] Frame #\(framesReceived) RECEIVED: type=\(frame.type), keyframe=\(frame.isKeyframe), sampleBuffer=\(frame.sampleBuffer != nil), displayLayer=\(displayLayer != nil)")
+            }
+
             // Log every 30 frames (~1 second at 30fps)
             if framesReceived % 30 == 0 {
                 print("📺 [LiveStreamVM] Received \(framesReceived) frames (type: \(frame.type), keyframe: \(frame.isKeyframe), dataSize: \(frame.data.count))")
+            }
+
+            // Log displayLayer status on video frames (first 10)
+            if framesReceived <= 10, frame.type == .video {
+                print("📺 [LiveStreamVM] Frame #\(framesReceived) DISPLAY CHECK: sampleBuffer=\(frame.sampleBuffer != nil), displayLayer=\(displayLayer != nil), displayLayerStatus=\(displayLayer?.status.rawValue ?? -1)")
             }
 
             // Enqueue sample buffer for display
@@ -131,6 +141,11 @@ class LiveStreamViewModel: ObservableObject {
                 }
 
                 displayLayer.enqueue(sampleBuffer)
+
+                // Log enqueue action for first 10 frames
+                if framesReceived <= 10 {
+                    print("📺 [LiveStreamVM] Frame #\(framesReceived) ENQUEUED to displayLayer, new status=\(displayLayer.status.rawValue)")
+                }
             } else if frame.type == .video {
                 // Log missing components
                 if frame.sampleBuffer == nil {

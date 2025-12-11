@@ -222,7 +222,7 @@ public actor NTDFStreamingSubscriber {
             let packetType = frame.data[1]
 
             // Debug: log first few video frames and any with packetType=2 (should be NTDF headers)
-            if videoFrameCount <= 5 || packetType == 2 {
+            if videoFrameCount <= 10 || packetType == 2 {
                 let hexPrefix = frame.data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " ")
                 print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) size=\(frame.data.count) bytes=\(hexPrefix)...")
             }
@@ -267,12 +267,17 @@ public actor NTDFStreamingSubscriber {
             }
         }
 
+        // Log frame arrival before decryption
+        if videoFrameCount <= 10 {
+            print("🎬 [NTDFSub] Frame #\(videoFrameCount) ARRIVING: encrypted=\(decryptor != nil), size=\(frame.data.count) bytes")
+        }
+
         // Decrypt if we have a decryptor
         let decryptedData: Data
         if let decryptor {
             do {
                 decryptedData = try await decryptor.decrypt(frame.data)
-                if videoFrameCount <= 3 || videoFrameCount % 100 == 0 {
+                if videoFrameCount <= 10 || videoFrameCount % 100 == 0 {
                     print("🎬 [NTDFSub] Decrypted frame #\(videoFrameCount): \(frame.data.count) -> \(decryptedData.count) bytes")
                 }
             } catch {
@@ -282,7 +287,7 @@ public actor NTDFStreamingSubscriber {
         } else {
             // Not encrypted
             decryptedData = frame.data
-            if videoFrameCount <= 3 {
+            if videoFrameCount <= 10 {
                 print("🎬 [NTDFSub] Unencrypted frame #\(videoFrameCount): \(decryptedData.count) bytes")
             }
         }
@@ -308,17 +313,17 @@ public actor NTDFStreamingSubscriber {
                     formatDescription: formatDesc,
                     naluLengthSize: Int(config.naluLengthSize)
                 )
-                if sampleBuffer == nil && (videoFrameCount <= 3 || videoFrameCount % 100 == 0) {
-                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): createVideoSampleBuffer returned nil")
+                if sampleBuffer == nil && videoFrameCount <= 10 {
+                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): createVideoSampleBuffer FAILED - formatDesc exists: \(videoFormatDescription != nil), naluCount: \(videoFrame.nalus.count), totalNaluBytes: \(videoFrame.nalus.reduce(0) { $0 + $1.count })")
                 }
             } else {
-                if videoFrameCount <= 3 {
+                if videoFrameCount <= 10 {
                     print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): No videoFormatDescription available")
                 }
             }
 
             // Log first few frames and periodically
-            if videoFrameCount <= 3 || videoFrameCount % 100 == 0 {
+            if videoFrameCount <= 10 || videoFrameCount % 100 == 0 {
                 print("🎬 [NTDFSub] Frame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), sampleBuffer=\(sampleBuffer != nil)")
             }
 
@@ -335,6 +340,11 @@ public actor NTDFStreamingSubscriber {
                 isKeyframe: videoFrame.isKeyframe,
                 sampleBuffer: sampleBuffer
             )
+
+            // Log callback invocation
+            if videoFrameCount <= 10 {
+                print("🎬 [NTDFSub] Frame #\(videoFrameCount) INVOKING callback: keyframe=\(decryptedFrame.isKeyframe), sampleBuffer=\(sampleBuffer != nil), handlerSet=\(onDecryptedFrame != nil)")
+            }
 
             await onDecryptedFrame?(decryptedFrame)
         } catch {

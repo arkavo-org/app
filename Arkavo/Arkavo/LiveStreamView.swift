@@ -152,10 +152,11 @@ struct LiveStreamDisplayView: UIViewRepresentable {
     @ObservedObject var viewModel: LiveStreamViewModel
 
     func makeUIView(context: Context) -> LiveStreamUIView {
-        print("📺 [LiveStreamDisplayView] Creating UIView and displayLayer")
+        let now = Date()
+        print("📺 [LiveStreamDisplayView] Creating UIView at \(now)")
         let view = LiveStreamUIView()
         viewModel.displayLayer = view.displayLayer
-        print("📺 [LiveStreamDisplayView] displayLayer assigned to viewModel")
+        print("📺 [LiveStreamDisplayView] displayLayer assigned at \(Date()), took \(Date().timeIntervalSince(now))s")
         return view
     }
 
