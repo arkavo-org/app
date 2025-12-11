@@ -307,9 +307,9 @@ public struct FLVDemuxer: Sendable {
 
         let avcPacketType = data[1]
 
-        // Log first few bytes for debugging
-        let hexPrefix = data.prefix(14).map { String(format: "%02X", $0) }.joined(separator: " ")
-        print("🔍 [FLVDemux] parseAVCVideoFrame: frameType=\(frameType) codecId=\(codecId) avcPacketType=\(avcPacketType) hex=\(hexPrefix)")
+        // Debug logging disabled - was too verbose
+        // let hexPrefix = data.prefix(14).map { String(format: "%02X", $0) }.joined(separator: " ")
+        // print("🔍 [FLVDemux] parseAVCVideoFrame: frameType=\(frameType) codecId=\(codecId) avcPacketType=\(avcPacketType) hex=\(hexPrefix)")
 
         guard avcPacketType == 1 else {  // NALU
             print("🔍 [FLVDemux] ❌ Not NALU data (avcPacketType=\(avcPacketType), expected 1)")
@@ -338,24 +338,25 @@ public struct FLVDemuxer: Sendable {
             let ivCounter = (UInt32(data[5]) << 16) | (UInt32(data[6]) << 8) | UInt32(data[7])
             let payloadLength = (Int(data[8]) << 16) | (Int(data[9]) << 8) | Int(data[10])
 
-            print("🔍 [FLVDemux] NTDF wrapper check: ivCounter=\(ivCounter), payloadLength=\(payloadLength), dataLen=\(data.count)")
+            // Debug logging disabled - was too verbose
+            // print("🔍 [FLVDemux] NTDF wrapper check: ivCounter=\(ivCounter), payloadLength=\(payloadLength), dataLen=\(data.count)")
 
             // If payload length roughly matches remaining data, this is NTDF-wrapped
             // The actual NALU data starts at offset 11 (5 FLV header + 6 NTDF header)
             if payloadLength > 0 && payloadLength <= data.count - 5 {
                 offset = 11
-                print("🔍 [FLVDemux] Detected NTDF collection wrapper, skipping to offset 11")
+                // print("🔍 [FLVDemux] Detected NTDF collection wrapper, skipping to offset 11")
             }
         }
 
-        // Debug: log first NALU length attempt
-        if offset + naluLengthSize <= data.count {
-            var firstLength = 0
-            for i in 0 ..< naluLengthSize {
-                firstLength = (firstLength << 8) | Int(data[offset + i])
-            }
-            print("🔍 [FLVDemux] First NALU length bytes at offset \(offset): \(data[offset..<min(offset+naluLengthSize, data.count)].map { String(format: "%02X", $0) }.joined(separator: " ")) = \(firstLength), dataLen=\(data.count), naluLengthSize=\(naluLengthSize)")
-        }
+        // Debug logging disabled - was too verbose
+        // if offset + naluLengthSize <= data.count {
+        //     var firstLength = 0
+        //     for i in 0 ..< naluLengthSize {
+        //         firstLength = (firstLength << 8) | Int(data[offset + i])
+        //     }
+        //     print("🔍 [FLVDemux] First NALU length bytes at offset \(offset): \(data[offset..<min(offset+naluLengthSize, data.count)].map { String(format: "%02X", $0) }.joined(separator: " ")) = \(firstLength), dataLen=\(data.count), naluLengthSize=\(naluLengthSize)")
+        // }
 
         while offset + naluLengthSize <= data.count {
             var naluLength = 0
@@ -374,7 +375,7 @@ public struct FLVDemuxer: Sendable {
             offset += naluLength
         }
 
-        print("🔍 [FLVDemux] Parsed \(nalus.count) NALUs")
+        // print("🔍 [FLVDemux] Parsed \(nalus.count) NALUs")
 
         // Calculate timestamps
         let dts = CMTime(value: CMTimeValue(baseTimestamp), timescale: 1000)

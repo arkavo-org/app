@@ -103,17 +103,29 @@ class LiveStreamViewModel: ObservableObject {
     // MARK: - Private Methods
 
     #if canImport(ArkavoStreaming)
+        private var videoFramesReceived: UInt64 = 0
+        private var audioFramesReceived: UInt64 = 0
+        private var waitingForKeyframe = true  // Start by waiting for first keyframe
+        private var hasReceivedFirstKeyframe = false
+
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
+
+            // Track video vs audio separately
+            if frame.type == .video {
+                videoFramesReceived += 1
+            } else {
+                audioFramesReceived += 1
+            }
 
             // Log first 10 frames in detail
             if framesReceived <= 10 {
                 print("📺 [LiveStreamVM] Frame #\(framesReceived) RECEIVED: type=\(frame.type), keyframe=\(frame.isKeyframe), sampleBuffer=\(frame.sampleBuffer != nil), displayLayer=\(displayLayer != nil)")
             }
 
-            // Log every 30 frames (~1 second at 30fps)
+            // Log every 30 frames with video/audio breakdown
             if framesReceived % 30 == 0 {
-                print("📺 [LiveStreamVM] Received \(framesReceived) frames (type: \(frame.type), keyframe: \(frame.isKeyframe), dataSize: \(frame.data.count))")
+                print("📺 [LiveStreamVM] Received \(framesReceived) total (video: \(videoFramesReceived), audio: \(audioFramesReceived)) - current: type=\(frame.type), keyframe=\(frame.isKeyframe), dataSize=\(frame.data.count)")
             }
 
             // Log displayLayer status on video frames (first 10)
@@ -126,33 +138,44 @@ class LiveStreamViewModel: ObservableObject {
                let displayLayer,
                frame.type == .video
             {
-                // Log first video frame
-                if framesReceived == 1 || framesReceived % 100 == 0 {
-                    print("📺 [LiveStreamVM] Video frame \(framesReceived): sampleBuffer present, displayLayer status: \(displayLayer.status.rawValue)")
-                }
-
-                // Check if layer is ready
+                // Check if layer has failed and needs recovery
                 if displayLayer.status == .failed {
-                    print("📺 [LiveStreamVM] ⚠️ Display layer failed, flushing...")
+                    print("📺 [LiveStreamVM] ⚠️ Display layer FAILED!")
                     if let error = displayLayer.error {
                         print("📺 [LiveStreamVM] Display layer error: \(error)")
                     }
+                    print("📺 [LiveStreamVM] Flushing and waiting for keyframe...")
                     displayLayer.flush()
+                    waitingForKeyframe = true
+                }
+
+                // Wait for keyframe after flush or at start
+                if waitingForKeyframe {
+                    if frame.isKeyframe {
+                        print("📺 [LiveStreamVM] ✅ Got keyframe, starting/resuming playback")
+                        waitingForKeyframe = false
+                        hasReceivedFirstKeyframe = true
+                    } else {
+                        if videoFramesReceived <= 10 || videoFramesReceived % 30 == 0 {
+                            print("📺 [LiveStreamVM] ⏳ Skipping non-keyframe \(videoFramesReceived), waiting for keyframe")
+                        }
+                        return
+                    }
+                }
+
+                // Log video frames being enqueued
+                if videoFramesReceived <= 10 || videoFramesReceived % 30 == 0 {
+                    print("📺 [LiveStreamVM] ✅ VideoFrame \(videoFramesReceived) ENQUEUING: ts=\(frame.timestamp), keyframe=\(frame.isKeyframe), displayLayerStatus=\(displayLayer.status.rawValue)")
                 }
 
                 displayLayer.enqueue(sampleBuffer)
-
-                // Log enqueue action for first 10 frames
-                if framesReceived <= 10 {
-                    print("📺 [LiveStreamVM] Frame #\(framesReceived) ENQUEUED to displayLayer, new status=\(displayLayer.status.rawValue)")
-                }
             } else if frame.type == .video {
                 // Log missing components
                 if frame.sampleBuffer == nil {
-                    print("📺 [LiveStreamVM] ⚠️ Frame \(framesReceived): No sampleBuffer for video frame")
+                    print("📺 [LiveStreamVM] ⚠️ VideoFrame \(videoFramesReceived): No sampleBuffer (ts=\(frame.timestamp), keyframe=\(frame.isKeyframe), dataSize=\(frame.data.count))")
                 }
                 if displayLayer == nil {
-                    print("📺 [LiveStreamVM] ⚠️ Frame \(framesReceived): No displayLayer set!")
+                    print("📺 [LiveStreamVM] ⚠️ VideoFrame \(videoFramesReceived): No displayLayer set!")
                 }
             }
         }

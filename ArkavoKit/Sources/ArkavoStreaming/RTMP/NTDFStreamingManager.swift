@@ -50,6 +50,13 @@ public actor NTDFStreamingManager {
     private var state: State = .idle
     private var cachedHeaderBytes: Data?
 
+    // Store stream parameters for metadata updates on key rotation
+    private var streamWidth: Int = 0
+    private var streamHeight: Int = 0
+    private var streamFramerate: Double = 0
+    private var streamVideoBitrate: Double = 0
+    private var streamAudioBitrate: Double = 0
+
     /// Current state of the manager
     public var currentState: State { state }
 
@@ -69,6 +76,11 @@ public actor NTDFStreamingManager {
             // 1. Fetch KAS public key and create metadata
             print("🔐 Initializing NTDF streaming...")
             let kasMetadata = try await kasService.createKasMetadata()
+
+            // Log KAS public key for debugging
+            let kasPublicKeyData = try kasMetadata.getPublicKey()
+            let kasKeyHex = kasPublicKeyData.map { String(format: "%02X", $0) }.joined()
+            print("🔐 [DEBUG] KAS public key (\(kasPublicKeyData.count) bytes): \(kasKeyHex)")
 
             // 2. Create policy data - must be valid JSON, not empty
             let policyData: Data
@@ -137,6 +149,13 @@ public actor NTDFStreamingManager {
         }
 
         print("📡 Connecting to RTMP: \(rtmpURL)/\(streamKey)")
+
+        // Store stream parameters for metadata updates on key rotation
+        self.streamWidth = width
+        self.streamHeight = height
+        self.streamFramerate = framerate
+        self.streamVideoBitrate = videoBitrate
+        self.streamAudioBitrate = audioBitrate
 
         // Get header bytes and encode as base64
         let headerBytes = await collection.getHeaderBytes()
@@ -326,8 +345,16 @@ public actor NTDFStreamingManager {
     /// Rotate to a new collection (new key, IV resets to 1)
     /// Called automatically before each keyframe
     private func rotateCollection() async throws {
+        // Clear cache to get fresh KAS key (in case of key rotation)
+        await kasService.clearCache()
+
         // Fetch fresh KAS metadata and create new collection
         let kasMetadata = try await kasService.createKasMetadata()
+
+        // Log KAS public key for debugging
+        let kasKeyData = try kasMetadata.getPublicKey()
+        let kasKeyHex = kasKeyData.map { String(format: "%02X", $0) }.joined()
+        print("🔐 [NTDFStreamingManager] Using KAS public key (\(kasKeyData.count) bytes): \(kasKeyHex)")
 
         // Create new policy with fresh UUID
         let policyUUID = UUID().uuidString.lowercased()
@@ -353,14 +380,35 @@ public actor NTDFStreamingManager {
         let headerBytes = await collection!.getHeaderBytes()
         cachedHeaderBytes = headerBytes
 
-        // Log key fingerprint
+        // Log key fingerprint and ephemeral public key
         let symmetricKey = await collection!.getSymmetricKey()
         let keyData = symmetricKey.withUnsafeBytes { Data($0) }
         let keyHash = CryptoKit.SHA256.hash(data: keyData)
         let keyFingerprint = keyHash.prefix(8).map { String(format: "%02X", $0) }.joined()
-        print("🔐 [NTDFStreamingManager] Rotated collection - new key fingerprint: \(keyFingerprint), policy: \(policyUUID.prefix(8))...")
 
-        // Send new NTDF header frame before keyframe
+        // Log ephemeral public key for debugging
+        let header = await collection!.header
+        let ephemeralKey = header.ephemeralPublicKey
+        let ephemeralKeyHex = ephemeralKey.map { String(format: "%02X", $0) }.joined()
+
+        print("🔐 [NTDFStreamingManager] Rotated collection:")
+        print("   - Key fingerprint: \(keyFingerprint)")
+        print("   - Policy UUID: \(policyUUID.prefix(8))...")
+        print("   - Ephemeral pubkey (\(ephemeralKey.count) bytes): \(ephemeralKeyHex)")
+
+        // Send updated metadata with new ntdf_header (for late joiners)
+        let base64Header = headerBytes.base64EncodedString()
+        try await rtmpPublisher.sendMetadata(
+            width: streamWidth,
+            height: streamHeight,
+            framerate: streamFramerate,
+            videoBitrate: streamVideoBitrate,
+            audioBitrate: streamAudioBitrate,
+            customFields: ["ntdf_header": base64Header]
+        )
+        print("🔐 [NTDFStreamingManager] Updated metadata with new ntdf_header")
+
+        // Send new NTDF header frame before keyframe (in-band backup)
         try await sendNTDFHeaderFrame(headerBytes)
     }
 
@@ -379,5 +427,23 @@ public actor NTDFStreamingManager {
         cachedHeaderBytes = nil
         state = .idle
         print("✅ NTDF stream disconnected")
+    }
+
+    /// Get symmetric key for testing/debugging purposes
+    /// WARNING: Only use for testing - exposing the key in production is a security risk
+    public func getSymmetricKeyForTesting() async -> SymmetricKey? {
+        guard let collection else { return nil }
+        return await collection.getSymmetricKey()
+    }
+
+    /// Encrypt raw data and return serialized NanoTDF collection item
+    /// - Parameter data: Plaintext data to encrypt
+    /// - Returns: Serialized encrypted data (IV + length + ciphertext + tag)
+    public func encrypt(data: Data) async throws -> Data {
+        guard let collection else {
+            throw NTDFStreamingError.notInitialized
+        }
+        let item = try await collection.encryptItem(plaintext: data)
+        return await collection.serialize(item: item)
     }
 }

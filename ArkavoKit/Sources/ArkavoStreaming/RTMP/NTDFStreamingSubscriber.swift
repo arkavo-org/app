@@ -74,6 +74,12 @@ public actor NTDFStreamingSubscriber {
     private var videoFormatDescription: CMVideoFormatDescription?
     private var audioFormatDescription: CMAudioFormatDescription?
 
+    // Synthetic timestamp generation (rml_rtmp has broken timestamp handling)
+    private var videoTimestampMs: UInt32 = 0
+    private var audioTimestampMs: UInt32 = 0
+    private let videoFrameDurationMs: UInt32 = 33  // ~30fps default
+    private let audioFrameDurationMs: UInt32 = 21  // ~48kHz AAC frame duration
+
     // Callbacks
     private var onDecryptedFrame: ((DecryptedFrame) async -> Void)?
     private var onStateChange: ((State) async -> Void)?
@@ -174,14 +180,28 @@ public actor NTDFStreamingSubscriber {
             return
         }
 
-        // Store for comparison with in-band header
+        // Check if this is a new/different header (key rotation)
+        let isNewHeader = metadataHeaderBase64 != ntdfHeaderBase64
+
+        // Store for comparison
         metadataHeaderBase64 = ntdfHeaderBase64
         print("🔐 [NTDFSub] Metadata header (first 80 chars): \(ntdfHeaderBase64.prefix(80))...")
 
-        // DON'T initialize from metadata - wait for fresh in-band header frame
-        // The metadata header might be stale/cached from a previous publisher session
-        print("🔐 [NTDFSub] ⏳ Waiting for in-band NTDF header frame (metadata header may be stale)")
-        // await initializeDecryptorWithHeader(headerBytes) - DISABLED: use in-band header instead
+        // If decryptor exists and this is a NEW header, add as alternate (key rotation)
+        if decryptor != nil && isNewHeader {
+            print("🔐 [NTDFSub] Key rotation detected - adding new key as alternate")
+            do {
+                try await decryptor?.addAlternateFromHeader(headerBytes)
+                print("🔐 [NTDFSub] ✅ Added rotated key as alternate decryptor")
+            } catch {
+                print("🔐 [NTDFSub] ⚠️ Failed to add rotated key: \(error)")
+            }
+            return
+        }
+
+        // Initialize primary decryptor from metadata header
+        headerSource = "metadata"
+        await initializeDecryptorWithHeader(headerBytes)
     }
 
     /// Initialize decryptor with NTDF header bytes (from metadata or header frame)
@@ -363,11 +383,12 @@ public actor NTDFStreamingSubscriber {
                 return
             }
         } else {
-            // Not encrypted - use original frame data
-            decryptedData = frame.data
-            if videoFrameCount <= 10 {
-                print("🎬 [NTDFSub] Unencrypted frame #\(videoFrameCount): \(decryptedData.count) bytes")
+            // No decryptor yet - skip encrypted frames until we get NTDF header
+            // We need to wait for the decryptor to be initialized before we can process video
+            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
+                print("🎬 [NTDFSub] ⏳ Frame #\(videoFrameCount): Waiting for decryptor (skipping encrypted frame)")
             }
+            return
         }
 
         // Parse decrypted FLV video frame
@@ -391,18 +412,18 @@ public actor NTDFStreamingSubscriber {
                     formatDescription: formatDesc,
                     naluLengthSize: Int(config.naluLengthSize)
                 )
-                if sampleBuffer == nil && videoFrameCount <= 10 {
+                if sampleBuffer == nil && (videoFrameCount <= 10 || videoFrameCount % 30 == 0) {
                     print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): createVideoSampleBuffer FAILED - formatDesc exists: \(videoFormatDescription != nil), naluCount: \(videoFrame.nalus.count), totalNaluBytes: \(videoFrame.nalus.reduce(0) { $0 + $1.count })")
                 }
             } else {
-                if videoFrameCount <= 10 {
+                if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
                     print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): No videoFormatDescription available")
                 }
             }
 
             // Log first few frames and periodically
-            if videoFrameCount <= 10 || videoFrameCount % 100 == 0 {
-                print("🎬 [NTDFSub] Frame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), sampleBuffer=\(sampleBuffer != nil)")
+            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
+                print("🎬 [NTDFSub] VideoFrame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), sampleBuffer=\(sampleBuffer != nil), naluBytes=\(videoFrame.nalus.reduce(0) { $0 + $1.count }), ts=\(frame.timestamp)")
             }
 
             // Combine NALUs for callback
@@ -420,7 +441,7 @@ public actor NTDFStreamingSubscriber {
             )
 
             // Log callback invocation
-            if videoFrameCount <= 10 {
+            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
                 print("🎬 [NTDFSub] Frame #\(videoFrameCount) INVOKING callback: keyframe=\(decryptedFrame.isKeyframe), sampleBuffer=\(sampleBuffer != nil), handlerSet=\(onDecryptedFrame != nil)")
             }
 
@@ -583,6 +604,16 @@ actor StreamingCollectionDecryptor {
             print("🔐 [DEBUG] Policy body: nil")
         }
 
+        // Debug: dump ephemeral public key (critical for key derivation)
+        let ephemeralKey = header.ephemeralPublicKey
+        let ephemeralKeyHex = ephemeralKey.map { String(format: "%02X", $0) }.joined()
+        print("🔐 [DEBUG] Ephemeral public key (\(ephemeralKey.count) bytes): \(ephemeralKeyHex)")
+
+        // Debug: dump KAS public key from header
+        let kasKey = header.payloadKeyAccess.kasPublicKey
+        let kasKeyHex = kasKey.map { String(format: "%02X", $0) }.joined()
+        print("🔐 [DEBUG] KAS public key in header (\(kasKey.count) bytes): \(kasKeyHex)")
+
         // Debug: dump raw header bytes for KAS debugging
         let headerHex = headerBytes.prefix(50).map { String(format: "%02X", $0) }.joined(separator: " ")
         print("🔐 [DEBUG] Raw header (\(headerBytes.count) bytes): \(headerHex)...")
@@ -616,7 +647,15 @@ actor StreamingCollectionDecryptor {
 
         do {
             // Use OpenTDFKit's KASRewrapClient for proper request/response handling
-            let kasClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+            // Note: KASRewrapClient appends "v2/rewrap", so we need "/kas" in the path
+            // Only append "/kas" if it's not already there
+            let kasRewrapURL: URL
+            if kasURL.path.hasSuffix("/kas") || kasURL.path.contains("/kas/") {
+                kasRewrapURL = kasURL
+            } else {
+                kasRewrapURL = kasURL.appendingPathComponent("kas")
+            }
+            let kasClient = KASRewrapClient(kasURL: kasRewrapURL, oauthToken: ntdfToken)
 
             let (wrappedKey, sessionPublicKey) = try await kasClient.rewrapNanoTDF(
                 header: headerBytes,
@@ -688,6 +727,13 @@ actor StreamingCollectionDecryptor {
         if itemsDecrypted < 5 {
             let headerHex = encryptedData.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
             print("🔐 [Decrypt] Item #\(itemsDecrypted + 1): ivCounter=\(ivCounter), payloadLen=\(payloadLength), header=\(headerHex)")
+
+            // Warn if first IV counter is high - indicates we have a stale key from previous rotation
+            if itemsDecrypted == 0 && ivCounter > 10 {
+                print("⚠️ [Decrypt] HIGH IV COUNTER on first frame! ivCounter=\(ivCounter)")
+                print("   This likely means the metadata ntdf_header is from a previous key rotation.")
+                print("   The publisher may need to update metadata on key rotation, or we need to wait for an in-band NTDF header frame.")
+            }
         }
 
         // Validate we have enough data
@@ -790,7 +836,15 @@ actor StreamingCollectionDecryptor {
         let newHeader = try parser.parseHeader()
 
         // Perform KAS rewrap for the new header
-        let kasClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+        // Note: KASRewrapClient appends "v2/rewrap", so we need "/kas" in the path
+        // Only append "/kas" if it's not already there
+        let kasRewrapURL: URL
+        if kasURL.path.hasSuffix("/kas") || kasURL.path.contains("/kas/") {
+            kasRewrapURL = kasURL
+        } else {
+            kasRewrapURL = kasURL.appendingPathComponent("kas")
+        }
+        let kasClient = KASRewrapClient(kasURL: kasRewrapURL, oauthToken: ntdfToken)
         let (wrappedKey, sessionPublicKey) = try await kasClient.rewrapNanoTDF(
             header: newHeaderBytes,
             parsedHeader: newHeader,

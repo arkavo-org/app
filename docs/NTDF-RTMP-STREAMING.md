@@ -410,3 +410,165 @@ The NTDF token (OAuth access token from `identity.arkavo.net`) is:
 **Cause:** Invalid or expired NTDF token.
 
 **Fix:** Re-authenticate with `identity.arkavo.net` to get fresh token.
+
+### AES-GCM Authentication Failure (Decryption Fails)
+
+**Symptom:** KAS rewrap succeeds, symmetric key is unwrapped, but decryption fails with `authenticationFailure`.
+
+**Cause:** Symmetric key mismatch between publisher and subscriber.
+
+**Debug Steps:**
+1. Compare key fingerprints:
+   - Publisher logs: `🔐 [NTDFStreamingManager] Rotated collection: - Key fingerprint: XXXXXXXX`
+   - Subscriber logs: `✅ Symmetric key unwrapped: 256 bits, fingerprint: XXXXXXXX`
+2. Compare ephemeral public keys:
+   - Publisher logs: `- Ephemeral pubkey (33 bytes): <HEX>`
+   - Subscriber logs: `🔐 [DEBUG] Ephemeral public key (33 bytes): <HEX>`
+3. Compare KAS public keys:
+   - Publisher logs: `🔐 [NTDFStreamingManager] Using KAS public key (33 bytes): <HEX>`
+   - Fetch from KAS: `curl https://100.arkavo.net/kas/v2/kas_public_key?algorithm=ec`
+
+**Root Cause (Under Investigation - Dec 2024):**
+The symmetric key derived by the publisher differs from the key returned by KAS rewrap. This indicates:
+- KAS may be using a different private key than the one corresponding to the fetched public key
+- Possible key rotation on the KAS server
+- NanoTDF v12 (L1L) format does not include KAS public key in header - KAS must determine which key to use
+
+**Potential Fixes:**
+1. Ensure KAS uses the same key pair for public key endpoint and rewrap
+2. Include `kid` (key ID) in NanoTDF header for KAS to identify correct key
+3. Clear KAS public key cache on each collection rotation (implemented)
+
+---
+
+## CLI Testing
+
+The `NTDFTestCLI` tool provides quick testing of NTDF streaming components.
+
+### Build CLI
+```bash
+swift build --package-path ArkavoKit -c debug --product ntdf-test
+```
+
+### Run Publisher Tests (local RTMP)
+```bash
+.build/debug/ntdf-test
+```
+
+### Run Subscriber Test (remote RTMP)
+```bash
+.build/debug/ntdf-test --subscriber
+```
+
+### Test Key Derivation Match
+```bash
+# Run this to verify publisher/subscriber derive same symmetric key
+.build/debug/ntdf-test --key-test
+```
+
+---
+
+## Current Status (Dec 11, 2024)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Publisher encoding | ✅ Working | Video/audio frames encoded and encrypted |
+| RTMP connection | ✅ Working | Publisher connects and sends frames |
+| Server relay | ✅ Working | arkavo-rs relays frames to subscribers |
+| Subscriber RTMP | ✅ Working | Receives frames, timestamps, and sequence headers |
+| RTMP chunk interleaving | ✅ Fixed | Properly handles interleaved chunks from different streams |
+| KAS rewrap | ✅ Working | Returns wrapped key and session public key |
+| Key unwrap | ✅ Working | Symmetric key unwrapped successfully |
+| Key derivation | ✅ Working | `ntdf-test --key-test` confirms keys match |
+| **Late joiner sync** | ⚠️ IN PROGRESS | Metadata update on rotation implemented |
+| **Decryption** | 🔄 TESTING | Works when key matches, fails on stale metadata |
+
+### Key Rotation Support
+
+The publisher rotates encryption keys periodically (e.g., on keyframes). When this happens:
+1. Publisher sends new `onMetaData` with updated `ntdf_header` (**NEW: Dec 11, 2024**)
+2. Publisher sends in-band NTDF header frame before keyframe
+3. Subscriber detects header change (`isNewHeader = metadataHeaderBase64 != ntdfHeaderBase64`)
+4. Subscriber calls `addAlternateFromHeader()` to add the new key
+5. Decryption tries primary key first, then alternates
+
+**Files:**
+- `ArkavoKit/Sources/ArkavoStreaming/RTMP/NTDFStreamingManager.swift` - `rotateCollection()` now sends metadata update
+- `ArkavoKit/Sources/ArkavoStreaming/RTMP/NTDFStreamingSubscriber.swift` - `handleMetadata()`
+
+### Late Joiner Issue (Dec 11, 2024)
+
+**Symptom:** Subscriber joins an existing stream, gets `authenticationFailure` on decryption.
+
+**Root Cause:** When the publisher rotates keys on keyframes, it was only sending an in-band NTDF header frame but **NOT** updating the RTMP metadata. Late joiners receive stale metadata with the old key.
+
+**Evidence:**
+- First frame IV counter is high (e.g., 69) instead of 1
+- This indicates frames are from a collection that started before the current metadata header
+
+**Fix Applied (Dec 11, 2024):**
+Updated `NTDFStreamingManager.rotateCollection()` to also send updated metadata:
+```swift
+// Send updated metadata with new ntdf_header (for late joiners)
+let base64Header = headerBytes.base64EncodedString()
+try await rtmpPublisher.sendMetadata(
+    width: streamWidth,
+    height: streamHeight,
+    framerate: streamFramerate,
+    videoBitrate: streamVideoBitrate,
+    audioBitrate: streamAudioBitrate,
+    customFields: ["ntdf_header": base64Header]
+)
+```
+
+**Subscriber Warning:** Now logs warning when first IV counter > 10:
+```
+⚠️ [Decrypt] HIGH IV COUNTER on first frame! ivCounter=69
+   This likely means the metadata ntdf_header is from a previous key rotation.
+```
+
+### RTMP Interleaved Chunk Handling (Fixed Dec 11, 2024)
+
+**Issue:** RTMP chunks from video and audio streams can be interleaved. When reading a multi-chunk video message, an audio chunk might arrive in between.
+
+**Fix Applied:** Updated `RTMPSubscriber.receiveRTMPMessage()` to:
+1. Parse interleaved chunk headers (format 0, 1, 2, 3)
+2. Skip interleaved chunk data
+3. Continue reading continuation header for original message
+
+**File:** `ArkavoKit/Sources/ArkavoStreaming/RTMP/RTMPSubscriber.swift`
+
+### Previous Issue: KAS Key Derivation Bug (RESOLVED Dec 10, 2024)
+
+CLI test (`ntdf-test --key-test`) confirmed the issue and fix:
+
+**Before fix:**
+```
+Publisher fingerprint: 28D09B01669BBAC5
+Subscriber fingerprint: 4222196A1E9C1D51
+❌ KEYS DO NOT MATCH!
+```
+
+**After fix:**
+```
+Publisher fingerprint: 63EA76CCF8E92EE7
+Subscriber fingerprint: 63EA76CCF8E92EE7
+✅ KEYS MATCH!
+```
+
+**Root Cause:** The `rewrap_dek()` function in `arkavo-rs/src/modules/crypto.rs` was returning the **raw ECDH x-coordinate** instead of the **HKDF-derived symmetric key**.
+
+The publisher derives the DEK via:
+```
+ECDH(eph_private, kas_public) → shared_secret
+HKDF(salt=SHA256("L1L"), shared_secret) → symmetric_key
+```
+
+But the KAS was returning only `shared_secret` without the HKDF derivation step.
+
+**Fix Applied:** Updated `rewrap_dek()` to:
+1. First derive the actual DEK: `HKDF(salt, dek_shared_secret)` → `dek`
+2. Then derive wrapping key: `HKDF(salt, session_shared_secret)` → `wrapping_key`
+3. Wrap `dek` with `wrapping_key` for transport
+
+**File Changed:** `arkavo-rs/src/modules/crypto.rs` - `rewrap_dek()` function

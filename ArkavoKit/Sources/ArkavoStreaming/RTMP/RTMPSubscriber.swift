@@ -337,7 +337,7 @@ public actor RTMPSubscriber {
         // Wait for connect response
         var receivedConnectResult = false
         for _ in 0 ..< 10 {
-            let (messageType, messageData, messageBytes) = try await receiveRTMPMessage()
+            let (messageType, messageData, _, messageBytes) = try await receiveRTMPMessage()
             bytesReceived += UInt64(messageBytes)
 
             switch messageType {
@@ -385,7 +385,7 @@ public actor RTMPSubscriber {
         // Wait for createStream response
         var receivedStreamId = false
         for _ in 0 ..< 10 {
-            let (messageType, messageData, messageBytes) = try await receiveRTMPMessage()
+            let (messageType, messageData, _, messageBytes) = try await receiveRTMPMessage()
             bytesReceived += UInt64(messageBytes)
 
             if messageType == 20 {  // AMF0 Command
@@ -636,12 +636,11 @@ public actor RTMPSubscriber {
     // MARK: - RTMP Protocol
 
     private func receiveMediaMessage() async throws -> (messageType: UInt8, data: Data, timestamp: UInt32, bytes: Int) {
-        let (messageType, data, bytes) = try await receiveRTMPMessage()
-        // TODO: Extract timestamp from chunk header properly
-        return (messageType, data, 0, bytes)
+        let (messageType, data, timestamp, bytes) = try await receiveRTMPMessage()
+        return (messageType, data, timestamp, bytes)
     }
 
-    private func receiveRTMPMessage() async throws -> (messageType: UInt8, data: Data, bytes: Int) {
+    private func receiveRTMPMessage() async throws -> (messageType: UInt8, data: Data, timestamp: UInt32, bytes: Int) {
         // Read chunk basic header
         guard let basicHeader = try await receiveDataExact(length: 1) else {
             throw RTMPSubscriberError.connectionFailed("Failed to read chunk header")
@@ -669,9 +668,6 @@ public actor RTMPSubscriber {
         // Get or create state for this chunk stream
         var csState = chunkStreamStates[chunkStreamId] ?? ChunkStreamState()
 
-        // Debug: log chunk format
-        print("📦 Chunk csid=\(chunkStreamId) fmt=\(format)")
-
         // Read message header based on format
         var messageLength: UInt32 = 0
         var messageTypeId: UInt8 = 0
@@ -691,12 +687,13 @@ public actor RTMPSubscriber {
             csState.messageTypeId = messageTypeId
             csState.timestamp = timestamp
 
-        case 1:  // 7 bytes (no stream id)
+        case 1:  // 7 bytes (no stream id) - timestamp is DELTA
             guard let header = try await receiveDataExact(length: 7) else {
                 throw RTMPSubscriberError.connectionFailed("Failed to read type 1 header")
             }
             totalBytes += 7
-            timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+            let timestampDelta = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+            timestamp = csState.timestamp + timestampDelta  // Add delta to previous timestamp
             messageLength = UInt32(header[3]) << 16 | UInt32(header[4]) << 8 | UInt32(header[5])
             messageTypeId = header[6]
             // Store state for future type 2, 3 chunks
@@ -709,7 +706,8 @@ public actor RTMPSubscriber {
                 throw RTMPSubscriberError.connectionFailed("Failed to read type 2 header")
             }
             totalBytes += 3
-            timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+            let timestampDelta = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+            timestamp = csState.timestamp + timestampDelta  // Add delta to previous timestamp
             // Use previous message length and type from stored state
             messageLength = csState.messageLength
             messageTypeId = csState.messageTypeId
@@ -728,8 +726,10 @@ public actor RTMPSubscriber {
         // Save state back
         chunkStreamStates[chunkStreamId] = csState
 
-        // Debug: log parsed header info
-        print("📦 -> type=\(messageTypeId) len=\(messageLength)")
+        // Debug: log parsed header info with timestamp
+        if messageTypeId == 8 || messageTypeId == 9 {
+            print("📦 csid=\(chunkStreamId) fmt=\(format) type=\(messageTypeId) len=\(messageLength) ts=\(timestamp)")
+        }
 
         // Extended timestamp
         if timestamp == 0xFF_FFFF {
@@ -754,16 +754,92 @@ public actor RTMPSubscriber {
             totalBytes += chunkSize
             remaining -= chunkSize
 
-            // Read continuation header if more chunks
+            // Read continuation header if more chunks needed
             if remaining > 0 {
-                guard let contHeader = try await receiveDataExact(length: 1) else {
-                    throw RTMPSubscriberError.connectionFailed("Failed to read continuation header")
-                }
-                totalBytes += 1
-                // Verify it's a type 3 continuation
-                let contFormat = (contHeader[0] >> 6) & 0x03
-                if contFormat != 3 {
-                    print("⚠️ Expected type 3 continuation, got type \(contFormat)")
+                // Keep reading until we get a type 3 continuation for OUR chunk stream
+                var gotOurContinuation = false
+                while !gotOurContinuation {
+                    guard let contHeader = try await receiveDataExact(length: 1) else {
+                        throw RTMPSubscriberError.connectionFailed("Failed to read continuation header")
+                    }
+                    totalBytes += 1
+
+                    // Parse continuation header
+                    let contFormat = (contHeader[0] >> 6) & 0x03
+                    var contCsid = UInt32(contHeader[0] & 0x3F)
+
+                    // Handle extended chunk stream ID
+                    if contCsid == 0 {
+                        guard let extByte = try await receiveDataExact(length: 1) else {
+                            throw RTMPSubscriberError.connectionFailed("Failed to read extended csid in continuation")
+                        }
+                        contCsid = UInt32(extByte[0]) + 64
+                        totalBytes += 1
+                    } else if contCsid == 1 {
+                        guard let extBytes = try await receiveDataExact(length: 2) else {
+                            throw RTMPSubscriberError.connectionFailed("Failed to read extended csid in continuation")
+                        }
+                        contCsid = UInt32(extBytes[1]) * 256 + UInt32(extBytes[0]) + 64
+                        totalBytes += 2
+                    }
+
+                    // Check if this is our continuation
+                    if contFormat == 3 && contCsid == chunkStreamId {
+                        gotOurContinuation = true
+                    } else {
+                        // Interleaved chunk from another stream - parse and skip it
+                        print("⚠️ [RTMPSub] Interleaved chunk: csid=\(contCsid) fmt=\(contFormat) (we're reading csid=\(chunkStreamId))")
+
+                        // Get state for the interleaved chunk stream
+                        var interleavedState = chunkStreamStates[contCsid] ?? ChunkStreamState()
+
+                        // Parse header based on format
+                        switch contFormat {
+                        case 0:  // Full header (11 bytes)
+                            guard let header = try await receiveDataExact(length: 11) else {
+                                throw RTMPSubscriberError.connectionFailed("Failed to read interleaved type 0 header")
+                            }
+                            totalBytes += 11
+                            interleavedState.timestamp = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+                            interleavedState.messageLength = UInt32(header[3]) << 16 | UInt32(header[4]) << 8 | UInt32(header[5])
+                            interleavedState.messageTypeId = header[6]
+
+                        case 1:  // 7 bytes (no stream id)
+                            guard let header = try await receiveDataExact(length: 7) else {
+                                throw RTMPSubscriberError.connectionFailed("Failed to read interleaved type 1 header")
+                            }
+                            totalBytes += 7
+                            let delta = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+                            interleavedState.timestamp += delta
+                            interleavedState.messageLength = UInt32(header[3]) << 16 | UInt32(header[4]) << 8 | UInt32(header[5])
+                            interleavedState.messageTypeId = header[6]
+
+                        case 2:  // 3 bytes (timestamp delta only)
+                            guard let header = try await receiveDataExact(length: 3) else {
+                                throw RTMPSubscriberError.connectionFailed("Failed to read interleaved type 2 header")
+                            }
+                            totalBytes += 3
+                            let delta = UInt32(header[0]) << 16 | UInt32(header[1]) << 8 | UInt32(header[2])
+                            interleavedState.timestamp += delta
+
+                        case 3:  // 0 bytes - use existing state
+                            break
+
+                        default:
+                            break
+                        }
+
+                        // Save updated state
+                        chunkStreamStates[contCsid] = interleavedState
+
+                        // Skip one chunk's worth of data for the interleaved message
+                        let skipSize = min(Int(interleavedState.messageLength), receiveChunkSize)
+                        if skipSize > 0 {
+                            _ = try await receiveDataExact(length: skipSize)
+                            totalBytes += skipSize
+                            print("⚠️ [RTMPSub] Skipped \(skipSize) bytes of interleaved csid=\(contCsid) data")
+                        }
+                    }
                 }
             }
         }
@@ -771,12 +847,12 @@ public actor RTMPSubscriber {
         // Send acknowledgement if needed
         bytesReceived += UInt64(totalBytes)
         if bytesReceived - lastAckSent >= UInt64(serverWindowAckSize) {
-            print("📤 [RTMPSub] Sending acknowledgement: bytesReceived=\(bytesReceived), lastAckSent=\(lastAckSent), windowSize=\(serverWindowAckSize)")
+            print("📤 [RTMPSub] Sending acknowledgement: bytesReceived=\(bytesReceived)")
             try await sendAcknowledgement()
             lastAckSent = bytesReceived
         }
 
-        return (messageTypeId, payload, totalBytes)
+        return (messageTypeId, payload, timestamp, totalBytes)
     }
 
     private func sendRTMPMessage(chunkStreamId: UInt8, messageTypeId: UInt8, messageStreamId: UInt32, payload: Data) async throws {
