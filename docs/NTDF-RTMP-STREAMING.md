@@ -480,8 +480,31 @@ swift build --package-path ArkavoKit -c debug --product ntdf-test
 | KAS rewrap | ✅ Working | Returns wrapped key and session public key |
 | Key unwrap | ✅ Working | Symmetric key unwrapped successfully |
 | Key derivation | ✅ Working | `ntdf-test --key-test` confirms keys match |
-| **Late joiner sync** | ⚠️ IN PROGRESS | Metadata update on rotation implemented |
-| **Decryption** | 🔄 TESTING | Works when key matches, fails on stale metadata |
+| Late joiner sync | ✅ Fixed | Metadata update on rotation implemented |
+| **E2E Decryption** | ✅ **WORKING** | `ntdf-test --e2e` confirms full pipeline works |
+
+### E2E Test Results (Dec 11, 2024)
+
+```bash
+.build/debug/ntdf-test --e2e
+```
+
+**Result: DECRYPTION WORKING!**
+
+| Metric | Value |
+|--------|-------|
+| Publisher key fingerprint | `2DA6B2E273806DE2` |
+| Subscriber key fingerprint | `2DA6B2E273806DE2` |
+| Key match | ✅ YES |
+| IV counter start | 1 (correct) |
+| Decryption | ✅ `45 → 23 bytes` |
+
+The E2E test:
+1. Creates unique stream name to avoid conflicts
+2. Publisher starts first, sends metadata with `ntdf_header`
+3. Subscriber connects, receives metadata, initializes decryptor
+4. KAS rewrap returns correct symmetric key
+5. Frames decrypted successfully (IV 1, 2, 3...)
 
 ### Key Rotation Support
 
