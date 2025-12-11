@@ -357,9 +357,8 @@ public actor VideoEncoder {
 
     /// Encodes a video frame
     public func encodeVideoFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
-        guard isRecording, !isPaused else { return }
-        guard let videoInput = videoInput, let adaptor = pixelBufferAdaptor else { return }
-        guard let assetWriter = assetWriter else { return }
+        // Allow frames through if recording OR streaming (NTDF or regular)
+        guard (isRecording || isStreaming || isNTDFStreaming), !isPaused else { return }
 
         // Validate timestamp
         guard timestamp.isValid, timestamp.seconds >= 0 else {
@@ -367,78 +366,111 @@ public actor VideoEncoder {
             return
         }
 
-        // Check if asset writer is ready for writing
-        guard assetWriter.status == .writing else {
-            if assetWriter.status == .failed {
-                print("❌ Asset writer failed before encoding could start")
-            }
-            return
-        }
+        // Calculate adjusted timestamp for both recording and streaming
+        var adjustedTimestamp = timestamp
 
-        // Initialize session on first frame (thread-safe check)
-        if !sessionStarted {
-            sessionStarted = true
-            startTime = timestamp
-            // Start session at time zero - we'll normalize all timestamps
-            assetWriter.startSession(atSourceTime: .zero)
-            lastVideoTimestamp = .zero
-            print("📹 VideoEncoder: Session started, base timestamp \(timestamp.seconds)")
-        }
+        // If recording to file, handle file-specific logic
+        if isRecording {
+            guard let videoInput = videoInput, let adaptor = pixelBufferAdaptor else { return }
+            guard let assetWriter = assetWriter else { return }
 
-        // Wait if input is not ready
-        if !videoInput.isReadyForMoreMediaData {
-            return
-        }
-
-        // Double-check asset writer is still healthy
-        guard assetWriter.status == .writing else {
-            if assetWriter.status == .failed {
-                let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
-                let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
-                print("❌ Asset writer failed during video encoding: \(errorMessage)")
-                if let underlyingError = underlyingError {
-                    print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+            // Check if asset writer is ready for writing
+            guard assetWriter.status == .writing else {
+                if assetWriter.status == .failed {
+                    print("❌ Asset writer failed before encoding could start")
                 }
+                return
             }
-            return
-        }
 
-        // Normalize timestamp relative to recording start
-        guard let baseTime = startTime else { return }
-        var adjustedTimestamp = CMTimeSubtract(timestamp, baseTime)
+            // Initialize session on first frame (thread-safe check)
+            if !sessionStarted {
+                sessionStarted = true
+                startTime = timestamp
+                // Start session at time zero - we'll normalize all timestamps
+                assetWriter.startSession(atSourceTime: .zero)
+                lastVideoTimestamp = .zero
+                print("📹 VideoEncoder: Session started, base timestamp \(timestamp.seconds)")
+            }
 
-        // Skip frames from before recording started (can happen with preview running)
-        if adjustedTimestamp.seconds < 0 {
-            return
-        }
+            // Wait if input is not ready
+            if !videoInput.isReadyForMoreMediaData {
+                return
+            }
 
-        // Adjust for pauses
-        if !totalPausedDuration.seconds.isZero {
-            adjustedTimestamp = CMTimeSubtract(adjustedTimestamp, totalPausedDuration)
-        }
-
-        // Ensure timestamps are monotonically increasing
-        if CMTimeCompare(adjustedTimestamp, lastVideoTimestamp) <= 0 {
-            // Timestamp is not increasing, skip this frame
-            return
-        }
-
-        // Append pixel buffer to file
-        if !adaptor.append(pixelBuffer, withPresentationTime: adjustedTimestamp) {
-            print("❌ Failed to append video frame at timestamp \(adjustedTimestamp.seconds)")
-            if assetWriter.status == .failed {
-                let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
-                let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
-                print("   Asset writer error: \(errorMessage)")
-                if let underlyingError = underlyingError {
-                    print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+            // Double-check asset writer is still healthy
+            guard assetWriter.status == .writing else {
+                if assetWriter.status == .failed {
+                    let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+                    let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
+                    print("❌ Asset writer failed during video encoding: \(errorMessage)")
+                    if let underlyingError = underlyingError {
+                        print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+                    }
                 }
+                return
             }
-            return
-        }
-        lastVideoTimestamp = adjustedTimestamp
 
-        // Also stream if streaming is active (either regular RTMP or NTDF-encrypted)
+            // Normalize timestamp relative to recording start
+            guard let baseTime = startTime else { return }
+            adjustedTimestamp = CMTimeSubtract(timestamp, baseTime)
+
+            // Skip frames from before recording started (can happen with preview running)
+            if adjustedTimestamp.seconds < 0 {
+                return
+            }
+
+            // Adjust for pauses
+            if !totalPausedDuration.seconds.isZero {
+                adjustedTimestamp = CMTimeSubtract(adjustedTimestamp, totalPausedDuration)
+            }
+
+            // Ensure timestamps are monotonically increasing
+            if CMTimeCompare(adjustedTimestamp, lastVideoTimestamp) <= 0 {
+                // Timestamp is not increasing, skip this frame
+                return
+            }
+
+            // Append pixel buffer to file
+            if !adaptor.append(pixelBuffer, withPresentationTime: adjustedTimestamp) {
+                print("❌ Failed to append video frame at timestamp \(adjustedTimestamp.seconds)")
+                if assetWriter.status == .failed {
+                    let errorMessage = assetWriter.error?.localizedDescription ?? "Unknown error"
+                    let underlyingError = (assetWriter.error as NSError?)?.userInfo[NSUnderlyingErrorKey] as? NSError
+                    print("   Asset writer error: \(errorMessage)")
+                    if let underlyingError = underlyingError {
+                        print("   Underlying error: Domain=\(underlyingError.domain) Code=\(underlyingError.code)")
+                    }
+                }
+                return
+            }
+            lastVideoTimestamp = adjustedTimestamp
+        } else if isStreaming || isNTDFStreaming {
+            // Streaming-only mode: initialize stream timing on first frame
+            if !sessionStarted {
+                sessionStarted = true
+                startTime = timestamp
+                lastVideoTimestamp = .zero
+                print("📹 VideoEncoder: Stream session started, base timestamp \(timestamp.seconds)")
+            }
+
+            // Normalize timestamp for streaming
+            if let baseTime = startTime {
+                adjustedTimestamp = CMTimeSubtract(timestamp, baseTime)
+            }
+
+            // Skip frames from before stream started
+            if adjustedTimestamp.seconds < 0 {
+                return
+            }
+
+            // Ensure timestamps are monotonically increasing
+            if CMTimeCompare(adjustedTimestamp, lastVideoTimestamp) <= 0 {
+                return
+            }
+            lastVideoTimestamp = adjustedTimestamp
+        }
+
+        // Stream if streaming is active (either regular RTMP or NTDF-encrypted)
         if (isStreaming || isNTDFStreaming), let encoder = streamVideoEncoder {
             do {
                 try encoder.encode(pixelBuffer, timestamp: adjustedTimestamp)
