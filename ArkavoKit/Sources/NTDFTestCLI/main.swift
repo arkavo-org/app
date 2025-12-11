@@ -602,15 +602,10 @@ extension NTDFTestCLI {
             let encryptedData = try await manager.encrypt(data: plaintext)
             let timestamp = CMTime(value: CMTimeValue(i * 33), timescale: 1000)
 
-            // Create video frame (simulating H.264 keyframe with FLV header)
-            var frameData = Data()
-            frameData.append(i == 0 ? 0x17 : 0x27)  // Keyframe or interframe + AVC
-            frameData.append(0x01)  // NAL units
-            frameData.append(contentsOf: [0x00, 0x00, 0x00])  // Composition time
-            frameData.append(encryptedData)
-
+            // EncodedVideoFrame.data should be the raw payload (encrypted NTDF item)
+            // The FLV header is added by FLVMuxer.createVideoPayload in RTMPPublisher.send(video:)
             let frame = EncodedVideoFrame(
-                data: frameData,
+                data: encryptedData,
                 pts: timestamp,
                 isKeyframe: i == 0 || i % 30 == 0
             )
@@ -666,7 +661,34 @@ extension NTDFTestCLI {
             print("  Publisher key fingerprint: \(publisherFingerprint)")
         }
 
-        print("\n  Step 4: Starting subscriber...")
+        // Use unique stream name to avoid conflicts with existing streams
+        let uniqueStreamName = "live/e2e-test-\(Int(Date().timeIntervalSince1970))"
+        print("  Using unique stream: \(uniqueStreamName)")
+
+        print("\n  Step 4: Starting publisher FIRST...")
+        let publisher = RTMPPublisher()
+
+        let destination = RTMPPublisher.Destination(url: remoteRtmpURL, platform: "ntdf")
+        try await withTimeout(seconds: 15) {
+            try await publisher.connect(to: destination, streamKey: uniqueStreamName)
+        }
+        print("  [PUB] Connected!")
+
+        // Send metadata with ntdf_header
+        try await publisher.sendMetadata(
+            width: 1280,
+            height: 720,
+            framerate: 30.0,
+            videoBitrate: 2_500_000,
+            audioBitrate: 128_000,
+            customFields: ["ntdf_header": base64Header]
+        )
+        print("  [PUB] Metadata sent with ntdf_header!")
+
+        // Give server time to register the stream
+        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
+
+        print("\n  Step 5: Starting subscriber...")
         let subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: ntdfToken)
         let stats = FrameStatistics()
         var subscriberFingerprint = ""
@@ -682,36 +704,16 @@ extension NTDFTestCLI {
         // Start subscriber in background
         let subscriberTask = Task {
             do {
-                try await subscriber.connect(rtmpURL: remoteRtmpURL, streamName: remoteStreamName)
+                try await subscriber.connect(rtmpURL: remoteRtmpURL, streamName: uniqueStreamName)
                 // Wait for frames
-                try await Task.sleep(nanoseconds: 8_000_000_000)  // 8 seconds
+                try await Task.sleep(nanoseconds: 10_000_000_000)  // 10 seconds
             } catch {
                 print("  [SUB] Error: \(error)")
             }
         }
 
-        // Give subscriber time to connect
+        // Give subscriber time to connect and receive metadata
         try await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
-
-        print("\n  Step 5: Starting publisher...")
-        let publisher = RTMPPublisher()
-
-        let destination = RTMPPublisher.Destination(url: remoteRtmpURL, platform: "ntdf")
-        try await withTimeout(seconds: 15) {
-            try await publisher.connect(to: destination, streamKey: remoteStreamName)
-        }
-        print("  [PUB] Connected!")
-
-        // Send metadata
-        try await publisher.sendMetadata(
-            width: 1280,
-            height: 720,
-            framerate: 30.0,
-            videoBitrate: 2_500_000,
-            audioBitrate: 128_000,
-            customFields: ["ntdf_header": base64Header]
-        )
-        print("  [PUB] Metadata sent with ntdf_header!")
 
         print("\n  Step 6: Sending frames...")
         for i in 0..<60 {
@@ -719,14 +721,10 @@ extension NTDFTestCLI {
             let encryptedData = try await manager.encrypt(data: plaintext)
             let timestamp = CMTime(value: CMTimeValue(i * 33), timescale: 1000)
 
-            var frameData = Data()
-            frameData.append(i == 0 ? 0x17 : 0x27)
-            frameData.append(0x01)
-            frameData.append(contentsOf: [0x00, 0x00, 0x00])
-            frameData.append(encryptedData)
-
+            // EncodedVideoFrame.data should be the raw payload (encrypted NTDF item)
+            // The FLV header is added by FLVMuxer.createVideoPayload in RTMPPublisher.send(video:)
             let frame = EncodedVideoFrame(
-                data: frameData,
+                data: encryptedData,
                 pts: timestamp,
                 isKeyframe: i == 0 || i % 30 == 0
             )
