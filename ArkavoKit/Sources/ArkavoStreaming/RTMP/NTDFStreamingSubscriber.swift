@@ -147,6 +147,15 @@ public actor NTDFStreamingSubscriber {
 
     // MARK: - Private Methods
 
+    /// Track the header source for debugging
+    private var headerSource: String = "none"
+    private var metadataHeaderBase64: String?
+
+    /// Buffer for frames that arrive before decryptor is initialized
+    private var pendingVideoFrames: [RTMPSubscriber.MediaFrame] = []
+    private var pendingAudioFrames: [RTMPSubscriber.MediaFrame] = []
+    private let maxPendingFrames = 30  // Don't buffer too many
+
     private func handleMetadata(_ metadata: RTMPSubscriber.StreamMetadata) async {
         print("📥 Received stream metadata")
 
@@ -165,18 +174,25 @@ public actor NTDFStreamingSubscriber {
             return
         }
 
-        await initializeDecryptorWithHeader(headerBytes)
+        // Store for comparison with in-band header
+        metadataHeaderBase64 = ntdfHeaderBase64
+        print("🔐 [NTDFSub] Metadata header (first 80 chars): \(ntdfHeaderBase64.prefix(80))...")
+
+        // DON'T initialize from metadata - wait for fresh in-band header frame
+        // The metadata header might be stale/cached from a previous publisher session
+        print("🔐 [NTDFSub] ⏳ Waiting for in-band NTDF header frame (metadata header may be stale)")
+        // await initializeDecryptorWithHeader(headerBytes) - DISABLED: use in-band header instead
     }
 
     /// Initialize decryptor with NTDF header bytes (from metadata or header frame)
     private func initializeDecryptorWithHeader(_ headerBytes: Data) async {
         // Skip if already initialized
         if decryptor != nil {
-            print("🔐 [NTDFSub] Decryptor already initialized, skipping")
+            print("🔐 [NTDFSub] Decryptor already initialized (source: \(headerSource)), skipping")
             return
         }
 
-        print("🔐 Initializing decryptor with header: \(headerBytes.count) bytes")
+        print("🔐 Initializing decryptor with header: \(headerBytes.count) bytes (source: \(headerSource))")
 
         // Initialize decryptor with NTDF token
         do {
@@ -222,9 +238,16 @@ public actor NTDFStreamingSubscriber {
             let packetType = frame.data[1]
 
             // Debug: log first few video frames and any with packetType=2 (should be NTDF headers)
-            if videoFrameCount <= 10 || packetType == 2 {
+            if videoFrameCount <= 15 || packetType == 2 {
                 let hexPrefix = frame.data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " ")
                 print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) size=\(frame.data.count) bytes=\(hexPrefix)...")
+
+                // Check for NTDF magic at offset 5
+                if frame.data.count > 9 {
+                    let magicCheck = frame.data[5..<9].map { String(format: "%02X", $0) }.joined(separator: " ")
+                    let isNTDF = frame.data.count > 8 && frame.data[5] == 0x4E && frame.data[6] == 0x54 && frame.data[7] == 0x44 && frame.data[8] == 0x46
+                    print("🎬 [NTDFSub]   -> Magic check at offset 5: \(magicCheck) (isNTDF=\(isNTDF))")
+                }
             }
 
             // Check for NTDF header frame (special video frame with magic bytes)
@@ -245,8 +268,48 @@ public actor NTDFStreamingSubscriber {
                     // Extract header bytes
                     if frame.data.count >= 11 + headerLength {
                         let headerBytes = frame.data.subdata(in: 11..<(11 + headerLength))
+                        let inbandBase64 = headerBytes.base64EncodedString()
                         print("🔐 [NTDFSub] Received NTDF header frame: \(headerLength) bytes (packetType=\(packetType))")
+                        print("🔐 [NTDFSub] In-band header (first 80 chars): \(inbandBase64.prefix(80))...")
+
+                        // Compare with metadata header and potentially use both
+                        var shouldAddMetadataAsAlternate = false
+                        if let metaHeader = metadataHeaderBase64 {
+                            if metaHeader == inbandBase64 {
+                                print("🔐 [NTDFSub] ✅ Headers MATCH - metadata and in-band are same")
+                            } else {
+                                print("🔐 [NTDFSub] ⚠️ Headers DIFFER - will try both!")
+                                print("   - Metadata: \(metaHeader.prefix(60))...")
+                                print("   - In-band:  \(inbandBase64.prefix(60))...")
+                                shouldAddMetadataAsAlternate = true
+                            }
+                        }
+
+                        // If decryptor already initialized, add this as an alternate key
+                        if decryptor != nil {
+                            print("🔐 [NTDFSub] Adding as alternate decryptor (primary already initialized)")
+                            do {
+                                try await decryptor?.addAlternateFromHeader(headerBytes)
+                            } catch {
+                                print("🔐 [NTDFSub] ⚠️ Failed to add alternate decryptor: \(error)")
+                            }
+                            return
+                        }
+
+                        // Initialize primary decryptor with in-band header
+                        headerSource = "inband"
                         await initializeDecryptorWithHeader(headerBytes)
+
+                        // If metadata header differs, also add it as an alternate
+                        if shouldAddMetadataAsAlternate, let metaHeader = metadataHeaderBase64,
+                           let metaHeaderBytes = Data(base64Encoded: metaHeader) {
+                            print("🔐 [NTDFSub] Adding metadata header as alternate decryptor")
+                            do {
+                                try await decryptor?.addAlternateFromHeader(metaHeaderBytes)
+                            } catch {
+                                print("🔐 [NTDFSub] ⚠️ Failed to add metadata header as alternate: \(error)")
+                            }
+                        }
                     } else {
                         print("🎬 [NTDFSub] ⚠️ NTDF header frame too short: expected \(11 + headerLength), got \(frame.data.count)")
                     }
@@ -267,25 +330,40 @@ public actor NTDFStreamingSubscriber {
             }
         }
 
+        // FLV video header is 5 bytes: [frameType|codecId][packetType][compositionTime x3]
+        // The encrypted payload starts after this header
+        let flvHeaderSize = 5
+        guard frame.data.count > flvHeaderSize else {
+            print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): Video frame too short (\(frame.data.count) bytes)")
+            return
+        }
+
+        // Extract FLV header info for later reconstruction
+        let flvHeader = frame.data.prefix(flvHeaderSize)
+        let encryptedPayload = frame.data.dropFirst(flvHeaderSize)
+
         // Log frame arrival before decryption
         if videoFrameCount <= 10 {
-            print("🎬 [NTDFSub] Frame #\(videoFrameCount) ARRIVING: encrypted=\(decryptor != nil), size=\(frame.data.count) bytes")
+            print("🎬 [NTDFSub] Frame #\(videoFrameCount) ARRIVING: encrypted=\(decryptor != nil), totalSize=\(frame.data.count), payloadSize=\(encryptedPayload.count) bytes")
         }
 
         // Decrypt if we have a decryptor
         let decryptedData: Data
         if let decryptor {
             do {
-                decryptedData = try await decryptor.decrypt(frame.data)
+                // Decrypt only the payload (after FLV header)
+                let decryptedPayload = try await decryptor.decrypt(Data(encryptedPayload))
                 if videoFrameCount <= 10 || videoFrameCount % 100 == 0 {
-                    print("🎬 [NTDFSub] Decrypted frame #\(videoFrameCount): \(frame.data.count) -> \(decryptedData.count) bytes")
+                    print("🎬 [NTDFSub] Decrypted frame #\(videoFrameCount): \(encryptedPayload.count) -> \(decryptedPayload.count) bytes")
                 }
+                // Reconstruct FLV frame with decrypted payload
+                decryptedData = Data(flvHeader) + decryptedPayload
             } catch {
                 print("🎬 [NTDFSub] ❌ Video decryption failed for frame #\(videoFrameCount): \(error)")
                 return
             }
         } else {
-            // Not encrypted
+            // Not encrypted - use original frame data
             decryptedData = frame.data
             if videoFrameCount <= 10 {
                 print("🎬 [NTDFSub] Unencrypted frame #\(videoFrameCount): \(decryptedData.count) bytes")
@@ -369,11 +447,26 @@ public actor NTDFStreamingSubscriber {
             }
         }
 
+        // FLV audio header is 2 bytes: [soundFormat|sampleRate|sampleSize|channels][aacPacketType]
+        // The encrypted payload starts after this header
+        let flvAudioHeaderSize = 2
+        guard frame.data.count > flvAudioHeaderSize else {
+            print("🔊 [NTDFSub] ⚠️ Audio frame too short (\(frame.data.count) bytes)")
+            return
+        }
+
+        // Extract FLV header info for later reconstruction
+        let flvHeader = frame.data.prefix(flvAudioHeaderSize)
+        let encryptedPayload = frame.data.dropFirst(flvAudioHeaderSize)
+
         // Decrypt if we have a decryptor
         let decryptedData: Data
         if let decryptor {
             do {
-                decryptedData = try await decryptor.decrypt(frame.data)
+                // Decrypt only the payload (after FLV header)
+                let decryptedPayload = try await decryptor.decrypt(Data(encryptedPayload))
+                // Reconstruct FLV frame with decrypted payload
+                decryptedData = Data(flvHeader) + decryptedPayload
             } catch {
                 print("❌ Audio decryption failed: \(error)")
                 return
@@ -443,11 +536,20 @@ actor StreamingCollectionDecryptor {
     /// The underlying OpenTDFKit decryptor (initialized after KAS rewrap)
     private var decryptor: OpenTDFKit.NanoTDFCollectionDecryptor?
 
+    /// Additional decryptors for key rotation scenarios (n-1, n+1 keys)
+    private var alternateDecryptors: [OpenTDFKit.NanoTDFCollectionDecryptor] = []
+
     /// Cipher configuration from header
     private let cipher: Cipher
 
     /// Tag size for parsing encrypted items
     private let tagSize: Int
+
+    /// Counter for debugging decryption attempts
+    private var itemsDecrypted: Int = 0
+
+    /// Track which decryptor succeeded for logging
+    private var lastSuccessfulDecryptorIndex: Int = -1  // -1 = primary, 0+ = alternate
 
     /// Initialize with header bytes, KAS URL, and NTDF token
     /// - Parameters:
@@ -531,7 +633,11 @@ actor StreamingCollectionDecryptor {
                 clientPrivateKey: clientKeyPair.privateKey
             )
 
-            print("✅ Symmetric key unwrapped: \(symmetricKey.bitCount) bits")
+            // Log key fingerprint for debugging (SHA256 of key, first 8 bytes)
+            let keyData = symmetricKey.withUnsafeBytes { Data($0) }
+            let keyHash = SHA256.hash(data: keyData)
+            let keyFingerprint = keyHash.prefix(8).map { String(format: "%02X", $0) }.joined()
+            print("✅ Symmetric key unwrapped: \(symmetricKey.bitCount) bits, fingerprint: \(keyFingerprint)")
 
             // Create the OpenTDFKit decryptor with the unwrapped key
             self.decryptor = NanoTDFCollectionDecryptor.withUnwrappedKey(
@@ -578,6 +684,12 @@ actor StreamingCollectionDecryptor {
                            Int(encryptedData[4]) << 8 |
                            Int(encryptedData[5])
 
+        // Debug: Log first decryption attempts
+        if itemsDecrypted < 5 {
+            let headerHex = encryptedData.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
+            print("🔐 [Decrypt] Item #\(itemsDecrypted + 1): ivCounter=\(ivCounter), payloadLen=\(payloadLength), header=\(headerHex)")
+        }
+
         // Validate we have enough data
         let expectedTotal = 6 + payloadLength
         guard encryptedData.count >= expectedTotal else {
@@ -589,6 +701,12 @@ actor StreamingCollectionDecryptor {
         // Extract ciphertext + tag
         let ciphertextWithTag = encryptedData.subdata(in: 6..<(6 + payloadLength))
 
+        // Debug: Log ciphertext info
+        if itemsDecrypted < 5 {
+            print("🔐 [Decrypt] ciphertext+tag size=\(ciphertextWithTag.count), tagSize=\(tagSize)")
+        }
+        itemsDecrypted += 1
+
         // Create CollectionItem for decryption
         let item = CollectionItem(
             ivCounter: ivCounter,
@@ -596,12 +714,102 @@ actor StreamingCollectionDecryptor {
             tagSize: tagSize
         )
 
-        // Decrypt using OpenTDFKit
-        do {
-            return try await decryptor.decryptItem(item)
-        } catch {
-            throw NTDFSubscriberError.decryptionFailed("Decryption failed: \(error)")
+        // Debug: Log more details on early decryption attempts
+        if itemsDecrypted <= 5 {
+            let tagData = ciphertextWithTag.suffix(tagSize)
+            let ciphertextData = ciphertextWithTag.prefix(ciphertextWithTag.count - tagSize)
+            print("🔐 [Decrypt] Item #\(itemsDecrypted) details:")
+            print("   - IV counter: \(ivCounter) (0x\(String(format: "%06X", ivCounter)))")
+            print("   - Ciphertext size: \(ciphertextData.count)")
+            print("   - Tag (last \(tagSize) bytes): \(tagData.map { String(format: "%02X", $0) }.joined(separator: " "))")
+            print("   - First 16 ciphertext bytes: \(ciphertextData.prefix(16).map { String(format: "%02X", $0) }.joined(separator: " "))")
         }
+
+        // Try primary decryptor first
+        do {
+            let result = try await decryptor.decryptItem(item)
+            if lastSuccessfulDecryptorIndex != -1 {
+                print("🔐 [Decrypt] Primary decryptor succeeded after alternate was used")
+                lastSuccessfulDecryptorIndex = -1
+            }
+            return result
+        } catch {
+            // Primary decryptor failed, try alternates
+            if itemsDecrypted <= 5 {
+                print("🔐 [Decrypt] Primary decryptor failed: \(error), trying \(alternateDecryptors.count) alternates...")
+            }
+
+            for (index, altDecryptor) in alternateDecryptors.enumerated() {
+                do {
+                    let result = try await altDecryptor.decryptItem(item)
+                    if lastSuccessfulDecryptorIndex != index {
+                        print("🔐 [Decrypt] ✅ Alternate decryptor #\(index) succeeded!")
+                        lastSuccessfulDecryptorIndex = index
+                    }
+                    return result
+                } catch {
+                    if itemsDecrypted <= 5 {
+                        print("🔐 [Decrypt] Alternate #\(index) failed: \(error)")
+                    }
+                    continue
+                }
+            }
+
+            // All decryptors failed
+            throw NTDFSubscriberError.decryptionFailed("Decryption failed with all \(1 + alternateDecryptors.count) keys: \(error)")
+        }
+    }
+
+    /// Add an alternate decryptor (for key rotation scenarios)
+    func addAlternateDecryptor(_ decryptor: OpenTDFKit.NanoTDFCollectionDecryptor) {
+        alternateDecryptors.append(decryptor)
+        print("🔐 [Decrypt] Added alternate decryptor, total: \(alternateDecryptors.count)")
+    }
+
+    /// Add alternate decryptor from a new header (when receiving updated NTDF header frames)
+    func addAlternateFromHeader(_ newHeaderBytes: Data) async throws {
+        print("🔐 [Decrypt] Adding alternate decryptor from new header...")
+
+        // Generate new client ephemeral key pair
+        let privateKey = P256.KeyAgreement.PrivateKey()
+        let clientKeyPair = EphemeralKeyPair(
+            privateKey: privateKey.rawRepresentation,
+            publicKey: privateKey.publicKey.compressedRepresentation,
+            curve: .secp256r1
+        )
+
+        let publicKeyPEM = try convertToSPKIPEM(compressedKey: clientKeyPair.publicKey)
+        let pemKeyPair = EphemeralKeyPair(
+            privateKey: clientKeyPair.privateKey,
+            publicKey: publicKeyPEM.data(using: .utf8)!,
+            curve: .secp256r1
+        )
+
+        // Parse the new header
+        let parser = BinaryParser(data: newHeaderBytes)
+        let newHeader = try parser.parseHeader()
+
+        // Perform KAS rewrap for the new header
+        let kasClient = KASRewrapClient(kasURL: kasURL, oauthToken: ntdfToken)
+        let (wrappedKey, sessionPublicKey) = try await kasClient.rewrapNanoTDF(
+            header: newHeaderBytes,
+            parsedHeader: newHeader,
+            clientKeyPair: pemKeyPair
+        )
+
+        let symmetricKey = try KASRewrapClient.unwrapKey(
+            wrappedKey: wrappedKey,
+            sessionPublicKey: sessionPublicKey,
+            clientPrivateKey: clientKeyPair.privateKey
+        )
+
+        let altDecryptor = NanoTDFCollectionDecryptor.withUnwrappedKey(
+            symmetricKey: symmetricKey,
+            cipher: cipher
+        )
+
+        alternateDecryptors.append(altDecryptor)
+        print("🔐 [Decrypt] Added alternate decryptor from header, total: \(alternateDecryptors.count)")
     }
 
     /// Convert compressed P256 public key to PEM format

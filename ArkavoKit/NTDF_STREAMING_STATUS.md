@@ -1,6 +1,6 @@
-# NTDF Streaming Status - 2025-12-09
+# NTDF Streaming Status - 2025-12-11
 
-## Current State: KAS Rewrap Working, Decryption Pending
+## Current State: Frame Forwarding & Decryption Fixed, Testing Display
 
 ### What's Working
 1. **v12 (L1L) header format** - OpenTDFKit NanoTDFCollectionBuilder now defaults to v12
@@ -10,45 +10,62 @@
 5. **Symmetric key unwrap** - 256-bit key successfully derived
 6. **Decryptor initialization** - Reports success
 7. **Sequence headers** - Video (SPS/PPS) and Audio (48kHz stereo) parsed correctly
+8. **Publisher video frames** - ArkavoCreator now sends video frames correctly
+9. **Server frame forwarding** - arkavo-rs now relays client-encrypted NTDF frames to subscribers
+10. **Subscriber frame reception** - iOS app receives video/audio frames from server
 
-### What's NOT Working
-- **Video playback** - Decryptor initialized but no video frames displayed
-- Need to investigate frame decryption and delivery to video renderer
+### Recent Fixes (2025-12-11)
 
-### Recent Fixes (commits to check)
-- `OpenTDFKit` main branch:
-  - `cc38a26` - v12 (L1L) format default in NanoTDFCollectionBuilder
-  - `e3ffe32` - Support raw SEC1 format for session public key parsing
+#### arkavo-rs RTMP Server (`session.rs`)
+**Bug:** When `encryption_mode` was `Encrypted` but `collection` was `None` (client-side encryption), frames were silently dropped.
 
-- `arkavo-rs` opentdf-kas-public-key branch:
-  - `10782a8` - GMAC binding size 8 bytes (not 16)
-  - `f453cd7` - Reverted SPKI change (server sends raw SEC1, client handles it)
+**Fix:** Added else branch to relay frames as-is when server has no collection (client did encryption):
+```rust
+EncryptionMode::Encrypted => {
+    if let Some(ref collection) = self.collection {
+        // Server-side encryption
+        let encrypted = encrypt_item(collection, data)?;
+        self.relay_frame(RelayFrame { ... data: encrypted });
+    } else {
+        // Client-side encryption (NTDF): relay frames as-is
+        self.relay_frame(RelayFrame { ... data: data.to_vec() });
+    }
+}
+```
 
-- `ArkavoKit` ntdf-rtmp-streaming branch:
-  - `e60ca22` - Updated OpenTDFKit dependency
+#### ArkavoKit Subscriber (`NTDFStreamingSubscriber.swift`)
+**Bug:** Subscriber tried to decrypt entire FLV frame including 5-byte video header or 2-byte audio header.
 
-### Next Steps to Debug
-1. Check if encrypted frames are being received after sequence headers
-2. Verify frame decryption is actually happening (add logging)
-3. Check if decrypted frames are being passed to video decoder
-4. Verify CMSampleBuffer creation from decrypted NALUs
-5. Check if frames are being enqueued to AVSampleBufferDisplayLayer
+**Fix:** Strip FLV header before decryption, then reconstruct:
+```swift
+// Video: 5-byte FLV header [frameType|codec][packetType][compositionTime x3]
+let flvHeader = frame.data.prefix(5)
+let encryptedPayload = frame.data.dropFirst(5)
+let decryptedPayload = try await decryptor.decrypt(Data(encryptedPayload))
+decryptedData = Data(flvHeader) + decryptedPayload
 
-### Key Files
-- `/Users/paul/Projects/arkavo/app/ArkavoKit/Sources/ArkavoStreaming/RTMP/NTDFStreamingSubscriber.swift`
-  - `StreamingCollectionDecryptor` - handles frame decryption
-  - Check `decryptVideoFrame()` and callback delivery
+// Audio: 2-byte FLV header [soundFormat|rate|size|channels][aacPacketType]
+let flvHeader = frame.data.prefix(2)
+let encryptedPayload = frame.data.dropFirst(2)
+```
 
-- `/Users/paul/Projects/arkavo/OpenTDFKit/OpenTDFKit/NanoTDFCollectionDecryptor.swift`
-  - `decryptItem()` - actual AES-GCM decryption
+### What's Still Being Tested
+- **Video display** - Verifying decrypted frames display correctly on AVSampleBufferDisplayLayer
+- **Audio playback** - Verifying decrypted audio frames play correctly
 
-### Wire Format
-- Collection item format: `[3-byte IV][3-byte length][ciphertext+16-byte tag]`
-- Publisher sends NTDF header before each keyframe for late-joining subscribers
+### Key Files Modified
+- `/Users/paul/Projects/arkavo/arkavo-rs/src/modules/rtmp/session.rs` - Server frame relay fix
+- `/Users/paul/Projects/arkavo/app/ArkavoKit/Sources/ArkavoStreaming/RTMP/NTDFStreamingSubscriber.swift` - FLV header stripping
+
+### Wire Format Reminder
+- FLV Video: `[1-byte header][1-byte packetType][3-byte compositionTime][NTDF encrypted payload]`
+- FLV Audio: `[1-byte header][1-byte packetType][NTDF encrypted payload]`
+- NTDF Collection item: `[3-byte IV][3-byte length][ciphertext+16-byte tag]`
+- Publisher sends NTDF header frame before each keyframe for late-joining subscribers
 - Magic bytes `NTDF` (0x4E544446) identify header frames in video stream
 
 ### Logs to Look For
-After "Decryptor initialized, ready to decrypt frames":
-- Look for video frame processing logs
-- Check for decryption errors
-- Verify frame callback invocations
+After server fix:
+- `🎬 [NTDFSub] Frame #N ARRIVING:` - frames now arriving
+- `🎬 [NTDFSub] Decrypted frame #N:` - successful decryption
+- `📺 [LiveStreamVM] Frame #N ENQUEUED` - frames sent to display layer

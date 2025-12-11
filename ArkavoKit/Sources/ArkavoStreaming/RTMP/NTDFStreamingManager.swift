@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import OpenTDFKit
 import ArkavoMedia
@@ -96,6 +97,15 @@ public actor NTDFStreamingManager {
                 .configuration(.default)
                 .build()
 
+            // Log key fingerprint for debugging (SHA256 of key, first 8 bytes)
+            if let collection = collection {
+                let symmetricKey = await collection.getSymmetricKey()
+                let keyData = symmetricKey.withUnsafeBytes { Data($0) }
+                let keyHash = CryptoKit.SHA256.hash(data: keyData)
+                let keyFingerprint = keyHash.prefix(8).map { String(format: "%02X", $0) }.joined()
+                print("🔐 [NTDFStreamingManager] Symmetric key fingerprint: \(keyFingerprint)")
+            }
+
             state = .ready
             print("✅ NTDF streaming initialized")
         } catch {
@@ -166,14 +176,18 @@ public actor NTDFStreamingManager {
     /// Encrypt and send video frame
     /// - Parameter frame: The video frame to encrypt and send
     public func sendEncryptedVideo(frame: EncodedVideoFrame) async throws {
-        guard let collection, state == .streaming else {
+        guard collection != nil, state == .streaming else {
             throw NTDFStreamingError.notStreaming
         }
 
         do {
-            // Re-send NTDF header before each keyframe for late-joining subscribers
-            if frame.isKeyframe, let headerBytes = cachedHeaderBytes {
-                try await sendNTDFHeaderFrame(headerBytes)
+            // Create NEW collection (new key) for each keyframe - IV resets to 1
+            if frame.isKeyframe {
+                try await rotateCollection()
+            }
+
+            guard let collection else {
+                throw NTDFStreamingError.notStreaming
             }
 
             // Encrypt the video frame data
@@ -307,6 +321,47 @@ public actor NTDFStreamingManager {
             guard let collection else { return false }
             return await collection.needsRotation
         }
+    }
+
+    /// Rotate to a new collection (new key, IV resets to 1)
+    /// Called automatically before each keyframe
+    private func rotateCollection() async throws {
+        // Fetch fresh KAS metadata and create new collection
+        let kasMetadata = try await kasService.createKasMetadata()
+
+        // Create new policy with fresh UUID
+        let policyUUID = UUID().uuidString.lowercased()
+        let policyJSON = """
+        {
+            "uuid": "\(policyUUID)",
+            "body": {
+                "dataAttributes": [],
+                "dissem": []
+            }
+        }
+        """
+        let policyData = policyJSON.data(using: .utf8)!
+
+        // Build new collection (new ephemeral key, new symmetric key)
+        collection = try await NanoTDFCollectionBuilder()
+            .kasMetadata(kasMetadata)
+            .policy(.embeddedPlaintext(policyData))
+            .configuration(.default)
+            .build()
+
+        // Update cached header and send NTDF header frame
+        let headerBytes = await collection!.getHeaderBytes()
+        cachedHeaderBytes = headerBytes
+
+        // Log key fingerprint
+        let symmetricKey = await collection!.getSymmetricKey()
+        let keyData = symmetricKey.withUnsafeBytes { Data($0) }
+        let keyHash = CryptoKit.SHA256.hash(data: keyData)
+        let keyFingerprint = keyHash.prefix(8).map { String(format: "%02X", $0) }.joined()
+        print("🔐 [NTDFStreamingManager] Rotated collection - new key fingerprint: \(keyFingerprint), policy: \(policyUUID.prefix(8))...")
+
+        // Send new NTDF header frame before keyframe
+        try await sendNTDFHeaderFrame(headerBytes)
     }
 
     /// Get stream statistics from RTMPPublisher
