@@ -84,11 +84,9 @@ public struct FLVDemuxer: Sendable {
             }
 
             guard status == noErr, let desc = formatDescription else {
-                print("🔍 [FLVDemux] ❌ createFormatDescription failed: status=\(status)")
                 throw DemuxError.invalidData
             }
 
-            print("🔍 [FLVDemux] ✅ createFormatDescription succeeded")
             return desc
         }
     }
@@ -149,95 +147,72 @@ public struct FLVDemuxer: Sendable {
         // bytes 2-4: composition time (signed 24-bit)
         // bytes 5+: AVCDecoderConfigurationRecord
 
-        print("🔍 [FLVDemux] parseAVCSequenceHeader: \(data.count) bytes")
-        print("🔍 [FLVDemux] Raw hex: \(data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
-
         guard data.count > 5 else {
-            print("🔍 [FLVDemux] ❌ Data too short: \(data.count) <= 5")
             throw DemuxError.invalidData
         }
 
         let codecId = data[0] & 0x0F
         guard codecId == 7 else {  // AVC
-            print("🔍 [FLVDemux] ❌ Not AVC codec: \(codecId)")
             throw DemuxError.unsupportedCodec("Video codec \(codecId) is not AVC")
         }
 
         let avcPacketType = data[1]
         guard avcPacketType == 0 else {
-            print("🔍 [FLVDemux] ❌ Not sequence header: packetType=\(avcPacketType)")
             throw DemuxError.invalidData
         }
 
         // Parse AVCDecoderConfigurationRecord starting at byte 5
         let config = data.subdata(in: 5 ..< data.count)
-        print("🔍 [FLVDemux] Config bytes: \(config.count), hex: \(config.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " "))")
-
         guard config.count >= 7 else {
-            print("🔍 [FLVDemux] ❌ Config too short: \(config.count) < 7")
             throw DemuxError.invalidData
         }
 
-        let configVersion = config[0]
         let profileIndication = config[1]
         let profileCompatibility = config[2]
         let levelIndication = config[3]
         let naluLengthSize = (config[4] & 0x03) + 1
-        print("🔍 [FLVDemux] version=\(configVersion) profile=\(profileIndication) level=\(levelIndication) naluSize=\(naluLengthSize)")
 
         // Parse SPS
         let numSPS = config[5] & 0x1F
-        print("🔍 [FLVDemux] numSPS=\(numSPS)")
         guard numSPS >= 1 else {
-            print("🔍 [FLVDemux] ❌ No SPS: numSPS=\(numSPS)")
             throw DemuxError.invalidData
         }
 
         var offset = 6
         guard config.count > offset + 2 else {
-            print("🔍 [FLVDemux] ❌ Config too short for SPS length: \(config.count) <= \(offset + 2)")
             throw DemuxError.invalidData
         }
 
         let spsLength = Int(config[offset]) << 8 | Int(config[offset + 1])
-        print("🔍 [FLVDemux] spsLength=\(spsLength) at offset \(offset)")
         offset += 2
 
         guard config.count >= offset + spsLength else {
-            print("🔍 [FLVDemux] ❌ Config too short for SPS data: \(config.count) < \(offset + spsLength)")
             throw DemuxError.invalidData
         }
 
         let sps = config.subdata(in: offset ..< offset + spsLength)
         offset += spsLength
-        print("🔍 [FLVDemux] SPS: \(sps.count) bytes")
 
         // Parse PPS
         guard config.count > offset else {
-            print("🔍 [FLVDemux] ❌ Config too short for numPPS: \(config.count) <= \(offset)")
             throw DemuxError.invalidData
         }
 
         let numPPS = config[offset]
-        print("🔍 [FLVDemux] numPPS=\(numPPS)")
         offset += 1
 
         guard numPPS >= 1, config.count > offset + 2 else {
-            print("🔍 [FLVDemux] ❌ Config too short for PPS length: numPPS=\(numPPS), configLen=\(config.count), offset=\(offset)")
             throw DemuxError.invalidData
         }
 
         let ppsLength = Int(config[offset]) << 8 | Int(config[offset + 1])
-        print("🔍 [FLVDemux] ppsLength=\(ppsLength) at offset \(offset)")
         offset += 2
 
         guard config.count >= offset + ppsLength else {
-            print("🔍 [FLVDemux] ❌ Config too short for PPS data: \(config.count) < \(offset + ppsLength)")
             throw DemuxError.invalidData
         }
 
         let pps = config.subdata(in: offset ..< offset + ppsLength)
-        print("🔍 [FLVDemux] ✅ Parsed: SPS=\(sps.count) bytes, PPS=\(pps.count) bytes")
 
         return AVCDecoderConfig(
             sps: sps,
@@ -297,22 +272,14 @@ public struct FLVDemuxer: Sendable {
     /// Parse AVC (H.264) video frame from FLV video tag
     public static func parseAVCVideoFrame(_ data: Data, naluLengthSize: Int, baseTimestamp: UInt32) throws -> VideoFrame {
         guard data.count > 5 else {
-            print("🔍 [FLVDemux] parseAVCVideoFrame: data too short (\(data.count) <= 5)")
             throw DemuxError.invalidData
         }
 
         let frameType = (data[0] >> 4) & 0x0F
-        let codecId = data[0] & 0x0F
         var isKeyframe = frameType == 1  // Will also check NAL types below
 
         let avcPacketType = data[1]
-
-        // Debug logging disabled - was too verbose
-        // let hexPrefix = data.prefix(14).map { String(format: "%02X", $0) }.joined(separator: " ")
-        // print("🔍 [FLVDemux] parseAVCVideoFrame: frameType=\(frameType) codecId=\(codecId) avcPacketType=\(avcPacketType) hex=\(hexPrefix)")
-
         guard avcPacketType == 1 else {  // NALU
-            print("🔍 [FLVDemux] ❌ Not NALU data (avcPacketType=\(avcPacketType), expected 1)")
             throw DemuxError.invalidData
         }
 
@@ -339,7 +306,6 @@ public struct FLVDemuxer: Sendable {
             offset += naluLengthSize
 
             guard offset + naluLength <= data.count else {
-                print("🔍 [FLVDemux] NALU length \(naluLength) exceeds data bounds (offset=\(offset), dataLen=\(data.count))")
                 break
             }
 
@@ -356,9 +322,6 @@ public struct FLVDemuxer: Sendable {
             let nalType = nalu[0] & 0x1F
             if nalType == 5 {
                 // IDR slice found - this is definitely a keyframe
-                if !isKeyframe {
-                    print("🔍 [FLVDemux] NAL type 5 (IDR) found, overriding FLV frameType=\(frameType) -> keyframe=true")
-                }
                 isKeyframe = true
                 break
             }

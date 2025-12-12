@@ -253,22 +253,8 @@ public actor NTDFStreamingSubscriber {
 
         // Check if this is a sequence header or NTDF header frame
         if frame.data.count > 1 {
-            let frameType = (frame.data[0] >> 4) & 0x0F
             let codecId = frame.data[0] & 0x0F
             let packetType = frame.data[1]
-
-            // Debug: log first few video frames and any with packetType=2 (should be NTDF headers)
-            if videoFrameCount <= 15 || packetType == 2 {
-                let hexPrefix = frame.data.prefix(20).map { String(format: "%02X", $0) }.joined(separator: " ")
-                print("🎬 [NTDFSub] Video frame #\(videoFrameCount): frameType=\(frameType) codecId=\(codecId) packetType=\(packetType) size=\(frame.data.count) bytes=\(hexPrefix)...")
-
-                // Check for NTDF magic at offset 5
-                if frame.data.count > 9 {
-                    let magicCheck = frame.data[5..<9].map { String(format: "%02X", $0) }.joined(separator: " ")
-                    let isNTDF = frame.data.count > 8 && frame.data[5] == 0x4E && frame.data[6] == 0x54 && frame.data[7] == 0x44 && frame.data[8] == 0x46
-                    print("🎬 [NTDFSub]   -> Magic check at offset 5: \(magicCheck) (isNTDF=\(isNTDF))")
-                }
-            }
 
             // Check for NTDF header frame (special video frame with magic bytes)
             // Format: [17 02 00 00 00][4E 54 44 46][length 2 bytes][header bytes]
@@ -289,27 +275,20 @@ public actor NTDFStreamingSubscriber {
                     if frame.data.count >= 11 + headerLength {
                         let headerBytes = frame.data.subdata(in: 11..<(11 + headerLength))
                         let inbandBase64 = headerBytes.base64EncodedString()
-                        print("🔐 [NTDFSub] Received NTDF header frame: \(headerLength) bytes (packetType=\(packetType))")
-                        print("🔐 [NTDFSub] In-band header (first 80 chars): \(inbandBase64.prefix(80))...")
+                        print("🔐 [NTDFSub] NTDF header: \(headerLength) bytes")
 
                         // Compare with metadata header and potentially use both
                         var shouldAddMetadataAsAlternate = false
-                        if let metaHeader = metadataHeaderBase64 {
-                            if metaHeader == inbandBase64 {
-                                print("🔐 [NTDFSub] ✅ Headers MATCH - metadata and in-band are same")
-                            } else {
-                                print("🔐 [NTDFSub] ⚠️ Headers DIFFER - will try both!")
-                                print("   - Metadata: \(metaHeader.prefix(60))...")
-                                print("   - In-band:  \(inbandBase64.prefix(60))...")
-                                shouldAddMetadataAsAlternate = true
-                            }
+                        if let metaHeader = metadataHeaderBase64, metaHeader != inbandBase64 {
+                            print("🔐 [NTDFSub] Key rotation detected - headers differ")
+                            shouldAddMetadataAsAlternate = true
                         }
 
                         // If decryptor already initialized, add this as an alternate key
                         if decryptor != nil {
-                            print("🔐 [NTDFSub] Adding as alternate decryptor (primary already initialized)")
                             do {
                                 try await decryptor?.addAlternateFromHeader(headerBytes)
+                                print("🔐 [NTDFSub] Added alternate decryptor for key rotation")
                             } catch {
                                 print("🔐 [NTDFSub] ⚠️ Failed to add alternate decryptor: \(error)")
                             }
@@ -323,15 +302,12 @@ public actor NTDFStreamingSubscriber {
                         // If metadata header differs, also add it as an alternate
                         if shouldAddMetadataAsAlternate, let metaHeader = metadataHeaderBase64,
                            let metaHeaderBytes = Data(base64Encoded: metaHeader) {
-                            print("🔐 [NTDFSub] Adding metadata header as alternate decryptor")
                             do {
                                 try await decryptor?.addAlternateFromHeader(metaHeaderBytes)
                             } catch {
-                                print("🔐 [NTDFSub] ⚠️ Failed to add metadata header as alternate: \(error)")
+                                print("🔐 [NTDFSub] ⚠️ Failed to add metadata alternate: \(error)")
                             }
                         }
-                    } else {
-                        print("🎬 [NTDFSub] ⚠️ NTDF header frame too short: expected \(11 + headerLength), got \(frame.data.count)")
                     }
                     return
                 }
@@ -362,40 +338,28 @@ public actor NTDFStreamingSubscriber {
         let flvHeader = frame.data.prefix(flvHeaderSize)
         let encryptedPayload = frame.data.dropFirst(flvHeaderSize)
 
-        // Log frame arrival before decryption
-        if videoFrameCount <= 10 {
-            print("🎬 [NTDFSub] Frame #\(videoFrameCount) ARRIVING: encrypted=\(decryptor != nil), totalSize=\(frame.data.count), payloadSize=\(encryptedPayload.count) bytes")
-        }
-
         // Decrypt if we have a decryptor
         let decryptedData: Data
         if let decryptor {
             do {
-                // Decrypt only the payload (after FLV header)
                 let decryptedPayload = try await decryptor.decrypt(Data(encryptedPayload))
-                if videoFrameCount <= 10 || videoFrameCount % 100 == 0 {
-                    print("🎬 [NTDFSub] Decrypted frame #\(videoFrameCount): \(encryptedPayload.count) -> \(decryptedPayload.count) bytes")
-                }
-                // Reconstruct FLV frame with decrypted payload
                 decryptedData = Data(flvHeader) + decryptedPayload
             } catch {
-                print("🎬 [NTDFSub] ❌ Video decryption failed for frame #\(videoFrameCount): \(error)")
+                if videoFrameCount <= 5 || videoFrameCount % 100 == 0 {
+                    print("🎬 [NTDFSub] ❌ Decrypt failed #\(videoFrameCount): \(error)")
+                }
                 return
             }
         } else {
-            // No decryptor yet - skip encrypted frames until we get NTDF header
-            // We need to wait for the decryptor to be initialized before we can process video
-            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
-                print("🎬 [NTDFSub] ⏳ Frame #\(videoFrameCount): Waiting for decryptor (skipping encrypted frame)")
+            // No decryptor yet - skip until we get NTDF header
+            if videoFrameCount == 1 {
+                print("🎬 [NTDFSub] ⏳ Waiting for NTDF header...")
             }
             return
         }
 
         // Parse decrypted FLV video frame
-        guard let config = videoConfig else {
-            print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): Received video frame before sequence header")
-            return
-        }
+        guard let config = videoConfig else { return }
 
         do {
             let videoFrame = try FLVDemuxer.parseAVCVideoFrame(
@@ -404,7 +368,7 @@ public actor NTDFStreamingSubscriber {
                 baseTimestamp: frame.timestamp
             )
 
-            // Create sample buffer if we have format description
+            // Create sample buffer
             var sampleBuffer: CMSampleBuffer?
             if let formatDesc = videoFormatDescription {
                 sampleBuffer = try? FLVDemuxer.createVideoSampleBuffer(
@@ -412,19 +376,14 @@ public actor NTDFStreamingSubscriber {
                     formatDescription: formatDesc,
                     naluLengthSize: Int(config.naluLengthSize)
                 )
-                if sampleBuffer == nil && (videoFrameCount <= 10 || videoFrameCount % 30 == 0) {
-                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): createVideoSampleBuffer FAILED - formatDesc exists: \(videoFormatDescription != nil), naluCount: \(videoFrame.nalus.count), totalNaluBytes: \(videoFrame.nalus.reduce(0) { $0 + $1.count })")
-                }
-            } else {
-                if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
-                    print("🎬 [NTDFSub] ⚠️ Frame #\(videoFrameCount): No videoFormatDescription available")
-                }
             }
 
-            // Log first few frames and periodically, with extra detail for keyframes
-            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 || videoFrame.isKeyframe {
+            // Log keyframes and periodic status
+            if videoFrame.isKeyframe {
                 let naluTypes = videoFrame.nalus.compactMap { $0.first.map { $0 & 0x1F } }
-                print("🎬 [NTDFSub] VideoFrame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), naluTypes=\(naluTypes), sampleBuffer=\(sampleBuffer != nil), ts=\(frame.timestamp)")
+                print("🎬 [NTDFSub] 🔑 KEYFRAME #\(videoFrameCount): naluTypes=\(naluTypes), sampleBuffer=\(sampleBuffer != nil)")
+            } else if videoFrameCount % 100 == 0 {
+                print("🎬 [NTDFSub] Video frame #\(videoFrameCount)")
             }
 
             // Combine NALUs for callback
@@ -441,14 +400,11 @@ public actor NTDFStreamingSubscriber {
                 sampleBuffer: sampleBuffer
             )
 
-            // Log callback invocation
-            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
-                print("🎬 [NTDFSub] Frame #\(videoFrameCount) INVOKING callback: keyframe=\(decryptedFrame.isKeyframe), sampleBuffer=\(sampleBuffer != nil), handlerSet=\(onDecryptedFrame != nil)")
-            }
-
             await onDecryptedFrame?(decryptedFrame)
         } catch {
-            print("🎬 [NTDFSub] ❌ Failed to parse video frame #\(videoFrameCount): \(error)")
+            if videoFrameCount <= 5 || videoFrameCount % 100 == 0 {
+                print("🎬 [NTDFSub] ❌ Parse failed #\(videoFrameCount): \(error)")
+            }
         }
     }
 
@@ -724,17 +680,9 @@ actor StreamingCollectionDecryptor {
                            Int(encryptedData[4]) << 8 |
                            Int(encryptedData[5])
 
-        // Debug: Log first decryption attempts
-        if itemsDecrypted < 5 {
-            let headerHex = encryptedData.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
-            print("🔐 [Decrypt] Item #\(itemsDecrypted + 1): ivCounter=\(ivCounter), payloadLen=\(payloadLength), header=\(headerHex)")
-
-            // Warn if first IV counter is high - indicates we have a stale key from previous rotation
-            if itemsDecrypted == 0 && ivCounter > 10 {
-                print("⚠️ [Decrypt] HIGH IV COUNTER on first frame! ivCounter=\(ivCounter)")
-                print("   This likely means the metadata ntdf_header is from a previous key rotation.")
-                print("   The publisher may need to update metadata on key rotation, or we need to wait for an in-band NTDF header frame.")
-            }
+        // Warn on first frame if IV counter is high (stale key from previous rotation)
+        if itemsDecrypted == 0 && ivCounter > 10 {
+            print("⚠️ [Decrypt] Late joiner detected (ivCounter=\(ivCounter)) - waiting for key rotation")
         }
 
         // Validate we have enough data
@@ -747,11 +695,6 @@ actor StreamingCollectionDecryptor {
 
         // Extract ciphertext + tag
         let ciphertextWithTag = encryptedData.subdata(in: 6..<(6 + payloadLength))
-
-        // Debug: Log ciphertext info
-        if itemsDecrypted < 5 {
-            print("🔐 [Decrypt] ciphertext+tag size=\(ciphertextWithTag.count), tagSize=\(tagSize)")
-        }
         itemsDecrypted += 1
 
         // Create CollectionItem for decryption
@@ -761,43 +704,26 @@ actor StreamingCollectionDecryptor {
             tagSize: tagSize
         )
 
-        // Debug: Log more details on early decryption attempts
-        if itemsDecrypted <= 5 {
-            let tagData = ciphertextWithTag.suffix(tagSize)
-            let ciphertextData = ciphertextWithTag.prefix(ciphertextWithTag.count - tagSize)
-            print("🔐 [Decrypt] Item #\(itemsDecrypted) details:")
-            print("   - IV counter: \(ivCounter) (0x\(String(format: "%06X", ivCounter)))")
-            print("   - Ciphertext size: \(ciphertextData.count)")
-            print("   - Tag (last \(tagSize) bytes): \(tagData.map { String(format: "%02X", $0) }.joined(separator: " "))")
-            print("   - First 16 ciphertext bytes: \(ciphertextData.prefix(16).map { String(format: "%02X", $0) }.joined(separator: " "))")
-        }
-
         // Try primary decryptor first
         do {
             let result = try await decryptor.decryptItem(item)
             if lastSuccessfulDecryptorIndex != -1 {
-                print("🔐 [Decrypt] Primary decryptor succeeded after alternate was used")
+                // Switched back to primary - log once
+                print("🔐 [Decrypt] Switched to primary decryptor")
                 lastSuccessfulDecryptorIndex = -1
             }
             return result
         } catch {
             // Primary decryptor failed, try alternates
-            if itemsDecrypted <= 5 {
-                print("🔐 [Decrypt] Primary decryptor failed: \(error), trying \(alternateDecryptors.count) alternates...")
-            }
-
             for (index, altDecryptor) in alternateDecryptors.enumerated() {
                 do {
                     let result = try await altDecryptor.decryptItem(item)
                     if lastSuccessfulDecryptorIndex != index {
-                        print("🔐 [Decrypt] ✅ Alternate decryptor #\(index) succeeded!")
+                        print("🔐 [Decrypt] ✅ Key rotation: using alternate #\(index)")
                         lastSuccessfulDecryptorIndex = index
                     }
                     return result
                 } catch {
-                    if itemsDecrypted <= 5 {
-                        print("🔐 [Decrypt] Alternate #\(index) failed: \(error)")
-                    }
                     continue
                 }
             }
@@ -810,12 +736,10 @@ actor StreamingCollectionDecryptor {
     /// Add an alternate decryptor (for key rotation scenarios)
     func addAlternateDecryptor(_ decryptor: OpenTDFKit.NanoTDFCollectionDecryptor) {
         alternateDecryptors.append(decryptor)
-        print("🔐 [Decrypt] Added alternate decryptor, total: \(alternateDecryptors.count)")
     }
 
     /// Add alternate decryptor from a new header (when receiving updated NTDF header frames)
     func addAlternateFromHeader(_ newHeaderBytes: Data) async throws {
-        print("🔐 [Decrypt] Adding alternate decryptor from new header...")
 
         // Generate new client ephemeral key pair
         let privateKey = P256.KeyAgreement.PrivateKey()
@@ -864,31 +788,17 @@ actor StreamingCollectionDecryptor {
         )
 
         alternateDecryptors.append(altDecryptor)
-        print("🔐 [Decrypt] Added alternate decryptor from header, total: \(alternateDecryptors.count)")
     }
 
     /// Convert compressed P256 public key to PEM format
-    /// Note: KAS server expects raw SEC1 bytes (uncompressed point) in PEM wrapper,
-    /// NOT standard SPKI format with ASN.1 structure
     private func convertToSPKIPEM(compressedKey: Data) throws -> String {
         guard compressedKey.count == 33 else {
-            throw NTDFSubscriberError.decryptionFailed("Invalid compressed key size: \(compressedKey.count), expected 33")
+            throw NTDFSubscriberError.decryptionFailed("Invalid compressed key size: \(compressedKey.count)")
         }
 
-        // Convert compressed to uncompressed using x963Representation (65 bytes)
-        // This is raw SEC1 format: 0x04 + X (32 bytes) + Y (32 bytes)
         let tempKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: compressedKey)
         let sec1Bytes = tempKey.x963Representation
-
-        // KAS server expects raw SEC1 bytes in PEM wrapper (non-standard but matching server's format)
-        let base64String = sec1Bytes.base64EncodedString(options: [
-            .lineLength64Characters,
-            .endLineWithLineFeed
-        ])
-
-        // Build PEM string with raw SEC1 bytes (matching KAS server's public_key_to_pem output)
-        let pemString = "-----BEGIN PUBLIC KEY-----\n\(base64String)-----END PUBLIC KEY-----"
-        print("🔐 [DEBUG] Generated SEC1 PEM (\(pemString.count) chars, \(sec1Bytes.count) bytes SEC1)")
-        return pemString
+        let base64String = sec1Bytes.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+        return "-----BEGIN PUBLIC KEY-----\n\(base64String)-----END PUBLIC KEY-----"
     }
 }

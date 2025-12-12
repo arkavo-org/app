@@ -50,41 +50,33 @@ class LiveStreamViewModel: ObservableObject {
 
         // Use provided token or stored token
         guard let token = ntdfToken ?? self.ntdfToken else {
-            print("📺 [LiveStreamVM] ❌ No NTDF token available")
+            print("📺 [LiveStreamVM] ❌ No NTDF token")
             isConnecting = false
             errorMessage = "NTDF token required for encrypted stream playback"
             return
         }
-        print("📺 [LiveStreamVM] Using NTDF token: \(token.prefix(20))...")
 
         #if canImport(ArkavoStreaming)
-            // Create subscriber with NTDF token
-            print("📺 [LiveStreamVM] Creating NTDFStreamingSubscriber with KAS: \(kasURL)")
             subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: token)
 
-            // Set up frame handler with @Sendable closure
             await subscriber?.setFrameHandler { @Sendable [weak self] frame in
                 await self?.handleFrame(frame)
             }
 
-            // Set up state handler with @Sendable closure
             await subscriber?.setStateHandler { @Sendable [weak self] state in
                 await self?.handleStateChange(state)
             }
 
             do {
-                print("📺 [LiveStreamVM] Calling subscriber.connect()...")
                 try await subscriber?.connect(rtmpURL: url, streamName: streamName)
                 isConnecting = false
                 isPlaying = true
-                print("📺 [LiveStreamVM] ✅ Connected and playing")
             } catch {
                 print("📺 [LiveStreamVM] ❌ Connection error: \(error)")
                 isConnecting = false
                 errorMessage = error.localizedDescription
             }
         #else
-            // Fallback for when ArkavoStreaming is not available
             print("📺 [LiveStreamVM] ❌ ArkavoStreaming not available")
             isConnecting = false
             errorMessage = "Streaming not available"
@@ -105,46 +97,30 @@ class LiveStreamViewModel: ObservableObject {
     #if canImport(ArkavoStreaming)
         private var videoFramesReceived: UInt64 = 0
         private var audioFramesReceived: UInt64 = 0
-        private var waitingForKeyframe = true  // Start by waiting for first keyframe
+        private var videoFramesEnqueued: UInt64 = 0
+        private var waitingForKeyframe = true
         private var hasReceivedFirstKeyframe = false
 
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
 
-            // Track video vs audio separately
             if frame.type == .video {
                 videoFramesReceived += 1
             } else {
                 audioFramesReceived += 1
             }
 
-            // Log first 10 frames in detail
-            if framesReceived <= 10 {
-                print("📺 [LiveStreamVM] Frame #\(framesReceived) RECEIVED: type=\(frame.type), keyframe=\(frame.isKeyframe), sampleBuffer=\(frame.sampleBuffer != nil), displayLayer=\(displayLayer != nil)")
-            }
-
-            // Log every 30 frames with video/audio breakdown
-            if framesReceived % 30 == 0 {
-                print("📺 [LiveStreamVM] Received \(framesReceived) total (video: \(videoFramesReceived), audio: \(audioFramesReceived)) - current: type=\(frame.type), keyframe=\(frame.isKeyframe), dataSize=\(frame.data.count)")
-            }
-
-            // Log displayLayer status on video frames (first 10)
-            if framesReceived <= 10, frame.type == .video {
-                print("📺 [LiveStreamVM] Frame #\(framesReceived) DISPLAY CHECK: sampleBuffer=\(frame.sampleBuffer != nil), displayLayer=\(displayLayer != nil), displayLayerStatus=\(displayLayer?.status.rawValue ?? -1)")
-            }
-
-            // Enqueue sample buffer for display
+            // Enqueue video sample buffer for display
             if let sampleBuffer = frame.sampleBuffer,
                let displayLayer,
                frame.type == .video
             {
                 // Check if layer has failed and needs recovery
                 if displayLayer.status == .failed {
-                    print("📺 [LiveStreamVM] ⚠️ Display layer FAILED!")
+                    print("📺 [LiveStreamVM] ⚠️ Display layer failed, flushing...")
                     if let error = displayLayer.error {
-                        print("📺 [LiveStreamVM] Display layer error: \(error)")
+                        print("📺 [LiveStreamVM] Error: \(error)")
                     }
-                    print("📺 [LiveStreamVM] Flushing and waiting for keyframe...")
                     displayLayer.flush()
                     waitingForKeyframe = true
                 }
@@ -152,52 +128,52 @@ class LiveStreamViewModel: ObservableObject {
                 // Wait for keyframe after flush or at start
                 if waitingForKeyframe {
                     if frame.isKeyframe {
-                        print("📺 [LiveStreamVM] ✅ Got keyframe, starting/resuming playback")
+                        print("📺 [LiveStreamVM] ✅ KEYFRAME received - starting playback (after \(videoFramesReceived) video frames)")
                         waitingForKeyframe = false
                         hasReceivedFirstKeyframe = true
                     } else {
-                        if videoFramesReceived <= 10 || videoFramesReceived % 30 == 0 {
-                            print("📺 [LiveStreamVM] ⏳ Skipping non-keyframe \(videoFramesReceived), waiting for keyframe")
+                        // Log waiting status periodically
+                        if videoFramesReceived == 1 || videoFramesReceived % 100 == 0 {
+                            print("📺 [LiveStreamVM] ⏳ Waiting for keyframe... (\(videoFramesReceived) video frames)")
                         }
                         return
                     }
                 }
 
-                // Log video frames being enqueued
-                if videoFramesReceived <= 10 || videoFramesReceived % 30 == 0 {
-                    print("📺 [LiveStreamVM] ✅ VideoFrame \(videoFramesReceived) ENQUEUING: ts=\(frame.timestamp), keyframe=\(frame.isKeyframe), displayLayerStatus=\(displayLayer.status.rawValue)")
-                }
-
                 displayLayer.enqueue(sampleBuffer)
-            } else if frame.type == .video {
-                // Log missing components
-                if frame.sampleBuffer == nil {
-                    print("📺 [LiveStreamVM] ⚠️ VideoFrame \(videoFramesReceived): No sampleBuffer (ts=\(frame.timestamp), keyframe=\(frame.isKeyframe), dataSize=\(frame.data.count))")
+                videoFramesEnqueued += 1
+
+                // Log playback status periodically
+                if videoFramesEnqueued == 1 {
+                    print("📺 [LiveStreamVM] ▶️ First frame enqueued - playback started!")
+                } else if videoFramesEnqueued % 300 == 0 {
+                    print("📺 [LiveStreamVM] 📊 Status: \(videoFramesEnqueued) frames displayed (video: \(videoFramesReceived), audio: \(audioFramesReceived))")
                 }
-                if displayLayer == nil {
-                    print("📺 [LiveStreamVM] ⚠️ VideoFrame \(videoFramesReceived): No displayLayer set!")
-                }
+            } else if frame.type == .video && frame.sampleBuffer == nil && videoFramesReceived <= 5 {
+                print("📺 [LiveStreamVM] ⚠️ No sampleBuffer for video frame \(videoFramesReceived)")
             }
         }
 
         private func handleStateChange(_ state: NTDFStreamingSubscriber.State) async {
-            print("📺 [LiveStreamVM] State changed to: \(state)")
             switch state {
             case .idle:
                 isPlaying = false
                 isConnecting = false
             case .connecting:
+                print("📺 [LiveStreamVM] 🔄 Connecting...")
                 isConnecting = true
             case .waitingForHeader:
+                print("📺 [LiveStreamVM] 🔐 Waiting for NTDF header...")
                 isConnecting = true
             case .playing:
+                print("📺 [LiveStreamVM] ✅ Stream ready")
                 isConnecting = false
                 isPlaying = true
             case let .error(message):
+                print("📺 [LiveStreamVM] ❌ Error: \(message)")
                 isConnecting = false
                 isPlaying = false
                 errorMessage = message
-                print("📺 [LiveStreamVM] ❌ Error state: \(message)")
             }
         }
     #endif
