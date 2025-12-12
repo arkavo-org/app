@@ -116,12 +116,12 @@ class LiveStreamViewModel: ObservableObject {
                frame.type == .video
             {
                 // Check if layer has failed and needs recovery
-                if displayLayer.status == .failed {
+                if displayLayer.sampleBufferRenderer.status == .failed {
                     print("📺 [LiveStreamVM] ⚠️ Display layer failed, flushing...")
-                    if let error = displayLayer.error {
+                    if let error = displayLayer.sampleBufferRenderer.error {
                         print("📺 [LiveStreamVM] Error: \(error)")
                     }
-                    displayLayer.flush()
+                    displayLayer.sampleBufferRenderer.flush()
                     waitingForKeyframe = true
                 }
 
@@ -140,7 +140,7 @@ class LiveStreamViewModel: ObservableObject {
                     }
                 }
 
-                displayLayer.enqueue(sampleBuffer)
+                displayLayer.sampleBufferRenderer.enqueue(sampleBuffer)
                 videoFramesEnqueued += 1
 
                 // Log playback status periodically
