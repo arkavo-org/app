@@ -421,9 +421,10 @@ public actor NTDFStreamingSubscriber {
                 }
             }
 
-            // Log first few frames and periodically
-            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 {
-                print("🎬 [NTDFSub] VideoFrame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), sampleBuffer=\(sampleBuffer != nil), naluBytes=\(videoFrame.nalus.reduce(0) { $0 + $1.count }), ts=\(frame.timestamp)")
+            // Log first few frames and periodically, with extra detail for keyframes
+            if videoFrameCount <= 10 || videoFrameCount % 30 == 0 || videoFrame.isKeyframe {
+                let naluTypes = videoFrame.nalus.compactMap { $0.first.map { $0 & 0x1F } }
+                print("🎬 [NTDFSub] VideoFrame #\(videoFrameCount): keyframe=\(videoFrame.isKeyframe), nalus=\(videoFrame.nalus.count), naluTypes=\(naluTypes), sampleBuffer=\(sampleBuffer != nil), ts=\(frame.timestamp)")
             }
 
             // Combine NALUs for callback

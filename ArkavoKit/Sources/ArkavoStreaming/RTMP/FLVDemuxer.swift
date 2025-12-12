@@ -303,7 +303,7 @@ public struct FLVDemuxer: Sendable {
 
         let frameType = (data[0] >> 4) & 0x0F
         let codecId = data[0] & 0x0F
-        let isKeyframe = frameType == 1
+        var isKeyframe = frameType == 1  // Will also check NAL types below
 
         let avcPacketType = data[1]
 
@@ -326,37 +326,10 @@ public struct FLVDemuxer: Sendable {
             compositionTime |= Int32(bitPattern: 0xFF00_0000)
         }
 
-        // Parse NALUs
+        // Parse NALUs - FLV header is 5 bytes, NALU data starts at offset 5
+        // Note: NTDF decryption is handled by NTDFStreamingSubscriber before this function
         var nalus: [Data] = []
         var offset = 5
-
-        // Check for NTDF collection item wire format wrapper
-        // Format: 3 bytes IV counter + 3 bytes payload length + encrypted payload
-        // The byte at offset 5 is the high byte of IV counter, often starting with 0x02
-        if data.count > 11 {
-            // Parse as NTDF collection item header
-            let ivCounter = (UInt32(data[5]) << 16) | (UInt32(data[6]) << 8) | UInt32(data[7])
-            let payloadLength = (Int(data[8]) << 16) | (Int(data[9]) << 8) | Int(data[10])
-
-            // Debug logging disabled - was too verbose
-            // print("🔍 [FLVDemux] NTDF wrapper check: ivCounter=\(ivCounter), payloadLength=\(payloadLength), dataLen=\(data.count)")
-
-            // If payload length roughly matches remaining data, this is NTDF-wrapped
-            // The actual NALU data starts at offset 11 (5 FLV header + 6 NTDF header)
-            if payloadLength > 0 && payloadLength <= data.count - 5 {
-                offset = 11
-                // print("🔍 [FLVDemux] Detected NTDF collection wrapper, skipping to offset 11")
-            }
-        }
-
-        // Debug logging disabled - was too verbose
-        // if offset + naluLengthSize <= data.count {
-        //     var firstLength = 0
-        //     for i in 0 ..< naluLengthSize {
-        //         firstLength = (firstLength << 8) | Int(data[offset + i])
-        //     }
-        //     print("🔍 [FLVDemux] First NALU length bytes at offset \(offset): \(data[offset..<min(offset+naluLengthSize, data.count)].map { String(format: "%02X", $0) }.joined(separator: " ")) = \(firstLength), dataLen=\(data.count), naluLengthSize=\(naluLengthSize)")
-        // }
 
         while offset + naluLengthSize <= data.count {
             var naluLength = 0
@@ -375,7 +348,21 @@ public struct FLVDemuxer: Sendable {
             offset += naluLength
         }
 
-        // print("🔍 [FLVDemux] Parsed \(nalus.count) NALUs")
+        // Check NAL unit types for keyframe detection (H.264)
+        // NAL type 5 = IDR slice (keyframe), NAL type 1 = non-IDR slice
+        // This provides more reliable keyframe detection than FLV frameType alone
+        for nalu in nalus {
+            guard !nalu.isEmpty else { continue }
+            let nalType = nalu[0] & 0x1F
+            if nalType == 5 {
+                // IDR slice found - this is definitely a keyframe
+                if !isKeyframe {
+                    print("🔍 [FLVDemux] NAL type 5 (IDR) found, overriding FLV frameType=\(frameType) -> keyframe=true")
+                }
+                isKeyframe = true
+                break
+            }
+        }
 
         // Calculate timestamps
         let dts = CMTime(value: CMTimeValue(baseTimestamp), timescale: 1000)
