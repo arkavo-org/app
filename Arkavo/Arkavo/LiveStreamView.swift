@@ -195,11 +195,25 @@ class LiveStreamUIView: UIView {
         displayLayer.backgroundColor = UIColor.black.cgColor
         layer.addSublayer(displayLayer)
 
+        // Configure audio session for playback
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .moviePlayback)
+            try audioSession.setActive(true)
+            print("📺 [LiveStreamUIView] ✅ Audio session configured for playback")
+        } catch {
+            print("📺 [LiveStreamUIView] ⚠️ Failed to configure audio session: \(error)")
+        }
+
         // Add renderers to synchronizer for coordinated playback
         synchronizer.addRenderer(displayLayer)
         synchronizer.addRenderer(audioRenderer)
 
-        print("📺 [LiveStreamUIView] Setup complete - video and audio synchronized")
+        // Ensure audio is not muted
+        audioRenderer.volume = 1.0
+        audioRenderer.isMuted = false
+
+        print("📺 [LiveStreamUIView] Setup complete - video and audio synchronized, volume=\(audioRenderer.volume)")
     }
 
     override func layoutSubviews() {

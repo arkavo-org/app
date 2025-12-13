@@ -435,10 +435,11 @@ public actor NTDFStreamingSubscriber {
 
             // Create sample buffer if we have format description
             var sampleBuffer: CMSampleBuffer?
-            if let formatDesc = audioFormatDescription {
+            if let formatDesc = audioFormatDescription, let config = audioConfig {
                 sampleBuffer = try? FLVDemuxer.createAudioSampleBuffer(
                     frame: audioFrame,
-                    formatDescription: formatDesc
+                    formatDescription: formatDesc,
+                    sampleRate: config.sampleRate
                 )
             }
 

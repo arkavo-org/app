@@ -465,7 +465,8 @@ public struct FLVDemuxer: Sendable {
     /// Create CMSampleBuffer from parsed audio frame
     public static func createAudioSampleBuffer(
         frame: AudioFrame,
-        formatDescription: CMAudioFormatDescription
+        formatDescription: CMAudioFormatDescription,
+        sampleRate: Int = 48000
     ) throws -> CMSampleBuffer {
         // Create block buffer with copied data (important: data must be retained)
         var blockBuffer: CMBlockBuffer?
@@ -513,10 +514,10 @@ public struct FLVDemuxer: Sendable {
             throw DemuxError.invalidData
         }
 
-        // Create sample buffer
+        // Create sample buffer with correct sample rate
         var sampleBuffer: CMSampleBuffer?
         var timingInfo = CMSampleTimingInfo(
-            duration: CMTime(value: 1024, timescale: 44100),  // AAC frame duration
+            duration: CMTime(value: 1024, timescale: Int32(sampleRate)),  // AAC frame duration
             presentationTimeStamp: frame.pts,
             decodeTimeStamp: frame.pts
         )

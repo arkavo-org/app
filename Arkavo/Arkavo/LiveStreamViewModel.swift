@@ -193,7 +193,14 @@ class LiveStreamViewModel: ObservableObject {
                 audioFramesEnqueued += 1
 
                 if audioFramesEnqueued == 1 {
-                    print("📺 [LiveStreamVM] 🔊 First audio frame enqueued!")
+                    // Log audio format info
+                    if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
+                        let mediaType = CMFormatDescriptionGetMediaType(formatDesc)
+                        let mediaSubType = CMFormatDescriptionGetMediaSubType(formatDesc)
+                        print("📺 [LiveStreamVM] 🔊 First audio frame enqueued! format=\(mediaType)/\(mediaSubType), status=\(audioRenderer.status.rawValue)")
+                    } else {
+                        print("📺 [LiveStreamVM] 🔊 First audio frame enqueued! (no format desc)")
+                    }
                 }
             }
         }
