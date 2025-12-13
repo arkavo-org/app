@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DA395E082ED1465700ABE5C8 /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = REFAC00000000000000000006 /* ArkavoC2PA */; };
-		DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAVRM0042CFB643500BE9912 /* VRMMetalKit */; };
-		REFAC00000000000000000003 /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = REFAC00000000000000000002 /* ArkavoKit */; };
+		DA6DEA3C2EE6483B0042F66F /* VRMMetalKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA6DEA3B2EE6483B0042F66F /* VRMMetalKit */; };
+		DA6DEA3E2EE648540042F66F /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = DA6DEA3D2EE648540042F66F /* ArkavoC2PA */; };
+		DA6DEA402EE648540042F66F /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA6DEA3F2EE648540042F66F /* ArkavoKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,9 +58,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA395E082ED1465700ABE5C8 /* ArkavoC2PA in Frameworks */,
-				DAVRM0012CFB643400BE9912 /* VRMMetalKit in Frameworks */,
-				REFAC00000000000000000003 /* ArkavoKit in Frameworks */,
+				DA6DEA3E2EE648540042F66F /* ArkavoC2PA in Frameworks */,
+				DA6DEA3C2EE6483B0042F66F /* VRMMetalKit in Frameworks */,
+				DA6DEA402EE648540042F66F /* ArkavoKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,9 +121,9 @@
 			);
 			name = ArkavoCreator;
 			packageProductDependencies = (
-				DAVRM0042CFB643500BE9912 /* VRMMetalKit */,
-				REFAC00000000000000000002 /* ArkavoKit */,
-				REFAC00000000000000000006 /* ArkavoC2PA */,
+				DA6DEA3B2EE6483B0042F66F /* VRMMetalKit */,
+				DA6DEA3D2EE648540042F66F /* ArkavoC2PA */,
+				DA6DEA3F2EE648540042F66F /* ArkavoKit */,
 			);
 			productName = ArkavoCreator;
 			productReference = DA91A9BA2CFB625000BE9912 /* ArkavoCreator.app */;
@@ -421,11 +421,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = rc.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -448,6 +450,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 			};
@@ -459,11 +462,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ArkavoCreator/ArkavoCreator.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = rc.0;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"ArkavoCreator/Preview Content\"";
+				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -486,6 +491,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.arkavo.ArkavoCreator;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 			};
@@ -619,20 +625,17 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DAVRM0042CFB643500BE9912 /* VRMMetalKit */ = {
+		DA6DEA3B2EE6483B0042F66F /* VRMMetalKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */;
 			productName = VRMMetalKit;
 		};
-		REFAC00000000000000000002 /* ArkavoKit */ = {
+		DA6DEA3D2EE648540042F66F /* ArkavoC2PA */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */;
-			productName = ArkavoKit;
-		};
-		REFAC00000000000000000006 /* ArkavoC2PA */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */;
 			productName = ArkavoC2PA;
+		};
+		DA6DEA3F2EE648540042F66F /* ArkavoKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArkavoKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

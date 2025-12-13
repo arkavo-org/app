@@ -50,11 +50,27 @@
         }
       }
     },
+    "%lld fps" : {
+
+    },
+    "%lld frames" : {
+
+    },
     "%lld types" : {
 
     },
     "%lld." : {
 
+    },
+    "%lldx%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lldx%2$lld"
+          }
+        }
+      }
     },
     "•" : {
 
@@ -327,6 +343,12 @@
     "Connected Peers" : {
 
     },
+    "Connecting to live stream..." : {
+
+    },
+    "Connecting to stream..." : {
+
+    },
     "Connecting..." : {
 
     },
@@ -420,6 +442,9 @@
     "Discovering edge agents..." : {
 
     },
+    "Dismiss" : {
+
+    },
     "Done" : {
       "localizations" : {
         "es-US" : {
@@ -437,6 +462,9 @@
 
     },
     "Enable passkeys" : {
+
+    },
+    "Encrypted" : {
 
     },
     "Encryption" : {
@@ -612,6 +640,9 @@
       }
     },
     "Learn more, view our" : {
+
+    },
+    "LIVE" : {
 
     },
     "Loading plans..." : {
@@ -1104,6 +1135,9 @@
       }
     },
     "Stream Details" : {
+
+    },
+    "Stream Ended" : {
 
     },
     "Stream ID" : {

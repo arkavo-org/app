@@ -11,6 +11,8 @@ struct ArkavoWorkflowView: View {
     @State private var isFileDialogPresented = false
     @State private var selectedMessages = Set<UUID>()
 
+    private var authState: ArkavoAuthState { ArkavoAuthState.shared }
+
     init() {
         print("ArkavoWorkflowView: Initializing")
         _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeWorkflowViewModel())
@@ -18,14 +20,14 @@ struct ArkavoWorkflowView: View {
 
     var body: some View {
         Group {
-            if viewModel.isConnected {
+            if authState.isAuthenticated {
                 contentView
             } else {
                 loginView
             }
         }
-        .sheet(isPresented: $viewModel.showingLoginSheet) {
-            loginSheet
+        .sheet(isPresented: Bindable(authState).showingLoginSheet) {
+            ArkavoLoginSheet(authState: authState)
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {
@@ -37,7 +39,7 @@ struct ArkavoWorkflowView: View {
             }
         }
         .task {
-            await viewModel.checkStoredCredentials()
+            await authState.checkStoredCredentials()
         }
     }
 
@@ -80,7 +82,7 @@ struct ArkavoWorkflowView: View {
 
                     Button {
                         Task {
-                            await viewModel.logout()
+                            await authState.logout()
                         }
                     } label: {
                         Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
@@ -156,8 +158,8 @@ struct ArkavoWorkflowView: View {
             Text("Please log in to access your content")
                 .foregroundColor(.secondary)
 
-            Button(action: { viewModel.showingLoginSheet = true }) {
-                if viewModel.isLoading {
+            Button(action: { authState.showingLoginSheet = true }) {
+                if authState.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 } else {
@@ -165,58 +167,12 @@ struct ArkavoWorkflowView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.isLoading)
+            .disabled(authState.isLoading)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var loginSheet: some View {
-        VStack(spacing: 20) {
-            Text("Login to Arkavo")
-                .font(.title2)
-                .bold()
-
-            Text("Enter your account name to continue")
-                .foregroundColor(.secondary)
-
-            TextField("Account Name", text: $viewModel.accountName)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 300)
-                .disabled(viewModel.isLoading)
-
-            HStack(spacing: 16) {
-                Button("Cancel") {
-                    viewModel.showingLoginSheet = false
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isLoading)
-
-                Button {
-                    Task {
-                        await viewModel.login()
-                    }
-                } label: {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text("Continue")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.accountName.isEmpty || viewModel.isLoading)
-            }
-
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-        }
-        .padding()
-        .frame(width: 400)
-    }
 }
 
 struct MessageRow: View {
@@ -483,17 +439,11 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     let messageDelegate: ArkavoMessageChainDelegate
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var showingLoginSheet = false
-    @Published var accountName = ""
 
     init(client: ArkavoClient, messageDelegate: ArkavoMessageChainDelegate) {
         print("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
         self.messageDelegate = messageDelegate
-
-        if let handle = KeychainManager.getHandle() {
-            accountName = handle
-        }
 
         // Set up delegate chain
         messageDelegate.updateNextDelegate(self)
@@ -544,126 +494,6 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
 
     private func handleType6Message(_ messageData: Data) {
         print("WorkflowViewModel: Processing type 6 message of size: \(messageData.count)")
-    }
-
-    // MARK: - Authentication Methods
-
-    func login() async {
-        guard !accountName.isEmpty else {
-            print("WorkflowViewModel: Login attempted with empty account name")
-            return
-        }
-
-        print("WorkflowViewModel: Starting login for account: \(accountName)")
-        isLoading = true
-        errorMessage = nil
-
-        let maxRetries = 3
-        var currentRetry = 0
-
-        while currentRetry < maxRetries {
-            do {
-                if currentRetry > 0 {
-                    print("WorkflowViewModel: Retry attempt \(currentRetry) of \(maxRetries)")
-                    try await Task.sleep(nanoseconds: UInt64(3_000_000_000))
-                }
-
-                print("WorkflowViewModel: Attempting to connect client...")
-                try await client.connect(accountName: accountName)
-                print("WorkflowViewModel: Client connected successfully")
-                handleSuccessfulLogin()
-                return
-
-            } catch let error as ASAuthorizationError where error.code == .failed &&
-                error.localizedDescription.contains("Request already in progress")
-            {
-                currentRetry += 1
-                print("WorkflowViewModel: Request in progress - will retry after delay")
-                continue
-
-            } catch {
-                print("WorkflowViewModel: Login failed with error: \(error)")
-                errorMessage = "Login failed. Please try again."
-                break
-            }
-        }
-
-        if currentRetry >= maxRetries {
-            errorMessage = "Unable to complete login. Please wait a moment and try again."
-        }
-
-        isLoading = false
-    }
-
-    private func handleSuccessfulLogin() {
-        // Save account name for future sessions
-        UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
-        print("WorkflowViewModel: Saved account name to UserDefaults")
-
-        showingLoginSheet = false
-        accountName = ""
-    }
-
-    func logout() async {
-        print("WorkflowViewModel: Starting logout process")
-        await client.disconnect()
-
-        print("WorkflowViewModel: Clearing stored credentials")
-        KeychainManager.deleteAuthenticationToken()
-        UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
-        print("WorkflowViewModel: Logout complete")
-    }
-
-    func checkStoredCredentials() async {
-        print("WorkflowViewModel: Checking stored credentials")
-
-        // First check the keychain for token
-        if let token = KeychainManager.getAuthenticationToken() {
-            print("WorkflowViewModel: Found stored token starting with: \(String(token.prefix(10)))...")
-        } else {
-            print("WorkflowViewModel: No stored token found in keychain")
-            return
-        }
-
-        // Then check UserDefaults for account name
-        guard let storedName = UserDefaults.standard.string(forKey: "arkavo_account_name") else {
-            print("WorkflowViewModel: No stored account name found in UserDefaults")
-            return
-        }
-
-        print("WorkflowViewModel: Found stored account name: \(storedName)")
-        print("WorkflowViewModel: Attempting to connect with stored credentials")
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            print("WorkflowViewModel: Connecting with stored account: \(storedName)")
-            try await client.connect(accountName: storedName)
-            print("WorkflowViewModel: Successfully connected with stored credentials")
-        } catch let error as ArkavoError {
-            print("WorkflowViewModel: Connection failed with ArkavoError: \(error)")
-            switch error {
-            case let .authenticationFailed(message):
-                print("WorkflowViewModel: Authentication failed: \(message)")
-            case let .connectionFailed(message):
-                print("WorkflowViewModel: Connection failed: \(message)")
-            default:
-                print("WorkflowViewModel: Other error: \(error)")
-            }
-
-            print("WorkflowViewModel: Clearing stored credentials after failure")
-            KeychainManager.deleteAuthenticationToken()
-            UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
-            errorMessage = error.localizedDescription
-        } catch {
-            print("WorkflowViewModel: Unexpected error during connection: \(error)")
-            print("WorkflowViewModel: Clearing stored credentials")
-            KeychainManager.deleteAuthenticationToken()
-            UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
     }
 
     // MARK: - Content Processing

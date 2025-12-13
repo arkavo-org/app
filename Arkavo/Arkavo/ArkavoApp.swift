@@ -379,10 +379,11 @@ struct ArkavoApp: App {
 
             ViewModelFactory.shared.setAccount(account)
 
-            // Connect with WebAuthn
+            // Connect with WebAuthn using the handle (which was set during finalizeRegistration)
             do {
-                regLogger.log("[Registration] Connecting with WebAuthn for account=\(profile.name, privacy: .private)")
-                try await client.connect(accountName: profile.name)
+                let connectHandle = profile.handle ?? handle
+                regLogger.log("[Registration] Connecting with WebAuthn for handle=\(connectHandle, privacy: .private)")
+                try await client.connect(accountName: connectHandle)
                 // If connection is successful, save token and changes
                 if let token = client.currentToken {
                     try KeychainManager.saveAuthenticationToken(token)
@@ -703,10 +704,12 @@ struct ArkavoApp: App {
             try await persistenceController.saveChanges()
 
             // Try to connect, but proceed to main view even if connection fails
+            // Use handle from keychain (saved during registration) or fall back to profile.handle
+            let accountName = KeychainManager.getArkavoHandle() ?? profile.handle ?? profile.name
             if KeychainManager.getAuthenticationToken() != nil {
                 do {
-                    print("Attempting connection with existing token")
-                    try await client.connect(accountName: profile.name)
+                    print("Attempting connection with existing token for handle: \(accountName)")
+                    try await client.connect(accountName: accountName)
                     print("checkAccountStatus: Connected with existing token")
                     sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
                 } catch {
@@ -717,8 +720,8 @@ struct ArkavoApp: App {
                 }
             } else {
                 do {
-                    print("Attempting fresh connection")
-                    try await client.connect(accountName: profile.name)
+                    print("Attempting fresh connection for handle: \(accountName)")
+                    try await client.connect(accountName: accountName)
                     print("checkAccountStatus: Connected with fresh connection")
                     sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
                 } catch let error as ArkavoError {

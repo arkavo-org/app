@@ -17,9 +17,11 @@ class LiveStreamViewModel: ObservableObject {
     @Published var metadata: LiveStreamMetadata?
     @Published var framesReceived: Int = 0
 
-    // MARK: - Display Layer
+    // MARK: - Display Layer and Audio
 
     var displayLayer: AVSampleBufferDisplayLayer?
+    var audioRenderer: AVSampleBufferAudioRenderer?
+    var synchronizer: AVSampleBufferRenderSynchronizer?
 
     // MARK: - Private Properties
 
@@ -27,7 +29,10 @@ class LiveStreamViewModel: ObservableObject {
         private var subscriber: NTDFStreamingSubscriber?
     #endif
 
-    private let kasURL = URL(string: "https://100.arkavo.net")!
+    private let kasURL = URL(string: "https://100.arkavo.net/kas")!
+
+    /// NTDF token for KAS authentication (must be set before connecting)
+    var ntdfToken: String?
 
     // MARK: - Initialization
 
@@ -36,21 +41,31 @@ class LiveStreamViewModel: ObservableObject {
     // MARK: - Public Methods
 
     /// Connect to RTMP stream
-    func connect(url: String, streamName: String) async {
+    /// - Parameters:
+    ///   - url: RTMP URL to connect to
+    ///   - streamName: Stream name/key to subscribe to
+    ///   - ntdfToken: Optional NTDF token (uses stored token if not provided)
+    func connect(url: String, streamName: String, ntdfToken: String? = nil) async {
+        print("📺 [LiveStreamVM] Connecting to \(url)/\(streamName)")
         isConnecting = true
         errorMessage = nil
 
-        #if canImport(ArkavoStreaming)
-            // Create subscriber
-            subscriber = NTDFStreamingSubscriber(kasURL: kasURL)
+        // Use provided token or stored token
+        guard let token = ntdfToken ?? self.ntdfToken else {
+            print("📺 [LiveStreamVM] ❌ No NTDF token")
+            isConnecting = false
+            errorMessage = "NTDF token required for encrypted stream playback"
+            return
+        }
 
-            // Set up frame handler
-            await subscriber?.setFrameHandler { [weak self] frame in
+        #if canImport(ArkavoStreaming)
+            subscriber = NTDFStreamingSubscriber(kasURL: kasURL, ntdfToken: token)
+
+            await subscriber?.setFrameHandler { @Sendable [weak self] frame in
                 await self?.handleFrame(frame)
             }
 
-            // Set up state handler
-            await subscriber?.setStateHandler { [weak self] state in
+            await subscriber?.setStateHandler { @Sendable [weak self] state in
                 await self?.handleStateChange(state)
             }
 
@@ -59,11 +74,12 @@ class LiveStreamViewModel: ObservableObject {
                 isConnecting = false
                 isPlaying = true
             } catch {
+                print("📺 [LiveStreamVM] ❌ Connection error: \(error)")
                 isConnecting = false
                 errorMessage = error.localizedDescription
             }
         #else
-            // Fallback for when ArkavoStreaming is not available
+            print("📺 [LiveStreamVM] ❌ ArkavoStreaming not available")
             isConnecting = false
             errorMessage = "Streaming not available"
         #endif
@@ -81,20 +97,157 @@ class LiveStreamViewModel: ObservableObject {
     // MARK: - Private Methods
 
     #if canImport(ArkavoStreaming)
+        private var videoFramesReceived: UInt64 = 0
+        private var audioFramesReceived: UInt64 = 0
+        private var videoFramesEnqueued: UInt64 = 0
+        private var audioFramesEnqueued: UInt64 = 0
+        private var audioFramesLate: UInt64 = 0
+        private var waitingForKeyframe = true
+        private var hasReceivedFirstKeyframe = false
+        private var playbackStarted = false
+        private var lastAudioPTS: Double = 0
+        private var firstAudioPTS: CMTime?
+        private var audioBufferCount: Int = 0
+        private let audioBufferTarget = 5  // Buffer 5 audio frames (~100ms) before starting
+
+        /// Start synchronized playback using the synchronizer
+        private func startPlayback(audioPTS: CMTime) {
+            guard !playbackStarted, let synchronizer else { return }
+
+            // Start playback at the audio PTS to ensure audio/video sync
+            synchronizer.setRate(1.0, time: audioPTS)
+
+            playbackStarted = true
+            print("📺 [LiveStreamVM] ✅ Playback started at audio PTS: \(audioPTS.seconds)s (buffered \(audioBufferCount) audio frames)")
+        }
+
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
 
-            // Enqueue sample buffer for display
+            if frame.type == .video {
+                videoFramesReceived += 1
+            } else {
+                audioFramesReceived += 1
+            }
+
+            // Handle video frames
             if let sampleBuffer = frame.sampleBuffer,
                let displayLayer,
                frame.type == .video
             {
-                // Check if layer is ready
-                if displayLayer.status == .failed {
-                    displayLayer.flush()
+                // Check if layer has failed and needs recovery
+                if displayLayer.sampleBufferRenderer.status == .failed {
+                    print("📺 [LiveStreamVM] ⚠️ Display layer failed, flushing...")
+                    if let error = displayLayer.sampleBufferRenderer.error {
+                        print("📺 [LiveStreamVM] Error: \(error)")
+                    }
+                    displayLayer.sampleBufferRenderer.flush()
+                    audioRenderer?.flush()
+                    waitingForKeyframe = true
+                    playbackStarted = false
                 }
 
-                displayLayer.enqueue(sampleBuffer)
+                // Wait for keyframe after flush or at start
+                if waitingForKeyframe {
+                    if frame.isKeyframe {
+                        print("📺 [LiveStreamVM] ✅ KEYFRAME received (after \(videoFramesReceived) video frames)")
+                        waitingForKeyframe = false
+                        hasReceivedFirstKeyframe = true
+                        // Don't start playback yet - wait for audio buffer to fill
+                    } else {
+                        // Log waiting status periodically
+                        if videoFramesReceived == 1 || videoFramesReceived % 100 == 0 {
+                            print("📺 [LiveStreamVM] ⏳ Waiting for keyframe... (\(videoFramesReceived) video frames)")
+                        }
+                        return
+                    }
+                }
+
+                // Don't enqueue video until playback has started (audio drives timing)
+                guard playbackStarted else {
+                    return
+                }
+
+                displayLayer.sampleBufferRenderer.enqueue(sampleBuffer)
+                videoFramesEnqueued += 1
+
+                // Log playback status periodically
+                if videoFramesEnqueued == 1 {
+                    print("📺 [LiveStreamVM] ▶️ First video frame enqueued!")
+                } else if videoFramesEnqueued % 300 == 0 {
+                    print("📺 [LiveStreamVM] 📊 Status: video=\(videoFramesEnqueued), audio=\(audioFramesEnqueued) enqueued")
+                }
+            } else if frame.type == .video && frame.sampleBuffer == nil && videoFramesReceived <= 5 {
+                print("📺 [LiveStreamVM] ⚠️ No sampleBuffer for video frame \(videoFramesReceived)")
+            }
+
+            // Handle audio frames
+            if let sampleBuffer = frame.sampleBuffer,
+               let audioRenderer,
+               let synchronizer,
+               frame.type == .audio
+            {
+                // Check if audio renderer has failed
+                if audioRenderer.status == .failed {
+                    print("📺 [LiveStreamVM] ⚠️ Audio renderer failed, flushing and resetting...")
+                    if let error = audioRenderer.error {
+                        print("📺 [LiveStreamVM] Audio error: \(error)")
+                    }
+                    // Flush both renderers and reset playback
+                    audioRenderer.flush()
+                    displayLayer?.sampleBufferRenderer.flush()
+                    playbackStarted = false
+                    waitingForKeyframe = true
+                    firstAudioPTS = nil
+                    audioBufferCount = 0
+                    return
+                }
+
+                let audioPTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+                // Buffer audio before starting playback
+                if !playbackStarted {
+                    // Store first audio PTS
+                    if firstAudioPTS == nil {
+                        firstAudioPTS = audioPTS
+                        print("📺 [LiveStreamVM] 🔊 First audio PTS: \(audioPTS.seconds)s, buffering...")
+                    }
+
+                    // Enqueue to buffer
+                    audioRenderer.enqueue(sampleBuffer)
+                    audioBufferCount += 1
+                    audioFramesEnqueued += 1
+
+                    // Start playback once we have enough audio buffered AND a keyframe
+                    if audioBufferCount >= audioBufferTarget && hasReceivedFirstKeyframe {
+                        if let startPTS = firstAudioPTS {
+                            startPlayback(audioPTS: startPTS)
+                        }
+                    }
+                    return
+                }
+
+                // Get timing info for running playback
+                let syncTime = synchronizer.currentTime()
+                let timeDiff = audioPTS.seconds - syncTime.seconds
+
+                // Track late audio frames (more than 100ms behind)
+                if timeDiff < -0.1 {
+                    audioFramesLate += 1
+                    if audioFramesLate <= 5 || audioFramesLate % 50 == 0 {
+                        print("📺 [LiveStreamVM] ⚠️ Audio late by \(String(format: "%.3f", -timeDiff))s (frame #\(audioFramesReceived), late count: \(audioFramesLate))")
+                    }
+                }
+
+                // Enqueue audio
+                audioRenderer.enqueue(sampleBuffer)
+                audioFramesEnqueued += 1
+                lastAudioPTS = audioPTS.seconds
+
+                if audioFramesEnqueued % 500 == 0 {
+                    // Periodic status with timing
+                    print("📺 [LiveStreamVM] 🔊 Audio #\(audioFramesEnqueued): PTS=\(String(format: "%.3f", audioPTS.seconds))s, sync=\(String(format: "%.3f", syncTime.seconds))s, diff=\(String(format: "%.3f", timeDiff))s, late=\(audioFramesLate), status=\(audioRenderer.status.rawValue)")
+                }
             }
         }
 
@@ -104,13 +257,17 @@ class LiveStreamViewModel: ObservableObject {
                 isPlaying = false
                 isConnecting = false
             case .connecting:
+                print("📺 [LiveStreamVM] 🔄 Connecting...")
                 isConnecting = true
             case .waitingForHeader:
+                print("📺 [LiveStreamVM] 🔐 Waiting for NTDF header...")
                 isConnecting = true
             case .playing:
+                print("📺 [LiveStreamVM] ✅ Stream ready")
                 isConnecting = false
                 isPlaying = true
             case let .error(message):
+                print("📺 [LiveStreamVM] ❌ Error: \(message)")
                 isConnecting = false
                 isPlaying = false
                 errorMessage = message

@@ -594,7 +594,21 @@ struct RecordView: View {
                 streamViewModel.error = "Failed to create streaming session"
                 return
             }
-            try await session.startStreaming(to: destination, streamKey: streamKey)
+
+            // Check if this is Arkavo (NTDF-encrypted streaming)
+            if streamViewModel.selectedPlatform == .arkavo {
+                guard let kasURL = URL(string: "https://100.arkavo.net") else {
+                    streamViewModel.error = "Invalid KAS URL"
+                    return
+                }
+                try await session.startNTDFStreaming(
+                    kasURL: kasURL,
+                    rtmpURL: destination.url,
+                    streamKey: "live/creator"
+                )
+            } else {
+                try await session.startStreaming(to: destination, streamKey: streamKey)
+            }
             streamViewModel.isStreaming = true
         } catch {
             streamViewModel.error = error.localizedDescription

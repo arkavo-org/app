@@ -25,7 +25,7 @@
       "location" : "https://github.com/arkavo-org/OpenTDFKit",
       "state" : {
         "branch" : "main",
-        "revision" : "c211d3b05f801ea5fb37d9ac1fc7c1e42015c362"
+        "revision" : "e3ffe32d86a51e7d0f219fcb0a6b746df418fb98"
       }
     },
     {
@@ -34,7 +34,7 @@
       "location" : "https://github.com/arkavo-org/VRMMetalKit",
       "state" : {
         "branch" : "main",
-        "revision" : "0994f57d033dac590cf6cae0df1260190628ef31"
+        "revision" : "f104690a96de6304987857d4bd9dacfd45329fd7"
       }
     },
     {

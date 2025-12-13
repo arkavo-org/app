@@ -54,6 +54,13 @@
 		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */; };
+		49D9C52D9B864D54A880D16E /* LiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */; };
+		647B8EA0E6704741B56C9102 /* LiveStreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */; };
+		BD00FF12577A4BA5996746E0 /* LiveStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */; };
+		0628579CD1E34893A4FBAD72 /* LiveStreamEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */; };
+		14DFEA4763294AFEA1364EE2 /* FeedItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D716EAD864767A14A2C51 /* FeedItem.swift */; };
+		E015062D4804444C94637C50 /* EmbeddedLiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */; };
+		6A49732F2EB942AAAC6FFF65 /* LiveBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F769E211744CD6AAE1B644 /* LiveBadge.swift */; };
 		DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C042D380ADE0033F6B8 /* ReportView.swift */; };
 		DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C062D3849910033F6B8 /* BlockedProfile.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
@@ -167,6 +174,13 @@
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedViewModel.swift; sourceTree = "<group>"; };
+		4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamView.swift; sourceTree = "<group>"; };
+		C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamViewModel.swift; sourceTree = "<group>"; };
+		21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEvent.swift; sourceTree = "<group>"; };
+		1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEventHandler.swift; sourceTree = "<group>"; };
+		7D5D716EAD864767A14A2C51 /* FeedItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedItem.swift; sourceTree = "<group>"; };
+		5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedLiveStreamView.swift; sourceTree = "<group>"; };
+		B1F769E211744CD6AAE1B644 /* LiveBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBadge.swift; sourceTree = "<group>"; };
 		DA975C042D380ADE0033F6B8 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		DA975C062D3849910033F6B8 /* BlockedProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedProfile.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
@@ -298,6 +312,13 @@
 				DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */,
 				DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */,
 				DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */,
+				4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */,
+				C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */,
+				21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */,
+				1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */,
+				7D5D716EAD864767A14A2C51 /* FeedItem.swift */,
+				5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */,
+				B1F769E211744CD6AAE1B644 /* LiveBadge.swift */,
 				DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */,
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
 				DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */,
@@ -647,6 +668,13 @@
 				DA2212282CB0BB0900C220B0 /* StreamProfileBadge.swift in Sources */,
 				DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */,
 				DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */,
+				49D9C52D9B864D54A880D16E /* LiveStreamView.swift in Sources */,
+				647B8EA0E6704741B56C9102 /* LiveStreamViewModel.swift in Sources */,
+				BD00FF12577A4BA5996746E0 /* LiveStreamEvent.swift in Sources */,
+				0628579CD1E34893A4FBAD72 /* LiveStreamEventHandler.swift in Sources */,
+				14DFEA4763294AFEA1364EE2 /* FeedItem.swift in Sources */,
+				E015062D4804444C94637C50 /* EmbeddedLiveStreamView.swift in Sources */,
+				6A49732F2EB942AAAC6FFF65 /* LiveBadge.swift in Sources */,
 				DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */,
 				DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */,
 				15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */,
