@@ -446,15 +446,7 @@ public actor RTMPSubscriber {
             while !Task.isCancelled {
                 do {
                     messageCount += 1
-                    if messageCount <= 20 {
-                        print("🔄 Waiting for message #\(messageCount)...")
-                    }
                     let (messageType, messageData, timestamp, _) = try await self.receiveMediaMessage()
-
-                    // Debug: Log all message types
-                    if messageType == 8 || messageType == 9 {
-                        print("📥 Received media type \(messageType): \(messageData.count) bytes")
-                    }
 
                     switch messageType {
                     case 8:  // Audio
@@ -466,7 +458,7 @@ public actor RTMPSubscriber {
                     case 20:  // AMF0 Command
                         await self.handleCommand(messageData)
                     default:
-                        print("📥 Received message type \(messageType): \(messageData.count) bytes")
+                        break
                     }
                 } catch {
                     if !Task.isCancelled {
@@ -529,25 +521,18 @@ public actor RTMPSubscriber {
     }
 
     private func handleMetadata(_ data: Data) async {
-        print("📥 Metadata: \(data.count) bytes, first bytes: \(data.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " "))")
-
         // Parse AMF0 metadata
         var parser = AMF0Parser(data: data)
 
         // Read all values
-        var valueIndex = 0
         while parser.bytesRemaining > 0 {
             do {
                 let value = try parser.readValue()
-                print("📥 [Metadata] Value \(valueIndex): \(describeAMF0Value(value))")
-                valueIndex += 1
 
                 // Look for object/array with metadata fields
                 if case let .object(dict) = value {
-                    print("📥 [Metadata] Found object with keys: \(dict.keys.sorted())")
                     parseMetadataDict(dict)
                 } else if case let .array(arr) = value {
-                    print("📥 [Metadata] Found array with \(arr.count) items")
                     for item in arr {
                         if case let .object(dict) = item {
                             parseMetadataDict(dict)
@@ -555,25 +540,14 @@ public actor RTMPSubscriber {
                     }
                 }
             } catch {
-                print("📥 [Metadata] Parse error: \(error)")
                 break
             }
         }
 
-        print("📥 [Metadata] Final metadata - ntdfHeader: \(metadata.ntdfHeader?.prefix(30) ?? "nil")")
-        await onMetadata?(metadata)
-    }
-
-    private func describeAMF0Value(_ value: AMF0Parser.Value) -> String {
-        switch value {
-        case .number(let n): return "number(\(n))"
-        case .boolean(let b): return "boolean(\(b))"
-        case .string(let s): return "string(\"\(s.prefix(50))\")"
-        case .object(let d): return "object(keys: \(d.keys.sorted()))"
-        case .array(let a): return "array(\(a.count) items)"
-        case .null: return "null"
-        case .undefined: return "undefined"
+        if metadata.ntdfHeader != nil {
+            print("📥 [RTMPSub] Metadata received with NTDF header")
         }
+        await onMetadata?(metadata)
     }
 
     private func parseMetadataDict(_ dict: [String: AMF0Parser.Value]) {
@@ -601,7 +575,6 @@ public actor RTMPSubscriber {
         // NTDF-RTMP: Extract encrypted stream header
         if case let .string(ntdfHeader) = dict["ntdf_header"] {
             metadata.ntdfHeader = ntdfHeader
-            print("🔐 Received ntdf_header: \(ntdfHeader.prefix(50))...")
         }
     }
 
@@ -740,11 +713,6 @@ public actor RTMPSubscriber {
         // Save state back
         chunkStreamStates[chunkStreamId] = csState
 
-        // Debug: log parsed header info with timestamp
-        if messageTypeId == 8 || messageTypeId == 9 {
-            print("📦 csid=\(chunkStreamId) fmt=\(format) type=\(messageTypeId) len=\(messageLength) ts=\(timestamp)")
-        }
-
         // Extended timestamp handling
         // For type 0/1/2: check if RAW 3-byte field is 0xFFFFFF
         // For type 3: check if previous chunk had extended timestamp
@@ -834,7 +802,6 @@ public actor RTMPSubscriber {
                         gotOurContinuation = true
                     } else {
                         // Interleaved chunk from another stream - parse and skip it
-                        print("⚠️ [RTMPSub] Interleaved chunk: csid=\(contCsid) fmt=\(contFormat) (we're reading csid=\(chunkStreamId))")
 
                         // Get state for the interleaved chunk stream
                         var interleavedState = chunkStreamStates[contCsid] ?? ChunkStreamState()
@@ -923,7 +890,6 @@ public actor RTMPSubscriber {
                             _ = try await receiveDataExact(length: skipSize)
                             totalBytes += skipSize
                             interleavedState.remainingBytes -= UInt32(skipSize)
-                            print("⚠️ [RTMPSub] Skipped \(skipSize) bytes of interleaved csid=\(contCsid) data (remaining=\(interleavedState.remainingBytes))")
                         }
 
                         // Save updated state after skip
