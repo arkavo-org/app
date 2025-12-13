@@ -156,22 +156,28 @@ struct LiveStreamDisplayView: UIViewRepresentable {
         print("📺 [LiveStreamDisplayView] Creating UIView at \(now)")
         let view = LiveStreamUIView()
         viewModel.displayLayer = view.displayLayer
-        print("📺 [LiveStreamDisplayView] displayLayer assigned at \(Date()), took \(Date().timeIntervalSince(now))s")
+        viewModel.audioRenderer = view.audioRenderer
+        viewModel.synchronizer = view.synchronizer
+        print("📺 [LiveStreamDisplayView] Renderers assigned at \(Date()), took \(Date().timeIntervalSince(now))s")
         return view
     }
 
     func updateUIView(_ uiView: LiveStreamUIView, context: Context) {
-        // Ensure displayLayer is always set (in case of view recreation)
+        // Ensure renderers are always set (in case of view recreation)
         if viewModel.displayLayer !== uiView.displayLayer {
-            print("📺 [LiveStreamDisplayView] Re-assigning displayLayer")
+            print("📺 [LiveStreamDisplayView] Re-assigning renderers")
             viewModel.displayLayer = uiView.displayLayer
+            viewModel.audioRenderer = uiView.audioRenderer
+            viewModel.synchronizer = uiView.synchronizer
         }
     }
 }
 
-/// UIView that hosts AVSampleBufferDisplayLayer
+/// UIView that hosts AVSampleBufferDisplayLayer and audio renderer
 class LiveStreamUIView: UIView {
     let displayLayer = AVSampleBufferDisplayLayer()
+    let audioRenderer = AVSampleBufferAudioRenderer()
+    let synchronizer = AVSampleBufferRenderSynchronizer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -184,11 +190,16 @@ class LiveStreamUIView: UIView {
     }
 
     private func setupLayer() {
-        print("📺 [LiveStreamUIView] Setting up displayLayer")
+        print("📺 [LiveStreamUIView] Setting up displayLayer and audioRenderer")
         displayLayer.videoGravity = .resizeAspect
         displayLayer.backgroundColor = UIColor.black.cgColor
         layer.addSublayer(displayLayer)
-        print("📺 [LiveStreamUIView] displayLayer setup complete")
+
+        // Add renderers to synchronizer for coordinated playback
+        synchronizer.addRenderer(displayLayer)
+        synchronizer.addRenderer(audioRenderer)
+
+        print("📺 [LiveStreamUIView] Setup complete - video and audio synchronized")
     }
 
     override func layoutSubviews() {

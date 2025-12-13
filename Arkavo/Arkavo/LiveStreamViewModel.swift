@@ -17,9 +17,11 @@ class LiveStreamViewModel: ObservableObject {
     @Published var metadata: LiveStreamMetadata?
     @Published var framesReceived: Int = 0
 
-    // MARK: - Display Layer
+    // MARK: - Display Layer and Audio
 
     var displayLayer: AVSampleBufferDisplayLayer?
+    var audioRenderer: AVSampleBufferAudioRenderer?
+    var synchronizer: AVSampleBufferRenderSynchronizer?
 
     // MARK: - Private Properties
 
@@ -98,38 +100,20 @@ class LiveStreamViewModel: ObservableObject {
         private var videoFramesReceived: UInt64 = 0
         private var audioFramesReceived: UInt64 = 0
         private var videoFramesEnqueued: UInt64 = 0
+        private var audioFramesEnqueued: UInt64 = 0
         private var waitingForKeyframe = true
         private var hasReceivedFirstKeyframe = false
-        private var timebaseConfigured = false
+        private var playbackStarted = false
 
-        /// Configure the display layer's timebase for live streaming
-        private func configureTimebase(for displayLayer: AVSampleBufferDisplayLayer, firstPTS: CMTime) {
-            guard !timebaseConfigured else { return }
+        /// Start synchronized playback using the synchronizer
+        private func startPlayback(firstPTS: CMTime) {
+            guard !playbackStarted, let synchronizer else { return }
 
-            // Create a timebase for live playback
-            var timebase: CMTimebase?
-            let status = CMTimebaseCreateWithSourceClock(
-                allocator: kCFAllocatorDefault,
-                sourceClock: CMClockGetHostTimeClock(),
-                timebaseOut: &timebase
-            )
+            // Set the synchronizer's time to match the first frame's PTS and start playback
+            synchronizer.setRate(1.0, time: firstPTS)
 
-            guard status == noErr, let timebase else {
-                print("📺 [LiveStreamVM] ⚠️ Failed to create timebase: \(status)")
-                return
-            }
-
-            // Set the timebase time to match the first frame's PTS
-            CMTimebaseSetTime(timebase, time: firstPTS)
-
-            // Set rate to 1.0 to start playback
-            CMTimebaseSetRate(timebase, rate: 1.0)
-
-            // Assign to display layer
-            displayLayer.controlTimebase = timebase
-
-            timebaseConfigured = true
-            print("📺 [LiveStreamVM] ✅ Timebase configured, starting at PTS: \(firstPTS.seconds)s")
+            playbackStarted = true
+            print("📺 [LiveStreamVM] ✅ Playback started at PTS: \(firstPTS.seconds)s")
         }
 
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
@@ -141,7 +125,7 @@ class LiveStreamViewModel: ObservableObject {
                 audioFramesReceived += 1
             }
 
-            // Enqueue video sample buffer for display
+            // Handle video frames
             if let sampleBuffer = frame.sampleBuffer,
                let displayLayer,
                frame.type == .video
@@ -153,8 +137,9 @@ class LiveStreamViewModel: ObservableObject {
                         print("📺 [LiveStreamVM] Error: \(error)")
                     }
                     displayLayer.sampleBufferRenderer.flush()
+                    audioRenderer?.flush()
                     waitingForKeyframe = true
-                    timebaseConfigured = false  // Reset timebase on failure
+                    playbackStarted = false
                 }
 
                 // Wait for keyframe after flush or at start
@@ -164,9 +149,9 @@ class LiveStreamViewModel: ObservableObject {
                         waitingForKeyframe = false
                         hasReceivedFirstKeyframe = true
 
-                        // Configure timebase on first keyframe
+                        // Start synchronized playback on first keyframe
                         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        configureTimebase(for: displayLayer, firstPTS: pts)
+                        startPlayback(firstPTS: pts)
                     } else {
                         // Log waiting status periodically
                         if videoFramesReceived == 1 || videoFramesReceived % 100 == 0 {
@@ -181,12 +166,35 @@ class LiveStreamViewModel: ObservableObject {
 
                 // Log playback status periodically
                 if videoFramesEnqueued == 1 {
-                    print("📺 [LiveStreamVM] ▶️ First frame enqueued - playback started!")
+                    print("📺 [LiveStreamVM] ▶️ First video frame enqueued!")
                 } else if videoFramesEnqueued % 300 == 0 {
-                    print("📺 [LiveStreamVM] 📊 Status: \(videoFramesEnqueued) frames displayed (video: \(videoFramesReceived), audio: \(audioFramesReceived))")
+                    print("📺 [LiveStreamVM] 📊 Status: video=\(videoFramesEnqueued), audio=\(audioFramesEnqueued) enqueued")
                 }
             } else if frame.type == .video && frame.sampleBuffer == nil && videoFramesReceived <= 5 {
                 print("📺 [LiveStreamVM] ⚠️ No sampleBuffer for video frame \(videoFramesReceived)")
+            }
+
+            // Handle audio frames
+            if let sampleBuffer = frame.sampleBuffer,
+               let audioRenderer,
+               frame.type == .audio,
+               playbackStarted  // Only enqueue audio after playback has started
+            {
+                // Check if audio renderer has failed
+                if audioRenderer.status == .failed {
+                    print("📺 [LiveStreamVM] ⚠️ Audio renderer failed, flushing...")
+                    if let error = audioRenderer.error {
+                        print("📺 [LiveStreamVM] Audio error: \(error)")
+                    }
+                    audioRenderer.flush()
+                }
+
+                audioRenderer.enqueue(sampleBuffer)
+                audioFramesEnqueued += 1
+
+                if audioFramesEnqueued == 1 {
+                    print("📺 [LiveStreamVM] 🔊 First audio frame enqueued!")
+                }
             }
         }
 
