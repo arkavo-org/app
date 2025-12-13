@@ -100,6 +100,37 @@ class LiveStreamViewModel: ObservableObject {
         private var videoFramesEnqueued: UInt64 = 0
         private var waitingForKeyframe = true
         private var hasReceivedFirstKeyframe = false
+        private var timebaseConfigured = false
+
+        /// Configure the display layer's timebase for live streaming
+        private func configureTimebase(for displayLayer: AVSampleBufferDisplayLayer, firstPTS: CMTime) {
+            guard !timebaseConfigured else { return }
+
+            // Create a timebase for live playback
+            var timebase: CMTimebase?
+            let status = CMTimebaseCreateWithSourceClock(
+                allocator: kCFAllocatorDefault,
+                sourceClock: CMClockGetHostTimeClock(),
+                timebaseOut: &timebase
+            )
+
+            guard status == noErr, let timebase else {
+                print("📺 [LiveStreamVM] ⚠️ Failed to create timebase: \(status)")
+                return
+            }
+
+            // Set the timebase time to match the first frame's PTS
+            CMTimebaseSetTime(timebase, time: firstPTS)
+
+            // Set rate to 1.0 to start playback
+            CMTimebaseSetRate(timebase, rate: 1.0)
+
+            // Assign to display layer
+            displayLayer.controlTimebase = timebase
+
+            timebaseConfigured = true
+            print("📺 [LiveStreamVM] ✅ Timebase configured, starting at PTS: \(firstPTS.seconds)s")
+        }
 
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
             framesReceived += 1
@@ -123,6 +154,7 @@ class LiveStreamViewModel: ObservableObject {
                     }
                     displayLayer.sampleBufferRenderer.flush()
                     waitingForKeyframe = true
+                    timebaseConfigured = false  // Reset timebase on failure
                 }
 
                 // Wait for keyframe after flush or at start
@@ -131,6 +163,10 @@ class LiveStreamViewModel: ObservableObject {
                         print("📺 [LiveStreamVM] ✅ KEYFRAME received - starting playback (after \(videoFramesReceived) video frames)")
                         waitingForKeyframe = false
                         hasReceivedFirstKeyframe = true
+
+                        // Configure timebase on first keyframe
+                        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        configureTimebase(for: displayLayer, firstPTS: pts)
                     } else {
                         // Log waiting status periodically
                         if videoFramesReceived == 1 || videoFramesReceived % 100 == 0 {
