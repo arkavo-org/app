@@ -206,7 +206,8 @@ class LiveStreamUIView: UIView {
         }
 
         // Add renderers to synchronizer for coordinated playback
-        synchronizer.addRenderer(displayLayer)
+        // Note: On iOS 18+, use sampleBufferRenderer for video (must match enqueue target)
+        synchronizer.addRenderer(displayLayer.sampleBufferRenderer)
         synchronizer.addRenderer(audioRenderer)
 
         // Ensure audio is not muted

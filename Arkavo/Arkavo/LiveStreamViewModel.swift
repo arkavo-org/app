@@ -101,19 +101,24 @@ class LiveStreamViewModel: ObservableObject {
         private var audioFramesReceived: UInt64 = 0
         private var videoFramesEnqueued: UInt64 = 0
         private var audioFramesEnqueued: UInt64 = 0
+        private var audioFramesLate: UInt64 = 0
         private var waitingForKeyframe = true
         private var hasReceivedFirstKeyframe = false
         private var playbackStarted = false
+        private var lastAudioPTS: Double = 0
+        private var firstAudioPTS: CMTime?
+        private var audioBufferCount: Int = 0
+        private let audioBufferTarget = 5  // Buffer 5 audio frames (~100ms) before starting
 
         /// Start synchronized playback using the synchronizer
-        private func startPlayback(firstPTS: CMTime) {
+        private func startPlayback(audioPTS: CMTime) {
             guard !playbackStarted, let synchronizer else { return }
 
-            // Set the synchronizer's time to match the first frame's PTS and start playback
-            synchronizer.setRate(1.0, time: firstPTS)
+            // Start playback at the audio PTS to ensure audio/video sync
+            synchronizer.setRate(1.0, time: audioPTS)
 
             playbackStarted = true
-            print("📺 [LiveStreamVM] ✅ Playback started at PTS: \(firstPTS.seconds)s")
+            print("📺 [LiveStreamVM] ✅ Playback started at audio PTS: \(audioPTS.seconds)s (buffered \(audioBufferCount) audio frames)")
         }
 
         private func handleFrame(_ frame: NTDFStreamingSubscriber.DecryptedFrame) async {
@@ -145,13 +150,10 @@ class LiveStreamViewModel: ObservableObject {
                 // Wait for keyframe after flush or at start
                 if waitingForKeyframe {
                     if frame.isKeyframe {
-                        print("📺 [LiveStreamVM] ✅ KEYFRAME received - starting playback (after \(videoFramesReceived) video frames)")
+                        print("📺 [LiveStreamVM] ✅ KEYFRAME received (after \(videoFramesReceived) video frames)")
                         waitingForKeyframe = false
                         hasReceivedFirstKeyframe = true
-
-                        // Start synchronized playback on first keyframe
-                        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        startPlayback(firstPTS: pts)
+                        // Don't start playback yet - wait for audio buffer to fill
                     } else {
                         // Log waiting status periodically
                         if videoFramesReceived == 1 || videoFramesReceived % 100 == 0 {
@@ -159,6 +161,11 @@ class LiveStreamViewModel: ObservableObject {
                         }
                         return
                     }
+                }
+
+                // Don't enqueue video until playback has started (audio drives timing)
+                guard playbackStarted else {
+                    return
                 }
 
                 displayLayer.sampleBufferRenderer.enqueue(sampleBuffer)
@@ -177,30 +184,69 @@ class LiveStreamViewModel: ObservableObject {
             // Handle audio frames
             if let sampleBuffer = frame.sampleBuffer,
                let audioRenderer,
-               frame.type == .audio,
-               playbackStarted  // Only enqueue audio after playback has started
+               let synchronizer,
+               frame.type == .audio
             {
                 // Check if audio renderer has failed
                 if audioRenderer.status == .failed {
-                    print("📺 [LiveStreamVM] ⚠️ Audio renderer failed, flushing...")
+                    print("📺 [LiveStreamVM] ⚠️ Audio renderer failed, flushing and resetting...")
                     if let error = audioRenderer.error {
                         print("📺 [LiveStreamVM] Audio error: \(error)")
                     }
+                    // Flush both renderers and reset playback
                     audioRenderer.flush()
+                    displayLayer?.sampleBufferRenderer.flush()
+                    playbackStarted = false
+                    waitingForKeyframe = true
+                    firstAudioPTS = nil
+                    audioBufferCount = 0
+                    return
                 }
 
+                let audioPTS = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+                // Buffer audio before starting playback
+                if !playbackStarted {
+                    // Store first audio PTS
+                    if firstAudioPTS == nil {
+                        firstAudioPTS = audioPTS
+                        print("📺 [LiveStreamVM] 🔊 First audio PTS: \(audioPTS.seconds)s, buffering...")
+                    }
+
+                    // Enqueue to buffer
+                    audioRenderer.enqueue(sampleBuffer)
+                    audioBufferCount += 1
+                    audioFramesEnqueued += 1
+
+                    // Start playback once we have enough audio buffered AND a keyframe
+                    if audioBufferCount >= audioBufferTarget && hasReceivedFirstKeyframe {
+                        if let startPTS = firstAudioPTS {
+                            startPlayback(audioPTS: startPTS)
+                        }
+                    }
+                    return
+                }
+
+                // Get timing info for running playback
+                let syncTime = synchronizer.currentTime()
+                let timeDiff = audioPTS.seconds - syncTime.seconds
+
+                // Track late audio frames (more than 100ms behind)
+                if timeDiff < -0.1 {
+                    audioFramesLate += 1
+                    if audioFramesLate <= 5 || audioFramesLate % 50 == 0 {
+                        print("📺 [LiveStreamVM] ⚠️ Audio late by \(String(format: "%.3f", -timeDiff))s (frame #\(audioFramesReceived), late count: \(audioFramesLate))")
+                    }
+                }
+
+                // Enqueue audio
                 audioRenderer.enqueue(sampleBuffer)
                 audioFramesEnqueued += 1
+                lastAudioPTS = audioPTS.seconds
 
-                if audioFramesEnqueued == 1 {
-                    // Log audio format info
-                    if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
-                        let mediaType = CMFormatDescriptionGetMediaType(formatDesc)
-                        let mediaSubType = CMFormatDescriptionGetMediaSubType(formatDesc)
-                        print("📺 [LiveStreamVM] 🔊 First audio frame enqueued! format=\(mediaType)/\(mediaSubType), status=\(audioRenderer.status.rawValue)")
-                    } else {
-                        print("📺 [LiveStreamVM] 🔊 First audio frame enqueued! (no format desc)")
-                    }
+                if audioFramesEnqueued % 500 == 0 {
+                    // Periodic status with timing
+                    print("📺 [LiveStreamVM] 🔊 Audio #\(audioFramesEnqueued): PTS=\(String(format: "%.3f", audioPTS.seconds))s, sync=\(String(format: "%.3f", syncTime.seconds))s, diff=\(String(format: "%.3f", timeDiff))s, late=\(audioFramesLate), status=\(audioRenderer.status.rawValue)")
                 }
             }
         }

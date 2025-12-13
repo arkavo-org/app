@@ -233,6 +233,8 @@ public actor NTDFStreamingSubscriber {
     }
 
     private var videoFrameCount: UInt64 = 0
+    private var audioFrameCount: UInt64 = 0
+    private var audioDecryptFails: UInt64 = 0
 
     /// Magic bytes to identify NTDF header frame: "NTDF" (0x4E544446)
     private static let ntdfHeaderMagic: [UInt8] = [0x4E, 0x54, 0x44, 0x46]
@@ -387,6 +389,8 @@ public actor NTDFStreamingSubscriber {
     }
 
     private func handleAudioFrame(_ frame: RTMPSubscriber.MediaFrame) async {
+        audioFrameCount += 1
+
         // Check if this is a sequence header
         if frame.data.count > 1 {
             let soundFormat = (frame.data[0] >> 4) & 0x0F
@@ -423,7 +427,11 @@ public actor NTDFStreamingSubscriber {
                 // Reconstruct FLV frame with decrypted payload
                 decryptedData = Data(flvHeader) + decryptedPayload
             } catch {
-                return  // Skip frames that fail decryption
+                audioDecryptFails += 1
+                if audioDecryptFails <= 5 || audioDecryptFails % 100 == 0 {
+                    print("🔊 [NTDFSub] ⚠️ Audio decrypt fail #\(audioDecryptFails) (total frames: \(audioFrameCount))")
+                }
+                return
             }
         } else {
             return  // No decryptor yet
@@ -441,6 +449,12 @@ public actor NTDFStreamingSubscriber {
                     formatDescription: formatDesc,
                     sampleRate: config.sampleRate
                 )
+            }
+
+            // Log audio stats periodically
+            if audioFrameCount % 500 == 0 {
+                let failRate = audioDecryptFails > 0 ? Double(audioDecryptFails) / Double(audioFrameCount) * 100 : 0
+                print("🔊 [NTDFSub] Audio #\(audioFrameCount): \(audioDecryptFails) fails (\(String(format: "%.1f", failRate))%)")
             }
 
             let decryptedFrame = DecryptedFrame(
