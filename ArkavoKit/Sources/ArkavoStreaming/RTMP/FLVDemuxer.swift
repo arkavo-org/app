@@ -376,23 +376,50 @@ public struct FLVDemuxer: Sendable {
             blockData.append(nalu)
         }
 
-        // Create block buffer
+        // Create block buffer with copied data (important: data must be retained)
         var blockBuffer: CMBlockBuffer?
-        let status = blockData.withUnsafeBytes { bufferPointer in
-            CMBlockBufferCreateWithMemoryBlock(
-                allocator: kCFAllocatorDefault,
-                memoryBlock: UnsafeMutableRawPointer(mutating: bufferPointer.baseAddress!),
-                blockLength: blockData.count,
-                blockAllocator: kCFAllocatorNull,
+
+        // First create an empty block buffer, then append data (which copies it)
+        var status = CMBlockBufferCreateEmpty(
+            allocator: kCFAllocatorDefault,
+            capacity: 0,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
+
+        guard status == noErr, let buffer = blockBuffer else {
+            throw DemuxError.invalidData
+        }
+
+        // Append data to block buffer - this copies the data so it's retained
+        status = blockData.withUnsafeBytes { bufferPointer in
+            CMBlockBufferAppendMemoryBlock(
+                buffer,
+                memoryBlock: nil,  // nil = allocate new memory
+                length: blockData.count,
+                blockAllocator: kCFAllocatorDefault,
                 customBlockSource: nil,
                 offsetToData: 0,
                 dataLength: blockData.count,
-                flags: 0,
-                blockBufferOut: &blockBuffer
+                flags: 0
             )
         }
 
-        guard status == noErr, let buffer = blockBuffer else {
+        guard status == noErr else {
+            throw DemuxError.invalidData
+        }
+
+        // Copy the actual data into the block buffer
+        status = blockData.withUnsafeBytes { bufferPointer in
+            CMBlockBufferReplaceDataBytes(
+                with: bufferPointer.baseAddress!,
+                blockBuffer: buffer,
+                offsetIntoDestination: 0,
+                dataLength: blockData.count
+            )
+        }
+
+        guard status == noErr else {
             throw DemuxError.invalidData
         }
 
@@ -440,25 +467,49 @@ public struct FLVDemuxer: Sendable {
         frame: AudioFrame,
         formatDescription: CMAudioFormatDescription
     ) throws -> CMSampleBuffer {
-        // Create block buffer
+        // Create block buffer with copied data (important: data must be retained)
         var blockBuffer: CMBlockBuffer?
         let blockData = frame.data
 
-        let status = blockData.withUnsafeBytes { bufferPointer in
-            CMBlockBufferCreateWithMemoryBlock(
-                allocator: kCFAllocatorDefault,
-                memoryBlock: UnsafeMutableRawPointer(mutating: bufferPointer.baseAddress!),
-                blockLength: blockData.count,
-                blockAllocator: kCFAllocatorNull,
-                customBlockSource: nil,
-                offsetToData: 0,
-                dataLength: blockData.count,
-                flags: 0,
-                blockBufferOut: &blockBuffer
+        // First create an empty block buffer, then append data (which copies it)
+        var status = CMBlockBufferCreateEmpty(
+            allocator: kCFAllocatorDefault,
+            capacity: 0,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
+
+        guard status == noErr, let buffer = blockBuffer else {
+            throw DemuxError.invalidData
+        }
+
+        // Append data to block buffer - this allocates and copies
+        status = CMBlockBufferAppendMemoryBlock(
+            buffer,
+            memoryBlock: nil,  // nil = allocate new memory
+            length: blockData.count,
+            blockAllocator: kCFAllocatorDefault,
+            customBlockSource: nil,
+            offsetToData: 0,
+            dataLength: blockData.count,
+            flags: 0
+        )
+
+        guard status == noErr else {
+            throw DemuxError.invalidData
+        }
+
+        // Copy the actual data into the block buffer
+        status = blockData.withUnsafeBytes { bufferPointer in
+            CMBlockBufferReplaceDataBytes(
+                with: bufferPointer.baseAddress!,
+                blockBuffer: buffer,
+                offsetIntoDestination: 0,
+                dataLength: blockData.count
             )
         }
 
-        guard status == noErr, let buffer = blockBuffer else {
+        guard status == noErr else {
             throw DemuxError.invalidData
         }
 
