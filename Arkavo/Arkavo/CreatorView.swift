@@ -351,6 +351,7 @@ struct CreatorHeaderView: View {
     @EnvironmentObject var sharedState: SharedState
     @StateObject var viewModel: CreatorViewModel
     let onSupport: () -> Void
+    @State private var showingCreatorProfile = false
 
     private let profileImageSize: CGFloat = 80
     private let statsSpacing: CGFloat = 32
@@ -375,6 +376,17 @@ struct CreatorHeaderView: View {
             .frame(maxWidth: .infinity)
 
             HStack(spacing: 16) {
+                // View Full Profile button - shows creator profile from iroh.arkavo.net
+                Button {
+                    showingCreatorProfile = true
+                } label: {
+                    Label("View Full Profile", systemImage: "person.text.rectangle")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: buttonHeight)
+                }
+                .buttonStyle(.bordered)
+
                 Button {
                     // Support action
                 } label: {
@@ -386,22 +398,11 @@ struct CreatorHeaderView: View {
                 .buttonStyle(.bordered)
                 .disabled(true)
                 .opacity(0.5)
-
-                Button {
-                    // Protect action
-                } label: {
-                    Text("Protect")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: buttonHeight)
-                }
-                .buttonStyle(.bordered)
-                .disabled(true)
-                .opacity(0.5)
             }
             .padding(.horizontal)
+
             // Coming Soon Notice
-            Label("Support and Protect features will be available in an upcoming update.", systemImage: "info.circle")
+            Label("Support features will be available in an upcoming update.", systemImage: "info.circle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -411,6 +412,18 @@ struct CreatorHeaderView: View {
         }
         .padding()
         .background(Color(uiColor: .systemBackground))
+        .sheet(isPresented: $showingCreatorProfile) {
+            NavigationStack {
+                CreatorProfileDisplayView(publicID: viewModel.profile.publicID)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                showingCreatorProfile = false
+                            }
+                        }
+                    }
+            }
+        }
     }
 }
 
