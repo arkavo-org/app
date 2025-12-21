@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import SwiftUI
 
 // MARK: - Creator Profile View
@@ -529,7 +530,7 @@ private struct AddScheduleSlotSheet: View {
 // MARK: - Patron Tiers Section
 
 private struct PatronTiersSection: View {
-    @Binding var tiers: [PatronTier]
+    @Binding var tiers: [ArkavoSocial.PatronTier]
     @State private var showingAddTier = false
 
     var body: some View {
@@ -604,7 +605,7 @@ private struct AddPatronTierSheet: View {
     @State private var priceDollars = 5.0
     @State private var benefitsText = ""
 
-    let onAdd: (PatronTier) -> Void
+    let onAdd: (ArkavoSocial.PatronTier) -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -641,7 +642,7 @@ private struct AddPatronTierSheet: View {
                         .map { $0.trimmingCharacters(in: .whitespaces) }
                         .filter { !$0.isEmpty }
 
-                    let tier = PatronTier(
+                    let tier = ArkavoSocial.PatronTier(
                         name: name,
                         description: description,
                         priceCents: Int(priceDollars * 100),
@@ -763,3 +764,4 @@ struct FlowLayout: Layout {
         }
     }
 }
+
