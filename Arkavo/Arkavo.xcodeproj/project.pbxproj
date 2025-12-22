@@ -70,6 +70,7 @@
 		DAAC242F2EA3D99000E06FE1 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC242B2EA3D99000E06FE1 /* AgentService.swift */; };
 		DAAC24302EA3D99000E06FE1 /* AgentChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */; };
 		DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */; };
+		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
 		DAAFCBCE2D090740003FC56F /* GroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* GroupView.swift */; };
 		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
@@ -190,6 +191,7 @@
 		DAAC242A2EA3D99000E06FE1 /* AgentDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDiscoveryView.swift; sourceTree = "<group>"; };
 		DAAC242B2EA3D99000E06FE1 /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorView.swift; sourceTree = "<group>"; };
+		DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorProfileDisplayView.swift; sourceTree = "<group>"; };
 		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DAAFCBCD2D09073A003FC56F /* GroupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupView.swift; sourceTree = "<group>"; };
 		DAAFCBCF2D0907BD003FC56F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -331,6 +333,7 @@
 				DAAFCBCF2D0907BD003FC56F /* ChatView.swift */,
 				DA6C9E5D2D1DFE1E000CC3E5 /* ChatViewModel.swift */,
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
+				DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
@@ -642,6 +645,7 @@
 				DA6C9E5C2D1DCC9B000CC3E5 /* AppStoreScreenshotGenerator.swift in Sources */,
 				DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */,
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
+				DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */,
 				DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */,
 				DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */,
 				DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */,

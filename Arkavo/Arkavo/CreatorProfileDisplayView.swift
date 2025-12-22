@@ -341,10 +341,15 @@ class CreatorProfileDisplayViewModel: ObservableObject {
     @Published var profile: CreatorProfile?
     @Published var isLoading = true
     @Published var error: Error?
+    @Published var needsTicket = false
 
     private let publicID: Data
-    private let irohClient = IrohProfileClient()
     private let cacheKey: String
+
+    /// The profile service (from ArkavoIrohManager)
+    private var profileService: IrohProfileService? {
+        ArkavoIrohManager.shared.profileService
+    }
 
     init(publicID: Data) {
         self.publicID = publicID
@@ -352,6 +357,17 @@ class CreatorProfileDisplayViewModel: ObservableObject {
 
         Task {
             await loadProfile()
+        }
+    }
+
+    /// Initialize with a ticket string (for direct P2P fetch)
+    init(ticket: String) {
+        // Extract publicID from ticket if possible, or use placeholder
+        publicID = Data(repeating: 0, count: 32)
+        cacheKey = "creatorProfile_ticket_\(ticket.prefix(16))"
+
+        Task {
+            await loadProfileFromTicket(ticket)
         }
     }
 
@@ -367,13 +383,22 @@ class CreatorProfileDisplayViewModel: ObservableObject {
             isLoading = false
         }
 
-        // Then fetch from network
+        // Then try to fetch via cached ticket
         await refresh()
     }
 
-    func refresh() async {
+    func loadProfileFromTicket(_ ticket: String) async {
+        isLoading = true
+        error = nil
+
+        guard let service = profileService else {
+            error = IrohProfileError.nodeNotInitialized
+            isLoading = false
+            return
+        }
+
         do {
-            let fetchedProfile = try await irohClient.fetchProfile(publicID: publicID)
+            let fetchedProfile = try await service.fetchProfileWithRetry(ticket: ticket)
             profile = fetchedProfile
 
             // Cache the profile locally
@@ -381,9 +406,46 @@ class CreatorProfileDisplayViewModel: ObservableObject {
                 UserDefaults.standard.set(data, forKey: cacheKey)
             }
 
+            // Cache the ticket for future lookups
+            let profileTicket = ProfileTicket(
+                ticket: ticket,
+                publicID: fetchedProfile.publicID,
+                version: fetchedProfile.version
+            )
+            await ProfileTicketCache.shared.cache(profileTicket, for: fetchedProfile.publicID)
+
             isLoading = false
-        } catch IrohProfileError.profileNotFound {
-            // Profile doesn't exist yet
+        } catch {
+            self.error = error
+            isLoading = false
+        }
+    }
+
+    func refresh() async {
+        // Check if we have a cached ticket for this profile
+        guard let ticketString = await ProfileTicketCache.shared.ticketString(for: publicID) else {
+            // No cached ticket - need one from the creator
+            needsTicket = true
+            isLoading = false
+            return
+        }
+
+        guard let service = profileService else {
+            error = IrohProfileError.nodeNotInitialized
+            isLoading = false
+            return
+        }
+
+        do {
+            let fetchedProfile = try await service.fetchProfile(ticket: ticketString)
+            profile = fetchedProfile
+
+            // Cache the profile locally
+            if let data = try? fetchedProfile.toData() {
+                UserDefaults.standard.set(data, forKey: cacheKey)
+            }
+
+            needsTicket = false
             isLoading = false
         } catch {
             self.error = error

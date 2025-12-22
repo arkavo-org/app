@@ -8,13 +8,15 @@ import SwiftUI
 enum ProfileSyncState: Equatable {
     case idle
     case syncing
-    case synced
+    case synced(ticket: String)
     case error(String)
 
     static func == (lhs: ProfileSyncState, rhs: ProfileSyncState) -> Bool {
         switch (lhs, rhs) {
-        case (.idle, .idle), (.syncing, .syncing), (.synced, .synced):
+        case (.idle, .idle), (.syncing, .syncing):
             true
+        case let (.synced(l), .synced(r)):
+            l == r
         case let (.error(l), .error(r)):
             l == r
         default:
@@ -32,13 +34,18 @@ class CreatorProfileViewModel: ObservableObject {
     @Published var showError = false
     @Published var errorMessage: String?
     @Published var isSaving = false
+    @Published var lastTicket: ProfileTicket?
 
-    private let irohClient = IrohProfileClient()
     private let authState = ArkavoAuthState.shared
     private let draftKey = "CreatorProfileDraft"
 
     var canPublish: Bool {
-        !profile.displayName.isEmpty && authState.isAuthenticated
+        !profile.displayName.isEmpty && ArkavoIrohManager.shared.isReady
+    }
+
+    /// The profile service (from ArkavoIrohManager)
+    private var profileService: IrohProfileService? {
+        ArkavoIrohManager.shared.profileService
     }
 
     init() {
@@ -105,7 +112,13 @@ class CreatorProfileViewModel: ObservableObject {
 
     func publishProfile() async {
         guard canPublish else {
-            errorMessage = "Cannot publish: display name is required and you must be logged in"
+            errorMessage = "Cannot publish: display name is required and iroh must be initialized"
+            showError = true
+            return
+        }
+
+        guard let service = profileService else {
+            errorMessage = "Iroh node not initialized. Please wait and try again."
             showError = true
             return
         }
@@ -118,30 +131,19 @@ class CreatorProfileViewModel: ObservableObject {
         do {
             // Update metadata
             profile.updatedAt = Date()
-            profile.version += 1
 
             // Save draft first
             await saveDraft()
 
-            // Get authentication token
-            guard let token = KeychainManager.getAuthenticationToken() else {
-                throw IrohProfileError.notAuthenticated
-            }
+            // Publish via native iroh P2P
+            let ticket = try await service.updateProfile(profile)
 
-            // Check if profile exists
-            let existingProfile = try? await irohClient.fetchProfile(publicID: profile.publicID)
+            // Cache the ticket for future lookups
+            await ProfileTicketCache.shared.cache(ticket, for: profile.publicID)
 
-            let response: PublishProfileResponse
-            if existingProfile != nil {
-                // Update existing profile
-                response = try await irohClient.updateProfile(profile, token: token)
-            } else {
-                // Publish new profile
-                response = try await irohClient.publishProfile(profile, token: token)
-            }
-
-            print("Profile published with ticket: \(response.ticket)")
-            syncState = .synced
+            lastTicket = ticket
+            print("Profile published with ticket: \(ticket.ticket)")
+            syncState = .synced(ticket: ticket.ticket)
         } catch {
             syncState = .error(error.localizedDescription)
             showError = true
@@ -152,12 +154,19 @@ class CreatorProfileViewModel: ObservableObject {
     // MARK: - Refresh from Network
 
     func refreshFromNetwork() async {
-        guard authState.isAuthenticated else { return }
+        guard let service = profileService else { return }
+
+        // Check if we have a cached ticket for this profile
+        guard let ticketString = await ProfileTicketCache.shared.ticketString(for: profile.publicID) else {
+            // No cached ticket - can't refresh without one
+            syncState = .idle
+            return
+        }
 
         syncState = .syncing
 
         do {
-            let fetchedProfile = try await irohClient.fetchProfile(publicID: profile.publicID)
+            let fetchedProfile = try await service.fetchProfile(ticket: ticketString)
 
             // Update local profile with fetched data
             profile = fetchedProfile
@@ -165,10 +174,7 @@ class CreatorProfileViewModel: ObservableObject {
             // Save as draft
             await saveDraft()
 
-            syncState = .synced
-        } catch IrohProfileError.profileNotFound {
-            // Profile doesn't exist on server yet, that's okay
-            syncState = .idle
+            syncState = .synced(ticket: ticketString)
         } catch {
             syncState = .error(error.localizedDescription)
         }
