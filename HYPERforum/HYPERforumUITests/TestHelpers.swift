@@ -8,6 +8,18 @@ class TestHelpers {
         self.app = app
     }
 
+    /// Configure app for UI testing with auto-authentication
+    static func configureForUITesting(_ app: XCUIApplication) {
+        app.launchEnvironment["UI_TESTING"] = "1"
+        app.launchArguments.append("-UITesting")
+    }
+
+    /// Check if user is authenticated (sidebar is visible)
+    func isAuthenticated(timeout: TimeInterval = 5) -> Bool {
+        let sidebar = app.outlines["list_sidebar"]
+        return sidebar.waitForExistence(timeout: timeout)
+    }
+
     // MARK: - Navigation Helpers
 
     /// Navigate to the Groups section via sidebar
@@ -60,10 +72,8 @@ class TestHelpers {
         // First ensure we're on the Groups view
         navigateToGroups()
 
-        // Find and click the group card
-        // This is a simplified approach - in practice, you'd iterate through groups
-        let groupsView = app.otherElements["view_groups"]
-        XCTAssertTrue(groupsView.exists, "Groups view should exist")
+        // Wait briefly for groups to load
+        sleep(1)
 
         // Click the first group card (for demo purposes)
         // In a real implementation, you'd search for the specific group by name

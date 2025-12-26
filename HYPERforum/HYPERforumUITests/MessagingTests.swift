@@ -9,6 +9,7 @@ final class MessagingTests: XCTestCase {
         continueAfterFailure = false
 
         app = XCUIApplication()
+        TestHelpers.configureForUITesting(app)
         app.launch()
 
         helpers = TestHelpers(app: app)
@@ -16,9 +17,7 @@ final class MessagingTests: XCTestCase {
         // Wait for app to be ready
         sleep(2)
 
-        // NOTE: These tests assume the user is already authenticated
-        // In a real test suite, you'd perform authentication first
-        // or use a test account that's already set up
+        // With -UITesting flag, app auto-authenticates as test user
     }
 
     override func tearDownWithError() throws {

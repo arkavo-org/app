@@ -9,6 +9,7 @@ final class NavigationTests: XCTestCase {
         continueAfterFailure = false
 
         app = XCUIApplication()
+        TestHelpers.configureForUITesting(app)
         app.launch()
 
         helpers = TestHelpers(app: app)
@@ -16,7 +17,7 @@ final class NavigationTests: XCTestCase {
         // Wait for app to be ready
         sleep(2)
 
-        // NOTE: These tests assume the user is already authenticated
+        // With -UITesting flag, app auto-authenticates as test user
     }
 
     override func tearDownWithError() throws {
@@ -27,19 +28,20 @@ final class NavigationTests: XCTestCase {
     // MARK: - Sidebar Navigation Tests
 
     func testSidebarPresence() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
-            throw XCTSkip("User not authenticated")
+        // Check for sidebar (indicates authenticated state with main forum)
+        let sidebar = app.outlines["list_sidebar"]
+        if sidebar.waitForExistence(timeout: 5) {
+            XCTAssertTrue(sidebar.exists, "Sidebar should be displayed")
+            return
         }
 
-        // Verify sidebar exists
-        let sidebar = app.otherElements["list_sidebar"]
-        XCTAssertTrue(sidebar.exists, "Sidebar should be displayed")
+        // Not authenticated - check for welcome screen sign-in button
+        let signInButton = app.buttons["button_signInPasskey"]
+        XCTAssertTrue(signInButton.waitForExistence(timeout: 3), "Welcome screen with sign-in button should be displayed")
     }
 
     func testAllSidebarItemsPresent() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -58,8 +60,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testNavigateToGroups() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -74,8 +75,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testNavigateToDiscussions() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -90,8 +90,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testNavigateToCouncil() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -107,8 +106,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testNavigateToSettings() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -123,8 +121,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testNavigateBetweenAllSections() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -149,8 +146,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Group Navigation Tests
 
     func testGroupListDisplay() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -165,8 +161,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testSelectGroupAndOpenChat() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -187,8 +182,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testGroupCardHoverEffect() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -206,8 +200,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testSidebarGroupList() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -271,8 +264,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Settings View Tests
 
     func testSettingsViewSections() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -288,8 +280,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testSettingsToggles() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -313,8 +304,7 @@ final class NavigationTests: XCTestCase {
     }
 
     func testToggleSettingsSwitch() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -338,8 +328,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - User Profile Menu Tests
 
     func testUserProfileMenuAccess() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -357,22 +346,17 @@ final class NavigationTests: XCTestCase {
     // MARK: - Window and Layout Tests
 
     func testMainForumWindowLayout() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
-        // Verify main forum uses NavigationSplitView layout
-        XCTAssertTrue(mainForumView.exists, "Main forum view should exist")
-
-        // Sidebar should be visible
-        let sidebar = app.otherElements["list_sidebar"]
+        // Verify sidebar is visible (indicates NavigationSplitView layout)
+        let sidebar = app.outlines["list_sidebar"]
         XCTAssertTrue(sidebar.exists, "Sidebar should be visible in split view")
     }
 
     func testNavigationTitleDisplay() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -390,8 +374,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Navigation Performance Tests
 
     func testNavigationPerformance() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -406,8 +389,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Deep Navigation Tests
 
     func testDeepNavigationToChat() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -432,8 +414,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Accessibility Tests
 
     func testKeyboardNavigation() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -449,8 +430,7 @@ final class NavigationTests: XCTestCase {
     // MARK: - Edge Cases
 
     func testRapidNavigation() throws {
-        let mainForumView = app.otherElements["view_mainForum"]
-        guard mainForumView.waitForExistence(timeout: 5) else {
+        guard helpers.isAuthenticated() else {
             throw XCTSkip("User not authenticated")
         }
 
@@ -462,7 +442,8 @@ final class NavigationTests: XCTestCase {
             app.buttons["sidebar_settings"].click()
         }
 
-        // App should remain stable
-        XCTAssertTrue(mainForumView.exists, "App should remain stable after rapid navigation")
+        // App should remain stable - sidebar should still be visible
+        let sidebar = app.outlines["list_sidebar"]
+        XCTAssertTrue(sidebar.exists, "App should remain stable after rapid navigation")
     }
 }

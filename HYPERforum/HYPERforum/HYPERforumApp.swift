@@ -59,6 +59,9 @@ struct HYPERforumApp: App {
                         windowAccessor.window = NSApplication.shared.windows.first { $0.isVisible }
                     }
 
+                    // Skip real network operations in UI test mode
+                    guard !AppState.isUITesting else { return }
+
                     // Reconnect WebSocket if user is authenticated
                     if appState.isAuthenticated, let user = appState.currentUser {
                         Task {
@@ -116,7 +119,45 @@ class AppState: ObservableObject {
     @Published var selectedGroup: String?
     @Published var showCouncil: Bool = false
 
+    /// Check if running in UI testing mode (computed once, thread-safe)
+    static let isUITesting: Bool = {
+        let args = CommandLine.arguments
+        let env = ProcessInfo.processInfo.environment
+
+        // Check for explicit UI testing flag in arguments
+        if args.contains("-UITesting") || args.contains("--UITesting") {
+            return true
+        }
+        // Check environment variable (set by XCUITest launchEnvironment)
+        if env["UI_TESTING"] == "1" {
+            return true
+        }
+        // Check for XCTest bundle in arguments (reliable indicator)
+        if args.contains(where: { $0.contains("XCTest") || $0.contains("xctest") }) {
+            return true
+        }
+
+        return false
+    }()
+
+    /// Test user for UI testing (can be overridden via environment)
+    static var testUser: String {
+        ProcessInfo.processInfo.environment["UI_TEST_USER"] ?? "ui_test_user"
+    }
+
     init() {
+        loadAuthState()
+    }
+
+    /// Load authentication state - can be called again after app launch
+    func loadAuthState() {
+        // Auto-authenticate in UI testing mode
+        if AppState.isUITesting {
+            isAuthenticated = true
+            currentUser = AppState.testUser
+            return
+        }
+
         // Load saved state from Keychain
         if let credentials = KeychainManager.getArkavoCredentials() {
             isAuthenticated = true
