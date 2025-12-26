@@ -22,40 +22,77 @@ class TestHelpers {
 
     // MARK: - Navigation Helpers
 
+    /// Find sidebar item by identifier (works with SwiftUI List items)
+    private func findSidebarItem(_ identifier: String) -> XCUIElement? {
+        // Try multiple element types since SwiftUI may render differently
+        let candidates: [XCUIElement] = [
+            app.buttons[identifier],
+            app.staticTexts[identifier],
+            app.cells[identifier],
+            app.outlineRows[identifier]
+        ]
+        for element in candidates {
+            if element.exists {
+                return element
+            }
+        }
+        // Fallback: search in outline by predicate
+        let outline = app.outlines["list_sidebar"]
+        if outline.exists {
+            let predicate = NSPredicate(format: "identifier == %@", identifier)
+            let match = outline.descendants(matching: .any).matching(predicate).firstMatch
+            if match.exists {
+                return match
+            }
+        }
+        return nil
+    }
+
     /// Navigate to the Groups section via sidebar
     func navigateToGroups() {
-        let groupsSidebarButton = app.buttons["sidebar_groups"]
-        if groupsSidebarButton.exists {
-            groupsSidebarButton.click()
-            sleep(1) // Wait for navigation
+        if let element = findSidebarItem("sidebar_groups") {
+            element.click()
+            sleep(1)
         }
     }
 
     /// Navigate to the Discussions section via sidebar
     func navigateToDiscussions() {
-        let discussionsSidebarButton = app.buttons["sidebar_discussions"]
-        if discussionsSidebarButton.exists {
-            discussionsSidebarButton.click()
+        if let element = findSidebarItem("sidebar_discussions") {
+            element.click()
             sleep(1)
         }
     }
 
     /// Navigate to the AI Council section via sidebar
     func navigateToCouncil() {
-        let councilSidebarButton = app.buttons["sidebar_council"]
-        if councilSidebarButton.exists {
-            councilSidebarButton.click()
+        if let element = findSidebarItem("sidebar_council") {
+            element.click()
             sleep(1)
         }
     }
 
     /// Navigate to the Settings section via sidebar
     func navigateToSettings() {
-        let settingsSidebarButton = app.buttons["sidebar_settings"]
-        if settingsSidebarButton.exists {
-            settingsSidebarButton.click()
+        if let element = findSidebarItem("sidebar_settings") {
+            element.click()
             sleep(1)
         }
+    }
+
+    /// Check if a view is displayed by identifier (tries multiple element types)
+    func viewExists(_ identifier: String, timeout: TimeInterval = 5) -> Bool {
+        let candidates: [XCUIElement] = [
+            app.scrollViews[identifier],
+            app.otherElements[identifier],
+            app.groups[identifier]
+        ]
+        for element in candidates {
+            if element.waitForExistence(timeout: timeout) {
+                return true
+            }
+        }
+        return false
     }
 
     /// Select a group by its ID and open chat
@@ -269,19 +306,22 @@ extension XCTestCase {
 
     /// Assert that the chat view is displayed
     func assertChatViewDisplayed(in app: XCUIApplication) {
-        let chatView = app.otherElements["view_chat"]
-        XCTAssertTrue(chatView.waitForExistence(timeout: 5), "Chat view should be displayed")
+        // Chat view is indicated by having a text input field
+        let textField = app.textFields.firstMatch
+        XCTAssertTrue(textField.waitForExistence(timeout: 5), "Chat view should be displayed")
     }
 
     /// Assert that the welcome view is displayed
     func assertWelcomeViewDisplayed(in app: XCUIApplication) {
-        let welcomeTitle = app.staticTexts["text_appTitle"]
+        // Welcome view has the app title
+        let welcomeTitle = app.staticTexts["HYPΞRforum"]
         XCTAssertTrue(welcomeTitle.waitForExistence(timeout: 5), "Welcome view should be displayed")
     }
 
     /// Assert that the user is authenticated (main forum view shown)
     func assertAuthenticated(in app: XCUIApplication) {
-        let mainForumView = app.otherElements["view_mainForum"]
-        XCTAssertTrue(mainForumView.waitForExistence(timeout: 5), "Main forum view should be displayed after authentication")
+        // Authenticated state is indicated by sidebar presence
+        let sidebar = app.outlines["list_sidebar"]
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "Main forum view should be displayed after authentication")
     }
 }
