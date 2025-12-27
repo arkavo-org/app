@@ -7,14 +7,14 @@ struct RecordingsLibraryView: View {
     @State private var showingPlayer = false
     @State private var showingProvenance = false
     @State private var showingDeleteConfirmation = false
-    @State private var showingProtectedPlayer = false
+    @State private var protectedPlayerRecording: Recording?  // Dedicated state for protected player
     @State private var isProtecting = false
     @State private var protectionError: String?
     @State private var showingProtectionError = false
     @State private var recordingToDelete: Recording?
     @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
 
-    private let kasURL = URL(string: "https://kas.arkavo.net")!
+    private let kasURL = URL(string: "https://100.arkavo.net")!
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,10 +55,8 @@ struct RecordingsLibraryView: View {
                 ProvenanceView(recording: recording)
             }
         }
-        .sheet(isPresented: $showingProtectedPlayer) {
-            if let recording = selectedRecording {
-                ProtectedVideoPlayerView(recording: recording, kasURL: kasURL)
-            }
+        .sheet(item: $protectedPlayerRecording) { recording in
+            ProtectedVideoPlayerView(recording: recording, kasURL: kasURL)
         }
         .task {
             await manager.loadRecordings()
@@ -170,8 +168,8 @@ struct RecordingsLibraryView: View {
 
         if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
-                selectedRecording = recording
-                showingProtectedPlayer = true
+                print("🎬 Opening protected player for: \(recording.title)")
+                protectedPlayerRecording = recording
             } label: {
                 Label("Play Protected (FairPlay)", systemImage: "play.tv")
             }
@@ -425,6 +423,12 @@ struct ProtectedVideoPlayerView: View {
     @State private var errorMessage: String?
     @State private var manifestInfo: ManifestInfo?
 
+    init(recording: Recording, kasURL: URL) {
+        self.recording = recording
+        self.kasURL = kasURL
+        print("🎬 ProtectedVideoPlayerView initialized for: \(recording.title)")
+    }
+
     struct ManifestInfo {
         let algorithm: String
         let kasURL: String
@@ -548,18 +552,25 @@ struct ProtectedVideoPlayerView: View {
             }
             .padding()
         }
+        .accessibilityIdentifier("ProtectedPlayerView")
         .task {
             await loadManifest()
         }
     }
 
     private func loadManifest() async {
+        print("📂 Loading manifest from: \(recording.tdfURL.path)")
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            print("📂 Manifest loading complete. isLoading = false")
+        }
 
         do {
             // Extract manifest from TDF ZIP archive
+            print("📦 Extracting manifest from TDF archive...")
             let json = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
+            print("✅ Manifest extracted successfully: \(json.keys)")
 
             // Parse manifest
             let encInfo = json["encryptionInformation"] as? [String: Any]
@@ -585,7 +596,9 @@ struct ProtectedVideoPlayerView: View {
                 protectedAt: protectedAt,
                 payloadSize: tdfSizeString
             )
+            print("✅ Manifest parsed: algorithm=\(algorithm), size=\(tdfSizeString)")
         } catch {
+            print("❌ Manifest loading error: \(error)")
             errorMessage = error.localizedDescription
         }
     }

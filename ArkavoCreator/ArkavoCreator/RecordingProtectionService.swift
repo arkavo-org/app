@@ -1,6 +1,7 @@
 import CommonCrypto
 import CryptoKit
 import Foundation
+import ZIPFoundation
 
 /// TDF3-based content protection service for FairPlay-compatible video encryption (macOS)
 ///
@@ -52,46 +53,39 @@ public actor RecordingProtectionService {
     // MARK: - TDF Archive Creation
 
     private func createTDFArchive(manifest: Data, payload: Data) throws -> Data {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let archivePath = tempDir.appendingPathExtension("tdf")
+        let archivePath = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).tdf")
 
-        do {
-            // Create temp directory with TDF contents
-            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-            try manifest.write(to: tempDir.appendingPathComponent("manifest.json"))
-            try payload.write(to: tempDir.appendingPathComponent("0.payload"))
-
-            // Create ZIP archive using ditto
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", "--keepParent", tempDir.path, archivePath.path]
-
-            try process.run()
-            process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else {
-                throw RecordingProtectionError.archiveCreationFailed
-            }
-
-            // Read the archive
-            let archiveData = try Data(contentsOf: archivePath)
-
-            // Cleanup
-            try? FileManager.default.removeItem(at: tempDir)
+        defer {
             try? FileManager.default.removeItem(at: archivePath)
+        }
 
-            return archiveData
-        } catch let error as RecordingProtectionError {
-            // Cleanup on error
-            try? FileManager.default.removeItem(at: tempDir)
-            try? FileManager.default.removeItem(at: archivePath)
-            throw error
-        } catch {
-            // Cleanup on error
-            try? FileManager.default.removeItem(at: tempDir)
-            try? FileManager.default.removeItem(at: archivePath)
+        // Create ZIP archive using ZIPFoundation
+        guard let archive = Archive(url: archivePath, accessMode: .create) else {
             throw RecordingProtectionError.archiveCreationFailed
         }
+
+        // Add manifest.json
+        try archive.addEntry(
+            with: "manifest.json",
+            type: .file,
+            uncompressedSize: Int64(manifest.count),
+            provider: { position, size in
+                manifest.subdata(in: Int(position)..<Int(position) + size)
+            }
+        )
+
+        // Add 0.payload
+        try archive.addEntry(
+            with: "0.payload",
+            type: .file,
+            uncompressedSize: Int64(payload.count),
+            provider: { position, size in
+                payload.subdata(in: Int(position)..<Int(position) + size)
+            }
+        )
+
+        // Read the archive data
+        return try Data(contentsOf: archivePath)
     }
 
     // MARK: - Key Generation
@@ -178,7 +172,7 @@ public actor RecordingProtectionService {
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let publicKey = json["publicKey"] as? String
+              let publicKey = json["public_key"] as? String
         else {
             throw RecordingProtectionError.invalidKASResponse
         }
@@ -332,40 +326,21 @@ public enum TDFArchiveReader {
     /// - Parameter tdfURL: URL to the .tdf file
     /// - Returns: Parsed manifest as dictionary
     public static func extractManifest(from tdfURL: URL) throws -> [String: Any] {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-        }
-
-        // Extract using ditto
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        process.arguments = ["-x", "-k", tdfURL.path, tempDir.path]
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
+        guard let archive = Archive(url: tdfURL, accessMode: .read) else {
             throw RecordingProtectionError.invalidTDFArchive
         }
 
-        // Find manifest.json (may be in a subdirectory due to --keepParent)
-        let enumerator = FileManager.default.enumerator(at: tempDir, includingPropertiesForKeys: nil)
-        var manifestURL: URL?
-
-        while let fileURL = enumerator?.nextObject() as? URL {
-            if fileURL.lastPathComponent == "manifest.json" {
-                manifestURL = fileURL
-                break
-            }
-        }
-
-        guard let manifestURL else {
+        // Find manifest.json entry
+        guard let manifestEntry = archive["manifest.json"] else {
             throw RecordingProtectionError.invalidTDFArchive
         }
 
-        let manifestData = try Data(contentsOf: manifestURL)
+        // Extract manifest data
+        var manifestData = Data()
+        _ = try archive.extract(manifestEntry) { data in
+            manifestData.append(data)
+        }
+
         guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any] else {
             throw RecordingProtectionError.invalidTDFArchive
         }

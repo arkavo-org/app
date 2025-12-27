@@ -229,22 +229,32 @@ final class RecordingsManager: ObservableObject {
 
     /// Protect a recording with TDF3 for FairPlay streaming
     func protectRecording(_ recording: Recording, kasURL: URL) async throws {
-        // Load video data
-        let videoData = try Data(contentsOf: recording.url)
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
 
-        // Create protection service
-        let protectionService = RecordingProtectionService(kasURL: kasURL)
+        // Move heavy work off main thread to avoid blocking UI
+        try await Task.detached(priority: .userInitiated) {
+            // Load video data (potentially large file)
+            print("📂 Loading video data from: \(videoURL.path)")
+            let videoData = try Data(contentsOf: videoURL)
+            print("📂 Loaded \(videoData.count) bytes")
 
-        // Protect the video - returns TDF ZIP archive
-        let tdfArchive = try await protectionService.protectVideo(
-            videoData: videoData,
-            assetID: recording.id.uuidString
-        )
+            // Create protection service and encrypt
+            let protectionService = RecordingProtectionService(kasURL: kasURL)
+            print("🔐 Starting TDF3 protection...")
+            let tdfArchive = try await protectionService.protectVideo(
+                videoData: videoData,
+                assetID: assetID
+            )
+            print("✅ TDF archive created: \(tdfArchive.count) bytes")
 
-        // Write TDF archive
-        try tdfArchive.write(to: recording.tdfURL)
-
-        print("Protected recording: \(recording.title)")
-        print("  TDF archive: \(recording.tdfURL.path)")
+            // Write TDF archive
+            try tdfArchive.write(to: tdfURL)
+            print("💾 Protected recording: \(title)")
+            print("💾 TDF archive: \(tdfURL.path)")
+        }.value
     }
 }
