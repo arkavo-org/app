@@ -20,7 +20,7 @@ final class CameraPreviewStore: ObservableObject {
     }
 
     var availableSources: [String] {
-        Array(images.keys).sorted()
+        return Array(images.keys).sorted()
     }
 }
 

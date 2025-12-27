@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import ArkavoSocial
 
 struct RecordingsLibraryView: View {
     @StateObject private var manager = RecordingsManager()
@@ -7,8 +8,21 @@ struct RecordingsLibraryView: View {
     @State private var showingPlayer = false
     @State private var showingProvenance = false
     @State private var showingDeleteConfirmation = false
+    @State private var protectedPlayerRecording: Recording?  // Dedicated state for protected player
+    @State private var isProtecting = false
+    @State private var protectionError: String?
+    @State private var showingProtectionError = false
     @State private var recordingToDelete: Recording?
     @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
+
+    // Iroh publishing state
+    @State private var isPublishing = false
+    @State private var publishError: String?
+    @State private var showingPublishError = false
+    @State private var publishedTicket: ContentTicket?
+    @State private var showingPublishSuccess = false
+
+    private let kasURL = URL(string: "https://100.arkavo.net")!
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +39,7 @@ struct RecordingsLibraryView: View {
                     LazyVGrid(columns: gridColumns, spacing: 16) {
                         ForEach(manager.recordings) { recording in
                             RecordingCard(recording: recording)
+                                .accessibilityIdentifier("RecordingCard_\(recording.id)")
                                 .onTapGesture {
                                     selectedRecording = recording
                                     showingPlayer = true
@@ -48,6 +63,9 @@ struct RecordingsLibraryView: View {
                 ProvenanceView(recording: recording)
             }
         }
+        .sheet(item: $protectedPlayerRecording) { recording in
+            ProtectedVideoPlayerView(recording: recording, kasURL: kasURL)
+        }
         .task {
             await manager.loadRecordings()
         }
@@ -61,6 +79,58 @@ struct RecordingsLibraryView: View {
         } message: {
             if let recording = recordingToDelete {
                 Text("Are you sure you want to permanently delete \"\(recording.title)\"? This action cannot be undone.")
+            }
+        }
+        .alert("Protection Error", isPresented: $showingProtectionError) {
+            Button("OK") {
+                protectionError = nil
+            }
+        } message: {
+            if let error = protectionError {
+                Text(error)
+            }
+        }
+        .alert("Publish Error", isPresented: $showingPublishError) {
+            Button("OK") {
+                publishError = nil
+            }
+        } message: {
+            if let error = publishError {
+                Text(error)
+            }
+        }
+        .alert("Published to Network", isPresented: $showingPublishSuccess) {
+            Button("Copy Ticket") {
+                if let ticket = publishedTicket {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ticket.ticket, forType: .string)
+                }
+            }
+            Button("OK", role: .cancel) {
+                publishedTicket = nil
+            }
+        } message: {
+            Text("Content published successfully. Share the ticket to allow others to access this content.")
+        }
+        .overlay {
+            if isProtecting || isPublishing {
+                ZStack {
+                    Color.black.opacity(0.5)
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text(isProtecting ? "Protecting video..." : "Publishing to network...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text(isProtecting ? "Encrypting with TDF3 for FairPlay streaming" : "Uploading TDF content via Iroh P2P")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding(32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .ignoresSafeArea()
+                .accessibilityIdentifier(isProtecting ? "ProtectionOverlay" : "PublishingOverlay")
             }
         }
     }
@@ -114,6 +184,56 @@ struct RecordingsLibraryView: View {
             showingPlayer = true
         }
 
+        Divider()
+
+        // TDF3 Protection options
+        Button {
+            Task {
+                await protectRecording(recording)
+            }
+        } label: {
+            Label("Protect with TDF3", systemImage: "lock.shield")
+        }
+        .disabled(isProtecting)
+
+        if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
+            Button {
+                print("🎬 Opening protected player for: \(recording.title)")
+                protectedPlayerRecording = recording
+            } label: {
+                Label("Play Protected (FairPlay)", systemImage: "play.tv")
+            }
+
+            Button {
+                NSWorkspace.shared.selectFile(recording.tdfURL.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Label("Show TDF Archive", systemImage: "doc.zipper")
+            }
+
+            Divider()
+
+            // Iroh P2P Publishing
+            Button {
+                Task {
+                    await publishToIroh(recording)
+                }
+            } label: {
+                Label("Publish to Network", systemImage: "globe")
+            }
+            .disabled(isPublishing || !ArkavoIrohManager.shared.isReady)
+
+            if recording.irohStatus.isPublished, let ticket = recording.irohStatus.contentTicket {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ticket.ticket, forType: .string)
+                } label: {
+                    Label("Copy Content Ticket", systemImage: "doc.on.doc")
+                }
+            }
+        }
+
+        Divider()
+
         Button("View Provenance") {
             selectedRecording = recording
             showingProvenance = true
@@ -138,6 +258,79 @@ struct RecordingsLibraryView: View {
         }
     }
 
+    /// Protect a recording with TDF3
+    private func protectRecording(_ recording: Recording) async {
+        isProtecting = true
+        defer { isProtecting = false }
+
+        do {
+            try await manager.protectRecording(recording, kasURL: kasURL)
+            await manager.loadRecordings() // Refresh to show protection status
+        } catch {
+            protectionError = error.localizedDescription
+            showingProtectionError = true
+        }
+    }
+
+    /// Publish a TDF-protected recording to the Iroh P2P network
+    private func publishToIroh(_ recording: Recording) async {
+        isPublishing = true
+        defer { isPublishing = false }
+
+        guard let contentService = ArkavoIrohManager.shared.contentService else {
+            publishError = "Iroh node not initialized. Please try again later."
+            showingPublishError = true
+            return
+        }
+
+        do {
+            // Read TDF archive data
+            let tdfData = try Data(contentsOf: recording.tdfURL)
+
+            // Extract manifest from TDF
+            let manifestJSON = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
+            let manifestLite = try TDFManifestLite.from(manifestJSON: manifestJSON)
+
+            // Build TDFContentInfo
+            let contentInfo = TDFContentInfo(
+                id: recording.id,
+                tdfData: tdfData,
+                manifest: manifestLite,
+                title: recording.title,
+                mimeType: "video/quicktime",
+                durationSeconds: recording.duration,
+                originalFileSize: recording.fileSize,
+                createdAt: recording.date
+            )
+
+            // Get creator public ID (use a placeholder for now - should come from authenticated user)
+            // TODO: Get actual creator publicID from authenticated profile
+            let creatorPublicID = Data(repeating: 0, count: 32)
+
+            // Publish to Iroh
+            print("🌐 Publishing to Iroh network...")
+            let ticket = try await contentService.publishContentWithRetry(
+                info: contentInfo,
+                creatorPublicID: creatorPublicID
+            )
+            print("✅ Published with ticket: \(ticket.ticket)")
+
+            // Cache the ticket
+            await ContentTicketCache.shared.cache(ticket, for: ticket.contentID)
+
+            // Show success
+            publishedTicket = ticket
+            showingPublishSuccess = true
+
+            // Refresh recordings to update status
+            await manager.loadRecordings()
+        } catch {
+            print("❌ Publish error: \(error)")
+            publishError = error.localizedDescription
+            showingPublishError = true
+        }
+    }
+
     /// Performs the actual deletion after confirmation
     private func confirmDelete() {
         guard let recording = recordingToDelete else { return }
@@ -152,6 +345,7 @@ struct RecordingCard: View {
     let recording: Recording
     @State private var thumbnail: NSImage?
     @State private var c2paStatus: Recording.C2PAStatus?
+    @State private var tdfStatus: Recording.TDFProtectionStatus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -174,9 +368,27 @@ struct RecordingCard: View {
                         }
                 }
 
-                // C2PA Badge (top-left)
+                // Badges (top-left)
                 VStack {
-                    HStack {
+                    HStack(spacing: 4) {
+                        // TDF Badge
+                        if let status = tdfStatus, status.isProtected {
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.caption2)
+                                Text("TDF3")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.blue.opacity(0.9))
+                            .foregroundColor(.white)
+                            .cornerRadius(4)
+                            .accessibilityIdentifier("TDF3Badge")
+                        }
+
+                        // C2PA Badge
                         if let status = c2paStatus, status.isSigned {
                             HStack(spacing: 4) {
                                 Image(systemName: status.isValid ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
@@ -190,10 +402,10 @@ struct RecordingCard: View {
                             .background(status.isValid ? Color.green.opacity(0.9) : Color.orange.opacity(0.9))
                             .foregroundColor(.white)
                             .cornerRadius(4)
-                            .padding(8)
                         }
                         Spacer()
                     }
+                    .padding(8)
                     Spacer()
                 }
 
@@ -249,6 +461,8 @@ struct RecordingCard: View {
         }
         // Check C2PA status
         c2paStatus = await manager.verifyC2PA(for: recording)
+        // Check TDF protection status
+        tdfStatus = await manager.checkTDFStatus(for: recording)
     }
 }
 
@@ -305,6 +519,213 @@ struct VideoPlayerView: View {
                     .font(.caption)
             }
             .padding()
+        }
+    }
+}
+
+// MARK: - Protected Video Player (FairPlay)
+
+struct ProtectedVideoPlayerView: View {
+    let recording: Recording
+    let kasURL: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var manifestInfo: ManifestInfo?
+
+    init(recording: Recording, kasURL: URL) {
+        self.recording = recording
+        self.kasURL = kasURL
+        print("🎬 ProtectedVideoPlayerView initialized for: \(recording.title)")
+    }
+
+    struct ManifestInfo {
+        let algorithm: String
+        let kasURL: String
+        let protectedAt: String
+        let payloadSize: String
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(recording.title)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+
+                    HStack(spacing: 8) {
+                        Label("TDF3 Protected", systemImage: "lock.shield.fill")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+
+                        if let info = manifestInfo {
+                            Text(info.algorithm)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+
+            Divider()
+
+            // Content
+            if isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Loading protected content...")
+                        .foregroundColor(.secondary)
+                }
+                .frame(minWidth: 800, minHeight: 600)
+            } else if let error = errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
+
+                    Text("Playback Error")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+
+                    Text(error)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .frame(minWidth: 800, minHeight: 600)
+            } else {
+                // Protected content info (actual FairPlay playback requires server integration)
+                VStack(spacing: 24) {
+                    Image(systemName: "play.tv.fill")
+                        .font(.system(size: 64))
+                        .foregroundColor(.blue)
+
+                    Text("FairPlay Protected Content")
+                        .font(.title)
+                        .fontWeight(.semibold)
+
+                    if let info = manifestInfo {
+                        VStack(alignment: .leading, spacing: 12) {
+                            InfoRow(label: "Encryption", value: info.algorithm)
+                            InfoRow(label: "KAS Server", value: info.kasURL)
+                            InfoRow(label: "Protected At", value: info.protectedAt)
+                            InfoRow(label: "TDF Size", value: info.payloadSize)
+                        }
+                        .padding()
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(12)
+                    }
+
+                    Text("To play this content, a FairPlay license must be obtained from the KAS server.\nThe client app will request a CKC (Content Key Context) using the TDF manifest.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    HStack(spacing: 16) {
+                        Button("Show TDF Archive") {
+                            NSWorkspace.shared.selectFile(recording.tdfURL.path, inFileViewerRootedAtPath: "")
+                        }
+                    }
+                }
+                .frame(minWidth: 800, minHeight: 600)
+            }
+
+            Divider()
+
+            // Footer
+            HStack(spacing: 16) {
+                if let info = manifestInfo {
+                    Label(info.algorithm, systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Text(recording.formattedFileSize)
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .padding()
+        }
+        .accessibilityIdentifier("ProtectedPlayerView")
+        .task {
+            await loadManifest()
+        }
+    }
+
+    private func loadManifest() async {
+        print("📂 Loading manifest from: \(recording.tdfURL.path)")
+        isLoading = true
+        defer {
+            isLoading = false
+            print("📂 Manifest loading complete. isLoading = false")
+        }
+
+        do {
+            // Extract manifest from TDF ZIP archive
+            print("📦 Extracting manifest from TDF archive...")
+            let json = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
+            print("✅ Manifest extracted successfully: \(json.keys)")
+
+            // Parse manifest
+            let encInfo = json["encryptionInformation"] as? [String: Any]
+            let method = encInfo?["method"] as? [String: Any]
+            let keyAccess = (encInfo?["keyAccess"] as? [[String: Any]])?.first
+            let meta = json["meta"] as? [String: Any]
+
+            let algorithm = method?["algorithm"] as? String ?? "Unknown"
+            let kasURLString = keyAccess?["url"] as? String ?? "Unknown"
+            let protectedAt = meta?["protectedAt"] as? String ?? "Unknown"
+
+            // Get TDF archive size
+            let tdfAttrs = try? FileManager.default.attributesOfItem(atPath: recording.tdfURL.path)
+            let tdfSize = tdfAttrs?[.size] as? Int64 ?? 0
+            let formatter = ByteCountFormatter()
+            formatter.allowedUnits = [.useMB, .useGB]
+            formatter.countStyle = .file
+            let tdfSizeString = formatter.string(fromByteCount: tdfSize)
+
+            manifestInfo = ManifestInfo(
+                algorithm: algorithm,
+                kasURL: kasURLString,
+                protectedAt: protectedAt,
+                payloadSize: tdfSizeString
+            )
+            print("✅ Manifest parsed: algorithm=\(algorithm), size=\(tdfSizeString)")
+        } catch {
+            print("❌ Manifest loading error: \(error)")
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.secondary)
+                .frame(width: 120, alignment: .trailing)
+            Text(value)
+                .fontWeight(.medium)
+            Spacer()
         }
     }
 }

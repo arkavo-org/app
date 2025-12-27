@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import AppKit
+import ArkavoSocial
 // C2PA support temporarily disabled
 // import ArkavoC2PA
 
@@ -21,6 +22,8 @@ struct Recording: Identifiable, Sendable {
     let fileSize: Int64
     let thumbnailPath: URL?
     var c2paStatus: C2PAStatus?
+    var tdfStatus: TDFProtectionStatus?
+    var irohStatus: IrohPublishStatus = .unpublished
 
     enum C2PAStatus: Sendable {
         case signed(validatedAt: Date, isValid: Bool)
@@ -40,6 +43,54 @@ struct Recording: Identifiable, Sendable {
             }
             return false
         }
+    }
+
+    /// TDF3 protection status for FairPlay streaming
+    enum TDFProtectionStatus: Sendable {
+        case protected(tdfURL: URL, protectedAt: Date)
+        case unprotected
+        case unknown
+
+        var isProtected: Bool {
+            if case .protected = self {
+                return true
+            }
+            return false
+        }
+
+        var tdfURL: URL? {
+            if case .protected(let url, _) = self {
+                return url
+            }
+            return nil
+        }
+    }
+
+    /// Iroh P2P publish status for TDF content
+    enum IrohPublishStatus: Sendable {
+        case unpublished
+        case publishing
+        case published(ticket: ContentTicket)
+        case failed(String)
+
+        var isPublished: Bool {
+            if case .published = self {
+                return true
+            }
+            return false
+        }
+
+        var contentTicket: ContentTicket? {
+            if case .published(let ticket) = self {
+                return ticket
+            }
+            return nil
+        }
+    }
+
+    /// URL of the TDF3 archive (ZIP containing manifest.json + 0.payload)
+    var tdfURL: URL {
+        url.deletingPathExtension().appendingPathExtension("tdf")
     }
 
     var formattedDuration: String {
@@ -182,5 +233,52 @@ final class RecordingsManager: ObservableObject {
         // C2PA verification temporarily disabled - c2patool not available
         // TODO: Re-enable when c2patool is bundled with the app
         return .unsigned
+    }
+
+    /// Check TDF protection status for a recording
+    func checkTDFStatus(for recording: Recording) async -> Recording.TDFProtectionStatus {
+        let tdfURL = recording.tdfURL
+
+        // Check if TDF archive exists
+        if FileManager.default.fileExists(atPath: tdfURL.path) {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tdfURL.path),
+               let modDate = attrs[.modificationDate] as? Date
+            {
+                return .protected(tdfURL: tdfURL, protectedAt: modDate)
+            }
+            return .protected(tdfURL: tdfURL, protectedAt: Date())
+        }
+        return .unprotected
+    }
+
+    /// Protect a recording with TDF3 for FairPlay streaming
+    func protectRecording(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Move heavy work off main thread to avoid blocking UI
+        try await Task.detached(priority: .userInitiated) {
+            // Load video data (potentially large file)
+            print("📂 Loading video data from: \(videoURL.path)")
+            let videoData = try Data(contentsOf: videoURL)
+            print("📂 Loaded \(videoData.count) bytes")
+
+            // Create protection service and encrypt
+            let protectionService = RecordingProtectionService(kasURL: kasURL)
+            print("🔐 Starting TDF3 protection...")
+            let tdfArchive = try await protectionService.protectVideo(
+                videoData: videoData,
+                assetID: assetID
+            )
+            print("✅ TDF archive created: \(tdfArchive.count) bytes")
+
+            // Write TDF archive
+            try tdfArchive.write(to: tdfURL)
+            print("💾 Protected recording: \(title)")
+            print("💾 TDF archive: \(tdfURL.path)")
+        }.value
     }
 }
