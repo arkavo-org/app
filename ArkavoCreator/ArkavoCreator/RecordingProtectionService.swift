@@ -4,21 +4,11 @@ import Foundation
 
 /// TDF3-based content protection service for FairPlay-compatible video encryption (macOS)
 ///
-/// Uses Standard TDF format (manifest.json + encrypted payload) with:
+/// Uses Standard TDF format (ZIP archive containing manifest.json + 0.payload) with:
 /// - AES-128-CBC for content encryption (FairPlay compatible)
 /// - RSA-2048 OAEP (SHA-1) for DEK wrapping (OpenTDF spec)
 public actor RecordingProtectionService {
     private let kasURL: URL
-
-    /// Protected video result containing TDF3 manifest and encrypted payload
-    public struct ProtectedVideo: Sendable {
-        /// TDF3 manifest.json containing wrapped DEK and encryption parameters
-        public let manifest: Data
-        /// AES-128-CBC encrypted video content
-        public let encryptedPayload: Data
-        /// 16-byte initialization vector used for encryption
-        public let iv: Data
-    }
 
     /// Initialize with KAS URL for key fetching
     /// - Parameter kasURL: KAS server URL (e.g., https://kas.arkavo.net)
@@ -26,11 +16,15 @@ public actor RecordingProtectionService {
         self.kasURL = kasURL
     }
 
-    /// Protect video content using TDF3 format for FairPlay delivery
+    /// Protect video content using Standard TDF format for FairPlay delivery
+    /// - Parameters:
+    ///   - videoData: Raw video data to encrypt
+    ///   - assetID: Unique asset identifier for the manifest
+    /// - Returns: TDF ZIP archive data containing manifest.json and 0.payload
     public func protectVideo(
         videoData: Data,
         assetID: String
-    ) async throws -> ProtectedVideo {
+    ) async throws -> Data {
         // 1. Generate 16-byte DEK (AES-128 for FairPlay)
         let dek = try generateDEK()
 
@@ -49,7 +43,55 @@ public actor RecordingProtectionService {
         // 6. Build Standard TDF manifest.json
         let manifest = try buildManifest(wrappedKey: wrappedKey, iv: iv, assetID: assetID)
 
-        return ProtectedVideo(manifest: manifest, encryptedPayload: ciphertext, iv: iv)
+        // 7. Create TDF ZIP archive containing manifest.json and 0.payload
+        let tdfArchive = try createTDFArchive(manifest: manifest, payload: ciphertext)
+
+        return tdfArchive
+    }
+
+    // MARK: - TDF Archive Creation
+
+    private func createTDFArchive(manifest: Data, payload: Data) throws -> Data {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let archivePath = tempDir.appendingPathExtension("tdf")
+
+        do {
+            // Create temp directory with TDF contents
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            try manifest.write(to: tempDir.appendingPathComponent("manifest.json"))
+            try payload.write(to: tempDir.appendingPathComponent("0.payload"))
+
+            // Create ZIP archive using ditto
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            process.arguments = ["-c", "-k", "--keepParent", tempDir.path, archivePath.path]
+
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                throw RecordingProtectionError.archiveCreationFailed
+            }
+
+            // Read the archive
+            let archiveData = try Data(contentsOf: archivePath)
+
+            // Cleanup
+            try? FileManager.default.removeItem(at: tempDir)
+            try? FileManager.default.removeItem(at: archivePath)
+
+            return archiveData
+        } catch let error as RecordingProtectionError {
+            // Cleanup on error
+            try? FileManager.default.removeItem(at: tempDir)
+            try? FileManager.default.removeItem(at: archivePath)
+            throw error
+        } catch {
+            // Cleanup on error
+            try? FileManager.default.removeItem(at: tempDir)
+            try? FileManager.default.removeItem(at: archivePath)
+            throw RecordingProtectionError.archiveCreationFailed
+        }
     }
 
     // MARK: - Key Generation
@@ -243,6 +285,8 @@ public enum RecordingProtectionError: Error, LocalizedError {
     case keyWrapFailed(CFError?)
     case invalidWrappedKeySize
     case weakRSAKey
+    case archiveCreationFailed
+    case invalidTDFArchive
 
     public var errorDescription: String? {
         switch self {
@@ -272,6 +316,60 @@ public enum RecordingProtectionError: Error, LocalizedError {
             "Invalid wrapped key size (expected 256 bytes for RSA-2048)"
         case .weakRSAKey:
             "RSA key too weak (minimum 2048 bits required)"
+        case .archiveCreationFailed:
+            "Failed to create TDF ZIP archive"
+        case .invalidTDFArchive:
+            "Invalid TDF archive format"
         }
+    }
+}
+
+// MARK: - TDF Archive Reader
+
+/// Utility to read manifest from a TDF ZIP archive
+public enum TDFArchiveReader {
+    /// Extract manifest.json from a TDF file
+    /// - Parameter tdfURL: URL to the .tdf file
+    /// - Returns: Parsed manifest as dictionary
+    public static func extractManifest(from tdfURL: URL) throws -> [String: Any] {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // Extract using ditto
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-x", "-k", tdfURL.path, tempDir.path]
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw RecordingProtectionError.invalidTDFArchive
+        }
+
+        // Find manifest.json (may be in a subdirectory due to --keepParent)
+        let enumerator = FileManager.default.enumerator(at: tempDir, includingPropertiesForKeys: nil)
+        var manifestURL: URL?
+
+        while let fileURL = enumerator?.nextObject() as? URL {
+            if fileURL.lastPathComponent == "manifest.json" {
+                manifestURL = fileURL
+                break
+            }
+        }
+
+        guard let manifestURL else {
+            throw RecordingProtectionError.invalidTDFArchive
+        }
+
+        let manifestData = try Data(contentsOf: manifestURL)
+        guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any] else {
+            throw RecordingProtectionError.invalidTDFArchive
+        }
+
+        return manifest
     }
 }

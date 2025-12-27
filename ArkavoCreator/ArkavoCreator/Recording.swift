@@ -45,7 +45,7 @@ struct Recording: Identifiable, Sendable {
 
     /// TDF3 protection status for FairPlay streaming
     enum TDFProtectionStatus: Sendable {
-        case protected(manifestURL: URL, protectedAt: Date)
+        case protected(tdfURL: URL, protectedAt: Date)
         case unprotected
         case unknown
 
@@ -56,7 +56,7 @@ struct Recording: Identifiable, Sendable {
             return false
         }
 
-        var manifestURL: URL? {
+        var tdfURL: URL? {
             if case .protected(let url, _) = self {
                 return url
             }
@@ -64,14 +64,9 @@ struct Recording: Identifiable, Sendable {
         }
     }
 
-    /// URL of the TDF3-protected version (same name with .tdf extension)
-    var protectedURL: URL {
+    /// URL of the TDF3 archive (ZIP containing manifest.json + 0.payload)
+    var tdfURL: URL {
         url.deletingPathExtension().appendingPathExtension("tdf")
-    }
-
-    /// URL of the TDF3 manifest
-    var manifestURL: URL {
-        url.deletingPathExtension().appendingPathExtension("tdf.json")
     }
 
     var formattedDuration: String {
@@ -218,19 +213,16 @@ final class RecordingsManager: ObservableObject {
 
     /// Check TDF protection status for a recording
     func checkTDFStatus(for recording: Recording) async -> Recording.TDFProtectionStatus {
-        let manifestURL = recording.manifestURL
-        let protectedURL = recording.protectedURL
+        let tdfURL = recording.tdfURL
 
-        // Check if both manifest and protected file exist
-        if FileManager.default.fileExists(atPath: manifestURL.path),
-           FileManager.default.fileExists(atPath: protectedURL.path)
-        {
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: manifestURL.path),
+        // Check if TDF archive exists
+        if FileManager.default.fileExists(atPath: tdfURL.path) {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tdfURL.path),
                let modDate = attrs[.modificationDate] as? Date
             {
-                return .protected(manifestURL: manifestURL, protectedAt: modDate)
+                return .protected(tdfURL: tdfURL, protectedAt: modDate)
             }
-            return .protected(manifestURL: manifestURL, protectedAt: Date())
+            return .protected(tdfURL: tdfURL, protectedAt: Date())
         }
         return .unprotected
     }
@@ -243,20 +235,16 @@ final class RecordingsManager: ObservableObject {
         // Create protection service
         let protectionService = RecordingProtectionService(kasURL: kasURL)
 
-        // Protect the video
-        let result = try await protectionService.protectVideo(
+        // Protect the video - returns TDF ZIP archive
+        let tdfArchive = try await protectionService.protectVideo(
             videoData: videoData,
             assetID: recording.id.uuidString
         )
 
-        // Write manifest
-        try result.manifest.write(to: recording.manifestURL)
-
-        // Write encrypted payload
-        try result.encryptedPayload.write(to: recording.protectedURL)
+        // Write TDF archive
+        try tdfArchive.write(to: recording.tdfURL)
 
         print("Protected recording: \(recording.title)")
-        print("  Manifest: \(recording.manifestURL.path)")
-        print("  Protected: \(recording.protectedURL.path)")
+        print("  TDF archive: \(recording.tdfURL.path)")
     }
 }

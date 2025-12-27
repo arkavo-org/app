@@ -31,6 +31,7 @@ struct RecordingsLibraryView: View {
                     LazyVGrid(columns: gridColumns, spacing: 16) {
                         ForEach(manager.recordings) { recording in
                             RecordingCard(recording: recording)
+                                .accessibilityIdentifier("RecordingCard_\(recording.id)")
                                 .onTapGesture {
                                     selectedRecording = recording
                                     showingPlayer = true
@@ -101,6 +102,7 @@ struct RecordingsLibraryView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }
                 .ignoresSafeArea()
+                .accessibilityIdentifier("ProtectionOverlay")
             }
         }
     }
@@ -166,7 +168,7 @@ struct RecordingsLibraryView: View {
         }
         .disabled(isProtecting)
 
-        if FileManager.default.fileExists(atPath: recording.protectedURL.path) {
+        if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
                 selectedRecording = recording
                 showingProtectedPlayer = true
@@ -175,9 +177,9 @@ struct RecordingsLibraryView: View {
             }
 
             Button {
-                NSWorkspace.shared.selectFile(recording.manifestURL.path, inFileViewerRootedAtPath: "")
+                NSWorkspace.shared.selectFile(recording.tdfURL.path, inFileViewerRootedAtPath: "")
             } label: {
-                Label("Show TDF Manifest", systemImage: "doc.text")
+                Label("Show TDF Archive", systemImage: "doc.zipper")
             }
         }
 
@@ -275,6 +277,7 @@ struct RecordingCard: View {
                             .background(Color.blue.opacity(0.9))
                             .foregroundColor(.white)
                             .cornerRadius(4)
+                            .accessibilityIdentifier("TDF3Badge")
                         }
 
                         // C2PA Badge
@@ -505,7 +508,7 @@ struct ProtectedVideoPlayerView: View {
                             InfoRow(label: "Encryption", value: info.algorithm)
                             InfoRow(label: "KAS Server", value: info.kasURL)
                             InfoRow(label: "Protected At", value: info.protectedAt)
-                            InfoRow(label: "Payload Size", value: info.payloadSize)
+                            InfoRow(label: "TDF Size", value: info.payloadSize)
                         }
                         .padding()
                         .background(Color.secondary.opacity(0.1))
@@ -519,12 +522,8 @@ struct ProtectedVideoPlayerView: View {
                         .padding(.horizontal, 32)
 
                     HStack(spacing: 16) {
-                        Button("Open Manifest") {
-                            NSWorkspace.shared.open(recording.manifestURL)
-                        }
-
-                        Button("Show in Finder") {
-                            NSWorkspace.shared.selectFile(recording.protectedURL.path, inFileViewerRootedAtPath: "")
+                        Button("Show TDF Archive") {
+                            NSWorkspace.shared.selectFile(recording.tdfURL.path, inFileViewerRootedAtPath: "")
                         }
                     }
                 }
@@ -559,10 +558,8 @@ struct ProtectedVideoPlayerView: View {
         defer { isLoading = false }
 
         do {
-            let manifestData = try Data(contentsOf: recording.manifestURL)
-            guard let json = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any] else {
-                throw NSError(domain: "Manifest", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid manifest format"])
-            }
+            // Extract manifest from TDF ZIP archive
+            let json = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
 
             // Parse manifest
             let encInfo = json["encryptionInformation"] as? [String: Any]
@@ -574,19 +571,19 @@ struct ProtectedVideoPlayerView: View {
             let kasURLString = keyAccess?["url"] as? String ?? "Unknown"
             let protectedAt = meta?["protectedAt"] as? String ?? "Unknown"
 
-            // Get payload size
-            let payloadAttrs = try? FileManager.default.attributesOfItem(atPath: recording.protectedURL.path)
-            let payloadSize = payloadAttrs?[.size] as? Int64 ?? 0
+            // Get TDF archive size
+            let tdfAttrs = try? FileManager.default.attributesOfItem(atPath: recording.tdfURL.path)
+            let tdfSize = tdfAttrs?[.size] as? Int64 ?? 0
             let formatter = ByteCountFormatter()
             formatter.allowedUnits = [.useMB, .useGB]
             formatter.countStyle = .file
-            let payloadSizeString = formatter.string(fromByteCount: payloadSize)
+            let tdfSizeString = formatter.string(fromByteCount: tdfSize)
 
             manifestInfo = ManifestInfo(
                 algorithm: algorithm,
                 kasURL: kasURLString,
                 protectedAt: protectedAt,
-                payloadSize: payloadSizeString
+                payloadSize: tdfSizeString
             )
         } catch {
             errorMessage = error.localizedDescription
