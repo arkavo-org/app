@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import SwiftUI
 
 // MARK: - Creator Profile Display View
@@ -60,6 +61,12 @@ struct CreatorProfileDisplayView: View {
                     if let tiers = viewModel.profile?.patronTiers, !tiers.isEmpty {
                         CreatorPatronTiersDisplay(tiers: tiers)
                     }
+
+                    Divider()
+                        .padding(.vertical)
+
+                    // Published Content
+                    CreatorContentView(creatorPublicID: publicID)
                 }
                 .padding()
             }
