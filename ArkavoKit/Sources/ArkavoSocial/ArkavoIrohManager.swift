@@ -68,6 +68,10 @@ public final class ArkavoIrohManager: Sendable {
     @MainActor
     private var _profileService: IrohProfileService?
 
+    /// The content service (created when node is ready)
+    @MainActor
+    private var _contentService: IrohContentService?
+
     /// Whether the manager is currently initializing
     @MainActor
     public private(set) var isInitializing: Bool = false
@@ -104,6 +108,7 @@ public final class ArkavoIrohManager: Sendable {
 
         if let node = manager.node {
             _profileService = IrohProfileService(node: node)
+            _contentService = IrohContentService(node: node)
         } else if let managerError = manager.error {
             error = managerError
         }
@@ -117,6 +122,7 @@ public final class ArkavoIrohManager: Sendable {
         nodeManager?.reset()
         nodeManager = nil
         _profileService = nil
+        _contentService = nil
         error = nil
         isInitializing = false
         config = nil
@@ -134,6 +140,12 @@ public final class ArkavoIrohManager: Sendable {
     @MainActor
     public var profileService: IrohProfileService? {
         _profileService
+    }
+
+    /// The content service, if node is initialized
+    @MainActor
+    public var contentService: IrohContentService? {
+        _contentService
     }
 
     /// Whether the node is ready for use

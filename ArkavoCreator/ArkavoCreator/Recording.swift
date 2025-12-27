@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import AppKit
+import ArkavoSocial
 // C2PA support temporarily disabled
 // import ArkavoC2PA
 
@@ -22,6 +23,7 @@ struct Recording: Identifiable, Sendable {
     let thumbnailPath: URL?
     var c2paStatus: C2PAStatus?
     var tdfStatus: TDFProtectionStatus?
+    var irohStatus: IrohPublishStatus = .unpublished
 
     enum C2PAStatus: Sendable {
         case signed(validatedAt: Date, isValid: Bool)
@@ -59,6 +61,28 @@ struct Recording: Identifiable, Sendable {
         var tdfURL: URL? {
             if case .protected(let url, _) = self {
                 return url
+            }
+            return nil
+        }
+    }
+
+    /// Iroh P2P publish status for TDF content
+    enum IrohPublishStatus: Sendable {
+        case unpublished
+        case publishing
+        case published(ticket: ContentTicket)
+        case failed(String)
+
+        var isPublished: Bool {
+            if case .published = self {
+                return true
+            }
+            return false
+        }
+
+        var contentTicket: ContentTicket? {
+            if case .published(let ticket) = self {
+                return ticket
             }
             return nil
         }

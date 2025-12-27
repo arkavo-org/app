@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import ArkavoSocial
 
 struct RecordingsLibraryView: View {
     @StateObject private var manager = RecordingsManager()
@@ -13,6 +14,13 @@ struct RecordingsLibraryView: View {
     @State private var showingProtectionError = false
     @State private var recordingToDelete: Recording?
     @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
+
+    // Iroh publishing state
+    @State private var isPublishing = false
+    @State private var publishError: String?
+    @State private var showingPublishError = false
+    @State private var publishedTicket: ContentTicket?
+    @State private var showingPublishSuccess = false
 
     private let kasURL = URL(string: "https://100.arkavo.net")!
 
@@ -82,17 +90,39 @@ struct RecordingsLibraryView: View {
                 Text(error)
             }
         }
+        .alert("Publish Error", isPresented: $showingPublishError) {
+            Button("OK") {
+                publishError = nil
+            }
+        } message: {
+            if let error = publishError {
+                Text(error)
+            }
+        }
+        .alert("Published to Network", isPresented: $showingPublishSuccess) {
+            Button("Copy Ticket") {
+                if let ticket = publishedTicket {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ticket.ticket, forType: .string)
+                }
+            }
+            Button("OK", role: .cancel) {
+                publishedTicket = nil
+            }
+        } message: {
+            Text("Content published successfully. Share the ticket to allow others to access this content.")
+        }
         .overlay {
-            if isProtecting {
+            if isProtecting || isPublishing {
                 ZStack {
                     Color.black.opacity(0.5)
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                        Text("Protecting video...")
+                        Text(isProtecting ? "Protecting video..." : "Publishing to network...")
                             .font(.headline)
                             .foregroundColor(.white)
-                        Text("Encrypting with TDF3 for FairPlay streaming")
+                        Text(isProtecting ? "Encrypting with TDF3 for FairPlay streaming" : "Uploading TDF content via Iroh P2P")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.8))
                     }
@@ -100,7 +130,7 @@ struct RecordingsLibraryView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }
                 .ignoresSafeArea()
-                .accessibilityIdentifier("ProtectionOverlay")
+                .accessibilityIdentifier(isProtecting ? "ProtectionOverlay" : "PublishingOverlay")
             }
         }
     }
@@ -179,6 +209,27 @@ struct RecordingsLibraryView: View {
             } label: {
                 Label("Show TDF Archive", systemImage: "doc.zipper")
             }
+
+            Divider()
+
+            // Iroh P2P Publishing
+            Button {
+                Task {
+                    await publishToIroh(recording)
+                }
+            } label: {
+                Label("Publish to Network", systemImage: "globe")
+            }
+            .disabled(isPublishing || !ArkavoIrohManager.shared.isReady)
+
+            if recording.irohStatus.isPublished, let ticket = recording.irohStatus.contentTicket {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ticket.ticket, forType: .string)
+                } label: {
+                    Label("Copy Content Ticket", systemImage: "doc.on.doc")
+                }
+            }
         }
 
         Divider()
@@ -218,6 +269,65 @@ struct RecordingsLibraryView: View {
         } catch {
             protectionError = error.localizedDescription
             showingProtectionError = true
+        }
+    }
+
+    /// Publish a TDF-protected recording to the Iroh P2P network
+    private func publishToIroh(_ recording: Recording) async {
+        isPublishing = true
+        defer { isPublishing = false }
+
+        guard let contentService = ArkavoIrohManager.shared.contentService else {
+            publishError = "Iroh node not initialized. Please try again later."
+            showingPublishError = true
+            return
+        }
+
+        do {
+            // Read TDF archive data
+            let tdfData = try Data(contentsOf: recording.tdfURL)
+
+            // Extract manifest from TDF
+            let manifestJSON = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
+            let manifestLite = try TDFManifestLite.from(manifestJSON: manifestJSON)
+
+            // Build TDFContentInfo
+            let contentInfo = TDFContentInfo(
+                id: recording.id,
+                tdfData: tdfData,
+                manifest: manifestLite,
+                title: recording.title,
+                mimeType: "video/quicktime",
+                durationSeconds: recording.duration,
+                originalFileSize: recording.fileSize,
+                createdAt: recording.date
+            )
+
+            // Get creator public ID (use a placeholder for now - should come from authenticated user)
+            // TODO: Get actual creator publicID from authenticated profile
+            let creatorPublicID = Data(repeating: 0, count: 32)
+
+            // Publish to Iroh
+            print("🌐 Publishing to Iroh network...")
+            let ticket = try await contentService.publishContentWithRetry(
+                info: contentInfo,
+                creatorPublicID: creatorPublicID
+            )
+            print("✅ Published with ticket: \(ticket.ticket)")
+
+            // Cache the ticket
+            await ContentTicketCache.shared.cache(ticket, for: ticket.contentID)
+
+            // Show success
+            publishedTicket = ticket
+            showingPublishSuccess = true
+
+            // Refresh recordings to update status
+            await manager.loadRecordings()
+        } catch {
+            print("❌ Publish error: \(error)")
+            publishError = error.localizedDescription
+            showingPublishError = true
         }
     }
 
