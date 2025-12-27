@@ -7,7 +7,7 @@ final class CameraPreviewStore: ObservableObject {
 
     @Published private(set) var images: [String: NSImage] = [:]
 
-    private init() {}
+    private init() { /* Singleton: prevents external instantiation */ }
 
     func update(with event: CameraPreviewEvent) {
         let image = NSImage(cgImage: event.image, size: .zero)

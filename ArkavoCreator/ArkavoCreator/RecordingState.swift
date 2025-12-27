@@ -12,7 +12,7 @@ final class RecordingState {
     // Current recording session (if any)
     private(set) var recordingSession: RecordingSession?
 
-    private init() {}
+    private init() { /* Singleton: prevents external instantiation */ }
 
     /// Set the active recording session
     func setRecordingSession(_ session: RecordingSession?) {

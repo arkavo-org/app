@@ -1,0 +1,24 @@
+// Shared build settings for all Arkavo projects
+// Enables unused code and performance warnings
+
+// Swift compiler warnings
+OTHER_SWIFT_FLAGS = $(inherited) -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=100
+
+// Enable strict concurrency checking (Swift 6)
+SWIFT_STRICT_CONCURRENCY = complete
+
+// Treat warnings as errors in Release builds
+// SWIFT_TREAT_WARNINGS_AS_ERRORS[config=Release] = YES
+
+// GCC warnings that help catch unused code
+GCC_WARN_UNUSED_FUNCTION = YES
+GCC_WARN_UNUSED_LABEL = YES
+GCC_WARN_UNUSED_PARAMETER = YES
+GCC_WARN_UNUSED_VALUE = YES
+GCC_WARN_UNUSED_VARIABLE = YES
+
+// Additional recommended warnings
+GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE
+GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR
+CLANG_WARN_EMPTY_BODY = YES
+CLANG_WARN_UNREACHABLE_CODE = YES

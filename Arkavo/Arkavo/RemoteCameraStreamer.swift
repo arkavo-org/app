@@ -886,7 +886,7 @@ private extension simd_float4x4 {
             self.session = nil
         }
 
-        func readerSessionDidBecomeActive(_: NFCNDEFReaderSession) {}
+        func readerSessionDidBecomeActive(_: NFCNDEFReaderSession) { /* Protocol required: no action needed when session becomes active */ }
 
         func readerSession(_ session: NFCNDEFReaderSession, didDetect tags: [NFCNDEFTag]) {
             guard let tag = tags.first else { return }

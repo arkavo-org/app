@@ -19,7 +19,7 @@ final class CouncilStreamHandler: AgentNotificationHandler {
 
     // MARK: - Initialization
 
-    init() {}
+    init() { /* Uses default property values */ }
 
     // MARK: - AgentNotificationHandler
 
@@ -92,7 +92,7 @@ final class StreamingContentAccumulator: ObservableObject {
     @Published var criticFeedback: String?
     @Published var isApproved: Bool = true
 
-    init() {}
+    init() { /* Uses default property values */ }
 
     /// Process an HRM delta and update state
     func process(_ delta: HRMDelta) {

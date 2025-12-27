@@ -315,7 +315,7 @@ struct ContactShareSheet: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_: UIActivityViewController, context _: Context) {}
+    func updateUIViewController(_: UIActivityViewController, context _: Context) { /* No dynamic updates needed */ }
 }
 
 #Preview {

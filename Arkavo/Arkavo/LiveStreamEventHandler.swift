@@ -22,7 +22,7 @@ final class LiveStreamEventHandler: ObservableObject {
 
     static let shared = LiveStreamEventHandler()
 
-    private init() {}
+    private init() { /* Singleton: prevents external instantiation */ }
 
     // MARK: - Public Methods
 

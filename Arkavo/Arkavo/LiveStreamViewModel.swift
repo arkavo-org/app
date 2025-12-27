@@ -36,7 +36,7 @@ class LiveStreamViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init() {}
+    init() { /* Properties initialized with defaults */ }
 
     // MARK: - Public Methods
 

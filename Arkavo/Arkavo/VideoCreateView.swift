@@ -333,7 +333,7 @@ struct StreamingCard: View {
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .alert("Connection Error", isPresented: $showErrorAlert) {
-            Button("OK") { }
+            Button("OK") { /* Dismisses alert */ }
         } message: {
             Text(errorMessage)
         }

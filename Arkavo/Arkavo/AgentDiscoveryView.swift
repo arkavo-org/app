@@ -37,7 +37,7 @@ struct AgentDiscoveryView: View {
                 agentService.stopDiscovery()
             }
             .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
+                Button("OK", role: .cancel) { /* Dismisses alert */ }
             } message: {
                 if let errorMessage {
                     Text(errorMessage)

@@ -321,7 +321,7 @@ struct BlockedUserRow: View {
             isPresented: $showingUnblockConfirmation,
         ) {
             Button("Unblock", role: .destructive, action: onUnblock)
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { /* Dismisses confirmation dialog */ }
         } message: {
             Text("Are you sure you want to unblock this user? They will be able to interact with your content again.")
         }
@@ -618,7 +618,7 @@ struct VideoThoughtView: View {
                             presenting: thought,
                         ) { _ in
                             Button("Delete", role: .destructive, action: onDelete)
-                            Button("Cancel", role: .cancel) {}
+                            Button("Cancel", role: .cancel) { /* Dismisses confirmation dialog */ }
                         } message: { _ in
                             Text("Are you sure you want to delete this video? This action cannot be undone.")
                         }
@@ -727,7 +727,7 @@ struct PostThoughtView: View {
                             presenting: thought,
                         ) { _ in
                             Button("Delete", role: .destructive, action: onDelete)
-                            Button("Cancel", role: .cancel) {}
+                            Button("Cancel", role: .cancel) { /* Dismisses confirmation dialog */ }
                         } message: { _ in
                             Text("Are you sure you want to delete this post? This action cannot be undone.")
                         }

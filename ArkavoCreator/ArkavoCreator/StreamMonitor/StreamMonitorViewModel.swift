@@ -45,7 +45,7 @@ final class StreamMonitorViewModel: ObservableObject {
     // Duration tracking
     private var startTime: Date?
 
-    private init() {}
+    private init() { /* Singleton: prevents external instantiation */ }
 
     /// Receives a composed frame from the compositor.
     /// Called by RecordingSession after composition, before encoding.

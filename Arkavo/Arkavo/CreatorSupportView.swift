@@ -122,7 +122,7 @@ struct CreatorSupportView: View {
                 }
             }
             .alert("Error", isPresented: $showError) {
-                Button("OK") { }
+                Button("OK") { /* Dismisses alert */ }
             } message: {
                 Text(errorMessage ?? "An unexpected error occurred.")
             }

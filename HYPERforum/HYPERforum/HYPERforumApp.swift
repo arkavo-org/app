@@ -9,7 +9,7 @@ class WindowAccessor: ObservableObject {
     @Published var window: NSWindow?
     static let shared = WindowAccessor()
 
-    private init() {}
+    private init() { /* Singleton: prevents external instantiation */ }
 }
 
 @main

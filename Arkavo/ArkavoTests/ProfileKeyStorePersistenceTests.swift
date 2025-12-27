@@ -16,7 +16,7 @@ class MockPersistenceControllerForKeyStore: @unchecked Sendable {
     // Dictionary to store profiles for testing
     var profileStore: [String: Profile] = [:]
 
-    init() {}
+    init() { /* Mock uses default property values */ }
 
     func savePeerProfile(_ peerProfile: Profile, keyStorePublicData: Data? = nil, keyStorePrivateData: Data? = nil) async throws {
         print("MockPersistenceController: savePeerProfile called for \(peerProfile.name)")

@@ -14,7 +14,7 @@ final class LocalAICouncilProvider: ObservableObject, CouncilConnectionProvider 
 
     // MARK: - Initialization
 
-    init() {}
+    init() { /* Uses default property values */ }
 
     // MARK: - Connection Management
 
