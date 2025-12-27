@@ -9,6 +9,7 @@ final class AICouncilTests: XCTestCase {
         continueAfterFailure = false
 
         app = XCUIApplication()
+        TestHelpers.configureForUITesting(app)
         app.launch()
 
         helpers = TestHelpers(app: app)
@@ -16,8 +17,7 @@ final class AICouncilTests: XCTestCase {
         // Wait for app to be ready
         sleep(2)
 
-        // NOTE: These tests assume the user is already authenticated
-        // and there are messages in the chat to analyze
+        // With -UITesting flag, app auto-authenticates as test user
     }
 
     override func tearDownWithError() throws {

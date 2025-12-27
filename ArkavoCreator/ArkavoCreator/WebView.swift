@@ -6,19 +6,54 @@ import WebKit
 class WebViewCoordinator: NSObject, WKNavigationDelegate {
     let parent: WebViewRepresentable
 
+    /// Domains allowed for OAuth authentication flows
+    private static let allowedDomains: Set<String> = [
+        // Arkavo
+        "arkavo.net",
+        "arkavo.com",
+        // OAuth providers
+        "twitch.tv",
+        "patreon.com",
+        "reddit.com",
+        "redditstatic.com",
+        // IndieAuth/Micropub
+        "indieauth.com",
+        "micro.blog",
+    ]
+
     init(_ parent: WebViewRepresentable) {
         self.parent = parent
     }
 
+    /// Check if a host is in the allowed domains list (including subdomains)
+    private func isAllowedHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return Self.allowedDomains.contains { domain in
+            host == domain || host.hasSuffix(".\(domain)")
+        }
+    }
+
     func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
         if let url = navigationAction.request.url {
+            // Handle app callback scheme
             if url.scheme == "arkavocreator" {
                 parent.handleCallback(url)
                 decisionHandler(.cancel)
                 return
             }
+
+            // Allow navigation only to trusted OAuth domains
+            if isAllowedHost(url.host) {
+                decisionHandler(.allow)
+                return
+            }
+
+            // Block navigation to untrusted domains
+            print("WebView: Blocked navigation to untrusted domain: \(url.host ?? "unknown")")
+            decisionHandler(.cancel)
+            return
         }
-        decisionHandler(.allow)
+        decisionHandler(.cancel)
     }
 
     func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {

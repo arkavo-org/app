@@ -29,6 +29,12 @@ final class RecordViewModel {
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
+    var floatingHeadEnabled: Bool = false {
+        didSet {
+            // Update session in real-time when toggle changes
+            recordingSession?.floatingHeadEnabled = floatingHeadEnabled
+        }
+    }
     var remoteBridgeEnabled: Bool = true
     var remoteBridgePort: String = "0"  // 0 = auto-assign available port
     var remoteCameraSources: [String] = []
@@ -118,6 +124,7 @@ final class RecordViewModel {
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
             session.watermarkOpacity = watermarkOpacity
+            session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
 
             if enableCamera {
@@ -273,6 +280,7 @@ final class RecordViewModel {
             session.enableMicrophone = enableMicrophone
             session.enableDesktop = enableDesktop
             session.enableAvatar = enableAvatar
+            session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
 
             if enableCamera {

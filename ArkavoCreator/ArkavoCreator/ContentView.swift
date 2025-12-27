@@ -98,6 +98,7 @@ struct ContentView: View {
 
 enum NavigationSection: String, CaseIterable, Codable {
     case dashboard = "Dashboard"
+    case profile = "Profile"
     case studio = "Studio"
     case library = "Library"
     case workflow = "Workflow"
@@ -117,6 +118,7 @@ enum NavigationSection: String, CaseIterable, Codable {
     var systemImage: String {
         switch self {
         case .dashboard: "square.grid.2x2"
+        case .profile: "person.crop.circle"
         case .studio: "video.bubble.left.fill"
         case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
@@ -130,6 +132,7 @@ enum NavigationSection: String, CaseIterable, Codable {
     var subtitle: String {
         switch self {
         case .dashboard: "Overview"
+        case .profile: "Your Creator Profile"
         case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
@@ -580,6 +583,10 @@ struct SectionContainer: View {
                 }
                 .transition(.moveAndFade())
                 .id("dashboard")
+            case .profile:
+                CreatorProfileView()
+                    .transition(.moveAndFade())
+                    .id("profile")
             case .patrons:
                 PatronManagementView(patreonClient: patreonClient)
                     .transition(.moveAndFade())

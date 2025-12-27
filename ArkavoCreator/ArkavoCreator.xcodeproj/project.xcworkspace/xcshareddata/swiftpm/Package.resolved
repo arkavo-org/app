@@ -11,6 +11,15 @@
       }
     },
     {
+      "identity" : "iroh-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/iroh-swift",
+      "state" : {
+        "revision" : "172a3e0efaae2bdeb02aeee80ca42081a4d0d47e",
+        "version" : "0.2.5"
+      }
+    },
+    {
       "identity" : "opentdfkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/OpenTDFKit",

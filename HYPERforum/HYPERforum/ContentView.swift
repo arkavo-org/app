@@ -7,14 +7,11 @@ struct ContentView: View {
     @State private var showingAuthSheet = false
 
     var body: some View {
-        Group {
-            if appState.isAuthenticated {
-                MainForumView()
-            } else {
-                WelcomeView(showingAuthSheet: $showingAuthSheet)
-            }
+        if appState.isAuthenticated {
+            MainForumView()
+        } else {
+            WelcomeView(showingAuthSheet: $showingAuthSheet)
         }
-        .accessibilityIdentifier("view_content")
     }
 }
 

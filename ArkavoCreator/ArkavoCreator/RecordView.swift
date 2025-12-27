@@ -186,14 +186,15 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
 
                 } else if studioState.visualSource == .face {
-                    // Traditional PIP: Boxed camera feed
+                    // Traditional PIP: Boxed camera feed (or floating head when enabled)
                     let pipWidth = geometry.size.width * 0.25
                     let pipHeight = pipWidth * (9 / 16)
 
                     facePIPView
                         .frame(width: pipWidth, height: pipHeight)
-                        .cornerRadius(12)
-                        .shadow(radius: 10)
+                        // Skip cornerRadius when floating head is enabled (person shape is the border)
+                        .cornerRadius(viewModel.floatingHeadEnabled ? 0 : 12)
+                        .shadow(radius: viewModel.floatingHeadEnabled ? 5 : 10)
                         .offset(x: -20, y: -20)
                         .offset(pipOffset)
                         .gesture(
@@ -225,7 +226,8 @@ struct RecordView: View {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .background(Color.black)
+                // Use clear background when floating head is enabled to show transparency
+                .background(viewModel.floatingHeadEnabled ? Color.clear : Color.black)
         } else {
             ZStack {
                 Color.black

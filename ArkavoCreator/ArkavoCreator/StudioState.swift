@@ -69,6 +69,13 @@ final class StudioState {
         }
     }
 
+    /// Enable floating head mode (person segmentation with transparent background)
+    var floatingHeadEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(floatingHeadEnabled, forKey: "studio.floatingHeadEnabled")
+        }
+    }
+
     // MARK: - Persisted Output Preference
 
     var defaultOutput: OutputMode {
@@ -92,6 +99,7 @@ final class StudioState {
 
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")
         selectedVRMPath = UserDefaults.standard.string(forKey: "studio.selectedVRMPath")
+        floatingHeadEnabled = UserDefaults.standard.bool(forKey: "studio.floatingHeadEnabled")
 
         if let outputRaw = UserDefaults.standard.string(forKey: "studio.defaultOutput"),
            let output = OutputMode(rawValue: outputRaw)
