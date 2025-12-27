@@ -40,7 +40,7 @@ struct CreatorProfileView: View {
             .padding()
         }
         .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK") {}
+            Button("OK") { /* Dismisses alert */ }
         } message: {
             Text(viewModel.errorMessage ?? "An error occurred")
         }

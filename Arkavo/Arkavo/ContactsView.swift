@@ -482,7 +482,7 @@ struct ContactDetailView: View {
                 }
             }
             .alert("Delete Contact?", isPresented: $showDeleteButton) {
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { /* Dismisses confirmation dialog */ }
                 Button("Delete", role: .destructive) {
                     dismiss()
                     onDelete(contact)

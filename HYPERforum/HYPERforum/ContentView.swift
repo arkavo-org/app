@@ -199,7 +199,7 @@ struct MainForumView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("Settings") {}
+                        Button("Settings") { /* TODO: Implement settings */ }
                         Button("Sign Out") {
                             Task {
                                 await webAuthnManager.signOut()

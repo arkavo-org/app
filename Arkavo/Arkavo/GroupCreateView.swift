@@ -53,7 +53,7 @@ struct GroupCreateView: View {
             }
         }
         .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) { /* Dismisses alert */ }
         } message: {
             Text(errorMessage)
         }

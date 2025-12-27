@@ -60,9 +60,9 @@ struct PatronManagementView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Menu {
-                        Button("CSV", action: {})
-                        Button("Excel", action: {})
-                        Button("PDF", action: {})
+                        Button("CSV", action: { /* TODO: Implement CSV export */ })
+                        Button("Excel", action: { /* TODO: Implement Excel export */ })
+                        Button("PDF", action: { /* TODO: Implement PDF export */ })
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
@@ -142,10 +142,10 @@ struct CampaignsSidebar: View {
                         CampaignRow(campaign: campaign)
                             .tag(campaign)
                             .contextMenu {
-                                Button("Edit") {}
-                                Button("Duplicate") {}
+                                Button("Edit") { /* TODO: Implement edit */ }
+                                Button("Duplicate") { /* TODO: Implement duplicate */ }
                                 Divider()
-                                Button("Archive", role: .destructive) {}
+                                Button("Archive", role: .destructive) { /* TODO: Implement archive */ }
                             }
                     }
                 }
@@ -450,7 +450,7 @@ struct NewCampaignSheet: View {
         true
     }
 
-    func createCampaign() {}
+    func createCampaign() { /* TODO: Implement campaign creation */ }
 }
 
 // MARK: - Tiers Sidebar
@@ -830,10 +830,10 @@ struct TierRowView: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Edit") {}
-            Button("Duplicate") {}
+            Button("Edit") { /* TODO: Implement edit */ }
+            Button("Duplicate") { /* TODO: Implement duplicate */ }
             Divider()
-            Button("Archive", role: .destructive) {}
+            Button("Archive", role: .destructive) { /* TODO: Implement archive */ }
         }
     }
 }

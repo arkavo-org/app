@@ -321,7 +321,7 @@
             IDCardScannerViewController(delegate: context.coordinator)
         }
 
-        func updateUIViewController(_: IDCardScannerViewController, context _: Context) {}
+        func updateUIViewController(_: IDCardScannerViewController, context _: Context) { /* No dynamic updates needed */ }
 
         func makeCoordinator() -> Coordinator {
             Coordinator(self)

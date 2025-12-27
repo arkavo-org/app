@@ -41,7 +41,7 @@ class AuthenticationManager: NSObject, ASAuthorizationControllerDelegate, ASAuth
         return URLSession(configuration: config, delegate: certificatePinningDelegate, delegateQueue: nil)
     }()
 
-    override init() {}
+    override init() { /* Required for NSObject subclass */ }
 
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
 //        print("presentationAnchor called")

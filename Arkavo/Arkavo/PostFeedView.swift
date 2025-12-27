@@ -620,7 +620,7 @@ struct PostCreateView: View {
         }
         #endif
         .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) { /* Dismisses alert */ }
         } message: {
             Text(error?.localizedDescription ?? "An unknown error occurred")
         }
@@ -638,7 +638,7 @@ struct ImagePicker: UIViewControllerRepresentable {
         return picker
     }
 
-    func updateUIViewController(_: UIImagePickerController, context _: Context) {}
+    func updateUIViewController(_: UIImagePickerController, context _: Context) { /* No dynamic updates needed */ }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)

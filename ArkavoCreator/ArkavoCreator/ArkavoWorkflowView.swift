@@ -399,14 +399,14 @@ struct ContentRow: View {
 
             // Actions Menu
             Menu {
-                Button("View Details", action: {})
-                Button("Edit", action: {})
+                Button("View Details", action: { /* TODO: Implement view details */ })
+                Button("Edit", action: { /* TODO: Implement edit */ })
                 if case .unprotected = content.protectionStatus {
-                    Button("Protect Content", action: {})
+                    Button("Protect Content", action: { /* TODO: Implement content protection */ })
                 }
-                Button("Set Patron Access", action: {})
+                Button("Set Patron Access", action: { /* TODO: Implement patron access */ })
                 Divider()
-                Button("Delete", role: .destructive, action: {})
+                Button("Delete", role: .destructive, action: { /* TODO: Implement delete */ })
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .symbolVariant(.fill)

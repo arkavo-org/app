@@ -94,7 +94,7 @@ struct PatreonLoginView: View {
         .alert("Authentication Error",
                isPresented: $showingError,
                actions: {
-                   Button("OK", role: .cancel) {}
+                   Button("OK", role: .cancel) { /* Dismisses alert */ }
                },
                message: {
                    Text("Could not start authentication. Please try again.")
