@@ -35,7 +35,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/arkavo-org/OpenTDFKit", branch: "main"),
-        .package(url: "https://github.com/arkavo-org/iroh-swift", from: "0.2.5")
+        .package(url: "https://github.com/arkavo-org/iroh-swift", from: "0.2.5"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.19")
     ],
     targets: [
         .target(
@@ -59,7 +60,8 @@ let package = Package(
             name: "ArkavoSocial",
             dependencies: [
                 "OpenTDFKit",
-                .product(name: "IrohSwift", package: "iroh-swift")
+                .product(name: "IrohSwift", package: "iroh-swift"),
+                "ZIPFoundation"
             ],
             swiftSettings: sharedSwiftSettings
         ),

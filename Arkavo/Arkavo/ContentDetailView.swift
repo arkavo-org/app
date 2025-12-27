@@ -11,6 +11,10 @@ struct ContentDetailView: View {
     @State private var isFetching = false
     @State private var fetchError: String?
     @State private var tdfData: Data?
+    @State private var payloadURL: URL?
+    @State private var extractedManifest: TDFManifestLite?
+    @State private var isExtracting = false
+    @State private var showingVideoPlayer = false
 
     var body: some View {
         NavigationStack {
@@ -78,14 +82,44 @@ struct ContentDetailView: View {
                         }
                         .disabled(isFetching)
                     } else {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 12) {
                             Label("Content fetched (\(formatSize(Int64(tdfData!.count))))",
                                   systemImage: "checkmark.circle.fill")
                                 .foregroundColor(.green)
 
-                            Text("Decryption coming soon")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            // Play button - prepare and play
+                            if payloadURL == nil {
+                                Button {
+                                    Task { await extractAndPrepare() }
+                                } label: {
+                                    HStack {
+                                        if isExtracting {
+                                            ProgressView()
+                                                .tint(.white)
+                                        } else {
+                                            Image(systemName: "play.fill")
+                                        }
+                                        Text(isExtracting ? "Preparing..." : "Play Video")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.green)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                                }
+                                .disabled(isExtracting)
+                            } else {
+                                Button {
+                                    showingVideoPlayer = true
+                                } label: {
+                                    Label("Play Video", systemImage: "play.fill")
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.green)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(12)
+                                }
+                            }
                         }
                     }
 
@@ -109,6 +143,37 @@ struct ContentDetailView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .fullScreenCover(isPresented: $showingVideoPlayer) {
+                if let url = payloadURL, let manifest = extractedManifest {
+                    TDFVideoPlayerView(payloadURL: url, manifest: manifest)
+                }
+            }
+        }
+    }
+
+    /// Extract manifest and payload from TDF archive, write payload to temp file
+    private func extractAndPrepare() async {
+        isExtracting = true
+        fetchError = nil
+        defer { isExtracting = false }
+
+        guard let tdfData else {
+            fetchError = "No TDF data available"
+            return
+        }
+
+        do {
+            // Extract manifest and payload from TDF ZIP archive
+            let (manifest, payload) = try TDFArchiveReader.extractAll(from: tdfData)
+            extractedManifest = manifest
+
+            // Write payload to temp file for AVPlayer
+            // Use .mov extension for QuickTime or .ts for MPEG-TS
+            let fileExtension = descriptor.mimeType.contains("quicktime") ? "mov" : "ts"
+            payloadURL = try TDFArchiveReader.writePayloadToTempFile(payload, fileExtension: fileExtension)
+
+        } catch {
+            fetchError = "Failed to prepare video: \(error.localizedDescription)"
         }
     }
 
@@ -179,7 +244,7 @@ private struct ContentInfoRow: View {
             contentID: Data(repeating: 0, count: 32),
             creatorPublicID: Data(repeating: 1, count: 32),
             manifest: TDFManifestLite(
-                kasURL: "https://kas.arkavo.net",
+                kasURL: "https://100.arkavo.net/kas",
                 wrappedKey: "base64key",
                 algorithm: "AES-128-CBC",
                 iv: "base64iv",
