@@ -686,7 +686,7 @@ struct RecordingControl: View {
                     }
                 }
 
-            case .processing, .uploading:
+            case .processing, .protecting, .uploading:
                 ProcessingView(state: viewModel.recordingState)
 
             case .complete:
@@ -735,11 +735,24 @@ struct ModernRecordButton: View {
 struct ProcessingView: View {
     let state: RecordingState
 
+    private var statusText: String {
+        switch state {
+        case .processing:
+            "Processing..."
+        case .protecting:
+            "Protecting..."
+        case .uploading:
+            "Uploading..."
+        default:
+            "Working..."
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             ProgressView()
                 .tint(.white)
-            Text(state == .processing ? "Processing..." : "Uploading...")
+            Text(statusText)
                 .font(.caption)
                 .foregroundStyle(.white)
         }
@@ -900,6 +913,7 @@ enum RecordingState: Equatable {
     case setupComplete
     case recording
     case processing
+    case protecting // TDF3 content encryption for FairPlay
     case uploading
     case complete(UploadResult)
     case error(String)
@@ -910,6 +924,7 @@ enum RecordingState: Equatable {
              (.setupComplete, .setupComplete),
              (.recording, .recording),
              (.processing, .processing),
+             (.protecting, .protecting),
              (.uploading, .uploading):
             true
         case let (.complete(lhsResult), .complete(rhsResult)):
@@ -997,27 +1012,64 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
 
             let processedVideo = try await processingManager.processVideo(at: videoURL)
 
-            // Upload the video
-            recordingState = .uploading
-
-            // First create the result
-            let result = UploadResult(
-                id: processedVideo.directory.lastPathComponent,
-                playbackURL: videoURL.absoluteString,
+            // Protect the video with TDF3
+            recordingState = .protecting
+            let protectedResult = try await protectVideo(
+                at: videoURL,
+                description: description,
+                processedDirectory: processedVideo.directory
             )
 
+            // Upload the protected video
+            recordingState = .uploading
+
             // Handle all the processing and uploading
-            try await handleRecordingComplete(result, description: description)
+            try await handleRecordingComplete(protectedResult.uploadResult, description: description, tdfManifest: protectedResult.manifest)
 
             // Only transition to complete state after everything is done
             await MainActor.run {
-                recordingState = .complete(result)
+                recordingState = .complete(protectedResult.uploadResult)
             }
         } catch {
             print("❌ Recording stop failed with error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             recordingState = .error(error.localizedDescription)
         }
+    }
+
+    /// Protect video with TDF3 for FairPlay streaming
+    private func protectVideo(
+        at videoURL: URL,
+        description: String,
+        processedDirectory: URL
+    ) async throws -> (uploadResult: UploadResult, manifest: Data) {
+        // Load video data
+        let videoData = try Data(contentsOf: videoURL)
+        print("🔐 Protecting video: \(videoData.count) bytes")
+
+        // Create protection service
+        let kasURL = URL(string: "https://kas.arkavo.net")!
+        let protectionService = VideoProtectionService(kasURL: kasURL)
+
+        // Generate asset ID
+        let assetID = processedDirectory.lastPathComponent
+
+        // Protect the video
+        let protectedVideo = try await protectionService.protectVideo(
+            videoData: videoData,
+            assetID: assetID
+        )
+
+        print("🔐 Video protected: manifest=\(protectedVideo.manifest.count) bytes, payload=\(protectedVideo.encryptedPayload.count) bytes")
+
+        // Create upload result with encrypted payload
+        var result = UploadResult(
+            id: assetID,
+            playbackURL: videoURL.absoluteString
+        )
+        result.encryptedPayload = protectedVideo.encryptedPayload
+
+        return (result, protectedVideo.manifest)
     }
 
     func flipCamera() {
@@ -1154,38 +1206,10 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         }
     }
 
-    private func handleRecordingComplete(_ result: UploadResult?, description: String) async throws {
+    private func handleRecordingComplete(_ result: UploadResult?, description: String, tdfManifest: Data? = nil) async throws {
         guard var result else {
             throw VideoError.processingFailed("Failed to get recording result")
         }
-
-        // Account for NanoTDF overhead - target ~950KB for the video
-        let videoTargetSize = 950_000 // Leave ~100KB for NanoTDF overhead
-
-        let videoURL = URL(string: result.playbackURL)!
-        let resourceValues = try videoURL.resourceValues(forKeys: [.fileSizeKey])
-        let fileSize = resourceValues.fileSize ?? 0
-
-        print("Original video size: \(fileSize) bytes")
-
-        // Analyze the original video
-        let asset = AVURLAsset(url: videoURL)
-        if let videoTrack = try await asset.loadTracks(withMediaType: .video).first {
-            let naturalSize = try await videoTrack.load(.naturalSize)
-            let transform = try await videoTrack.load(.preferredTransform)
-            let videoAngle = atan2(transform.b, transform.a)
-
-            print("\n📹 Original Video Analysis:")
-            print("- File size: \(fileSize) bytes")
-            print("- Natural size: \(naturalSize)")
-            print("- Aspect ratio: \(naturalSize.width / naturalSize.height)")
-            print("- Transform angle: \(videoAngle * 180 / .pi)°")
-            print("- Transform matrix: \(transform)")
-        }
-
-        // Compress video with optimized settings
-        let compressedData = try await compressVideo(url: videoURL, description: description, targetSize: videoTargetSize)
-        print("Compressed video size: \(compressedData.count) bytes")
 
         // Process video metadata and save
         let persistenceController = PersistenceController.shared
@@ -1200,7 +1224,6 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
 
         let contributor = Contributor(profilePublicID: profile.publicID, role: "creator")
 
-//        print("handleRecordingComplete profile.publicID \(profile.publicID.base58EncodedString)")
         // Create metadata
         let metadata = Thought.Metadata(
             creatorPublicID: profile.publicID,
@@ -1210,24 +1233,86 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
             contributors: [contributor],
         )
 
-        // Create thought with policy and encrypted data
-        let videoThought = try await createThoughtWithPolicy(
-            videoData: compressedData,
-            metadata: metadata,
-        )
-        result.nano = videoThought.nano
+        // Use TDF3 protected video if available, otherwise fall back to NanoTDF
+        if let tdfManifest, let encryptedPayload = result.encryptedPayload {
+            // TDF3 path: video is already encrypted with AES-128-CBC
+            print("📤 Uploading TDF3 protected video: manifest=\(tdfManifest.count) bytes, payload=\(encryptedPayload.count) bytes")
 
-        // Verify NanoTDF size before sending
-        guard videoThought.nano.count <= 1_000_000 else {
-            throw NSError(domain: "VideoCompression", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
+            // Store TDF manifest in result for FairPlay key delivery
+            result.tdfManifest = tdfManifest
+
+            // Create combined upload message with TDF3 manifest + encrypted payload
+            let uploadMessage = try createTDF3UploadMessage(
+                manifest: tdfManifest,
+                encryptedPayload: encryptedPayload,
+                metadata: metadata
+            )
+
+            // Send via WebSocket/NATS
+            try await client.sendNATSMessage(uploadMessage)
+
+            // Create thought for local storage
+            let videoThought = Thought(
+                id: UUID(),
+                nano: uploadMessage, // Store combined message for reference
+                metadata: metadata
+            )
+            videoStream.addThought(videoThought)
+            try context.save()
+        } else {
+            // Legacy NanoTDF path (fallback)
+            let videoURL = URL(string: result.playbackURL)!
+
+            // Account for NanoTDF overhead - target ~950KB for the video
+            let videoTargetSize = 950_000
+
+            // Compress video with optimized settings
+            let compressedData = try await compressVideo(url: videoURL, description: description, targetSize: videoTargetSize)
+            print("Compressed video size: \(compressedData.count) bytes")
+
+            // Create thought with policy and encrypted data
+            let videoThought = try await createThoughtWithPolicy(
+                videoData: compressedData,
+                metadata: metadata
+            )
+            result.nano = videoThought.nano
+
+            // Verify NanoTDF size before sending
+            guard videoThought.nano.count <= 1_000_000 else {
+                throw NSError(domain: "VideoCompression", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Final NanoTDF too large for websocket"])
+            }
+
+            // Send the same NanoTDF over websocket
+            try await client.sendNATSMessage(videoThought.nano)
+
+            videoStream.addThought(videoThought)
+            try context.save()
         }
+    }
 
-        // Send the same NanoTDF over websocket
-        try await client.sendNATSMessage(videoThought.nano)
+    /// Create TDF3 upload message combining manifest and encrypted payload
+    private func createTDF3UploadMessage(
+        manifest: Data,
+        encryptedPayload: Data,
+        metadata: Thought.Metadata
+    ) throws -> Data {
+        // Message format: [4-byte manifest length][manifest][encrypted payload]
+        var message = Data()
 
-        videoStream.addThought(videoThought)
-        try context.save()
+        // Write manifest length as 4-byte big-endian integer
+        var manifestLength = UInt32(manifest.count).bigEndian
+        message.append(Data(bytes: &manifestLength, count: 4))
+
+        // Append manifest
+        message.append(manifest)
+
+        // Append encrypted payload
+        message.append(encryptedPayload)
+
+        print("📦 TDF3 upload message: \(message.count) bytes (manifest: \(manifest.count), payload: \(encryptedPayload.count))")
+
+        return message
     }
 
     // MARK: - Private Helpers

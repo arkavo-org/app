@@ -344,4 +344,6 @@ struct UploadResult: Codable, Sendable {
     let id: String
     let playbackURL: String
     var nano: Data?
+    var encryptedPayload: Data? // TDF3 AES-128-CBC encrypted video
+    var tdfManifest: Data? // TDF3 manifest.json with wrapped DEK
 }

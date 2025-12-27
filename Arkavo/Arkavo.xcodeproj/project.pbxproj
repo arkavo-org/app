@@ -77,6 +77,7 @@
 		DAAFCBF82D091A51003FC56F /* PostFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF72D091A4A003FC56F /* PostFeedView.swift */; };
 		DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */; };
 		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
+DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF00001VPS00001 /* VideoProtectionService.swift */; };
 		DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* VideoCreateView.swift */; };
 		DABD7D4C2D0E4BDE00239F22 /* GroupCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */; };
 		DABD7D502D0F584B00239F22 /* CreatorSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */; };
@@ -198,6 +199,7 @@
 		DAAFCBF72D091A4A003FC56F /* PostFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostFeedView.swift; sourceTree = "<group>"; };
 		DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedView.swift; sourceTree = "<group>"; };
 		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
+DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProtectionService.swift; sourceTree = "<group>"; };
 		DABD7D492D0D336700239F22 /* VideoCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCreateView.swift; sourceTree = "<group>"; };
 		DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCreateView.swift; sourceTree = "<group>"; };
 		DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorSupportView.swift; sourceTree = "<group>"; };
@@ -326,6 +328,7 @@
 				DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */,
 				DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */,
 				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
+				DAF00001VPS00001 /* VideoProtectionService.swift */,
 				DAAFCBCD2D09073A003FC56F /* GroupView.swift */,
 				DA132E202D7FCF7F0003F04D /* GroupViewModel.swift */,
 				DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */,
@@ -663,6 +666,7 @@
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
 				DABD7D4C2D0E4BDE00239F22 /* GroupCreateView.swift in Sources */,
 				DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */,
+				DAF00002VPS00002 /* VideoProtectionService.swift in Sources */,
 				DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */,
 				DA88DD0C2CCAA9B5005DA044 /* MetadataServiceModel.swift in Sources */,
 				DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */,
