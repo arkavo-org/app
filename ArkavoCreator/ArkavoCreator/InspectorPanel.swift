@@ -89,6 +89,23 @@ struct FaceInspectorContent: View {
                 .labelsHidden()
             }
 
+            // Section: Background removal
+            Divider()
+            sectionHeader("Background")
+
+            Toggle(isOn: $viewModel.floatingHeadEnabled) {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.minus")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Floating Head")
+                        Text("Remove background from camera")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .toggleStyle(.switch)
+
             Spacer()
         }
         .padding()
