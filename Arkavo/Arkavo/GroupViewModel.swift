@@ -299,6 +299,19 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
     private var mcBrowserViewController: MCBrowserViewController? // Keep for UI-based browsing if needed
     private var invitationHandler: (@Sendable (Bool, MCSession?) -> Void)?
 
+    /// Key for persisted device ID in UserDefaults (privacy-safe alternative to identifierForVendor)
+    private static let deviceIdKey = "com.arkavo.p2p.deviceId"
+
+    /// Persistent device ID for peer discovery (generated once, not a system identifier)
+    private static var persistedDeviceId: String {
+        if let existingId = UserDefaults.standard.string(forKey: deviceIdKey) {
+            return existingId
+        }
+        let newId = UUID().uuidString
+        UserDefaults.standard.set(newId, forKey: deviceIdKey)
+        return newId
+    }
+
     private let arkavoClient: ArkavoClient
 
     // Published properties (mirrored by PeerDiscoveryManager)
@@ -609,7 +622,7 @@ class P2PGroupViewModel: NSObject, ObservableObject { // REMOVED: ArkavoClientDe
         // Include essential info for discovery and identification
         let discoveryInfo: [String: String] = [
             "profileID": profile.publicID.base58EncodedString,
-            "deviceID": UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString,
+            "deviceID": Self.persistedDeviceId,
             "timestamp": "\(Date().timeIntervalSince1970)",
             "name": profile.name,
         ]
