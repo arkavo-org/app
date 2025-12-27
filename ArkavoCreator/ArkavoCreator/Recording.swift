@@ -21,6 +21,7 @@ struct Recording: Identifiable, Sendable {
     let fileSize: Int64
     let thumbnailPath: URL?
     var c2paStatus: C2PAStatus?
+    var tdfStatus: TDFProtectionStatus?
 
     enum C2PAStatus: Sendable {
         case signed(validatedAt: Date, isValid: Bool)
@@ -40,6 +41,37 @@ struct Recording: Identifiable, Sendable {
             }
             return false
         }
+    }
+
+    /// TDF3 protection status for FairPlay streaming
+    enum TDFProtectionStatus: Sendable {
+        case protected(manifestURL: URL, protectedAt: Date)
+        case unprotected
+        case unknown
+
+        var isProtected: Bool {
+            if case .protected = self {
+                return true
+            }
+            return false
+        }
+
+        var manifestURL: URL? {
+            if case .protected(let url, _) = self {
+                return url
+            }
+            return nil
+        }
+    }
+
+    /// URL of the TDF3-protected version (same name with .tdf extension)
+    var protectedURL: URL {
+        url.deletingPathExtension().appendingPathExtension("tdf")
+    }
+
+    /// URL of the TDF3 manifest
+    var manifestURL: URL {
+        url.deletingPathExtension().appendingPathExtension("tdf.json")
     }
 
     var formattedDuration: String {
@@ -182,5 +214,49 @@ final class RecordingsManager: ObservableObject {
         // C2PA verification temporarily disabled - c2patool not available
         // TODO: Re-enable when c2patool is bundled with the app
         return .unsigned
+    }
+
+    /// Check TDF protection status for a recording
+    func checkTDFStatus(for recording: Recording) async -> Recording.TDFProtectionStatus {
+        let manifestURL = recording.manifestURL
+        let protectedURL = recording.protectedURL
+
+        // Check if both manifest and protected file exist
+        if FileManager.default.fileExists(atPath: manifestURL.path),
+           FileManager.default.fileExists(atPath: protectedURL.path)
+        {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: manifestURL.path),
+               let modDate = attrs[.modificationDate] as? Date
+            {
+                return .protected(manifestURL: manifestURL, protectedAt: modDate)
+            }
+            return .protected(manifestURL: manifestURL, protectedAt: Date())
+        }
+        return .unprotected
+    }
+
+    /// Protect a recording with TDF3 for FairPlay streaming
+    func protectRecording(_ recording: Recording, kasURL: URL) async throws {
+        // Load video data
+        let videoData = try Data(contentsOf: recording.url)
+
+        // Create protection service
+        let protectionService = RecordingProtectionService(kasURL: kasURL)
+
+        // Protect the video
+        let result = try await protectionService.protectVideo(
+            videoData: videoData,
+            assetID: recording.id.uuidString
+        )
+
+        // Write manifest
+        try result.manifest.write(to: recording.manifestURL)
+
+        // Write encrypted payload
+        try result.encryptedPayload.write(to: recording.protectedURL)
+
+        print("Protected recording: \(recording.title)")
+        print("  Manifest: \(recording.manifestURL.path)")
+        print("  Protected: \(recording.protectedURL.path)")
     }
 }
