@@ -5,7 +5,7 @@ import ArkavoSocial
 struct RecordingsLibraryView: View {
     @StateObject private var manager = RecordingsManager()
     @State private var selectedRecording: Recording?
-    @State private var showingPlayer = false
+    @State private var playerRecording: Recording?  // Dedicated state for video player sheet
     @State private var showingProvenance = false
     @State private var showingDeleteConfirmation = false
     @State private var protectedPlayerRecording: Recording?  // Dedicated state for protected player
@@ -41,8 +41,7 @@ struct RecordingsLibraryView: View {
                             RecordingCard(recording: recording)
                                 .accessibilityIdentifier("RecordingCard_\(recording.id)")
                                 .onTapGesture {
-                                    selectedRecording = recording
-                                    showingPlayer = true
+                                    playerRecording = recording
                                 }
                                 .contextMenu {
                                     recordingContextMenu(for: recording)
@@ -53,10 +52,8 @@ struct RecordingsLibraryView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingPlayer) {
-            if let recording = selectedRecording {
-                VideoPlayerView(recording: recording)
-            }
+        .sheet(item: $playerRecording) { recording in
+            VideoPlayerView(recording: recording)
         }
         .sheet(isPresented: $showingProvenance) {
             if let recording = selectedRecording {
@@ -200,8 +197,7 @@ struct RecordingsLibraryView: View {
     @ViewBuilder
     private func recordingContextMenu(for recording: Recording) -> some View {
         Button("Play") {
-            selectedRecording = recording
-            showingPlayer = true
+            playerRecording = recording
         }
 
         Divider()
@@ -513,8 +509,8 @@ struct VideoPlayerView: View {
 
             Divider()
 
-            // Video Player
-            VideoPlayer(player: AVPlayer(url: recording.url))
+            // Video Player using native AVPlayerView wrapper
+            AVPlayerViewRepresentable(url: recording.url)
                 .frame(minWidth: 800, minHeight: 600)
 
             Divider()
@@ -539,6 +535,40 @@ struct VideoPlayerView: View {
                     .font(.caption)
             }
             .padding()
+        }
+    }
+}
+
+// Custom AVPlayerView wrapper for macOS
+struct AVPlayerViewRepresentable: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let playerView = AVPlayerView()
+        playerView.controlsStyle = .floating
+
+        // Start security-scoped access on the recordings folder
+        if let folder = RecordingsFolderAccess.getBookmarkedFolder() {
+            _ = folder.startAccessingSecurityScopedResource()
+        }
+
+        let player = AVPlayer(url: url)
+        playerView.player = player
+        player.play()
+
+        return playerView
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        // No updates needed
+    }
+
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player?.pause()
+        nsView.player = nil
+        // Stop security-scoped access
+        if let folder = RecordingsFolderAccess.getBookmarkedFolder() {
+            folder.stopAccessingSecurityScopedResource()
         }
     }
 }

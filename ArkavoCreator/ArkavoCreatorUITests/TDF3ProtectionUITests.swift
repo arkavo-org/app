@@ -107,6 +107,60 @@ final class TDF3ProtectionUITests: XCTestCase {
         return true
     }
 
+    // MARK: - Video Playback Tests
+
+    @MainActor
+    func testPlayVideoFromContextMenu() throws {
+        guard navigateToLibrary() else {
+            throw XCTSkip("Could not navigate to Library")
+        }
+
+        guard let card = getFirstRecordingCard() else {
+            throw XCTSkip("No recordings available for testing")
+        }
+
+        print("🎬 Testing video playback...")
+        rightClickRecording(card)
+
+        let playMenuItem = app.menuItems["Play"]
+        guard playMenuItem.waitForExistence(timeout: 5) else {
+            XCTFail("Play menu item should exist")
+            return
+        }
+        print("✅ Play menu item found")
+
+        playMenuItem.click()
+        sleep(2)
+
+        // Check if video player sheet appeared
+        let videoPlayer = app.windows.element(boundBy: 1)  // Sheet is often second window
+        let closeButton = app.buttons.matching(NSPredicate(format: "label CONTAINS 'xmark' OR label == 'Close'")).firstMatch
+
+        print("🔍 Checking for player UI elements...")
+        print("   - Windows count: \(app.windows.count)")
+        print("   - Close button exists: \(closeButton.exists)")
+
+        // Look for the video player view or the loading indicator
+        let loadingIndicator = app.progressIndicators.firstMatch
+        let showInFinderButton = app.buttons["Show in Finder"]
+
+        let playerAppeared = closeButton.waitForExistence(timeout: 5) ||
+                            showInFinderButton.waitForExistence(timeout: 5) ||
+                            loadingIndicator.waitForExistence(timeout: 5)
+
+        XCTAssertTrue(playerAppeared, "Video player sheet should appear with controls")
+        print("✅ Video player sheet appeared")
+
+        // Dismiss the sheet
+        if closeButton.exists {
+            closeButton.click()
+        } else {
+            app.typeKey(.escape, modifierFlags: [])
+        }
+        sleep(1)
+        print("✅ Video playback test completed")
+    }
+
     // MARK: - Context Menu Tests
 
     @MainActor
