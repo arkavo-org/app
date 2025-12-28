@@ -137,8 +137,8 @@ final class RecordViewModel {
             // Register with shared state for streaming access
             RecordingState.shared.setRecordingSession(session)
 
-            // Generate output URL
-            let outputURL = try generateOutputURL()
+            // Generate output URL (may prompt for folder selection)
+            let outputURL = try await generateOutputURL()
 
             // Start recording
             try await session.startRecording(outputURL: outputURL, title: title)
@@ -333,22 +333,31 @@ final class RecordViewModel {
         title = "Recording \(formatter.string(from: Date()))"
     }
 
-    private func generateOutputURL() throws -> URL {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let recordingsPath = documentsPath.appendingPathComponent("Recordings", isDirectory: true)
+    private func generateOutputURL() async throws -> URL {
+        // Get bookmarked folder or prompt user to select one
+        var recordingsFolder = RecordingsFolderAccess.getBookmarkedFolder()
+        if recordingsFolder == nil {
+            recordingsFolder = await RecordingsFolderAccess.chooseRecordingsFolder()
+        }
 
-        // Create recordings directory if needed
-        try FileManager.default.createDirectory(at: recordingsPath, withIntermediateDirectories: true)
+        guard let folder = recordingsFolder else {
+            throw CocoaError(.userCancelled)
+        }
 
-        // Generate filename with appropriate extension based on recording mode
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
-        let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
-        let ext = isAudioOnly ? "m4a" : "mov"
-        let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
+        return try RecordingsFolderAccess.withScopedAccess(folder) {
+            // Create recordings directory if needed
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        return recordingsPath.appendingPathComponent(filename)
+            // Generate filename with appropriate extension based on recording mode
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
+            let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
+            let ext = isAudioOnly ? "m4a" : "mov"
+            let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
+
+            return folder.appendingPathComponent(filename)
+        }
     }
 
     func getAvailableDevices() -> (screens: [ScreenInfo], cameras: [CameraInfo], microphones: [AudioDeviceInfo]) {

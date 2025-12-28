@@ -118,15 +118,22 @@ struct Recording: Identifiable, Sendable {
 @MainActor
 final class RecordingsManager: ObservableObject {
     @Published private(set) var recordings: [Recording] = []
+    @Published private(set) var needsFolderSelection = false
 
-    private let recordingsDirectory: URL
+    private var recordingsDirectory: URL
 
     init() {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        recordingsDirectory = documentsPath.appendingPathComponent("Recordings", isDirectory: true)
-
-        // Create directory if needed
-        try? FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+        // Check if we have a bookmarked folder, otherwise we'll need user to select one
+        if let folder = RecordingsFolderAccess.getBookmarkedFolder() {
+            recordingsDirectory = folder
+            print("📂 [RecordingsManager] recordingsDirectory: \(recordingsDirectory.path)")
+        } else {
+            // Use sandboxed container as temporary fallback until user selects folder
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            recordingsDirectory = documentsURL.appendingPathComponent("Recordings", isDirectory: true)
+            needsFolderSelection = true
+            print("📂 [RecordingsManager] no folder selected, using fallback: \(recordingsDirectory.path)")
+        }
 
         // Listen for recording completed notifications
         NotificationCenter.default.addObserver(
@@ -144,13 +151,24 @@ final class RecordingsManager: ObservableObject {
         }
     }
 
+    func selectRecordingsFolder() async {
+        if let folder = await RecordingsFolderAccess.chooseRecordingsFolder() {
+            recordingsDirectory = folder
+            needsFolderSelection = false
+            print("📂 [RecordingsManager] user selected: \(folder.path)")
+            await loadRecordings()
+        }
+    }
+
     func loadRecordings() async {
         do {
-            let fileURLs = try FileManager.default.contentsOfDirectory(
-                at: recordingsDirectory,
-                includingPropertiesForKeys: [.creationDateKey, .fileSizeKey],
-                options: [.skipsHiddenFiles]
-            )
+            let fileURLs = try RecordingsFolderAccess.withScopedAccess(recordingsDirectory) {
+                try FileManager.default.contentsOfDirectory(
+                    at: recordingsDirectory,
+                    includingPropertiesForKeys: [.creationDateKey, .fileSizeKey],
+                    options: [.skipsHiddenFiles]
+                )
+            }
 
             let mediaFiles = fileURLs.filter { $0.pathExtension == "mov" || $0.pathExtension == "m4a" }
 
@@ -282,3 +300,4 @@ final class RecordingsManager: ObservableObject {
         }.value
     }
 }
+

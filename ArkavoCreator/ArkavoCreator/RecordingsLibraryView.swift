@@ -163,16 +163,36 @@ struct RecordingsLibraryView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "video.slash")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
+            if manager.needsFolderSelection {
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
 
-            Text("No Recordings Yet")
-                .font(.title2)
-                .fontWeight(.semibold)
+                Text("Choose Recordings Folder")
+                    .font(.title2)
+                    .fontWeight(.semibold)
 
-            Text("Start recording to see your videos here")
-                .foregroundColor(.secondary)
+                Text("Select where to store your recordings")
+                    .foregroundColor(.secondary)
+
+                Button("Select Folder...") {
+                    Task {
+                        await manager.selectRecordingsFolder()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Image(systemName: "video.slash")
+                    .font(.system(size: 60))
+                    .foregroundColor(.secondary)
+
+                Text("No Recordings Yet")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+
+                Text("Start recording to see your videos here")
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
