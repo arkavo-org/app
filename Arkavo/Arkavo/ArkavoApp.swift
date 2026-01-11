@@ -78,6 +78,14 @@ struct ArkavoApp: App {
             }
             .environmentObject(remoteStreamer)
             .task {
+                // Initialize Iroh node for P2P content fetching
+                await ArkavoIrohManager.shared.initialize()
+                if let error = await ArkavoIrohManager.shared.error {
+                    print("Warning: Iroh initialization failed: \(error)")
+                } else {
+                    print("Iroh node initialized successfully")
+                }
+
                 // Clean up any invalid profiles from previous failed registrations
                 do {
                     try await persistenceController.cleanupInvalidProfiles()
