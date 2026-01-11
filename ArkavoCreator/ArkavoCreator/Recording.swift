@@ -161,14 +161,20 @@ final class RecordingsManager: ObservableObject {
     }
 
     func loadRecordings() async {
+        // Start security-scoped access for the recordings directory
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error loading recordings: Cannot access recordings directory")
+            recordings = []
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         do {
-            let fileURLs = try RecordingsFolderAccess.withScopedAccess(recordingsDirectory) {
-                try FileManager.default.contentsOfDirectory(
-                    at: recordingsDirectory,
-                    includingPropertiesForKeys: [.creationDateKey, .fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                )
-            }
+            let fileURLs = try FileManager.default.contentsOfDirectory(
+                at: recordingsDirectory,
+                includingPropertiesForKeys: [.creationDateKey, .fileSizeKey],
+                options: [.skipsHiddenFiles]
+            )
 
             let mediaFiles = fileURLs.filter { $0.pathExtension == "mov" || $0.pathExtension == "m4a" }
 
@@ -217,6 +223,13 @@ final class RecordingsManager: ObservableObject {
     }
 
     func deleteRecording(_ recording: Recording) {
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error deleting recording: Cannot access recordings directory")
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         do {
             try FileManager.default.removeItem(at: recording.url)
 
@@ -234,6 +247,13 @@ final class RecordingsManager: ObservableObject {
     }
 
     func generateThumbnail(for recording: Recording) async -> NSImage? {
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error generating thumbnail: Cannot access recordings directory")
+            return nil
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         let asset = AVURLAsset(url: recording.url)
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
@@ -277,27 +297,34 @@ final class RecordingsManager: ObservableObject {
         let assetID = recording.id.uuidString
         let title = recording.title
 
-        // Move heavy work off main thread to avoid blocking UI
-        try await Task.detached(priority: .userInitiated) {
-            // Load video data (potentially large file)
-            print("📂 Loading video data from: \(videoURL.path)")
-            let videoData = try Data(contentsOf: videoURL)
-            print("📂 Loaded \(videoData.count) bytes")
-
-            // Create protection service and encrypt
-            let protectionService = RecordingProtectionService(kasURL: kasURL)
-            print("🔐 Starting TDF3 protection...")
-            let tdfArchive = try await protectionService.protectVideo(
-                videoData: videoData,
-                assetID: assetID
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
             )
-            print("✅ TDF archive created: \(tdfArchive.count) bytes")
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
 
-            // Write TDF archive
-            try tdfArchive.write(to: tdfURL)
-            print("💾 Protected recording: \(title)")
-            print("💾 TDF archive: \(tdfURL.path)")
-        }.value
+        // Load video data (potentially large file)
+        print("📂 Loading video data from: \(videoURL.path)")
+        let videoData = try Data(contentsOf: videoURL)
+        print("📂 Loaded \(videoData.count) bytes")
+
+        // Create protection service and encrypt
+        let protectionService = RecordingProtectionService(kasURL: kasURL)
+        print("🔐 Starting TDF3 protection...")
+        let tdfArchive = try await protectionService.protectVideo(
+            videoData: videoData,
+            assetID: assetID
+        )
+        print("✅ TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
     }
 
     /// Protect a recording with HLS segmentation for streaming playback
@@ -308,24 +335,31 @@ final class RecordingsManager: ObservableObject {
         let assetID = recording.id.uuidString
         let title = recording.title
 
-        // Move heavy work off main thread to avoid blocking UI
-        try await Task.detached(priority: .userInitiated) {
-            // Create HLS protection service
-            let protectionService = HLSRecordingProtectionService(kasURL: kasURL)
-            print("🎬 Starting HLS TDF protection for: \(title)")
-
-            // Convert to HLS and package into TDF
-            let tdfArchive = try await protectionService.protectVideoHLS(
-                videoURL: videoURL,
-                assetID: assetID
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
             )
-            print("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
 
-            // Write TDF archive
-            try tdfArchive.write(to: tdfURL)
-            print("💾 Protected HLS recording: \(title)")
-            print("💾 TDF archive: \(tdfURL.path)")
-        }.value
+        // Create HLS protection service
+        let protectionService = HLSRecordingProtectionService(kasURL: kasURL)
+        print("🎬 Starting HLS TDF protection for: \(title)")
+
+        // Convert to HLS and package into TDF
+        let tdfArchive = try await protectionService.protectVideoHLS(
+            videoURL: videoURL,
+            assetID: assetID
+        )
+        print("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected HLS recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
     }
 }
 
