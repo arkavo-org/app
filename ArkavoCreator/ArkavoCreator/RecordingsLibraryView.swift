@@ -1,6 +1,9 @@
 import SwiftUI
 import AVKit
 import ArkavoSocial
+import ArkavoMediaKit
+import CryptoKit
+import OpenTDFKit
 
 struct RecordingsLibraryView: View {
     @StateObject private var manager = RecordingsManager()
@@ -618,6 +621,11 @@ struct ProtectedVideoPlayerView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var manifestInfo: ManifestInfo?
+    @State private var isPlaying = false
+    @State private var player: AVPlayer?
+    @State private var playbackError: String?
+    @State private var isPreparingPlayback = false
+    @State private var playbackStatus: String = ""
 
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
@@ -630,6 +638,7 @@ struct ProtectedVideoPlayerView: View {
         let kasURL: String
         let protectedAt: String
         let payloadSize: String
+        let hlsManifest: HLSManifest?
     }
 
     var body: some View {
@@ -692,8 +701,12 @@ struct ProtectedVideoPlayerView: View {
                         .padding(.horizontal)
                 }
                 .frame(minWidth: 800, minHeight: 600)
+            } else if isPlaying, let player {
+                // Video player
+                VideoPlayer(player: player)
+                    .frame(minWidth: 800, minHeight: 600)
             } else {
-                // Protected content info (actual FairPlay playback requires server integration)
+                // Protected content info with Play button
                 VStack(spacing: 24) {
                     Image(systemName: "play.tv.fill")
                         .font(.system(size: 64))
@@ -715,13 +728,39 @@ struct ProtectedVideoPlayerView: View {
                         .cornerRadius(12)
                     }
 
-                    Text("To play this content, a FairPlay license must be obtained from the KAS server.\nThe client app will request a CKC (Content Key Context) using the TDF manifest.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                    if let playbackError {
+                        Text(playbackError)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    } else if isPreparingPlayback {
+                        VStack(spacing: 8) {
+                            ProgressView()
+                            Text(playbackStatus)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Text("Click Play to decrypt and stream this content using your KAS credentials.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
 
                     HStack(spacing: 16) {
+                        Button {
+                            Task {
+                                await startPlayback()
+                            }
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                                .font(.headline)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isPreparingPlayback || manifestInfo == nil)
+
                         Button("Show TDF Archive") {
                             NSWorkspace.shared.selectFile(recording.tdfURL.path, inFileViewerRootedAtPath: "")
                         }
@@ -762,6 +801,21 @@ struct ProtectedVideoPlayerView: View {
             print("📂 Manifest loading complete. isLoading = false")
         }
 
+        // Get the bookmarked recordings directory for security-scoped access
+        guard let recordingsDirectory = RecordingsFolderAccess.getBookmarkedFolder() else {
+            print("❌ No bookmarked recordings folder")
+            errorMessage = "Please re-select the recordings folder"
+            return
+        }
+
+        // Start security-scoped access on the directory
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("❌ Cannot access recordings directory")
+            errorMessage = "Cannot access recordings folder"
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         do {
             // Extract manifest from TDF ZIP archive
             print("📦 Extracting manifest from TDF archive...")
@@ -786,16 +840,300 @@ struct ProtectedVideoPlayerView: View {
             formatter.countStyle = .file
             let tdfSizeString = formatter.string(fromByteCount: tdfSize)
 
+            // Parse HLS manifest for playback
+            var hlsManifest: HLSManifest?
+            if let hlsInfo = meta?["hls"] as? [String: Any],
+               let assetID = hlsInfo["assetId"] as? String,
+               let segmentIVs = hlsInfo["segmentIVs"] as? [String],
+               let wrappedKey = keyAccess?["wrappedKey"] as? String {
+                let policy = encInfo?["policy"] as? String
+                let policyBinding = keyAccess?["policyBinding"] as? [String: String]
+
+                hlsManifest = HLSManifest(
+                    assetID: assetID,
+                    wrappedKey: wrappedKey,
+                    algorithm: algorithm,
+                    segmentIVs: segmentIVs,
+                    segmentCount: hlsInfo["segmentCount"] as? Int ?? segmentIVs.count,
+                    totalDuration: hlsInfo["totalDuration"] as? Double ?? 0,
+                    encryptionMode: hlsInfo["encryptionMode"] as? String,
+                    kasURL: URL(string: kasURLString) ?? kasURL,
+                    policy: policy,
+                    policyBindingAlg: policyBinding?["alg"],
+                    policyBindingHash: policyBinding?["hash"]
+                )
+                print("✅ HLS manifest parsed: \(segmentIVs.count) segments")
+            }
+
             manifestInfo = ManifestInfo(
                 algorithm: algorithm,
                 kasURL: kasURLString,
                 protectedAt: protectedAt,
-                payloadSize: tdfSizeString
+                payloadSize: tdfSizeString,
+                hlsManifest: hlsManifest
             )
             print("✅ Manifest parsed: algorithm=\(algorithm), size=\(tdfSizeString)")
         } catch {
             print("❌ Manifest loading error: \(error)")
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func startPlayback() async {
+        guard let info = manifestInfo, let hlsManifest = info.hlsManifest else {
+            playbackError = "No HLS manifest available"
+            return
+        }
+
+        isPreparingPlayback = true
+        playbackError = nil
+        playbackStatus = "Loading TDF archive..."
+
+        // Get the bookmarked recordings directory for security-scoped access
+        guard let recordingsDirectory = RecordingsFolderAccess.getBookmarkedFolder() else {
+            playbackError = "Please re-select the recordings folder"
+            isPreparingPlayback = false
+            return
+        }
+
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            playbackError = "Cannot access recordings folder"
+            isPreparingPlayback = false
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
+        do {
+            // Read TDF data
+            let tdfData = try Data(contentsOf: recording.tdfURL)
+            print("📂 Loaded TDF archive: \(tdfData.count) bytes")
+
+            // Extract HLS content
+            playbackStatus = "Extracting HLS segments..."
+            let tempDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("hls-player-\(UUID().uuidString)")
+            let extractor = HLSTDFExtractor(kasURL: kasURL)
+            let localAsset = try await extractor.extract(tdfData: tdfData, outputDirectory: tempDir)
+            print("✅ Extracted \(localAsset.segmentURLs.count) segments")
+
+            // Get NTDF token for KAS authentication
+            playbackStatus = "Authenticating with KAS..."
+            guard let ntdfToken = KeychainManager.getAuthenticationToken() else {
+                playbackError = "Not authenticated - please sign in first"
+                isPreparingPlayback = false
+                return
+            }
+
+            // Unwrap key from KAS
+            playbackStatus = "Obtaining decryption key..."
+            let symmetricKey = try await unwrapKeyFromKAS(manifest: hlsManifest, ntdfToken: ntdfToken)
+            print("✅ Key unwrapped successfully")
+
+            // Decrypt segments and create playable content
+            playbackStatus = "Decrypting content..."
+            let playableURL = try await decryptAndPreparePlayback(
+                localAsset: localAsset,
+                symmetricKey: symmetricKey,
+                extractor: extractor
+            )
+
+            // Create player
+            playbackStatus = "Starting playback..."
+            let avPlayer = AVPlayer(url: playableURL)
+            self.player = avPlayer
+            isPlaying = true
+            isPreparingPlayback = false
+
+            // Start playback
+            avPlayer.play()
+            print("▶️ Playback started")
+
+        } catch {
+            print("❌ Playback error: \(error)")
+            playbackError = error.localizedDescription
+            isPreparingPlayback = false
+        }
+    }
+
+    private func unwrapKeyFromKAS(manifest: HLSManifest, ntdfToken: String) async throws -> SymmetricKey {
+        // Build TDFManifest from HLSManifest for KAS rewrap
+        guard let policy = manifest.policy,
+              let policyBindingAlg = manifest.policyBindingAlg,
+              let policyBindingHash = manifest.policyBindingHash
+        else {
+            throw PlaybackError.missingPolicyData
+        }
+
+        // Create TDF manifest structures
+        let policyBinding = TDFPolicyBinding(alg: policyBindingAlg, hash: policyBindingHash)
+
+        let keyAccess = TDFKeyAccessObject(
+            type: .wrapped,
+            url: manifest.kasURL.absoluteString,
+            protocolValue: .kas,
+            wrappedKey: manifest.wrappedKey,
+            policyBinding: policyBinding,
+            encryptedMetadata: nil,
+            kid: nil,
+            sid: nil,
+            schemaVersion: nil,
+            ephemeralPublicKey: nil
+        )
+
+        let method = TDFMethodDescriptor(
+            algorithm: manifest.algorithm,
+            iv: manifest.segmentIVs.first ?? "",
+            isStreamable: true
+        )
+
+        let encInfo = TDFEncryptionInformation(
+            type: .split,
+            keyAccess: [keyAccess],
+            method: method,
+            integrityInformation: nil,
+            policy: policy
+        )
+
+        let payloadDescriptor = TDFPayloadDescriptor(
+            type: .reference,
+            url: "playlist.m3u8",
+            protocolValue: .zip,
+            isEncrypted: true,
+            mimeType: "application/x-mpegURL"
+        )
+
+        let tdfManifest = TDFManifest(
+            schemaVersion: "4.3.0",
+            payload: payloadDescriptor,
+            encryptionInformation: encInfo,
+            assertions: nil
+        )
+
+        // Generate ephemeral P-256 key pair for ECDH
+        let clientPrivateKey = P256.KeyAgreement.PrivateKey()
+        let clientPublicKeyPEM = clientPrivateKey.publicKey.pemRepresentation
+
+        // Create KAS rewrap client
+        let kasClient = KASRewrapClient(
+            kasURL: manifest.kasURL,
+            oauthToken: ntdfToken
+        )
+
+        // Perform rewrap request
+        print("🔑 Sending rewrap request to KAS...")
+        let result = try await kasClient.rewrapTDF(
+            manifest: tdfManifest,
+            clientPublicKeyPEM: clientPublicKeyPEM
+        )
+
+        // Get wrapped key from result
+        guard let wrappedKeyData = result.wrappedKeys.values.first else {
+            throw PlaybackError.keyUnwrapFailed
+        }
+
+        // Extract session public key from PEM and unwrap
+        guard let sessionPEM = result.sessionPublicKeyPEM else {
+            throw PlaybackError.keyUnwrapFailed
+        }
+
+        let sessionKey = try extractCompressedKeyFromPEM(sessionPEM)
+
+        // Unwrap using ECDH
+        return try KASRewrapClient.unwrapKey(
+            wrappedKey: wrappedKeyData,
+            sessionPublicKey: sessionKey,
+            clientPrivateKey: Data(clientPrivateKey.rawRepresentation)
+        )
+    }
+
+    private func extractCompressedKeyFromPEM(_ pem: String) throws -> Data {
+        let normalizedPEM = pem
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let markers = [
+            "-----BEGIN PUBLIC KEY-----",
+            "-----END PUBLIC KEY-----",
+            "-----BEGIN EC PUBLIC KEY-----",
+            "-----END EC PUBLIC KEY-----"
+        ]
+
+        var base64Content = normalizedPEM
+        for marker in markers {
+            base64Content = base64Content.replacingOccurrences(of: marker, with: "")
+        }
+        base64Content = base64Content.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        guard let keyData = Data(base64Encoded: base64Content) else {
+            throw PlaybackError.invalidKASResponse
+        }
+
+        // Parse the key and return compressed form
+        let publicKey: P256.KeyAgreement.PublicKey
+        if keyData.count == 65, keyData[0] == 0x04 {
+            publicKey = try P256.KeyAgreement.PublicKey(x963Representation: keyData)
+        } else if keyData.count == 33, keyData[0] == 0x02 || keyData[0] == 0x03 {
+            publicKey = try P256.KeyAgreement.PublicKey(compressedRepresentation: keyData)
+        } else if keyData.count >= 70 {
+            publicKey = try P256.KeyAgreement.PublicKey(derRepresentation: keyData)
+        } else {
+            throw PlaybackError.invalidKASResponse
+        }
+
+        return publicKey.compressedRepresentation
+    }
+
+    private func decryptAndPreparePlayback(
+        localAsset: LocalHLSAsset,
+        symmetricKey: SymmetricKey,
+        extractor: HLSTDFExtractor
+    ) async throws -> URL {
+        // Create directory for decrypted content
+        let decryptedDir = localAsset.outputDirectory.appendingPathComponent("decrypted")
+        try FileManager.default.createDirectory(at: decryptedDir, withIntermediateDirectories: true)
+
+        // Decrypt each segment
+        for (index, segmentURL) in localAsset.segmentURLs.enumerated() {
+            let encryptedData = try Data(contentsOf: segmentURL)
+            let decryptedData = try await extractor.decryptSegment(
+                segmentData: encryptedData,
+                segmentIndex: index,
+                symmetricKey: symmetricKey,
+                manifest: localAsset.manifest
+            )
+
+            let decryptedURL = decryptedDir.appendingPathComponent("segment_\(index).mov")
+            try decryptedData.write(to: decryptedURL)
+        }
+
+        // For single segment, play directly; for multiple, create playlist
+        if localAsset.segmentURLs.count == 1 {
+            return decryptedDir.appendingPathComponent("segment_0.mov")
+        } else {
+            // Create a simple playlist for concatenated playback
+            // For now, just play the first segment
+            return decryptedDir.appendingPathComponent("segment_0.mov")
+        }
+    }
+
+    enum PlaybackError: Error, LocalizedError {
+        case missingPolicyData
+        case keyUnwrapFailed
+        case invalidKASResponse
+        case decryptionFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .missingPolicyData:
+                "TDF manifest missing policy data"
+            case .keyUnwrapFailed:
+                "Failed to unwrap decryption key from KAS"
+            case .invalidKASResponse:
+                "Invalid response from KAS server"
+            case .decryptionFailed:
+                "Failed to decrypt content"
+            }
         }
     }
 }
