@@ -75,6 +75,7 @@
 		DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0003EE0112340000001B /* ContentDetailView.swift */; };
 		DACC0004EE0112340000001A /* TDFContentKeyDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */; };
 		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
+		DA0000042EF7A00000000004 /* HLSTDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */; };
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
 		DAAFCBCE2D090740003FC56F /* GroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* GroupView.swift */; };
 		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
@@ -112,6 +113,7 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 		DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */; };
+		DA0000032EF7A00000000003 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA0000022EF7A00000000002 /* ArkavoMediaKit */; };
 		DAF7A3A52EC2D80A00A59F0C /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAF7A3A42EC2D80A00A59F0C /* ArkavoKit */; };
 		DAF7A3A72EC2D83D00A59F0C /* StreamManager 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF7A3A62EC2D83D00A59F0C /* StreamManager 2.swift */; };
 		DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */; };
@@ -211,6 +213,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DACC0003EE0112340000001B /* ContentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDetailView.swift; sourceTree = "<group>"; };
 		DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFContentKeyDelegate.swift; sourceTree = "<group>"; };
 		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
+		DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSTDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
@@ -252,6 +255,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DA34603D2EE4B78B00A1D638 /* ArkavoStore in Frameworks */,
 				DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */,
 				DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */,
+				DA0000032EF7A00000000003 /* ArkavoMediaKit in Frameworks */,
 				DAF7A3A52EC2D80A00A59F0C /* ArkavoKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -349,6 +353,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DACC0003EE0112340000001B /* ContentDetailView.swift */,
 				DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */,
 				DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */,
+				DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */,
 				DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */,
 				DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */,
 				DA36F2032CBA1A4500762668 /* RegistrationView.swift */,
@@ -464,6 +469,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DAEE13892CA1021500DCB5EC /* FlatBuffers */,
 				DAF7A3A42EC2D80A00A59F0C /* ArkavoKit */,
 				DA34603C2EE4B78B00A1D638 /* ArkavoStore */,
+				DA0000022EF7A00000000002 /* ArkavoMediaKit */,
 			);
 			productName = Arkavo;
 			productReference = DAC1F9E32C34DA7000499631 /* Arkavo.app */;
@@ -542,6 +548,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 				DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */,
+				DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -665,6 +672,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */,
 				DACC0004EE0112340000001A /* TDFContentKeyDelegate.swift in Sources */,
 				DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */,
+				DA0000042EF7A00000000004 /* HLSTDFVideoPlayerView.swift in Sources */,
 				DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */,
 				DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */,
 				DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */,
@@ -1111,6 +1119,10 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoMediaKit;
+		};
 		DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoKit;
@@ -1122,8 +1134,8 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = revision;
+				revision = df22f6c7db7bd94dcd4eb4e83ca7995813d394b4;
 			};
 		};
 		DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */ = {
@@ -1137,6 +1149,11 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DA0000022EF7A00000000002 /* ArkavoMediaKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
+			productName = ArkavoMediaKit;
+		};
 		DA34603C2EE4B78B00A1D638 /* ArkavoStore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */;

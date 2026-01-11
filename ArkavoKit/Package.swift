@@ -42,9 +42,10 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/arkavo-org/OpenTDFKit", branch: "main"),
+        .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "df22f6c7db7bd94dcd4eb4e83ca7995813d394b4"),
         .package(url: "https://github.com/arkavo-org/iroh-swift", from: "0.2.5"),
-        .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.19")
+        .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.19"),
+        .package(path: "../ArkavoMediaKit")
     ],
     targets: [
         .target(
@@ -119,6 +120,8 @@ let package = Package(
             dependencies: [
                 "ArkavoSocial",
                 .product(name: "IrohSwift", package: "iroh-swift"),
+                .product(name: "ArkavoMediaKit", package: "ArkavoMediaKit"),
+                "OpenTDFKit",
             ],
             swiftSettings: sharedSwiftSettings
         ),

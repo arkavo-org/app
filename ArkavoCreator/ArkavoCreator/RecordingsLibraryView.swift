@@ -212,6 +212,15 @@ struct RecordingsLibraryView: View {
         }
         .disabled(isProtecting)
 
+        Button {
+            Task {
+                await protectRecordingHLS(recording)
+            }
+        } label: {
+            Label("Protect with HLS (Streaming)", systemImage: "play.tv.fill")
+        }
+        .disabled(isProtecting)
+
         if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
                 print("🎬 Opening protected player for: \(recording.title)")
@@ -281,6 +290,20 @@ struct RecordingsLibraryView: View {
 
         do {
             try await manager.protectRecording(recording, kasURL: kasURL)
+            await manager.loadRecordings() // Refresh to show protection status
+        } catch {
+            protectionError = error.localizedDescription
+            showingProtectionError = true
+        }
+    }
+
+    /// Protect a recording with HLS segmentation for streaming playback
+    private func protectRecordingHLS(_ recording: Recording) async {
+        isProtecting = true
+        defer { isProtecting = false }
+
+        do {
+            try await manager.protectRecordingHLS(recording, kasURL: kasURL)
             await manager.loadRecordings() // Refresh to show protection status
         } catch {
             protectionError = error.localizedDescription

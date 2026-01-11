@@ -1,5 +1,7 @@
 import ArkavoSocial
+import SwiftData
 import SwiftUI
+import ZIPFoundation
 
 // MARK: - Content Detail View
 
@@ -8,6 +10,7 @@ import SwiftUI
 struct ContentDetailView: View {
     let descriptor: ContentDescriptor
     @Environment(\.dismiss) private var dismiss
+    @Query private var accounts: [Account]
     @State private var isFetching = false
     @State private var fetchError: String?
     @State private var tdfData: Data?
@@ -15,6 +18,19 @@ struct ContentDetailView: View {
     @State private var extractedManifest: TDFManifestLite?
     @State private var isExtracting = false
     @State private var showingVideoPlayer = false
+    @State private var isHLSContent = false
+    @State private var showingHLSVideoPlayer = false
+
+    /// Get OAuth token for KAS authentication
+    private var oauthToken: String {
+        guard let account = accounts.first,
+              let profile = account.profile
+        else {
+            return ""
+        }
+        let authManager = AuthenticationManager()
+        return authManager.createJWT(account: account, publicID: profile.publicID.base58EncodedString) ?? ""
+    }
 
     var body: some View {
         NavigationStack {
@@ -148,6 +164,16 @@ struct ContentDetailView: View {
                     TDFVideoPlayerView(payloadURL: url, manifest: manifest)
                 }
             }
+            .fullScreenCover(isPresented: $showingHLSVideoPlayer) {
+                if let tdfData, isHLSContent {
+                    HLSTDFVideoPlayerView(
+                        tdfData: tdfData,
+                        kasURL: URL(string: descriptor.manifest.kasURL)!,
+                        assetID: descriptor.manifest.assetID,
+                        oauthToken: oauthToken
+                    )
+                }
+            }
         }
     }
 
@@ -163,18 +189,34 @@ struct ContentDetailView: View {
         }
 
         do {
-            // Extract manifest and payload from TDF ZIP archive
-            let (manifest, payload) = try TDFArchiveReader.extractAll(from: tdfData)
-            extractedManifest = manifest
+            // Check if this is HLS content by looking for playlist.m3u8
+            isHLSContent = checkForHLSContent(tdfData)
 
-            // Write payload to temp file for AVPlayer
-            // Use .mov extension for QuickTime or .ts for MPEG-TS
-            let fileExtension = descriptor.mimeType.contains("quicktime") ? "mov" : "ts"
-            payloadURL = try TDFArchiveReader.writePayloadToTempFile(payload, fileExtension: fileExtension)
+            if isHLSContent {
+                // HLS content - use the HLS player directly with raw TDF data
+                showingHLSVideoPlayer = true
+            } else {
+                // Standard TDF - extract and play with FairPlay
+                let (manifest, payload) = try TDFArchiveReader.extractAll(from: tdfData)
+                extractedManifest = manifest
+
+                // Write payload to temp file for AVPlayer
+                // Use .mov extension for QuickTime or .ts for MPEG-TS
+                let fileExtension = descriptor.mimeType.contains("quicktime") ? "mov" : "ts"
+                payloadURL = try TDFArchiveReader.writePayloadToTempFile(payload, fileExtension: fileExtension)
+            }
 
         } catch {
             fetchError = "Failed to prepare video: \(error.localizedDescription)"
         }
+    }
+
+    /// Check if TDF archive contains HLS content (playlist.m3u8)
+    private func checkForHLSContent(_ data: Data) -> Bool {
+        guard let archive = try? Archive(data: data, accessMode: .read) else {
+            return false
+        }
+        return archive["playlist.m3u8"] != nil
     }
 
     private func fetchContent() async {

@@ -1,8 +1,10 @@
+import ArkavoMediaKit
 import ArkavoSocial
 import CryptoKit
 import Darwin
 import Foundation
 import IrohSwift
+import OpenTDFKit
 
 /// TDF Create CLI - Creates TDF-protected content and publishes to Iroh
 ///
@@ -38,6 +40,7 @@ struct TDFCreateCLI {
         var useRelay = true  // Default to relay for cross-device access
         var relayUrl: String? = nil  // Uses n0's public relay when nil
         var serveAfterPublish = false  // Keep node running to serve content
+        var useHLSPackaging = false  // Package video as HLS for FairPlay DRM
 
         var i = 1
         while i < args.count {
@@ -72,6 +75,8 @@ struct TDFCreateCLI {
                 useRelay = true
             case "--serve":
                 serveAfterPublish = true
+            case "--hls":
+                useHLSPackaging = true
             case "--help", "-h":
                 printUsage()
                 exit(0)
@@ -100,7 +105,8 @@ struct TDFCreateCLI {
                 publishToIroh: publishToIroh,
                 useRelay: useRelay,
                 relayUrl: relayUrl,
-                serveAfterPublish: serveAfterPublish
+                serveAfterPublish: serveAfterPublish,
+                useHLSPackaging: useHLSPackaging
             )
         } catch {
             printError("Failed: \(error.localizedDescription)")
@@ -115,7 +121,8 @@ struct TDFCreateCLI {
         publishToIroh: Bool,
         useRelay: Bool,
         relayUrl: String?,
-        serveAfterPublish: Bool
+        serveAfterPublish: Bool,
+        useHLSPackaging: Bool
     ) async throws {
         print("============================================")
         print("TDF Create CLI")
@@ -124,6 +131,9 @@ struct TDFCreateCLI {
         print("KAS URL: \(kasURL)")
         print("Publish to Iroh: \(publishToIroh)")
         print("Relay: \(useRelay ? (relayUrl ?? "n0 public relay") : "disabled")")
+        if useHLSPackaging {
+            print("HLS Packaging: enabled (FairPlay compatible)")
+        }
         print("============================================\n")
 
         // 1. Read input file
@@ -132,12 +142,21 @@ struct TDFCreateCLI {
         guard FileManager.default.fileExists(atPath: inputPath) else {
             throw CLIError.fileNotFound(inputPath)
         }
-        let inputData = try Data(contentsOf: inputURL)
-        print("  Read \(inputData.count) bytes")
 
         // Determine MIME type from extension
         let mimeType = mimeTypeForExtension(inputURL.pathExtension)
         print("  MIME type: \(mimeType)")
+
+        // Check if this is a video file for HLS packaging
+        let isVideo = mimeType.hasPrefix("video/")
+        if useHLSPackaging && !isVideo {
+            print("  Warning: --hls flag is only applicable to video files, ignoring")
+        }
+
+        // Get original file size
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: inputPath)
+        let originalFileSize = fileAttributes[.size] as? Int64 ?? 0
+        print("  File size: \(originalFileSize) bytes")
 
         // 2. Generate asset ID
         let assetID = UUID().uuidString
@@ -145,12 +164,26 @@ struct TDFCreateCLI {
 
         // 3. Create TDF protection
         print("\nStep 3: Creating TDF protection...")
-        let protectionService = TDFProtectionService(kasURL: kasURL)
-        let tdfData = try await protectionService.protect(
-            data: inputData,
-            assetID: assetID,
-            mimeType: mimeType
-        )
+        let tdfData: Data
+
+        if useHLSPackaging && isVideo {
+            // Use HLS packaging for video with FairPlay compatibility
+            tdfData = try await createHLSTDF(
+                inputURL: inputURL,
+                kasURL: kasURL,
+                assetID: assetID
+            )
+        } else {
+            // Standard TDF protection for non-video or non-HLS mode
+            let inputData = try Data(contentsOf: inputURL)
+            print("  Read \(inputData.count) bytes")
+            let protectionService = TDFProtectionService(kasURL: kasURL)
+            tdfData = try await protectionService.protect(
+                data: inputData,
+                assetID: assetID,
+                mimeType: mimeType
+            )
+        }
         print("  Created TDF archive: \(tdfData.count) bytes")
 
         // 4. Save TDF file if output path specified
@@ -199,7 +232,7 @@ struct TDFCreateCLI {
                 title: inputURL.lastPathComponent,
                 mimeType: mimeType,
                 durationSeconds: nil,
-                originalFileSize: Int64(inputData.count),
+                originalFileSize: originalFileSize,
                 createdAt: Date(),
                 updatedAt: Date(),
                 version: 1
@@ -245,6 +278,83 @@ struct TDFCreateCLI {
         }
     }
 
+    /// Create HLS-packaged TDF for video files (FairPlay compatible)
+    ///
+    /// Converts video to HLS segments, encrypts with AES-128-CBC,
+    /// and packages everything into a single TDF archive.
+    static func createHLSTDF(
+        inputURL: URL,
+        kasURL: URL,
+        assetID: String
+    ) async throws -> Data {
+        // Create temp directory for HLS output
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hls-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // 1. Convert video to HLS segments
+        print("  Converting video to HLS segments...")
+        let converter = HLSConverter()
+        let hlsResult = try await converter.convert(
+            videoURL: inputURL,
+            outputDirectory: tempDir,
+            segmentDuration: 6.0
+        )
+        print("    Created \(hlsResult.segmentURLs.count) segments")
+        print("    Total duration: \(String(format: "%.1f", hlsResult.totalDuration))s")
+
+        // 2. Fetch KAS RSA public key
+        print("  Fetching KAS public key...")
+        let kasPublicKeyPEM = try await fetchKASRSAPublicKey(kasURL: kasURL)
+
+        // 3. Package HLS into TDF with encrypted segments
+        print("  Packaging HLS into TDF archive...")
+        let packager = HLSTDFPackager(
+            kasURL: kasURL,
+            kasPublicKeyPEM: kasPublicKeyPEM,
+            keySize: .bits128,  // FairPlay requires 128-bit keys
+            mode: .cbc         // FairPlay requires CBC mode
+        )
+
+        let tdfData = try await packager.package(
+            hlsResult: hlsResult,
+            assetID: assetID
+        )
+
+        return tdfData
+    }
+
+    /// Fetch KAS RSA public key for key wrapping
+    static func fetchKASRSAPublicKey(kasURL: URL) async throws -> String {
+        var components = URLComponents(url: kasURL, resolvingAgainstBaseURL: true)!
+        components.path = "/kas/v2/kas_public_key"
+        components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa")]
+
+        guard let url = components.url else {
+            throw CLIError.invalidArgument("Invalid KAS URL")
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200
+        else {
+            throw CLIError.invalidArgument("Failed to fetch KAS public key")
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let publicKey = json["public_key"] as? String
+        else {
+            throw CLIError.invalidArgument("Invalid KAS response format")
+        }
+
+        return publicKey
+    }
+
     static func printUsage() {
         print("""
         TDF Create CLI - Creates TDF-protected content and publishes to Iroh
@@ -255,6 +365,7 @@ struct TDFCreateCLI {
         Options:
           --kas-url URL     KAS server URL (default: https://100.arkavo.net)
           --output, -o FILE Output TDF file path (default: <input>.tdf)
+          --hls             Package video as HLS for FairPlay DRM playback
           --no-publish      Don't publish to Iroh, only create local TDF file
           --relay           Enable relay for NAT traversal (default: enabled, uses n0's public relay)
           --no-relay        Disable relay (direct connections only)
@@ -264,9 +375,10 @@ struct TDFCreateCLI {
 
         Examples:
           tdf-create video.mov
+          tdf-create video.mov --hls
+          tdf-create video.mov --hls --serve
           tdf-create video.mov --kas-url https://kas.example.com
           tdf-create video.mov --output protected.tdf --no-publish
-          tdf-create video.mov --no-relay
         """)
     }
 

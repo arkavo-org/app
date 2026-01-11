@@ -299,5 +299,33 @@ final class RecordingsManager: ObservableObject {
             print("💾 TDF archive: \(tdfURL.path)")
         }.value
     }
+
+    /// Protect a recording with HLS segmentation for streaming playback
+    func protectRecordingHLS(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Move heavy work off main thread to avoid blocking UI
+        try await Task.detached(priority: .userInitiated) {
+            // Create HLS protection service
+            let protectionService = HLSRecordingProtectionService(kasURL: kasURL)
+            print("🎬 Starting HLS TDF protection for: \(title)")
+
+            // Convert to HLS and package into TDF
+            let tdfArchive = try await protectionService.protectVideoHLS(
+                videoURL: videoURL,
+                assetID: assetID
+            )
+            print("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
+
+            // Write TDF archive
+            try tdfArchive.write(to: tdfURL)
+            print("💾 Protected HLS recording: \(title)")
+            print("💾 TDF archive: \(tdfURL.path)")
+        }.value
+    }
 }
 
