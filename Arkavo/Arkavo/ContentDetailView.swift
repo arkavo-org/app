@@ -1,5 +1,4 @@
 import ArkavoSocial
-import SwiftData
 import SwiftUI
 import ZIPFoundation
 
@@ -10,7 +9,6 @@ import ZIPFoundation
 struct ContentDetailView: View {
     let descriptor: ContentDescriptor
     @Environment(\.dismiss) private var dismiss
-    @Query private var accounts: [Account]
     @State private var isFetching = false
     @State private var fetchError: String?
     @State private var tdfData: Data?
@@ -21,15 +19,11 @@ struct ContentDetailView: View {
     @State private var isHLSContent = false
     @State private var showingHLSVideoPlayer = false
 
-    /// Get OAuth token for KAS authentication
-    private var oauthToken: String {
-        guard let account = accounts.first,
-              let profile = account.profile
-        else {
-            return ""
-        }
-        let authManager = AuthenticationManager()
-        return authManager.createJWT(account: account, publicID: profile.publicID.base58EncodedString) ?? ""
+    /// Get NTDF token for KAS authentication
+    /// This token is issued by authnz-rs during WebAuthn registration
+    /// and can be validated by KAS for rewrap requests
+    private var ntdfToken: String {
+        KeychainManager.getAuthenticationToken() ?? ""
     }
 
     var body: some View {
@@ -170,7 +164,7 @@ struct ContentDetailView: View {
                         tdfData: tdfData,
                         kasURL: URL(string: descriptor.manifest.kasURL)!,
                         assetID: descriptor.manifest.assetID,
-                        oauthToken: oauthToken
+                        ntdfToken: ntdfToken
                     )
                 }
             }

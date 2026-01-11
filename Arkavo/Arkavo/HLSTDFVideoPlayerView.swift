@@ -25,8 +25,8 @@ struct HLSTDFVideoPlayerView: View {
     /// Asset ID for tracking
     let assetID: String
 
-    /// OAuth token for KAS authentication
-    let oauthToken: String
+    /// NTDF token for KAS authentication (issued by authnz-rs during registration)
+    let ntdfToken: String
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = HLSTDFPlayerViewModel()
@@ -58,7 +58,7 @@ struct HLSTDFVideoPlayerView: View {
                                     tdfData: tdfData,
                                     kasURL: kasURL,
                                     assetID: assetID,
-                                    oauthToken: oauthToken
+                                    ntdfToken: ntdfToken
                                 )
                             }
                         }
@@ -96,7 +96,7 @@ struct HLSTDFVideoPlayerView: View {
                 tdfData: tdfData,
                 kasURL: kasURL,
                 assetID: assetID,
-                oauthToken: oauthToken
+                ntdfToken: ntdfToken
             )
         }
         .onDisappear {
@@ -121,7 +121,7 @@ final class HLSTDFPlayerViewModel: ObservableObject {
         tdfData: Data,
         kasURL: URL,
         assetID: String,
-        oauthToken: String
+        ntdfToken: String
     ) async {
         isLoading = true
         error = nil
@@ -149,7 +149,7 @@ final class HLSTDFPlayerViewModel: ObservableObject {
                 // Unwrap key from KAS using proper rewrap protocol
                 try await self.unwrapKeyFromKAS(
                     manifest: manifest,
-                    oauthToken: oauthToken
+                    ntdfToken: ntdfToken
                 )
             }
 
@@ -210,7 +210,7 @@ final class HLSTDFPlayerViewModel: ObservableObject {
     /// - Policy validation
     private func unwrapKeyFromKAS(
         manifest: HLSManifest,
-        oauthToken: String
+        ntdfToken: String
     ) async throws -> SymmetricKey {
         // Build TDFManifest from HLSManifest for KAS rewrap
         guard let policy = manifest.policy,
@@ -271,9 +271,10 @@ final class HLSTDFPlayerViewModel: ObservableObject {
         let clientPublicKeyPEM = clientPrivateKey.publicKey.pemRepresentation
 
         // Create KAS rewrap client
+        // Note: KASRewrapClient uses 'oauthToken' parameter name but we pass the NTDF token
         let kasClient = KASRewrapClient(
             kasURL: manifest.kasURL,
-            oauthToken: oauthToken
+            oauthToken: ntdfToken
         )
 
         // Perform rewrap request
@@ -377,6 +378,6 @@ enum HLSPlayerError: Error, LocalizedError {
         tdfData: Data(),
         kasURL: URL(string: "https://100.arkavo.net")!,
         assetID: UUID().uuidString,
-        oauthToken: "preview-token"
+        ntdfToken: "preview-token"
     )
 }

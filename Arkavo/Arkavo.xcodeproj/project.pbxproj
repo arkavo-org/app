@@ -88,7 +88,6 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DABD7D502D0F584B00239F22 /* CreatorSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */; };
 		DABFC2902C34F54E00232D79 /* OpenTDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = DABFC28F2C34F54E00232D79 /* OpenTDFKit */; };
 		DAC1F9E72C34DA7000499631 /* ArkavoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */; };
-		DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1F9E82C34DA7000499631 /* ArkavoView.swift */; };
 		DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9EC2C34DA7100499631 /* Assets.xcassets */; };
 		DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
@@ -216,7 +215,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSTDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
-		DAC1F9E82C34DA7000499631 /* ArkavoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoView.swift; sourceTree = "<group>"; };
 		DAC1F9EC2C34DA7100499631 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DAC1F9EE2C34DA7100499631 /* Arkavo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Arkavo.entitlements; sourceTree = "<group>"; };
 		DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -371,7 +369,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DA1C90642CB2234D00806E8A /* EntityServiceModel.swift */,
 				DA88DD0B2CCAA9B5005DA044 /* MetadataServiceModel.swift */,
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
-				DAC1F9E82C34DA7000499631 /* ArkavoView.swift */,
 				DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */,
 				DACCD61E2CAF5D2C00A9060C /* AccountView.swift */,
 				DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */,
@@ -655,7 +652,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DA132E212D7FCF7F0003F04D /* GroupViewModel.swift in Sources */,
 				DA73B3352C6436EF00393056 /* StreamCloudView.swift in Sources */,
 				DA5448DE2CFB612F00959553 /* Arkavo/Extensions.swift in Sources */,
-				DAC1F9E92C34DA7000499631 /* ArkavoView.swift in Sources */,
 				DAF7A3A72EC2D83D00A59F0C /* StreamManager 2.swift in Sources */,
 				DA284D612C3F5AC300CCF7EC /* WebSocketManager.swift in Sources */,
 				DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */,
