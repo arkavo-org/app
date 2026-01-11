@@ -32,6 +32,14 @@ let package = Package(
             name: "ntdf-test",
             targets: ["NTDFTestCLI"]
         ),
+        .executable(
+            name: "tdf-create",
+            targets: ["TDFCreateCLI"]
+        ),
+        .executable(
+            name: "tdf-fetch",
+            targets: ["TDFFetchCLI"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/arkavo-org/OpenTDFKit", branch: "main"),
@@ -104,6 +112,22 @@ let package = Package(
         .executableTarget(
             name: "NTDFTestCLI",
             dependencies: ["ArkavoStreaming", "ArkavoMedia", "OpenTDFKit"],
+            swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "TDFCreateCLI",
+            dependencies: [
+                "ArkavoSocial",
+                .product(name: "IrohSwift", package: "iroh-swift"),
+            ],
+            swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "TDFFetchCLI",
+            dependencies: [
+                "ArkavoSocial",
+                .product(name: "IrohSwift", package: "iroh-swift"),
+            ],
             swiftSettings: sharedSwiftSettings
         ),
     ]
