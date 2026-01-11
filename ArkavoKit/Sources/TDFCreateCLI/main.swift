@@ -35,6 +35,9 @@ struct TDFCreateCLI {
         var kasURL = defaultKASURL
         var outputPath: String?
         var publishToIroh = true
+        var useRelay = true  // Default to relay for cross-device access
+        var relayUrl: String? = nil  // Uses n0's public relay when nil
+        var serveAfterPublish = false  // Keep node running to serve content
 
         var i = 1
         while i < args.count {
@@ -55,6 +58,20 @@ struct TDFCreateCLI {
                 outputPath = args[i]
             case "--no-publish":
                 publishToIroh = false
+            case "--relay":
+                useRelay = true
+            case "--no-relay":
+                useRelay = false
+            case "--relay-url":
+                i += 1
+                guard i < args.count else {
+                    printError("Missing relay URL")
+                    exit(1)
+                }
+                relayUrl = args[i]
+                useRelay = true
+            case "--serve":
+                serveAfterPublish = true
             case "--help", "-h":
                 printUsage()
                 exit(0)
@@ -80,7 +97,10 @@ struct TDFCreateCLI {
                 inputPath: inputPath,
                 kasURL: kasURL,
                 outputPath: outputPath,
-                publishToIroh: publishToIroh
+                publishToIroh: publishToIroh,
+                useRelay: useRelay,
+                relayUrl: relayUrl,
+                serveAfterPublish: serveAfterPublish
             )
         } catch {
             printError("Failed: \(error.localizedDescription)")
@@ -92,7 +112,10 @@ struct TDFCreateCLI {
         inputPath: String,
         kasURL: URL,
         outputPath: String?,
-        publishToIroh: Bool
+        publishToIroh: Bool,
+        useRelay: Bool,
+        relayUrl: String?,
+        serveAfterPublish: Bool
     ) async throws {
         print("============================================")
         print("TDF Create CLI")
@@ -100,6 +123,7 @@ struct TDFCreateCLI {
         print("Input: \(inputPath)")
         print("KAS URL: \(kasURL)")
         print("Publish to Iroh: \(publishToIroh)")
+        print("Relay: \(useRelay ? (relayUrl ?? "n0 public relay") : "disabled")")
         print("============================================\n")
 
         // 1. Read input file
@@ -154,7 +178,8 @@ struct TDFCreateCLI {
         // 6. Publish to Iroh
         if publishToIroh {
             print("\nStep 6: Publishing to Iroh network...")
-            let node = try await IrohNode()
+            let config = IrohConfig(relayEnabled: useRelay, customRelayUrl: relayUrl)
+            let node = try await IrohNode(config: config)
 
             // Publish TDF archive
             print("  Uploading TDF archive...")
@@ -195,7 +220,21 @@ struct TDFCreateCLI {
             print(payloadTicket)
             print("============================================")
 
-            try await node.close()
+            if serveAfterPublish {
+                print("\nServing content... Press Ctrl+C to stop.")
+                print("Node is available via relay for remote downloads.")
+
+                // Keep running until interrupted using async sleep
+                signal(SIGINT) { _ in
+                    print("\nShutting down...")
+                    exit(0)
+                }
+                while true {
+                    try await Task.sleep(for: .seconds(60))
+                }
+            } else {
+                try await node.close()
+            }
         } else {
             print("\n============================================")
             print("SUCCESS!")
@@ -217,12 +256,17 @@ struct TDFCreateCLI {
           --kas-url URL     KAS server URL (default: https://100.arkavo.net)
           --output, -o FILE Output TDF file path (default: <input>.tdf)
           --no-publish      Don't publish to Iroh, only create local TDF file
+          --relay           Enable relay for NAT traversal (default: enabled, uses n0's public relay)
+          --no-relay        Disable relay (direct connections only)
+          --relay-url URL   Use custom relay URL instead of n0's public relay
+          --serve           Keep node running to serve content after publishing
           --help, -h        Show this help message
 
         Examples:
           tdf-create video.mov
           tdf-create video.mov --kas-url https://kas.example.com
           tdf-create video.mov --output protected.tdf --no-publish
+          tdf-create video.mov --no-relay
         """)
     }
 

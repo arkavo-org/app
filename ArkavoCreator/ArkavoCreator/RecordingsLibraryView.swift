@@ -299,6 +299,19 @@ struct RecordingsLibraryView: View {
             return
         }
 
+        // Start security-scoped access for the recordings folder
+        guard let folder = RecordingsFolderAccess.getBookmarkedFolder() else {
+            publishError = "Recordings folder not selected. Please select a folder first."
+            showingPublishError = true
+            return
+        }
+        guard folder.startAccessingSecurityScopedResource() else {
+            publishError = "Cannot access recordings folder. Please re-select the folder."
+            showingPublishError = true
+            return
+        }
+        defer { folder.stopAccessingSecurityScopedResource() }
+
         do {
             // Read TDF archive data
             let tdfData = try Data(contentsOf: recording.tdfURL)

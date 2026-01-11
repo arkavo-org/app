@@ -8,7 +8,8 @@ struct CreatorContentView: View {
     let creatorPublicID: Data
     @StateObject private var viewModel = CreatorContentViewModel()
     @State private var showingTicketInput = false
-    @State private var ticketInput = ""
+    // Test ticket for TDF content via n0 public relay (CLI in serve mode)
+    @State private var ticketInput = "blobacsn2iwlrqozd7cjquqpijsrhqg6sutpsk7r6psbxqjfznx54t3gaajpnb2hi4dthixs65ltmuys2mjoojswyylzfzxdaltjojxwqlldmfxgc4tzfzuxe33ifzwgs3tlfyxrmaakaaaghmhlamaauaaarkyowayamlurkwvq5mbqbqaaaiblb2ydaetacakhysai5aaaaaaaaaaaspm3d2ydaetacakhysai5aaaaaaaaaaaudeld2ydaetacakhysai5aaaplpn3kinla5ld2ydaetacakhysai5aaicuphdlacgjf3d2ydaetacakhysai5abqiilqg2dgo3mld2ydaetacakhysai5ac53ev6nfnef623d2ydaetacakhysai5adbuzs27ag2epw3d2ydaetacakhysai5adfv5yjekxjv7pld2ydaetacakhysai5adyloqjjrt7gzr3d2ydaetacakhysai5aeb6fjdbxa5cmsld2ydaetacakhysai5aefurowhqemps4ld2ydaetacakhysai5aei55p3pqr4yo73d2ydaetacakhysai5aejwz6tjvjicee3d2ydaetacakhysai5aer6e3mmm2b3vtld2ydaetacakhysai5ae4hxcp4xnc5usld2ydaetacakhysai5aff6jy2qpjisbkld2ydaetacakhysai5agjxgehklbnv57ld2ydaetacakhysai5agmsiv4jqklkigld2ydabhvpm4izdvpncuml5mygizwfmjzebwfiu5kto6erngpoxfjgbcza"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -245,12 +246,18 @@ class CreatorContentViewModel: ObservableObject {
         error = nil
 
         guard let service = contentService else {
-            error = "Iroh not initialized"
+            error = "Iroh not initialized - check ArkavoIrohManager.shared.error"
+            if let irohError = await ArkavoIrohManager.shared.error {
+                error = "Iroh init failed: \(irohError)"
+            }
             return
         }
 
+        print("[CreatorContent] Fetching ticket: \(ticket.prefix(50))...")
+
         do {
             let descriptor = try await service.fetchContentWithRetry(ticket: ticket)
+            print("[CreatorContent] Successfully fetched: \(descriptor.title)")
 
             // Cache the ticket for this creator
             let contentTicket = ContentTicket(
@@ -266,7 +273,9 @@ class CreatorContentViewModel: ObservableObject {
                 contents.insert(descriptor, at: 0)
             }
         } catch {
-            self.error = error.localizedDescription
+            print("[CreatorContent] Fetch error: \(error)")
+            print("[CreatorContent] Error type: \(type(of: error))")
+            self.error = "Fetch failed: \(error)"
         }
     }
 }

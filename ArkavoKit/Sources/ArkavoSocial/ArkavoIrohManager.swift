@@ -12,30 +12,40 @@ public struct ArkavoIrohConfig: Sendable {
     public var storagePath: URL?
     /// Enable relay servers for NAT traversal (default: true)
     public var relayEnabled: Bool
+    /// Custom relay server URL (e.g., "https://iroh.arkavo.org")
+    public var customRelayUrl: String?
+
+    /// Arkavo's relay server URL
+    public static let arkavoRelayUrl = "https://iroh.arkavo.org"
 
     public init(
         storagePath: URL? = nil,
-        relayEnabled: Bool = true
+        relayEnabled: Bool = true,
+        customRelayUrl: String? = nil
     ) {
         self.storagePath = storagePath
         self.relayEnabled = relayEnabled
+        self.customRelayUrl = customRelayUrl
     }
 
-    /// Default configuration
-    public static let `default` = ArkavoIrohConfig()
+    /// Default configuration using n0's public relay for NAT traversal
+    public static let `default` = ArkavoIrohConfig(
+        relayEnabled: true
+        // Uses n0's public relays when customRelayUrl is nil
+    )
 
     /// Convert to IrohConfig
     func toIrohConfig() -> IrohConfig {
-        if let storagePath {
-            return IrohConfig(storagePath: storagePath, relayEnabled: relayEnabled)
-        } else {
-            // Use default storage with custom subdirectory for Arkavo
-            let defaultPath = FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-                .first!
-                .appendingPathComponent("arkavo-iroh", isDirectory: true)
-            return IrohConfig(storagePath: defaultPath, relayEnabled: relayEnabled)
-        }
+        let defaultPath = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!
+            .appendingPathComponent("arkavo-iroh", isDirectory: true)
+
+        return IrohConfig(
+            storagePath: storagePath ?? defaultPath,
+            relayEnabled: relayEnabled,
+            customRelayUrl: customRelayUrl
+        )
     }
 }
 
