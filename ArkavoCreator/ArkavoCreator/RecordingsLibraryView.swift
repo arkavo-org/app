@@ -626,6 +626,9 @@ struct ProtectedVideoPlayerView: View {
     @State private var playbackError: String?
     @State private var isPreparingPlayback = false
     @State private var playbackStatus: String = ""
+    @State private var contentKeySession: AVContentKeySession?
+    @State private var keyDelegate: TDFContentKeyDelegate?
+    @State private var useFairPlay = false  // FairPlay requires SAMPLE-AES; using local decryption
 
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
@@ -924,35 +927,114 @@ struct ProtectedVideoPlayerView: View {
                 return
             }
 
-            // Unwrap key from KAS
-            playbackStatus = "Obtaining decryption key..."
-            let symmetricKey = try await unwrapKeyFromKAS(manifest: hlsManifest, ntdfToken: ntdfToken)
-            print("✅ Key unwrapped successfully")
-
-            // Decrypt segments and create playable content
-            playbackStatus = "Decrypting content..."
-            let playableURL = try await decryptAndPreparePlayback(
-                localAsset: localAsset,
-                symmetricKey: symmetricKey,
-                extractor: extractor
-            )
-
-            // Create player
-            playbackStatus = "Starting playback..."
-            let avPlayer = AVPlayer(url: playableURL)
-            self.player = avPlayer
-            isPlaying = true
-            isPreparingPlayback = false
-
-            // Start playback
-            avPlayer.play()
-            print("▶️ Playback started")
+            if useFairPlay {
+                // FairPlay playback - hardware decryption via Secure Enclave
+                try await startFairPlayPlayback(
+                    hlsManifest: hlsManifest,
+                    localAsset: localAsset,
+                    authToken: ntdfToken
+                )
+            } else {
+                // Local decryption fallback
+                try await startLocalDecryptionPlayback(
+                    hlsManifest: hlsManifest,
+                    localAsset: localAsset,
+                    extractor: extractor,
+                    authToken: ntdfToken
+                )
+            }
 
         } catch {
             print("❌ Playback error: \(error)")
             playbackError = error.localizedDescription
             isPreparingPlayback = false
         }
+    }
+
+    /// FairPlay playback using AVContentKeySession
+    private func startFairPlayPlayback(
+        hlsManifest: HLSManifest,
+        localAsset: LocalHLSAsset,
+        authToken: String
+    ) async throws {
+        playbackStatus = "Setting up FairPlay..."
+        print("🔐 Starting FairPlay playback...")
+
+        // Create FairPlay manifest for key delegate
+        let manifest = HLSManifestLite(
+            kasURL: hlsManifest.kasURL.absoluteString,
+            wrappedKey: hlsManifest.wrappedKey,
+            algorithm: hlsManifest.algorithm,
+            iv: hlsManifest.segmentIVs.first ?? "",
+            assetID: hlsManifest.assetID
+        )
+
+        // Create content key session with FairPlay
+        let session = AVContentKeySession(keySystem: .fairPlayStreaming)
+        contentKeySession = session
+
+        // Create key delegate
+        let delegate = TDFContentKeyDelegate(
+            manifest: manifest,
+            authToken: authToken,
+            serverURL: kasURL
+        )
+        keyDelegate = delegate
+        session.setDelegate(delegate, queue: .main)
+
+        // Use the first segment or playlist URL
+        let assetURL = localAsset.playlistURL
+        let asset = AVURLAsset(url: assetURL)
+
+        // Add asset as content key recipient - this triggers key request
+        session.addContentKeyRecipient(asset)
+
+        playbackStatus = "Requesting FairPlay key..."
+        print("🔐 Asset added as content key recipient")
+
+        // Create player
+        let playerItem = AVPlayerItem(asset: asset)
+        let avPlayer = AVPlayer(playerItem: playerItem)
+        self.player = avPlayer
+
+        playbackStatus = "Starting playback..."
+        isPlaying = true
+        isPreparingPlayback = false
+
+        avPlayer.play()
+        print("▶️ FairPlay playback started")
+    }
+
+    /// Local decryption playback (fallback)
+    private func startLocalDecryptionPlayback(
+        hlsManifest: HLSManifest,
+        localAsset: LocalHLSAsset,
+        extractor: HLSTDFExtractor,
+        authToken: String
+    ) async throws {
+        // Unwrap key from KAS
+        playbackStatus = "Obtaining decryption key..."
+        let symmetricKey = try await unwrapKeyFromKAS(manifest: hlsManifest, ntdfToken: authToken)
+        print("✅ Key unwrapped successfully")
+
+        // Decrypt segments and create playable content
+        playbackStatus = "Decrypting content..."
+        let playableURL = try await decryptAndPreparePlayback(
+            localAsset: localAsset,
+            symmetricKey: symmetricKey,
+            extractor: extractor
+        )
+
+        // Create player
+        playbackStatus = "Starting playback..."
+        let avPlayer = AVPlayer(url: playableURL)
+        self.player = avPlayer
+        isPlaying = true
+        isPreparingPlayback = false
+
+        // Start playback
+        avPlayer.play()
+        print("▶️ Local decryption playback started")
     }
 
     private func unwrapKeyFromKAS(manifest: HLSManifest, ntdfToken: String) async throws -> SymmetricKey {
@@ -1009,9 +1091,8 @@ struct ProtectedVideoPlayerView: View {
             assertions: nil
         )
 
-        // Generate ephemeral P-256 key pair for ECDH
+        // Generate ephemeral P-256 key pair for ECDH and JWT signing
         let clientPrivateKey = P256.KeyAgreement.PrivateKey()
-        let clientPublicKeyPEM = clientPrivateKey.publicKey.pemRepresentation
 
         // Create KAS rewrap client
         let kasClient = KASRewrapClient(
@@ -1019,11 +1100,14 @@ struct ProtectedVideoPlayerView: View {
             oauthToken: ntdfToken
         )
 
-        // Perform rewrap request
-        print("🔑 Sending rewrap request to KAS...")
+        // Perform rewrap request - the same key is used for:
+        // 1. clientPublicKey in request (derived from clientPrivateKey)
+        // 2. JWT signing (converted to P256.Signing key)
+        // 3. ECDH unwrap of response (using clientPrivateKey)
+        print("🔑 Sending RSA rewrap request to KAS: \(manifest.kasURL.appendingPathComponent("v2/rewrap"))")
         let result = try await kasClient.rewrapTDF(
             manifest: tdfManifest,
-            clientPublicKeyPEM: clientPublicKeyPEM
+            clientPrivateKey: clientPrivateKey
         )
 
         // Get wrapped key from result

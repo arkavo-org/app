@@ -71,7 +71,7 @@ public actor HLSRecordingProtectionService {
     private func fetchKASRSAPublicKey() async throws -> String {
         var components = URLComponents(url: kasURL, resolvingAgainstBaseURL: true)!
         components.path = "/kas/v2/kas_public_key"
-        components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa")]
+        components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa:2048")]
 
         guard let url = components.url else {
             throw HLSRecordingProtectionError.invalidKASURL

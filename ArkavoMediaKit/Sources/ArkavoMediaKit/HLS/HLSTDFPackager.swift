@@ -167,6 +167,14 @@ public actor HLSTDFPackager {
         let manifestIV = segmentIVs.first?.base64EncodedString() ?? ""
         let protectedAt = ISO8601DateFormatter().string(from: Date())
 
+        // Build KAS rewrap URL - append /kas path if not already present
+        let kasRewrapURL: String
+        if kasURL.path.contains("/kas") {
+            kasRewrapURL = kasURL.absoluteString
+        } else {
+            kasRewrapURL = kasURL.appendingPathComponent("kas").absoluteString
+        }
+
         let manifest: [String: Any] = [
             "schemaVersion": "4.3.0",
             "encryptionInformation": [
@@ -174,7 +182,7 @@ public actor HLSTDFPackager {
                 "policy": policyBase64,
                 "keyAccess": [[
                     "type": "wrapped",
-                    "url": kasURL.absoluteString,
+                    "url": kasRewrapURL,
                     "protocol": "kas",
                     "wrappedKey": wrappedKey,
                     "policyBinding": [

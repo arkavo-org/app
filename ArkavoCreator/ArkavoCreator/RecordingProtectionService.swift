@@ -157,7 +157,7 @@ public actor RecordingProtectionService {
     private func fetchKASRSAPublicKey() async throws -> String {
         var components = URLComponents(url: kasURL, resolvingAgainstBaseURL: true)!
         components.path = "/kas/v2/kas_public_key"
-        components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa")]
+        components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa:2048")]
 
         guard let url = components.url else {
             throw RecordingProtectionError.invalidKASURL
@@ -235,12 +235,20 @@ public actor RecordingProtectionService {
     // MARK: - Manifest Building
 
     private func buildManifest(wrappedKey: String, iv: Data, assetID: String) throws -> Data {
+        // Build KAS rewrap URL - append /kas path if not already present
+        let kasRewrapURL: String
+        if kasURL.path.contains("/kas") {
+            kasRewrapURL = kasURL.absoluteString
+        } else {
+            kasRewrapURL = kasURL.appendingPathComponent("kas").absoluteString
+        }
+
         let manifest: [String: Any] = [
             "encryptionInformation": [
                 "type": "split",
                 "keyAccess": [[
                     "type": "wrapped",
-                    "url": kasURL.absoluteString,
+                    "url": kasRewrapURL,
                     "protocol": "kas",
                     "wrappedKey": wrappedKey,
                 ]],
