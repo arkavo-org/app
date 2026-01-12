@@ -20,14 +20,6 @@
       }
     },
     {
-      "identity" : "opentdfkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/arkavo-org/OpenTDFKit",
-      "state" : {
-        "revision" : "df22f6c7db7bd94dcd4eb4e83ca7995813d394b4"
-      }
-    },
-    {
       "identity" : "vrmmetalkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/VRMMetalKit",

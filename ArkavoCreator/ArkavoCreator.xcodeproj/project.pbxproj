@@ -622,13 +622,13 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoKit;
-		};
 		DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoMediaKit;
+		};
+		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 

@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import AppKit
 import ArkavoSocial
+import ArkavoMediaKit
 // C2PA support temporarily disabled
 // import ArkavoC2PA
 
@@ -359,6 +360,41 @@ final class RecordingsManager: ObservableObject {
         // Write TDF archive
         try tdfArchive.write(to: tdfURL)
         print("💾 Protected HLS recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
+    }
+
+    /// Protect a recording with fMP4/CBCS for true FairPlay hardware DRM
+    func protectRecordingFMP4(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Start security-scoped access on the directory
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
+            )
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
+        // Create fMP4 protection service
+        let protectionService = FMP4RecordingProtectionService(kasURL: kasURL)
+        print("🎬 Starting fMP4 FairPlay protection for: \(title)")
+
+        // Convert to fMP4/CBCS and package into TDF
+        let tdfArchive = try await protectionService.protectVideo(
+            videoURL: videoURL,
+            assetID: assetID
+        )
+        print("✅ fMP4 TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected fMP4 recording: \(title)")
         print("💾 TDF archive: \(tdfURL.path)")
     }
 }

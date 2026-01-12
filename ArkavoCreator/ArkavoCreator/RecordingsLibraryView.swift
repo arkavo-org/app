@@ -224,6 +224,15 @@ struct RecordingsLibraryView: View {
         }
         .disabled(isProtecting)
 
+        Button {
+            Task {
+                await protectRecordingFMP4(recording)
+            }
+        } label: {
+            Label("Protect with FairPlay (fMP4)", systemImage: "lock.shield.fill")
+        }
+        .disabled(isProtecting)
+
         if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
                 print("🎬 Opening protected player for: \(recording.title)")
@@ -307,6 +316,20 @@ struct RecordingsLibraryView: View {
 
         do {
             try await manager.protectRecordingHLS(recording, kasURL: kasURL)
+            await manager.loadRecordings() // Refresh to show protection status
+        } catch {
+            protectionError = error.localizedDescription
+            showingProtectionError = true
+        }
+    }
+
+    /// Protect a recording with fMP4/CBCS for true FairPlay hardware DRM
+    private func protectRecordingFMP4(_ recording: Recording) async {
+        isProtecting = true
+        defer { isProtecting = false }
+
+        do {
+            try await manager.protectRecordingFMP4(recording, kasURL: kasURL)
             await manager.loadRecordings() // Refresh to show protection status
         } catch {
             protectionError = error.localizedDescription

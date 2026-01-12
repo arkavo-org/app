@@ -4,7 +4,10 @@ import Foundation
 
 /// AVC/H.264 sample entry
 public struct AVCSampleEntry: ISOBox {
-    public let type = FourCC.avc1
+    public var type: FourCC {
+        // Use 'encv' for encrypted video, 'avc1' for clear
+        encryptionInfo != nil ? FourCC.encv : FourCC.avc1
+    }
 
     public let dataReferenceIndex: UInt16
     public let width: UInt16
@@ -140,7 +143,10 @@ public struct AVCDecoderConfigurationRecord: ISOBox {
 
 /// HEVC/H.265 sample entry
 public struct HEVCSampleEntry: ISOBox {
-    public let type = FourCC.hvc1
+    public var type: FourCC {
+        // Use 'encv' for encrypted video, 'hvc1' for clear
+        encryptionInfo != nil ? FourCC.encv : FourCC.hvc1
+    }
 
     public let dataReferenceIndex: UInt16
     public let width: UInt16
@@ -369,7 +375,10 @@ public struct HEVCNALArray {
 
 /// AAC audio sample entry
 public struct AACSampleEntry: ISOBox {
-    public let type = FourCC.mp4a
+    public var type: FourCC {
+        // Use 'enca' for encrypted audio, 'mp4a' for clear
+        encryptionInfo != nil ? FourCC.enca : FourCC.mp4a
+    }
 
     public let dataReferenceIndex: UInt16 = 1
     public let channelCount: UInt16
