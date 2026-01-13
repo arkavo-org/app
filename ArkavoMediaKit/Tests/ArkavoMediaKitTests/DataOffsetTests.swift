@@ -5,8 +5,9 @@ import Testing
 // MARK: - Data Offset Calculation Tests
 
 /// Tests for validating data offset calculations in FMP4Writer.
-/// The data_offset in trun box must correctly point from the fragment start
-/// to the first byte of sample data in mdat.
+/// When default-base-is-moof flag is set in tfhd, data_offset in trun is
+/// relative to the first byte of moof (not segment start).
+/// See ISO 14496-12 for details on base data offset handling.
 @Suite("FMP4 Data Offset Calculation")
 struct DataOffsetTests {
 
@@ -161,19 +162,24 @@ struct DataOffsetTests {
             return
         }
 
-        // data_offset should point to mdat payload (mdat header is 8 bytes)
-        let expectedMdatPayloadOffset = mdatInfo.offset + 8
+        // mdat payload starts 8 bytes after mdat header
+        let mdatPayloadOffset = mdatInfo.offset + 8
 
-        // Verify data_offset points to correct location
-        #expect(Int(dataOffset) == expectedMdatPayloadOffset, "data_offset (\(dataOffset)) should equal mdat payload offset (\(expectedMdatPayloadOffset))")
+        // With default-base-is-moof, data_offset is relative to moof start
+        // So the actual sample position = moofInfo.offset + data_offset
+        let actualSamplePosition = moofInfo.offset + Int(dataOffset)
 
-        // Verify the marker is at the location pointed to by data_offset
-        let actualData = mediaSegment.subdata(in: Int(dataOffset)..<(Int(dataOffset) + 4))
-        #expect(actualData == markerData, "Data at data_offset should be sample marker")
+        // Verify actual sample position equals mdat payload start
+        #expect(actualSamplePosition == mdatPayloadOffset,
+                "moof_start (\(moofInfo.offset)) + data_offset (\(dataOffset)) = \(actualSamplePosition) should equal mdat payload offset (\(mdatPayloadOffset))")
+
+        // Verify the marker is at the actual sample position
+        let actualData = mediaSegment.subdata(in: actualSamplePosition..<(actualSamplePosition + 4))
+        #expect(actualData == markerData, "Data at actual sample position should be sample marker")
     }
 
-    @Test("data_offset includes styp size")
-    func dataOffsetIncludesStypSize() throws {
+    @Test("data_offset is relative to moof start (excludes styp)")
+    func dataOffsetRelativeToMoof() throws {
         let sps = Data([0x67, 0x64, 0x00, 0x28])
         let pps = Data([0x68, 0xEE, 0x3C, 0x80])
 
@@ -206,8 +212,14 @@ struct DataOffsetTests {
             return
         }
 
-        // styp size should be part of the offset calculation
+        // moof should start right after styp
         #expect(moofInfo.offset == stypInfo.size, "moof should start right after styp")
+
+        // Find mdat
+        guard let mdatInfo = findBox(mediaSegment, type: "mdat") else {
+            Issue.record("mdat box not found")
+            return
+        }
 
         // Find trun and extract data_offset
         guard let trafInfo = findBox(mediaSegment, type: "traf", startingAt: moofInfo.offset + 8),
@@ -217,8 +229,20 @@ struct DataOffsetTests {
             return
         }
 
-        // data_offset should include styp size
-        #expect(Int(dataOffset) >= stypInfo.size, "data_offset should include styp size")
+        // With default-base-is-moof, data_offset should NOT include styp size
+        // data_offset = moof_size + mdat_header_size (relative to moof start)
+        let moofSize = moofInfo.size
+        let mdatHeaderSize = 8
+        let expectedDataOffset = moofSize + mdatHeaderSize
+
+        #expect(Int(dataOffset) == expectedDataOffset,
+                "data_offset (\(dataOffset)) should equal moof_size (\(moofSize)) + mdat_header (\(mdatHeaderSize)) = \(expectedDataOffset)")
+
+        // Verify moof_start + data_offset points to mdat payload
+        let actualSamplePosition = moofInfo.offset + Int(dataOffset)
+        let expectedMdatPayload = mdatInfo.offset + 8
+        #expect(actualSamplePosition == expectedMdatPayload,
+                "moof_start + data_offset should point to mdat payload")
     }
 
     // MARK: - Encrypted Segment Tests
@@ -262,8 +286,11 @@ struct DataOffsetTests {
             return
         }
 
-        // Verify data at data_offset is our marker
-        let actualData = mediaSegment.subdata(in: Int(dataOffset)..<(Int(dataOffset) + 4))
+        // With default-base-is-moof, actual sample position = moof_start + data_offset
+        let actualSamplePosition = moofInfo.offset + Int(dataOffset)
+
+        // Verify data at actual sample position is our marker
+        let actualData = mediaSegment.subdata(in: actualSamplePosition..<(actualSamplePosition + 4))
         #expect(actualData == markerData, "Data at data_offset should be sample marker")
     }
 
@@ -359,8 +386,11 @@ struct DataOffsetTests {
             return
         }
 
-        // First sample marker should be at data_offset
-        let firstSampleData = mediaSegment.subdata(in: Int(dataOffset)..<(Int(dataOffset) + 4))
+        // With default-base-is-moof, actual sample position = moof_start + data_offset
+        let actualSamplePosition = moofInfo.offset + Int(dataOffset)
+
+        // First sample marker should be at actual sample position
+        let firstSampleData = mediaSegment.subdata(in: actualSamplePosition..<(actualSamplePosition + 4))
         #expect(firstSampleData == marker1, "First sample should be at data_offset")
 
         // Verify all samples are present in mdat
@@ -369,7 +399,7 @@ struct DataOffsetTests {
         #expect(mediaSegment.range(of: marker3) != nil)
 
         // Samples should be contiguous in mdat
-        let mdatPayloadStart = Int(dataOffset)
+        let mdatPayloadStart = actualSamplePosition
         let sample2Start = mdatPayloadStart + sample1.count
         let sample3Start = sample2Start + sample2.count
 

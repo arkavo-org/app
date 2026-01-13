@@ -39,6 +39,16 @@ struct FairPlayDiagnosticTests {
         return (size, type, 8)
     }
 
+    private func findBox(_ data: Data, type: String, startingAt start: Int = 0) -> (offset: Int, size: Int)? {
+        var offset = start
+        while offset + 8 <= data.count {
+            guard let header = parseBoxHeader(data, at: offset) else { break }
+            if header.type == type { return (offset, header.size) }
+            if header.size > 0 { offset += header.size } else { break }
+        }
+        return nil
+    }
+
     private func findBoxRecursive(_ data: Data, type: String, startingAt start: Int = 0, endAt end: Int? = nil) -> (offset: Int, size: Int)? {
         let endOffset = end ?? data.count
         var offset = start
@@ -409,6 +419,12 @@ struct FairPlayDiagnosticTests {
         let samples = [FMP4Writer.Sample(data: sampleData, duration: 3000, isSync: true)]
         let mediaSegment = writer.generateMediaSegment(trackID: 1, samples: samples, baseDecodeTime: 0)
 
+        // Find moof box for base reference
+        guard let moofInfo = findBox(mediaSegment, type: "moof") else {
+            Issue.record("Missing moof box")
+            return
+        }
+
         guard let trunInfo = findBoxRecursive(mediaSegment, type: "trun") else {
             Issue.record("Missing trun box")
             return
@@ -425,15 +441,18 @@ struct FairPlayDiagnosticTests {
         let offsetData = mediaSegment.subdata(in: dataOffsetPosition..<(dataOffsetPosition + 4))
         let dataOffset = Int(Int32(bigEndian: offsetData.withUnsafeBytes { $0.load(as: Int32.self) }))
 
-        // Verify the marker is at data_offset
-        guard dataOffset + 4 <= mediaSegment.count else {
-            Issue.record("data_offset \(dataOffset) points beyond segment end")
+        // With default-base-is-moof, data_offset is relative to moof start
+        let actualSamplePosition = moofInfo.offset + dataOffset
+
+        // Verify the marker is at the actual sample position
+        guard actualSamplePosition + 4 <= mediaSegment.count else {
+            Issue.record("data_offset \(dataOffset) + moof_start points beyond segment end")
             return
         }
 
-        let actualData = mediaSegment.subdata(in: dataOffset..<(dataOffset + 4))
+        let actualData = mediaSegment.subdata(in: actualSamplePosition..<(actualSamplePosition + 4))
         #expect(actualData == markerData, "data_offset should point to sample data start")
-        print("✅ trun data_offset (\(dataOffset)) correctly points to mdat payload")
+        print("✅ trun data_offset (\(dataOffset)) + moof_start (\(moofInfo.offset)) = \(actualSamplePosition) correctly points to mdat payload")
     }
 
     // MARK: - 6. HLS Playlist Validation

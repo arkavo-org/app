@@ -386,11 +386,11 @@ public final class FMP4Writer {
         moof.append(traf)
 
         // Recalculate with correct offset for data_offset
-        // data_offset = distance from fragment start to mdat payload
-        // = styp_size + moof_size + mdat_header (8 bytes)
+        // When default-base-is-moof flag is set in tfhd, data_offset is relative to
+        // the first byte of moof (not segment start). This is per ISO 14496-12.
         let moofSize = moof.serialize().count
         let mdatHeaderSize = 8 // mdat box header
-        let dataOffsetBase = stypSize + moofSize + mdatHeaderSize
+        let dataOffsetBase = moofSize + mdatHeaderSize
 
         // Rebuild traf with correct offset
         var correctedMoof = ContainerBox(type: .moof)
@@ -458,18 +458,18 @@ public final class FMP4Writer {
 
         // senc, saiz, saio for encryption (if enabled)
         if encryption != nil {
-            // Calculate offset to senc sample data from fragment start
-            // AVPlayer uses fragment start as base (not moof start) despite default-base-is-moof
-            // Structure: styp + moof(8) + mfhd(16) + traf(8) + tfhd + tfdt + trun + senc_header(8) + version_flags(4) + sample_count(4)
+            // Calculate offset to senc sample data from moof start
+            // When default-base-is-moof flag is set in tfhd, offsets are relative to moof start
+            // Structure: moof(8) + mfhd(16) + traf(8) + tfhd + tfdt + trun + senc_header(8) + version_flags(4) + sample_count(4)
             let tfhdSize = tfhd.serialize().count
             let tfdtSize = tfdt.serialize().count
             let trunSize = trun.serialize().count
 
-            // Offset from fragment start to senc sample auxiliary data
-            // styp + moof header (8) + mfhd (16) + traf header (8) + tfhd + tfdt + trun + senc overhead (16)
-            let sencDataOffset = stypSize + 8 + 16 + 8 + tfhdSize + tfdtSize + trunSize + 16
+            // Offset from moof start to senc sample auxiliary data
+            // moof header (8) + mfhd (16) + traf header (8) + tfhd + tfdt + trun + senc overhead (16)
+            let sencDataOffset = 8 + 16 + 8 + tfhdSize + tfdtSize + trunSize + 16
 
-            print("🐞 FMP4Writer: sencDataOffset = \(sencDataOffset) (stypSize=\(stypSize), tfhd=\(tfhdSize), tfdt=\(tfdtSize), trun=\(trunSize))")
+            print("🐞 FMP4Writer: sencDataOffset = \(sencDataOffset) (tfhd=\(tfhdSize), tfdt=\(tfdtSize), trun=\(trunSize))")
 
             let (senc, saiz, saio) = generateEncryptionBoxes(samples: samples, sencDataOffset: sencDataOffset)
             traf.append(senc)
