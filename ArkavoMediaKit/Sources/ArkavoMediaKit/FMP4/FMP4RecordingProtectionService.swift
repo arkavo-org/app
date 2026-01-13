@@ -48,7 +48,8 @@ public actor FMP4RecordingProtectionService {
         print("🔑 Generating content encryption key...")
         let contentKey = CBCSEncryptor.generateKeyID()  // 16-byte AES-128 key
         let constantIV = CBCSEncryptor.generateIV()     // 16-byte constant IV
-        let keyID = CBCSEncryptor.generateKeyID()       // 16-byte key ID
+        // Use all-zero KID to match Apple FairPlay reference content
+        let keyID = Data(repeating: 0, count: 16)
 
         // Debug: Log key bytes for verification during playback troubleshooting
         print("🔑 DEBUG contentKey (hex): \(contentKey.map { String(format: "%02x", $0) }.joined())")

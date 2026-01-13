@@ -336,23 +336,19 @@ public final class FMP4Writer {
 
         var data = Data()
 
-        // styp - segment type box for CMAF/HLS compliance
-        let styp = SegmentTypeBox.cmafSegment
-        let stypData = styp.serialize()
-        data.append(stypData)
+        // Note: styp box omitted to match Apple FairPlay reference content structure
+        // Reference segments start directly with moof, not styp
 
         // Calculate sample data size for offset calculation
         let sampleDataSize = samples.reduce(0) { $0 + $1.data.count }
 
-        // moof - pass styp size for data_offset calculation
-        // AVPlayer interprets data_offset relative to fragment start (not moof start)
-        // despite default-base-is-moof flag, so we must include styp size
+        // moof - no styp prefix, so stypSize is 0
         let moof = generateMoof(
             trackID: trackID,
             samples: samples,
             baseDecodeTime: baseDecodeTime,
             sampleDataSize: sampleDataSize,
-            stypSize: stypData.count
+            stypSize: 0
         )
         let moofData = moof.serialize()
         data.append(moofData)

@@ -82,10 +82,9 @@ public final class CBCSEncryptor {
             }
         }
 
-        // Merge consecutive subsamples where possible
-        let mergedSubsamples = mergeSubsamples(subsamples)
-
-        return EncryptionResult(encryptedData: encryptedData, subsamples: mergedSubsamples)
+        // Don't merge subsamples - each NAL unit must be a separate entry
+        // so the decoder knows NAL boundaries for decryption
+        return EncryptionResult(encryptedData: encryptedData, subsamples: subsamples)
     }
 
     /// Encrypt a single NAL unit using CBCS pattern
@@ -94,14 +93,12 @@ public final class CBCSEncryptor {
             return (nalData, SubsampleEntry(bytesOfClearData: UInt16(nalData.count), bytesOfProtectedData: 0))
         }
 
-        // For hardware decryption (AVPlayer/VideoToolbox), the slice header must remain unencrypted.
-        // The slice header follows the NAL header and is variable-length (requires Exp-Golomb parsing).
-        // Conservative approach: Keep first 48 bytes clear to cover:
-        // - Length prefix (typically 4 bytes)
+        // For CBCS, keep NAL header clear. The slice header can be encrypted.
+        // Reference FairPlay content uses ~12 bytes clear per NAL:
+        // - Length prefix (4 bytes)
         // - NAL unit header (1-2 bytes)
-        // - Slice header (variable, typically 5-30 bytes)
-        // - Safety margin for high-bitrate content with larger headers
-        let minimumClearBytes = 48
+        // - Small safety margin
+        let minimumClearBytes = 12
 
         // NAL header is: length prefix + NAL header byte(s)
         let nalHeaderSize = lengthSize + 1 // For H.264. H.265 uses 2 bytes
