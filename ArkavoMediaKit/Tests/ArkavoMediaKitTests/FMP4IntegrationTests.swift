@@ -289,6 +289,182 @@ struct FMP4IntegrationTests {
         #expect(ppsResult.encryptedData == ppsSample)
     }
 
+    // MARK: - Unencrypted Playback Validation Tests
+
+    @Test("Unencrypted init segment has correct stsd entry")
+    func validateUnencryptedStsdEntry() throws {
+        let sps = Data([0x67, 0x64, 0x00, 0x28, 0xAC, 0xD9, 0x40])
+        let pps = Data([0x68, 0xEE, 0x3C, 0x80])
+
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1920,
+            height: 1080,
+            timescale: 90000,
+            sps: [sps],
+            pps: [pps]
+        )
+
+        // No encryption
+        let writer = FMP4Writer(tracks: [track])
+        let initSegment = writer.generateInitSegment()
+
+        // Should have avc1, NOT encv
+        let avc1Marker = Data([0x61, 0x76, 0x63, 0x31]) // "avc1"
+        let encvMarker = Data([0x65, 0x6E, 0x63, 0x76]) // "encv"
+
+        #expect(initSegment.range(of: avc1Marker) != nil, "Unencrypted content should have avc1 entry")
+        #expect(initSegment.range(of: encvMarker) == nil, "Unencrypted content should NOT have encv entry")
+
+        // Should NOT have encryption boxes
+        let sinfMarker = Data([0x73, 0x69, 0x6E, 0x66]) // "sinf"
+        let psshMarker = Data([0x70, 0x73, 0x73, 0x68]) // "pssh"
+        let tencMarker = Data([0x74, 0x65, 0x6E, 0x63]) // "tenc"
+
+        #expect(initSegment.range(of: sinfMarker) == nil, "Unencrypted content should NOT have sinf")
+        #expect(initSegment.range(of: psshMarker) == nil, "Unencrypted content should NOT have pssh")
+        #expect(initSegment.range(of: tencMarker) == nil, "Unencrypted content should NOT have tenc")
+    }
+
+    @Test("Unencrypted media segment has no senc/saiz/saio")
+    func validateUnencryptedMediaSegmentNoEncryption() throws {
+        let sps = Data([0x67, 0x64, 0x00, 0x28])
+        let pps = Data([0x68, 0xEE, 0x3C, 0x80])
+
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1920,
+            height: 1080,
+            timescale: 90000,
+            sps: [sps],
+            pps: [pps]
+        )
+
+        let writer = FMP4Writer(tracks: [track])
+
+        let samples = [
+            FMP4Writer.Sample(data: Data(repeating: 0xAA, count: 100), duration: 3000, isSync: true),
+            FMP4Writer.Sample(data: Data(repeating: 0xBB, count: 100), duration: 3000, isSync: false),
+        ]
+
+        let mediaSegment = writer.generateMediaSegment(trackID: 1, samples: samples, baseDecodeTime: 0)
+
+        // Should NOT have encryption boxes
+        let sencMarker = Data([0x73, 0x65, 0x6E, 0x63]) // "senc"
+        let saizMarker = Data([0x73, 0x61, 0x69, 0x7A]) // "saiz"
+        let saioMarker = Data([0x73, 0x61, 0x69, 0x6F]) // "saio"
+
+        #expect(mediaSegment.range(of: sencMarker) == nil, "Unencrypted segment should NOT have senc")
+        #expect(mediaSegment.range(of: saizMarker) == nil, "Unencrypted segment should NOT have saiz")
+        #expect(mediaSegment.range(of: saioMarker) == nil, "Unencrypted segment should NOT have saio")
+
+        // Should still have required boxes
+        let moofMarker = Data([0x6D, 0x6F, 0x6F, 0x66])
+        let mdatMarker = Data([0x6D, 0x64, 0x61, 0x74])
+        let trafMarker = Data([0x74, 0x72, 0x61, 0x66])
+        let trunMarker = Data([0x74, 0x72, 0x75, 0x6E])
+
+        #expect(mediaSegment.range(of: moofMarker) != nil)
+        #expect(mediaSegment.range(of: mdatMarker) != nil)
+        #expect(mediaSegment.range(of: trafMarker) != nil)
+        #expect(mediaSegment.range(of: trunMarker) != nil)
+    }
+
+    @Test("Unencrypted HLS playlist has no KEY tag")
+    func validateUnencryptedPlaylist() throws {
+        let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+            targetDuration: 6,
+            playlistType: .vod,
+            initSegmentURI: "init.mp4"
+        )
+
+        // No encryption
+        let hlsGenerator = FMP4HLSGenerator(
+            config: playlistConfig,
+            encryption: nil
+        )
+
+        let segments = [
+            FMP4HLSGenerator.Segment(uri: "segment0.m4s", duration: 6.0),
+            FMP4HLSGenerator.Segment(uri: "segment1.m4s", duration: 6.0),
+        ]
+
+        let playlist = hlsGenerator.generateMediaPlaylist(segments: segments)
+
+        // Should NOT have KEY tag
+        #expect(!playlist.contains("#EXT-X-KEY"), "Unencrypted playlist should NOT have KEY tag")
+        #expect(!playlist.contains("skd://"), "Unencrypted playlist should NOT have skd:// URI")
+
+        // Should have required tags
+        #expect(playlist.contains("#EXTM3U"))
+        #expect(playlist.contains("#EXT-X-VERSION:7"))
+        #expect(playlist.contains("#EXT-X-MAP:URI=\"init.mp4\""))
+        #expect(playlist.contains("segment0.m4s"))
+    }
+
+    @Test("Complete unencrypted fMP4 package is valid")
+    func validateCompleteUnencryptedPackage() throws {
+        let sps = Data([0x67, 0x64, 0x00, 0x28, 0xAC, 0xD9, 0x40])
+        let pps = Data([0x68, 0xEE, 0x3C, 0x80])
+
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1920,
+            height: 1080,
+            timescale: 90000,
+            sps: [sps],
+            pps: [pps]
+        )
+
+        let writer = FMP4Writer(tracks: [track])
+
+        // Generate init segment
+        let initSegment = writer.generateInitSegment()
+        #expect(initSegment.count > 0)
+
+        // Verify ftyp + moov structure
+        let ftypType = String(data: initSegment[4..<8], encoding: .ascii)
+        #expect(ftypType == "ftyp")
+
+        // Generate multiple media segments
+        for i in 0..<3 {
+            let samples = [
+                FMP4Writer.Sample(data: Data(repeating: UInt8(i * 0x11), count: 500), duration: 3000, isSync: i == 0),
+                FMP4Writer.Sample(data: Data(repeating: UInt8(i * 0x22), count: 300), duration: 3000, isSync: false),
+            ]
+
+            let mediaSegment = writer.generateMediaSegment(
+                trackID: 1,
+                samples: samples,
+                baseDecodeTime: UInt64(i * 6000)
+            )
+
+            #expect(mediaSegment.count > 0)
+
+            // Verify styp + moof + mdat structure
+            let stypType = String(data: mediaSegment[4..<8], encoding: .ascii)
+            #expect(stypType == "styp", "Segment \(i) should start with styp")
+        }
+
+        // Generate playlist
+        let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+            targetDuration: 6,
+            playlistType: .vod,
+            initSegmentURI: "init.mp4"
+        )
+
+        let hlsGenerator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+
+        let segments = [
+            FMP4HLSGenerator.Segment(uri: "segment0.m4s", duration: 6.0),
+            FMP4HLSGenerator.Segment(uri: "segment1.m4s", duration: 6.0),
+            FMP4HLSGenerator.Segment(uri: "segment2.m4s", duration: 6.0),
+        ]
+
+        let playlist = hlsGenerator.generateMediaPlaylist(segments: segments)
+
+        #expect(playlist.contains("#EXTM3U"))
+        #expect(playlist.contains("#EXT-X-ENDLIST"))
+        #expect(!playlist.contains("#EXT-X-KEY"))
+    }
+
     // MARK: - Full Pipeline Test
 
     @Test("Full FairPlay HLS package generation")
