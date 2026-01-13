@@ -286,9 +286,9 @@ public final class FMP4HLSGenerator {
 // MARK: - Data Extensions
 
 extension Data {
-    /// Convert data to hex string
+    /// Convert data to hex string (uppercase for HLS IV compatibility)
     var hexString: String {
-        map { String(format: "%02x", $0) }.joined()
+        map { String(format: "%02X", $0) }.joined()
     }
 }
 

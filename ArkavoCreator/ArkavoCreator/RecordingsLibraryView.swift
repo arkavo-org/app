@@ -652,6 +652,7 @@ struct ProtectedVideoPlayerView: View {
     @State private var contentKeySession: AVContentKeySession?
     @State private var keyDelegate: TDFContentKeyDelegate?
     @State private var useFairPlay = false  // FairPlay requires SAMPLE-AES; using local decryption
+    @State private var contentLoader: LocalContentLoader?
 
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
@@ -659,12 +660,39 @@ struct ProtectedVideoPlayerView: View {
         print("🎬 ProtectedVideoPlayerView initialized for: \(recording.title)")
     }
 
+    /// Content format detected in TDF archive
+    enum ContentFormat {
+        case hls           // AES-128-CBC full segment encryption
+        case fmp4          // CBCS 1:9 pattern encryption (FairPlay)
+
+        var displayName: String {
+            switch self {
+            case .hls: return "HLS (AES-CBC)"
+            case .fmp4: return "fMP4 (FairPlay CBCS)"
+            }
+        }
+    }
+
+    /// fMP4/FairPlay manifest info
+    struct FMP4Manifest {
+        let assetID: String
+        let wrappedKey: String
+        let algorithm: String
+        let iv: String
+        let kasURL: URL
+        let playlistFilename: String
+        let initFilename: String
+        let segmentFilenames: [String]
+    }
+
     struct ManifestInfo {
         let algorithm: String
         let kasURL: String
         let protectedAt: String
         let payloadSize: String
+        let contentFormat: ContentFormat
         let hlsManifest: HLSManifest?
+        let fmp4Manifest: FMP4Manifest?
     }
 
     var body: some View {
@@ -682,6 +710,13 @@ struct ProtectedVideoPlayerView: View {
                             .foregroundColor(.blue)
 
                         if let info = manifestInfo {
+                            Text(info.contentFormat.displayName)
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(info.contentFormat == .fmp4 ? Color.purple.opacity(0.2) : Color.blue.opacity(0.2))
+                                .cornerRadius(4)
+
                             Text(info.algorithm)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -817,6 +852,14 @@ struct ProtectedVideoPlayerView: View {
         .task {
             await loadManifest()
         }
+        .onDisappear {
+            // Clean up resources when view is dismissed
+            player?.pause()
+            player = nil
+
+            // Clean up content loader
+            contentLoader = nil
+        }
     }
 
     private func loadManifest() async {
@@ -866,9 +909,59 @@ struct ProtectedVideoPlayerView: View {
             formatter.countStyle = .file
             let tdfSizeString = formatter.string(fromByteCount: tdfSize)
 
-            // Parse HLS manifest for playback
+            // Detect content format and parse manifest
             var hlsManifest: HLSManifest?
-            if let hlsInfo = meta?["hls"] as? [String: Any],
+            var fmp4Manifest: FMP4Manifest?
+            var contentFormat: ContentFormat = .hls
+
+            // Try to extract fMP4 metadata from multiple locations:
+            // 1. encryptedMetadata in keyAccess (TDF spec compliant)
+            // 2. meta.fmp4 or meta.fairplay (legacy)
+            var fmp4Info: [String: Any]?
+
+            // Check encryptedMetadata first (TDF spec compliant)
+            if let encryptedMetadataBase64 = keyAccess?["encryptedMetadata"] as? String,
+               let encryptedMetadataData = Data(base64Encoded: encryptedMetadataBase64),
+               let decoded = try? JSONSerialization.jsonObject(with: encryptedMetadataData) as? [String: Any],
+               decoded["type"] as? String == "fmp4-fairplay" {
+                fmp4Info = decoded
+                print("📋 Found fMP4 metadata in encryptedMetadata")
+            }
+            // Fall back to legacy meta.fmp4 or meta.fairplay
+            else if let legacyInfo = meta?["fmp4"] as? [String: Any] ?? meta?["fairplay"] as? [String: Any] {
+                fmp4Info = legacyInfo
+                print("📋 Found fMP4 metadata in legacy meta field")
+            }
+
+            // Check for fMP4/FairPlay format
+            if let fmp4Info,
+               let assetID = fmp4Info["assetId"] as? String,
+               let wrappedKey = keyAccess?["wrappedKey"] as? String {
+
+                let ivString = (method?["iv"] as? String) ?? ""
+                let playlistFilename = fmp4Info["playlistFilename"] as? String ?? "playlist.m3u8"
+                let initFilename = fmp4Info["initFilename"] as? String ?? "init.mp4"
+                let segmentFilenames = fmp4Info["segmentFilenames"] as? [String] ?? ["segment0.m4s"]
+
+                fmp4Manifest = FMP4Manifest(
+                    assetID: assetID,
+                    wrappedKey: wrappedKey,
+                    algorithm: algorithm,
+                    iv: ivString,
+                    kasURL: URL(string: kasURLString) ?? kasURL,
+                    playlistFilename: playlistFilename,
+                    initFilename: initFilename,
+                    segmentFilenames: segmentFilenames
+                )
+                contentFormat = .fmp4
+                print("✅ fMP4/FairPlay manifest parsed: \(segmentFilenames.count) segments")
+                print("   Asset ID: \(assetID)")
+                print("   Playlist: \(playlistFilename)")
+                print("   Init: \(initFilename)")
+                print("   IV from manifest: '\(ivString)' (length: \(ivString.count))")
+            }
+            // Fall back to HLS format
+            else if let hlsInfo = meta?["hls"] as? [String: Any],
                let assetID = hlsInfo["assetId"] as? String,
                let segmentIVs = hlsInfo["segmentIVs"] as? [String],
                let wrappedKey = keyAccess?["wrappedKey"] as? String {
@@ -888,6 +981,7 @@ struct ProtectedVideoPlayerView: View {
                     policyBindingAlg: policyBinding?["alg"],
                     policyBindingHash: policyBinding?["hash"]
                 )
+                contentFormat = .hls
                 print("✅ HLS manifest parsed: \(segmentIVs.count) segments")
             }
 
@@ -896,9 +990,11 @@ struct ProtectedVideoPlayerView: View {
                 kasURL: kasURLString,
                 protectedAt: protectedAt,
                 payloadSize: tdfSizeString,
-                hlsManifest: hlsManifest
+                contentFormat: contentFormat,
+                hlsManifest: hlsManifest,
+                fmp4Manifest: fmp4Manifest
             )
-            print("✅ Manifest parsed: algorithm=\(algorithm), size=\(tdfSizeString)")
+            print("✅ Manifest parsed: format=\(contentFormat.displayName), algorithm=\(algorithm), size=\(tdfSizeString)")
         } catch {
             print("❌ Manifest loading error: \(error)")
             errorMessage = error.localizedDescription
@@ -906,8 +1002,8 @@ struct ProtectedVideoPlayerView: View {
     }
 
     private func startPlayback() async {
-        guard let info = manifestInfo, let hlsManifest = info.hlsManifest else {
-            playbackError = "No HLS manifest available"
+        guard let info = manifestInfo else {
+            playbackError = "No manifest available"
             return
         }
 
@@ -930,18 +1026,6 @@ struct ProtectedVideoPlayerView: View {
         defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
 
         do {
-            // Read TDF data
-            let tdfData = try Data(contentsOf: recording.tdfURL)
-            print("📂 Loaded TDF archive: \(tdfData.count) bytes")
-
-            // Extract HLS content
-            playbackStatus = "Extracting HLS segments..."
-            let tempDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("hls-player-\(UUID().uuidString)")
-            let extractor = HLSTDFExtractor(kasURL: kasURL)
-            let localAsset = try await extractor.extract(tdfData: tdfData, outputDirectory: tempDir)
-            print("✅ Extracted \(localAsset.segmentURLs.count) segments")
-
             // Get NTDF token for KAS authentication
             playbackStatus = "Authenticating with KAS..."
             guard let ntdfToken = KeychainManager.getAuthenticationToken() else {
@@ -950,27 +1034,226 @@ struct ProtectedVideoPlayerView: View {
                 return
             }
 
-            if useFairPlay {
-                // FairPlay playback - hardware decryption via Secure Enclave
-                try await startFairPlayPlayback(
-                    hlsManifest: hlsManifest,
-                    localAsset: localAsset,
-                    authToken: ntdfToken
-                )
-            } else {
-                // Local decryption fallback
-                try await startLocalDecryptionPlayback(
-                    hlsManifest: hlsManifest,
-                    localAsset: localAsset,
-                    extractor: extractor,
-                    authToken: ntdfToken
-                )
+            // Route to appropriate playback method based on content format
+            switch info.contentFormat {
+            case .fmp4:
+                guard let fmp4Manifest = info.fmp4Manifest else {
+                    playbackError = "No fMP4 manifest available"
+                    isPreparingPlayback = false
+                    return
+                }
+                try await startFMP4Playback(fmp4Manifest: fmp4Manifest, authToken: ntdfToken)
+
+            case .hls:
+                guard let hlsManifest = info.hlsManifest else {
+                    playbackError = "No HLS manifest available"
+                    isPreparingPlayback = false
+                    return
+                }
+                try await startHLSPlayback(hlsManifest: hlsManifest, authToken: ntdfToken)
             }
 
         } catch {
             print("❌ Playback error: \(error)")
             playbackError = error.localizedDescription
             isPreparingPlayback = false
+        }
+    }
+
+    /// fMP4/FairPlay playback - extracts and plays with hardware DRM
+    private func startFMP4Playback(fmp4Manifest: FMP4Manifest, authToken: String) async throws {
+        playbackStatus = "Extracting fMP4 content..."
+        print("🎬 Starting fMP4/FairPlay playback...")
+
+        // Extract fMP4 content to temp directory
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fmp4-player-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        // Use TDFArchiveReader to extract all files
+        let files = try TDFArchiveReader.extractAllFiles(from: recording.tdfURL, to: tempDir)
+        print("✅ Extracted \(files.count) files to: \(tempDir.path)")
+        for file in files {
+            print("   - \(file.lastPathComponent)")
+        }
+
+        // Find the playlist file
+        let localPlaylistPath = tempDir.appendingPathComponent(fmp4Manifest.playlistFilename)
+        guard FileManager.default.fileExists(atPath: localPlaylistPath.path) else {
+            throw NSError(domain: "FMP4Playback", code: 1,
+                         userInfo: [NSLocalizedDescriptionKey: "Playlist not found: \(fmp4Manifest.playlistFilename)"])
+        }
+
+        // Fix playlist: Inject IV from manifest if missing
+        // FairPlay requires the IV to be explicit in the playlist for correct decryption
+        print("🔧 Manifest IV: '\(fmp4Manifest.iv)' (length: \(fmp4Manifest.iv.count))")
+        if !fmp4Manifest.iv.isEmpty {
+            var playlistContent = try String(contentsOf: localPlaylistPath, encoding: .utf8)
+            print("📄 Original playlist:\n\(playlistContent)")
+
+            // Convert IV to Hex if it looks like Base64 (TDF usually uses Base64)
+            var hexIV = fmp4Manifest.iv
+
+            // Check for Base64 vs Hex format
+            // Base64: 22-24 chars for 16 bytes (varies with padding)
+            // Hex: 32 chars for 16 bytes
+            if !hexIV.hasPrefix("0x") {
+                // Try Base64 first - it's shorter than hex for same data
+                // Base64 of 16 bytes = ceil(16*8/6) = 22 chars + up to 2 padding = 22-24
+                if hexIV.count >= 22 && hexIV.count <= 24 {
+                    // Ensure proper padding for Base64 decoding
+                    var padded = hexIV
+                    while padded.count % 4 != 0 {
+                        padded += "="
+                    }
+                    if let data = Data(base64Encoded: padded), data.count == 16 {
+                        hexIV = "0x" + data.map { String(format: "%02X", $0) }.joined()
+                        print("🔧 Converted Base64 IV to Hex: \(hexIV)")
+                    } else {
+                        // Not valid Base64, treat as hex
+                        hexIV = "0x" + hexIV.uppercased()
+                        print("🔧 Added 0x prefix to IV: \(hexIV)")
+                    }
+                } else if hexIV.count == 32 {
+                    // Already hex, just add prefix
+                    hexIV = "0x" + hexIV.uppercased()
+                    print("🔧 Added 0x prefix to hex IV: \(hexIV)")
+                } else {
+                    // Unknown format, add prefix and hope for the best
+                    hexIV = "0x" + hexIV.uppercased()
+                    print("⚠️ Unknown IV format (length: \(fmp4Manifest.iv.count)), added 0x prefix: \(hexIV)")
+                }
+            } else {
+                print("🔧 IV already has 0x prefix: \(hexIV)")
+            }
+
+            // Check if IV is already present
+            if !playlistContent.contains("IV=") {
+                print("🔧 Injecting IV into playlist: \(hexIV)")
+                // Regex to find the #EXT-X-KEY line and append IV
+                // Pattern matches: #EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://..." ...
+                // We want to insert IV=0x... after the URI
+                let pattern = #"(#EXT-X-KEY:[^\n]*URI="[^"]+")"#
+                let regex = try NSRegularExpression(pattern: pattern, options: [])
+                let range = NSRange(location: 0, length: playlistContent.utf16.count)
+
+                let originalContent = playlistContent
+                playlistContent = regex.stringByReplacingMatches(
+                    in: playlistContent,
+                    options: [],
+                    range: range,
+                    withTemplate: "$1,IV=\(hexIV)"
+                )
+
+                if playlistContent != originalContent {
+                    print("✅ IV injected successfully")
+                    print("📄 Modified playlist:\n\(playlistContent)")
+                    try playlistContent.write(to: localPlaylistPath, atomically: true, encoding: .utf8)
+                } else {
+                    print("⚠️ Regex did not match #EXT-X-KEY line - IV not injected")
+                    // Try to show what lines exist for debugging
+                    let lines = playlistContent.components(separatedBy: "\n")
+                    for line in lines where line.contains("EXT-X-KEY") {
+                        print("   Found key line: \(line)")
+                    }
+                }
+            } else {
+                print("ℹ️ IV already present in playlist, skipping injection")
+            }
+        } else {
+            print("⚠️ Manifest IV is empty, cannot inject")
+        }
+
+        // Create content loader for custom URL scheme
+        playbackStatus = "Setting up content loader..."
+        print("📁 Creating content loader for: \(tempDir.path)")
+
+        let loader = LocalContentLoader(contentDirectory: tempDir)
+        contentLoader = loader
+
+        playbackStatus = "Setting up FairPlay..."
+        print("🔐 Setting up FairPlay...")
+
+        // Create FairPlay manifest for key delegate
+        let manifest = HLSManifestLite(
+            kasURL: fmp4Manifest.kasURL.absoluteString,
+            wrappedKey: fmp4Manifest.wrappedKey,
+            algorithm: fmp4Manifest.algorithm,
+            iv: fmp4Manifest.iv,
+            assetID: fmp4Manifest.assetID
+        )
+
+        // Create content key session with FairPlay
+        let session = AVContentKeySession(keySystem: .fairPlayStreaming)
+        contentKeySession = session
+
+        // Create key delegate
+        let delegate = TDFContentKeyDelegate(
+            manifest: manifest,
+            authToken: authToken,
+            serverURL: kasURL
+        )
+        keyDelegate = delegate
+        session.setDelegate(delegate, queue: .main)
+
+        // Create asset using custom URL scheme
+        let asset = loader.createAsset(for: fmp4Manifest.playlistFilename)
+        session.addContentKeyRecipient(asset)
+
+        playbackStatus = "Requesting FairPlay key..."
+        print("🔐 Asset added as content key recipient")
+
+        // Proactively request the content key using the skd:// URI
+        // This must match exactly what's in the playlist for AVPlayer to find the key
+        let skdURI = "skd://\(fmp4Manifest.assetID)"
+        print("🔐 Proactively requesting content key for: \(skdURI)")
+        session.processContentKeyRequest(withIdentifier: skdURI, initializationData: nil, options: nil)
+
+        // Wait a moment for key processing to start
+        try await Task.sleep(nanoseconds: 500_000_000) // 500ms
+
+        // Create player
+        let playerItem = AVPlayerItem(asset: asset)
+        let avPlayer = AVPlayer(playerItem: playerItem)
+        self.player = avPlayer
+
+        playbackStatus = "Starting playback..."
+        isPlaying = true
+        isPreparingPlayback = false
+
+        avPlayer.play()
+        print("▶️ fMP4/FairPlay playback started")
+    }
+
+    /// HLS playback - extracts and plays with optional FairPlay or local decryption
+    private func startHLSPlayback(hlsManifest: HLSManifest, authToken: String) async throws {
+        // Read TDF data
+        let tdfData = try Data(contentsOf: recording.tdfURL)
+        print("📂 Loaded TDF archive: \(tdfData.count) bytes")
+
+        // Extract HLS content
+        playbackStatus = "Extracting HLS segments..."
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hls-player-\(UUID().uuidString)")
+        let extractor = HLSTDFExtractor(kasURL: kasURL)
+        let localAsset = try await extractor.extract(tdfData: tdfData, outputDirectory: tempDir)
+        print("✅ Extracted \(localAsset.segmentURLs.count) segments")
+
+        if useFairPlay {
+            // FairPlay playback - hardware decryption via Secure Enclave
+            try await startFairPlayPlayback(
+                hlsManifest: hlsManifest,
+                localAsset: localAsset,
+                authToken: authToken
+            )
+        } else {
+            // Local decryption fallback
+            try await startLocalDecryptionPlayback(
+                hlsManifest: hlsManifest,
+                localAsset: localAsset,
+                extractor: extractor,
+                authToken: authToken
+            )
         }
     }
 

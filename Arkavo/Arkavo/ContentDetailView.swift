@@ -17,7 +17,9 @@ struct ContentDetailView: View {
     @State private var isExtracting = false
     @State private var showingVideoPlayer = false
     @State private var isHLSContent = false
+    @State private var isFMP4Content = false
     @State private var showingHLSVideoPlayer = false
+    @State private var showingFMP4VideoPlayer = false
 
     /// Get NTDF token for KAS authentication
     /// This token is issued by authnz-rs during WebAuthn registration
@@ -168,6 +170,14 @@ struct ContentDetailView: View {
                     )
                 }
             }
+            .fullScreenCover(isPresented: $showingFMP4VideoPlayer) {
+                if let tdfData, isFMP4Content {
+                    FMP4VideoPlayerView(
+                        tdfData: tdfData,
+                        manifest: descriptor.manifest
+                    )
+                }
+            }
         }
     }
 
@@ -183,11 +193,16 @@ struct ContentDetailView: View {
         }
 
         do {
-            // Check if this is HLS content by looking for playlist.m3u8
-            isHLSContent = checkForHLSContent(tdfData)
+            // Check content type by looking at archive contents
+            let contentType = detectContentType(tdfData)
 
-            if isHLSContent {
-                // HLS content - use the HLS player directly with raw TDF data
+            if contentType == .fmp4 {
+                // fMP4/FairPlay content - use the fMP4 player
+                isFMP4Content = true
+                showingFMP4VideoPlayer = true
+            } else if contentType == .hls {
+                // HLS content with segment encryption - use HLS player
+                isHLSContent = true
                 showingHLSVideoPlayer = true
             } else {
                 // Standard TDF - extract and play with FairPlay
@@ -205,12 +220,32 @@ struct ContentDetailView: View {
         }
     }
 
-    /// Check if TDF archive contains HLS content (playlist.m3u8)
-    private func checkForHLSContent(_ data: Data) -> Bool {
+    /// Content types that can be in a TDF archive
+    private enum TDFContentType {
+        case fmp4       // fMP4/FairPlay with init.mp4 + segments
+        case hls        // HLS with segment encryption
+        case standard   // Standard TDF with single payload
+    }
+
+    /// Detect content type by examining archive contents
+    private func detectContentType(_ data: Data) -> TDFContentType {
         guard let archive = try? Archive(data: data, accessMode: .read) else {
-            return false
+            return .standard
         }
-        return archive["playlist.m3u8"] != nil
+
+        let hasPlaylist = archive["playlist.m3u8"] != nil
+        let hasInitMP4 = archive["init.mp4"] != nil
+
+        if hasPlaylist && hasInitMP4 {
+            // fMP4/FairPlay content (has both playlist and init segment)
+            return .fmp4
+        } else if hasPlaylist {
+            // HLS with segment encryption (playlist but no init.mp4)
+            return .hls
+        } else {
+            // Standard TDF payload
+            return .standard
+        }
     }
 
     private func fetchContent() async {

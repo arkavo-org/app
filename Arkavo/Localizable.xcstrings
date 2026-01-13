@@ -442,6 +442,9 @@
     "Developer Mode" : {
 
     },
+    "Diagnostics" : {
+
+    },
     "Disconnect" : {
 
     },
@@ -538,6 +541,9 @@
 
     },
     "Failed to load image" : {
+
+    },
+    "FairPlay Test" : {
 
     },
     "Features" : {
@@ -1258,6 +1264,9 @@
 
     },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
+    "Test FairPlay Streaming" : {
 
     },
     "Thank you for helping keep our community safe." : {

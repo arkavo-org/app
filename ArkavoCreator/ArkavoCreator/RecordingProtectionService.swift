@@ -355,4 +355,39 @@ public enum TDFArchiveReader {
 
         return manifest
     }
+
+    /// Extract all files from a TDF archive to a directory
+    /// - Parameters:
+    ///   - tdfURL: URL to the .tdf file
+    ///   - outputDirectory: Directory to extract files to
+    /// - Returns: Array of extracted file URLs
+    public static func extractAllFiles(from tdfURL: URL, to outputDirectory: URL) throws -> [URL] {
+        guard let archive = Archive(url: tdfURL, accessMode: .read) else {
+            throw RecordingProtectionError.invalidTDFArchive
+        }
+
+        var extractedFiles: [URL] = []
+
+        for entry in archive {
+            // Skip directories
+            guard entry.type == .file else { continue }
+
+            let destinationURL = outputDirectory.appendingPathComponent(entry.path)
+
+            // Create parent directories if needed
+            let parentDir = destinationURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+
+            // Extract file
+            var fileData = Data()
+            _ = try archive.extract(entry) { data in
+                fileData.append(data)
+            }
+            try fileData.write(to: destinationURL)
+
+            extractedFiles.append(destinationURL)
+        }
+
+        return extractedFiles
+    }
 }

@@ -145,7 +145,8 @@ public actor FMP4RecordingProtectionService {
             samples.append(FMP4Writer.Sample(
                 data: encryptedResult.encryptedData,
                 duration: durationValue,
-                isSync: isSync
+                isSync: isSync,
+                subsamples: encryptedResult.subsamples
             ))
 
             totalDuration += UInt64(durationValue)
@@ -215,9 +216,20 @@ public actor FMP4RecordingProtectionService {
 
         // 9. Package into TDF archive (ZIP)
         print("📦 Packaging into TDF archive...")
+
+        // Add fMP4-specific metadata to manifest
+        let segmentFilenames = segments.map { $0.uri }
+        let enhancedManifestData = try addFMP4Metadata(
+            to: manifestData,
+            assetID: assetID,
+            playlistFilename: "playlist.m3u8",
+            initFilename: "init.mp4",
+            segmentFilenames: segmentFilenames
+        )
+
         let archive = try createTDFArchive(
             tempDir: tempDir,
-            manifestData: manifestData,
+            manifestData: enhancedManifestData,
             segments: segments
         )
 
@@ -272,6 +284,56 @@ public actor FMP4RecordingProtectionService {
         }
 
         return sps.isEmpty ? nil : (sps, pps)
+    }
+
+    /// Add fMP4-specific metadata to manifest using TDF spec's encryptedMetadata field
+    /// The metadata is base64-encoded JSON (unencrypted) per TDF spec allowance
+    private func addFMP4Metadata(
+        to manifestData: Data,
+        assetID: String,
+        playlistFilename: String,
+        initFilename: String,
+        segmentFilenames: [String]
+    ) throws -> Data {
+        // Parse existing manifest
+        guard var manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any] else {
+            throw FMP4ProtectionError.manifestParsingFailed
+        }
+
+        let protectedAtTimestamp = ISO8601DateFormatter().string(from: Date())
+
+        // Create fMP4 metadata (unencrypted, just base64-encoded)
+        let fmp4Meta: [String: Any] = [
+            "type": "fmp4-fairplay",
+            "assetId": assetID,
+            "playlistFilename": playlistFilename,
+            "initFilename": initFilename,
+            "segmentFilenames": segmentFilenames,
+            "encryption": "cbcs-1-9",
+            "protectedAt": protectedAtTimestamp
+        ]
+
+        // Encode metadata as base64 JSON
+        let metadataJSON = try JSONSerialization.data(withJSONObject: fmp4Meta, options: [.sortedKeys])
+        let metadataBase64 = metadataJSON.base64EncodedString()
+
+        // Add encryptedMetadata to keyAccess (per TDF spec)
+        if var encInfo = manifest["encryptionInformation"] as? [String: Any],
+           var keyAccessArray = encInfo["keyAccess"] as? [[String: Any]],
+           !keyAccessArray.isEmpty {
+            keyAccessArray[0]["encryptedMetadata"] = metadataBase64
+            encInfo["keyAccess"] = keyAccessArray
+            manifest["encryptionInformation"] = encInfo
+        }
+
+        // Add top-level meta section (required by IrohContentService)
+        manifest["meta"] = [
+            "assetId": assetID,
+            "protectedAt": protectedAtTimestamp
+        ]
+
+        // Re-serialize
+        return try JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
     }
 
     private func createTDFArchive(
@@ -442,6 +504,7 @@ public enum FMP4ProtectionError: Error, LocalizedError {
     case noParameterSets
     case encodingFailed(String)
     case packagingFailed(String)
+    case manifestParsingFailed
 
     public var errorDescription: String? {
         switch self {
@@ -455,6 +518,8 @@ public enum FMP4ProtectionError: Error, LocalizedError {
             "fMP4 encoding failed: \(reason)"
         case let .packagingFailed(reason):
             "TDF packaging failed: \(reason)"
+        case .manifestParsingFailed:
+            "Failed to parse manifest JSON"
         }
     }
 }

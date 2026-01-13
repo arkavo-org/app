@@ -37,6 +37,43 @@ public struct FileTypeBox: ISOBox {
     }
 }
 
+// MARK: - Segment Type Box (styp)
+
+/// Segment type box - identifies media segment type (CMAF/HLS compliance)
+public struct SegmentTypeBox: ISOBox {
+    public let type = FourCC.styp
+    public let majorBrand: FourCC
+    public let minorVersion: UInt32
+    public let compatibleBrands: [FourCC]
+
+    public init(majorBrand: FourCC = FourCC("msdh"),
+                minorVersion: UInt32 = 0,
+                compatibleBrands: [FourCC] = [FourCC("msdh"), FourCC("msix")]) {
+        self.majorBrand = majorBrand
+        self.minorVersion = minorVersion
+        self.compatibleBrands = compatibleBrands
+    }
+
+    /// Create styp for CMAF/HLS media segments
+    public static var cmafSegment: SegmentTypeBox {
+        SegmentTypeBox(
+            majorBrand: FourCC("msdh"),
+            minorVersion: 0,
+            compatibleBrands: [FourCC("msdh"), FourCC("msix")]
+        )
+    }
+
+    public func serializePayload() -> Data {
+        var data = Data()
+        data.append(majorBrand.data)
+        data.append(minorVersion.bigEndianData)
+        for brand in compatibleBrands {
+            data.append(brand.data)
+        }
+        return data
+    }
+}
+
 // MARK: - Movie Header Box (mvhd)
 
 /// Movie header with overall information about the movie
@@ -488,6 +525,74 @@ public struct TrackExtendsBox: ISOFullBox {
         data.append(defaultSampleDuration.bigEndianData)
         data.append(defaultSampleSize.bigEndianData)
         data.append(defaultSampleFlags.bigEndianData)
+        return data
+    }
+}
+
+// MARK: - Edit List Box (edts/elst)
+
+/// Edit list box - maps presentation timeline to media timeline
+/// Required by Apple HLS Authoring Spec for proper time mapping
+public struct EditListBox: ISOFullBox {
+    public let type = FourCC("elst")
+    public let version: UInt8
+    public var flags: UInt32 = 0
+
+    public let entries: [EditListEntry]
+
+    public struct EditListEntry {
+        public let segmentDuration: UInt64
+        public let mediaTime: Int64
+        public let mediaRateInteger: Int16
+        public let mediaRateFraction: Int16
+
+        /// Create identity edit (1:1 mapping from media time 0)
+        public static func identity(duration: UInt64 = 0) -> EditListEntry {
+            EditListEntry(
+                segmentDuration: duration,
+                mediaTime: 0,
+                mediaRateInteger: 1,
+                mediaRateFraction: 0
+            )
+        }
+
+        public init(segmentDuration: UInt64, mediaTime: Int64, mediaRateInteger: Int16 = 1, mediaRateFraction: Int16 = 0) {
+            self.segmentDuration = segmentDuration
+            self.mediaTime = mediaTime
+            self.mediaRateInteger = mediaRateInteger
+            self.mediaRateFraction = mediaRateFraction
+        }
+    }
+
+    public init(entries: [EditListEntry]) {
+        self.entries = entries
+        // Use version 1 for 64-bit durations
+        self.version = 1
+    }
+
+    /// Create identity edit list (presentation starts at media time 0)
+    public static var identity: EditListBox {
+        EditListBox(entries: [.identity()])
+    }
+
+    public func serializePayload() -> Data {
+        var data = serializeVersionAndFlags()
+
+        // Entry count
+        data.append(UInt32(entries.count).bigEndianData)
+
+        for entry in entries {
+            if version == 1 {
+                data.append(entry.segmentDuration.bigEndianData)
+                data.append(UInt64(bitPattern: entry.mediaTime).bigEndianData)
+            } else {
+                data.append(UInt32(entry.segmentDuration).bigEndianData)
+                data.append(Int32(entry.mediaTime).bigEndianData)
+            }
+            data.append(entry.mediaRateInteger.bigEndianData)
+            data.append(entry.mediaRateFraction.bigEndianData)
+        }
+
         return data
     }
 }

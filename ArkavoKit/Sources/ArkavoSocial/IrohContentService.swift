@@ -73,15 +73,34 @@ public struct TDFManifestLite: Codable, Sendable, Hashable {
         guard let encInfo = json["encryptionInformation"] as? [String: Any],
               let method = encInfo["method"] as? [String: Any],
               let keyAccess = (encInfo["keyAccess"] as? [[String: Any]])?.first,
-              let meta = json["meta"] as? [String: Any],
               let kasURL = keyAccess["url"] as? String,
               let wrappedKey = keyAccess["wrappedKey"] as? String,
               let algorithm = method["algorithm"] as? String,
-              let iv = method["iv"] as? String,
-              let assetID = meta["assetId"] as? String,
-              let protectedAt = meta["protectedAt"] as? String
+              let iv = method["iv"] as? String
         else {
             throw IrohContentError.manifestExtractionFailed("Missing required fields in manifest")
+        }
+
+        // Try top-level meta first
+        var assetID: String?
+        var protectedAt: String?
+
+        if let meta = json["meta"] as? [String: Any] {
+            assetID = meta["assetId"] as? String
+            protectedAt = meta["protectedAt"] as? String
+        }
+
+        // Fall back to encryptedMetadata for fMP4 content (base64-encoded JSON)
+        if assetID == nil || protectedAt == nil,
+           let encryptedMetadata = keyAccess["encryptedMetadata"] as? String,
+           let metadataData = Data(base64Encoded: encryptedMetadata),
+           let fmp4Meta = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any] {
+            assetID = assetID ?? (fmp4Meta["assetId"] as? String)
+            protectedAt = protectedAt ?? (fmp4Meta["protectedAt"] as? String)
+        }
+
+        guard let finalAssetID = assetID, let finalProtectedAt = protectedAt else {
+            throw IrohContentError.manifestExtractionFailed("Missing assetId or protectedAt in manifest")
         }
 
         return TDFManifestLite(
@@ -89,8 +108,8 @@ public struct TDFManifestLite: Codable, Sendable, Hashable {
             wrappedKey: wrappedKey,
             algorithm: algorithm,
             iv: iv,
-            assetID: assetID,
-            protectedAt: protectedAt
+            assetID: finalAssetID,
+            protectedAt: finalProtectedAt
         )
     }
 }

@@ -90,14 +90,27 @@ public final class CBCSEncryptor {
             return (nalData, SubsampleEntry(bytesOfClearData: UInt16(nalData.count), bytesOfProtectedData: 0))
         }
 
-        // NAL header is clear (length prefix + NAL header byte(s))
+        // For hardware decryption (AVPlayer/VideoToolbox), the slice header must remain unencrypted.
+        // The slice header follows the NAL header and is variable-length (requires Exp-Golomb parsing).
+        // Conservative approach: Keep first 48 bytes clear to cover:
+        // - Length prefix (typically 4 bytes)
+        // - NAL unit header (1-2 bytes)
+        // - Slice header (variable, typically 5-30 bytes)
+        // - Safety margin for high-bitrate content with larger headers
+        let minimumClearBytes = 48
+
+        // NAL header is: length prefix + NAL header byte(s)
         let nalHeaderSize = lengthSize + 1 // For H.264. H.265 uses 2 bytes
 
-        // Keep NAL header clear
-        let clearPart = nalData.prefix(nalHeaderSize)
+        // Use the larger of nalHeaderSize or minimumClearBytes for slice NAL units
+        // If the NAL unit is smaller than minimumClearBytes, keep it all clear
+        let clearBytes = min(max(nalHeaderSize, minimumClearBytes), nalData.count)
 
-        // Payload to encrypt
-        let payload = nalData.dropFirst(nalHeaderSize)
+        // Keep NAL header + slice header clear
+        let clearPart = nalData.prefix(clearBytes)
+
+        // Payload to encrypt (everything after clear bytes)
+        let payload = nalData.dropFirst(clearBytes)
 
         if payload.isEmpty {
             return (nalData, SubsampleEntry(bytesOfClearData: UInt16(nalData.count), bytesOfProtectedData: 0))
@@ -111,7 +124,7 @@ public final class CBCSEncryptor {
         result.append(encryptedPayload)
 
         let subsample = SubsampleEntry(
-            bytesOfClearData: UInt16(nalHeaderSize),
+            bytesOfClearData: UInt16(clearBytes),
             bytesOfProtectedData: UInt32(encryptedPayload.count)
         )
 

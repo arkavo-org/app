@@ -113,12 +113,14 @@ public final class FMP4Writer {
         public let duration: UInt32
         public let isSync: Bool
         public let compositionTimeOffset: Int32
+        public let subsamples: [SubsampleEntry]?  // Encryption subsample info
 
-        public init(data: Data, duration: UInt32, isSync: Bool = false, compositionTimeOffset: Int32 = 0) {
+        public init(data: Data, duration: UInt32, isSync: Bool = false, compositionTimeOffset: Int32 = 0, subsamples: [SubsampleEntry]? = nil) {
             self.data = data
             self.duration = duration
             self.isSync = isSync
             self.compositionTimeOffset = compositionTimeOffset
+            self.subsamples = subsamples
         }
     }
 
@@ -205,6 +207,11 @@ public final class FMP4Writer {
             isAudio: isAudio
         )
         trak.append(tkhd)
+
+        // edts - edit list for presentation time mapping (required by Apple HLS Authoring Spec)
+        var edts = ContainerBox(type: .edts)
+        edts.append(EditListBox.identity)
+        trak.append(edts)
 
         // mdia
         let mdia = generateMdia(for: track)
@@ -321,7 +328,7 @@ public final class FMP4Writer {
 
     // MARK: - Media Segment Generation
 
-    /// Generate a media segment (moof + mdat) for a single track
+    /// Generate a media segment (styp + moof + mdat) for a single track
     public func generateMediaSegment(trackID: UInt32,
                                      samples: [Sample],
                                      baseDecodeTime: UInt64) -> Data {
@@ -329,15 +336,23 @@ public final class FMP4Writer {
 
         var data = Data()
 
+        // styp - segment type box for CMAF/HLS compliance
+        let styp = SegmentTypeBox.cmafSegment
+        let stypData = styp.serialize()
+        data.append(stypData)
+
         // Calculate sample data size for offset calculation
         let sampleDataSize = samples.reduce(0) { $0 + $1.data.count }
 
-        // moof
+        // moof - pass styp size for data_offset calculation
+        // AVPlayer interprets data_offset relative to fragment start (not moof start)
+        // despite default-base-is-moof flag, so we must include styp size
         let moof = generateMoof(
             trackID: trackID,
             samples: samples,
             baseDecodeTime: baseDecodeTime,
-            sampleDataSize: sampleDataSize
+            sampleDataSize: sampleDataSize,
+            stypSize: stypData.count
         )
         let moofData = moof.serialize()
         data.append(moofData)
@@ -352,7 +367,8 @@ public final class FMP4Writer {
     private func generateMoof(trackID: UInt32,
                               samples: [Sample],
                               baseDecodeTime: UInt64,
-                              sampleDataSize: Int) -> ContainerBox {
+                              sampleDataSize: Int,
+                              stypSize: Int = 0) -> ContainerBox {
         var moof = ContainerBox(type: .moof)
 
         // mfhd
@@ -364,13 +380,17 @@ public final class FMP4Writer {
             trackID: trackID,
             samples: samples,
             baseDecodeTime: baseDecodeTime,
-            moofSize: 0 // Will be calculated
+            dataOffsetBase: 0, // Will be calculated
+            stypSize: stypSize
         )
         moof.append(traf)
 
-        // Recalculate with correct moof size for data_offset
-        let preliminarySize = moof.serialize().count
+        // Recalculate with correct offset for data_offset
+        // data_offset = distance from fragment start to mdat payload
+        // = styp_size + moof_size + mdat_header (8 bytes)
+        let moofSize = moof.serialize().count
         let mdatHeaderSize = 8 // mdat box header
+        let dataOffsetBase = stypSize + moofSize + mdatHeaderSize
 
         // Rebuild traf with correct offset
         var correctedMoof = ContainerBox(type: .moof)
@@ -380,7 +400,8 @@ public final class FMP4Writer {
             trackID: trackID,
             samples: samples,
             baseDecodeTime: baseDecodeTime,
-            moofSize: preliminarySize + mdatHeaderSize
+            dataOffsetBase: dataOffsetBase,
+            stypSize: stypSize
         )
         correctedMoof.append(correctedTraf)
 
@@ -390,12 +411,16 @@ public final class FMP4Writer {
     private func generateTraf(trackID: UInt32,
                               samples: [Sample],
                               baseDecodeTime: UInt64,
-                              moofSize: Int) -> ContainerBox {
+                              dataOffsetBase: Int,
+                              stypSize: Int = 0) -> ContainerBox {
         var traf = ContainerBox(type: .traf)
 
         // tfhd
+        // sample_description_index = 1 tells decoder to use the first stsd entry (encv)
+        // This is critical for encrypted content - without it, decoder may not find encryption info
         let tfhd = TrackFragmentHeaderBox(
             trackID: trackID,
+            sampleDescriptionIndex: 1,
             defaultBaseIsMoof: true
         )
         traf.append(tfhd)
@@ -414,19 +439,39 @@ public final class FMP4Writer {
             )
         }
 
-        // Data offset from start of moof to start of sample data in mdat
-        let dataOffset = Int32(moofSize)
+        // Data offset from fragment start to mdat payload
+        // AVPlayer uses fragment start as base (not moof start) despite default-base-is-moof
+        let dataOffset = Int32(dataOffsetBase)
 
+        if dataOffsetBase > 0 {
+             print("🐞 FMP4Writer: dataOffsetBase = \(dataOffsetBase), trun dataOffset = \(dataOffset)")
+        }
+
+        // Don't use firstSampleFlags when per-sample flags are present - they're mutually exclusive
+        // Per-sample flags already include sync/non-sync info for each sample
         let trun = TrackRunBox(
             samples: trunSamples,
             dataOffset: dataOffset,
-            firstSampleFlags: samples.first?.isSync == true ? TrackRunSample.syncFlags() : nil
+            firstSampleFlags: nil
         )
         traf.append(trun)
 
         // senc, saiz, saio for encryption (if enabled)
         if encryption != nil {
-            let (senc, saiz, saio) = generateEncryptionBoxes(samples: samples)
+            // Calculate offset to senc sample data from fragment start
+            // AVPlayer uses fragment start as base (not moof start) despite default-base-is-moof
+            // Structure: styp + moof(8) + mfhd(16) + traf(8) + tfhd + tfdt + trun + senc_header(8) + version_flags(4) + sample_count(4)
+            let tfhdSize = tfhd.serialize().count
+            let tfdtSize = tfdt.serialize().count
+            let trunSize = trun.serialize().count
+
+            // Offset from fragment start to senc sample auxiliary data
+            // styp + moof header (8) + mfhd (16) + traf header (8) + tfhd + tfdt + trun + senc overhead (16)
+            let sencDataOffset = stypSize + 8 + 16 + 8 + tfhdSize + tfdtSize + trunSize + 16
+
+            print("🐞 FMP4Writer: sencDataOffset = \(sencDataOffset) (stypSize=\(stypSize), tfhd=\(tfhdSize), tfdt=\(tfdtSize), trun=\(trunSize))")
+
+            let (senc, saiz, saio) = generateEncryptionBoxes(samples: samples, sencDataOffset: sencDataOffset)
             traf.append(senc)
             traf.append(saiz)
             traf.append(saio)
@@ -435,30 +480,41 @@ public final class FMP4Writer {
         return traf
     }
 
-    private func generateEncryptionBoxes(samples: [Sample]) -> (SampleEncryptionBox, SampleAuxiliaryInfoSizesBox, SampleAuxiliaryInfoOffsetsBox) {
+    private func generateEncryptionBoxes(samples: [Sample], sencDataOffset: Int = 0) -> (SampleEncryptionBox, SampleAuxiliaryInfoSizesBox, SampleAuxiliaryInfoOffsetsBox) {
         // For CBCS with constant IV, we don't need per-sample IVs
-        // Subsample info depends on NAL unit parsing (simplified here)
+        // Use actual subsample info from CBCSEncryptor if available
 
         var entries: [SampleEncryptionEntry] = []
         var sampleInfoSizes: [UInt8] = []
 
         for sample in samples {
-            // Simplified: treat entire sample as one subsample
-            // In production, would parse NAL units and create proper subsample entries
-            let subsample = SubsampleEntry(
-                bytesOfClearData: 0,
-                bytesOfProtectedData: UInt32(sample.data.count)
-            )
-            let entry = SampleEncryptionEntry(iv: nil, subsamples: [subsample])
+            let subsamples: [SubsampleEntry]
+
+            if let actualSubsamples = sample.subsamples, !actualSubsamples.isEmpty {
+                // Use actual subsample info from encryption
+                subsamples = actualSubsamples
+            } else {
+                // Fallback: treat entire sample as protected (for unencrypted or unknown)
+                subsamples = [SubsampleEntry(
+                    bytesOfClearData: 0,
+                    bytesOfProtectedData: UInt32(sample.data.count)
+                )]
+            }
+
+            let entry = SampleEncryptionEntry(iv: nil, subsamples: subsamples)
             entries.append(entry)
 
-            // Size = 2 (subsample count) + 6 (one subsample entry)
-            sampleInfoSizes.append(8)
+            // Size = 2 (subsample count) + 6 bytes per subsample entry (2 clear + 4 protected)
+            let infoSize = 2 + (subsamples.count * 6)
+            sampleInfoSizes.append(UInt8(min(infoSize, 255)))
         }
 
         let senc = SampleEncryptionBox(entries: entries, useSubsampleEncryption: true)
+        // Note: Bento4 reference CBCS output does NOT use aux_info_type in saiz/saio
+        // The encryption scheme is already signaled in tenc, so aux_info_type is redundant
         let saiz = SampleAuxiliaryInfoSizesBox(sampleInfoSizes: sampleInfoSizes)
-        let saio = SampleAuxiliaryInfoOffsetsBox(offsets: [0]) // Will need proper calculation
+        // saio offset points to the sample auxiliary info data within senc (after senc header + version/flags + sample_count)
+        let saio = SampleAuxiliaryInfoOffsetsBox(offsets: [UInt64(sencDataOffset)])
 
         return (senc, saiz, saio)
     }

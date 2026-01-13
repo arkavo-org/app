@@ -84,6 +84,7 @@ public struct FourCC: Equatable, Hashable, CustomStringConvertible, Sendable {
 
     // Common box types
     public static let ftyp = FourCC("ftyp")
+    public static let styp = FourCC("styp")  // Segment type box for media segments
     public static let moov = FourCC("moov")
     public static let mvhd = FourCC("mvhd")
     public static let trak = FourCC("trak")
@@ -114,6 +115,10 @@ public struct FourCC: Equatable, Hashable, CustomStringConvertible, Sendable {
     public static let mdat = FourCC("mdat")
     public static let sidx = FourCC("sidx")
 
+    // Edit list boxes
+    public static let edts = FourCC("edts")
+    public static let elst = FourCC("elst")
+
     // Codec boxes
     public static let avc1 = FourCC("avc1")
     public static let avcC = FourCC("avcC")
@@ -134,6 +139,7 @@ public struct FourCC: Equatable, Hashable, CustomStringConvertible, Sendable {
     public static let saio = FourCC("saio")
     public static let encv = FourCC("encv")
     public static let enca = FourCC("enca")
+    public static let cbcs_aux = FourCC("cbcs")  // CBCS aux_info_type for saiz/saio
 
     // Handler types
     public static let vide = FourCC("vide")

@@ -1,6 +1,34 @@
 import AVFoundation
 import ArkavoSocial
 import Foundation
+import os.log
+
+// MARK: - FairPlay Debug Logger
+
+private let fairPlayLog = OSLog(subsystem: "com.arkavo.app", category: "FairPlay")
+
+/// Debug logger for FairPlay key exchange
+private enum FairPlayDebug {
+    static func log(_ message: String, type: OSLogType = .debug) {
+        os_log("%{public}@", log: fairPlayLog, type: type, message)
+        print("🎬 [FairPlay] \(message)")
+    }
+
+    static func logRequest(_ method: String, url: URL, body: Data?) {
+        log("→ \(method) \(url.absoluteString)")
+        if let body = body, let str = String(data: body, encoding: .utf8) {
+            log("   Body: \(str.prefix(500))")
+        }
+    }
+
+    static func logResponse(_ statusCode: Int, data: Data) {
+        if let str = String(data: data, encoding: .utf8) {
+            log("← HTTP \(statusCode): \(str.prefix(500))")
+        } else {
+            log("← HTTP \(statusCode): \(data.count) bytes (binary)")
+        }
+    }
+}
 
 // MARK: - FairPlay Errors
 
@@ -69,6 +97,14 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         self.sessionId = LockIsolated(nil)
         self.fairPlayCertificate = LockIsolated(nil)
         super.init()
+
+        FairPlayDebug.log("══════════════════════════════════════════════════════")
+        FairPlayDebug.log("TDFContentKeyDelegate initialized")
+        FairPlayDebug.log("  Server URL: \(serverURL.absoluteString)")
+        FairPlayDebug.log("  Asset ID: \(manifest.assetID)")
+        FairPlayDebug.log("  KAS URL: \(manifest.kasURL)")
+        FairPlayDebug.log("  Algorithm: \(manifest.algorithm)")
+        FairPlayDebug.log("══════════════════════════════════════════════════════")
     }
 
     // MARK: - AVContentKeySessionDelegate
@@ -77,6 +113,9 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         _ session: AVContentKeySession,
         didProvide keyRequest: AVContentKeyRequest
     ) {
+        FairPlayDebug.log("──────────────────────────────────────────────────────")
+        FairPlayDebug.log("📥 contentKeySession(didProvide:) called")
+        FairPlayDebug.log("  Request identifier: \(keyRequest.identifier ?? "nil")")
         handleKeyRequest(keyRequest)
     }
 
@@ -84,6 +123,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         _ session: AVContentKeySession,
         didProvideRenewingContentKeyRequest keyRequest: AVContentKeyRequest
     ) {
+        FairPlayDebug.log("🔄 contentKeySession(didProvideRenewingContentKeyRequest:)")
         handleKeyRequest(keyRequest)
     }
 
@@ -92,6 +132,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         shouldRetry keyRequest: AVContentKeyRequest,
         reason retryReason: AVContentKeyRequest.RetryReason
     ) -> Bool {
+        FairPlayDebug.log("⚠️ contentKeySession(shouldRetry:) - reason: \(retryReason.rawValue)")
         switch retryReason {
         case .timedOut, .receivedResponseWithExpiredLease:
             return true
@@ -105,37 +146,54 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         contentKeyRequest keyRequest: AVContentKeyRequest,
         didFailWithError error: Error
     ) {
-        print("FairPlay key request failed: \(error.localizedDescription)")
+        FairPlayDebug.log("❌ contentKeySession(didFailWithError:)", type: .error)
+        FairPlayDebug.log("  Error: \(error.localizedDescription)", type: .error)
     }
 
     // MARK: - Key Request Handling
 
     private func handleKeyRequest(_ keyRequest: AVContentKeyRequest) {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        FairPlayDebug.log("🚀 handleKeyRequest started")
+
         Task {
             do {
                 // 1. Start session if needed
+                FairPlayDebug.log("Step 1: Check/start session...")
                 if sessionId.value == nil {
+                    FairPlayDebug.log("  No existing session, starting new one...")
                     let newSessionId = try await startSession()
                     sessionId.withLock { $0 = newSessionId }
+                    FairPlayDebug.log("  ✅ Session started: \(newSessionId)")
+                } else {
+                    FairPlayDebug.log("  Using existing session: \(sessionId.value!)")
                 }
 
                 // 2. Get FairPlay certificate (cached after first fetch)
+                FairPlayDebug.log("Step 2: Get FairPlay certificate...")
                 let certificate: Data
                 if let cached = fairPlayCertificate.value {
+                    FairPlayDebug.log("  Using cached certificate (\(cached.count) bytes)")
                     certificate = cached
                 } else {
+                    FairPlayDebug.log("  Fetching certificate from server...")
                     certificate = try await fetchCertificate()
                     fairPlayCertificate.withLock { $0 = certificate }
+                    FairPlayDebug.log("  ✅ Certificate fetched: \(certificate.count) bytes")
                 }
 
                 // 3. Generate SPC with content identifier
+                FairPlayDebug.log("Step 3: Generate SPC...")
                 let contentId = tdfManifest.assetID.data(using: .utf8) ?? Data()
+                FairPlayDebug.log("  Content ID: \(tdfManifest.assetID)")
                 let spcData = try await keyRequest.makeStreamingContentKeyRequestData(
                     forApp: certificate,
                     contentIdentifier: contentId
                 )
+                FairPlayDebug.log("  ✅ SPC generated: \(spcData.count) bytes")
 
                 // 4. Request CKC from server
+                FairPlayDebug.log("Step 4: Request CKC from server...")
                 guard let currentSessionId = sessionId.value else {
                     throw FairPlayError.sessionStartFailed("Session ID not available")
                 }
@@ -143,14 +201,26 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
                     spcData: spcData,
                     sessionId: currentSessionId
                 )
+                FairPlayDebug.log("  ✅ CKC received: \(ckcData.count) bytes")
 
                 // 5. Provide CKC to AVPlayer
+                FairPlayDebug.log("Step 5: Provide CKC to AVPlayer...")
                 let keyResponse = AVContentKeyResponse(
                     fairPlayStreamingKeyResponseData: ckcData
                 )
                 keyRequest.processContentKeyResponse(keyResponse)
 
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                FairPlayDebug.log("══════════════════════════════════════════════════════")
+                FairPlayDebug.log("✅ FairPlay key exchange SUCCEEDED in \(String(format: "%.3f", elapsed))s")
+                FairPlayDebug.log("══════════════════════════════════════════════════════")
+
             } catch {
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                FairPlayDebug.log("══════════════════════════════════════════════════════")
+                FairPlayDebug.log("❌ FairPlay key exchange FAILED after \(String(format: "%.3f", elapsed))s")
+                FairPlayDebug.log("  Error: \(error)")
+                FairPlayDebug.log("══════════════════════════════════════════════════════")
                 keyRequest.processContentKeyResponseError(error)
             }
         }
@@ -172,12 +242,16 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        FairPlayDebug.logRequest("POST", url: url, body: request.httpBody)
+
         let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        FairPlayDebug.logResponse(statusCode, data: data)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200 ... 299).contains(httpResponse.statusCode)
         else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             let body = String(data: data, encoding: .utf8) ?? ""
             throw FairPlayError.sessionStartFailed("HTTP \(statusCode): \(body)")
         }
@@ -197,12 +271,16 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
 
+        FairPlayDebug.logRequest("GET", url: url, body: nil)
+
         let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        FairPlayDebug.log("← HTTP \(statusCode): \(data.count) bytes (certificate)")
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200 ... 299).contains(httpResponse.statusCode)
         else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             throw FairPlayError.certificateFetchFailed("HTTP \(statusCode)")
         }
 
@@ -249,12 +327,18 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        FairPlayDebug.log("→ POST \(url.absoluteString)")
+        FairPlayDebug.log("   SPC size: \(spcData.count) bytes")
+        FairPlayDebug.log("   Session: \(sessionId)")
+
         let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        FairPlayDebug.logResponse(statusCode, data: data)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200 ... 299).contains(httpResponse.statusCode)
         else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             let body = String(data: data, encoding: .utf8) ?? ""
             throw FairPlayError.ckcRequestFailed("HTTP \(statusCode): \(body)")
         }

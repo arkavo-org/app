@@ -266,9 +266,8 @@ final class HLSTDFPlayerViewModel: ObservableObject {
             assertions: nil
         )
 
-        // Generate ephemeral P-256 key pair for ECDH
+        // Generate ephemeral P-256 key pair for ECDH and JWT signing
         let clientPrivateKey = P256.KeyAgreement.PrivateKey()
-        let clientPublicKeyPEM = clientPrivateKey.publicKey.pemRepresentation
 
         // Create KAS rewrap client
         // Note: KASRewrapClient uses 'oauthToken' parameter name but we pass the NTDF token
@@ -277,10 +276,13 @@ final class HLSTDFPlayerViewModel: ObservableObject {
             oauthToken: ntdfToken
         )
 
-        // Perform rewrap request
+        // Perform rewrap request - the same key is used for:
+        // 1. clientPublicKey in request (derived from clientPrivateKey)
+        // 2. JWT signing (converted to P256.Signing key)
+        // 3. ECDH unwrap of response (using clientPrivateKey)
         let result = try await kasClient.rewrapTDF(
             manifest: tdfManifest,
-            clientPublicKeyPEM: clientPublicKeyPEM
+            clientPrivateKey: clientPrivateKey
         )
 
         // Get wrapped key from result

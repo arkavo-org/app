@@ -1,5 +1,5 @@
 {
-  "originHash" : "a016bed49d2f025f10261ee51c7e82dd136f87b5c718ca5c84069501e64634ee",
+  "originHash" : "6aa47a04b3091a3078270b52c93d65c847838d83ea797bd8027fa182d29bd8c8",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "4b3632cba5de6cb47d6c185ac9e569f1e271bd7c",
         "version" : "0.3.0"
-      }
-    },
-    {
-      "identity" : "opentdfkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/arkavo-org/OpenTDFKit",
-      "state" : {
-        "branch" : "main",
-        "revision" : "df22f6c7db7bd94dcd4eb4e83ca7995813d394b4"
       }
     },
     {
