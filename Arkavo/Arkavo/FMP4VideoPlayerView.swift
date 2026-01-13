@@ -102,34 +102,40 @@ final class FMP4PlayerViewModel: ObservableObject {
 
     private var contentKeySession: AVContentKeySession?
     private var keyDelegate: TDFContentKeyDelegate?
-    private var contentLoader: FMP4ContentLoader?
+    private var httpServer: LocalHTTPServer?
     private var tempDirectory: URL?
 
     func load(tdfData: Data, manifest: TDFManifestLite) async {
         isLoading = true
         error = nil
-        loadingMessage = "Extracting content..."
 
         do {
             // 1. Create temp directory for extracted content
+            loadingMessage = "Extracting content..."
             let tempDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("fmp4-player-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
             tempDirectory = tempDir
 
             // 2. Extract fMP4 content from TDF archive
-            loadingMessage = "Extracting fMP4 segments..."
             try extractFMP4Content(from: tdfData, to: tempDir)
 
-            // 3. Create content loader for custom URL scheme
-            loadingMessage = "Setting up player..."
-            let loader = FMP4ContentLoader(contentDirectory: tempDir)
-            contentLoader = loader
+            // 3. Start local HTTP server
+            loadingMessage = "Starting HTTP server..."
+            let server = LocalHTTPServer(contentDirectory: tempDir)
+            let baseURL = try server.start()
+            httpServer = server
+            print("🌐 HTTP server started at: \(baseURL)")
 
-            // 4. Create FairPlay content key session
+            // 4. Create asset with HTTP URL
+            let playlistURL = baseURL.appendingPathComponent("playlist.m3u8")
+            let asset = AVURLAsset(url: playlistURL)
+
+            // 5. Set up FairPlay content key session
+            loadingMessage = "Setting up FairPlay..."
             contentKeySession = AVContentKeySession(keySystem: .fairPlayStreaming)
 
-            // 5. Create key delegate with manifest
+            // 6. Create key delegate with manifest
             let tdfManifestForDelegate = TDFManifestLite(
                 kasURL: manifest.kasURL,
                 wrappedKey: manifest.wrappedKey,
@@ -141,16 +147,15 @@ final class FMP4PlayerViewModel: ObservableObject {
             keyDelegate = TDFContentKeyDelegate(manifest: tdfManifestForDelegate)
             contentKeySession?.setDelegate(keyDelegate, queue: .main)
 
-            // 6. Create asset with custom URL scheme
-            let asset = loader.createAsset(for: "playlist.m3u8")
-
             // 7. Add asset as content key recipient
             contentKeySession?.addContentKeyRecipient(asset)
 
             // 8. Proactively request the content key using asset ID
             loadingMessage = "Requesting decryption key..."
+            let skdURI = "skd://\(manifest.assetID)"
+            print("🔐 Proactively requesting content key for: \(skdURI)")
             contentKeySession?.processContentKeyRequest(
-                withIdentifier: manifest.assetID,
+                withIdentifier: skdURI,
                 initializationData: nil,
                 options: nil
             )
@@ -165,26 +170,34 @@ final class FMP4PlayerViewModel: ObservableObject {
 
             // Start playback
             avPlayer.play()
+            print("▶️ fMP4/FairPlay playback started")
 
         } catch {
+            print("❌ FMP4 playback error: \(error)")
             self.error = error
             isLoading = false
         }
     }
 
     func stop() {
+        // 1. Stop player
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
 
+        // 2. Stop HTTP server
+        httpServer?.stop()
+        httpServer = nil
+
+        // 3. Clear FairPlay session
         contentKeySession = nil
         keyDelegate = nil
-        contentLoader = nil
 
-        // Clean up temp directory
+        // 4. Clean up temp directory
         if let tempDir = tempDirectory {
             try? FileManager.default.removeItem(at: tempDir)
             tempDirectory = nil
+            print("🗑️ Cleaned up temp directory")
         }
     }
 
@@ -194,11 +207,10 @@ final class FMP4PlayerViewModel: ObservableObject {
             throw FMP4PlayerError.invalidArchive
         }
 
-        // Extract all files except manifest.json
-        for entry in archive {
-            // Skip manifest.json (we already have the parsed manifest)
-            guard entry.path != "manifest.json" else { continue }
+        var extractedFiles: [String] = []
 
+        // Extract all files
+        for entry in archive {
             let destinationURL = outputDir.appendingPathComponent(entry.path)
 
             // Create parent directories if needed
@@ -209,186 +221,74 @@ final class FMP4PlayerViewModel: ObservableObject {
 
             // Extract file
             _ = try archive.extract(entry, to: destinationURL)
-            print("📦 Extracted: \(entry.path)")
+            extractedFiles.append(entry.path)
+        }
+
+        print("📦 Extracted \(extractedFiles.count) files: \(extractedFiles.joined(separator: ", "))")
+
+        // Verify required files exist
+        let playlistURL = outputDir.appendingPathComponent("playlist.m3u8")
+        guard FileManager.default.fileExists(atPath: playlistURL.path) else {
+            throw FMP4PlayerError.missingPlaylist
+        }
+
+        let initURL = outputDir.appendingPathComponent("init.mp4")
+        guard FileManager.default.fileExists(atPath: initURL.path) else {
+            throw FMP4PlayerError.missingInitSegment
         }
     }
 }
 
-// MARK: - FMP4 Content Loader
+// MARK: - FMP4 Content Server Helper
 
-/// Custom URL scheme resource loader for serving fMP4/HLS content to AVPlayer
+/// Helper for serving fMP4/HLS content from a local directory
+/// Used by local HTTP server implementations for FairPlay playback
 @available(iOS 26.0, *)
-final class FMP4ContentLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
-    /// Custom URL scheme for local content
-    static let scheme = "arkavo-fmp4"
-
-    private let contentDirectory: URL
-    private let queue = DispatchQueue(label: "com.arkavo.FMP4ContentLoader")
+final class FMP4ContentServer: @unchecked Sendable {
+    let contentDirectory: URL
 
     init(contentDirectory: URL) {
         self.contentDirectory = contentDirectory
-        super.init()
     }
 
-    /// Transform a file URL to use the custom scheme
-    func localURL(for filename: String) -> URL {
-        var components = URLComponents()
-        components.scheme = Self.scheme
-        components.host = "local"
-        components.path = "/" + filename
-        return components.url!
-    }
-
-    /// Create an AVURLAsset configured to use this loader
-    func createAsset(for filename: String) -> AVURLAsset {
-        let url = localURL(for: filename)
-        let asset = AVURLAsset(url: url)
-        asset.resourceLoader.setDelegate(self, queue: queue)
-        return asset
-    }
-
-    // MARK: - AVAssetResourceLoaderDelegate
-
-    func resourceLoader(
-        _ resourceLoader: AVAssetResourceLoader,
-        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
-    ) -> Bool {
-        guard let url = loadingRequest.request.url,
-              url.scheme == Self.scheme else {
-            return false
-        }
-
-        queue.async { [weak self] in
-            self?.handleLoadingRequest(loadingRequest)
-        }
-
-        return true
-    }
-
-    func resourceLoader(
-        _ resourceLoader: AVAssetResourceLoader,
-        didCancel loadingRequest: AVAssetResourceLoadingRequest
-    ) {
-        // Request cancelled, nothing to clean up
-    }
-
-    // MARK: - Request Handling
-
-    private func handleLoadingRequest(_ loadingRequest: AVAssetResourceLoadingRequest) {
-        guard let url = loadingRequest.request.url else {
-            print("🔴 FMP4ContentLoader: Invalid URL in request")
-            loadingRequest.finishLoading(with: makeError(.invalidURL))
-            return
-        }
-
-        // Extract file path from URL
-        let filename = String(url.path.dropFirst()) // Remove leading /
+    /// Get file data for a given filename
+    /// - Parameter filename: The file to read (e.g., "playlist.m3u8", "init.mp4", "segment0.m4s")
+    /// - Returns: File data and content type, or nil if file doesn't exist
+    func fileData(for filename: String) -> (data: Data, contentType: String)? {
         let fileURL = contentDirectory.appendingPathComponent(filename)
 
-        // Diagnostic logging
-        print("📁 FMP4ContentLoader: \(filename)")
-        print("   📋 contentInfoRequest: \(loadingRequest.contentInformationRequest != nil)")
-        print("   📋 dataRequest: \(loadingRequest.dataRequest != nil)")
-
-        // Check if file exists
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            print("   ❌ Not found: \(fileURL.path)")
-            loadingRequest.finishLoading(with: makeError(.fileNotFound))
-            return
+            return nil
         }
 
-        do {
-            let fileData = try Data(contentsOf: fileURL)
-            let contentType = mimeType(for: fileURL.pathExtension)
-
-            print("   📊 File size: \(fileData.count) bytes, contentType: \(contentType)")
-
-            // Handle content info request
-            if let contentInfoRequest = loadingRequest.contentInformationRequest {
-                contentInfoRequest.isByteRangeAccessSupported = true
-                contentInfoRequest.contentLength = Int64(fileData.count)
-                contentInfoRequest.contentType = contentType
-                print("   ℹ️  Set content info: length=\(fileData.count), type=\(contentType)")
-            }
-
-            // Handle data request
-            if let dataRequest = loadingRequest.dataRequest {
-                let requestedOffset = Int(dataRequest.requestedOffset)
-                let requestedLength = dataRequest.requestedLength
-                let requestsAllData = dataRequest.requestsAllDataToEndOfResource
-
-                print("   📥 Data request: offset=\(requestedOffset), length=\(requestedLength), allToEnd=\(requestsAllData)")
-
-                // Validate offset is within bounds
-                guard requestedOffset >= 0, requestedOffset < fileData.count else {
-                    print("   ⚠️  Offset \(requestedOffset) out of bounds for file size \(fileData.count)")
-                    loadingRequest.finishLoading()
-                    return
-                }
-
-                let availableLength = fileData.count - requestedOffset
-
-                // FIX: Respect requestsAllDataToEndOfResource flag
-                let respondLength: Int
-                if requestsAllData {
-                    respondLength = availableLength
-                } else {
-                    respondLength = min(requestedLength, availableLength)
-                }
-
-                if respondLength > 0 {
-                    let responseData = fileData.subdata(in: requestedOffset..<(requestedOffset + respondLength))
-                    dataRequest.respond(with: responseData)
-                }
-
-                print("   ✅ Served \(respondLength) bytes (offset: \(requestedOffset), available: \(availableLength))")
-            }
-
-            loadingRequest.finishLoading()
-
-        } catch {
-            print("   ❌ Error reading file: \(error)")
-            loadingRequest.finishLoading(with: error)
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return nil
         }
+
+        return (data, mimeType(for: fileURL.pathExtension))
     }
 
-    private func mimeType(for pathExtension: String) -> String {
+    /// Get HTTP Content-Type header value for a file extension
+    func mimeType(for pathExtension: String) -> String {
         switch pathExtension.lowercased() {
         case "m3u8":
-            return "public.m3u-playlist"
+            return "application/vnd.apple.mpegurl"
         case "mp4":
-            return "public.mpeg-4"
+            return "video/mp4"
         case "m4s":
-            return "public.mpeg-4"
+            return "video/iso.segment"
         case "mov":
-            return "public.movie"
+            return "video/quicktime"
         case "ts":
-            return "public.mpeg-2-transport-stream"
+            return "video/MP2T"
         default:
-            return "public.data"
+            return "application/octet-stream"
         }
     }
 
-    private func makeError(_ code: LoaderError) -> NSError {
-        NSError(
-            domain: "com.arkavo.FMP4ContentLoader",
-            code: code.rawValue,
-            userInfo: [NSLocalizedDescriptionKey: code.description]
-        )
-    }
-
-    enum LoaderError: Int {
-        case invalidURL = 1
-        case fileNotFound = 2
-        case readError = 3
-
-        var description: String {
-            switch self {
-            case .invalidURL: return "Invalid URL"
-            case .fileNotFound: return "File not found"
-            case .readError: return "Error reading file"
-            }
-        }
+    /// List all files in the content directory
+    var files: [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: contentDirectory.path)) ?? []
     }
 }
 
@@ -399,6 +299,7 @@ enum FMP4PlayerError: Error, LocalizedError {
     case missingPlaylist
     case missingInitSegment
     case extractionFailed(String)
+    case serverStartFailed(Error)
 
     var errorDescription: String? {
         switch self {
@@ -410,6 +311,8 @@ enum FMP4PlayerError: Error, LocalizedError {
             return "Missing init.mp4"
         case .extractionFailed(let reason):
             return "Extraction failed: \(reason)"
+        case .serverStartFailed(let error):
+            return "Failed to start content server: \(error.localizedDescription)"
         }
     }
 }

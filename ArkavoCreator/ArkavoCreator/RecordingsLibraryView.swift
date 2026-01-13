@@ -652,7 +652,8 @@ struct ProtectedVideoPlayerView: View {
     @State private var contentKeySession: AVContentKeySession?
     @State private var keyDelegate: TDFContentKeyDelegate?
     @State private var useFairPlay = false  // FairPlay requires SAMPLE-AES; using local decryption
-    @State private var contentLoader: LocalContentLoader?
+    @State private var httpServer: LocalHTTPServer?
+    @State private var tempDirectory: URL?
 
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
@@ -857,8 +858,20 @@ struct ProtectedVideoPlayerView: View {
             player?.pause()
             player = nil
 
-            // Clean up content loader
-            contentLoader = nil
+            // Stop HTTP server
+            httpServer?.stop()
+            httpServer = nil
+
+            // Clear FairPlay session
+            contentKeySession = nil
+            keyDelegate = nil
+
+            // Clean up temp directory
+            if let tempDir = tempDirectory {
+                try? FileManager.default.removeItem(at: tempDir)
+                tempDirectory = nil
+                print("🗑️ Cleaned up temp directory")
+            }
         }
     }
 
@@ -1069,6 +1082,7 @@ struct ProtectedVideoPlayerView: View {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("fmp4-player-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        tempDirectory = tempDir
 
         // Use TDFArchiveReader to extract all files
         let files = try TDFArchiveReader.extractAllFiles(from: recording.tdfURL, to: tempDir)
@@ -1080,8 +1094,7 @@ struct ProtectedVideoPlayerView: View {
         // Find the playlist file
         let localPlaylistPath = tempDir.appendingPathComponent(fmp4Manifest.playlistFilename)
         guard FileManager.default.fileExists(atPath: localPlaylistPath.path) else {
-            throw NSError(domain: "FMP4Playback", code: 1,
-                         userInfo: [NSLocalizedDescriptionKey: "Playlist not found: \(fmp4Manifest.playlistFilename)"])
+            throw FMP4PlaybackError.missingPlaylist(fmp4Manifest.playlistFilename)
         }
 
         // Fix playlist: Inject IV from manifest if missing
@@ -1164,65 +1177,83 @@ struct ProtectedVideoPlayerView: View {
             print("⚠️ Manifest IV is empty, cannot inject")
         }
 
-        // Create content loader for custom URL scheme
-        playbackStatus = "Setting up content loader..."
-        print("📁 Creating content loader for: \(tempDir.path)")
+        // Start local HTTP server to serve fMP4 content
+        playbackStatus = "Starting HTTP server..."
+        let server = LocalHTTPServer(contentDirectory: tempDir)
+        do {
+            let baseURL = try server.start()
+            httpServer = server
+            print("🌐 HTTP server started at: \(baseURL)")
+        } catch {
+            throw FMP4PlaybackError.serverStartFailed(error)
+        }
 
-        let loader = LocalContentLoader(contentDirectory: tempDir)
-        contentLoader = loader
+        // Create asset with HTTP URL
+        guard let baseURL = server.baseURL else {
+            throw FMP4PlaybackError.serverStartFailed(LocalHTTPServer.ServerError.notStarted)
+        }
+        let playlistURL = baseURL.appendingPathComponent(fmp4Manifest.playlistFilename)
+        let asset = AVURLAsset(url: playlistURL)
 
+        // Set up FairPlay content key session
         playbackStatus = "Setting up FairPlay..."
-        print("🔐 Setting up FairPlay...")
+        let session = AVContentKeySession(keySystem: .fairPlayStreaming)
+        contentKeySession = session
 
-        // Create FairPlay manifest for key delegate
-        let manifest = HLSManifestLite(
+        // Create key delegate with manifest info
+        let hlsManifest = HLSManifestLite(
             kasURL: fmp4Manifest.kasURL.absoluteString,
             wrappedKey: fmp4Manifest.wrappedKey,
             algorithm: fmp4Manifest.algorithm,
             iv: fmp4Manifest.iv,
             assetID: fmp4Manifest.assetID
         )
-
-        // Create content key session with FairPlay
-        let session = AVContentKeySession(keySystem: .fairPlayStreaming)
-        contentKeySession = session
-
-        // Create key delegate
         let delegate = TDFContentKeyDelegate(
-            manifest: manifest,
+            manifest: hlsManifest,
             authToken: authToken,
-            serverURL: kasURL
+            serverURL: fmp4Manifest.kasURL
         )
         keyDelegate = delegate
         session.setDelegate(delegate, queue: .main)
 
-        // Create asset using custom URL scheme
-        let asset = loader.createAsset(for: fmp4Manifest.playlistFilename)
+        // Add asset as content key recipient
         session.addContentKeyRecipient(asset)
 
-        playbackStatus = "Requesting FairPlay key..."
-        print("🔐 Asset added as content key recipient")
-
-        // Proactively request the content key using the skd:// URI
-        // This must match exactly what's in the playlist for AVPlayer to find the key
+        // Proactively request the content key using asset ID
+        playbackStatus = "Requesting decryption key..."
         let skdURI = "skd://\(fmp4Manifest.assetID)"
         print("🔐 Proactively requesting content key for: \(skdURI)")
-        session.processContentKeyRequest(withIdentifier: skdURI, initializationData: nil, options: nil)
-
-        // Wait a moment for key processing to start
-        try await Task.sleep(nanoseconds: 500_000_000) // 500ms
+        session.processContentKeyRequest(
+            withIdentifier: skdURI,
+            initializationData: nil,
+            options: nil
+        )
 
         // Create player
+        playbackStatus = "Starting playback..."
         let playerItem = AVPlayerItem(asset: asset)
         let avPlayer = AVPlayer(playerItem: playerItem)
         self.player = avPlayer
-
-        playbackStatus = "Starting playback..."
         isPlaying = true
         isPreparingPlayback = false
 
+        // Start playback
         avPlayer.play()
         print("▶️ fMP4/FairPlay playback started")
+    }
+
+    enum FMP4PlaybackError: Error, LocalizedError {
+        case missingPlaylist(String)
+        case serverStartFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingPlaylist(let filename):
+                return "Playlist not found: \(filename)"
+            case .serverStartFailed(let error):
+                return "Failed to start content server: \(error.localizedDescription)"
+            }
+        }
     }
 
     /// HLS playback - extracts and plays with optional FairPlay or local decryption

@@ -50,6 +50,11 @@ public actor FMP4RecordingProtectionService {
         let constantIV = CBCSEncryptor.generateIV()     // 16-byte constant IV
         let keyID = CBCSEncryptor.generateKeyID()       // 16-byte key ID
 
+        // Debug: Log key bytes for verification during playback troubleshooting
+        print("🔑 DEBUG contentKey (hex): \(contentKey.map { String(format: "%02x", $0) }.joined())")
+        print("🔑 DEBUG constantIV (hex): \(constantIV.map { String(format: "%02x", $0) }.joined())")
+        print("🔑 DEBUG keyID (hex): \(keyID.map { String(format: "%02x", $0) }.joined())")
+
         // 2. Fetch KAS public key and wrap content key
         print("🔐 Wrapping content key with KAS public key...")
         let manifestBuilder = TDFManifestBuilder(kasURL: kasURL)

@@ -140,8 +140,13 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         FairPlayDebug.log("  Asset ID: \(manifest.assetID)")
         FairPlayDebug.log("  KAS URL: \(manifest.kasURL)")
         FairPlayDebug.log("  Algorithm: \(manifest.algorithm)")
-        FairPlayDebug.log("  IV: \(manifest.iv.prefix(32))...")
-        FairPlayDebug.log("  Wrapped Key: \(manifest.wrappedKey.prefix(32))...")
+        FairPlayDebug.log("  IV (base64): \(manifest.iv)")
+        // Decode IV from base64 and show as hex for comparison with protection logs
+        if let ivData = Data(base64Encoded: manifest.iv) {
+            FairPlayDebug.log("  IV (hex): \(ivData.map { String(format: "%02x", $0) }.joined())")
+        }
+        FairPlayDebug.log("  Wrapped Key (first 64 chars): \(manifest.wrappedKey.prefix(64))...")
+        FairPlayDebug.log("  Wrapped Key length: \(manifest.wrappedKey.count) chars")
         FairPlayDebug.log("  User ID: \(userId)")
         FairPlayDebug.log("  Auth Token: \(authToken.prefix(20))...")
         FairPlayDebug.log("══════════════════════════════════════════════════════")

@@ -4,15 +4,15 @@ import Testing
 
 // MARK: - Byte-Range Request Handling Tests
 
-/// Tests for validating byte-range request handling in content loaders.
-/// These tests simulate the logic used in FMP4ContentLoader and LocalContentLoader
-/// to ensure consistent behavior for edge cases.
+/// Tests for validating byte-range request handling in HTTP content servers.
+/// These tests verify correct behavior for serving fMP4/HLS content with proper
+/// HTTP byte-range semantics required by AVPlayer's HLS/FairPlay pipeline.
 @Suite("Byte-Range Request Handling")
 struct ByteRangeTests {
 
     // MARK: - Test Helpers
 
-    /// Simulates byte-range serving logic (same as FMP4ContentLoader fixed version)
+    /// Simulates HTTP byte-range serving logic for local content servers
     private func serveByteRange(
         fileData: Data,
         requestedOffset: Int,
