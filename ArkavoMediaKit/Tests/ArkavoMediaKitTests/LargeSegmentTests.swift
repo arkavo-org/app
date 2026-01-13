@@ -125,6 +125,91 @@ struct LargeSegmentTests {
         print("\n✅ Large segment structure is valid")
     }
 
+    @Test("Verify saio offset matches actual senc position")
+    func verifySaioOffsetMatchesSenc() {
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1920, height: 1080, timescale: 90000,
+            sps: [testSPS], pps: [testPPS]
+        )
+        let encryption = FMP4Writer.EncryptionConfig(keyID: testKeyID, constantIV: testIV)
+        let writer = FMP4Writer(tracks: [track], encryption: encryption)
+        let encryptor = CBCSEncryptor(key: testKey, iv: testIV)
+
+        // Create samples similar to real video
+        var samples: [FMP4Writer.Sample] = []
+        for i in 0..<10 {
+            let isIDR = (i == 0)
+            let sampleData = createVideoSample(isIDR: isIDR, size: isIDR ? 50000 : 5000)
+            let result = encryptor.encryptVideoSample(sampleData, nalLengthSize: 4)
+            samples.append(FMP4Writer.Sample(
+                data: result.encryptedData,
+                duration: 3000,
+                isSync: isIDR,
+                subsamples: result.subsamples
+            ))
+        }
+
+        let segment = writer.generateMediaSegment(trackID: 1, samples: samples, baseDecodeTime: 0)
+
+        print("\n=== SAIO Offset Verification ===")
+        print("Segment size: \(segment.count) bytes")
+
+        // Find moof start
+        let moofMarker = Data([0x6D, 0x6F, 0x6F, 0x66])
+        guard let moofRange = segment.range(of: moofMarker) else {
+            Issue.record("moof not found")
+            return
+        }
+        let moofStart = moofRange.lowerBound - 4
+
+        // Find senc box
+        let sencMarker = Data([0x73, 0x65, 0x6E, 0x63])
+        guard let sencRange = segment.range(of: sencMarker) else {
+            Issue.record("senc not found")
+            return
+        }
+        let sencStart = sencRange.lowerBound - 4
+        let sencSize = Int(UInt32(bigEndian: segment.subdata(in: sencStart..<(sencStart+4)).withUnsafeBytes { $0.load(as: UInt32.self) }))
+
+        // senc sample data starts after: header(8) + version/flags(4) + sample_count(4) = 16 bytes
+        let sencSampleDataOffset = sencStart + 16
+        let sencSampleDataOffsetFromMoof = sencSampleDataOffset - moofStart
+
+        print("moof start: \(moofStart)")
+        print("senc start: \(sencStart) (size: \(sencSize))")
+        print("senc sample data starts at: \(sencSampleDataOffset)")
+        print("senc sample data offset from moof: \(sencSampleDataOffsetFromMoof)")
+
+        // Find saio box and extract the offset value
+        let saioMarker = Data([0x73, 0x61, 0x69, 0x6F])
+        guard let saioRange = segment.range(of: saioMarker) else {
+            Issue.record("saio not found")
+            return
+        }
+        let saioStart = saioRange.lowerBound - 4
+
+        // saio structure: size(4) + type(4) + version/flags(4) + entry_count(4) = 16 bytes before offset
+        let saioOffsetPosition = saioStart + 16
+        let saioOffsetValue = Int(UInt32(bigEndian: segment.subdata(in: saioOffsetPosition..<(saioOffsetPosition+4)).withUnsafeBytes { $0.load(as: UInt32.self) }))
+
+        print("saio box at: \(saioStart)")
+        print("saio offset value: \(saioOffsetValue)")
+
+        // With default-base-is-moof, saio offset should equal sencSampleDataOffsetFromMoof
+        print("\nExpected saio offset (from moof): \(sencSampleDataOffsetFromMoof)")
+        print("Actual saio offset value: \(saioOffsetValue)")
+
+        #expect(saioOffsetValue == sencSampleDataOffsetFromMoof,
+                "saio offset (\(saioOffsetValue)) should point to senc sample data at offset \(sencSampleDataOffsetFromMoof) from moof")
+
+        // Also verify the offset points to valid data
+        let targetOffset = moofStart + saioOffsetValue
+        print("\nAbsolute target position: moof_start(\(moofStart)) + saio_offset(\(saioOffsetValue)) = \(targetOffset)")
+        print("senc sample data position: \(sencSampleDataOffset)")
+        #expect(targetOffset == sencSampleDataOffset,
+                "saio should point to senc sample data")
+    }
+
     @Test("Subsample info for large IDR frame")
     func subsampleInfoForLargeIDRFrame() {
         let encryptor = CBCSEncryptor(key: testKey, iv: testIV)
