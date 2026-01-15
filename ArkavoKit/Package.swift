@@ -70,7 +70,8 @@ let package = Package(
             dependencies: [
                 "OpenTDFKit",
                 .product(name: "IrohSwift", package: "iroh-swift"),
-                "ZIPFoundation"
+                "ZIPFoundation",
+                .product(name: "ArkavoMediaKit", package: "ArkavoMediaKit"),
             ],
             swiftSettings: sharedSwiftSettings
         ),
