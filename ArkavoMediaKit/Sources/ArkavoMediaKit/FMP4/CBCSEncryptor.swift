@@ -64,6 +64,12 @@ public final class CBCSEncryptor {
         var encryptedData = Data()
         var subsamples: [SubsampleEntry] = []
 
+        // Debug: Log NAL structure for first few samples
+        if nalUnits.count > 1 {
+            let nalTypes = nalUnits.map { "NAL\($0.type)(\($0.isSlice ? "slice" : "non-slice"):\($0.length)B)" }
+            print("🔍 [CBCS] Sample \(sample.count)B has \(nalUnits.count) NALs: \(nalTypes.joined(separator: ", "))")
+        }
+
         for nal in nalUnits {
             let nalData = sample.subdata(in: nal.offset..<(nal.offset + nal.length))
 
@@ -82,8 +88,26 @@ public final class CBCSEncryptor {
             }
         }
 
-        // Don't merge subsamples - each NAL unit must be a separate entry
-        // so the decoder knows NAL boundaries for decryption
+        // Verify total bytes match
+        let totalClear = subsamples.reduce(0) { $0 + Int($1.bytesOfClearData) }
+        let totalProtected = subsamples.reduce(0) { $0 + Int($1.bytesOfProtectedData) }
+        let totalSubsampleBytes = totalClear + totalProtected
+        if totalSubsampleBytes != encryptedData.count {
+            print("⚠️ [CBCS] Subsample mismatch: clear=\(totalClear) + protected=\(totalProtected) = \(totalSubsampleBytes), but data=\(encryptedData.count)")
+        }
+
+        // NOTE: Do NOT merge subsamples for FairPlay CBCS!
+        // FairPlay/CBCS requires each NAL unit to have its own subsample entry.
+        // The decoder uses these entries to know exactly which bytes are clear vs encrypted.
+        // Reference content (Apple FairPlay SDK) uses 8 subsamples per sample (50 bytes = 2 + 8*6).
+        //
+        // Merging would create: [164 clear, 99836 protected] - WRONG for FairPlay!
+        // Correct is: [28c,0p] [8c,0p] [128c,99836p] etc. - separate entry per NAL
+
+        // Debug: Log subsample structure
+        let subsampleDesc = subsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " ")
+        print("🔍 [CBCS] Sample \(encryptedData.count)B → \(subsamples.count) subsamples: \(subsampleDesc)")
+
         return EncryptionResult(encryptedData: encryptedData, subsamples: subsamples)
     }
 
@@ -94,7 +118,7 @@ public final class CBCSEncryptor {
         }
 
         // For CBCS, keep NAL header clear. The slice header can be encrypted.
-        // Reference FairPlay content uses ~12 bytes clear per NAL:
+        // Apple FairPlay reference content uses ~12 bytes clear per NAL:
         // - Length prefix (4 bytes)
         // - NAL unit header (1-2 bytes)
         // - Small safety margin
@@ -119,6 +143,16 @@ public final class CBCSEncryptor {
 
         // Apply pattern encryption to payload
         let encryptedPayload = encryptWithPattern(Data(payload))
+
+        // Debug: Verify encryption actually modified data
+        if payload.count >= 16 {
+            let originalFirst16 = Array(payload.prefix(16))
+            let encryptedFirst16 = Array(encryptedPayload.prefix(16))
+            let modified = originalFirst16 != encryptedFirst16
+            if !modified {
+                print("⚠️ [CBCS] WARNING: First 16 bytes NOT modified by encryption!")
+            }
+        }
 
         var result = Data()
         result.append(clearPart)

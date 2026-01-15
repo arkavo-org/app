@@ -119,9 +119,11 @@ public final class FMP4HLSGenerator {
         // Track encryption state for per-segment key changes
         var currentEncryption: FairPlayConfig? = nil
 
-        // Emit playlist-level encryption key if set and no per-segment encryption
+        // Check if any segment has explicit per-segment encryption
         let hasPerSegmentEncryption = segments.contains { $0.encryption != nil }
-        if let enc = encryption, !hasPerSegmentEncryption {
+
+        // Emit playlist-level encryption key if set
+        if let enc = encryption {
             lines.append(generateKeyTag(enc))
             currentEncryption = enc
         }
@@ -131,19 +133,32 @@ public final class FMP4HLSGenerator {
 
         // Segments with per-segment encryption state tracking
         for segment in segments {
-            // Determine effective encryption for this segment
-            let segmentEncryption = segment.encryption
+            // Determine effective encryption for this segment:
+            // - If segment has explicit encryption, use it
+            // - If segment has nil encryption AND there's per-segment encryption in playlist, treat as clear
+            // - If segment has nil encryption AND no per-segment encryption, inherit playlist default
+            let effectiveEncryption: FairPlayConfig?
+            if let segEnc = segment.encryption {
+                // Explicit per-segment encryption
+                effectiveEncryption = segEnc
+            } else if hasPerSegmentEncryption {
+                // Segment is explicitly clear (nil in a playlist with per-segment encryption)
+                effectiveEncryption = nil
+            } else {
+                // Inherit playlist-level encryption (nil means "use default")
+                effectiveEncryption = encryption
+            }
 
             // Check for encryption state change
-            if segmentEncryption != currentEncryption {
-                if let enc = segmentEncryption {
+            if effectiveEncryption != currentEncryption {
+                if let enc = effectiveEncryption {
                     // Transition to encrypted or new key
                     lines.append(generateKeyTag(enc))
                 } else {
                     // Transition to clear
                     lines.append("#EXT-X-KEY:METHOD=NONE")
                 }
-                currentEncryption = segmentEncryption
+                currentEncryption = effectiveEncryption
             }
 
             // Duration

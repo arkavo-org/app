@@ -46,11 +46,15 @@ struct CBCSEncryptorTests {
         #expect(!result.subsamples.isEmpty)
 
         // First subsample should have clear bytes to cover slice header
-        // The encryptor uses 48 bytes minimum clear to ensure slice header is preserved
-        // for hardware decryption (AVPlayer/VideoToolbox)
+        // Apple FairPlay reference content uses ~12 bytes clear per NAL:
+        // - Length prefix (4 bytes)
+        // - NAL unit header (1-2 bytes)
+        // - Small safety margin
         if let first = result.subsamples.first {
             #expect(first.bytesOfClearData >= 5, "Should have at least NAL header clear")
-            #expect(first.bytesOfClearData <= 48, "Should use minimum clear bytes for slice header")
+            #expect(first.bytesOfClearData <= 164, "Should not exceed NAL size")
+            // With 12 bytes minimum clear and 164-byte NAL (4 prefix + 160 data), protected = 152 bytes
+            #expect(first.bytesOfProtectedData == 152, "Protected region should be 152 bytes")
         }
     }
 
@@ -140,18 +144,22 @@ struct CBCSEncryptorTests {
         let encryptor = CBCSEncryptor(key: testKey, iv: testIV)
 
         // IDR slice NAL unit (type 5) - should be encrypted
+        // Using 500 bytes to ensure we have data beyond the 12-byte clear region
+        // Real video NALs are typically 1KB+ for SD and multiple KB for HD
         var idrNAL = Data()
-        idrNAL.append(contentsOf: [0x00, 0x00, 0x00, 0x30]) // Length = 48
+        idrNAL.append(contentsOf: [0x00, 0x00, 0x01, 0xF0]) // Length = 496
         idrNAL.append(0x65) // NAL type 5 (IDR)
-        idrNAL.append(contentsOf: [UInt8](repeating: 0x44, count: 47))
+        idrNAL.append(contentsOf: [UInt8](repeating: 0x44, count: 495))
 
         let result = encryptor.encryptVideoSample(idrNAL, nalLengthSize: 4)
 
-        // Should have protected bytes
+        // Should have protected bytes (500 - 12 = 488 bytes in protected region)
+        // Apple FairPlay reference uses ~12 bytes clear per NAL
         let totalProtected = result.subsamples.reduce(0) { $0 + Int($1.bytesOfProtectedData) }
-        #expect(totalProtected > 0)
+        #expect(totalProtected > 0, "Slice NAL should have protected bytes")
+        #expect(totalProtected == 488, "Expected 488 bytes in protected region")
 
-        // Header should be preserved
+        // Header should be preserved (first 12 bytes are clear)
         #expect(result.encryptedData[0...3] == idrNAL[0...3]) // Length prefix
         #expect(result.encryptedData[4] == 0x65) // NAL type
     }
