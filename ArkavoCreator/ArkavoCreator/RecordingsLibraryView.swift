@@ -1735,14 +1735,9 @@ struct ProtectedVideoPlayerView: View {
             try decryptedData.write(to: decryptedURL)
         }
 
-        // For single segment, play directly; for multiple, create playlist
-        if localAsset.segmentURLs.count == 1 {
-            return decryptedDir.appendingPathComponent("segment_0.mov")
-        } else {
-            // Create a simple playlist for concatenated playback
-            // For now, just play the first segment
-            return decryptedDir.appendingPathComponent("segment_0.mov")
-        }
+        // TODO: For multiple segments, create a playlist for concatenated playback
+        // Currently plays first segment only
+        return decryptedDir.appendingPathComponent("segment_0.mov")
     }
 
     enum PlaybackError: Error, LocalizedError {

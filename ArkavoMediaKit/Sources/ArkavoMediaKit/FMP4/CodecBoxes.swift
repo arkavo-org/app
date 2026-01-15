@@ -239,23 +239,14 @@ public struct HEVCDecoderConfigurationRecord: ISOBox {
     public let nalArrays: [HEVCNALArray]
 
     public init(vps: [Data], sps: [Data], pps: [Data]) {
-        // Parse profile/level from SPS if available
-        if let firstSPS = sps.first, firstSPS.count >= 12 {
-            // Simplified parsing - in production would do full NAL parsing
-            self.generalProfileSpace = 0
-            self.generalTierFlag = false
-            self.generalProfileIDC = 1 // Main profile
-            self.generalProfileCompatibilityFlags = 0x60000000
-            self.generalConstraintIndicatorFlags = 0
-            self.generalLevelIDC = 120 // Level 4.0
-        } else {
-            self.generalProfileSpace = 0
-            self.generalTierFlag = false
-            self.generalProfileIDC = 1
-            self.generalProfileCompatibilityFlags = 0x60000000
-            self.generalConstraintIndicatorFlags = 0
-            self.generalLevelIDC = 120
-        }
+        // Default HEVC profile/level configuration
+        // TODO: Parse actual values from SPS NAL unit if needed
+        self.generalProfileSpace = 0
+        self.generalTierFlag = false
+        self.generalProfileIDC = 1 // Main profile
+        self.generalProfileCompatibilityFlags = 0x60000000
+        self.generalConstraintIndicatorFlags = 0
+        self.generalLevelIDC = 120 // Level 4.0
 
         self.chromaFormatIDC = 1 // 4:2:0
         self.bitDepthLumaMinus8 = 0
