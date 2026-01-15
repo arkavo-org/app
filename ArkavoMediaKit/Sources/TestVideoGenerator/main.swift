@@ -1,17 +1,25 @@
 import ArgumentParser
 import ArkavoMediaKit
+import AVFoundation
 import Foundation
+import Network
 
 // MARK: - CLI Entry Point
 
 @main
-struct TestVideoGenerator: ParsableCommand {
+struct TestVideoGenerator: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "TestVideoGenerator",
         abstract: "Generate fMP4/HLS test videos for manual testing",
         discussion: """
             Generates test video packages based on the fMP4/HLS test matrix.
             Each scenario creates an init.mp4, media segments, and playlist.m3u8.
+
+            For visual decode testing, use --source with a real video file:
+              TestVideoGenerator --source video.mp4 -o ./output
+
+            To serve content via HTTP for playback testing:
+              TestVideoGenerator --serve ./output
             """
     )
 
@@ -20,6 +28,15 @@ struct TestVideoGenerator: ParsableCommand {
 
     @Option(name: .shortAndLong, help: "Specific scenario to generate (e.g., B1, B2, M1)")
     var scenario: String?
+
+    @Option(name: .long, help: "Source video file to repackage as fMP4/HLS (for visual testing)")
+    var source: String?
+
+    @Option(name: .long, help: "Serve directory via HTTP (for AVPlayer playback)")
+    var serve: String?
+
+    @Option(name: .shortAndLong, help: "HTTP server port (default: 8888)")
+    var port: UInt16 = 8888
 
     @Flag(name: .shortAndLong, help: "List all available scenarios")
     var list = false
@@ -30,17 +47,39 @@ struct TestVideoGenerator: ParsableCommand {
     @Option(name: [.customShort("n"), .long], help: "Number of segments to generate")
     var segments: Int = 3
 
-    mutating func run() throws {
+    mutating func run() async throws {
         if list {
             printScenarios()
             return
         }
 
+        // Serve mode - start HTTP server
+        if let servePath = serve {
+            let serverDir = URL(fileURLWithPath: servePath)
+            let server = SimpleHTTPServer(directory: serverDir, port: port)
+            try await server.start()
+            return
+        }
+
         guard let output = output else {
-            throw ValidationError("Missing required option '--output <output>'")
+            throw ValidationError("Missing required option '--output <output>' or '--serve <directory>'")
         }
 
         let outputURL = URL(fileURLWithPath: output)
+
+        // If source video provided, repackage it as fMP4/HLS
+        if let sourcePath = source {
+            let sourceURL = URL(fileURLWithPath: sourcePath)
+            let repackager = VideoRepackager(
+                sourceURL: sourceURL,
+                outputDir: outputURL,
+                segmentDuration: duration
+            )
+            try await repackager.repackage()
+            return
+        }
+
+        // Otherwise generate synthetic test scenarios
         let generator = VideoTestGenerator(
             outputDir: outputURL,
             segmentDuration: duration,
@@ -594,5 +633,396 @@ struct VideoTestGenerator {
         data.append(nalData)
 
         return data
+    }
+}
+
+// MARK: - Video Repackager (Real Video to fMP4/HLS)
+
+/// Repackages a real video file as fMP4/HLS for visual decode testing
+struct VideoRepackager {
+    let sourceURL: URL
+    let outputDir: URL
+    let segmentDuration: Int
+
+    func repackage() async throws {
+        print("Repackaging \(sourceURL.lastPathComponent) as fMP4/HLS...")
+
+        // Create output directory
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+        // Load source video
+        let asset = AVURLAsset(url: sourceURL)
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw RepackagerError.noVideoTrack
+        }
+
+        // Get video parameters
+        let formatDescriptions = try await videoTrack.load(.formatDescriptions)
+        guard let formatDesc = formatDescriptions.first else {
+            throw RepackagerError.noFormatDescription
+        }
+
+        let dimensions = try await videoTrack.load(.naturalSize)
+        let timescale = try await videoTrack.load(.naturalTimeScale)
+
+        // Extract SPS/PPS from format description
+        guard let h264Params = extractParameterSets(from: formatDesc) else {
+            throw RepackagerError.noParameterSets
+        }
+
+        print("  Video: \(Int(dimensions.width))x\(Int(dimensions.height)), timescale: \(timescale)")
+        print("  NAL length size: \(h264Params.nalLengthSize) bytes")
+
+        // Create FMP4 writer (clear, no encryption)
+        let trackConfig = FMP4Writer.TrackConfig.h264Video(
+            width: UInt16(dimensions.width),
+            height: UInt16(dimensions.height),
+            timescale: UInt32(timescale),
+            sps: h264Params.sps,
+            pps: h264Params.pps
+        )
+
+        let writer = FMP4Writer(tracks: [trackConfig], encryption: nil)
+
+        // Generate init segment
+        print("  Generating init segment...")
+        let initSegment = writer.generateInitSegment()
+        try initSegment.write(to: outputDir.appendingPathComponent("init.mp4"))
+
+        // Read samples from source
+        print("  Reading video samples...")
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: nil)
+        reader.add(output)
+        reader.startReading()
+
+        var allSamples: [FMP4Writer.Sample] = []
+
+        while let sampleBuffer = output.copyNextSampleBuffer() {
+            guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { continue }
+
+            var length: Int = 0
+            var dataPointer: UnsafeMutablePointer<Int8>?
+            CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+
+            guard let pointer = dataPointer else { continue }
+            let sampleData = Data(bytes: pointer, count: length)
+
+            // Get timing info
+            let duration = CMSampleBufferGetDuration(sampleBuffer)
+            let durationValue = UInt32(duration.value * Int64(timescale) / Int64(duration.timescale))
+
+            // Calculate Composition Time Offset for B-frames
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let dts = CMSampleBufferGetDecodeTimeStamp(sampleBuffer)
+            var compositionTimeOffset: Int32 = 0
+
+            if pts.isValid && dts.isValid && pts != dts {
+                let ptsInTimescale = Int64(pts.value) * Int64(timescale) / Int64(pts.timescale)
+                let dtsInTimescale = Int64(dts.value) * Int64(timescale) / Int64(dts.timescale)
+                compositionTimeOffset = Int32(ptsInTimescale - dtsInTimescale)
+            }
+
+            // Check if sync sample
+            let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false)
+            var isSync = true
+            if let attachments = attachments as? [[CFString: Any]],
+               let first = attachments.first,
+               let notSync = first[kCMSampleAttachmentKey_NotSync] as? Bool {
+                isSync = !notSync
+            }
+
+            allSamples.append(FMP4Writer.Sample(
+                data: sampleData,
+                duration: durationValue,
+                isSync: isSync,
+                compositionTimeOffset: compositionTimeOffset
+            ))
+        }
+
+        print("  Read \(allSamples.count) samples")
+
+        // Generate media segments
+        print("  Generating media segments...")
+        let segmentDurationTicks = UInt64(segmentDuration * Int(timescale))
+        var hlsSegments: [FMP4HLSGenerator.Segment] = []
+        var segmentIndex = 0
+        var sampleIndex = 0
+        var currentSegmentSamples: [FMP4Writer.Sample] = []
+        var currentSegmentDuration: UInt64 = 0
+        var baseDecodeTime: UInt64 = 0
+
+        while sampleIndex < allSamples.count {
+            let sample = allSamples[sampleIndex]
+            currentSegmentSamples.append(sample)
+            currentSegmentDuration += UInt64(sample.duration)
+            sampleIndex += 1
+
+            // End segment when duration reached or last sample
+            let shouldEndSegment = currentSegmentDuration >= segmentDurationTicks || sampleIndex == allSamples.count
+
+            if shouldEndSegment && !currentSegmentSamples.isEmpty {
+                let segmentData = writer.generateMediaSegment(
+                    trackID: 1,
+                    samples: currentSegmentSamples,
+                    baseDecodeTime: baseDecodeTime
+                )
+
+                let segmentFilename = "segment\(segmentIndex).m4s"
+                try segmentData.write(to: outputDir.appendingPathComponent(segmentFilename))
+
+                let duration = Double(currentSegmentDuration) / Double(timescale)
+                hlsSegments.append(FMP4HLSGenerator.Segment(uri: segmentFilename, duration: duration))
+
+                baseDecodeTime += currentSegmentDuration
+                currentSegmentSamples = []
+                currentSegmentDuration = 0
+                segmentIndex += 1
+            }
+        }
+
+        print("  Created \(segmentIndex) segments")
+
+        // Generate HLS playlist
+        print("  Generating playlist...")
+        let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+            targetDuration: segmentDuration,
+            playlistType: .vod,
+            initSegmentURI: "init.mp4"
+        )
+
+        let hlsGenerator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+        let playlist = hlsGenerator.generateMediaPlaylist(segments: hlsSegments)
+        try playlist.write(to: outputDir.appendingPathComponent("playlist.m3u8"), atomically: true, encoding: .utf8)
+
+        print("Done! Output: \(outputDir.path)")
+        print("  To play: open \(outputDir.path)/playlist.m3u8")
+    }
+
+    // MARK: - Parameter Set Extraction
+
+    private struct H264Parameters {
+        let sps: [Data]
+        let pps: [Data]
+        let nalLengthSize: Int
+    }
+
+    private func extractParameterSets(from formatDesc: CMFormatDescription) -> H264Parameters? {
+        guard let extensions = CMFormatDescriptionGetExtensions(formatDesc) as? [String: Any],
+              let sampleDescriptionExtensions = extensions["SampleDescriptionExtensionAtoms"] as? [String: Any],
+              let avcCData = sampleDescriptionExtensions["avcC"] as? Data
+        else {
+            return nil
+        }
+
+        guard avcCData.count >= 8 else { return nil }
+
+        // Extract NAL length size from byte 4 (lower 2 bits + 1)
+        let lengthSizeMinusOne = Int(avcCData[4] & 0x03)
+        let nalLengthSize = lengthSizeMinusOne + 1
+
+        var sps: [Data] = []
+        var pps: [Data] = []
+        var offset = 5
+
+        // Number of SPS (lower 5 bits)
+        let numSPS = Int(avcCData[offset] & 0x1F)
+        offset += 1
+
+        for _ in 0..<numSPS {
+            guard offset + 2 <= avcCData.count else { break }
+            let spsLen = Int(avcCData[offset]) << 8 | Int(avcCData[offset + 1])
+            offset += 2
+            guard offset + spsLen <= avcCData.count else { break }
+            sps.append(avcCData.subdata(in: offset..<(offset + spsLen)))
+            offset += spsLen
+        }
+
+        guard offset < avcCData.count else {
+            return sps.isEmpty ? nil : H264Parameters(sps: sps, pps: pps, nalLengthSize: nalLengthSize)
+        }
+
+        let numPPS = Int(avcCData[offset])
+        offset += 1
+
+        for _ in 0..<numPPS {
+            guard offset + 2 <= avcCData.count else { break }
+            let ppsLen = Int(avcCData[offset]) << 8 | Int(avcCData[offset + 1])
+            offset += 2
+            guard offset + ppsLen <= avcCData.count else { break }
+            pps.append(avcCData.subdata(in: offset..<(offset + ppsLen)))
+            offset += ppsLen
+        }
+
+        return sps.isEmpty ? nil : H264Parameters(sps: sps, pps: pps, nalLengthSize: nalLengthSize)
+    }
+}
+
+// MARK: - Repackager Errors
+
+enum RepackagerError: Error, LocalizedError {
+    case noVideoTrack
+    case noFormatDescription
+    case noParameterSets
+
+    var errorDescription: String? {
+        switch self {
+        case .noVideoTrack: "No video track found in source file"
+        case .noFormatDescription: "No format description in video track"
+        case .noParameterSets: "Could not extract SPS/PPS from video"
+        }
+    }
+}
+
+// MARK: - Simple HTTP Server
+
+/// Simple HTTP server for serving fMP4/HLS content to AVPlayer
+final class SimpleHTTPServer: @unchecked Sendable {
+    private let directory: URL
+    private let port: UInt16
+    private var listener: NWListener?
+    private let queue = DispatchQueue(label: "SimpleHTTPServer")
+
+    init(directory: URL, port: UInt16) {
+        self.directory = directory
+        self.port = port
+    }
+
+    func start() async throws {
+        let parameters = NWParameters.tcp
+        parameters.allowLocalEndpointReuse = true
+
+        listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
+
+        listener?.newConnectionHandler = { [weak self] connection in
+            self?.handleConnection(connection)
+        }
+
+        listener?.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                print("HTTP server running at http://127.0.0.1:\(self.port)/")
+                print("Playlist URL: http://127.0.0.1:\(self.port)/playlist.m3u8")
+                print("Press Ctrl+C to stop")
+            case .failed(let error):
+                print("Server failed: \(error)")
+            default:
+                break
+            }
+        }
+
+        listener?.start(queue: queue)
+
+        // Keep running until interrupted
+        await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in
+            // Never resumes - runs until process killed
+        }
+    }
+
+    private func handleConnection(_ connection: NWConnection) {
+        connection.stateUpdateHandler = { state in
+            if case .ready = state {
+                self.receiveRequest(connection)
+            }
+        }
+        connection.start(queue: queue)
+    }
+
+    private func receiveRequest(_ connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, error in
+            guard let self = self, let data = data, error == nil else {
+                connection.cancel()
+                return
+            }
+
+            guard let request = String(data: data, encoding: .utf8) else {
+                connection.cancel()
+                return
+            }
+
+            self.handleRequest(request, connection: connection)
+        }
+    }
+
+    private func handleRequest(_ request: String, connection: NWConnection) {
+        let lines = request.split(separator: "\r\n")
+        guard let firstLine = lines.first else {
+            sendError(connection, status: 400, message: "Bad Request")
+            return
+        }
+
+        let parts = firstLine.split(separator: " ")
+        guard parts.count >= 2, parts[0] == "GET" else {
+            sendError(connection, status: 405, message: "Method Not Allowed")
+            return
+        }
+
+        var path = String(parts[1])
+        if path == "/" {
+            path = "/playlist.m3u8"
+        }
+
+        // Remove leading slash and decode URL
+        let filename = String(path.dropFirst()).removingPercentEncoding ?? String(path.dropFirst())
+        let fileURL = directory.appendingPathComponent(filename)
+
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            print("  404: \(filename)")
+            sendError(connection, status: 404, message: "Not Found")
+            return
+        }
+
+        do {
+            let fileData = try Data(contentsOf: fileURL)
+            let mimeType = mimeTypeFor(filename)
+            print("  200: \(filename) (\(fileData.count) bytes)")
+
+            let response = """
+            HTTP/1.1 200 OK\r
+            Content-Type: \(mimeType)\r
+            Content-Length: \(fileData.count)\r
+            Access-Control-Allow-Origin: *\r
+            Connection: close\r
+            \r
+
+            """
+
+            var responseData = response.data(using: .utf8)!
+            responseData.append(fileData)
+
+            connection.send(content: responseData, completion: .contentProcessed { _ in
+                connection.cancel()
+            })
+        } catch {
+            sendError(connection, status: 500, message: "Internal Server Error")
+        }
+    }
+
+    private func sendError(_ connection: NWConnection, status: Int, message: String) {
+        let response = """
+        HTTP/1.1 \(status) \(message)\r
+        Content-Type: text/plain\r
+        Content-Length: \(message.count)\r
+        Connection: close\r
+        \r
+        \(message)
+        """
+
+        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    private func mimeTypeFor(_ filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "m3u8": return "application/vnd.apple.mpegurl"
+        case "m4s": return "video/iso.segment"
+        case "mp4": return "video/mp4"
+        case "m4v": return "video/mp4"
+        case "ts": return "video/mp2t"
+        default: return "application/octet-stream"
+        }
     }
 }
