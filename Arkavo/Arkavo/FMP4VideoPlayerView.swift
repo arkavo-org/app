@@ -1,3 +1,4 @@
+import ArkavoMediaKit
 import ArkavoSocial
 import AVFoundation
 import AVKit
@@ -101,7 +102,7 @@ final class FMP4PlayerViewModel: ObservableObject {
     @Published var error: Error?
 
     private var contentKeySession: AVContentKeySession?
-    private var keyDelegate: TDFContentKeyDelegate?
+    private var keyDelegate: TDFContentKeyDelegate<TDFManifestLite>?
     private var httpServer: LocalHTTPServer?
     private var tempDirectory: URL?
 

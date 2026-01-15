@@ -73,7 +73,6 @@
 		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
 		DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0002EE0112340000001B /* CreatorContentView.swift */; };
 		DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0003EE0112340000001B /* ContentDetailView.swift */; };
-		DACC0004EE0112340000001A /* TDFContentKeyDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */; };
 		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
 		DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */; };
 		DAFP0001EE0112340000001A /* FairPlayTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFP0001EE0112340000001B /* FairPlayTestView.swift */; };
@@ -212,7 +211,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorSupportView.swift; sourceTree = "<group>"; };
 		DACC0002EE0112340000001B /* CreatorContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorContentView.swift; sourceTree = "<group>"; };
 		DACC0003EE0112340000001B /* ContentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDetailView.swift; sourceTree = "<group>"; };
-		DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFContentKeyDelegate.swift; sourceTree = "<group>"; };
 		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMP4VideoPlayerView.swift; sourceTree = "<group>"; };
 		DAFP0001EE0112340000001B /* FairPlayTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FairPlayTestView.swift; sourceTree = "<group>"; };
@@ -353,7 +351,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */,
 				DACC0002EE0112340000001B /* CreatorContentView.swift */,
 				DACC0003EE0112340000001B /* ContentDetailView.swift */,
-				DACC0004EE0112340000001B /* TDFContentKeyDelegate.swift */,
 				DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */,
 				DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */,
 				DAFP0001EE0112340000001B /* FairPlayTestView.swift */,
@@ -672,7 +669,6 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */,
 				DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */,
 				DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */,
-				DACC0004EE0112340000001A /* TDFContentKeyDelegate.swift in Sources */,
 				DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */,
 				DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */,
 				DAFP0001EE0112340000001A /* FairPlayTestView.swift in Sources */,

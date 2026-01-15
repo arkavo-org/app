@@ -1,6 +1,12 @@
+import ArkavoMediaKit
 import ArkavoSocial
 import AVKit
 import SwiftUI
+
+// MARK: - TDFManifestLite Conformance
+
+/// Bridge TDFManifestLite from ArkavoSocial to FairPlayManifestProtocol from ArkavoMediaKit
+extension TDFManifestLite: FairPlayManifestProtocol {}
 
 // MARK: - TDFVideoPlayerView
 
@@ -26,7 +32,7 @@ struct TDFVideoPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
     @State private var contentKeySession: AVContentKeySession?
-    @State private var keyDelegate: TDFContentKeyDelegate?
+    @State private var keyDelegate: TDFContentKeyDelegate<TDFManifestLite>?
     @State private var error: Error?
     @State private var isLoading = true
 

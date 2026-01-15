@@ -778,7 +778,7 @@ struct ProtectedVideoPlayerView: View {
     @State private var isPreparingPlayback = false
     @State private var playbackStatus: String = ""
     @State private var contentKeySession: AVContentKeySession?
-    @State private var keyDelegate: TDFContentKeyDelegate?
+    @State private var keyDelegate: TDFContentKeyDelegate<HLSManifestLite>?
     @State private var useFairPlay = false  // FairPlay requires SAMPLE-AES; using local decryption
     @State private var httpServer: LocalHTTPServer?
     @State private var tempDirectory: URL?

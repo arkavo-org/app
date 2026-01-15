@@ -8,18 +8,18 @@ import os.log
 public enum FairPlayDebugConfig {
     /// Enable verbose debug logging (set to false for production)
     #if DEBUG
-    public nonisolated(unsafe) static var isVerboseLoggingEnabled = true
+        public nonisolated(unsafe) static var isVerboseLoggingEnabled = true
     #else
-    public nonisolated(unsafe) static var isVerboseLoggingEnabled = false
+        public nonisolated(unsafe) static var isVerboseLoggingEnabled = false
     #endif
 }
 
 // MARK: - FairPlay Debug Logger
 
-private let fairPlayLog = OSLog(subsystem: "com.arkavo.creator", category: "FairPlay")
+private let fairPlayLog = OSLog(subsystem: "com.arkavo.mediakit", category: "FairPlay")
 
 /// Debug logger for FairPlay key exchange
-private enum FairPlayDebug {
+enum FairPlayDebug {
     static func log(_ message: String, type: OSLogType = .debug) {
         guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         os_log("%{public}@", log: fairPlayLog, type: type, message)
@@ -38,7 +38,8 @@ private enum FairPlayDebug {
         log("→ \(method) \(url.absoluteString)")
         if let body = body, let json = try? JSONSerialization.jsonObject(with: body),
            let pretty = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
-           let str = String(data: pretty, encoding: .utf8) {
+           let str = String(data: pretty, encoding: .utf8)
+        {
             // Truncate long values like wrappedKey and spcData
             let truncated = str.replacingOccurrences(
                 of: #""[A-Za-z0-9+/=]{100,}""#,
@@ -62,7 +63,7 @@ private enum FairPlayDebug {
 // MARK: - FairPlay Errors
 
 /// Errors that can occur during FairPlay key exchange
-enum FairPlayError: Error, LocalizedError {
+public enum FairPlayError: Error, LocalizedError, Sendable {
     case sessionStartFailed(String)
     case certificateFetchFailed(String)
     case spcGenerationFailed(String)
@@ -70,7 +71,7 @@ enum FairPlayError: Error, LocalizedError {
     case invalidCKCResponse(String)
     case manifestEncodingFailed(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case let .sessionStartFailed(reason):
             "Failed to start FairPlay session: \(reason)"
@@ -88,15 +89,40 @@ enum FairPlayError: Error, LocalizedError {
     }
 }
 
-// MARK: - HLS Manifest for FairPlay
+// MARK: - FairPlay Manifest Protocol
 
-/// Lightweight HLS manifest structure for FairPlay key exchange
-struct HLSManifestLite: Sendable {
-    let kasURL: String
-    let wrappedKey: String
-    let algorithm: String
-    let iv: String
-    let assetID: String
+/// Protocol for manifest types that can be used with FairPlay key exchange
+public protocol FairPlayManifestProtocol: Sendable {
+    var assetID: String { get }
+    var kasURL: String { get }
+    var wrappedKey: String { get }
+    var algorithm: String { get }
+    var iv: String { get }
+}
+
+// MARK: - Default FairPlay Manifest Implementation
+
+/// Default manifest implementation for FairPlay key exchange
+public struct FairPlayManifest: FairPlayManifestProtocol, Sendable {
+    public let assetID: String
+    public let kasURL: String
+    public let wrappedKey: String
+    public let algorithm: String
+    public let iv: String
+
+    public init(
+        assetID: String,
+        kasURL: String,
+        wrappedKey: String,
+        algorithm: String,
+        iv: String
+    ) {
+        self.assetID = assetID
+        self.kasURL = kasURL
+        self.wrappedKey = wrappedKey
+        self.algorithm = algorithm
+        self.iv = iv
+    }
 }
 
 // MARK: - State Actor for Thread Safety
@@ -117,7 +143,7 @@ private actor FairPlayState {
 
 // MARK: - TDFContentKeyDelegate
 
-/// AVContentKeySessionDelegate for FairPlay DRM with TDF content (macOS)
+/// AVContentKeySessionDelegate for FairPlay DRM with TDF content
 ///
 /// Handles the FairPlay key exchange process:
 /// 1. Receives key request from AVPlayer
@@ -125,28 +151,35 @@ private actor FairPlayState {
 /// 3. Posts SPC + TDF manifest to server
 /// 4. Receives CKC (Content Key Context) from server
 /// 5. Provides CKC to AVPlayer for hardware decryption
-final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unchecked Sendable {
-    private let manifest: HLSManifestLite
+///
+/// The TDF manifest contains the RSA-wrapped DEK. The server:
+/// - Unwraps DEK using its RSA private key
+/// - Re-wraps DEK using FairPlay SDK
+/// - Returns CKC for Secure Enclave decryption
+public final class TDFContentKeyDelegate<Manifest: FairPlayManifestProtocol>: NSObject, AVContentKeySessionDelegate,
+    @unchecked Sendable
+{
+    private let manifest: Manifest
     private let serverURL: URL
     private let userId: String
-    private let authToken: String
+    private let authToken: String?
     private let state = FairPlayState()
 
     /// Callback invoked when content key is successfully delivered
-    var onKeyDelivered: (() -> Void)?
+    public var onKeyDelivered: (@Sendable () -> Void)?
 
     /// Callback invoked when content key delivery fails
-    var onKeyFailed: ((Error) -> Void)?
+    public var onKeyFailed: (@Sendable (Error) -> Void)?
 
-    /// Initialize with HLS manifest and authentication
+    /// Initialize with TDF manifest and authentication
     /// - Parameters:
-    ///   - manifest: The HLS manifest containing encryption info
-    ///   - authToken: Authentication token for KAS
+    ///   - manifest: The TDF manifest containing encryption info
+    ///   - authToken: Optional authentication token for server requests
     ///   - userId: User identifier for session (defaults to "anonymous")
     ///   - serverURL: FairPlay server URL (defaults to 100.arkavo.net)
-    init(
-        manifest: HLSManifestLite,
-        authToken: String,
+    public init(
+        manifest: Manifest,
+        authToken: String? = nil,
         userId: String = "anonymous",
         serverURL: URL = URL(string: "https://100.arkavo.net")!
     ) {
@@ -162,47 +195,38 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         FairPlayDebug.log("  Asset ID: \(manifest.assetID)")
         FairPlayDebug.log("  KAS URL: \(manifest.kasURL)")
         FairPlayDebug.log("  Algorithm: \(manifest.algorithm)")
-        FairPlayDebug.log("  IV (base64): \(manifest.iv)")
-        // Decode IV from base64 and show as hex for comparison with protection logs
+        FairPlayDebug.log("  Auth: \(authToken != nil ? "provided" : "none")")
         if let ivData = Data(base64Encoded: manifest.iv) {
             FairPlayDebug.log("  IV (hex): \(ivData.map { String(format: "%02x", $0) }.joined())")
         }
-        FairPlayDebug.log("  Wrapped Key (first 64 chars): \(manifest.wrappedKey.prefix(64))...")
-        FairPlayDebug.log("  Wrapped Key length: \(manifest.wrappedKey.count) chars")
-        FairPlayDebug.log("  User ID: \(userId)")
-        FairPlayDebug.log("  Auth Token: \(authToken.prefix(20))...")
         FairPlayDebug.log("══════════════════════════════════════════════════════")
     }
 
     // MARK: - AVContentKeySessionDelegate
 
-    func contentKeySession(
-        _ session: AVContentKeySession,
+    public func contentKeySession(
+        _: AVContentKeySession,
         didProvide keyRequest: AVContentKeyRequest
     ) {
         FairPlayDebug.log("──────────────────────────────────────────────────────")
         FairPlayDebug.log("📥 contentKeySession(didProvide:) called")
         FairPlayDebug.log("  Request identifier: \(keyRequest.identifier ?? "nil")")
         FairPlayDebug.log("  Request status: \(keyRequest.status.rawValue)")
-        if let id = keyRequest.identifier as? String {
-            FairPlayDebug.log("  Content ID (string): \(id)")
-        }
         handleKeyRequest(keyRequest)
     }
 
-    func contentKeySession(
-        _ session: AVContentKeySession,
+    public func contentKeySession(
+        _: AVContentKeySession,
         didProvideRenewingContentKeyRequest keyRequest: AVContentKeyRequest
     ) {
         FairPlayDebug.log("──────────────────────────────────────────────────────")
-        FairPlayDebug.log("🔄 contentKeySession(didProvideRenewingContentKeyRequest:) called")
-        FairPlayDebug.log("  Request identifier: \(keyRequest.identifier ?? "nil")")
+        FairPlayDebug.log("🔄 contentKeySession(didProvideRenewingContentKeyRequest:)")
         handleKeyRequest(keyRequest)
     }
 
-    func contentKeySession(
-        _ session: AVContentKeySession,
-        shouldRetry keyRequest: AVContentKeyRequest,
+    public func contentKeySession(
+        _: AVContentKeySession,
+        shouldRetry _: AVContentKeyRequest,
         reason retryReason: AVContentKeyRequest.RetryReason
     ) -> Bool {
         FairPlayDebug.log("⚠️ contentKeySession(shouldRetry:) - reason: \(retryReason.rawValue)")
@@ -219,9 +243,9 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         }
     }
 
-    func contentKeySession(
-        _ session: AVContentKeySession,
-        contentKeyRequest keyRequest: AVContentKeyRequest,
+    public func contentKeySession(
+        _: AVContentKeySession,
+        contentKeyRequest _: AVContentKeyRequest,
         didFailWithError error: Error
     ) {
         FairPlayDebug.log("❌ contentKeySession(didFailWithError:)", type: .error)
@@ -235,11 +259,11 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         }
     }
 
-    func contentKeySessionDidGenerateExpiredSessionReport(_ session: AVContentKeySession) {
+    public func contentKeySessionDidGenerateExpiredSessionReport(_: AVContentKeySession) {
         FairPlayDebug.log("📋 contentKeySessionDidGenerateExpiredSessionReport")
     }
 
-    func contentKeySession(_ session: AVContentKeySession, contentKeyRequestDidSucceed keyRequest: AVContentKeyRequest) {
+    public func contentKeySession(_: AVContentKeySession, contentKeyRequestDidSucceed _: AVContentKeyRequest) {
         FairPlayDebug.log("✅ contentKeyRequestDidSucceed!")
     }
 
@@ -326,14 +350,20 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
                 FairPlayDebug.log("══════════════════════════════════════════════════════")
 
                 // Notify caller that key is ready
-                DispatchQueue.main.async { [weak self] in
-                    self?.onKeyDelivered?()
+                if let callback = onKeyDelivered {
+                    DispatchQueue.main.async {
+                        callback()
+                    }
                 }
 
             } catch {
                 let totalDuration = CFAbsoluteTimeGetCurrent() - startTime
                 FairPlayDebug.log("══════════════════════════════════════════════════════", type: .error)
-                FairPlayDebug.log("❌ FairPlay key exchange FAILED after \(String(format: "%.3f", totalDuration))s", type: .error)
+                FairPlayDebug
+                    .log(
+                        "❌ FairPlay key exchange FAILED after \(String(format: "%.3f", totalDuration))s",
+                        type: .error
+                    )
                 FairPlayDebug.log("  Error: \(error)", type: .error)
                 if let localizedError = error as? LocalizedError {
                     FairPlayDebug.log("  Description: \(localizedError.errorDescription ?? "none")", type: .error)
@@ -342,8 +372,11 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
                 keyRequest.processContentKeyResponseError(error)
 
                 // Notify caller that key failed
-                DispatchQueue.main.async { [weak self] in
-                    self?.onKeyFailed?(error)
+                if let callback = onKeyFailed {
+                    let capturedError = error
+                    DispatchQueue.main.async {
+                        callback(capturedError)
+                    }
                 }
             }
         }
@@ -357,12 +390,14 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let body: [String: Any] = [
             "userId": userId,
             "assetId": manifest.assetID,
-            "protocol": "fairplay"
+            "protocol": "fairplay",
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -394,7 +429,9 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         let url = serverURL.appendingPathComponent("media/v1/certificate")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         FairPlayDebug.logRequest("GET", url: url, body: nil)
 
@@ -423,7 +460,9 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         // Encode manifest as base64 JSON
         let manifestJSON: [String: Any] = [
@@ -433,13 +472,13 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
                     "type": "wrapped",
                     "url": manifest.kasURL,
                     "protocol": "kas",
-                    "wrappedKey": manifest.wrappedKey
+                    "wrappedKey": manifest.wrappedKey,
                 ]],
                 "method": [
                     "algorithm": manifest.algorithm,
-                    "iv": manifest.iv
-                ]
-            ]
+                    "iv": manifest.iv,
+                ],
+            ],
         ]
 
         guard let manifestData = try? JSONSerialization.data(withJSONObject: manifestJSON) else {
@@ -459,7 +498,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
             "userId": userId,
             "assetId": manifest.assetID,
             "spcData": spcData.base64EncodedString(),
-            "tdfManifest": manifestBase64
+            "tdfManifest": manifestBase64,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -504,3 +543,8 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
         return ckcData
     }
 }
+
+// MARK: - Type Alias for Convenience
+
+/// Type alias for TDFContentKeyDelegate with default FairPlayManifest type
+public typealias DefaultTDFContentKeyDelegate = TDFContentKeyDelegate<FairPlayManifest>
