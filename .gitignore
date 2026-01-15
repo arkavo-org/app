@@ -130,7 +130,7 @@ docs/*STATUS*.md
 
 # Apple FairPlay reference test content (large files)
 FairPlayStreamingTestContentv1.0/
-FairPlayTest/reference/
+FairPlayTest/
 
 # Test TDF recordings
 *.tdf
