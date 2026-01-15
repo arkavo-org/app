@@ -96,7 +96,14 @@ let package = Package(
         ),
         .testTarget(
             name: "ArkavoKitTests",
-            dependencies: ["ArkavoKit", "ArkavoRecorder", "ArkavoStreaming", "ArkavoMedia"],
+            dependencies: [
+                "ArkavoKit",
+                "ArkavoRecorder",
+                "ArkavoStreaming",
+                "ArkavoMedia",
+                "ArkavoSocial",
+                .product(name: "ArkavoMediaKit", package: "ArkavoMediaKit"),
+            ],
             swiftSettings: sharedSwiftSettings
         ),
         .target(
