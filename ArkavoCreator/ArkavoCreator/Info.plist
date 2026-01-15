@@ -29,5 +29,7 @@
 		<string>Arkavo Creator needs screen recording permission to capture your screen content with C2PA provenance tracking.</string>
 		<key>NSFileUsageDescription</key>
 		<string>Arkavo Creator requires access to encrypt and protect your content.</string>
+		<key>NSDocumentsFolderUsageDescription</key>
+		<string>ArkavoCreator saves your video recordings to the Documents folder.</string>
 	</dict>
 </plist>

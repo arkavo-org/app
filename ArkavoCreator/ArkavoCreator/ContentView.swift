@@ -1099,26 +1099,28 @@ struct SettingsContent: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Feedback Toggle Section
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Feedback")
-                    .font(.headline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Feedback Toggle Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Feedback")
+                        .font(.headline)
 
-                Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
-                    .toggleStyle(.switch)
+                    Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
+                        .toggleStyle(.switch)
 
-                Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
-                    .foregroundColor(.secondary)
-                    .font(.callout)
+                    Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
+                        .foregroundColor(.secondary)
+                        .font(.callout)
+                }
+                .padding()
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Spacer()
             }
             .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            Spacer()
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

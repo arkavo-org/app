@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
 import AppKit
+import ArkavoSocial
+import ArkavoMediaKit
 // C2PA support temporarily disabled
 // import ArkavoC2PA
 
@@ -21,6 +23,8 @@ struct Recording: Identifiable, Sendable {
     let fileSize: Int64
     let thumbnailPath: URL?
     var c2paStatus: C2PAStatus?
+    var tdfStatus: TDFProtectionStatus?
+    var irohStatus: IrohPublishStatus = .unpublished
 
     enum C2PAStatus: Sendable {
         case signed(validatedAt: Date, isValid: Bool)
@@ -40,6 +44,54 @@ struct Recording: Identifiable, Sendable {
             }
             return false
         }
+    }
+
+    /// TDF3 protection status for FairPlay streaming
+    enum TDFProtectionStatus: Sendable {
+        case protected(tdfURL: URL, protectedAt: Date)
+        case unprotected
+        case unknown
+
+        var isProtected: Bool {
+            if case .protected = self {
+                return true
+            }
+            return false
+        }
+
+        var tdfURL: URL? {
+            if case .protected(let url, _) = self {
+                return url
+            }
+            return nil
+        }
+    }
+
+    /// Iroh P2P publish status for TDF content
+    enum IrohPublishStatus: Sendable {
+        case unpublished
+        case publishing
+        case published(ticket: ContentTicket)
+        case failed(String)
+
+        var isPublished: Bool {
+            if case .published = self {
+                return true
+            }
+            return false
+        }
+
+        var contentTicket: ContentTicket? {
+            if case .published(let ticket) = self {
+                return ticket
+            }
+            return nil
+        }
+    }
+
+    /// URL of the TDF3 archive (ZIP containing manifest.json + 0.payload)
+    var tdfURL: URL {
+        url.deletingPathExtension().appendingPathExtension("tdf")
     }
 
     var formattedDuration: String {
@@ -67,15 +119,22 @@ struct Recording: Identifiable, Sendable {
 @MainActor
 final class RecordingsManager: ObservableObject {
     @Published private(set) var recordings: [Recording] = []
+    @Published private(set) var needsFolderSelection = false
 
-    private let recordingsDirectory: URL
+    private var recordingsDirectory: URL
 
     init() {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        recordingsDirectory = documentsPath.appendingPathComponent("Recordings", isDirectory: true)
-
-        // Create directory if needed
-        try? FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
+        // Check if we have a bookmarked folder, otherwise we'll need user to select one
+        if let folder = RecordingsFolderAccess.getBookmarkedFolder() {
+            recordingsDirectory = folder
+            print("📂 [RecordingsManager] recordingsDirectory: \(recordingsDirectory.path)")
+        } else {
+            // Use sandboxed container as temporary fallback until user selects folder
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            recordingsDirectory = documentsURL.appendingPathComponent("Recordings", isDirectory: true)
+            needsFolderSelection = true
+            print("📂 [RecordingsManager] no folder selected, using fallback: \(recordingsDirectory.path)")
+        }
 
         // Listen for recording completed notifications
         NotificationCenter.default.addObserver(
@@ -93,7 +152,24 @@ final class RecordingsManager: ObservableObject {
         }
     }
 
+    func selectRecordingsFolder() async {
+        if let folder = await RecordingsFolderAccess.chooseRecordingsFolder() {
+            recordingsDirectory = folder
+            needsFolderSelection = false
+            print("📂 [RecordingsManager] user selected: \(folder.path)")
+            await loadRecordings()
+        }
+    }
+
     func loadRecordings() async {
+        // Start security-scoped access for the recordings directory
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error loading recordings: Cannot access recordings directory")
+            recordings = []
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         do {
             let fileURLs = try FileManager.default.contentsOfDirectory(
                 at: recordingsDirectory,
@@ -148,6 +224,13 @@ final class RecordingsManager: ObservableObject {
     }
 
     func deleteRecording(_ recording: Recording) {
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error deleting recording: Cannot access recordings directory")
+            return
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         do {
             try FileManager.default.removeItem(at: recording.url)
 
@@ -165,6 +248,13 @@ final class RecordingsManager: ObservableObject {
     }
 
     func generateThumbnail(for recording: Recording) async -> NSImage? {
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            print("Error generating thumbnail: Cannot access recordings directory")
+            return nil
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
         let asset = AVURLAsset(url: recording.url)
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
@@ -183,4 +273,129 @@ final class RecordingsManager: ObservableObject {
         // TODO: Re-enable when c2patool is bundled with the app
         return .unsigned
     }
+
+    /// Check TDF protection status for a recording
+    func checkTDFStatus(for recording: Recording) async -> Recording.TDFProtectionStatus {
+        let tdfURL = recording.tdfURL
+
+        // Check if TDF archive exists
+        if FileManager.default.fileExists(atPath: tdfURL.path) {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: tdfURL.path),
+               let modDate = attrs[.modificationDate] as? Date
+            {
+                return .protected(tdfURL: tdfURL, protectedAt: modDate)
+            }
+            return .protected(tdfURL: tdfURL, protectedAt: Date())
+        }
+        return .unprotected
+    }
+
+    /// Protect a recording with TDF3 for FairPlay streaming
+    func protectRecording(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
+            )
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
+        // Load video data (potentially large file)
+        print("📂 Loading video data from: \(videoURL.path)")
+        let videoData = try Data(contentsOf: videoURL)
+        print("📂 Loaded \(videoData.count) bytes")
+
+        // Create protection service and encrypt
+        let protectionService = RecordingProtectionService(kasURL: kasURL)
+        print("🔐 Starting TDF3 protection...")
+        let tdfArchive = try await protectionService.protectVideo(
+            videoData: videoData,
+            assetID: assetID
+        )
+        print("✅ TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
+    }
+
+    /// Protect a recording with HLS segmentation for streaming playback
+    func protectRecordingHLS(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
+            )
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
+        // Create HLS protection service
+        let protectionService = HLSRecordingProtectionService(kasURL: kasURL)
+        print("🎬 Starting HLS TDF protection for: \(title)")
+
+        // Convert to HLS and package into TDF
+        let tdfArchive = try await protectionService.protectVideoHLS(
+            videoURL: videoURL,
+            assetID: assetID
+        )
+        print("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected HLS recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
+    }
+
+    /// Protect a recording with fMP4/CBCS for true FairPlay hardware DRM
+    func protectRecordingFMP4(_ recording: Recording, kasURL: URL) async throws {
+        // Capture URLs before detaching (for Sendable safety)
+        let videoURL = recording.url
+        let tdfURL = recording.tdfURL
+        let assetID = recording.id.uuidString
+        let title = recording.title
+
+        // Start security-scoped access on the directory
+        guard recordingsDirectory.startAccessingSecurityScopedResource() else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileReadNoPermissionError,
+                userInfo: [NSLocalizedDescriptionKey: "Cannot access recordings folder - please re-select the recordings folder"]
+            )
+        }
+        defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
+
+        // Create fMP4 protection service
+        let protectionService = FMP4RecordingProtectionService(kasURL: kasURL)
+        print("🎬 Starting fMP4 FairPlay protection for: \(title)")
+
+        // Convert to fMP4/CBCS and package into TDF
+        let tdfArchive = try await protectionService.protectVideo(
+            videoURL: videoURL,
+            assetID: assetID
+        )
+        print("✅ fMP4 TDF archive created: \(tdfArchive.count) bytes")
+
+        // Write TDF archive
+        try tdfArchive.write(to: tdfURL)
+        print("💾 Protected fMP4 recording: \(title)")
+        print("💾 TDF archive: \(tdfURL.path)")
+    }
 }
+

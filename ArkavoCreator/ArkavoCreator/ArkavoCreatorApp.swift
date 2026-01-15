@@ -1,4 +1,5 @@
 import ArkavoKit
+import ArkavoSocial
 import AuthenticationServices
 import LocalAuthentication
 import SwiftData
@@ -56,6 +57,11 @@ struct ArkavoCreatorApp: App {
                 // Load stored tokens
                 redditClient.loadStoredTokens()
                 micropubClient.loadStoredTokens()
+
+                // Initialize Iroh P2P node for content publishing
+                Task {
+                    await ArkavoIrohManager.shared.initialize()
+                }
                 // uncomment for Screenshots
 //                if let window = NSApplication.shared.windows.first {
 //                    window.setContentSize(NSSize(width: 1280, height: 800))

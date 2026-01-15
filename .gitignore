@@ -128,3 +128,10 @@ docs/*STATUS*.md
 **/Resources/*.cer
 **/.fairplay_keys/
 
+# Apple FairPlay reference test content (large files)
+FairPlayStreamingTestContentv1.0/
+FairPlayTest/
+
+# Test TDF recordings
+*.tdf
+

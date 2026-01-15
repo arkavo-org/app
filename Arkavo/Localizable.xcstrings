@@ -56,6 +56,9 @@
     "%lld frames" : {
 
     },
+    "%lld min" : {
+
+    },
     "%lld types" : {
 
     },
@@ -147,6 +150,9 @@
       }
     },
     "Add a description..." : {
+
+    },
+    "Add content with a ticket" : {
 
     },
     "Add someone you know who's right beside you—verify in person to grow your trusted network." : {
@@ -367,6 +373,18 @@
     "Contacts" : {
 
     },
+    "Content" : {
+
+    },
+    "Content Details" : {
+
+    },
+    "Content fetched (%@)" : {
+
+    },
+    "Content Ticket" : {
+
+    },
     "Contributors" : {
 
     },
@@ -422,6 +440,9 @@
 
     },
     "Developer Mode" : {
+
+    },
+    "Diagnostics" : {
 
     },
     "Disconnect" : {
@@ -482,7 +503,13 @@
     "Ensure other devices are also searching." : {
 
     },
+    "Enter a content ticket received from a creator to fetch their published content." : {
+
+    },
     "Enter handle" : {
+
+    },
+    "Enter Ticket" : {
 
     },
     "Enter your unique handle for arkavo.social" : {
@@ -516,7 +543,16 @@
     "Failed to load image" : {
 
     },
+    "FairPlay Test" : {
+
+    },
     "Features" : {
+
+    },
+    "Fetch Content" : {
+
+    },
+    "Fetching..." : {
 
     },
     "For questions or concerns about this EULA, please contact Arkavo Support at support@arkavo.com." : {
@@ -764,6 +800,12 @@
     "No Peers Discovered" : {
 
     },
+    "No published content" : {
+
+    },
+    "No scheduled streams" : {
+
+    },
     "Not available" : {
 
     },
@@ -792,10 +834,19 @@
     "Owner:" : {
 
     },
+    "Paste content ticket" : {
+
+    },
     "Peer-to-peer mesh networking for secure local communication" : {
 
     },
     "Peers" : {
+
+    },
+    "Play Video" : {
+
+    },
+    "Playback Error" : {
 
     },
     "Please grant location permission in Settings to use this feature." : {
@@ -824,6 +875,12 @@
 
     },
     "Posts" : {
+
+    },
+    "Preparing playback..." : {
+
+    },
+    "Preparing..." : {
 
     },
     "Privacy" : {
@@ -872,13 +929,13 @@
         }
       }
     },
-    "Protect" : {
-
-    },
     "Public ID" : {
 
     },
     "Public ID: %@" : {
+
+    },
+    "Published Content" : {
 
     },
     "Ready to join?" : {
@@ -1059,6 +1116,9 @@
     "Skip for now" : {
 
     },
+    "Social Links" : {
+
+    },
     "Start" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1157,6 +1217,9 @@
     "Streaming" : {
 
     },
+    "Streaming Schedule" : {
+
+    },
     "Streams" : {
       "localizations" : {
         "es-US" : {
@@ -1182,7 +1245,10 @@
     "Support %@" : {
 
     },
-    "Support and Protect features will be available in an upcoming update." : {
+    "Support features will be available in an upcoming update." : {
+
+    },
+    "Support Tiers" : {
 
     },
     "Tap 'Discover Peers' to find nearby devices." : {
@@ -1194,7 +1260,13 @@
     "Tap to connect" : {
 
     },
+    "TDF Protected" : {
+
+    },
     "Tell us your likes or dislikes. This helps us match your preference best." : {
+
+    },
+    "Test FairPlay Streaming" : {
 
     },
     "Thank you for helping keep our community safe." : {
@@ -1288,6 +1360,9 @@
           }
         }
       }
+    },
+    "View Full Profile" : {
+
     },
     "View Secure Stream" : {
       "extractionState" : "stale",

@@ -140,6 +140,7 @@ struct AccountView: View {
                     }
                 }
             }
+
         }
         .navigationTitle("Account")
         .sheet(isPresented: $showingEncryptionUpgrade) {
