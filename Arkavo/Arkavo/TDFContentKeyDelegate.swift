@@ -9,9 +9,9 @@ import os.log
 public enum FairPlayDebugConfig {
     /// Enable verbose debug logging (set to false for production)
     #if DEBUG
-    public static var isVerboseLoggingEnabled = true
+    public nonisolated(unsafe) static var isVerboseLoggingEnabled = true
     #else
-    public static var isVerboseLoggingEnabled = false
+    public nonisolated(unsafe) static var isVerboseLoggingEnabled = false
     #endif
 }
 
