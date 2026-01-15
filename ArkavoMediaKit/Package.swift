@@ -25,7 +25,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(path: "../OpenTDFKit"),
+        .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "df22f6c7db7bd94dcd4eb4e83ca7995813d394b4"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
     ],
     targets: [
