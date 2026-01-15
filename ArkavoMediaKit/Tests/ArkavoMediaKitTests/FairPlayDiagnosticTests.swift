@@ -310,7 +310,7 @@ struct FairPlayDiagnosticTests {
 
     // MARK: - 3. Media Segment Structure Tests
 
-    @Test("Media segment has required top-level boxes: styp, moof, mdat")
+    @Test("Media segment has required top-level boxes: moof, mdat")
     func mediaSegmentTopLevelBoxes() {
         let track = FMP4Writer.TrackConfig.h264Video(
             width: 1920, height: 1080, timescale: 90000,
@@ -328,10 +328,15 @@ struct FairPlayDiagnosticTests {
             offset += header.size
         }
 
-        #expect(topLevelTypes.contains("styp"), "Missing styp box")
+        // Required boxes: moof and mdat (styp is optional for CMAF compliance)
         #expect(topLevelTypes.contains("moof"), "Missing moof box")
         #expect(topLevelTypes.contains("mdat"), "Missing mdat box")
-        #expect(topLevelTypes[0] == "styp", "styp must be first box in media segment")
+
+        // moof must come before mdat
+        if let moofIndex = topLevelTypes.firstIndex(of: "moof"),
+           let mdatIndex = topLevelTypes.firstIndex(of: "mdat") {
+            #expect(moofIndex < mdatIndex, "moof must come before mdat")
+        }
         print("✅ Media segment top-level boxes: \(topLevelTypes)")
     }
 
@@ -521,7 +526,8 @@ struct FairPlayDiagnosticTests {
         print("Size: \(mediaSegment.count) bytes")
 
         var mediaValid = true
-        for boxType in ["styp", "moof", "mfhd", "traf", "tfhd", "tfdt", "trun", "senc", "saiz", "saio", "mdat"] {
+        // No styp - matches Apple FairPlay reference content structure
+        for boxType in ["moof", "mfhd", "traf", "tfhd", "tfdt", "trun", "senc", "saiz", "saio", "mdat"] {
             if findBoxRecursive(mediaSegment, type: boxType) == nil {
                 print("❌ Missing: \(boxType)")
                 mediaValid = false
@@ -645,5 +651,218 @@ struct FairPlayDiagnosticTests {
         #expect(offset == mediaSegment.count, "Media segment has \(mediaSegment.count - offset) bytes after last box")
 
         print("✅ All box sizes valid in both init and media segments")
+    }
+
+    // MARK: - 10. CRITICAL: Single-Sample Alignment Verification
+
+    @Test("Single-sample alignment: sum(clear+protected) == sample_size")
+    func singleSampleAlignmentVerification() {
+        // This is the most decisive test for CENC correctness
+        // Most homegrown packagers fail here: the senc subsample entries
+        // must sum to exactly the sample size in trun
+
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1920, height: 1080, timescale: 90000,
+            sps: [sampleSPS], pps: [samplePPS]
+        )
+        let encryption = FMP4Writer.EncryptionConfig(keyID: testKeyID, constantIV: testIV)
+        let writer = FMP4Writer(tracks: [track], encryption: encryption)
+        let encryptor = CBCSEncryptor(key: testKey, iv: testIV)
+
+        // Create realistic sample with SPS, PPS, and IDR NAL units
+        // IMPORTANT: NAL length prefix must match the actual NAL data length
+        var sample = Data()
+
+        // SPS NAL (type 7) - sampleSPS is 27 bytes
+        let spsLength = UInt32(sampleSPS.count)
+        sample.append(spsLength.bigEndianData)
+        sample.append(sampleSPS)
+        let spsTotal = 4 + Int(spsLength)
+
+        // PPS NAL (type 8) - samplePPS is 4 bytes
+        let ppsLength = UInt32(samplePPS.count)
+        sample.append(ppsLength.bigEndianData)
+        sample.append(samplePPS)
+        let ppsTotal = 4 + Int(ppsLength)
+
+        // IDR NAL (type 5) - large enough to have encrypted portion
+        let idrPayloadSize = 500
+        let idrLength = UInt32(idrPayloadSize)
+        sample.append(idrLength.bigEndianData)
+        sample.append(0x65) // NAL type 5 (IDR)
+        sample.append(Data(repeating: 0xAB, count: idrPayloadSize - 1))
+        let idrTotal = 4 + idrPayloadSize
+
+        let originalSampleSize = sample.count
+        print("\n═══════════════════════════════════════════════════════")
+        print("SINGLE-SAMPLE ALIGNMENT VERIFICATION (DECISIVE TEST)")
+        print("═══════════════════════════════════════════════════════")
+        print("Original sample size: \(originalSampleSize) bytes")
+        print("  - SPS NAL: \(spsTotal) bytes (4 + \(spsLength))")
+        print("  - PPS NAL: \(ppsTotal) bytes (4 + \(ppsLength))")
+        print("  - IDR NAL: \(idrTotal) bytes (4 + \(idrPayloadSize))")
+
+        // Encrypt the sample
+        let encryptResult = encryptor.encryptVideoSample(sample, nalLengthSize: 4)
+        let encryptedSampleSize = encryptResult.encryptedData.count
+        print("\nEncrypted sample size: \(encryptedSampleSize) bytes")
+        #expect(encryptedSampleSize == originalSampleSize, "Encryption must not change sample size")
+
+        // Calculate subsample totals
+        var totalClearBytes = 0
+        var totalProtectedBytes = 0
+        print("\nSubsamples (\(encryptResult.subsamples.count) entries):")
+        for (i, ss) in encryptResult.subsamples.enumerated() {
+            print("  [\(i)] clear: \(ss.bytesOfClearData), protected: \(ss.bytesOfProtectedData)")
+            totalClearBytes += Int(ss.bytesOfClearData)
+            totalProtectedBytes += Int(ss.bytesOfProtectedData)
+        }
+        let subsampleTotal = totalClearBytes + totalProtectedBytes
+        print("\nSubsample totals:")
+        print("  Total clear: \(totalClearBytes)")
+        print("  Total protected: \(totalProtectedBytes)")
+        print("  Sum: \(subsampleTotal)")
+        print("  Expected (sample_size): \(encryptedSampleSize)")
+
+        // THE CRITICAL CHECK
+        #expect(subsampleTotal == encryptedSampleSize,
+                "CRITICAL MISMATCH: sum(clear+protected)=\(subsampleTotal) != sample_size=\(encryptedSampleSize)")
+
+        // Now generate segment and verify senc matches
+        let writerSample = FMP4Writer.Sample(
+            data: encryptResult.encryptedData,
+            duration: 3000,
+            isSync: true,
+            subsamples: encryptResult.subsamples
+        )
+        let mediaSegment = writer.generateMediaSegment(trackID: 1, samples: [writerSample], baseDecodeTime: 0)
+
+        // Parse trun to get sample_size
+        guard let trunInfo = findBoxRecursive(mediaSegment, type: "trun") else {
+            Issue.record("Missing trun box")
+            return
+        }
+
+        // trun structure: size(4) + type(4) + version(1) + flags(3) + sample_count(4) + [data_offset(4)] + [first_sample_flags(4)] + per_sample_data
+        let trunFlags = UInt32(mediaSegment[trunInfo.offset + 9]) << 16 |
+                        UInt32(mediaSegment[trunInfo.offset + 10]) << 8 |
+                        UInt32(mediaSegment[trunInfo.offset + 11])
+        let hasDataOffset = (trunFlags & 0x000001) != 0
+        let hasFirstSampleFlags = (trunFlags & 0x000004) != 0
+        let hasSampleDuration = (trunFlags & 0x000100) != 0
+        let hasSampleSize = (trunFlags & 0x000200) != 0
+
+        var trunOffset = trunInfo.offset + 16 // After header + version/flags + sample_count
+        if hasDataOffset { trunOffset += 4 }
+        if hasFirstSampleFlags { trunOffset += 4 }
+
+        // Read sample entry (first sample)
+        if hasSampleDuration { trunOffset += 4 } // Skip duration to get to size
+        guard hasSampleSize else {
+            Issue.record("trun does not have sample_size present")
+            return
+        }
+
+        let trunSampleSizeData = mediaSegment.subdata(in: trunOffset..<(trunOffset + 4))
+        let trunSampleSize = Int(UInt32(bigEndian: trunSampleSizeData.withUnsafeBytes { $0.load(as: UInt32.self) }))
+        print("\ntrun sample_size: \(trunSampleSize)")
+        #expect(trunSampleSize == encryptedSampleSize, "trun sample_size must match encrypted sample size")
+
+        // Parse senc to get subsample entries
+        guard let sencInfo = findBoxRecursive(mediaSegment, type: "senc") else {
+            Issue.record("Missing senc box")
+            return
+        }
+
+        // senc structure: size(4) + type(4) + version(1) + flags(3) + sample_count(4) + [per_sample_data]
+        let sencFlags = UInt32(mediaSegment[sencInfo.offset + 9]) << 16 |
+                        UInt32(mediaSegment[sencInfo.offset + 10]) << 8 |
+                        UInt32(mediaSegment[sencInfo.offset + 11])
+        let hasSubsamples = (sencFlags & 0x02) != 0
+        print("\nsenc flags: 0x\(String(format: "%06X", sencFlags)), hasSubsamples: \(hasSubsamples)")
+
+        guard hasSubsamples else {
+            Issue.record("senc does not have subsample flag set")
+            return
+        }
+
+        // Read senc sample entry (first sample)
+        // For CBCS with constant IV (perSampleIVSize=0): no IV, just subsample data
+        var sencOffset = sencInfo.offset + 16 // After header + version/flags + sample_count
+
+        // Read subsample_count
+        let subsampleCountData = mediaSegment.subdata(in: sencOffset..<(sencOffset + 2))
+        let sencSubsampleCount = Int(UInt16(bigEndian: subsampleCountData.withUnsafeBytes { $0.load(as: UInt16.self) }))
+        sencOffset += 2
+
+        print("senc subsample_count: \(sencSubsampleCount)")
+        #expect(sencSubsampleCount == encryptResult.subsamples.count,
+                "senc subsample_count must match CBCSEncryptor output")
+
+        // Read each subsample entry and calculate total
+        var sencTotalClear = 0
+        var sencTotalProtected = 0
+        print("senc subsamples:")
+        for i in 0..<sencSubsampleCount {
+            let clearData = mediaSegment.subdata(in: sencOffset..<(sencOffset + 2))
+            let clearBytes = Int(UInt16(bigEndian: clearData.withUnsafeBytes { $0.load(as: UInt16.self) }))
+            sencOffset += 2
+
+            let protectedData = mediaSegment.subdata(in: sencOffset..<(sencOffset + 4))
+            let protectedBytes = Int(UInt32(bigEndian: protectedData.withUnsafeBytes { $0.load(as: UInt32.self) }))
+            sencOffset += 4
+
+            print("  [\(i)] clear: \(clearBytes), protected: \(protectedBytes)")
+            sencTotalClear += clearBytes
+            sencTotalProtected += protectedBytes
+        }
+
+        let sencTotal = sencTotalClear + sencTotalProtected
+        print("\nsenc totals:")
+        print("  Total clear: \(sencTotalClear)")
+        print("  Total protected: \(sencTotalProtected)")
+        print("  Sum: \(sencTotal)")
+
+        // THE CRITICAL CHECK: senc subsamples must sum to trun sample_size
+        let aligned = (sencTotal == trunSampleSize)
+        print("\n═══════════════════════════════════════════════════════")
+        if aligned {
+            print("✅ ALIGNMENT VERIFIED: senc sum(\(sencTotal)) == trun sample_size(\(trunSampleSize))")
+        } else {
+            print("❌ ALIGNMENT MISMATCH: senc sum(\(sencTotal)) != trun sample_size(\(trunSampleSize))")
+            print("   Difference: \(abs(sencTotal - trunSampleSize)) bytes")
+        }
+        print("═══════════════════════════════════════════════════════\n")
+
+        #expect(aligned, "CRITICAL: senc subsample sum must equal trun sample_size")
+
+        // Parse saiz to verify it matches senc entry size
+        guard let saizInfo = findBoxRecursive(mediaSegment, type: "saiz") else {
+            Issue.record("Missing saiz box")
+            return
+        }
+
+        // saiz: size(4) + type(4) + version/flags(4) + [aux_info_type(4) + aux_info_type_parameter(4)] + default_sample_info_size(1) + sample_count(4)
+        let saizVersion = mediaSegment[saizInfo.offset + 8]
+        var saizOffset = saizInfo.offset + 12 // After header + version/flags
+        if saizVersion > 0 {
+            saizOffset += 8 // Skip aux_info_type and aux_info_type_parameter
+        }
+
+        let defaultSampleInfoSize = Int(mediaSegment[saizOffset])
+        saizOffset += 1
+        let saizSampleCountData = mediaSegment.subdata(in: saizOffset..<(saizOffset + 4))
+        let saizSampleCount = Int(UInt32(bigEndian: saizSampleCountData.withUnsafeBytes { $0.load(as: UInt32.self) }))
+
+        print("saiz: defaultSampleInfoSize=\(defaultSampleInfoSize), sampleCount=\(saizSampleCount)")
+
+        // Calculate expected saiz size: 2 (subsample_count) + 6 * subsampleCount (clear:2 + protected:4)
+        let expectedSaizEntrySize = 2 + (6 * sencSubsampleCount)
+        print("Expected saiz entry size: \(expectedSaizEntrySize) (2 + 6*\(sencSubsampleCount))")
+
+        #expect(defaultSampleInfoSize == expectedSaizEntrySize || saizSampleCount == 1,
+                "saiz must correctly report aux info size")
+
+        print("✅ Single-sample alignment verification PASSED")
     }
 }

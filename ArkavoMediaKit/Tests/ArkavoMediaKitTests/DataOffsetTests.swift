@@ -178,7 +178,7 @@ struct DataOffsetTests {
         #expect(actualData == markerData, "Data at actual sample position should be sample marker")
     }
 
-    @Test("data_offset is relative to moof start (excludes styp)")
+    @Test("data_offset is relative to moof start")
     func dataOffsetRelativeToMoof() throws {
         let sps = Data([0x67, 0x64, 0x00, 0x28])
         let pps = Data([0x68, 0xEE, 0x3C, 0x80])
@@ -199,21 +199,11 @@ struct DataOffsetTests {
 
         let mediaSegment = writer.generateMediaSegment(trackID: 1, samples: samples, baseDecodeTime: 0)
 
-        // Verify styp is first box
-        guard let stypInfo = findBox(mediaSegment, type: "styp") else {
-            Issue.record("styp box not found")
-            return
-        }
-        #expect(stypInfo.offset == 0, "styp should be first box")
-
-        // Find moof
+        // Find moof (may be preceded by styp for CMAF compliance)
         guard let moofInfo = findBox(mediaSegment, type: "moof") else {
             Issue.record("moof box not found")
             return
         }
-
-        // moof should start right after styp
-        #expect(moofInfo.offset == stypInfo.size, "moof should start right after styp")
 
         // Find mdat
         guard let mdatInfo = findBox(mediaSegment, type: "mdat") else {
@@ -229,8 +219,8 @@ struct DataOffsetTests {
             return
         }
 
-        // With default-base-is-moof, data_offset should NOT include styp size
-        // data_offset = moof_size + mdat_header_size (relative to moof start)
+        // With default-base-is-moof, data_offset is relative to moof start
+        // data_offset = moof_size + mdat_header_size
         let moofSize = moofInfo.size
         let mdatHeaderSize = 8
         let expectedDataOffset = moofSize + mdatHeaderSize
@@ -453,8 +443,8 @@ struct DataOffsetTests {
             if boxCount > 10 { break } // Safety limit for top-level
         }
 
-        // Should have styp, moof, mdat
-        #expect(boxCount >= 3, "Should have at least 3 top-level boxes (styp, moof, mdat)")
+        // Should have moof, mdat (no styp per Apple FairPlay reference structure)
+        #expect(boxCount >= 2, "Should have at least 2 top-level boxes (moof, mdat)")
         #expect(offset == mediaSegment.count, "All data should be consumed by boxes")
     }
 }

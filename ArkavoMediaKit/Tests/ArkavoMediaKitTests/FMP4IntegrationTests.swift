@@ -438,9 +438,19 @@ struct FMP4IntegrationTests {
 
             #expect(mediaSegment.count > 0)
 
-            // Verify styp + moof + mdat structure
-            let stypType = String(data: mediaSegment[4..<8], encoding: .ascii)
-            #expect(stypType == "styp", "Segment \(i) should start with styp")
+            // Parse top-level boxes to verify structure
+            var topLevelBoxes: [String] = []
+            var offset = 0
+            while offset + 8 <= mediaSegment.count {
+                let size = Int(UInt32(bigEndian: mediaSegment.subdata(in: offset..<(offset + 4)).withUnsafeBytes { $0.load(as: UInt32.self) }))
+                guard size > 0, let boxType = String(data: mediaSegment.subdata(in: (offset + 4)..<(offset + 8)), encoding: .ascii) else { break }
+                topLevelBoxes.append(boxType)
+                offset += size
+            }
+
+            // Verify required boxes are present (moof and mdat required, styp optional for CMAF)
+            #expect(topLevelBoxes.contains("moof"), "Segment \(i) must have moof")
+            #expect(topLevelBoxes.contains("mdat"), "Segment \(i) must have mdat")
         }
 
         // Generate playlist

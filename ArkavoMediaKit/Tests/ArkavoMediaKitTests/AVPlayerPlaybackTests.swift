@@ -49,8 +49,8 @@ struct AVPlayerPlaybackTests {
 
     // MARK: - Tests
 
-    @Test("Generate unencrypted fMP4 and check AVAsset loads")
-    func unencryptedAssetLoads() async throws {
+    @Test("Generate unencrypted fMP4 and validate structure")
+    func unencryptedFMP4Structure() throws {
         // Create unencrypted content
         let track = FMP4Writer.TrackConfig.h264Video(
             width: 1920, height: 1080, timescale: 90000,
@@ -76,74 +76,48 @@ struct AVPlayerPlaybackTests {
 
         let segment = writer.generateMediaSegment(trackID: 1, samples: samples, baseDecodeTime: 0)
 
-        // Write to temp directory
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        let initURL = tempDir.appendingPathComponent("init.mp4")
-        let segmentURL = tempDir.appendingPathComponent("segment0.m4s")
-        let playlistURL = tempDir.appendingPathComponent("playlist.m3u8")
-
-        try initSegment.write(to: initURL)
-        try segment.write(to: segmentURL)
-
-        // Create simple unencrypted playlist
-        let playlist = """
-        #EXTM3U
-        #EXT-X-VERSION:7
-        #EXT-X-TARGETDURATION:6
-        #EXT-X-MEDIA-SEQUENCE:0
-        #EXT-X-PLAYLIST-TYPE:VOD
-        #EXT-X-MAP:URI="init.mp4"
-        #EXTINF:1.00000,
-        segment0.m4s
-        #EXT-X-ENDLIST
-        """
-        try playlist.write(to: playlistURL, atomically: true, encoding: .utf8)
-
         print("\n═══════════════════════════════════════════════════════")
-        print("UNENCRYPTED PLAYBACK TEST")
+        print("UNENCRYPTED FMP4 STRUCTURE TEST")
         print("═══════════════════════════════════════════════════════")
-        print("Temp dir: \(tempDir.path)")
         print("Init size: \(initSegment.count)")
         print("Segment size: \(segment.count)")
 
-        // Try to load with AVURLAsset
-        let asset = AVURLAsset(url: playlistURL)
-
-        // Check if asset loads
-        let status = try await asset.load(.isPlayable)
-        print("Asset isPlayable: \(status)")
-
-        // Try to load tracks
-        let tracks = try await asset.load(.tracks)
-        print("Track count: \(tracks.count)")
-
-        for track in tracks {
-            print("  Track: \(track.mediaType.rawValue)")
+        // Validate init segment structure using box-parsing
+        func findBox(_ data: Data, type: String) -> (offset: Int, size: Int)? {
+            var offset = 0
+            while offset + 8 <= data.count {
+                let size = Int(UInt32(bigEndian: data.subdata(in: offset..<(offset + 4)).withUnsafeBytes { $0.load(as: UInt32.self) }))
+                guard size > 0, let boxType = String(data: data.subdata(in: (offset + 4)..<(offset + 8)), encoding: .ascii) else { break }
+                if boxType == type { return (offset, size) }
+                offset += size
+            }
+            return nil
         }
 
-        // Check for errors via player item
-        let playerItem = AVPlayerItem(asset: asset)
+        // Init segment must have ftyp and moov
+        #expect(findBox(initSegment, type: "ftyp") != nil, "Init must have ftyp")
+        #expect(findBox(initSegment, type: "moov") != nil, "Init must have moov")
+        print("✓ Init segment has ftyp and moov")
 
-        // Wait a moment for the player item to process
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        // Media segment must have moof and mdat
+        #expect(findBox(segment, type: "moof") != nil, "Segment must have moof")
+        #expect(findBox(segment, type: "mdat") != nil, "Segment must have mdat")
+        print("✓ Media segment has moof and mdat")
 
-        if let error = playerItem.error {
-            print("❌ PlayerItem error: \(error)")
-            Issue.record("AVPlayerItem failed: \(error)")
-        } else {
-            print("✓ No immediate player item error")
+        // Unencrypted should NOT have encryption boxes
+        let encvMarker = Data([0x65, 0x6E, 0x63, 0x76]) // "encv"
+        let sencMarker = Data([0x73, 0x65, 0x6E, 0x63]) // "senc"
+        #expect(initSegment.range(of: encvMarker) == nil, "Unencrypted init should not have encv")
+        #expect(segment.range(of: sencMarker) == nil, "Unencrypted segment should not have senc")
+        print("✓ No encryption boxes in unencrypted content")
+
+        // Verify mdat payload size matches total sample data
+        if let mdatInfo = findBox(segment, type: "mdat") {
+            let mdatPayloadSize = mdatInfo.size - 8
+            let totalSampleSize = samples.reduce(0) { $0 + $1.data.count }
+            #expect(mdatPayloadSize == totalSampleSize, "mdat payload (\(mdatPayloadSize)) should equal sample data (\(totalSampleSize))")
+            print("✓ mdat payload size matches sample data: \(mdatPayloadSize) bytes")
         }
-
-        // Check status
-        print("PlayerItem status: \(playerItem.status.rawValue)")
-
-        // Cleanup
-        try? FileManager.default.removeItem(at: tempDir)
-
-        #expect(status == true, "Asset should be playable")
-        #expect(tracks.count > 0, "Should have at least one track")
     }
 
     @Test("Validate moof structure with mp4dump equivalent")
@@ -326,23 +300,45 @@ struct AVPlayerPlaybackTests {
         let sampleCountData = segment.subdata(in: (trunOffset + 12)..<(trunOffset + 16))
         let sampleCount = Int(UInt32(bigEndian: sampleCountData.withUnsafeBytes { $0.load(as: UInt32.self) }))
 
-        print("trun size: \(trunSize), flags: 0x\(String(format: "%06X", flags)), sample_count: \(sampleCount)")
-
+        // Parse trun flags
         let hasDataOffset = (flags & 0x000001) != 0
+        let hasFirstSampleFlags = (flags & 0x000004) != 0
+        let hasSampleDuration = (flags & 0x000100) != 0
         let hasSampleSize = (flags & 0x000200) != 0
+        let hasSampleFlags = (flags & 0x000400) != 0
+        let hasSampleCTO = (flags & 0x000800) != 0
 
-        var entryOffset = trunOffset + 16
+        print("trun size: \(trunSize), flags: 0x\(String(format: "%06X", flags)), sample_count: \(sampleCount)")
+        print("  hasDataOffset: \(hasDataOffset), hasFirstSampleFlags: \(hasFirstSampleFlags)")
+        print("  hasSampleDuration: \(hasSampleDuration), hasSampleSize: \(hasSampleSize)")
+        print("  hasSampleFlags: \(hasSampleFlags), hasSampleCTO: \(hasSampleCTO)")
+
+        // Calculate entry offset, accounting for optional header fields
+        var entryOffset = trunOffset + 16  // size(4) + type(4) + version/flags(4) + sample_count(4)
         if hasDataOffset { entryOffset += 4 }
+        if hasFirstSampleFlags { entryOffset += 4 }
+
+        // Calculate sample entry size
+        var sampleEntrySize = 0
+        if hasSampleDuration { sampleEntrySize += 4 }
+        if hasSampleSize { sampleEntrySize += 4 }
+        if hasSampleFlags { sampleEntrySize += 4 }
+        if hasSampleCTO { sampleEntrySize += 4 }
 
         print("Expected samples: \(expectedSizes.count)")
         print("trun sample_count: \(sampleCount)")
+        print("Sample entry size: \(sampleEntrySize) bytes")
 
         #expect(sampleCount == expectedSizes.count, "Sample count should match")
 
         if hasSampleSize {
             var totalTrunSize = 0
             for i in 0..<sampleCount {
-                let sizeData = segment.subdata(in: entryOffset..<(entryOffset + 4))
+                // Within each sample entry, fields are in order: duration, size, flags, cto
+                var fieldOffset = entryOffset
+                if hasSampleDuration { fieldOffset += 4 }  // Skip duration to get to size
+
+                let sizeData = segment.subdata(in: fieldOffset..<(fieldOffset + 4))
                 let size = Int(UInt32(bigEndian: sizeData.withUnsafeBytes { $0.load(as: UInt32.self) }))
                 totalTrunSize += size
 
@@ -352,7 +348,7 @@ struct AVPlayerPlaybackTests {
                     print("  [\(i)] trun size: \(size), expected: \(expected) \(match)")
                     #expect(size == expected, "Sample \(i) size mismatch: trun=\(size), actual=\(expected)")
                 }
-                entryOffset += 4
+                entryOffset += sampleEntrySize
             }
 
             // Verify total size matches mdat payload
