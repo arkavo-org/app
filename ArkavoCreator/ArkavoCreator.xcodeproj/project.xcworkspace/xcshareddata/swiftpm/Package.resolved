@@ -33,8 +33,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/VRMMetalKit",
       "state" : {
-        "branch" : "main",
-        "revision" : "dcff40754c196f16ab53b8f5b7134e06354b32cb"
+        "revision" : "0994f57d033dac590cf6cae0df1260190628ef31"
       }
     },
     {

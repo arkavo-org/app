@@ -649,8 +649,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/arkavo-org/VRMMetalKit";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = revision;
+				revision = 0994f57d033dac590cf6cae0df1260190628ef31;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
