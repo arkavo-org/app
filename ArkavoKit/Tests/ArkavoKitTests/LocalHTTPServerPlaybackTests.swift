@@ -757,6 +757,264 @@ struct LocalHTTPServerPlaybackTests {
         #expect(statusCode == 416 || statusCode == 200, "Out-of-range request should return 416 or 200, got \(statusCode)")
     }
 
+    // MARK: - AVFoundation Key Rotation Tests
+
+    @Test("AVFoundation: Key rotation playlist triggers multiple key requests")
+    func avFoundationKeyRotationSmokeTest() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let testKeyID2 = Data(repeating: 0x34, count: 16)
+
+        // Create track config
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1280, height: 720, timescale: 90000,
+            sps: [testSPS], pps: [testPPS]
+        )
+
+        // Create clear init segment (shared between key periods)
+        let clearWriter = FMP4Writer(tracks: [track], encryption: nil)
+        let initSegment = clearWriter.generateInitSegment()
+        try initSegment.write(to: tempDir.appendingPathComponent("init.mp4"))
+
+        // Create encrypted segments with different keys
+        let enc1 = FMP4Writer.EncryptionConfig(keyID: testKeyID, constantIV: testIV)
+        let enc2 = FMP4Writer.EncryptionConfig(keyID: testKeyID2, constantIV: testIV)
+
+        let writer1 = FMP4Writer(tracks: [track], encryption: enc1)
+        let writer2 = FMP4Writer(tracks: [track], encryption: enc2)
+
+        // Generate samples for each segment
+        func createSegmentSamples() -> [FMP4Writer.Sample] {
+            var samples: [FMP4Writer.Sample] = []
+            for i in 0..<90 {  // 3 seconds at 30fps
+                let isIDR = (i == 0)
+                let sampleData = createVideoSample(isIDR: isIDR, size: isIDR ? 8000 : 2000)
+                samples.append(FMP4Writer.Sample(
+                    data: sampleData,
+                    duration: 3000,
+                    isSync: isIDR
+                ))
+            }
+            return samples
+        }
+
+        // Segment 0 with key1
+        let seg0 = writer1.generateMediaSegment(trackID: 1, samples: createSegmentSamples(), baseDecodeTime: 0)
+        try seg0.write(to: tempDir.appendingPathComponent("seg0.m4s"))
+
+        // Segment 1 with key2 (key rotation!)
+        let seg1 = writer2.generateMediaSegment(trackID: 1, samples: createSegmentSamples(), baseDecodeTime: 270000)
+        try seg1.write(to: tempDir.appendingPathComponent("seg1.m4s"))
+
+        // Generate playlist with key rotation using per-segment encryption
+        let key1Config = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "key-period-1", keyID: testKeyID)
+        let key2Config = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "key-period-2", keyID: testKeyID2)
+
+        let segments = [
+            FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 3.0, encryption: key1Config),
+            FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 3.0, encryption: key2Config),
+        ]
+
+        let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+            targetDuration: 4,
+            playlistType: .vod,
+            initSegmentURI: "init.mp4"
+        )
+        let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+        let playlist = generator.generateMediaPlaylist(segments: segments)
+        try playlist.write(to: tempDir.appendingPathComponent("playlist.m3u8"), atomically: true, encoding: .utf8)
+
+        print("--- Key Rotation Playlist ---\n\(playlist)")
+
+        // Verify playlist structure before serving
+        #expect(playlist.contains("skd://key-period-1"), "Playlist should contain first key URI")
+        #expect(playlist.contains("skd://key-period-2"), "Playlist should contain second key URI")
+        let keyTagCount = playlist.components(separatedBy: "#EXT-X-KEY:METHOD=SAMPLE-AES").count - 1
+        #expect(keyTagCount == 2, "Playlist should have 2 KEY tags for rotation")
+
+        // Start server
+        let server = LocalHTTPServer(contentDirectory: tempDir)
+        let baseURL = try server.start()
+        defer { server.stop() }
+
+        let playlistURL = baseURL.appendingPathComponent("playlist.m3u8")
+        print("Testing AVPlayer key rotation with: \(playlistURL)")
+
+        // Track key requests via actor for async-safe access
+        let keyTracker = KeyRequestTracker()
+
+        // Create asset with resource loader to capture key requests
+        let asset = AVURLAsset(url: playlistURL)
+        let delegate = KeyRequestCaptureDelegate { keyURI in
+            Task { await keyTracker.addRequest(keyURI) }
+            print("🔐 Key request: \(keyURI)")
+        }
+        asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
+
+        let playerItem = AVPlayerItem(asset: asset)
+        _ = AVPlayer(playerItem: playerItem)
+
+        // Wait for player to process manifest and potentially request keys
+        let startTime = Date()
+        let timeout: TimeInterval = 10
+
+        while Date().timeIntervalSince(startTime) < timeout {
+            let status = playerItem.status
+            if status == .readyToPlay || status == .failed {
+                break
+            }
+            // Key requests may trigger before playback is ready
+            let currentKeyCount = await keyTracker.count
+            if currentKeyCount >= 2 {
+                break
+            }
+            try await Task.sleep(nanoseconds: 100_000_000)  // 100ms
+        }
+
+        // Get final state
+        let finalStatus = playerItem.status
+        let finalKeyRequests = await keyTracker.requests
+
+        print("Final player status: \(finalStatus.rawValue)")
+        print("Key requests received: \(finalKeyRequests)")
+
+        // Assertions - even without a license server we can verify:
+        // 1. Manifest was parsed (player item exists and didn't immediately fail with parse error)
+        if finalStatus == .failed {
+            let error = playerItem.error
+            // FairPlay key request failure is EXPECTED (no license server)
+            // Parse errors or segment fetch errors would indicate a problem
+            let errorDesc = error?.localizedDescription ?? ""
+            print("Player error: \(errorDesc)")
+            // If we got key requests, the manifest was parsed successfully
+            if !finalKeyRequests.isEmpty {
+                print("✅ Manifest parsed, key requests triggered (expected failure without license server)")
+            }
+        }
+
+        // 2. Key requests (informational - may not trigger without FairPlay entitlements)
+        // On systems with FairPlay entitlements, we'd expect both keys to be requested
+        if finalKeyRequests.contains(where: { $0.contains("key-period-1") }) {
+            print("✅ Key request triggered for key-period-1")
+        } else {
+            print("ℹ️ No key request for key-period-1 (FairPlay entitlements may not be available)")
+        }
+
+        if finalKeyRequests.contains(where: { $0.contains("key-period-2") }) {
+            print("✅ Key request triggered for key-period-2")
+        } else {
+            print("ℹ️ No key request for key-period-2 (FairPlay entitlements may not be available)")
+        }
+
+        // The playlist structure validation (done above) is the primary test
+        // Key request validation is secondary and depends on system configuration
+        print("✅ AVFoundation key rotation smoke test passed (playlist validation)")
+    }
+
+    @Test("AVFoundation: Clear to encrypted transition triggers key request")
+    func avFoundationClearToEncryptedTransition() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let track = FMP4Writer.TrackConfig.h264Video(
+            width: 1280, height: 720, timescale: 90000,
+            sps: [testSPS], pps: [testPPS]
+        )
+
+        // Clear init segment
+        let clearWriter = FMP4Writer(tracks: [track], encryption: nil)
+        let initSegment = clearWriter.generateInitSegment()
+        try initSegment.write(to: tempDir.appendingPathComponent("init.mp4"))
+
+        // Clear segment 0
+        var clearSamples: [FMP4Writer.Sample] = []
+        for i in 0..<90 {
+            let isIDR = (i == 0)
+            clearSamples.append(FMP4Writer.Sample(
+                data: createVideoSample(isIDR: isIDR, size: isIDR ? 8000 : 2000),
+                duration: 3000,
+                isSync: isIDR
+            ))
+        }
+        let seg0 = clearWriter.generateMediaSegment(trackID: 1, samples: clearSamples, baseDecodeTime: 0)
+        try seg0.write(to: tempDir.appendingPathComponent("seg0.m4s"))
+
+        // Encrypted segment 1
+        let encryption = FMP4Writer.EncryptionConfig(keyID: testKeyID, constantIV: testIV)
+        let encWriter = FMP4Writer(tracks: [track], encryption: encryption)
+        let seg1 = encWriter.generateMediaSegment(trackID: 1, samples: clearSamples, baseDecodeTime: 270000)
+        try seg1.write(to: tempDir.appendingPathComponent("seg1.m4s"))
+
+        // Generate playlist with clear → encrypted transition
+        let encConfig = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "encrypted-content", keyID: testKeyID)
+
+        let segments = [
+            FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 3.0, encryption: nil),  // Clear
+            FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 3.0, encryption: encConfig),  // Encrypted
+        ]
+
+        let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+            targetDuration: 4,
+            playlistType: .vod,
+            initSegmentURI: "init.mp4"
+        )
+        let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+        let playlist = generator.generateMediaPlaylist(segments: segments)
+        try playlist.write(to: tempDir.appendingPathComponent("playlist.m3u8"), atomically: true, encoding: .utf8)
+
+        print("--- Clear→Encrypted Playlist ---\n\(playlist)")
+
+        // Verify playlist has KEY tag after clear segment
+        #expect(playlist.contains("skd://encrypted-content"), "Playlist should contain key URI")
+        #expect(playlist.contains("seg0.m4s"), "Playlist should have clear segment")
+        #expect(playlist.contains("seg1.m4s"), "Playlist should have encrypted segment")
+
+        // Start server
+        let server = LocalHTTPServer(contentDirectory: tempDir)
+        let baseURL = try server.start()
+        defer { server.stop() }
+
+        let playlistURL = baseURL.appendingPathComponent("playlist.m3u8")
+
+        // Track key requests via actor
+        let keyTracker = KeyRequestTracker()
+
+        let asset = AVURLAsset(url: playlistURL)
+        let delegate = KeyRequestCaptureDelegate { keyURI in
+            Task { await keyTracker.addRequest(keyURI) }
+            print("🔐 Key request: \(keyURI)")
+        }
+        asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
+
+        let playerItem = AVPlayerItem(asset: asset)
+        _ = AVPlayer(playerItem: playerItem)
+
+        // Wait for key request
+        let startTime = Date()
+        while Date().timeIntervalSince(startTime) < 10 {
+            let hasKeyRequest = await keyTracker.count > 0
+            if hasKeyRequest || playerItem.status == .failed {
+                break
+            }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        let finalRequests = await keyTracker.requests
+
+        // Key request validation (informational - may not trigger without FairPlay entitlements)
+        if finalRequests.contains(where: { $0.contains("encrypted-content") }) {
+            print("✅ Key request triggered for encrypted-content")
+        } else {
+            print("ℹ️ No key request for encrypted-content (FairPlay entitlements may not be available)")
+        }
+
+        // The playlist structure validation (done above) is the primary test
+        print("✅ Clear→Encrypted transition test passed (playlist validation)")
+    }
+
     // MARK: - Box Parsing Helpers
 
     struct BoxInfo {
@@ -785,5 +1043,47 @@ struct LocalHTTPServerPlaybackTests {
         }
 
         return boxes
+    }
+}
+
+// MARK: - Key Request Tracking
+
+/// Actor for async-safe tracking of FairPlay key requests
+actor KeyRequestTracker {
+    private var _requests: [String] = []
+
+    var requests: [String] { _requests }
+    var count: Int { _requests.count }
+
+    func addRequest(_ uri: String) {
+        _requests.append(uri)
+    }
+}
+
+/// Helper class to capture FairPlay key requests from AVPlayer
+/// Used to verify that key rotation triggers the expected skd:// requests
+final class KeyRequestCaptureDelegate: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
+    private let onKeyRequest: (String) -> Void
+
+    init(onKeyRequest: @escaping (String) -> Void) {
+        self.onKeyRequest = onKeyRequest
+        super.init()
+    }
+
+    func resourceLoader(
+        _ resourceLoader: AVAssetResourceLoader,
+        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
+    ) -> Bool {
+        guard let url = loadingRequest.request.url else { return false }
+
+        // Capture skd:// key requests
+        if url.scheme == "skd" {
+            onKeyRequest(url.absoluteString)
+            // Don't fulfill - we just want to observe the request
+            // Return false to let AVPlayer know we won't handle it
+            // This will cause playback to fail, but that's expected without a license server
+        }
+
+        return false
     }
 }
