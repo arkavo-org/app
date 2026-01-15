@@ -11,21 +11,23 @@ public final class FMP4HLSGenerator {
         public let uri: String
         public let duration: Double
         public let byteRange: ByteRange?
+        public let encryption: FairPlayConfig?  // Per-segment encryption (nil = inherit playlist default)
 
         public struct ByteRange {
             public let length: Int
             public let offset: Int
         }
 
-        public init(uri: String, duration: Double, byteRange: ByteRange? = nil) {
+        public init(uri: String, duration: Double, byteRange: ByteRange? = nil, encryption: FairPlayConfig? = nil) {
             self.uri = uri
             self.duration = duration
             self.byteRange = byteRange
+            self.encryption = encryption
         }
     }
 
     /// FairPlay encryption configuration
-    public struct FairPlayConfig {
+    public struct FairPlayConfig: Equatable {
         public let keyURI: String      // skd:// URI
         public let keyID: Data         // 16-byte key ID
         public let iv: Data?           // Optional IV (for explicit IV mode)
@@ -39,6 +41,10 @@ public final class FMP4HLSGenerator {
         /// Create FairPlay config with asset ID
         public static func fairPlay(assetID: String, keyID: Data, iv: Data? = nil) -> FairPlayConfig {
             FairPlayConfig(keyURI: "skd://\(assetID)", keyID: keyID, iv: iv)
+        }
+
+        public static func == (lhs: FairPlayConfig, rhs: FairPlayConfig) -> Bool {
+            lhs.keyURI == rhs.keyURI && lhs.keyID == rhs.keyID && lhs.iv == rhs.iv
         }
     }
 
@@ -81,6 +87,7 @@ public final class FMP4HLSGenerator {
     // MARK: - Media Playlist Generation
 
     /// Generate media playlist for fMP4 segments
+    /// Supports per-segment encryption state changes for key rotation and clear/encrypted transitions
     public func generateMediaPlaylist(segments: [Segment]) -> String {
         var lines: [String] = []
 
@@ -109,27 +116,42 @@ public final class FMP4HLSGenerator {
             lines.append("#EXT-X-INDEPENDENT-SEGMENTS")
         }
 
-        // Encryption key (FairPlay CBCS)
-        if let enc = encryption {
+        // Track encryption state for per-segment key changes
+        var currentEncryption: FairPlayConfig? = nil
+
+        // Emit playlist-level encryption key if set and no per-segment encryption
+        let hasPerSegmentEncryption = segments.contains { $0.encryption != nil }
+        if let enc = encryption, !hasPerSegmentEncryption {
             lines.append(generateKeyTag(enc))
+            currentEncryption = enc
         }
 
         // Init segment (MAP)
         lines.append("#EXT-X-MAP:URI=\"\(config.initSegmentURI)\"")
 
-        // Segments
-        for (index, segment) in segments.enumerated() {
+        // Segments with per-segment encryption state tracking
+        for segment in segments {
+            // Determine effective encryption for this segment
+            let segmentEncryption = segment.encryption
+
+            // Check for encryption state change
+            if segmentEncryption != currentEncryption {
+                if let enc = segmentEncryption {
+                    // Transition to encrypted or new key
+                    lines.append(generateKeyTag(enc))
+                } else {
+                    // Transition to clear
+                    lines.append("#EXT-X-KEY:METHOD=NONE")
+                }
+                currentEncryption = segmentEncryption
+            }
+
             // Duration
             lines.append("#EXTINF:\(String(format: "%.5f", segment.duration)),")
 
             // Byte range (if applicable)
             if let range = segment.byteRange {
                 lines.append("#EXT-X-BYTERANGE:\(range.length)@\(range.offset)")
-            }
-
-            // Bitrate hint (optional)
-            if index == 0 {
-                // Could add #EXT-X-BITRATE here
             }
 
             // URI

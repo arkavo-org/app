@@ -339,6 +339,52 @@ struct HLSFairPlayTestMatrix {
 
             print("✅ B6: Encrypted → clear transition structures validated")
         }
+
+        @Test("B7: Alternating clear and encrypted segments")
+        func b7AlternatingClearEncryptedSegments() {
+            let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+                targetDuration: 6,
+                playlistType: .vod,
+                initSegmentURI: "init.mp4"
+            )
+
+            let encConfig = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "test-asset", keyID: parent.testKeyID)
+
+            // Alternating pattern: clear, enc, clear, enc
+            let segments = [
+                FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 6.0, encryption: nil),
+                FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 6.0, encryption: encConfig),
+                FMP4HLSGenerator.Segment(uri: "seg2.m4s", duration: 6.0, encryption: nil),
+                FMP4HLSGenerator.Segment(uri: "seg3.m4s", duration: 6.0, encryption: encConfig),
+            ]
+
+            let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+            let playlist = generator.generateMediaPlaylist(segments: segments)
+
+            print("--- B7 Alternating Encryption Playlist ---\n\(playlist)")
+
+            // Invariant: No "key bleed" - clear segments must follow METHOD=NONE
+            // Count transitions:
+            // clear(0) → enc(1): +KEY
+            // enc(1) → clear(2): +NONE
+            // clear(2) → enc(3): +KEY
+            // Since we start clear, there's no prior encryption to clear, so only 1 NONE tag
+            let sampleAESCount = playlist.components(separatedBy: "METHOD=SAMPLE-AES").count - 1
+            let noneCount = playlist.components(separatedBy: "METHOD=NONE").count - 1
+
+            #expect(sampleAESCount == 2, "Expected 2 SAMPLE-AES tags for alternating pattern")
+            #expect(noneCount == 1, "Expected 1 NONE tag (clear→enc→clear→enc starts clear)")
+
+            // Verify segment order matches playlist order
+            let lines = playlist.components(separatedBy: "\n")
+            var segmentOrder: [String] = []
+            for line in lines where line.hasSuffix(".m4s") {
+                segmentOrder.append(line)
+            }
+            #expect(segmentOrder == ["seg0.m4s", "seg1.m4s", "seg2.m4s", "seg3.m4s"], "Segment order should be preserved")
+
+            print("✅ B7: Alternating clear/encrypted validated")
+        }
     }
 
     // MARK: - M: Manifest Signaling Matrix Tests
@@ -475,6 +521,126 @@ struct HLSFairPlayTestMatrix {
                    "Valid playlist must have correct keyformat")
 
             print("✅ M7: Wrong key format detection validated")
+        }
+
+        @Test("M2: Key rotation with multiple EXT-X-KEY entries")
+        func m2KeyRotationSampleAES() {
+            let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+                targetDuration: 6,
+                playlistType: .vod,
+                initSegmentURI: "init.mp4"
+            )
+
+            // Create segments with different keys
+            let key1Config = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "asset-key1", keyID: parent.testKeyID)
+            let key2Config = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "asset-key2", keyID: parent.testKeyID2)
+
+            let segments = [
+                FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 6.0, encryption: key1Config),
+                FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 6.0, encryption: key1Config),
+                FMP4HLSGenerator.Segment(uri: "seg2.m4s", duration: 6.0, encryption: key2Config),  // Key change
+                FMP4HLSGenerator.Segment(uri: "seg3.m4s", duration: 6.0, encryption: key2Config),
+            ]
+
+            let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+            let playlist = generator.generateMediaPlaylist(segments: segments)
+
+            print("--- M2 Key Rotation Playlist ---\n\(playlist)")
+
+            // Invariants:
+            // 1. Every encrypted segment has an active key
+            // 2. Key URI changes only affect segments after the tag
+            #expect(playlist.contains("skd://asset-key1"), "Should contain first key URI")
+            #expect(playlist.contains("skd://asset-key2"), "Should contain second key URI")
+
+            // Verify key order: key1 appears before key2
+            guard let key1Range = playlist.range(of: "asset-key1"),
+                  let key2Range = playlist.range(of: "asset-key2") else {
+                Issue.record("Missing key URIs in playlist")
+                return
+            }
+            #expect(key1Range.lowerBound < key2Range.lowerBound, "Key1 should appear before Key2")
+
+            // Count KEY tags - should be exactly 2
+            let keyTagCount = playlist.components(separatedBy: "#EXT-X-KEY:METHOD=SAMPLE-AES").count - 1
+            #expect(keyTagCount == 2, "Expected 2 KEY tags for key rotation, got \(keyTagCount)")
+
+            print("✅ M2: Key rotation with 2 keys validated")
+        }
+
+        @Test("M4: SAMPLE-AES to NONE transition mid-playlist")
+        func m4EncryptionOffMidPlaylist() {
+            let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+                targetDuration: 6,
+                playlistType: .vod,
+                initSegmentURI: "init.mp4"
+            )
+
+            let encConfig = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "test-asset", keyID: parent.testKeyID)
+
+            let segments = [
+                FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 6.0, encryption: encConfig),
+                FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 6.0, encryption: encConfig),
+                FMP4HLSGenerator.Segment(uri: "seg2.m4s", duration: 6.0, encryption: nil),  // Clear segment
+                FMP4HLSGenerator.Segment(uri: "seg3.m4s", duration: 6.0, encryption: nil),
+            ]
+
+            let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+            let playlist = generator.generateMediaPlaylist(segments: segments)
+
+            print("--- M4 Encryption Off Playlist ---\n\(playlist)")
+
+            // Invariant: METHOD=NONE clears encryption for following segments
+            #expect(playlist.contains("#EXT-X-KEY:METHOD=NONE"), "Should have METHOD=NONE tag")
+            #expect(playlist.contains("#EXT-X-KEY:METHOD=SAMPLE-AES"), "Should have METHOD=SAMPLE-AES tag")
+
+            // Verify order: SAMPLE-AES before NONE
+            guard let sampleAESRange = playlist.range(of: "METHOD=SAMPLE-AES"),
+                  let noneRange = playlist.range(of: "METHOD=NONE") else {
+                Issue.record("Missing encryption method tags")
+                return
+            }
+            #expect(sampleAESRange.lowerBound < noneRange.lowerBound,
+                   "SAMPLE-AES should appear before NONE")
+
+            print("✅ M4: Encryption off (SAMPLE-AES → NONE) validated")
+        }
+
+        @Test("M5: NONE to SAMPLE-AES transition mid-playlist")
+        func m5EncryptionOnMidPlaylist() {
+            let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+                targetDuration: 6,
+                playlistType: .vod,
+                initSegmentURI: "init.mp4"
+            )
+
+            let encConfig = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "test-asset", keyID: parent.testKeyID)
+
+            let segments = [
+                FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 6.0, encryption: nil),
+                FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 6.0, encryption: nil),
+                FMP4HLSGenerator.Segment(uri: "seg2.m4s", duration: 6.0, encryption: encConfig),  // Encryption starts
+                FMP4HLSGenerator.Segment(uri: "seg3.m4s", duration: 6.0, encryption: encConfig),
+            ]
+
+            let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+            let playlist = generator.generateMediaPlaylist(segments: segments)
+
+            print("--- M5 Encryption On Playlist ---\n\(playlist)")
+
+            // Invariant: Key appears before first encrypted segment
+            #expect(playlist.contains("#EXT-X-KEY:METHOD=SAMPLE-AES"), "Should have KEY tag")
+
+            // Verify seg2.m4s comes after the KEY tag
+            guard let keyRange = playlist.range(of: "#EXT-X-KEY:METHOD=SAMPLE-AES"),
+                  let seg2Range = playlist.range(of: "seg2.m4s") else {
+                Issue.record("Missing KEY tag or segment")
+                return
+            }
+            #expect(keyRange.lowerBound < seg2Range.lowerBound,
+                   "KEY tag should appear before seg2.m4s")
+
+            print("✅ M5: Encryption on (NONE → SAMPLE-AES) validated")
         }
     }
 
@@ -946,6 +1112,84 @@ struct HLSFairPlayTestMatrix {
 
             print("✅ P2: FairPlay fMP4 single key profile validated")
             print("--- Playlist ---\n\(playlist)")
+        }
+
+        @Test("P3: FairPlay fMP4 rotating keys profile")
+        func p3FairPlayRotatingKeysProfile() {
+            // Complete end-to-end test combining M2 + B2 invariants
+            let key1 = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "period-1", keyID: parent.testKeyID)
+            let key2 = FMP4HLSGenerator.FairPlayConfig.fairPlay(assetID: "period-2", keyID: parent.testKeyID2)
+
+            // Create actual encrypted segments with different writers
+            let track = parent.createVideoTrack()
+            let enc1 = FMP4Writer.EncryptionConfig(keyID: parent.testKeyID, constantIV: parent.testIV)
+            let enc2 = FMP4Writer.EncryptionConfig(keyID: parent.testKeyID2, constantIV: parent.testIV)
+
+            let writer1 = FMP4Writer(tracks: [track], encryption: enc1)
+            let writer2 = FMP4Writer(tracks: [track], encryption: enc2)
+
+            // Generate init (shared, clear)
+            let clearWriter = FMP4Writer(tracks: [track], encryption: nil)
+            let initSegment = clearWriter.generateInitSegment()
+
+            // Encrypt samples for segment 0 (key1)
+            let encryptor1 = CBCSEncryptor(key: parent.testKey, iv: parent.testIV)
+            let rawSample0 = parent.createVideoSample(isIDR: true, payloadSize: 400)
+            let encResult0 = encryptor1.encryptVideoSample(rawSample0, nalLengthSize: 4)
+            let sample0 = FMP4Writer.Sample(
+                data: encResult0.encryptedData,
+                duration: 90000,
+                isSync: true,
+                subsamples: encResult0.subsamples
+            )
+            let seg0 = writer1.generateMediaSegment(trackID: 1, samples: [sample0], baseDecodeTime: 0)
+
+            // Encrypt samples for segment 1 (key2)
+            let encryptor2 = CBCSEncryptor(key: parent.testKey, iv: parent.testIV)
+            let rawSample1 = parent.createVideoSample(isIDR: true, payloadSize: 400)
+            let encResult1 = encryptor2.encryptVideoSample(rawSample1, nalLengthSize: 4)
+            let sample1 = FMP4Writer.Sample(
+                data: encResult1.encryptedData,
+                duration: 90000,
+                isSync: true,
+                subsamples: encResult1.subsamples
+            )
+            let seg1 = writer2.generateMediaSegment(trackID: 1, samples: [sample1], baseDecodeTime: 90000)
+
+            // Validate segment encryption structures
+            #expect(parent.findBoxRecursive(seg0, type: "senc") != nil, "Segment 0 must have senc")
+            #expect(parent.findBoxRecursive(seg1, type: "senc") != nil, "Segment 1 must have senc")
+
+            // Validate init is clear
+            #expect(parent.findBoxRecursive(initSegment, type: "senc") == nil, "Init should be clear")
+            #expect(parent.findBox(initSegment, type: "ftyp") != nil, "Init has ftyp")
+            #expect(parent.findBox(initSegment, type: "moov") != nil, "Init has moov")
+
+            // Generate playlist with key rotation
+            let segments = [
+                FMP4HLSGenerator.Segment(uri: "seg0.m4s", duration: 3.0, encryption: key1),
+                FMP4HLSGenerator.Segment(uri: "seg1.m4s", duration: 3.0, encryption: key2),
+            ]
+
+            let playlistConfig = FMP4HLSGenerator.PlaylistConfig(
+                targetDuration: 4, playlistType: .vod, initSegmentURI: "init.mp4"
+            )
+            let generator = FMP4HLSGenerator(config: playlistConfig, encryption: nil)
+            let playlist = generator.generateMediaPlaylist(segments: segments)
+
+            print("--- P3 Rotating Keys Playlist ---\n\(playlist)")
+
+            // Profile invariants
+            #expect(playlist.contains("#EXT-X-VERSION:7"), "HLS v7 for fMP4")
+            #expect(playlist.contains("skd://period-1"), "Has first key URI")
+            #expect(playlist.contains("skd://period-2"), "Has second key URI")
+            #expect(playlist.contains("#EXT-X-MAP:URI=\"init.mp4\""), "Has init segment reference")
+
+            // Count key tags
+            let keyTagCount = playlist.components(separatedBy: "#EXT-X-KEY:METHOD=SAMPLE-AES").count - 1
+            #expect(keyTagCount == 2, "Expected 2 KEY tags for rotating keys")
+
+            print("✅ P3: FairPlay rotating keys profile validated")
         }
 
         @Test("P4: Clear preview + encrypted main content structure")
