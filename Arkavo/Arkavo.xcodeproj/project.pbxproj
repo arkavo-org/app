@@ -1135,7 +1135,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 			repositoryURL = "https://github.com/arkavo-org/OpenTDFKit";
 			requirement = {
 				kind = revision;
-				revision = df22f6c7db7bd94dcd4eb4e83ca7995813d394b4;
+				revision = d8ffeff;
 			};
 		};
 		DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */ = {
