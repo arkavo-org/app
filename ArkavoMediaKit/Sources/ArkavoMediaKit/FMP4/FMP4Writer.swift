@@ -297,6 +297,13 @@ public final class FMP4Writer {
                 avcC: avcC,
                 encrypted: encInfo
             )
+            // Debug: Verify sample entry type
+            print("🔍 [stsd] Sample entry type: \(avc1.type) (expected 'encv' for encrypted content)")
+            if encInfo != nil {
+                print("🔍 [stsd] Encryption info: keyID=\(encInfo!.keyID.prefix(4).map { String(format: "%02x", $0) }.joined())..., pattern=\(encInfo!.defaultCryptByteBlock):\(encInfo!.defaultSkipByteBlock)")
+            } else {
+                print("⚠️ [stsd] No encryption info - using clear 'avc1' sample entry!")
+            }
             entries.append(avc1)
 
         case .hevc(let vps, let sps, let pps):
@@ -336,19 +343,23 @@ public final class FMP4Writer {
 
         var data = Data()
 
-        // Note: styp box omitted to match Apple FairPlay reference content structure
-        // Reference segments start directly with moof, not styp
+        // styp - Segment Type Box (required for CMAF compliance)
+        // This identifies the segment as a CMAF encrypted segment
+        let styp = SegmentTypeBox.cmafEncryptedSegment
+        let stypData = styp.serialize()
+        data.append(stypData)
+        print("🎬 FMP4Writer: Added styp box (\(stypData.count) bytes) with brands: msdh, msix, cmfc, iso6")
 
         // Calculate sample data size for offset calculation
         let sampleDataSize = samples.reduce(0) { $0 + $1.data.count }
 
-        // moof - no styp prefix, so stypSize is 0
+        // moof - include styp size for correct data_offset calculation
         let moof = generateMoof(
             trackID: trackID,
             samples: samples,
             baseDecodeTime: baseDecodeTime,
             sampleDataSize: sampleDataSize,
-            stypSize: 0
+            stypSize: stypData.count
         )
         let moofData = moof.serialize()
         data.append(moofData)
@@ -421,6 +432,17 @@ public final class FMP4Writer {
         )
         traf.append(tfhd)
 
+        // Debug: Verify tfhd flags
+        // Box structure: size(4) + type(4) + version(1) + flags(3) + trackID(4) + ...
+        let tfhdBytes = tfhd.serialize()
+        if tfhdBytes.count >= 12 {
+            let version = tfhdBytes[8]
+            let flags = UInt32(tfhdBytes[9]) << 16 | UInt32(tfhdBytes[10]) << 8 | UInt32(tfhdBytes[11])
+            let defaultBaseIsMoofSet = (flags & 0x020000) != 0
+            let sampleDescIndexPresent = (flags & 0x000002) != 0
+            print("🔍 [tfhd] version=\(version), flags=0x\(String(format: "%06x", flags)), default-base-is-moof=\(defaultBaseIsMoofSet), sample-desc-index=\(sampleDescIndexPresent)")
+        }
+
         // tfdt
         let tfdt = TrackFragmentDecodeTimeBox(baseMediaDecodeTime: baseDecodeTime)
         traf.append(tfdt)
@@ -481,9 +503,9 @@ public final class FMP4Writer {
         // Use actual subsample info from CBCSEncryptor if available
 
         var entries: [SampleEncryptionEntry] = []
-        var sampleInfoSizes: [UInt8] = []
+        var sampleInfoSizes: [Int] = []
 
-        for sample in samples {
+        for (sampleIdx, sample) in samples.enumerated() {
             let subsamples: [SubsampleEntry]
 
             if let actualSubsamples = sample.subsamples, !actualSubsamples.isEmpty {
@@ -497,18 +519,67 @@ public final class FMP4Writer {
                 )]
             }
 
+            // CRITICAL ALIGNMENT VERIFICATION at write time
+            let sampleSize = sample.data.count
+            let subsampleSum = subsamples.reduce(0) { $0 + Int($1.bytesOfClearData) + Int($1.bytesOfProtectedData) }
+            if subsampleSum != sampleSize {
+                print("❌ [FMP4Writer] CRITICAL ALIGNMENT ERROR in sample \(sampleIdx):")
+                print("   sample.data.count = \(sampleSize)")
+                print("   sum(subsamples) = \(subsampleSum)")
+                print("   Difference: \(abs(subsampleSum - sampleSize)) bytes")
+                print("   Subsamples: \(subsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " "))")
+                print("   ⚠️ This WILL cause AVPlayer decryption failure!")
+            }
+
             let entry = SampleEncryptionEntry(iv: nil, subsamples: subsamples)
             entries.append(entry)
 
             // Size = 2 (subsample count) + 6 bytes per subsample entry (2 clear + 4 protected)
             let infoSize = 2 + (subsamples.count * 6)
-            sampleInfoSizes.append(UInt8(min(infoSize, 255)))
+            sampleInfoSizes.append(infoSize)
         }
 
         let senc = SampleEncryptionBox(entries: entries, useSubsampleEncryption: true)
-        // Note: Bento4 reference CBCS output does NOT use aux_info_type in saiz/saio
-        // The encryption scheme is already signaled in tenc, so aux_info_type is redundant
-        let saiz = SampleAuxiliaryInfoSizesBox(sampleInfoSizes: sampleInfoSizes)
+
+        // Debug: Verify senc structure for first sample
+        if let firstEntry = entries.first, let firstSubsamples = firstEntry.subsamples {
+            let expectedSize = 2 + (firstSubsamples.count * 6) // No per-sample IV for CBCS with constant IV
+            let actualSencData = senc.serialize()
+            print("🔍 [senc] First sample: \(firstSubsamples.count) subsamples, expected saiz=\(expectedSize)")
+            print("🔍 [senc] Subsamples: \(firstSubsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " "))")
+            print("🔍 [senc] Total senc box size: \(actualSencData.count) bytes")
+            // Show first 32 bytes of senc for debugging
+            let hexBytes = actualSencData.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " ")
+            print("🔍 [senc] Header bytes: \(hexBytes)")
+        }
+
+        // Check if all samples have uniform auxiliary info size (like Apple FairPlay reference content)
+        // Reference uses defaultSampleInfoSize when all samples have the same size
+        let uniqueSizes = Set(sampleInfoSizes)
+        let saiz: SampleAuxiliaryInfoSizesBox
+
+        if uniqueSizes.count == 1, let uniformSize = sampleInfoSizes.first, uniformSize <= 255 {
+            // All samples have the same auxiliary info size - use defaultSampleInfoSize
+            // This matches Apple FairPlay reference content structure
+            saiz = SampleAuxiliaryInfoSizesBox(
+                defaultSampleInfoSize: UInt8(uniformSize),
+                sampleCount: UInt32(samples.count)
+            )
+            print("🔐 FMP4Writer: Using uniform saiz defaultSampleInfoSize=\(uniformSize) for \(samples.count) samples")
+        } else {
+            // Variable sizes - use per-sample array (with truncation warning)
+            let truncatedSizes = sampleInfoSizes.map { size -> UInt8 in
+                if size > 255 {
+                    print("⚠️ FMP4Writer: Sample auxiliary info size \(size) exceeds 255, truncating")
+                }
+                return UInt8(min(size, 255))
+            }
+            saiz = SampleAuxiliaryInfoSizesBox(sampleInfoSizes: truncatedSizes)
+            // Debug: Show unique sizes
+            let sizeCounts = Dictionary(grouping: sampleInfoSizes) { $0 }.mapValues { $0.count }
+            print("🔐 FMP4Writer: Variable saiz sizes for \(samples.count) samples: \(sizeCounts)")
+        }
+
         // saio offset points to the sample auxiliary info data within senc (after senc header + version/flags + sample_count)
         let saio = SampleAuxiliaryInfoOffsetsBox(offsets: [UInt64(sencDataOffset)])
 

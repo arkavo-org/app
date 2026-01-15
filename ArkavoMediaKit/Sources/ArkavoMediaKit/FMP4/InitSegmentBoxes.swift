@@ -63,6 +63,21 @@ public struct SegmentTypeBox: ISOBox {
         )
     }
 
+    /// Create styp for encrypted CMAF media segments (CBCS/FairPlay)
+    /// Includes iso6 brand for common encryption support
+    public static var cmafEncryptedSegment: SegmentTypeBox {
+        SegmentTypeBox(
+            majorBrand: FourCC("msdh"),
+            minorVersion: 0,
+            compatibleBrands: [
+                FourCC("msdh"),  // Media Segment Data handler
+                FourCC("msix"),  // Segment Index
+                FourCC("cmfc"),  // CMAF (Common Media Application Format)
+                FourCC("iso6")   // ISO Base Media File Format v6 (encryption)
+            ]
+        )
+    }
+
     public func serializePayload() -> Data {
         var data = Data()
         data.append(majorBrand.data)

@@ -48,13 +48,13 @@ public actor FMP4RecordingProtectionService {
         print("🔑 Generating content encryption key...")
         let contentKey = CBCSEncryptor.generateKeyID()  // 16-byte AES-128 key
         let constantIV = CBCSEncryptor.generateIV()     // 16-byte constant IV
-        // Use all-zero KID to match Apple FairPlay reference content
+        // Use all-zero KID - FairPlay uses Asset ID for key lookup, not KID
+        // KID is CENC bookkeeping only; keep stable until playback works
         let keyID = Data(repeating: 0, count: 16)
 
         // Debug: Log key bytes for verification during playback troubleshooting
         print("🔑 DEBUG contentKey (hex): \(contentKey.map { String(format: "%02x", $0) }.joined())")
         print("🔑 DEBUG constantIV (hex): \(constantIV.map { String(format: "%02x", $0) }.joined())")
-        print("🔑 DEBUG keyID (hex): \(keyID.map { String(format: "%02x", $0) }.joined())")
 
         // 2. Fetch KAS public key and wrap content key
         print("🔐 Wrapping content key with KAS public key...")
@@ -83,8 +83,8 @@ public actor FMP4RecordingProtectionService {
         let dimensions = try await videoTrack.load(.naturalSize)
         let timescale = try await videoTrack.load(.naturalTimeScale)
 
-        // Extract SPS/PPS from format description
-        guard let (sps, pps) = extractParameterSets(from: formatDesc) else {
+        // Extract SPS/PPS and NAL length size from format description
+        guard let h264Params = extractParameterSets(from: formatDesc) else {
             throw FMP4ProtectionError.noParameterSets
         }
 
@@ -94,8 +94,8 @@ public actor FMP4RecordingProtectionService {
             width: UInt16(dimensions.width),
             height: UInt16(dimensions.height),
             timescale: UInt32(timescale),
-            sps: sps,
-            pps: pps
+            sps: h264Params.sps,
+            pps: h264Params.pps
         )
 
         let encryptionConfig = FMP4Writer.EncryptionConfig(
@@ -105,6 +105,7 @@ public actor FMP4RecordingProtectionService {
 
         let writer = FMP4Writer(tracks: [trackConfig], encryption: encryptionConfig)
         let encryptor = CBCSEncryptor(key: contentKey, iv: constantIV)
+        let nalLengthSize = h264Params.nalLengthSize
 
         // 5. Generate init segment
         print("📝 Generating init segment...")
@@ -132,12 +133,48 @@ public actor FMP4RecordingProtectionService {
             guard let pointer = dataPointer else { continue }
             let sampleData = Data(bytes: pointer, count: length)
 
-            // Encrypt the sample
-            let encryptedResult = encryptor.encryptVideoSample(sampleData, nalLengthSize: 4)
+            // Encrypt the sample using the actual NAL length size from the source video
+            let encryptedResult = encryptor.encryptVideoSample(sampleData, nalLengthSize: nalLengthSize)
+
+            // CRITICAL ALIGNMENT CHECK: sum(clear + protected) must equal sample_size
+            let originalSize = sampleData.count
+            let encryptedSize = encryptedResult.encryptedData.count
+            let totalClear = encryptedResult.subsamples.reduce(0) { $0 + Int($1.bytesOfClearData) }
+            let totalProtected = encryptedResult.subsamples.reduce(0) { $0 + Int($1.bytesOfProtectedData) }
+            let subsampleSum = totalClear + totalProtected
+
+            if samples.count < 5 || subsampleSum != encryptedSize {
+                // Log first few samples and any misalignments
+                let aligned = subsampleSum == encryptedSize
+                let prefix = aligned ? "✅" : "❌ MISMATCH"
+                print("\(prefix) [Sample \(samples.count)] Alignment check:")
+                print("   Original size: \(originalSize)")
+                print("   Encrypted size: \(encryptedSize)")
+                print("   Subsamples (\(encryptedResult.subsamples.count)): \(encryptedResult.subsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " "))")
+                print("   Sum(clear+protected): \(totalClear) + \(totalProtected) = \(subsampleSum)")
+                if !aligned {
+                    print("   ⚠️ CRITICAL: subsample sum (\(subsampleSum)) != encrypted size (\(encryptedSize))")
+                    print("   ⚠️ This WILL cause AVPlayer to fail decryption!")
+                }
+            }
 
             // Get timing info
             let duration = CMSampleBufferGetDuration(sampleBuffer)
             let durationValue = UInt32(duration.value * Int64(timescale) / Int64(duration.timescale))
+
+            // Calculate Composition Time Offset (CTS) for B-frame support
+            // CTS = PTS - DTS (tells decoder when to display the frame relative to decode time)
+            let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            let dts = CMSampleBufferGetDecodeTimeStamp(sampleBuffer)
+            var compositionTimeOffset: Int32 = 0
+
+            // Only calculate CTS if both PTS and DTS are valid
+            if pts.isValid && dts.isValid && pts != dts {
+                // Convert both timestamps to the output timescale
+                let ptsInTimescale = Int64(pts.value) * Int64(timescale) / Int64(pts.timescale)
+                let dtsInTimescale = Int64(dts.value) * Int64(timescale) / Int64(dts.timescale)
+                compositionTimeOffset = Int32(ptsInTimescale - dtsInTimescale)
+            }
 
             // Check if sync sample
             let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false)
@@ -152,6 +189,7 @@ public actor FMP4RecordingProtectionService {
                 data: encryptedResult.encryptedData,
                 duration: durationValue,
                 isSync: isSync,
+                compositionTimeOffset: compositionTimeOffset,
                 subsamples: encryptedResult.subsamples
             ))
 
@@ -245,7 +283,14 @@ public actor FMP4RecordingProtectionService {
 
     // MARK: - Private Helpers
 
-    private func extractParameterSets(from formatDesc: CMFormatDescription) -> ([Data], [Data])? {
+    /// Result of extracting H.264 parameters from format description
+    private struct H264Parameters {
+        let sps: [Data]
+        let pps: [Data]
+        let nalLengthSize: Int  // 1, 2, or 4 bytes
+    }
+
+    private func extractParameterSets(from formatDesc: CMFormatDescription) -> H264Parameters? {
         guard let extensions = CMFormatDescriptionGetExtensions(formatDesc) as? [String: Any],
               let sampleDescriptionExtensions = extensions["SampleDescriptionExtensionAtoms"] as? [String: Any],
               let avcCData = sampleDescriptionExtensions["avcC"] as? Data
@@ -253,14 +298,20 @@ public actor FMP4RecordingProtectionService {
             return nil
         }
 
-        // Parse avcC to extract SPS/PPS
-        // Format: configVersion(1) + profile(1) + compatibility(1) + level(1) + lengthSize(1)
+        // Parse avcC to extract SPS/PPS and NAL length size
+        // Format: configVersion(1) + profile(1) + compatibility(1) + level(1) + lengthSizeMinusOne(1)
         //         + numSPS(1) + [spsLen(2) + sps]* + numPPS(1) + [ppsLen(2) + pps]*
         guard avcCData.count >= 8 else { return nil }
 
+        // Extract NAL length size from byte 4 (lower 2 bits + 1)
+        // Values: 0 → 1 byte, 1 → 2 bytes, 3 → 4 bytes
+        let lengthSizeMinusOne = Int(avcCData[4] & 0x03)
+        let nalLengthSize = lengthSizeMinusOne + 1
+        print("📏 NAL length size from avcC: \(nalLengthSize) bytes")
+
         var sps: [Data] = []
         var pps: [Data] = []
-        var offset = 5  // Skip header
+        var offset = 5  // Skip header (configVersion + profile + compatibility + level + lengthSizeMinusOne)
 
         // Number of SPS (lower 5 bits)
         let numSPS = Int(avcCData[offset] & 0x1F)
@@ -275,7 +326,9 @@ public actor FMP4RecordingProtectionService {
             offset += spsLen
         }
 
-        guard offset < avcCData.count else { return (sps, pps) }
+        guard offset < avcCData.count else {
+            return sps.isEmpty ? nil : H264Parameters(sps: sps, pps: pps, nalLengthSize: nalLengthSize)
+        }
 
         let numPPS = Int(avcCData[offset])
         offset += 1
@@ -289,7 +342,7 @@ public actor FMP4RecordingProtectionService {
             offset += ppsLen
         }
 
-        return sps.isEmpty ? nil : (sps, pps)
+        return sps.isEmpty ? nil : H264Parameters(sps: sps, pps: pps, nalLengthSize: nalLengthSize)
     }
 
     /// Add fMP4-specific metadata to manifest using TDF spec's encryptedMetadata field

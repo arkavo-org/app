@@ -635,6 +635,134 @@ struct AVPlayerViewRepresentable: NSViewRepresentable {
     }
 }
 
+// MARK: - AVPlayer Status Observer
+
+/// Observer class for AVPlayer and AVPlayerItem status changes
+/// Properly retains KVO observers to avoid premature deallocation
+final class PlayerStatusObserver: NSObject {
+    private var playerStatusObservation: NSKeyValueObservation?
+    private var itemStatusObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
+    private var errorObservation: NSKeyValueObservation?
+
+    var player: AVPlayer? {
+        didSet {
+            setupObservations()
+        }
+    }
+
+    private func setupObservations() {
+        // Clear old observations
+        playerStatusObservation?.invalidate()
+        itemStatusObservation?.invalidate()
+        timeControlObservation?.invalidate()
+        errorObservation?.invalidate()
+
+        guard let player = player else { return }
+
+        // Observe player status
+        playerStatusObservation = player.observe(\.status, options: [.new, .initial]) { player, change in
+            print("🎬 [Observer] AVPlayer status: \(player.status.rawValue) (\(player.status.description))")
+            if player.status == .failed, let error = player.error {
+                print("❌ [Observer] AVPlayer failed: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
+                    if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+                        print("❌ [Observer] Underlying: \(underlying)")
+                    }
+                }
+            }
+        }
+
+        // Observe time control status (playing, paused, waiting)
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { player, _ in
+            print("🎬 [Observer] TimeControlStatus: \(player.timeControlStatus.rawValue) (\(player.timeControlStatus.description))")
+            if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+                if let reason = player.reasonForWaitingToPlay {
+                    print("⏳ [Observer] Waiting reason: \(reason.rawValue)")
+                }
+            }
+        }
+
+        // Observe current item for status changes
+        if let item = player.currentItem {
+            observeItem(item)
+        }
+
+        // Observe when current item changes
+        errorObservation = player.observe(\.currentItem, options: [.new]) { [weak self] player, _ in
+            if let item = player.currentItem {
+                self?.observeItem(item)
+            }
+        }
+    }
+
+    private func observeItem(_ item: AVPlayerItem) {
+        itemStatusObservation?.invalidate()
+
+        itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { item, _ in
+            print("📼 [Observer] AVPlayerItem status: \(item.status.rawValue) (\(item.status.description))")
+            if item.status == .failed, let error = item.error {
+                print("❌ [Observer] AVPlayerItem failed: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
+                    for (key, value) in nsError.userInfo {
+                        print("❌ [Observer] UserInfo[\(key)]: \(value)")
+                    }
+                }
+            }
+
+            // Log error logs when status changes
+            if let errorLog = item.errorLog() {
+                for event in errorLog.events {
+                    print("📊 [Observer] Error event: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
+                }
+            }
+        }
+    }
+
+    func cleanup() {
+        playerStatusObservation?.invalidate()
+        itemStatusObservation?.invalidate()
+        timeControlObservation?.invalidate()
+        errorObservation?.invalidate()
+        player = nil
+    }
+}
+
+extension AVPlayer.Status {
+    var description: String {
+        switch self {
+        case .unknown: return "unknown"
+        case .readyToPlay: return "readyToPlay"
+        case .failed: return "failed"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
+extension AVPlayerItem.Status {
+    var description: String {
+        switch self {
+        case .unknown: return "unknown"
+        case .readyToPlay: return "readyToPlay"
+        case .failed: return "failed"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
+extension AVPlayer.TimeControlStatus {
+    var description: String {
+        switch self {
+        case .paused: return "paused"
+        case .waitingToPlayAtSpecifiedRate: return "waiting"
+        case .playing: return "playing"
+        @unknown default: return "unknown(\(rawValue))"
+        }
+    }
+}
+
 // MARK: - Protected Video Player (FairPlay)
 
 struct ProtectedVideoPlayerView: View {
@@ -654,6 +782,7 @@ struct ProtectedVideoPlayerView: View {
     @State private var useFairPlay = false  // FairPlay requires SAMPLE-AES; using local decryption
     @State private var httpServer: LocalHTTPServer?
     @State private var tempDirectory: URL?
+    @State private var playerObserver: PlayerStatusObserver?
 
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
@@ -1219,17 +1348,31 @@ struct ProtectedVideoPlayerView: View {
         // Add asset as content key recipient
         session.addContentKeyRecipient(asset)
 
-        // Proactively request the content key using asset ID
+        // Wait for the content key to be delivered before starting playback
         playbackStatus = "Requesting decryption key..."
         let skdURI = "skd://\(fmp4Manifest.assetID)"
         print("🔐 Proactively requesting content key for: \(skdURI)")
-        session.processContentKeyRequest(
-            withIdentifier: skdURI,
-            initializationData: nil,
-            options: nil
-        )
 
-        // Create player
+        // Use continuation to await key delivery
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            delegate.onKeyDelivered = {
+                print("✅ Content key delivered, starting playback...")
+                continuation.resume()
+            }
+            delegate.onKeyFailed = { error in
+                print("❌ Content key failed: \(error)")
+                continuation.resume(throwing: error)
+            }
+
+            // Trigger the key request
+            session.processContentKeyRequest(
+                withIdentifier: skdURI,
+                initializationData: nil,
+                options: nil
+            )
+        }
+
+        // Create player AFTER key is delivered
         playbackStatus = "Starting playback..."
         let playerItem = AVPlayerItem(asset: asset)
         let avPlayer = AVPlayer(playerItem: playerItem)
@@ -1237,9 +1380,73 @@ struct ProtectedVideoPlayerView: View {
         isPlaying = true
         isPreparingPlayback = false
 
+        // Set up proper status observation using retained observer
+        let observer = PlayerStatusObserver()
+        observer.player = avPlayer
+        self.playerObserver = observer
+
+        // Add notification observers for additional error events
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { notification in
+            if let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error {
+                print("❌ [Notification] AVPlayerItem failed to play to end: \(error.localizedDescription)")
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemNewErrorLogEntry,
+            object: playerItem,
+            queue: .main
+        ) { notification in
+            if let item = notification.object as? AVPlayerItem,
+               let errorLog = item.errorLog(),
+               let lastEvent = errorLog.events.last {
+                print("❌ [Notification] Error log entry: \(lastEvent.errorComment ?? "Unknown") (code: \(lastEvent.errorStatusCode), domain: \(lastEvent.errorDomain))")
+            }
+        }
+
+        // Check for immediate errors
+        if playerItem.status == .failed {
+            print("❌ PlayerItem failed immediately: \(playerItem.error?.localizedDescription ?? "Unknown")")
+        }
+
         // Start playback
         avPlayer.play()
         print("▶️ fMP4/FairPlay playback started")
+
+        // Log detailed playback status after delays
+        for delay in [1.0, 3.0, 5.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak avPlayer, weak playerItem] in
+                guard let avPlayer = avPlayer, let playerItem = playerItem else { return }
+                print("📊 [\(delay)s] AVPlayer status: \(avPlayer.status.description), timeControl: \(avPlayer.timeControlStatus.description)")
+                print("📊 [\(delay)s] PlayerItem status: \(playerItem.status.description), duration: \(playerItem.duration.seconds)s")
+                print("📊 [\(delay)s] Current time: \(avPlayer.currentTime().seconds)s, rate: \(avPlayer.rate)")
+                if let error = playerItem.error {
+                    print("❌ [\(delay)s] PlayerItem error: \(error.localizedDescription)")
+                    if let nsError = error as NSError? {
+                        print("❌ [\(delay)s] Domain: \(nsError.domain), Code: \(nsError.code)")
+                        for (key, value) in nsError.userInfo {
+                            print("❌ [\(delay)s] UserInfo[\(key)]: \(value)")
+                        }
+                    }
+                }
+                if let accessLog = playerItem.accessLog() {
+                    print("📊 [\(delay)s] Access log: \(accessLog.events.count) events")
+                    for event in accessLog.events {
+                        print("   - URI: \(event.uri ?? "nil"), bytes: \(event.numberOfBytesTransferred), duration: \(event.durationWatched)s")
+                    }
+                }
+                if let errorLog = playerItem.errorLog() {
+                    print("📊 [\(delay)s] Error log: \(errorLog.events.count) events")
+                    for event in errorLog.events {
+                        print("   - Error: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
+                    }
+                }
+            }
+        }
     }
 
     enum FMP4PlaybackError: Error, LocalizedError {

@@ -116,6 +116,12 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
     private let authToken: String
     private let state = FairPlayState()
 
+    /// Callback invoked when content key is successfully delivered
+    var onKeyDelivered: (() -> Void)?
+
+    /// Callback invoked when content key delivery fails
+    var onKeyFailed: ((Error) -> Void)?
+
     /// Initialize with HLS manifest and authentication
     /// - Parameters:
     ///   - manifest: The HLS manifest containing encryption info
@@ -303,6 +309,11 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
                 FairPlayDebug.log("  Total time: \(String(format: "%.3f", totalDuration))s")
                 FairPlayDebug.log("══════════════════════════════════════════════════════")
 
+                // Notify caller that key is ready
+                DispatchQueue.main.async { [weak self] in
+                    self?.onKeyDelivered?()
+                }
+
             } catch {
                 let totalDuration = CFAbsoluteTimeGetCurrent() - startTime
                 FairPlayDebug.log("══════════════════════════════════════════════════════", type: .error)
@@ -313,6 +324,11 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, @unche
                 }
                 FairPlayDebug.log("══════════════════════════════════════════════════════", type: .error)
                 keyRequest.processContentKeyResponseError(error)
+
+                // Notify caller that key failed
+                DispatchQueue.main.async { [weak self] in
+                    self?.onKeyFailed?(error)
+                }
             }
         }
     }

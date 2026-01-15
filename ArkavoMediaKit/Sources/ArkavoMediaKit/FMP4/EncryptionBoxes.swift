@@ -299,16 +299,30 @@ public struct SampleAuxiliaryInfoSizesBox: ISOFullBox {
     public let auxInfoTypeParameter: UInt32?
     public let defaultSampleInfoSize: UInt8
     public let sampleInfoSizes: [UInt8]
+    public let sampleCount: UInt32
 
-    public init(defaultSampleInfoSize: UInt8 = 0,
-                sampleInfoSizes: [UInt8],
+    /// Initialize with per-sample sizes (defaultSampleInfoSize = 0)
+    public init(sampleInfoSizes: [UInt8],
+                auxInfoType: FourCC? = nil,
+                auxInfoTypeParameter: UInt32? = nil) {
+        self.defaultSampleInfoSize = 0
+        self.sampleInfoSizes = sampleInfoSizes
+        self.sampleCount = UInt32(sampleInfoSizes.count)
+        self.auxInfoType = auxInfoType
+        self.auxInfoTypeParameter = auxInfoTypeParameter
+        self.flags = (auxInfoType != nil) ? 0x01 : 0x00
+    }
+
+    /// Initialize with uniform default size (matches Apple FairPlay reference content)
+    public init(defaultSampleInfoSize: UInt8,
+                sampleCount: UInt32,
                 auxInfoType: FourCC? = nil,
                 auxInfoTypeParameter: UInt32? = nil) {
         self.defaultSampleInfoSize = defaultSampleInfoSize
-        self.sampleInfoSizes = sampleInfoSizes
+        self.sampleInfoSizes = []
+        self.sampleCount = sampleCount
         self.auxInfoType = auxInfoType
         self.auxInfoTypeParameter = auxInfoTypeParameter
-        // Flag 0x01 = aux_info_type and aux_info_type_parameter present
         self.flags = (auxInfoType != nil) ? 0x01 : 0x00
     }
 
@@ -325,7 +339,7 @@ public struct SampleAuxiliaryInfoSizesBox: ISOFullBox {
         data.append(defaultSampleInfoSize)
 
         // sample_count
-        data.append(UInt32(sampleInfoSizes.count).bigEndianData)
+        data.append(sampleCount.bigEndianData)
 
         // sample_info_size array (only if default is 0)
         if defaultSampleInfoSize == 0 {
