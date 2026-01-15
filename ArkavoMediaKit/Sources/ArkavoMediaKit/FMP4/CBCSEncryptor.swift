@@ -1,6 +1,18 @@
 import CommonCrypto
 import Foundation
 
+// MARK: - CBCS Debug Configuration
+
+/// Global configuration for CBCS encryption debugging
+public enum CBCSDebugConfig {
+    /// Enable verbose debug logging (set to false for production)
+    #if DEBUG
+    public nonisolated(unsafe) static var isVerboseLoggingEnabled = true
+    #else
+    public nonisolated(unsafe) static var isVerboseLoggingEnabled = false
+    #endif
+}
+
 // MARK: - CBCS Encryptor
 
 /// CBCS (Common Encryption Scheme - CBC mode with Subsample encryption) encryptor
@@ -47,8 +59,10 @@ public final class CBCSEncryptor {
         self.skipBlocks = skipBlocks
 
         // Debug: Log encryption key for verification
-        print("🔐 CBCSEncryptor initialized with key (hex): \(key.map { String(format: "%02x", $0) }.joined())")
-        print("🔐 CBCSEncryptor IV (hex): \(iv.map { String(format: "%02x", $0) }.joined())")
+        if CBCSDebugConfig.isVerboseLoggingEnabled {
+            print("🔐 CBCSEncryptor initialized with key (hex): \(key.map { String(format: "%02x", $0) }.joined())")
+            print("🔐 CBCSEncryptor IV (hex): \(iv.map { String(format: "%02x", $0) }.joined())")
+        }
     }
 
     // MARK: - Video Encryption (H.264/H.265)
@@ -65,7 +79,7 @@ public final class CBCSEncryptor {
         var subsamples: [SubsampleEntry] = []
 
         // Debug: Log NAL structure for first few samples
-        if nalUnits.count > 1 {
+        if CBCSDebugConfig.isVerboseLoggingEnabled && nalUnits.count > 1 {
             let nalTypes = nalUnits.map { "NAL\($0.type)(\($0.isSlice ? "slice" : "non-slice"):\($0.length)B)" }
             print("🔍 [CBCS] Sample \(sample.count)B has \(nalUnits.count) NALs: \(nalTypes.joined(separator: ", "))")
         }
@@ -92,7 +106,7 @@ public final class CBCSEncryptor {
         let totalClear = subsamples.reduce(0) { $0 + Int($1.bytesOfClearData) }
         let totalProtected = subsamples.reduce(0) { $0 + Int($1.bytesOfProtectedData) }
         let totalSubsampleBytes = totalClear + totalProtected
-        if totalSubsampleBytes != encryptedData.count {
+        if totalSubsampleBytes != encryptedData.count && CBCSDebugConfig.isVerboseLoggingEnabled {
             print("⚠️ [CBCS] Subsample mismatch: clear=\(totalClear) + protected=\(totalProtected) = \(totalSubsampleBytes), but data=\(encryptedData.count)")
         }
 
@@ -105,8 +119,10 @@ public final class CBCSEncryptor {
         // Correct is: [28c,0p] [8c,0p] [128c,99836p] etc. - separate entry per NAL
 
         // Debug: Log subsample structure
-        let subsampleDesc = subsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " ")
-        print("🔍 [CBCS] Sample \(encryptedData.count)B → \(subsamples.count) subsamples: \(subsampleDesc)")
+        if CBCSDebugConfig.isVerboseLoggingEnabled {
+            let subsampleDesc = subsamples.map { "[\($0.bytesOfClearData)c/\($0.bytesOfProtectedData)p]" }.joined(separator: " ")
+            print("🔍 [CBCS] Sample \(encryptedData.count)B → \(subsamples.count) subsamples: \(subsampleDesc)")
+        }
 
         return EncryptionResult(encryptedData: encryptedData, subsamples: subsamples)
     }
@@ -145,7 +161,7 @@ public final class CBCSEncryptor {
         let encryptedPayload = encryptWithPattern(Data(payload))
 
         // Debug: Verify encryption actually modified data
-        if payload.count >= 16 {
+        if CBCSDebugConfig.isVerboseLoggingEnabled && payload.count >= 16 {
             let originalFirst16 = Array(payload.prefix(16))
             let encryptedFirst16 = Array(encryptedPayload.prefix(16))
             let modified = originalFirst16 != encryptedFirst16

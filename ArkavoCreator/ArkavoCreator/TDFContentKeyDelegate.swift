@@ -2,6 +2,18 @@ import AVFoundation
 import Foundation
 import os.log
 
+// MARK: - FairPlay Debug Configuration
+
+/// Global configuration for FairPlay debugging
+public enum FairPlayDebugConfig {
+    /// Enable verbose debug logging (set to false for production)
+    #if DEBUG
+    public static var isVerboseLoggingEnabled = true
+    #else
+    public static var isVerboseLoggingEnabled = false
+    #endif
+}
+
 // MARK: - FairPlay Debug Logger
 
 private let fairPlayLog = OSLog(subsystem: "com.arkavo.creator", category: "FairPlay")
@@ -9,17 +21,20 @@ private let fairPlayLog = OSLog(subsystem: "com.arkavo.creator", category: "Fair
 /// Debug logger for FairPlay key exchange
 private enum FairPlayDebug {
     static func log(_ message: String, type: OSLogType = .debug) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         os_log("%{public}@", log: fairPlayLog, type: type, message)
         print("🎬 [FairPlay] \(message)")
     }
 
     static func logData(_ label: String, data: Data, maxBytes: Int = 64) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         let hex = data.prefix(maxBytes).map { String(format: "%02x", $0) }.joined(separator: " ")
         let truncated = data.count > maxBytes ? "... (\(data.count) bytes total)" : ""
         log("\(label): \(hex)\(truncated)")
     }
 
     static func logRequest(_ method: String, url: URL, body: Data?) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         log("→ \(method) \(url.absoluteString)")
         if let body = body, let json = try? JSONSerialization.jsonObject(with: body),
            let pretty = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
@@ -35,6 +50,7 @@ private enum FairPlayDebug {
     }
 
     static func logResponse(_ statusCode: Int, data: Data) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         if let str = String(data: data, encoding: .utf8) {
             log("← HTTP \(statusCode): \(str.prefix(500))")
         } else {

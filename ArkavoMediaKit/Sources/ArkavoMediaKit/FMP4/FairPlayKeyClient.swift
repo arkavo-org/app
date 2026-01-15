@@ -40,6 +40,7 @@ public final class FairPlayKeyClient {
     // MARK: - Properties
 
     private let serverURL: URL
+    private let authToken: String?
     private let manifestBuilder: TDFManifestBuilder
     private var currentSession: Session?
     private var certificate: Data?
@@ -47,10 +48,20 @@ public final class FairPlayKeyClient {
     // MARK: - Initialization
 
     /// Initialize FairPlay key client
-    /// - Parameter serverURL: Base URL of the media server (e.g., https://100.arkavo.net)
-    public init(serverURL: URL) {
+    /// - Parameters:
+    ///   - serverURL: Base URL of the media server (e.g., https://100.arkavo.net)
+    ///   - authToken: Optional Bearer token for authenticated requests
+    public init(serverURL: URL, authToken: String? = nil) {
         self.serverURL = serverURL
+        self.authToken = authToken
         self.manifestBuilder = TDFManifestBuilder(kasURL: serverURL)
+    }
+
+    /// Add authorization header to request if auth token is available
+    private func addAuthHeader(to request: inout URLRequest) {
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     // MARK: - Certificate
@@ -62,7 +73,11 @@ public final class FairPlayKeyClient {
         }
 
         let url = serverURL.appendingPathComponent("media/v1/certificate")
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        addAuthHeader(to: &request)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw FairPlayKeyError.certificateFetchFailed
@@ -80,6 +95,7 @@ public final class FairPlayKeyClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "userId": userId,
@@ -115,6 +131,7 @@ public final class FairPlayKeyClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "userId": session.userId,
@@ -139,6 +156,7 @@ public final class FairPlayKeyClient {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = ["userId": session.userId]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -180,6 +198,7 @@ public final class FairPlayKeyClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "sessionId": session.sessionId,
@@ -217,6 +236,7 @@ public final class FairPlayKeyClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "sessionId": session.sessionId,

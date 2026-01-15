@@ -3,6 +3,18 @@ import ArkavoSocial
 import Foundation
 import os.log
 
+// MARK: - FairPlay Debug Configuration
+
+/// Global configuration for FairPlay debugging
+public enum FairPlayDebugConfig {
+    /// Enable verbose debug logging (set to false for production)
+    #if DEBUG
+    public static var isVerboseLoggingEnabled = true
+    #else
+    public static var isVerboseLoggingEnabled = false
+    #endif
+}
+
 // MARK: - FairPlay Debug Logger
 
 private let fairPlayLog = OSLog(subsystem: "com.arkavo.app", category: "FairPlay")
@@ -10,11 +22,13 @@ private let fairPlayLog = OSLog(subsystem: "com.arkavo.app", category: "FairPlay
 /// Debug logger for FairPlay key exchange
 private enum FairPlayDebug {
     static func log(_ message: String, type: OSLogType = .debug) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         os_log("%{public}@", log: fairPlayLog, type: type, message)
         print("🎬 [FairPlay] \(message)")
     }
 
     static func logRequest(_ method: String, url: URL, body: Data?) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         log("→ \(method) \(url.absoluteString)")
         if let body = body, let str = String(data: body, encoding: .utf8) {
             log("   Body: \(str.prefix(500))")
@@ -22,6 +36,7 @@ private enum FairPlayDebug {
     }
 
     static func logResponse(_ statusCode: Int, data: Data) {
+        guard FairPlayDebugConfig.isVerboseLoggingEnabled else { return }
         if let str = String(data: data, encoding: .utf8) {
             log("← HTTP \(statusCode): \(str.prefix(500))")
         } else {
@@ -78,20 +93,24 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
     private let tdfManifest: TDFManifestLite
     private let serverURL: URL
     private let userId: String
+    private let authToken: String?
     private let sessionId: LockIsolated<String?>
     private let fairPlayCertificate: LockIsolated<Data?>
 
     /// Initialize with TDF manifest and optional user ID
     /// - Parameters:
     ///   - manifest: The TDF manifest containing encryption info
+    ///   - authToken: Optional Bearer token for authenticated requests
     ///   - userId: User identifier for session (defaults to "anonymous")
     ///   - serverURL: FairPlay server URL (defaults to 100.arkavo.net)
     init(
         manifest: TDFManifestLite,
+        authToken: String? = nil,
         userId: String = "anonymous",
         serverURL: URL = URL(string: "https://100.arkavo.net")!
     ) {
         self.tdfManifest = manifest
+        self.authToken = authToken
         self.userId = userId
         self.serverURL = serverURL
         self.sessionId = LockIsolated(nil)
@@ -104,7 +123,15 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         FairPlayDebug.log("  Asset ID: \(manifest.assetID)")
         FairPlayDebug.log("  KAS URL: \(manifest.kasURL)")
         FairPlayDebug.log("  Algorithm: \(manifest.algorithm)")
+        FairPlayDebug.log("  Auth: \(authToken != nil ? "provided" : "none")")
         FairPlayDebug.log("══════════════════════════════════════════════════════")
+    }
+
+    /// Add authorization header to request if auth token is available
+    private func addAuthHeader(to request: inout URLRequest) {
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     // MARK: - AVContentKeySessionDelegate
@@ -234,6 +261,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "userId": userId,
@@ -270,6 +298,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         let url = serverURL.appendingPathComponent("media/v1/certificate")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        addAuthHeader(to: &request)
 
         FairPlayDebug.logRequest("GET", url: url, body: nil)
 
@@ -297,6 +326,7 @@ final class TDFContentKeyDelegate: NSObject, AVContentKeySessionDelegate, Sendab
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         // Encode manifest as base64 JSON
         let manifestJSON: [String: Any] = [
