@@ -26,11 +26,20 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../OpenTDFKit"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
     ],
     targets: [
         .target(
             name: "ArkavoMediaKit",
             dependencies: ["OpenTDFKit"],
+            swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "TestVideoGenerator",
+            dependencies: [
+                "ArkavoMediaKit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
             swiftSettings: sharedSwiftSettings
         ),
         .testTarget(
