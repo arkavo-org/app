@@ -11,6 +11,7 @@ struct ArkavoApp: App {
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
+    @State private var pendingAgentAuthorization: AgentAuthorizationRequest?
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
     @StateObject private var agentService = AgentService()
@@ -146,6 +147,17 @@ struct ArkavoApp: App {
                 if let url = notification.object as? URL {
                     handleIncomingURL(url)
                 }
+            }
+            .sheet(item: $pendingAgentAuthorization) { request in
+                AgentAuthorizationView(
+                    request: request,
+                    onAuthorize: {
+                        pendingAgentAuthorization = nil
+                    },
+                    onCancel: {
+                        pendingAgentAuthorization = nil
+                    }
+                )
             }
             .alert(item: $connectionError) { error in
                 Alert(
@@ -822,6 +834,25 @@ struct ArkavoApp: App {
         }
     }
 
+    // Handle agent authorization QR code URLs (arkavo://agent/authorize?did=...&name=...&entitlements=...)
+    func handleAgentAuthorizationURL(_ components: URLComponents) {
+        print("🔐 [Agent Auth] Handling authorization URL")
+
+        guard let request = AgentAuthorizationRequest.from(components: components) else {
+            print("❌ [Agent Auth] Invalid authorization URL - missing DID")
+            return
+        }
+
+        print("📱 [Agent Auth] Agent DID: \(request.did)")
+        if let name = request.name {
+            print("📱 [Agent Auth] Agent name: \(name)")
+        }
+        print("📱 [Agent Auth] Entitlements: \(request.entitlements)")
+
+        // Show authorization sheet
+        pendingAgentAuthorization = request
+    }
+
     // applinks
     func handleIncomingURL(_ url: URL) {
         print("Handling URL: \(url.absoluteString)") // Debug logging
@@ -834,6 +865,12 @@ struct ArkavoApp: App {
         // Handle ArkavoCreator connection URLs (arkavo://connect?host=...&port=...)
         if components.host == "connect" {
             handleConnectionURL(components)
+            return
+        }
+
+        // Handle agent authorization URLs (arkavo://agent/authorize?did=...&name=...&entitlements=...)
+        if components.host == "agent" && components.path == "/authorize" {
+            handleAgentAuthorizationURL(components)
             return
         }
 
