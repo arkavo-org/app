@@ -1,4 +1,5 @@
 import ArkavoSocial
+import AuthenticationServices
 import SwiftUI
 
 struct ConnectedAccountsView: View {
@@ -8,6 +9,7 @@ struct ConnectedAccountsView: View {
     @State private var showingPatreonDisconnectAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var isPatreonConnecting = false
 
     var body: some View {
         List {
@@ -117,12 +119,19 @@ struct ConnectedAccountsView: View {
 
             Spacer()
 
-            if isPatreonLinked {
+            if isPatreonConnecting {
+                ProgressView()
+            } else if isPatreonLinked {
                 Button("Disconnect") {
                     showingPatreonDisconnectAlert = true
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
+            } else {
+                Button("Connect") {
+                    connectPatreon()
+                }
+                .buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)
@@ -152,6 +161,91 @@ struct ConnectedAccountsView: View {
     private func disconnectPatreon() {
         KeychainManager.deleteTokens()
         isPatreonLinked = false
+    }
+
+    private func connectPatreon() {
+        isPatreonConnecting = true
+
+        // Build Patreon OAuth URL
+        // Uses "arkavo" client scheme for consumer app (vs "arkavocreator" for creator app)
+        let redirectURI = ArkavoConfiguration.shared.oauthRedirectURL(for: "patreon", client: "arkavo")
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.patreon.com"
+        components.path = "/oauth2/authorize"
+        components.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: Secrets.patreonClientId),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "scope", value: "identity identity.memberships"),
+            URLQueryItem(name: "state", value: UUID().uuidString),
+        ]
+
+        guard let authURL = components.url else {
+            isPatreonConnecting = false
+            errorMessage = "Failed to build Patreon OAuth URL"
+            showingError = true
+            return
+        }
+
+        // Start ASWebAuthenticationSession
+        let session = ASWebAuthenticationSession(
+            url: authURL,
+            callbackURLScheme: "arkavo"
+        ) { callbackURL, error in
+            Task { @MainActor in
+                isPatreonConnecting = false
+
+                if let error = error as? ASWebAuthenticationSessionError,
+                   error.code == .canceledLogin
+                {
+                    // User cancelled, no error needed
+                    return
+                }
+
+                if let error {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                    return
+                }
+
+                guard let url = callbackURL,
+                      let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                      let code = components.queryItems?.first(where: { $0.name == "code" })?.value
+                else {
+                    // Check for error in callback
+                    if let errorParam = URLComponents(url: callbackURL ?? URL(string: "arkavo://")!, resolvingAgainstBaseURL: false)?
+                        .queryItems?.first(where: { $0.name == "error" })?.value
+                    {
+                        errorMessage = "Patreon OAuth failed: \(errorParam)"
+                    } else {
+                        errorMessage = "No authorization code received"
+                    }
+                    showingError = true
+                    return
+                }
+
+                // Exchange code for tokens via backend
+                await linkPatreonWithCode(code)
+            }
+        }
+
+        // Configure and start session
+        #if os(iOS)
+            session.prefersEphemeralWebBrowserSession = false
+        #endif
+        session.start()
+    }
+
+    private func linkPatreonWithCode(_ code: String) async {
+        do {
+            // Call ArkavoClient to exchange code and link account
+            try await ArkavoClient.linkPatreonAccount(authorizationCode: code)
+            isPatreonLinked = true
+        } catch {
+            errorMessage = "Failed to link Patreon: \(error.localizedDescription)"
+            showingError = true
+        }
     }
 }
 

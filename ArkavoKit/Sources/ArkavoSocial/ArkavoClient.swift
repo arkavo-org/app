@@ -1162,6 +1162,55 @@ public extension ArkavoClient {
     // TODO: Function to verify NanoTDF with DID
 }
 
+// MARK: - Patreon Account Linking
+
+public extension ArkavoClient {
+    /// Links a Patreon account using an OAuth authorization code.
+    /// The backend exchanges the code for tokens, fetches the user's tier,
+    /// and returns an updated NTDF token with the SubscriptionTier attribute.
+    ///
+    /// - Parameter authorizationCode: The OAuth authorization code from Patreon
+    /// - Throws: ArkavoError if linking fails
+    static func linkPatreonAccount(authorizationCode: String) async throws {
+        guard let token = KeychainManager.getAuthenticationToken() else {
+            throw ArkavoError.authenticationFailed("No authentication token")
+        }
+
+        let url = ArkavoConfiguration.shared.identityURL.appendingPathComponent("link/patreon")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(token, forHTTPHeaderField: "X-Auth-Token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "authorization_code": authorizationCode,
+            "redirect_uri": ArkavoConfiguration.shared.oauthRedirectURL(for: "patreon", client: "arkavo"),
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ArkavoError.invalidResponse
+        }
+
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw ArkavoError.authenticationFailed("Patreon linking failed: \(errorMessage)")
+        }
+
+        // Parse response and save updated NTDF token
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let newToken = json["ntdf_token"] as? String
+        else {
+            throw ArkavoError.authenticationFailed("No updated token received")
+        }
+
+        // Save the updated token with tier attributes
+        try KeychainManager.saveAuthenticationToken(newToken)
+    }
+}
+
 // MARK: - Helper Classes
 
 private class AuthenticationDelegate: NSObject, ASAuthorizationControllerDelegate {
