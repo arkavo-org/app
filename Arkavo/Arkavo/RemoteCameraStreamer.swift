@@ -547,16 +547,23 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         }
     }
 
-    private func sendFaceMetadata(blendShapes: [ARFaceAnchor.BlendShapeLocation: NSNumber]) {
+    private func sendFaceMetadata(blendShapes: [ARFaceAnchor.BlendShapeLocation: NSNumber], anchors: [ARAnchor]) {
         var normalized: [String: Float] = [:]
         for (key, value) in blendShapes {
             normalized[key.rawValue] = value.floatValue
         }
-        print("📤 [RemoteCameraStreamer] Sending face metadata: \(normalized.count) blend shapes")
+
+        // Extract head transform from ARFaceAnchor
+        var headTransform: [Float]? = nil
+        if let faceAnchor = anchors.compactMap({ $0 as? ARFaceAnchor }).first {
+            headTransform = faceAnchor.transform.asFloats
+        }
+
+        print("📤 [RemoteCameraStreamer] Sending face metadata: \(normalized.count) blend shapes, headTransform: \(headTransform != nil ? "yes" : "no")")
         if let firstShape = normalized.first {
             print("   └─ Sample: \(firstShape.key) = \(String(format: "%.3f", firstShape.value))")
         }
-        let face = ARFaceMetadata(blendShapes: normalized, trackingState: currentTrackingState)
+        let face = ARFaceMetadata(blendShapes: normalized, trackingState: currentTrackingState, headTransform: headTransform)
         sendMetadata(.arFace(face))
     }
 
@@ -689,12 +696,12 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
 
         if hasFace && hasBody {
             print("🎭🦴 [RemoteCameraStreamer] Combined tracking: face (\(metadata.blendShapes!.count) shapes) + body")
-            sendFaceMetadata(blendShapes: metadata.blendShapes!)
+            sendFaceMetadata(blendShapes: metadata.blendShapes!, anchors: metadata.anchors)
             sendBodyMetadata(metadata.bodySkeleton!)
             noDetectionFrameCount = 0  // Reset counter
         } else if let blendShapes = metadata.blendShapes {
             print("🎭 [RemoteCameraStreamer] Face tracking: \(blendShapes.count) blend shapes")
-            sendFaceMetadata(blendShapes: blendShapes)
+            sendFaceMetadata(blendShapes: blendShapes, anchors: metadata.anchors)
             noDetectionFrameCount = 0  // Reset counter
         } else if let skeleton = metadata.bodySkeleton {
             print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")

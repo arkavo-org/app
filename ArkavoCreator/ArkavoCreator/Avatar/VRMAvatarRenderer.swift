@@ -540,7 +540,7 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         }
 
         #if DEBUG
-        print("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes")
+        print("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes, headTransform: \(blendShapes.headTransform != nil ? "yes" : "no")")
         #endif
 
         // Use ARKitFaceDriver to map, smooth, and apply blend shapes
@@ -548,6 +548,56 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             blendShapes: blendShapes,
             controller: expressionController
         )
+
+        // Apply head transform if available
+        if let headTransform = blendShapes.headTransform, let model = model {
+            applyHeadTransform(headTransform, to: model)
+        }
+    }
+
+    /// Apply head transform from ARKit face tracking to the VRM head bone
+    ///
+    /// Extracts rotation from the head transform matrix and applies it to the head bone.
+    /// The ARKit transform is in world space; we only apply the rotation component.
+    ///
+    /// - Parameters:
+    ///   - transform: 4x4 transform matrix from ARKit face anchor
+    ///   - model: VRM model to apply the transform to
+    private func applyHeadTransform(_ transform: simd_float4x4, to model: VRMModel) {
+        guard let humanoid = model.humanoid,
+              let headBone = humanoid.humanBones[.head],
+              headBone.node >= 0 && headBone.node < model.nodes.count else {
+            return
+        }
+
+        let headNode = model.nodes[headBone.node]
+
+        // Extract rotation from transform matrix
+        // The rotation is in the upper-left 3x3 portion
+        let col0 = simd_make_float3(transform.columns.0)
+        let col1 = simd_make_float3(transform.columns.1)
+        let col2 = simd_make_float3(transform.columns.2)
+
+        // Normalize the columns to remove any scale
+        let rotationMatrix = simd_float3x3(
+            normalize(col0),
+            normalize(col1),
+            normalize(col2)
+        )
+
+        // Convert to quaternion
+        let rotation = simd_quatf(rotationMatrix)
+
+        // Apply rotation to head node
+        // Note: ARKit uses a different coordinate system than VRM
+        // ARKit: +X right, +Y up, -Z forward (camera looks at -Z)
+        // VRM: +X right, +Y up, -Z forward (model faces -Z)
+        // The coordinate systems are compatible for face tracking
+        headNode.rotation = rotation
+        headNode.updateLocalMatrix()
+
+        // Update world transforms
+        headNode.updateWorldTransform()
     }
 
     /// Apply face tracking from multiple sources (for multi-camera setup)
@@ -583,6 +633,19 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             controller: expressionController,
             priority: priority
         )
+
+        // Apply head transform from the most active source
+        if let model = model {
+            // Find the most recent active source with a head transform
+            let activeSources = sources.filter { $0.isActive }
+            for source in activeSources.sorted(by: { $0.lastUpdate > $1.lastUpdate }) {
+                if let blendShapes = source.blendShapes,
+                   let headTransform = blendShapes.headTransform {
+                    applyHeadTransform(headTransform, to: model)
+                    break // Only apply from one source
+                }
+            }
+        }
     }
 
     /// Reset face tracking filters (call when switching avatars or restarting)

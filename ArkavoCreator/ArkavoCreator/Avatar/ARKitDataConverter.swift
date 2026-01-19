@@ -51,9 +51,14 @@ enum ARKitDataConverter {
         _ metadata: ARFaceMetadata,
         timestamp: Date
     ) -> ARKitFaceBlendShapes {
+        var headTransform: simd_float4x4? = nil
+        if let transformArray = metadata.headTransform {
+            headTransform = toMatrix4x4(transformArray)
+        }
         return ARKitFaceBlendShapes(
             timestamp: timestamp.timeIntervalSinceReferenceDate,
-            shapes: metadata.blendShapes
+            shapes: metadata.blendShapes,
+            headTransform: headTransform
         )
     }
 
@@ -66,9 +71,9 @@ enum ARKitDataConverter {
             print("🔄 [ARKitDataConverter] Event metadata is not .arFace, returning nil")
             return nil
         }
-        print("🔄 [ARKitDataConverter] Converting face metadata with \(faceMetadata.blendShapes.count) blend shapes")
+        print("🔄 [ARKitDataConverter] Converting face metadata with \(faceMetadata.blendShapes.count) blend shapes, headTransform: \(faceMetadata.headTransform != nil ? "yes" : "no")")
         let result = toARKitFaceBlendShapes(faceMetadata, timestamp: event.timestamp)
-        print("   └─ Converted to ARKitFaceBlendShapes with \(result.shapes.count) shapes")
+        print("   └─ Converted to ARKitFaceBlendShapes with \(result.shapes.count) shapes, headTransform: \(result.headTransform != nil ? "yes" : "no")")
         return result
     }
 
