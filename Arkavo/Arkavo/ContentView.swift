@@ -49,7 +49,8 @@ struct ContentView: View {
                     if sharedState.isOfflineMode && !sharedState.showCreateView {
                         // Show network connection prompt when offline
                         NetworkConnectionPrompt(
-                            onConnect: { _ in
+                            onConnect: { domain in
+                                sharedState.selectedNetworkDomain = domain
                                 sharedState.shouldShowRegistration = true
                             },
                             onSkip: {
@@ -72,7 +73,8 @@ struct ContentView: View {
                     if sharedState.isOfflineMode {
                         // Show network connection prompt when offline
                         NetworkConnectionPrompt(
-                            onConnect: { _ in
+                            onConnect: { domain in
+                                sharedState.selectedNetworkDomain = domain
                                 sharedState.shouldShowRegistration = true
                             },
                             onSkip: {

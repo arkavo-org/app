@@ -995,6 +995,7 @@ class SharedState: ObservableObject {
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
     @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
+    @Published var selectedNetworkDomain: String = "arkavo.social"
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]

@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 
 struct AccountView: View {
+    @EnvironmentObject var sharedState: SharedState
     @Query private var accounts: [Account]
     @StateObject private var locationManager = LocationManager()
     @StateObject private var storeKitManager = StoreKitManager()
@@ -22,6 +23,7 @@ struct AccountView: View {
     @State private var showingDeleteProfileAlert = false
     @State private var isResettingProfile = false
     @State private var showingEncryptionUpgrade = false
+    @State private var showingNetworkPrompt = false
 
     private var account: Account? {
         accounts.first
@@ -57,6 +59,34 @@ struct AccountView: View {
                             .foregroundColor(.gray)
                     }
                 #endif
+            }
+
+            Section(header: Text("Network")) {
+                HStack {
+                    Image(systemName: sharedState.isOfflineMode ? "wifi.slash" : "wifi")
+                        .foregroundStyle(sharedState.isOfflineMode ? .orange : .green)
+                    Text("Status")
+                    Spacer()
+                    Text(sharedState.isOfflineMode ? "Offline" : "Connected")
+                        .foregroundStyle(sharedState.isOfflineMode ? .orange : .green)
+                }
+
+                if sharedState.isOfflineMode {
+                    Button {
+                        showingNetworkPrompt = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "network")
+                                .foregroundStyle(Color.accentColor)
+                            Text("Connect to Network")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
             }
 
             Section(header: Text("Profile Management")) {
@@ -145,6 +175,29 @@ struct AccountView: View {
         .navigationTitle("Account")
         .sheet(isPresented: $showingEncryptionUpgrade) {
             EncryptionUpgradeView(storeKitManager: storeKitManager, account: account)
+        }
+        .sheet(isPresented: $showingNetworkPrompt) {
+            NavigationStack {
+                NetworkConnectionPrompt(
+                    onConnect: { domain in
+                        showingNetworkPrompt = false
+                        sharedState.selectedNetworkDomain = domain
+                        sharedState.shouldShowRegistration = true
+                    },
+                    onSkip: {
+                        showingNetworkPrompt = false
+                    }
+                )
+                .navigationTitle("Connect")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showingNetworkPrompt = false
+                        }
+                    }
+                }
+            }
         }
         .alert("Location Permission", isPresented: $showingLocationPermissionAlert) {
             Button("OK") {
@@ -325,6 +378,7 @@ struct ClassificationView: View {
 struct AccountView_Previews: PreviewProvider {
     static var previews: some View {
         AccountView()
+            .environmentObject(SharedState())
     }
 }
 
