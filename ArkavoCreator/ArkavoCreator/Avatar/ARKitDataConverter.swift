@@ -108,16 +108,19 @@ enum ARKitDataConverter {
         // ARKit: left_upLeg → VRM: leftUpperLeg
         // ARKit: left_leg → VRM: leftLowerLeg
         let mapping: [String: String] = [
+            // Legs
             "left_upLeg": "leftUpperLeg",
             "left_leg": "leftLowerLeg",
             "left_foot": "leftFoot",
             "left_toes": "leftToes",
-            "left_toesEnd": "leftToes",  // Map toesEnd to toes
+            "left_toesEnd": "leftToes",
             "right_upLeg": "rightUpperLeg",
             "right_leg": "rightLowerLeg",
             "right_foot": "rightFoot",
             "right_toes": "rightToes",
-            "right_toesEnd": "rightToes",  // Map toesEnd to toes
+            "right_toesEnd": "rightToes",
+
+            // Arms
             "left_shoulder": "leftShoulder",
             "left_arm": "leftUpperArm",
             "left_forearm": "leftLowerArm",
@@ -130,7 +133,115 @@ enum ARKitDataConverter {
             "left_upArm": "leftUpperArm",
             "left_lowArm": "leftLowerArm",
             "right_upArm": "rightUpperArm",
-            "right_lowArm": "rightLowerArm"
+            "right_lowArm": "rightLowerArm",
+
+            // Left hand fingers - Thumb
+            "left_handThumbStart": "leftHandThumb1",
+            "left_handThumbIntermediate": "leftHandThumb2",
+            "left_handThumbEnd": "leftHandThumb3",
+            "left_handThumbTip": "leftHandThumb4",
+            "left_handThumb1": "leftHandThumb1",
+            "left_handThumb2": "leftHandThumb2",
+            "left_handThumb3": "leftHandThumb3",
+            "left_handThumb4": "leftHandThumb4",
+
+            // Left hand fingers - Index
+            "left_handIndexStart": "leftHandIndex1",
+            "left_handIndexIntermediate": "leftHandIndex2",
+            "left_handIndexEnd": "leftHandIndex3",
+            "left_handIndexTip": "leftHandIndex4",
+            "left_handIndex1": "leftHandIndex1",
+            "left_handIndex2": "leftHandIndex2",
+            "left_handIndex3": "leftHandIndex3",
+            "left_handIndex4": "leftHandIndex4",
+
+            // Left hand fingers - Middle
+            "left_handMiddleStart": "leftHandMiddle1",
+            "left_handMiddleIntermediate": "leftHandMiddle2",
+            "left_handMiddleEnd": "leftHandMiddle3",
+            "left_handMiddleTip": "leftHandMiddle4",
+            "left_handMiddle1": "leftHandMiddle1",
+            "left_handMiddle2": "leftHandMiddle2",
+            "left_handMiddle3": "leftHandMiddle3",
+            "left_handMiddle4": "leftHandMiddle4",
+
+            // Left hand fingers - Ring
+            "left_handRingStart": "leftHandRing1",
+            "left_handRingIntermediate": "leftHandRing2",
+            "left_handRingEnd": "leftHandRing3",
+            "left_handRingTip": "leftHandRing4",
+            "left_handRing1": "leftHandRing1",
+            "left_handRing2": "leftHandRing2",
+            "left_handRing3": "leftHandRing3",
+            "left_handRing4": "leftHandRing4",
+
+            // Left hand fingers - Pinky
+            "left_handPinkyStart": "leftHandPinky1",
+            "left_handPinkyIntermediate": "leftHandPinky2",
+            "left_handPinkyEnd": "leftHandPinky3",
+            "left_handPinkyTip": "leftHandPinky4",
+            "left_handLittleStart": "leftHandPinky1",
+            "left_handLittleIntermediate": "leftHandPinky2",
+            "left_handLittleEnd": "leftHandPinky3",
+            "left_handLittleTip": "leftHandPinky4",
+            "left_handPinky1": "leftHandPinky1",
+            "left_handPinky2": "leftHandPinky2",
+            "left_handPinky3": "leftHandPinky3",
+            "left_handPinky4": "leftHandPinky4",
+
+            // Right hand fingers - Thumb
+            "right_handThumbStart": "rightHandThumb1",
+            "right_handThumbIntermediate": "rightHandThumb2",
+            "right_handThumbEnd": "rightHandThumb3",
+            "right_handThumbTip": "rightHandThumb4",
+            "right_handThumb1": "rightHandThumb1",
+            "right_handThumb2": "rightHandThumb2",
+            "right_handThumb3": "rightHandThumb3",
+            "right_handThumb4": "rightHandThumb4",
+
+            // Right hand fingers - Index
+            "right_handIndexStart": "rightHandIndex1",
+            "right_handIndexIntermediate": "rightHandIndex2",
+            "right_handIndexEnd": "rightHandIndex3",
+            "right_handIndexTip": "rightHandIndex4",
+            "right_handIndex1": "rightHandIndex1",
+            "right_handIndex2": "rightHandIndex2",
+            "right_handIndex3": "rightHandIndex3",
+            "right_handIndex4": "rightHandIndex4",
+
+            // Right hand fingers - Middle
+            "right_handMiddleStart": "rightHandMiddle1",
+            "right_handMiddleIntermediate": "rightHandMiddle2",
+            "right_handMiddleEnd": "rightHandMiddle3",
+            "right_handMiddleTip": "rightHandMiddle4",
+            "right_handMiddle1": "rightHandMiddle1",
+            "right_handMiddle2": "rightHandMiddle2",
+            "right_handMiddle3": "rightHandMiddle3",
+            "right_handMiddle4": "rightHandMiddle4",
+
+            // Right hand fingers - Ring
+            "right_handRingStart": "rightHandRing1",
+            "right_handRingIntermediate": "rightHandRing2",
+            "right_handRingEnd": "rightHandRing3",
+            "right_handRingTip": "rightHandRing4",
+            "right_handRing1": "rightHandRing1",
+            "right_handRing2": "rightHandRing2",
+            "right_handRing3": "rightHandRing3",
+            "right_handRing4": "rightHandRing4",
+
+            // Right hand fingers - Pinky
+            "right_handPinkyStart": "rightHandPinky1",
+            "right_handPinkyIntermediate": "rightHandPinky2",
+            "right_handPinkyEnd": "rightHandPinky3",
+            "right_handPinkyTip": "rightHandPinky4",
+            "right_handLittleStart": "rightHandPinky1",
+            "right_handLittleIntermediate": "rightHandPinky2",
+            "right_handLittleEnd": "rightHandPinky3",
+            "right_handLittleTip": "rightHandPinky4",
+            "right_handPinky1": "rightHandPinky1",
+            "right_handPinky2": "rightHandPinky2",
+            "right_handPinky3": "rightHandPinky3",
+            "right_handPinky4": "rightHandPinky4"
         ]
 
         // Apply mapping if exists
