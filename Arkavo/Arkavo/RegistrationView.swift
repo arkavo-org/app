@@ -43,6 +43,7 @@ enum RegistrationStep: Int, CaseIterable {
 
 struct RegistrationView: View {
     var onComplete: (_ profile: Profile) async -> Void
+    var isCheckingAccount: Bool = false
     @EnvironmentObject private var sharedState: SharedState
 
     private let skipPasskeysFlag: Bool = {
@@ -119,63 +120,77 @@ struct RegistrationView: View {
 
                         Spacer()
 
-                        VStack {
-                            Button(action: {
-                                handleButtonAction()
-                            }) {
-                                Text(currentButtonLabel)
-                                    .frame(width: geometry.size.width * 0.8)
-                                    .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
-
-                            ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
-                                .padding()
-
-                            if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundColor(.orange)
-                                        Text("Registration issue: \(details)")
-                                            .font(.footnote)
-                                            .foregroundColor(.secondary)
-                                            .textSelection(.enabled)
-                                    }
-                                    Text("You can retry, or contact support@arkavo.com with these details.")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                        // Hide buttons while checking account status on welcome screen
+                        if !(isCheckingAccount && currentStep == .welcome) {
+                            VStack {
+                                Button(action: {
+                                    handleButtonAction()
+                                }) {
+                                    Text(currentButtonLabel)
+                                        .frame(width: geometry.size.width * 0.8)
+                                        .padding(.vertical, 6)
                                 }
-                                .padding(10)
-                                .background(Color(UIColor.secondarySystemBackground))
-                                .cornerRadius(8)
-                                .padding(.horizontal)
-                            }
+                                .buttonStyle(.borderedProminent)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
 
-                            HStack {
-                                if currentStep != .welcome {
-                                    Button("Back") {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            slideDirection = .right
-                                            currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
+                                    .padding()
+
+                                if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundColor(.orange)
+                                            Text("Registration issue: \(details)")
+                                                .font(.footnote)
+                                                .foregroundColor(.secondary)
+                                                .textSelection(.enabled)
                                         }
+                                        Text("You can retry, or contact support@arkavo.com with these details.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
                                     }
-                                } else {
-                                    Button("Skip for now") {
-                                        // Return to offline mode / network connections
-                                        sharedState.isOfflineMode = true
+                                    .padding(10)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .cornerRadius(8)
+                                    .padding(.horizontal)
+                                }
+
+                                HStack {
+                                    if currentStep != .welcome {
+                                        Button("Back") {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                slideDirection = .right
+                                                currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                            }
+                                        }
+                                    } else {
+                                        Button("Skip for now") {
+                                            // Return to offline mode / network connections
+                                            sharedState.isOfflineMode = true
+                                        }
+                                        .foregroundStyle(.secondary)
                                     }
+                                    Spacer()
+                                    if currentStep == .welcome {
+                                        Button("Next") {
+                                            handleButtonAction()
+                                        }
+                                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                    }
+                                }
+                                .padding()
+                            }
+                        } else {
+                            // Show loading indicator while checking account
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                Text("Checking account...")
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if currentStep == .welcome {
-                                    Button("Next") {
-                                        handleButtonAction()
-                                    }
-                                    .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
-                                }
+                                    .padding(.top, 8)
                             }
                             .padding()
                         }

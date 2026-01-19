@@ -63,14 +63,17 @@ struct ArkavoApp: App {
             Group {
                 switch selectedView {
                 case .registration:
-                    RegistrationView(onComplete: { profile in
-                        Task {
-                            let success = await saveProfile(profile: profile)
-                            if success {
-                                selectedView = .main
+                    RegistrationView(
+                        onComplete: { profile in
+                            Task {
+                                let success = await saveProfile(profile: profile)
+                                if success {
+                                    selectedView = .main
+                                }
                             }
-                        }
-                    })
+                        },
+                        isCheckingAccount: isCheckingAccountStatus
+                    )
                 case .main:
                     NavigationStack(path: $navigationPath) {
                         ContentView()
