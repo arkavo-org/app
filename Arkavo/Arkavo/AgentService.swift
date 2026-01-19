@@ -32,8 +32,8 @@ final class AgentService: ObservableObject {
     /// Discovery state
     @Published var isDiscovering: Bool = false
 
-    /// LocalAIAgent publishing state
-    @Published var isLocalAgentPublishing: Bool = false
+    /// Device agent publishing state
+    @Published var isDeviceAgentPublishing: Bool = false
 
     /// Error state
     @Published var lastError: AgentError?
@@ -45,6 +45,11 @@ final class AgentService: ObservableObject {
     private let localAgent: LocalAIAgent
     private var cancellables = Set<AnyCancellable>()
 
+    /// Access to the device agent for ID and name
+    var deviceAgent: LocalAIAgent? {
+        localAgent
+    }
+
     /// Stream handlers for active sessions (session_id -> AgentStreamHandler)
     private var streamHandlers: [String: AgentStreamHandler] = [:]
 
@@ -55,14 +60,14 @@ final class AgentService: ObservableObject {
         self.chatManager = AgentChatSessionManager(agentManager: AgentManager.shared)
         self.localAgent = LocalAIAgent.shared
 
-        // Add built-in LocalAIAgent as first agent (always available, no discovery)
-        // Use unique ID from LocalAIAgent instance (device-specific)
+        // Add built-in device agent as first agent (always available, no discovery)
+        // Use unique ID from device agent instance (device-specific)
         let localAgentEndpoint = AgentEndpoint(
             id: localAgent.id,
             url: "local://in-process", // Not used, but required
             metadata: AgentMetadata(
                 name: localAgent.name,
-                purpose: "Local AI for on-device intelligence and sensor access",
+                purpose: "On-device intelligence and sensor access",
                 model: "on-device",
                 properties: [
                     "capabilities": "sensors,foundation_models,writing_tools,image_playground,sentiment_analysis"
@@ -73,20 +78,20 @@ final class AgentService: ObservableObject {
         connectedAgents[localAgent.id] = true // Always "connected" (in-process)
 
         setupBindings()
-        logger.log("[AgentService] Initialized with built-in LocalAIAgent")
+        logger.log("[AgentService] Initialized with built-in device agent")
     }
 
     // MARK: - Setup
 
     private func setupBindings() {
         // Bind AgentManager.agents to our published property
-        // Filter out LocalAIAgent if it appears in mDNS discovery (it shouldn't discover itself)
-        // Then prepend our built-in LocalAIAgent endpoint
+        // Filter out device agent if it appears in mDNS discovery (it shouldn't discover itself)
+        // Then prepend our built-in device agent endpoint
         agentManager.$agents
             .map { [weak self] discoveredAgents in
                 guard let self = self else { return [] }
 
-                // Filter out any LocalAIAgent from mDNS discovery
+                // Filter out any device agent from mDNS discovery
                 let remoteAgents = discoveredAgents.filter { agent in
                     let id = agent.id.lowercased()
                     let purpose = agent.metadata.purpose.lowercased()
@@ -94,10 +99,10 @@ final class AgentService: ObservableObject {
                     return !id.contains("local") && !purpose.contains("local ai")
                 }
 
-                // Get built-in LocalAIAgent (first in list)
+                // Get built-in device agent (first in list)
                 let builtInLocal = self.discoveredAgents.first { $0.id == self.localAgent.id }
 
-                // Return built-in LocalAIAgent first, then remote agents
+                // Return built-in device agent first, then remote agents
                 if let builtInLocal = builtInLocal {
                     return [builtInLocal] + remoteAgents
                 } else {
@@ -106,26 +111,26 @@ final class AgentService: ObservableObject {
             }
             .assign(to: &$discoveredAgents)
 
-        // Bind LocalAIAgent publishing state
+        // Bind device agent publishing state
         localAgent.$isPublishing
-            .assign(to: &$isLocalAgentPublishing)
+            .assign(to: &$isDeviceAgentPublishing)
     }
 
-    // MARK: - LocalAIAgent Management
+    // MARK: - Device Agent Management
 
-    /// Start publishing LocalAIAgent as an A2A service
-    func startLocalAgent(port: UInt16 = 0) throws {
-        logger.log("[AgentService] Starting LocalAIAgent")
+    /// Start publishing device agent as an A2A service
+    func startDeviceAgent(port: UInt16 = 0) throws {
+        logger.log("[AgentService] Starting device agent")
         try localAgent.startPublishing(port: port)
     }
 
-    /// Stop publishing LocalAIAgent
-    func stopLocalAgent() {
-        logger.log("[AgentService] Stopping LocalAIAgent")
+    /// Stop publishing device agent
+    func stopDeviceAgent() {
+        logger.log("[AgentService] Stopping device agent")
         localAgent.stopPublishing()
     }
 
-    /// Get device capabilities from LocalAIAgent
+    /// Get device capabilities from device agent
     func getDeviceCapabilities() -> DeviceCapabilities {
         localAgent.getDeviceCapabilities()
     }
@@ -152,10 +157,10 @@ final class AgentService: ObservableObject {
     func connect(to agent: AgentEndpoint) async throws {
         logger.log("[AgentService] Connecting to agent: \(agent.id)")
 
-        // LocalAIAgent doesn't need WebSocket connection - it's in-process
+        // device agent doesn't need WebSocket connection - it's in-process
         let isLocalAgent = agent.id.lowercased().contains("local")
         if isLocalAgent {
-            logger.log("[AgentService] Skipping WebSocket connection for LocalAIAgent (in-process)")
+            logger.log("[AgentService] Skipping WebSocket connection for device agent (in-process)")
             connectedAgents[agent.id] = true // Mark as "connected" for UI purposes
             return
         }
@@ -176,10 +181,10 @@ final class AgentService: ObservableObject {
     func disconnect(from agentId: String) async {
         logger.log("[AgentService] Disconnecting from agent: \(agentId)")
 
-        // LocalAIAgent doesn't have WebSocket connection to disconnect
+        // device agent doesn't have WebSocket connection to disconnect
         let isLocalAgent = agentId.lowercased().contains("local")
         if isLocalAgent {
-            logger.log("[AgentService] LocalAIAgent disconnect (no-op, in-process)")
+            logger.log("[AgentService] device agent disconnect (no-op, in-process)")
             connectedAgents[agentId] = false
             return
         }
@@ -200,10 +205,10 @@ final class AgentService: ObservableObject {
     func openChatSession(with agentId: String) async throws -> ChatSession {
         logger.log("[AgentService] Opening chat session with agent: \(agentId)")
 
-        // For LocalAIAgent, use direct in-process call (no WebSocket)
+        // For device agent, use direct in-process call (no WebSocket)
         let isLocalAgent = agentId.lowercased().contains("local")
         if isLocalAgent {
-            logger.log("[AgentService] Using direct in-process chat for LocalAIAgent")
+            logger.log("[AgentService] Using direct in-process chat for device agent")
             let sessionId = localAgent.openDirectChatSession()
 
             // Create a ChatSession compatible with UI
@@ -246,10 +251,10 @@ final class AgentService: ObservableObject {
             throw AgentError.notConnected
         }
 
-        // For LocalAIAgent, use direct in-process call
+        // For device agent, use direct in-process call
         let isLocalAgent = agentId.lowercased().contains("local")
         if isLocalAgent {
-            logger.log("[AgentService] Using direct in-process message send for LocalAIAgent")
+            logger.log("[AgentService] Using direct in-process message send for device agent")
             do {
                 // Start streaming state
                 streamingStates[sessionId] = true
@@ -257,7 +262,7 @@ final class AgentService: ObservableObject {
                 let response = try await localAgent.sendDirectMessage(sessionId: sessionId, content: content)
 
                 // Update streaming text with the response
-                logger.log("[AgentService] Got response from LocalAIAgent: '\(response)' (length: \(response.count))")
+                logger.log("[AgentService] Got response from device agent: '\(response)' (length: \(response.count))")
                 streamingText[sessionId] = response
                 logger.log("[AgentService] Set streamingText[\(sessionId)] = '\(response)'")
                 logger.log("[AgentService] Direct message sent and received response")
@@ -330,9 +335,9 @@ final class AgentService: ObservableObject {
     func closeChatSession(sessionId: String) async {
         logger.log("[AgentService] Closing chat session: \(sessionId)")
 
-        // Check if this is a LocalAIAgent session
+        // Check if this is a device agent session
         if let agentId = sessionAgentMap[sessionId], agentId.lowercased().contains("local") {
-            logger.log("[AgentService] Closing direct LocalAIAgent session")
+            logger.log("[AgentService] Closing direct device agent session")
             localAgent.closeDirectChatSession(sessionId: sessionId)
             activeSessions.removeValue(forKey: sessionId)
             sessionAgentMap.removeValue(forKey: sessionId)
@@ -403,12 +408,12 @@ final class AgentService: ObservableObject {
     func onAppearActive() {
         logger.log("[AgentService] App became active")
 
-        // Start LocalAIAgent to publish on-device capabilities
+        // Start device agent to publish on-device capabilities
         do {
-            try startLocalAgent()
+            try startDeviceAgent()
         } catch {
-            logger.error("[AgentService] Failed to start LocalAIAgent: \(String(describing: error))")
-            lastError = .connectionFailed("Failed to start LocalAIAgent")
+            logger.error("[AgentService] Failed to start device agent: \(String(describing: error))")
+            lastError = .connectionFailed("Failed to start device agent")
         }
 
         // Start discovering other agents
@@ -419,7 +424,7 @@ final class AgentService: ObservableObject {
     func onDisappear() {
         logger.log("[AgentService] App going to background")
         stopDiscovery()
-        stopLocalAgent()
+        stopDeviceAgent()
 
         // Close all active sessions
         Task {
@@ -433,7 +438,7 @@ final class AgentService: ObservableObject {
     func cleanup() async {
         logger.log("[AgentService] Cleaning up")
         stopDiscovery()
-        stopLocalAgent()
+        stopDeviceAgent()
 
         // Close all sessions
         for sessionId in activeSessions.keys {

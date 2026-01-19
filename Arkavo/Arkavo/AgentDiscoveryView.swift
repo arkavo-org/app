@@ -218,7 +218,7 @@ struct AgentCard: View {
         if purpose.contains("orchestrat") {
             return .orchestrator
         } else if purpose.contains("local") && purpose.contains("ai") {
-            return .localAI
+            return .deviceAgent
         } else {
             return .remote
         }
@@ -228,7 +228,7 @@ struct AgentCard: View {
         switch agentType {
         case .orchestrator:
             return Image(systemName: "cpu.fill")
-        case .localAI:
+        case .deviceAgent:
             return Image(systemName: "iphone")
         case .remote:
             return Image(systemName: "globe")
@@ -239,7 +239,7 @@ struct AgentCard: View {
         switch agentType {
         case .orchestrator:
             return .purple
-        case .localAI:
+        case .deviceAgent:
             return .blue
         case .remote:
             return .green
@@ -313,7 +313,7 @@ struct AgentCard: View {
 
 enum AgentType: String {
     case orchestrator = "Orchestrator"
-    case localAI = "Local AI"
+    case deviceAgent = "Device Agent"
     case remote = "Remote"
 }
 

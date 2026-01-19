@@ -20,6 +20,8 @@ struct AgentAuthorizationView: View {
 
     @State private var isAuthorizing = false
     @State private var error: String?
+    @StateObject private var contactService = UnifiedContactService()
+    @EnvironmentObject var agentService: AgentService
 
     private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "AgentAuth")
 
@@ -126,13 +128,37 @@ struct AgentAuthorizationView: View {
     private func authorize() {
         isAuthorizing = true
         error = nil
-        let authRequest = request // Copy for sendability
-        logger.log("[AgentAuth] Authorizing agent: \(authRequest.did)")
+
+        // Extract values for sendability
+        let agentDID = request.did
+        let agentName = request.name ?? "Authorized Agent"
+        let agentEntitlements = request.entitlements
+
+        logger.log("[AgentAuth] Authorizing agent: \(agentDID)")
 
         Task {
             do {
-                try await AgentAuthorizationService.shared.authorizeAgent(authRequest)
+                // First authorize with the backend
+                try await AgentAuthorizationService.shared.authorizeAgent(
+                    did: agentDID,
+                    name: agentName,
+                    entitlements: agentEntitlements
+                )
                 logger.log("[AgentAuth] Agent authorized successfully")
+
+                // Configure contact service if needed
+                contactService.configure(agentService: agentService)
+
+                // Create a Profile contact for this delegated agent
+                let entitlements = AgentEntitlements(from: agentEntitlements)
+                try await contactService.addDelegatedAgent(
+                    agentID: agentDID, // Use DID as agent ID for delegated agents
+                    name: agentName,
+                    did: agentDID,
+                    entitlements: entitlements
+                )
+                logger.log("[AgentAuth] Created contact for delegated agent")
+
                 await MainActor.run {
                     onAuthorize()
                 }
@@ -180,8 +206,8 @@ actor AgentAuthorizationService {
     private init() {}
 
     /// Authorize an agent by registering it with the authnz-rs service
-    func authorizeAgent(_ request: AgentAuthorizationRequest) async throws {
-        logger.log("[AgentAuthService] Authorizing agent DID: \(request.did)")
+    func authorizeAgent(did: String, name: String, entitlements: [String]) async throws {
+        logger.log("[AgentAuthService] Authorizing agent DID: \(did)")
 
         let url = baseURL.appendingPathComponent("agents/authorize")
         var urlRequest = URLRequest(url: url)
@@ -194,9 +220,9 @@ actor AgentAuthorizationService {
         }
 
         let body: [String: Any] = [
-            "did": request.did,
-            "name": request.name ?? "Unknown Agent",
-            "entitlements": request.entitlements
+            "did": did,
+            "name": name,
+            "entitlements": entitlements
         ]
 
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -253,4 +279,5 @@ enum AgentAuthorizationError: LocalizedError {
         onAuthorize: { print("Authorized") },
         onCancel: { print("Cancelled") }
     )
+    .environmentObject(AgentService())
 }

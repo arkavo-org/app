@@ -18,6 +18,79 @@ final class Profile: Identifiable, Codable {
     @Attribute(.unique) var did: String?
     var handle: String?
 
+    // MARK: - Agent Contact Fields
+
+    /// Type of contact: "human", "deviceAgent", "remoteAgent", "delegatedAgent"
+    var contactType: String = "human"
+
+    /// Serialized [CommunicationChannel] for multi-channel communication
+    @Attribute(.externalStorage) var channelsJSON: Data?
+
+    /// Serialized AgentEntitlements for delegated agents
+    var entitlementsJSON: Data?
+
+    /// URL endpoint for remote agents
+    var agentEndpoint: String?
+
+    /// LLM model name for agents (e.g., "on-device", "gpt-4", "claude-3")
+    var agentModel: String?
+
+    /// Agent description/purpose
+    var agentPurpose: String?
+
+    /// Agent ID (for mapping to AgentService discovered agents)
+    var agentID: String?
+
+    // MARK: - Computed Properties for Agent Data
+
+    /// Get the contact type enum
+    var contactTypeEnum: ContactType {
+        get { ContactType(rawValue: contactType) ?? .human }
+        set { contactType = newValue.rawValue }
+    }
+
+    /// Whether this contact is an agent
+    var isAgent: Bool {
+        contactTypeEnum.isAgent
+    }
+
+    /// Get/set communication channels
+    var channels: [CommunicationChannel] {
+        get {
+            guard let data = channelsJSON else { return [] }
+            return (try? JSONDecoder().decode([CommunicationChannel].self, from: data)) ?? []
+        }
+        set {
+            channelsJSON = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    /// Get/set agent entitlements
+    var entitlements: AgentEntitlements {
+        get {
+            guard let data = entitlementsJSON else { return AgentEntitlements() }
+            return (try? JSONDecoder().decode(AgentEntitlements.self, from: data)) ?? AgentEntitlements()
+        }
+        set {
+            entitlementsJSON = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    /// Check if any channel is currently available
+    var isOnline: Bool {
+        channels.contains { $0.isAvailable }
+    }
+
+    /// Get the best available channel for communication
+    var bestAvailableChannel: CommunicationChannel? {
+        // Prefer local network, then Arkavo network, then P2P
+        channels.first { $0.isAvailable && $0.type == .localNetwork }
+            ?? channels.first { $0.isAvailable && $0.type == .arkavoNetwork }
+            ?? channels.first { $0.isAvailable && $0.type == .p2p }
+    }
+
+    // MARK: - P2P Key Storage
+
     /// Stores the serialized public components of the *peer's* KeyStore, received during P2P key exchange.
     /// Used for operations requiring the peer's public keys (e.g., signature verification).
     /// Marked for external storage.
@@ -43,8 +116,16 @@ final class Profile: Identifiable, Codable {
         hasHighIdentityAssurance = false
         // Generate the publicID from the initialized id
         publicID = Profile.generatePublicID(from: newID)
-        keyStorePublic = nil // Initialize new property
-        keyStorePrivate = nil // Initialize new property
+        keyStorePublic = nil
+        keyStorePrivate = nil
+        // Agent fields default to nil/human
+        contactType = "human"
+        channelsJSON = nil
+        entitlementsJSON = nil
+        agentEndpoint = nil
+        agentModel = nil
+        agentPurpose = nil
+        agentID = nil
     }
 
     init(
@@ -65,8 +146,42 @@ final class Profile: Identifiable, Codable {
         self.hasHighIdentityAssurance = hasHighIdentityAssurance
         // Generate publicID from the id
         publicID = Profile.generatePublicID(from: id)
-        keyStorePublic = nil // Initialize new property
-        keyStorePrivate = nil // Initialize new property
+        keyStorePublic = nil
+        keyStorePrivate = nil
+        // Agent fields default to nil/human
+        contactType = "human"
+        channelsJSON = nil
+        entitlementsJSON = nil
+        agentEndpoint = nil
+        agentModel = nil
+        agentPurpose = nil
+        agentID = nil
+    }
+
+    // MARK: - Agent Profile Initializer
+
+    /// Create a Profile for an agent contact
+    static func createAgentProfile(
+        agentID: String,
+        name: String,
+        did: String?,
+        purpose: String?,
+        model: String?,
+        endpoint: String?,
+        contactType: ContactType,
+        channels: [CommunicationChannel] = [],
+        entitlements: AgentEntitlements = AgentEntitlements()
+    ) -> Profile {
+        let profile = Profile(name: name)
+        profile.did = did
+        profile.agentID = agentID
+        profile.agentPurpose = purpose
+        profile.agentModel = model
+        profile.agentEndpoint = endpoint
+        profile.contactTypeEnum = contactType
+        profile.channels = channels
+        profile.entitlements = entitlements
+        return profile
     }
 
     func finalizeRegistration(did: String, handle: String) {

@@ -5,10 +5,7 @@ enum Tab {
     case home
     case communities
     case contacts
-    case agents
     case social
-//    case creators
-//    case protect
     case profile
 
     var title: String {
@@ -16,10 +13,7 @@ enum Tab {
         case .home: "Home"
         case .communities: "Community"
         case .contacts: "Contacts"
-        case .agents: "Agents"
         case .social: "Social"
-//        case .creators: "Creators"
-//        case .protect: "Protect"
         case .profile: "Profile"
         }
     }
@@ -29,10 +23,7 @@ enum Tab {
         case .home: "play.circle.fill"
         case .communities: "bubble.left.and.bubble.right.fill"
         case .contacts: "person.2.fill"
-        case .agents: "cpu"
         case .social: "network"
-//        case .creators: "star.circle.fill"
-//        case .protect: "shield.checkerboard"
         case .profile: "person.circle.fill"
         }
     }
@@ -56,10 +47,11 @@ struct ContentView: View {
                 switch sharedState.selectedTab {
                 case .home:
                     if sharedState.isOfflineMode && !sharedState.showCreateView {
-                        // Show network connections view when in offline mode
-                        NetworkConnectionsView()
-                            .environmentObject(sharedState)
-                            .environmentObject(agentService)
+                        // Redirect to contacts tab when offline
+                        Color.clear
+                            .onAppear {
+                                sharedState.selectedTab = .contacts
+                            }
                     } else {
                         VideoContentView()
                     }
@@ -70,22 +62,14 @@ struct ContentView: View {
                             sharedState.selectedStreamPublicID = nil
                         }
                 case .contacts:
-                    // Contacts view for managing peers and connections
+                    // Unified contacts view for managing peers and agents
                     ContactsView()
-                case .agents:
-                    // Agent discovery and chat (always available)
-                    AgentDiscoveryView(agentService: agentService)
                 case .social:
                     if sharedState.isOfflineMode {
-                        // Redirect to network connections if they somehow get to this tab in offline mode
-                        NetworkConnectionsView()
-                            .environmentObject(sharedState)
-                            .environmentObject(agentService)
+                        // Redirect to contacts tab when offline
+                        Color.clear
                             .onAppear {
-                                // Switch to home tab
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    sharedState.selectedTab = .home
-                                }
+                                sharedState.selectedTab = .contacts
                             }
                     } else {
                         PostFeedView()
@@ -142,7 +126,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 20) {
-                        ForEach([Tab.home, .communities, .contacts, .agents, .social, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .communities, .contacts, .social, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -318,9 +302,7 @@ struct EmptyStateView: View {
         case .communities:
             "Need help? Tap the '+' to start creating your group."
         case .contacts:
-            "Connect with others! Tap '+' to add your first contact."
-        case .agents:
-            "No agents discovered yet. Make sure an agent is running on your network."
+            "Connect with others! Tap '+' to add contacts or discover agents."
         case .home:
             "Share your first video! Tap '+' to get started."
         case .social:

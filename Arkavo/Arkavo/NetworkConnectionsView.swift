@@ -119,7 +119,7 @@ struct NetworkConnectionsView: View {
         return anyConnected ? .connected : .disconnected
     }
 
-    private var localAIAgent: AgentEndpoint? {
+    private var deviceAgentEndpoint: AgentEndpoint? {
         agentService.discoveredAgents.first { $0.id.lowercased().contains("local") }
     }
 
@@ -127,7 +127,7 @@ struct NetworkConnectionsView: View {
         if remoteStreamer.connectionState == .streaming {
             return .connected
         }
-        if !cameraDiscovery.discoveredServers.isEmpty || localAIAgent != nil {
+        if !cameraDiscovery.discoveredServers.isEmpty || deviceAgentEndpoint != nil {
             return .connected
         }
         return .connecting
@@ -221,7 +221,7 @@ struct NetworkConnectionsView: View {
                     Divider()
                 }
 
-                if cameraDiscovery.discoveredServers.isEmpty && localAIAgent == nil && !isRemoteStreaming {
+                if cameraDiscovery.discoveredServers.isEmpty && deviceAgentEndpoint == nil && !isRemoteStreaming {
                     HStack {
                         ProgressView()
                             .scaleEffect(0.8)
@@ -240,8 +240,8 @@ struct NetworkConnectionsView: View {
                         )
                     }
 
-                    // Local AI Agent
-                    if let agent = localAIAgent {
+                    // Device Agent
+                    if let agent = deviceAgentEndpoint {
                         LocalDeviceRow(
                             name: agent.metadata.name,
                             detail: "On-device AI",

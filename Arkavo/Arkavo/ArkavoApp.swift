@@ -991,6 +991,7 @@ class SharedState: ObservableObject {
     @Published var lastRegistrationErrorDetails: String?
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
+    @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]
@@ -1009,8 +1010,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture" // create a video
         case .communities: "Converse" // start chatting
-        case .contacts: "Connect" // invite someone new
-        case .agents: "Discover" // find local agents
+        case .contacts: "Connect" // invite someone new or discover agents
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -1020,8 +1020,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture video"
         case .communities: "Converse in chat"
-        case .contacts: "Connect with someone"
-        case .agents: "Discover agents"
+        case .contacts: "Connect with contacts"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }
