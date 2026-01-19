@@ -3,16 +3,14 @@ import SwiftUI
 
 enum Tab {
     case home
-    case communities
-    case contacts
+    case chats
     case social
     case profile
 
     var title: String {
         switch self {
         case .home: "Home"
-        case .communities: "Community"
-        case .contacts: "Contacts"
+        case .chats: "Chats"
         case .social: "Social"
         case .profile: "Profile"
         }
@@ -21,8 +19,7 @@ enum Tab {
     var icon: String {
         switch self {
         case .home: "play.circle.fill"
-        case .communities: "bubble.left.and.bubble.right.fill"
-        case .contacts: "person.2.fill"
+        case .chats: "bubble.left.and.bubble.right.fill"
         case .social: "network"
         case .profile: "person.circle.fill"
         }
@@ -54,21 +51,18 @@ struct ContentView: View {
                                 sharedState.shouldShowRegistration = true
                             },
                             onSkip: {
-                                sharedState.selectedTab = .contacts
+                                sharedState.selectedTab = .chats
                             }
                         )
                     } else {
                         VideoContentView()
                     }
-                case .communities:
-                    // Inner Circle is always available, even in offline mode
-                    GroupView()
+                case .chats:
+                    // All conversations: 1:1, groups, and agents
+                    ChatsView()
                         .onDisappear {
                             sharedState.selectedStreamPublicID = nil
                         }
-                case .contacts:
-                    // Unified contacts view for managing peers and agents
-                    ContactsView()
                 case .social:
                     if sharedState.isOfflineMode {
                         // Show network connection prompt when offline
@@ -78,7 +72,7 @@ struct ContentView: View {
                                 sharedState.shouldShowRegistration = true
                             },
                             onSkip: {
-                                sharedState.selectedTab = .contacts
+                                sharedState.selectedTab = .chats
                             }
                         )
                     } else {
@@ -136,7 +130,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 20) {
-                        ForEach([Tab.home, .communities, .contacts, .social, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .chats, .social, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -309,10 +303,8 @@ struct EmptyStateView: View {
 
     private func getEmptyStateMessage() -> String {
         switch tab {
-        case .communities:
-            "Need help? Tap the '+' to start creating your group."
-        case .contacts:
-            "Connect with others! Tap '+' to add contacts or discover agents."
+        case .chats:
+            "No conversations yet. Tap '+' to start a new chat or create a group."
         case .home:
             "Share your first video! Tap '+' to get started."
         case .social:

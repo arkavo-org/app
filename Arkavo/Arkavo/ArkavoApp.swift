@@ -908,7 +908,7 @@ struct ArkavoApp: App {
         case "stream":
             print("Processing stream deep link") // Debug logging
             // First switch the tab
-            sharedState.selectedTab = .communities
+            sharedState.selectedTab = .chats
             // Then append to navigation path
             DispatchQueue.main.async {
                 navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
@@ -1013,8 +1013,7 @@ class SharedState: ObservableObject {
     func getCenterPrompt() -> String {
         switch selectedTab {
         case .home: "Capture" // create a video
-        case .communities: "Converse" // start chatting
-        case .contacts: "Connect" // invite someone new or discover agents
+        case .chats: "Message" // start a conversation
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -1023,8 +1022,7 @@ class SharedState: ObservableObject {
     func getTooltipText() -> String {
         switch selectedTab {
         case .home: "Capture video"
-        case .communities: "Converse in chat"
-        case .contacts: "Connect with contacts"
+        case .chats: "New conversation"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }
@@ -1145,6 +1143,15 @@ final class ViewModelFactory {
             return nil
         }
         return makeChatViewModel(streamPublicID: streamPublicID)
+    }
+
+    @MainActor
+    func makeChatsViewModel() -> ChatsViewModel {
+        guard let account = currentAccount else {
+            print("⚠️ Warning: Attempting to create ChatsViewModel without account")
+            return ChatsViewModel(account: Account())
+        }
+        return ChatsViewModel(account: account)
     }
 
     // Access the MultipeerConnectivity view model for peer discovery
