@@ -47,11 +47,15 @@ struct ContentView: View {
                 switch sharedState.selectedTab {
                 case .home:
                     if sharedState.isOfflineMode && !sharedState.showCreateView {
-                        // Redirect to contacts tab when offline
-                        Color.clear
-                            .onAppear {
+                        // Show network connection prompt when offline
+                        NetworkConnectionPrompt(
+                            onConnect: { _ in
+                                sharedState.shouldShowRegistration = true
+                            },
+                            onSkip: {
                                 sharedState.selectedTab = .contacts
                             }
+                        )
                     } else {
                         VideoContentView()
                     }
@@ -66,11 +70,15 @@ struct ContentView: View {
                     ContactsView()
                 case .social:
                     if sharedState.isOfflineMode {
-                        // Redirect to contacts tab when offline
-                        Color.clear
-                            .onAppear {
+                        // Show network connection prompt when offline
+                        NetworkConnectionPrompt(
+                            onConnect: { _ in
+                                sharedState.shouldShowRegistration = true
+                            },
+                            onSkip: {
                                 sharedState.selectedTab = .contacts
                             }
+                        )
                     } else {
                         PostFeedView()
                     }

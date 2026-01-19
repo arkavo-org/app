@@ -14,6 +14,7 @@
 		479D56E22F1DBB97009600B0 /* UnifiedContactService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */; };
 		479D56E32F1DBB97009600B0 /* UnifiedContactDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */; };
 		479D56E42F1DBB97009600B0 /* UnifiedChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */; };
+		479D56E62F1DBBA0009600B0 /* NetworkConnectionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */; };
 		49D9C52D9B864D54A880D16E /* LiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */; };
 		647B8EA0E6704741B56C9102 /* LiveStreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */; };
 		6A49732F2EB942AAAC6FFF65 /* LiveBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F769E211744CD6AAE1B644 /* LiveBadge.swift */; };
@@ -149,6 +150,7 @@
 		4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamView.swift; sourceTree = "<group>"; };
 		479D56DD2F1DBB83009600B0 /* ContactTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactTypes.swift; sourceTree = "<group>"; };
 		479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedChatView.swift; sourceTree = "<group>"; };
+		479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkConnectionPrompt.swift; sourceTree = "<group>"; };
 		479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedContactDetailView.swift; sourceTree = "<group>"; };
 		479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedContactService.swift; sourceTree = "<group>"; };
 		591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertificatePinningDelegate.swift; sourceTree = "<group>"; };
@@ -332,6 +334,7 @@
 			children = (
 				479D56DD2F1DBB83009600B0 /* ContactTypes.swift */,
 				479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */,
+				479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */,
 				479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */,
 				479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */,
 				DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */,
@@ -696,6 +699,7 @@
 				479D56E22F1DBB97009600B0 /* UnifiedContactService.swift in Sources */,
 				479D56E32F1DBB97009600B0 /* UnifiedContactDetailView.swift in Sources */,
 				479D56E42F1DBB97009600B0 /* UnifiedChatView.swift in Sources */,
+				479D56E62F1DBBA0009600B0 /* NetworkConnectionPrompt.swift in Sources */,
 				DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */,
 				DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */,
 				DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */,
