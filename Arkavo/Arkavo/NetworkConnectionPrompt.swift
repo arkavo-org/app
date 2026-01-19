@@ -4,9 +4,9 @@ import SwiftUI
 /// Can be used as an overlay, sheet, or inline view
 struct NetworkConnectionPrompt: View {
     @EnvironmentObject var sharedState: SharedState
-    @State private var selectedNetwork: NetworkOption = .arkavo
+    @State private var showCustomServerField = false
     @State private var customDomain: String = ""
-    @State private var isConnecting = false
+    @State private var connectingOption: NetworkOption?
 
     var onConnect: ((String) -> Void)?
     var onSkip: (() -> Void)?
@@ -14,11 +14,13 @@ struct NetworkConnectionPrompt: View {
     enum NetworkOption: String, CaseIterable {
         case arkavo = "arkavo.social"
         case custom = "Custom Server"
+        case offline = "Continue Offline"
 
         var icon: String {
             switch self {
             case .arkavo: return "globe.americas.fill"
             case .custom: return "server.rack"
+            case .offline: return "wifi.slash"
             }
         }
 
@@ -26,6 +28,7 @@ struct NetworkConnectionPrompt: View {
             switch self {
             case .arkavo: return "Official Arkavo network with global reach"
             case .custom: return "Connect to a private or self-hosted server"
+            case .offline: return "Use local features only"
             }
         }
     }
@@ -49,28 +52,48 @@ struct NetworkConnectionPrompt: View {
                     .padding(.horizontal)
             }
 
-            // Network options
+            // Network options - one tap to select and connect
             VStack(spacing: 12) {
                 ForEach(NetworkOption.allCases, id: \.self) { option in
                     NetworkOptionRow(
                         option: option,
-                        isSelected: selectedNetwork == option,
-                        onTap: { selectedNetwork = option }
+                        isConnecting: connectingOption == option,
+                        onTap: { handleOptionTap(option) }
                     )
                 }
 
                 // Custom domain field
-                if selectedNetwork == .custom {
-                    HStack {
-                        Image(systemName: "link")
-                            .foregroundStyle(.secondary)
-                        TextField("server.example.com", text: $customDomain)
-                            .textContentType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                if showCustomServerField {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "link")
+                                .foregroundStyle(.secondary)
+                            TextField("server.example.com", text: $customDomain)
+                                .textContentType(.URL)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .onSubmit {
+                                    if !customDomain.isEmpty {
+                                        connectToCustomServer()
+                                    }
+                                }
+                        }
+                        .padding()
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+
+                        Button {
+                            connectToCustomServer()
+                        } label: {
+                            if connectingOption == .custom {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Connect to Server")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(customDomain.isEmpty || connectingOption != nil)
                     }
-                    .padding()
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
                 }
             }
@@ -85,39 +108,26 @@ struct NetworkConnectionPrompt: View {
             .padding(.horizontal)
 
             Spacer()
-
-            // Actions
-            VStack(spacing: 12) {
-                Button {
-                    connect()
-                } label: {
-                    if isConnecting {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Connect")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(selectedNetwork == .custom && customDomain.isEmpty || isConnecting)
-
-                Button("Continue Offline") {
-                    onSkip?()
-                }
-                .foregroundStyle(.secondary)
-            }
-            .padding(.bottom)
         }
         .padding()
     }
 
-    private func connect() {
-        let domain = selectedNetwork == .custom ? customDomain : selectedNetwork.rawValue
-        isConnecting = true
+    private func handleOptionTap(_ option: NetworkOption) {
+        switch option {
+        case .arkavo:
+            connectingOption = .arkavo
+            onConnect?(option.rawValue)
+        case .custom:
+            showCustomServerField.toggle()
+        case .offline:
+            onSkip?()
+        }
+    }
 
-        // Trigger registration flow with the selected network
-        onConnect?(domain)
+    private func connectToCustomServer() {
+        guard !customDomain.isEmpty else { return }
+        connectingOption = .custom
+        onConnect?(customDomain)
     }
 }
 
@@ -125,7 +135,7 @@ struct NetworkConnectionPrompt: View {
 
 private struct NetworkOptionRow: View {
     let option: NetworkConnectionPrompt.NetworkOption
-    let isSelected: Bool
+    let isConnecting: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -133,9 +143,9 @@ private struct NetworkOptionRow: View {
             HStack(spacing: 12) {
                 Image(systemName: option.icon)
                     .font(.title3)
-                    .foregroundStyle(isSelected ? .white : Color.accentColor)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 40, height: 40)
-                    .background(isSelected ? Color.accentColor : Color.accentColor.opacity(0.1))
+                    .background(Color.accentColor.opacity(0.1))
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -151,22 +161,22 @@ private struct NetworkOptionRow: View {
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.accentColor)
+                if isConnecting {
+                    ProgressView()
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    .fill(Color(.secondarySystemBackground))
             )
         }
         .buttonStyle(.plain)
+        .disabled(isConnecting)
         .padding(.horizontal)
     }
 }

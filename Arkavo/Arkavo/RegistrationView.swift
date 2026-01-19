@@ -43,7 +43,6 @@ enum RegistrationStep: Int, CaseIterable {
 
 struct RegistrationView: View {
     var onComplete: (_ profile: Profile) async -> Void
-    var isCheckingAccount: Bool = false
     @EnvironmentObject private var sharedState: SharedState
 
     private let skipPasskeysFlag: Bool = {
@@ -120,9 +119,8 @@ struct RegistrationView: View {
 
                         Spacer()
 
-                        // Hide buttons while checking account status on welcome screen
-                        if !(isCheckingAccount && currentStep == .welcome) {
-                            VStack {
+                        // Registration buttons
+                        VStack {
                                 Button(action: {
                                     handleButtonAction()
                                 }) {
@@ -182,18 +180,6 @@ struct RegistrationView: View {
                                 }
                                 .padding()
                             }
-                        } else {
-                            // Show loading indicator while checking account
-                            VStack {
-                                ProgressView()
-                                    .scaleEffect(1.2)
-                                Text("Checking account...")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 8)
-                            }
-                            .padding()
-                        }
                     }
                 }
             }

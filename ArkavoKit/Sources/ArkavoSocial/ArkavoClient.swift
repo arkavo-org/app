@@ -241,6 +241,36 @@ public final class ArkavoClient: NSObject {
         KeychainManager.deleteAuthenticationToken()
     }
 
+    /// Deletes the user's account from the server
+    /// - Throws: ArkavoError if the deletion fails
+    public func deleteAccount() async throws {
+        guard let token = KeychainManager.getAuthenticationToken() else {
+            throw ArkavoError.authenticationFailed("No authentication token")
+        }
+
+        var request = URLRequest(url: authURL.appendingPathComponent("account"))
+        request.httpMethod = "DELETE"
+        request.setValue(token, forHTTPHeaderField: "X-Auth-Token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ArkavoError.invalidResponse
+        }
+
+        if !(200...299).contains(httpResponse.statusCode) {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("Delete account failed with status \(httpResponse.statusCode): \(errorMessage)")
+            throw ArkavoError.authenticationFailed("Failed to delete account: \(errorMessage)")
+        }
+
+        print("Account deleted successfully on server")
+
+        // Disconnect and clear local auth state
+        await disconnect()
+    }
+
     public func sendMessage(_ data: Data) async throws {
         guard currentState == .connected, let webSocket else {
             throw ArkavoError.notConnected
@@ -595,7 +625,7 @@ public final class ArkavoClient: NSObject {
 
         // Parse token from response body
         guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-              let token = json["jwt_token"] as? String
+              let token = json["ntdf_token"] as? String
         else {
             throw ArkavoError.authenticationFailed("No authentication token received")
         }

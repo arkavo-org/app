@@ -71,8 +71,7 @@ struct ArkavoApp: App {
                                     selectedView = .main
                                 }
                             }
-                        },
-                        isCheckingAccount: isCheckingAccountStatus
+                        }
                     )
                 case .main:
                     NavigationStack(path: $navigationPath) {
@@ -877,6 +876,12 @@ struct ArkavoApp: App {
             return
         }
 
+        // Handle Patreon OAuth callback URLs (identity.arkavo.net/oauth/.../patreon)
+        if components.host == "identity.arkavo.net" && components.path.contains("/oauth/") && components.path.contains("patreon") {
+            NotificationCenter.default.post(name: .patreonOAuthCallback, object: url)
+            return
+        }
+
         // Handle app.arkavo.com URLs
         guard components.host == "app.arkavo.com" else {
             print("Unknown URL host: \(components.host ?? "nil")")
@@ -942,6 +947,7 @@ extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
     static let retryConnection = Notification.Name("RetryConnection")
+    static let patreonOAuthCallback = Notification.Name("PatreonOAuthCallback")
 }
 
 @MainActor
@@ -1092,6 +1098,12 @@ final class ViewModelFactory {
     func clearAccount() {
         currentAccount = nil
         currentProfile = nil
+    }
+
+    // Get the ArkavoClient instance
+    @MainActor
+    func getArkavoClient() -> ArkavoClient {
+        serviceLocator.resolve() as ArkavoClient
     }
 
     // Accessor methods for current account and profile

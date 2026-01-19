@@ -101,6 +101,7 @@
 		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
 		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61E2CAF5D2C00A9060C /* AccountView.swift */; };
+E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */; };
 		DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */; };
 		DAE94DD92DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */; };
 		DAE94DDA2DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */; };
@@ -241,6 +242,7 @@
 		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DACCD61E2CAF5D2C00A9060C /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectedAccountsView.swift; sourceTree = "<group>"; };
 		DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkConnectionsView.swift; sourceTree = "<group>"; };
 		DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialKeyExchangeTests.swift; sourceTree = "<group>"; };
 		DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InnerCircleMemberTests.swift; sourceTree = "<group>"; };
@@ -400,6 +402,7 @@
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */,
 				DACCD61E2CAF5D2C00A9060C /* AccountView.swift */,
+				1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */,
 				DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
 				DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */,
@@ -665,6 +668,7 @@
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */,
 				DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */,
 				DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */,
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
