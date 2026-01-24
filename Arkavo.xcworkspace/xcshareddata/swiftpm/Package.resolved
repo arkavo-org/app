@@ -1,5 +1,5 @@
 {
-  "originHash" : "9e70aae0025908ba37125e94037ad822881e2544dec50074b5a0da6469a274f3",
+  "originHash" : "297507ad096b0144910896d833983ef5443d5c6e7698b9e1ad037cddf5680107",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -29,12 +29,20 @@
       }
     },
     {
+      "identity" : "opentdfkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/OpenTDFKit",
+      "state" : {
+        "branch" : "d8ffeff",
+        "revision" : "d8ffeff99e00ec3334aa57b1fe5f9e1c7f38d2a9"
+      }
+    },
+    {
       "identity" : "vrmmetalkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/VRMMetalKit",
       "state" : {
-        "branch" : "main",
-        "revision" : "f104690a96de6304987857d4bd9dacfd45329fd7"
+        "revision" : "0994f57d033dac590cf6cae0df1260190628ef31"
       }
     },
     {

@@ -119,66 +119,67 @@ struct RegistrationView: View {
 
                         Spacer()
 
+                        // Registration buttons
                         VStack {
-                            Button(action: {
-                                handleButtonAction()
-                            }) {
-                                Text(currentButtonLabel)
-                                    .frame(width: geometry.size.width * 0.8)
-                                    .padding(.vertical, 6)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
-
-                            ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
-                                .padding()
-
-                            if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundColor(.orange)
-                                        Text("Registration issue: \(details)")
-                                            .font(.footnote)
-                                            .foregroundColor(.secondary)
-                                            .textSelection(.enabled)
-                                    }
-                                    Text("You can retry, or contact support@arkavo.com with these details.")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                Button(action: {
+                                    handleButtonAction()
+                                }) {
+                                    Text(currentButtonLabel)
+                                        .frame(width: geometry.size.width * 0.8)
+                                        .padding(.vertical, 6)
                                 }
-                                .padding(10)
-                                .background(Color(UIColor.secondarySystemBackground))
-                                .cornerRadius(8)
-                                .padding(.horizontal)
-                            }
+                                .buttonStyle(.borderedProminent)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability) || (currentStep == .eula && !eulaAccepted))
 
-                            HStack {
-                                if currentStep != .welcome {
-                                    Button("Back") {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            slideDirection = .right
-                                            currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                ProgressView(value: Double(currentStep.rawValue), total: Double(RegistrationStep.allCases.count - 1))
+                                    .padding()
+
+                                if let details = sharedState.lastRegistrationErrorDetails, !details.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundColor(.orange)
+                                            Text("Registration issue: \(details)")
+                                                .font(.footnote)
+                                                .foregroundColor(.secondary)
+                                                .textSelection(.enabled)
                                         }
+                                        Text("You can retry, or contact support@arkavo.com with these details.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
                                     }
-                                } else {
-                                    Button("Skip for now") {
-                                        // Return to offline mode / network connections
-                                        sharedState.isOfflineMode = true
-                                    }
-                                    .foregroundStyle(.secondary)
+                                    .padding(10)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .cornerRadius(8)
+                                    .padding(.horizontal)
                                 }
-                                Spacer()
-                                if currentStep == .welcome {
-                                    Button("Next") {
-                                        handleButtonAction()
+
+                                HStack {
+                                    if currentStep != .welcome {
+                                        Button("Back") {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                slideDirection = .right
+                                                currentStep = RegistrationStep(rawValue: currentStep.rawValue - 1) ?? .welcome
+                                            }
+                                        }
+                                    } else {
+                                        Button("Skip for now") {
+                                            // Return to main view in offline mode
+                                            sharedState.skipRegistration = true
+                                        }
+                                        .foregroundStyle(.secondary)
                                     }
-                                    .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                    Spacer()
+                                    if currentStep == .welcome {
+                                        Button("Next") {
+                                            handleButtonAction()
+                                        }
+                                        .disabled(currentStep == .generateScreenName && (selectedScreenName.isEmpty || !isScreenNameAvailable || isCheckingAvailability))
+                                    }
                                 }
+                                .padding()
                             }
-                            .padding()
-                        }
                     }
                 }
             }

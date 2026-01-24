@@ -310,6 +310,26 @@ class PersistenceController {
         }
     }
 
+    /// Deletes an account and all associated data (streams, thoughts, etc.)
+    func deleteAccount(_ account: Account) async throws {
+        print("PersistenceController: Deleting account and all associated data")
+
+        // Delete all streams associated with the account
+        for stream in account.streams {
+            // Delete all thoughts in each stream
+            for thought in stream.thoughts {
+                mainContext.delete(thought)
+            }
+            mainContext.delete(stream)
+        }
+
+        // Delete the account
+        mainContext.delete(account)
+        try await saveChanges()
+
+        print("PersistenceController: Account successfully deleted")
+    }
+
     /// Deletes the stored P2P relationship KeyStore data (both the peer's public keys in `keyStorePublic`
     /// and the local user's private keys for this relationship in `keyStorePrivate`) for a given peer profile,
     /// keeping the profile record itself.

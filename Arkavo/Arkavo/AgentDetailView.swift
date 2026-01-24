@@ -14,14 +14,14 @@ struct AgentDetailView: View {
     @State private var showError = false
 
     var isConnected: Bool {
-        // LocalAIAgent doesn't need connection - it's in-process
-        if isLocalAgent {
-            return agentService.isLocalAgentPublishing
+        // Device agent doesn't need connection - it's in-process
+        if isDeviceAgent {
+            return agentService.isDeviceAgentPublishing
         }
         return agentService.isConnected(to: agent.id)
     }
 
-    var isLocalAgent: Bool {
+    var isDeviceAgent: Bool {
         agent.id.lowercased().contains("local") ||
         agent.metadata.purpose.lowercased().contains("local")
     }
@@ -40,9 +40,9 @@ struct AgentDetailView: View {
                     metadataSection
 
                     // Chat Sessions Section
-                    // LocalAIAgent: Always available (in-process)
+                    // Device agent: Always available (in-process)
                     // Remote agents: Only when connected
-                    if isLocalAgent || isConnected {
+                    if isDeviceAgent || isConnected {
                         chatSessionsSection
                     }
 
@@ -119,8 +119,8 @@ struct AgentDetailView: View {
 
     private var connectionSection: some View {
         VStack(spacing: 16) {
-            // Connection button (not needed for LocalAIAgent - it's in-process)
-            if isLocalAgent {
+            // Connection button (not needed for Device agent - it's in-process)
+            if isDeviceAgent {
                 HStack {
                     Image(systemName: "iphone.circle.fill")
                     Text("In-Process Agent")
@@ -230,9 +230,9 @@ struct AgentDetailView: View {
             Text("Chat Sessions")
                 .font(.headline)
 
-            // LocalAIAgent: Can start chat without connection
+            // Device agent: Can start chat without connection
             // Remote agents: Need connection first
-            if isLocalAgent || isConnected {
+            if isDeviceAgent || isConnected {
                 Button(action: {
                     Task {
                         await openChatSession()

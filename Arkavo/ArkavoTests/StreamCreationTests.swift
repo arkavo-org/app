@@ -91,7 +91,10 @@ final class StreamCreationTests: XCTestCase {
         // Act: Create stream and insert into context before creating thought
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
+            interests: profile.interests,
+            location: profile.location,
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
@@ -129,7 +132,10 @@ final class StreamCreationTests: XCTestCase {
         // Act: Follow the correct pattern from createVideoStream
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
+            interests: profile.interests,
+            location: profile.location,
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
@@ -168,7 +174,10 @@ final class StreamCreationTests: XCTestCase {
         // Act: Follow the correct pattern from createPostStream
         let stream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
+            interests: profile.interests,
+            location: profile.location,
             policies: Policies(
                 admission: .closed,
                 interaction: .closed,
@@ -205,18 +214,12 @@ final class StreamCreationTests: XCTestCase {
         account.profile = profile
 
         // Act: Follow the correct pattern from createInnerCircleStream
-        // InnerCircle creates its own profile
-        let innerCircleProfile = Profile(
+        let stream = Stream(
+            creatorPublicID: profile.publicID,
             name: "InnerCircle",
             blurb: "Local peer-to-peer communication",
             interests: "local",
-            location: ""
-        )
-        modelContext.insert(innerCircleProfile)
-
-        let stream = Stream(
-            creatorPublicID: profile.publicID,
-            profile: innerCircleProfile,
+            location: "",
             policies: Policies(
                 admission: .openInvitation,
                 interaction: .open,
@@ -230,7 +233,7 @@ final class StreamCreationTests: XCTestCase {
         // Assert
         XCTAssertNoThrow(try modelContext.save())
         XCTAssertEqual(account.streams.count, 1)
-        XCTAssertEqual(account.streams.first?.profile.name, "InnerCircle")
+        XCTAssertEqual(account.streams.first?.streamName, "InnerCircle")
     }
 
     // MARK: - Multiple Streams Creation Test
@@ -246,7 +249,10 @@ final class StreamCreationTests: XCTestCase {
         // Act: Create video stream
         let videoStream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
+            interests: profile.interests,
+            location: profile.location,
             policies: Policies(admission: .closed, interaction: .closed, age: .onlyKids)
         )
         modelContext.insert(videoStream)
@@ -267,7 +273,10 @@ final class StreamCreationTests: XCTestCase {
         // Create post stream
         let postStream = Stream(
             creatorPublicID: profile.publicID,
-            profile: profile,
+            name: profile.name,
+            blurb: profile.blurb ?? "",
+            interests: profile.interests,
+            location: profile.location,
             policies: Policies(admission: .closed, interaction: .closed, age: .onlyKids)
         )
         modelContext.insert(postStream)
@@ -286,16 +295,12 @@ final class StreamCreationTests: XCTestCase {
         account.streams.append(postStream)
 
         // Create InnerCircle stream
-        let innerCircleProfile = Profile(
+        let innerCircleStream = Stream(
+            creatorPublicID: profile.publicID,
             name: "InnerCircle",
             blurb: "Local peer-to-peer communication",
             interests: "local",
-            location: ""
-        )
-        modelContext.insert(innerCircleProfile)
-        let innerCircleStream = Stream(
-            creatorPublicID: profile.publicID,
-            profile: innerCircleProfile,
+            location: "",
             policies: Policies(admission: .openInvitation, interaction: .open, age: .forAll)
         )
         modelContext.insert(innerCircleStream)
@@ -308,7 +313,7 @@ final class StreamCreationTests: XCTestCase {
         // Verify each stream type
         let savedVideoStream = account.streams.first { $0.source?.metadata.mediaType == .video }
         let savedPostStream = account.streams.first { $0.source?.metadata.mediaType == .post }
-        let savedInnerCircle = account.streams.first { $0.profile.name == "InnerCircle" }
+        let savedInnerCircle = account.streams.first { $0.streamName == "InnerCircle" }
 
         XCTAssertNotNil(savedVideoStream, "Video stream should exist")
         XCTAssertNotNil(savedPostStream, "Post stream should exist")

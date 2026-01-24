@@ -1,9 +1,11 @@
+import ArkavoSocial
 import ArkavoStore
 import StoreKit
 import SwiftData
 import SwiftUI
 
 struct AccountView: View {
+    @EnvironmentObject var sharedState: SharedState
     @Query private var accounts: [Account]
     @StateObject private var locationManager = LocationManager()
     @StateObject private var storeKitManager = StoreKitManager()
@@ -19,9 +21,12 @@ struct AccountView: View {
     @State private var streamLevel: StreamLevel = .sl0
     @State private var dataModeLevel: DataModeLevel = .dml0
     @State private var showingAgeVerification = false
-    @State private var showingDeleteProfileAlert = false
-    @State private var isResettingProfile = false
+    @State private var showingDeleteAccountAlert = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String?
+    @State private var showingDeleteError = false
     @State private var showingEncryptionUpgrade = false
+    @State private var showingNetworkPrompt = false
 
     private var account: Account? {
         accounts.first
@@ -33,6 +38,13 @@ struct AccountView: View {
         case .medium: "lock.fill"
         case .high: "lock.shield.fill"
         }
+    }
+
+    private var connectedAccountsCount: String {
+        var count = 0
+        if KeychainManager.isAppleAccountLinked() { count += 1 }
+        if KeychainManager.isPatreonAccountLinked() { count += 1 }
+        return count > 0 ? "\(count) linked" : "None"
     }
 
     var body: some View {
@@ -59,27 +71,71 @@ struct AccountView: View {
                 #endif
             }
 
-            Section(header: Text("Profile Management")) {
+            Section(header: Text("Network")) {
+                HStack {
+                    Image(systemName: sharedState.isOfflineMode ? "wifi.slash" : "wifi")
+                        .foregroundStyle(sharedState.isOfflineMode ? .orange : .green)
+                    Text("Status")
+                    Spacer()
+                    Text(sharedState.isOfflineMode ? "Offline" : "Connected")
+                        .foregroundStyle(sharedState.isOfflineMode ? .orange : .green)
+                }
+
+                if sharedState.isOfflineMode {
+                    Button {
+                        showingNetworkPrompt = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "network")
+                                .foregroundStyle(Color.accentColor)
+                            Text("Connect to Network")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
+            }
+
+            Section(header: Text("Connected Accounts")) {
+                NavigationLink(destination: ConnectedAccountsView()) {
+                    HStack {
+                        Image(systemName: "link.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text("Manage Connected Accounts")
+                        Spacer()
+                        Text(connectedAccountsCount)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section(header: Text("Account Management")) {
                 Button(action: {
-                    showingDeleteProfileAlert = true
+                    showingDeleteAccountAlert = true
                 }) {
                     HStack {
-                        Image(systemName: "person.crop.circle.badge.xmark")
-                            .foregroundColor(.red)
-                        Text("Reset Profile")
+                        if isDeletingAccount {
+                            ProgressView()
+                                .frame(width: 20, height: 20)
+                        } else {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        Text("Delete Account")
                             .foregroundColor(.red)
                     }
                 }
-                .disabled(isResettingProfile)
-                .alert("Reset Profile", isPresented: $showingDeleteProfileAlert) {
-                    Button("Cancel", role: .cancel) {
-                        // Empty closure: Default behavior is to dismiss the alert.
-                    }
-                    Button("Reset", role: .destructive) {
-                        resetProfile()
+                .disabled(isDeletingAccount)
+                .alert("Delete Account", isPresented: $showingDeleteAccountAlert) {
+                    Button("Cancel", role: .cancel) { /* Dismisses alert */ }
+                    Button("Delete", role: .destructive) {
+                        deleteAccount()
                     }
                 } message: {
-                    Text("This will delete your profile and all associated encryption keys. A new empty profile will be created. This action cannot be undone.")
+                    Text("This will permanently delete your account and all associated data from the server. This action cannot be undone.")
                 }
             }
 
@@ -146,6 +202,29 @@ struct AccountView: View {
         .sheet(isPresented: $showingEncryptionUpgrade) {
             EncryptionUpgradeView(storeKitManager: storeKitManager, account: account)
         }
+        .sheet(isPresented: $showingNetworkPrompt) {
+            NavigationStack {
+                NetworkConnectionPrompt(
+                    onConnect: { domain in
+                        showingNetworkPrompt = false
+                        sharedState.selectedNetworkDomain = domain
+                        sharedState.shouldShowRegistration = true
+                    },
+                    onSkip: {
+                        showingNetworkPrompt = false
+                    }
+                )
+                .navigationTitle("Connect")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showingNetworkPrompt = false
+                        }
+                    }
+                }
+            }
+        }
         .alert("Location Permission", isPresented: $showingLocationPermissionAlert) {
             Button("OK") {
                 // Empty closure: Default behavior is to dismiss the alert.
@@ -180,6 +259,11 @@ struct AccountView: View {
                 #endif
             }
         }
+        .alert("Error", isPresented: $showingDeleteError) {
+            Button("OK") { /* Dismisses alert */ }
+        } message: {
+            Text(deleteAccountError ?? "Failed to delete account. Please try again.")
+        }
     }
 
     private func requestLocationPermission() {
@@ -196,31 +280,59 @@ struct AccountView: View {
         }
     }
 
-    private func resetProfile() {
+    private func deleteAccount() {
         Task {
-            isResettingProfile = true
-            defer { isResettingProfile = false }
+            isDeletingAccount = true
+            defer { isDeletingAccount = false }
 
             do {
-                guard let account, let profile = account.profile else {
-                    print("No account or profile found to reset")
-                    return
+                // Call the server to delete the account
+                let client = ViewModelFactory.shared.getArkavoClient()
+                try await client.deleteAccount()
+
+                // Clear all local data
+                await clearLocalData()
+
+                // Return to onboarding
+                await MainActor.run {
+                    sharedState.isOfflineMode = true
+                    sharedState.shouldShowRegistration = true
                 }
 
-                // Delete the profile, which will clear KeyStore data and create a new empty profile
-                try await PersistenceController.shared.deleteProfile(profile)
-
-                // Reset local state variables
-                identityAssuranceLevel = .ial0
-                #if !os(macOS)
-                    ageVerificationManager.verificationStatus = .unverified
-                #endif
-
-                print("Profile successfully reset")
+                print("Account successfully deleted")
             } catch {
-                print("Error resetting profile: \(error)")
+                print("Error deleting account: \(error)")
+                await MainActor.run {
+                    deleteAccountError = error.localizedDescription
+                    showingDeleteError = true
+                }
             }
         }
+    }
+
+    private func clearLocalData() async {
+        // Clear keychain data
+        KeychainManager.deleteAuthenticationToken()
+        KeychainManager.deleteArkavoHandle()
+        KeychainManager.deleteAppleAccount()
+        KeychainManager.deleteTokens()
+
+        // Clear account and profile from persistence
+        if let account {
+            if let profile = account.profile {
+                try? await PersistenceController.shared.deleteProfile(profile)
+            }
+            try? await PersistenceController.shared.deleteAccount(account)
+        }
+
+        // Clear ViewModelFactory state
+        ViewModelFactory.shared.clearAccount()
+
+        // Reset local state variables
+        identityAssuranceLevel = .ial0
+        #if !os(macOS)
+        ageVerificationManager.verificationStatus = .unverified
+        #endif
     }
 }
 
@@ -325,6 +437,7 @@ struct ClassificationView: View {
 struct AccountView_Previews: PreviewProvider {
     static var previews: some View {
         AccountView()
+            .environmentObject(SharedState())
     }
 }
 

@@ -3,23 +3,15 @@ import SwiftUI
 
 enum Tab {
     case home
-    case communities
-    case contacts
-    case agents
+    case chats
     case social
-//    case creators
-//    case protect
     case profile
 
     var title: String {
         switch self {
         case .home: "Home"
-        case .communities: "Community"
-        case .contacts: "Contacts"
-        case .agents: "Agents"
+        case .chats: "Chats"
         case .social: "Social"
-//        case .creators: "Creators"
-//        case .protect: "Protect"
         case .profile: "Profile"
         }
     }
@@ -27,12 +19,8 @@ enum Tab {
     var icon: String {
         switch self {
         case .home: "play.circle.fill"
-        case .communities: "bubble.left.and.bubble.right.fill"
-        case .contacts: "person.2.fill"
-        case .agents: "cpu"
+        case .chats: "bubble.left.and.bubble.right.fill"
         case .social: "network"
-//        case .creators: "star.circle.fill"
-//        case .protect: "shield.checkerboard"
         case .profile: "person.circle.fill"
         }
     }
@@ -56,37 +44,37 @@ struct ContentView: View {
                 switch sharedState.selectedTab {
                 case .home:
                     if sharedState.isOfflineMode && !sharedState.showCreateView {
-                        // Show network connections view when in offline mode
-                        NetworkConnectionsView()
-                            .environmentObject(sharedState)
-                            .environmentObject(agentService)
+                        // Show network connection prompt when offline
+                        NetworkConnectionPrompt(
+                            onConnect: { domain in
+                                sharedState.selectedNetworkDomain = domain
+                                sharedState.shouldShowRegistration = true
+                            },
+                            onSkip: {
+                                sharedState.selectedTab = .chats
+                            }
+                        )
                     } else {
                         VideoContentView()
                     }
-                case .communities:
-                    // Inner Circle is always available, even in offline mode
-                    GroupView()
+                case .chats:
+                    // All conversations: 1:1, groups, and agents
+                    ChatsView()
                         .onDisappear {
                             sharedState.selectedStreamPublicID = nil
                         }
-                case .contacts:
-                    // Contacts view for managing peers and connections
-                    ContactsView()
-                case .agents:
-                    // Agent discovery and chat (always available)
-                    AgentDiscoveryView(agentService: agentService)
                 case .social:
                     if sharedState.isOfflineMode {
-                        // Redirect to network connections if they somehow get to this tab in offline mode
-                        NetworkConnectionsView()
-                            .environmentObject(sharedState)
-                            .environmentObject(agentService)
-                            .onAppear {
-                                // Switch to home tab
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    sharedState.selectedTab = .home
-                                }
+                        // Show network connection prompt when offline
+                        NetworkConnectionPrompt(
+                            onConnect: { domain in
+                                sharedState.selectedNetworkDomain = domain
+                                sharedState.shouldShowRegistration = true
+                            },
+                            onSkip: {
+                                sharedState.selectedTab = .chats
                             }
+                        )
                     } else {
                         PostFeedView()
                     }
@@ -142,7 +130,7 @@ struct ContentView: View {
                 if !isCollapsed {
                     // Expanded TabView
                     HStack(spacing: 20) {
-                        ForEach([Tab.home, .communities, .contacts, .agents, .social, .profile], id: \.self) { tab in
+                        ForEach([Tab.home, .chats, .social, .profile], id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
@@ -315,12 +303,8 @@ struct EmptyStateView: View {
 
     private func getEmptyStateMessage() -> String {
         switch tab {
-        case .communities:
-            "Need help? Tap the '+' to start creating your group."
-        case .contacts:
-            "Connect with others! Tap '+' to add your first contact."
-        case .agents:
-            "No agents discovered yet. Make sure an agent is running on your network."
+        case .chats:
+            "No conversations yet. Tap '+' to start a new chat or create a group."
         case .home:
             "Share your first video! Tap '+' to get started."
         case .social:

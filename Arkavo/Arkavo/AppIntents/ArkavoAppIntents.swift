@@ -91,8 +91,8 @@ struct AskAgentIntent: AppIntent {
         switch type {
         case .orchestrator:
             return agents.first { $0.metadata.purpose.lowercased().contains("orchestrat") }
-        case .localAI:
-            return agents.first { $0.metadata.purpose.lowercased().contains("local") && $0.metadata.purpose.lowercased().contains("ai") }
+        case .deviceAgent:
+            return agents.first { $0.id.lowercased().contains("local") || $0.metadata.purpose.lowercased().contains("on-device") }
         case .any:
             return agents.first
         }
@@ -103,14 +103,14 @@ struct AskAgentIntent: AppIntent {
 @available(iOS 26.0, macOS 26.0, *)
 enum AgentTypeParameter: String, AppEnum {
     case orchestrator = "Orchestrator"
-    case localAI = "Local AI"
+    case deviceAgent = "Device Agent"
     case any = "Any Available"
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Agent Type")
 
     static var caseDisplayRepresentations: [AgentTypeParameter: DisplayRepresentation] = [
         .orchestrator: "Orchestrator (for task planning)",
-        .localAI: "Local AI (for on-device tasks)",
+        .deviceAgent: "Device Agent (for on-device tasks)",
         .any: "Any available agent",
     ]
 }

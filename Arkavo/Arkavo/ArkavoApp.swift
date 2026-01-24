@@ -11,6 +11,7 @@ struct ArkavoApp: App {
     @State private var isCheckingAccountStatus = false
     @State private var tokenCheckTimer: Timer?
     @State private var connectionError: ConnectionError?
+    @State private var pendingAgentAuthorization: AgentAuthorizationRequest?
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
     @StateObject private var agentService = AgentService()
@@ -62,14 +63,16 @@ struct ArkavoApp: App {
             Group {
                 switch selectedView {
                 case .registration:
-                    RegistrationView(onComplete: { profile in
-                        Task {
-                            let success = await saveProfile(profile: profile)
-                            if success {
-                                selectedView = .main
+                    RegistrationView(
+                        onComplete: { profile in
+                            Task {
+                                let success = await saveProfile(profile: profile)
+                                if success {
+                                    selectedView = .main
+                                }
                             }
                         }
-                    })
+                    )
                 case .main:
                     NavigationStack(path: $navigationPath) {
                         ContentView()
@@ -136,6 +139,14 @@ struct ArkavoApp: App {
                     selectedView = .registration
                 }
             }
+            .onChange(of: sharedState.skipRegistration) { _, shouldSkip in
+                // When user taps "Skip for now" in registration, go to main view
+                if shouldSkip {
+                    sharedState.skipRegistration = false
+                    sharedState.isOfflineMode = true
+                    selectedView = .main
+                }
+            }
             .onChange(of: sharedState.isOfflineMode) { _, isOffline in
                 // When user skips registration, go to main view in offline mode
                 if isOffline && selectedView == .registration {
@@ -146,6 +157,17 @@ struct ArkavoApp: App {
                 if let url = notification.object as? URL {
                     handleIncomingURL(url)
                 }
+            }
+            .sheet(item: $pendingAgentAuthorization) { request in
+                AgentAuthorizationView(
+                    request: request,
+                    onAuthorize: {
+                        pendingAgentAuthorization = nil
+                    },
+                    onCancel: {
+                        pendingAgentAuthorization = nil
+                    }
+                )
             }
             .alert(item: $connectionError) { error in
                 Alert(
@@ -822,6 +844,25 @@ struct ArkavoApp: App {
         }
     }
 
+    // Handle agent authorization QR code URLs (arkavo://agent/authorize?did=...&name=...&entitlements=...)
+    func handleAgentAuthorizationURL(_ components: URLComponents) {
+        print("🔐 [Agent Auth] Handling authorization URL")
+
+        guard let request = AgentAuthorizationRequest.from(components: components) else {
+            print("❌ [Agent Auth] Invalid authorization URL - missing DID")
+            return
+        }
+
+        print("📱 [Agent Auth] Agent DID: \(request.did)")
+        if let name = request.name {
+            print("📱 [Agent Auth] Agent name: \(name)")
+        }
+        print("📱 [Agent Auth] Entitlements: \(request.entitlements)")
+
+        // Show authorization sheet
+        pendingAgentAuthorization = request
+    }
+
     // applinks
     func handleIncomingURL(_ url: URL) {
         print("Handling URL: \(url.absoluteString)") // Debug logging
@@ -834,6 +875,18 @@ struct ArkavoApp: App {
         // Handle ArkavoCreator connection URLs (arkavo://connect?host=...&port=...)
         if components.host == "connect" {
             handleConnectionURL(components)
+            return
+        }
+
+        // Handle agent authorization URLs (arkavo://agent/authorize?did=...&name=...&entitlements=...)
+        if components.host == "agent" && components.path == "/authorize" {
+            handleAgentAuthorizationURL(components)
+            return
+        }
+
+        // Handle Patreon OAuth callback URLs (identity.arkavo.net/oauth/.../patreon)
+        if components.host == "identity.arkavo.net" && components.path.contains("/oauth/") && components.path.contains("patreon") {
+            NotificationCenter.default.post(name: .patreonOAuthCallback, object: url)
             return
         }
 
@@ -868,7 +921,7 @@ struct ArkavoApp: App {
         case "stream":
             print("Processing stream deep link") // Debug logging
             // First switch the tab
-            sharedState.selectedTab = .communities
+            sharedState.selectedTab = .chats
             // Then append to navigation path
             DispatchQueue.main.async {
                 navigationPath.append(DeepLinkDestination.stream(publicID: publicID))
@@ -902,6 +955,7 @@ extension Notification.Name {
     static let closeWebSockets = Notification.Name("CloseWebSockets")
     static let handleIncomingURL = Notification.Name("HandleIncomingURL")
     static let retryConnection = Notification.Name("RetryConnection")
+    static let patreonOAuthCallback = Notification.Name("PatreonOAuthCallback")
 }
 
 @MainActor
@@ -954,6 +1008,9 @@ class SharedState: ObservableObject {
     @Published var lastRegistrationErrorDetails: String?
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
+    @Published var skipRegistration: Bool = false
+    @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
+    @Published var selectedNetworkDomain: String = "arkavo.social"
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]
@@ -971,9 +1028,7 @@ class SharedState: ObservableObject {
     func getCenterPrompt() -> String {
         switch selectedTab {
         case .home: "Capture" // create a video
-        case .communities: "Converse" // start chatting
-        case .contacts: "Connect" // invite someone new
-        case .agents: "Discover" // find local agents
+        case .chats: "Message" // start a conversation
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -982,9 +1037,7 @@ class SharedState: ObservableObject {
     func getTooltipText() -> String {
         switch selectedTab {
         case .home: "Capture video"
-        case .communities: "Converse in chat"
-        case .contacts: "Connect with someone"
-        case .agents: "Discover agents"
+        case .chats: "New conversation"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }
@@ -1056,6 +1109,12 @@ final class ViewModelFactory {
         currentProfile = nil
     }
 
+    // Get the ArkavoClient instance
+    @MainActor
+    func getArkavoClient() -> ArkavoClient {
+        serviceLocator.resolve() as ArkavoClient
+    }
+
     // Accessor methods for current account and profile
     @MainActor
     func getCurrentAccount() -> Account? {
@@ -1105,6 +1164,15 @@ final class ViewModelFactory {
             return nil
         }
         return makeChatViewModel(streamPublicID: streamPublicID)
+    }
+
+    @MainActor
+    func makeChatsViewModel() -> ChatsViewModel {
+        guard let account = currentAccount else {
+            print("⚠️ Warning: Attempting to create ChatsViewModel without account")
+            return ChatsViewModel(account: Account())
+        }
+        return ChatsViewModel(account: account)
     }
 
     // Access the MultipeerConnectivity view model for peer discovery

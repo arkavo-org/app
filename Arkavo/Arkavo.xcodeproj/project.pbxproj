@@ -7,11 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0628579CD1E34893A4FBAD72 /* LiveStreamEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */; };
+		14DFEA4763294AFEA1364EE2 /* FeedItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D716EAD864767A14A2C51 /* FeedItem.swift */; };
 		15BFEA2048AB405BBBB81E87 /* CertificatePinningDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */; };
+		479D56DE2F1DBB83009600B0 /* ContactTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56DD2F1DBB83009600B0 /* ContactTypes.swift */; };
+		479D56E22F1DBB97009600B0 /* UnifiedContactService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */; };
+		479D56E32F1DBB97009600B0 /* UnifiedContactDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */; };
+		479D56E42F1DBB97009600B0 /* UnifiedChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */; };
+		479D56E62F1DBBA0009600B0 /* NetworkConnectionPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */; };
+		479D56E72F1DBBB0009600B0 /* ChatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56E82F1DBBB0009600B0 /* ChatsView.swift */; };
+		479D56E92F1DBBC0009600B0 /* ChatsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479D56EA2F1DBBC0009600B0 /* ChatsViewModel.swift */; };
+		49D9C52D9B864D54A880D16E /* LiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */; };
+		647B8EA0E6704741B56C9102 /* LiveStreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */; };
+		6A49732F2EB942AAAC6FFF65 /* LiveBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F769E211744CD6AAE1B644 /* LiveBadge.swift */; };
+		BD00FF12577A4BA5996746E0 /* LiveStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */; };
 		CB68E2632C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2642C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
 		CB68E2652C9A743600FF3167 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB68E2622C9A743600FF3167 /* Localizable.xcstrings */; };
+		DA0000032EF7A00000000003 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA0000022EF7A00000000002 /* ArkavoMediaKit */; };
+		DA0000042EF7A00000000004 /* HLSTDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */; };
 		DA03B4592C40AD9500C68162 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */; };
+		DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */; };
 		DA0FEC422C58766F00C0A010 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC402C586DF700C0A010 /* Stream.swift */; };
 		DA0FEC442C5B230700C0A010 /* ThoughtStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */; };
 		DA11D51A2C8DDFA9005D1946 /* StreamMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11D5192C8DDFA9005D1946 /* StreamMapView.swift */; };
@@ -54,13 +70,6 @@
 		DA8A1F962CE2502300E1D7FC /* TextEmbedding.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */; };
 		DA8A1F982CE2794800E1D7FC /* ProtectorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */; };
 		DA90ED732D2B65BA00BE0B1E /* VideoFeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */; };
-		49D9C52D9B864D54A880D16E /* LiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */; };
-		647B8EA0E6704741B56C9102 /* LiveStreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */; };
-		BD00FF12577A4BA5996746E0 /* LiveStreamEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */; };
-		0628579CD1E34893A4FBAD72 /* LiveStreamEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */; };
-		14DFEA4763294AFEA1364EE2 /* FeedItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5D716EAD864767A14A2C51 /* FeedItem.swift */; };
-		E015062D4804444C94637C50 /* EmbeddedLiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */; };
-		6A49732F2EB942AAAC6FFF65 /* LiveBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F769E211744CD6AAE1B644 /* LiveBadge.swift */; };
 		DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C042D380ADE0033F6B8 /* ReportView.swift */; };
 		DA975C072D3849910033F6B8 /* BlockedProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA975C062D3849910033F6B8 /* BlockedProfile.swift */; };
 		DA9D344A2C6AE68000D39ED4 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D34492C6AE68000D39ED4 /* StreamView.swift */; };
@@ -70,20 +79,12 @@
 		DAAC242F2EA3D99000E06FE1 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC242B2EA3D99000E06FE1 /* AgentService.swift */; };
 		DAAC24302EA3D99000E06FE1 /* AgentChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */; };
 		DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */; };
-		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
-		DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0002EE0112340000001B /* CreatorContentView.swift */; };
-		DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0003EE0112340000001B /* ContentDetailView.swift */; };
-		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
-		DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */; };
-		DAFP0001EE0112340000001A /* FairPlayTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFP0001EE0112340000001B /* FairPlayTestView.swift */; };
-		DA0000042EF7A00000000004 /* HLSTDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */; };
 		DAAFCBCC2D08FAF0003FC56F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */; };
 		DAAFCBCE2D090740003FC56F /* GroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCD2D09073A003FC56F /* GroupView.swift */; };
 		DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBCF2D0907BD003FC56F /* ChatView.swift */; };
 		DAAFCBF82D091A51003FC56F /* PostFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF72D091A4A003FC56F /* PostFeedView.swift */; };
 		DAAFCBFA2D091F18003FC56F /* VideoFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */; };
 		DABD7D482D0D2F3B00239F22 /* VideoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D472D0D2F2900239F22 /* VideoManager.swift */; };
-DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF00001VPS00001 /* VideoProtectionService.swift */; };
 		DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D492D0D336700239F22 /* VideoCreateView.swift */; };
 		DABD7D4C2D0E4BDE00239F22 /* GroupCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */; };
 		DABD7D502D0F584B00239F22 /* CreatorSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */; };
@@ -94,8 +95,13 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
 		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
+		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
+		DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0002EE0112340000001B /* CreatorContentView.swift */; };
+		DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0003EE0112340000001B /* ContentDetailView.swift */; };
+		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
 		DACCD61D2CAB91A600A9060C /* StreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61C2CAB91A300A9060C /* StreamService.swift */; };
 		DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACCD61E2CAF5D2C00A9060C /* AccountView.swift */; };
+E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */; };
 		DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */; };
 		DAE94DD92DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */; };
 		DAE94DDA2DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */; };
@@ -105,18 +111,22 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DD42DC5B56C00FB0EFE /* KeyExchangeTests.swift */; };
 		DAE94DDF2DC5B56C00FB0EFE /* KeyExchangeTestSuite.md in Resources */ = {isa = PBXBuildFile; fileRef = DAE94DD52DC5B56C00FB0EFE /* KeyExchangeTestSuite.md */; };
 		DAE94DE02DC6A00000FB0EFE /* StreamCreationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */; };
+		DAEADA7A2F1D4935007F1CB1 /* AgentAuthorizationRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEADA792F1D4935007F1CB1 /* AgentAuthorizationRequest.swift */; };
+		DAEADA7C2F1D4977007F1CB1 /* AgentAuthorizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
 		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
+		DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF00001VPS00001 /* VideoProtectionService.swift */; };
 		DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */; };
 		DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 		DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */; };
-		DA0000032EF7A00000000003 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA0000022EF7A00000000002 /* ArkavoMediaKit */; };
 		DAF7A3A52EC2D80A00A59F0C /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAF7A3A42EC2D80A00A59F0C /* ArkavoKit */; };
 		DAF7A3A72EC2D83D00A59F0C /* StreamManager 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF7A3A62EC2D83D00A59F0C /* StreamManager 2.swift */; };
+		DAFP0001EE0112340000001A /* FairPlayTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFP0001EE0112340000001B /* FairPlayTestView.swift */; };
 		DC2BC2C36016470FB5A24D83 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */; };
+		E015062D4804444C94637C50 /* EmbeddedLiveStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -138,8 +148,23 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 
 /* Begin PBXFileReference section */
 		0E80E531FA3341FFBD4A81C3 /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
+		1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEventHandler.swift; sourceTree = "<group>"; };
+		21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEvent.swift; sourceTree = "<group>"; };
+		4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamView.swift; sourceTree = "<group>"; };
+		479D56DD2F1DBB83009600B0 /* ContactTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactTypes.swift; sourceTree = "<group>"; };
+		479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedChatView.swift; sourceTree = "<group>"; };
+		479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkConnectionPrompt.swift; sourceTree = "<group>"; };
+		479D56E82F1DBBB0009600B0 /* ChatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatsView.swift; sourceTree = "<group>"; };
+		479D56EA2F1DBBC0009600B0 /* ChatsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatsViewModel.swift; sourceTree = "<group>"; };
+		479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedContactDetailView.swift; sourceTree = "<group>"; };
+		479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedContactService.swift; sourceTree = "<group>"; };
 		591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertificatePinningDelegate.swift; sourceTree = "<group>"; };
+		5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedLiveStreamView.swift; sourceTree = "<group>"; };
+		7D5D716EAD864767A14A2C51 /* FeedItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedItem.swift; sourceTree = "<group>"; };
+		B1F769E211744CD6AAE1B644 /* LiveBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBadge.swift; sourceTree = "<group>"; };
+		C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamViewModel.swift; sourceTree = "<group>"; };
 		CB68E2622C9A743600FF3167 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSTDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DA03B4582C40AD8800C68162 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
 		DA0FEC402C586DF700C0A010 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		DA0FEC432C5B230700C0A010 /* ThoughtStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtStreamView.swift; sourceTree = "<group>"; };
@@ -167,6 +192,7 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DA484F342CDD948A0023B016 /* ProtectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorView.swift; sourceTree = "<group>"; };
 		DA4937A62CC5DCDA00E1F6BC /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		DA5448DD2CFB612F00959553 /* Arkavo/Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Arkavo/Extensions.swift; sourceTree = "<group>"; };
+		DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMP4VideoPlayerView.swift; sourceTree = "<group>"; };
 		DA57B9A82DE28A9D002D5C8F /* WaveEmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveEmptyStateView.swift; sourceTree = "<group>"; };
 		DA57B9AA2DE28AB6002D5C8F /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		DA57B9AC2DE293B3002D5C8F /* ContactsCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsCreateView.swift; sourceTree = "<group>"; };
@@ -182,13 +208,6 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DA8A1F952CE2502300E1D7FC /* TextEmbedding.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = TextEmbedding.mlpackage; sourceTree = "<group>"; };
 		DA8A1F972CE2793F00E1D7FC /* ProtectorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtectorService.swift; sourceTree = "<group>"; };
 		DA90ED722D2B65BA00BE0B1E /* VideoFeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedViewModel.swift; sourceTree = "<group>"; };
-		4017DBFD0D6746EAA2B28307 /* LiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamView.swift; sourceTree = "<group>"; };
-		C82CD8EFAE3543DF892F21C8 /* LiveStreamViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamViewModel.swift; sourceTree = "<group>"; };
-		21F0633CE43D41BCA1E14050 /* LiveStreamEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEvent.swift; sourceTree = "<group>"; };
-		1BDCCF88D3EC45A89373F606 /* LiveStreamEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStreamEventHandler.swift; sourceTree = "<group>"; };
-		7D5D716EAD864767A14A2C51 /* FeedItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedItem.swift; sourceTree = "<group>"; };
-		5E57B8C4C0CB4B73B8E36068 /* EmbeddedLiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedLiveStreamView.swift; sourceTree = "<group>"; };
-		B1F769E211744CD6AAE1B644 /* LiveBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBadge.swift; sourceTree = "<group>"; };
 		DA975C042D380ADE0033F6B8 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportView.swift; sourceTree = "<group>"; };
 		DA975C062D3849910033F6B8 /* BlockedProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedProfile.swift; sourceTree = "<group>"; };
 		DA9D34492C6AE68000D39ED4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
@@ -198,23 +217,15 @@ DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuild
 		DAAC242A2EA3D99000E06FE1 /* AgentDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDiscoveryView.swift; sourceTree = "<group>"; };
 		DAAC242B2EA3D99000E06FE1 /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorView.swift; sourceTree = "<group>"; };
-		DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorProfileDisplayView.swift; sourceTree = "<group>"; };
 		DAAFCBCB2D08FAEE003FC56F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		DAAFCBCD2D09073A003FC56F /* GroupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupView.swift; sourceTree = "<group>"; };
 		DAAFCBCF2D0907BD003FC56F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		DAAFCBF72D091A4A003FC56F /* PostFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostFeedView.swift; sourceTree = "<group>"; };
 		DAAFCBF92D091F17003FC56F /* VideoFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFeedView.swift; sourceTree = "<group>"; };
 		DABD7D472D0D2F2900239F22 /* VideoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoManager.swift; sourceTree = "<group>"; };
-DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProtectionService.swift; sourceTree = "<group>"; };
 		DABD7D492D0D336700239F22 /* VideoCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCreateView.swift; sourceTree = "<group>"; };
 		DABD7D4B2D0E4BD700239F22 /* GroupCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCreateView.swift; sourceTree = "<group>"; };
 		DABD7D4F2D0F584A00239F22 /* CreatorSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorSupportView.swift; sourceTree = "<group>"; };
-		DACC0002EE0112340000001B /* CreatorContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorContentView.swift; sourceTree = "<group>"; };
-		DACC0003EE0112340000001B /* ContentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDetailView.swift; sourceTree = "<group>"; };
-		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
-		DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMP4VideoPlayerView.swift; sourceTree = "<group>"; };
-		DAFP0001EE0112340000001B /* FairPlayTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FairPlayTestView.swift; sourceTree = "<group>"; };
-		DA0000052EF7A00000000005 /* HLSTDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSTDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DAC1F9E32C34DA7000499631 /* Arkavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arkavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoApp.swift; sourceTree = "<group>"; };
 		DAC1F9EC2C34DA7100499631 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -225,8 +236,13 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoWebSocket.swift; sourceTree = "<group>"; };
+		DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorProfileDisplayView.swift; sourceTree = "<group>"; };
+		DACC0002EE0112340000001B /* CreatorContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorContentView.swift; sourceTree = "<group>"; };
+		DACC0003EE0112340000001B /* ContentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDetailView.swift; sourceTree = "<group>"; };
+		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
 		DACCD61C2CAB91A300A9060C /* StreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamService.swift; sourceTree = "<group>"; };
 		DACCD61E2CAF5D2C00A9060C /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectedAccountsView.swift; sourceTree = "<group>"; };
 		DAE94DD02DC5A5D200FB0EFE /* NetworkConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkConnectionsView.swift; sourceTree = "<group>"; };
 		DAE94DD22DC5B56C00FB0EFE /* InitialKeyExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitialKeyExchangeTests.swift; sourceTree = "<group>"; };
 		DAE94DD32DC5B56C00FB0EFE /* InnerCircleMemberTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InnerCircleMemberTests.swift; sourceTree = "<group>"; };
@@ -236,14 +252,18 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DAE94DD72DC5B56C00FB0EFE /* KeyStoreDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStoreDataTests.swift; sourceTree = "<group>"; };
 		DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileKeyStorePersistenceTests.swift; sourceTree = "<group>"; };
 		DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamCreationTests.swift; sourceTree = "<group>"; };
+		DAEADA792F1D4935007F1CB1 /* AgentAuthorizationRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuthorizationRequest.swift; sourceTree = "<group>"; };
+		DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuthorizationView.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
+		DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProtectionService.swift; sourceTree = "<group>"; };
 		DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDiscoveryService.swift; sourceTree = "<group>"; };
 		DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraStreamer.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
 		DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueueManager.swift; sourceTree = "<group>"; };
 		DAF7A3A62EC2D83D00A59F0C /* StreamManager 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StreamManager 2.swift"; sourceTree = "<group>"; };
+		DAFP0001EE0112340000001B /* FairPlayTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FairPlayTestView.swift; sourceTree = "<group>"; };
 		REFAC00000000000000000004 /* StreamManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -318,6 +338,14 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 		DAC1F9E52C34DA7000499631 /* Arkavo */ = {
 			isa = PBXGroup;
 			children = (
+				479D56DD2F1DBB83009600B0 /* ContactTypes.swift */,
+				479D56DF2F1DBB97009600B0 /* UnifiedChatView.swift */,
+				479D56E52F1DBBA0009600B0 /* NetworkConnectionPrompt.swift */,
+				479D56E82F1DBBB0009600B0 /* ChatsView.swift */,
+				479D56EA2F1DBBC0009600B0 /* ChatsViewModel.swift */,
+				479D56E02F1DBB97009600B0 /* UnifiedContactDetailView.swift */,
+				479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */,
+				DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */,
 				DAAC24272EA3D99000E06FE1 /* AgentChatListView.swift */,
 				DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */,
 				DAAC24292EA3D99000E06FE1 /* AgentDetailView.swift */,
@@ -374,6 +402,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DAC1F9E62C34DA7000499631 /* ArkavoApp.swift */,
 				DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */,
 				DACCD61E2CAF5D2C00A9060C /* AccountView.swift */,
+				1DE27E30569F453E96F4F8CD /* ConnectedAccountsView.swift */,
 				DA22122D2CB0C85B00C220B0 /* AccountProfileBadge.swift */,
 				DA1A4DE22C69264F00722E3E /* AccountProfileView.swift */,
 				DA24F9132CB1C870003211CD /* AccountProfileInterestsView.swift */,
@@ -411,6 +440,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				591B48B20FFA44C19F96F4DE /* CertificatePinningDelegate.swift */,
 				REFAC00000000000000000004 /* StreamManager.swift */,
 				DAF7A3A62EC2D83D00A59F0C /* StreamManager 2.swift */,
+				DAEADA792F1D4935007F1CB1 /* AgentAuthorizationRequest.swift */,
 			);
 			path = Arkavo;
 			sourceTree = "<group>";
@@ -634,13 +664,16 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DA24F9142CB1C872003211CD /* AccountProfileInterestsView.swift in Sources */,
 				DA22122E2CB0C85B00C220B0 /* AccountProfileBadge.swift in Sources */,
 				DA36BD532CC8534400467778 /* IDCardScannerViewController.swift in Sources */,
+				DAEADA7A2F1D4935007F1CB1 /* AgentAuthorizationRequest.swift in Sources */,
 				DA7598C52C9615F90021A8FC /* ArkavoPolicy.swift in Sources */,
 				DA6C9E5E2D1DFE1E000CC3E5 /* ChatViewModel.swift in Sources */,
 				DACCD61F2CAF5D2C00A9060C /* AccountView.swift in Sources */,
+				E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */,
 				DAE94DD12DC5A5D200FB0EFE /* NetworkConnectionsView.swift in Sources */,
 				DA975C052D380AE20033F6B8 /* ReportView.swift in Sources */,
 				DAAFCBD02D0907BE003FC56F /* ChatView.swift in Sources */,
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
+				DAEADA7C2F1D4977007F1CB1 /* AgentAuthorizationView.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DAAFCBF82D091A51003FC56F /* PostFeedView.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
@@ -673,6 +706,12 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */,
 				DAFP0001EE0112340000001A /* FairPlayTestView.swift in Sources */,
 				DA0000042EF7A00000000004 /* HLSTDFVideoPlayerView.swift in Sources */,
+				479D56E22F1DBB97009600B0 /* UnifiedContactService.swift in Sources */,
+				479D56E32F1DBB97009600B0 /* UnifiedContactDetailView.swift in Sources */,
+				479D56E42F1DBB97009600B0 /* UnifiedChatView.swift in Sources */,
+				479D56E62F1DBBA0009600B0 /* NetworkConnectionPrompt.swift in Sources */,
+				479D56E72F1DBBB0009600B0 /* ChatsView.swift in Sources */,
+				479D56E92F1DBBC0009600B0 /* ChatsViewModel.swift in Sources */,
 				DAAC242C2EA3D99000E06FE1 /* AgentDetailView.swift in Sources */,
 				DAAC242D2EA3D99000E06FE1 /* AgentChatListView.swift in Sources */,
 				DAAC242E2EA3D99000E06FE1 /* AgentDiscoveryView.swift in Sources */,
@@ -686,6 +725,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */,
 				DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
+				479D56DE2F1DBB83009600B0 /* ContactTypes.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
 				DA1A4DE52C6929DC00722E3E /* StreamProfileView.swift in Sources */,
 				DABD7D4C2D0E4BDE00239F22 /* GroupCreateView.swift in Sources */,
@@ -814,12 +854,12 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=100";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
-				OTHER_SWIFT_FLAGS = "$(inherited) -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=100";
 			};
 			name = Debug;
 		};
@@ -894,7 +934,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 100;
+				CURRENT_PROJECT_VERSION = 111;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;
@@ -945,7 +985,7 @@ DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; l
 				CODE_SIGN_ENTITLEMENTS = Arkavo/Arkavo.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 100;
+				CURRENT_PROJECT_VERSION = 111;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Arkavo/Preview Content\"";
 				ENABLE_APP_SANDBOX = YES;

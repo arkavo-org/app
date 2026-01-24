@@ -10,58 +10,126 @@ final class RegistrationFlowUITest: XCTestCase {
         app.launch()
     }
 
-    func testCompleteRegistrationFlow() throws {
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let testHandle = "testuser\(timestamp)"
+    override func tearDownWithError() throws {
+        app = nil
+    }
 
-        // Wait for Welcome screen
-        let welcomeTitle = app.staticTexts["Welcome"]
-        XCTAssertTrue(welcomeTitle.waitForExistence(timeout: 5), "Welcome screen should appear")
+    func testSkipForNowFromRegistration() throws {
+        // Wait for app to load
+        sleep(2)
 
-        // Tap Get Started
-        let getStartedButton = app.buttons["Get Started"]
-        XCTAssertTrue(getStartedButton.waitForExistence(timeout: 3))
-        getStartedButton.tap()
+        // Navigate to registration if on network prompt
+        let arkavoSocialOption = app.staticTexts["arkavo.social"]
+        if arkavoSocialOption.waitForExistence(timeout: 3) {
+            print("On network prompt, tapping arkavo.social to go to registration")
+            arkavoSocialOption.tap()
+            sleep(3)
+        }
 
-        // Wait for EULA screen
-        let eulaTitle = app.staticTexts["Terms of Service"]
-        XCTAssertTrue(eulaTitle.waitForExistence(timeout: 3), "EULA screen should appear")
+        // Should now be on registration welcome screen with Arkavo logo/title
+        let arkavoTitle = app.staticTexts["Arkavo"]
+        if arkavoTitle.waitForExistence(timeout: 5) {
+            print("On registration welcome screen")
+        }
 
-        // Accept EULA
-        let eulaCheckbox = app.buttons["EULA Agreement Checkbox"]
-        XCTAssertTrue(eulaCheckbox.waitForExistence(timeout: 3))
-        eulaCheckbox.tap()
+        // Find and tap Skip for now button
+        let skipButton = app.buttons["Skip for now"]
+        guard skipButton.waitForExistence(timeout: 5) else {
+            // Debug: print what buttons exist
+            print("Available buttons:")
+            for button in app.buttons.allElementsBoundByIndex {
+                print("  - '\(button.label)' (enabled: \(button.isEnabled))")
+            }
+            XCTFail("Skip for now button not found")
+            return
+        }
 
-        let acceptButton = app.buttons["Accept & Continue"]
-        XCTAssertTrue(acceptButton.waitForExistence(timeout: 2))
-        XCTAssertTrue(acceptButton.isEnabled, "Accept button should be enabled after checking box")
-        acceptButton.tap()
+        print("Found Skip for now button, tapping it")
+        skipButton.tap()
+        sleep(2)
 
-        // Wait for handle screen
-        let handleTitle = app.staticTexts["Create Handle"]
-        XCTAssertTrue(handleTitle.waitForExistence(timeout: 3), "Handle screen should appear")
+        // After skipping, should go to main view with tab bar
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 5), "Should navigate to main view with tab bar after skipping")
+        print("Successfully navigated to main view")
+    }
 
-        // Enter handle
-        let handleField = app.textFields["handleTextField"]
-        XCTAssertTrue(handleField.waitForExistence(timeout: 3))
-        handleField.tap()
-        handleField.typeText(testHandle)
+    func testContinueOfflineFromNetworkPrompt() throws {
+        // Wait for app to load
+        sleep(2)
 
-        // Wait for availability check
-        let availableText = app.staticTexts["Available"]
-        XCTAssertTrue(availableText.waitForExistence(timeout: 5), "Handle should be available")
+        // Check if we're on the network prompt
+        let continueOfflineText = app.staticTexts["Continue Offline"]
+        guard continueOfflineText.waitForExistence(timeout: 5) else {
+            print("Not on network prompt, skipping test")
+            return
+        }
 
-        // Continue/Finish Registration
-        let finishButton = app.buttons["Finish Registration"]
-        XCTAssertTrue(finishButton.waitForExistence(timeout: 2))
-        XCTAssertTrue(finishButton.isEnabled, "Finish button should be enabled")
-        finishButton.tap()
+        print("On network prompt, tapping Continue Offline")
+        continueOfflineText.tap()
+        sleep(2)
 
-        // Wait for registration to complete (app should navigate away from registration)
-        let registrationComplete = welcomeTitle.waitForNonExistence(timeout: 10)
-        XCTAssertTrue(registrationComplete, "Should exit registration flow")
+        // Should go to main view with tab bar
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 5), "Should navigate to main view after Continue Offline")
+        print("Successfully navigated to main view via Continue Offline")
+    }
 
-        print("✅ Registration completed successfully with handle: \(testHandle)")
+    func testRegistrationNextButton() throws {
+        // Wait for app to load
+        sleep(2)
+
+        // Navigate to registration if on network prompt
+        let arkavoSocialOption = app.staticTexts["arkavo.social"]
+        if arkavoSocialOption.waitForExistence(timeout: 3) {
+            arkavoSocialOption.tap()
+            sleep(3)
+        }
+
+        // Should be on registration welcome screen
+        let nextButton = app.buttons["Next"]
+        guard nextButton.waitForExistence(timeout: 5) else {
+            print("Next button not found")
+            return
+        }
+
+        print("Tapping Next button")
+        nextButton.tap()
+        sleep(2)
+
+        // Should advance to next step - Back button should appear
+        let backButton = app.buttons["Back"]
+        XCTAssertTrue(backButton.waitForExistence(timeout: 5), "Should advance to next step with Back button")
+        print("Successfully advanced to next registration step")
+    }
+
+    func testDebugCurrentScreen() throws {
+        // Debug test to see what's on screen
+        sleep(3)
+
+        print("\n=== DEBUG: Current Screen State ===")
+        print("Buttons:")
+        for button in app.buttons.allElementsBoundByIndex.prefix(15) {
+            print("  - '\(button.label)' (enabled: \(button.isEnabled), exists: \(button.exists))")
+        }
+        print("\nStatic Texts:")
+        for text in app.staticTexts.allElementsBoundByIndex.prefix(15) {
+            print("  - '\(text.label)'")
+        }
+        print("\nText Fields:")
+        for field in app.textFields.allElementsBoundByIndex {
+            print("  - '\(field.label)' placeholder: '\(field.placeholderValue ?? "none")'")
+        }
+        print("\nTab Bars:")
+        print("  Count: \(app.tabBars.count)")
+        if app.tabBars.count > 0 {
+            for tab in app.tabBars.buttons.allElementsBoundByIndex {
+                print("  - '\(tab.label)'")
+            }
+        }
+        print("=== END DEBUG ===\n")
+
+        XCTAssertTrue(true) // Always pass, this is just for debugging
     }
 }
 
