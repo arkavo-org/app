@@ -188,16 +188,10 @@ struct ChatsView: View {
                 sharedState.showChatOverlay = true
             }
         case .direct, .agent:
-            // Open 1:1 or agent chat
-            if let profile = conversation.profile {
-                if profile.isAgent {
-                    // Use UnifiedChatView for agent chats
-                    sharedState.showChatOverlay = true
-                } else {
-                    // For human 1:1, use existing P2P mechanism
-                    // TODO: Implement human P2P chat
-                    sharedState.showChatOverlay = true
-                }
+            // Open 1:1 or agent chat via ChatOverlay
+            // TODO: Implement distinct P2P mechanism for human chats
+            if conversation.profile != nil {
+                sharedState.showChatOverlay = true
             }
         }
     }
