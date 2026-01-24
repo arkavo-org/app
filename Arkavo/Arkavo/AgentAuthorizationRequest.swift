@@ -15,13 +15,25 @@ public struct AgentAuthorizationRequest: Identifiable, Equatable {
         self.entitlements = entitlements
     }
 
+    /// Validates that a DID string conforms to the expected format.
+    /// A valid DID starts with "did:" and has at least 3 colon-separated parts (did:method:identifier).
+    /// - Parameter did: The DID string to validate
+    /// - Returns: true if the DID format is valid
+    public static func isValidDID(_ did: String) -> Bool {
+        guard did.hasPrefix("did:") else { return false }
+        let parts = did.split(separator: ":")
+        // Minimum: did:method:identifier (3 parts)
+        return parts.count >= 3
+    }
+
     /// Builds an AgentAuthorizationRequest from URLComponents for paths like /authorize
     /// - Parameter components: The URLComponents from an incoming arkavo:// URL
-    /// - Returns: A request if required fields are present; otherwise nil
+    /// - Returns: A request if required fields are present and valid; otherwise nil
     public static func from(components: URLComponents) -> AgentAuthorizationRequest? {
-        // Validate host and path if provided by caller; be permissive here and only require DID
         let queryItems = components.queryItems ?? []
-        guard let did = queryItems.first(where: { $0.name == "did" })?.value, !did.isEmpty else {
+        guard let did = queryItems.first(where: { $0.name == "did" })?.value,
+              !did.isEmpty,
+              isValidDID(did) else {
             return nil
         }
         let name = queryItems.first(where: { $0.name == "name" })?.value
