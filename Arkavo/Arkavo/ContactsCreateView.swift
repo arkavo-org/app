@@ -298,7 +298,9 @@ struct QRCodeScannerView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {
+        // No dynamic updates needed - scanner configuration is static
+    }
 }
 
 class QRScannerViewController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
@@ -671,7 +673,9 @@ struct ContactShareSheet: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_: UIActivityViewController, context _: Context) {}
+    func updateUIViewController(_: UIActivityViewController, context _: Context) {
+        // No dynamic updates needed - activity view is presented once
+    }
 }
 
 // MARK: - ArkavoKit Import

@@ -203,7 +203,7 @@ actor AgentAuthorizationService {
     private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "AgentAuthService")
     private let baseURL = URL(string: "https://100.arkavo.net")!
 
-    private init() {}
+    private init() { /* Singleton - no initialization needed */ }
 
     /// Authorize an agent by registering it with the authnz-rs service
     func authorizeAgent(did: String, name: String, entitlements: [String]) async throws {

@@ -130,7 +130,7 @@ struct AccountView: View {
                 }
                 .disabled(isDeletingAccount)
                 .alert("Delete Account", isPresented: $showingDeleteAccountAlert) {
-                    Button("Cancel", role: .cancel) {}
+                    Button("Cancel", role: .cancel) { /* Dismisses alert */ }
                     Button("Delete", role: .destructive) {
                         deleteAccount()
                     }
@@ -260,7 +260,7 @@ struct AccountView: View {
             }
         }
         .alert("Error", isPresented: $showingDeleteError) {
-            Button("OK") {}
+            Button("OK") { /* Dismisses alert */ }
         } message: {
             Text(deleteAccountError ?? "Failed to delete account. Please try again.")
         }

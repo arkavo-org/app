@@ -24,7 +24,7 @@ struct ConnectedAccountsView: View {
         }
         .navigationTitle("Connected Accounts")
         .alert("Disconnect Apple Account", isPresented: $showingAppleDisconnectAlert) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { /* Dismisses alert */ }
             Button("Disconnect", role: .destructive) {
                 disconnectApple()
             }
@@ -32,7 +32,7 @@ struct ConnectedAccountsView: View {
             Text("Are you sure you want to disconnect your Apple account? You can reconnect it later.")
         }
         .alert("Disconnect Patreon", isPresented: $showingPatreonDisconnectAlert) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { /* Dismisses alert */ }
             Button("Disconnect", role: .destructive) {
                 disconnectPatreon()
             }
@@ -40,7 +40,7 @@ struct ConnectedAccountsView: View {
             Text("Are you sure you want to disconnect your Patreon account?")
         }
         .alert("Error", isPresented: $showingError) {
-            Button("OK") {}
+            Button("OK") { /* Dismisses alert */ }
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }

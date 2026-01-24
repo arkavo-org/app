@@ -89,7 +89,7 @@ struct UnifiedContactDetailView: View {
                 }
             }
             .alert("Delete Contact?", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { /* Dismisses alert */ }
                 Button("Delete", role: .destructive) {
                     dismiss()
                     onDelete(contact)
