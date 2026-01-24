@@ -139,6 +139,14 @@ struct ArkavoApp: App {
                     selectedView = .registration
                 }
             }
+            .onChange(of: sharedState.skipRegistration) { _, shouldSkip in
+                // When user taps "Skip for now" in registration, go to main view
+                if shouldSkip {
+                    sharedState.skipRegistration = false
+                    sharedState.isOfflineMode = true
+                    selectedView = .main
+                }
+            }
             .onChange(of: sharedState.isOfflineMode) { _, isOffline in
                 // When user skips registration, go to main view in offline mode
                 if isOffline && selectedView == .registration {
@@ -1000,6 +1008,7 @@ class SharedState: ObservableObject {
     @Published var lastRegistrationErrorDetails: String?
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
+    @Published var skipRegistration: Bool = false
     @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
     @Published var selectedNetworkDomain: String = "arkavo.social"
 

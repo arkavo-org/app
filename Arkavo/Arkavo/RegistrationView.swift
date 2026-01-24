@@ -165,8 +165,8 @@ struct RegistrationView: View {
                                         }
                                     } else {
                                         Button("Skip for now") {
-                                            // Return to offline mode / network connections
-                                            sharedState.isOfflineMode = true
+                                            // Return to main view in offline mode
+                                            sharedState.skipRegistration = true
                                         }
                                         .foregroundStyle(.secondary)
                                     }
