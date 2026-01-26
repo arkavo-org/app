@@ -428,23 +428,23 @@ public enum VRMAExporter {
             var custom: [String: Any] = [:]
 
             // Map ARKit blend shapes to VRM preset expressions
-            // Note: Some ARKit shapes combine to form VRM presets
+            // ARKit uses underscore format: eyeBlink_L, mouthSmile_L, etc.
             let arkitToVRMPreset: [String: String] = [
                 // Blink
-                "eyeBlinkLeft": "blinkLeft",
-                "eyeBlinkRight": "blinkRight",
+                "eyeBlink_L": "blinkLeft",
+                "eyeBlink_R": "blinkRight",
                 // Happy (smile)
-                "mouthSmileLeft": "happy",
-                "mouthSmileRight": "happy",
+                "mouthSmile_L": "happy",
+                "mouthSmile_R": "happy",
                 // Angry (brow down)
-                "browDownLeft": "angry",
-                "browDownRight": "angry",
+                "browDown_L": "angry",
+                "browDown_R": "angry",
                 // Sad (frown)
-                "mouthFrownLeft": "sad",
-                "mouthFrownRight": "sad",
+                "mouthFrown_L": "sad",
+                "mouthFrown_R": "sad",
                 // Surprised (wide eyes)
-                "eyeWideLeft": "surprised",
-                "eyeWideRight": "surprised",
+                "eyeWide_L": "surprised",
+                "eyeWide_R": "surprised",
                 // Mouth shapes for lip sync
                 "jawOpen": "aa",
                 "mouthPucker": "ou",
