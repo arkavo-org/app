@@ -85,9 +85,14 @@ public enum VRMAExporter {
         // Determine which bones have animation data
         let animatedBones = collectAnimatedBones(session: session)
         let hasExpressions = session.frames.first?.faceBlendShapes != nil
+        let expressionKeys = hasExpressions ? collectExpressionKeys(session: session) : []
 
-        // Build nodes (skeleton hierarchy for rest pose)
-        let (nodes, humanBoneNodeMap) = buildNodes(animatedBones: animatedBones, restPose: restPose)
+        // Build nodes (skeleton hierarchy + expression nodes)
+        let (nodes, humanBoneNodeMap, expressionNodeMap) = buildNodes(
+            animatedBones: animatedBones,
+            expressionKeys: expressionKeys,
+            restPose: restPose
+        )
         gltf["nodes"] = nodes
 
         // Build scene referencing root node
@@ -98,7 +103,7 @@ public enum VRMAExporter {
         let (bufferViews, accessors, bufferByteLength) = buildAccessors(
             session: session,
             animatedBones: animatedBones,
-            hasExpressions: hasExpressions
+            expressionKeys: expressionKeys
         )
         gltf["bufferViews"] = bufferViews
         gltf["accessors"] = accessors
@@ -111,7 +116,8 @@ public enum VRMAExporter {
             session: session,
             animatedBones: animatedBones,
             humanBoneNodeMap: humanBoneNodeMap,
-            hasExpressions: hasExpressions
+            expressionKeys: expressionKeys,
+            expressionNodeMap: expressionNodeMap
         )
         gltf["animations"] = [animation]
 
@@ -120,8 +126,8 @@ public enum VRMAExporter {
         extensions["VRMC_vrm_animation"] = buildVRMAExtension(
             animatedBones: animatedBones,
             humanBoneNodeMap: humanBoneNodeMap,
-            hasExpressions: hasExpressions,
-            session: session
+            expressionKeys: expressionKeys,
+            expressionNodeMap: expressionNodeMap
         )
         gltf["extensions"] = extensions
 
@@ -146,17 +152,29 @@ public enum VRMAExporter {
         return bones.sorted { $0.rawValue < $1.rawValue }
     }
 
-    /// Build node hierarchy for skeleton
+    /// Build node hierarchy for skeleton and expressions
     private static func buildNodes(
         animatedBones: [VRMHumanoidBone],
+        expressionKeys: [String],
         restPose: VRMModel?
-    ) -> ([[String: Any]], [VRMHumanoidBone: Int]) {
+    ) -> ([[String: Any]], [VRMHumanoidBone: Int], [String: Int]) {
         var nodes: [[String: Any]] = []
         var humanBoneNodeMap: [VRMHumanoidBone: Int] = [:]
+        var expressionNodeMap: [String: Int] = [:]
 
-        // Always include hips as root even if not animated
-        let allBones: [VRMHumanoidBone] = Array(Set(animatedBones + [.hips])).sorted { $0.rawValue < $1.rawValue }
+        // Always include hips as root even if not animated (or a root node for expressions-only)
+        let allBones: [VRMHumanoidBone] = animatedBones.isEmpty ? [] : Array(Set(animatedBones + [.hips])).sorted { $0.rawValue < $1.rawValue }
 
+        // If no bones but have expressions, create a root node
+        if allBones.isEmpty && !expressionKeys.isEmpty {
+            nodes.append([
+                "name": "root",
+                "translation": [0, 0, 0],
+                "rotation": [0, 0, 0, 1]
+            ])
+        }
+
+        // Add humanoid bone nodes
         for bone in allBones {
             let nodeIndex = nodes.count
             humanBoneNodeMap[bone] = nodeIndex
@@ -191,14 +209,25 @@ public enum VRMAExporter {
             nodes.append(node)
         }
 
-        return (nodes, humanBoneNodeMap)
+        // Add expression nodes (VRMA uses translation.x for expression weight)
+        for key in expressionKeys {
+            let nodeIndex = nodes.count
+            expressionNodeMap[key] = nodeIndex
+
+            nodes.append([
+                "name": "Expression_\(key)",
+                "translation": [0, 0, 0]  // x will be animated for weight
+            ])
+        }
+
+        return (nodes, humanBoneNodeMap, expressionNodeMap)
     }
 
     /// Build buffer views and accessors for animation keyframes
     private static func buildAccessors(
         session: VRMASession,
         animatedBones: [VRMHumanoidBone],
-        hasExpressions: Bool
+        expressionKeys: [String]
     ) -> ([[String: Any]], [[String: Any]], Int) {
         var bufferViews: [[String: Any]] = []
         var accessors: [[String: Any]] = []
@@ -257,24 +286,21 @@ public enum VRMAExporter {
             byteOffset += translationByteLength
         }
 
-        // Expression weight accessors (scalar per expression)
-        if hasExpressions {
-            let expressionKeys = collectExpressionKeys(session: session)
-            for _ in expressionKeys {
-                let weightByteLength = frameCount * MemoryLayout<Float>.size
-                bufferViews.append([
-                    "buffer": 0,
-                    "byteOffset": byteOffset,
-                    "byteLength": weightByteLength
-                ])
-                accessors.append([
-                    "bufferView": bufferViews.count - 1,
-                    "componentType": 5126, // FLOAT
-                    "count": frameCount,
-                    "type": "SCALAR"
-                ])
-                byteOffset += weightByteLength
-            }
+        // Expression translation accessors (VEC3 per expression, x = weight)
+        for _ in expressionKeys {
+            let translationByteLength = frameCount * 3 * MemoryLayout<Float>.size
+            bufferViews.append([
+                "buffer": 0,
+                "byteOffset": byteOffset,
+                "byteLength": translationByteLength
+            ])
+            accessors.append([
+                "bufferView": bufferViews.count - 1,
+                "componentType": 5126, // FLOAT
+                "count": frameCount,
+                "type": "VEC3"
+            ])
+            byteOffset += translationByteLength
         }
 
         return (bufferViews, accessors, byteOffset)
@@ -298,7 +324,8 @@ public enum VRMAExporter {
         session: VRMASession,
         animatedBones: [VRMHumanoidBone],
         humanBoneNodeMap: [VRMHumanoidBone: Int],
-        hasExpressions: Bool
+        expressionKeys: [String],
+        expressionNodeMap: [String: Int]
     ) -> [String: Any] {
         var channels: [[String: Any]] = []
         var samplers: [[String: Any]] = []
@@ -347,16 +374,25 @@ public enum VRMAExporter {
             outputAccessorIndex += 1
         }
 
-        // Expression channels (encoded as translation.x on dedicated nodes)
-        // VRMA encodes expression weights using translation.x on expression nodes
-        if hasExpressions {
-            let expressionKeys = collectExpressionKeys(session: session)
-            for _ in expressionKeys {
-                // Expression nodes would be added after humanoid bones
-                // For simplicity, we skip expression channels in this implementation
-                // as they require additional node setup
-                outputAccessorIndex += 1
-            }
+        // Expression channels (translation.x = weight on dedicated expression nodes)
+        for key in expressionKeys {
+            guard let nodeIndex = expressionNodeMap[key] else { continue }
+
+            samplers.append([
+                "input": timeAccessorIndex,
+                "output": outputAccessorIndex,
+                "interpolation": "LINEAR"
+            ])
+
+            channels.append([
+                "sampler": samplers.count - 1,
+                "target": [
+                    "node": nodeIndex,
+                    "path": "translation"
+                ]
+            ])
+
+            outputAccessorIndex += 1
         }
 
         return [
@@ -370,8 +406,8 @@ public enum VRMAExporter {
     private static func buildVRMAExtension(
         animatedBones: [VRMHumanoidBone],
         humanBoneNodeMap: [VRMHumanoidBone: Int],
-        hasExpressions: Bool,
-        session: VRMASession
+        expressionKeys: [String],
+        expressionNodeMap: [String: Int]
     ) -> [String: Any] {
         var extension_: [String: Any] = [
             "specVersion": "1.0"
@@ -386,37 +422,47 @@ public enum VRMAExporter {
         }
         extension_["humanoid"] = ["humanBones": humanBones]
 
-        // Expression mapping (simplified - maps ARKit blend shapes to VRM presets)
-        if hasExpressions {
+        // Expression mapping
+        if !expressionKeys.isEmpty {
             var preset: [String: Any] = [:]
             var custom: [String: Any] = [:]
 
-            // Map common ARKit expressions to VRM presets
+            // Map ARKit blend shapes to VRM preset expressions
+            // Note: Some ARKit shapes combine to form VRM presets
             let arkitToVRMPreset: [String: String] = [
+                // Blink
                 "eyeBlinkLeft": "blinkLeft",
                 "eyeBlinkRight": "blinkRight",
+                // Happy (smile)
                 "mouthSmileLeft": "happy",
                 "mouthSmileRight": "happy",
+                // Angry (brow down)
                 "browDownLeft": "angry",
                 "browDownRight": "angry",
+                // Sad (frown)
                 "mouthFrownLeft": "sad",
                 "mouthFrownRight": "sad",
+                // Surprised (wide eyes)
                 "eyeWideLeft": "surprised",
-                "eyeWideRight": "surprised"
+                "eyeWideRight": "surprised",
+                // Mouth shapes for lip sync
+                "jawOpen": "aa",
+                "mouthPucker": "ou",
+                "mouthFunnel": "ou"
             ]
 
-            let expressionKeys = collectExpressionKeys(session: session)
-            var nodeIndex = humanBoneNodeMap.count  // Start after humanoid bones
-
             for key in expressionKeys {
+                guard let nodeIndex = expressionNodeMap[key] else { continue }
+
                 if let presetName = arkitToVRMPreset[key] {
+                    // Only use first ARKit shape for each VRM preset
                     if preset[presetName] == nil {
                         preset[presetName] = ["node": nodeIndex]
                     }
                 } else {
+                    // All other ARKit shapes go to custom
                     custom[key] = ["node": nodeIndex]
                 }
-                nodeIndex += 1
             }
 
             extension_["expressions"] = [
@@ -434,7 +480,7 @@ public enum VRMAExporter {
     private static func buildBinaryBuffer(session: VRMASession) -> Data {
         var buffer = Data()
         let animatedBones = collectAnimatedBones(session: session)
-        let hasExpressions = session.frames.first?.faceBlendShapes != nil
+        let expressionKeys = session.frames.first?.faceBlendShapes != nil ? collectExpressionKeys(session: session) : []
 
         // Write time values
         for frame in session.frames {
@@ -445,7 +491,7 @@ public enum VRMAExporter {
         // Write rotation values for each bone
         for bone in animatedBones {
             for frame in session.frames {
-                var quat = frame.bodyJoints?[bone] ?? simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+                let quat = frame.bodyJoints?[bone] ?? simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
                 // glTF quaternion order: x, y, z, w
                 var x = quat.imag.x
                 var y = quat.imag.y
@@ -468,14 +514,14 @@ public enum VRMAExporter {
             }
         }
 
-        // Write expression weight values
-        if hasExpressions {
-            let expressionKeys = collectExpressionKeys(session: session)
-            for key in expressionKeys {
-                for frame in session.frames {
-                    var weight = frame.faceBlendShapes?[key] ?? 0.0
-                    buffer.append(Data(bytes: &weight, count: MemoryLayout<Float>.size))
-                }
+        // Write expression translation values (x = weight, y = 0, z = 0)
+        for key in expressionKeys {
+            for frame in session.frames {
+                var weight = frame.faceBlendShapes?[key] ?? 0.0
+                var zero: Float = 0.0
+                buffer.append(Data(bytes: &weight, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &zero, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &zero, count: MemoryLayout<Float>.size))
             }
         }
 
