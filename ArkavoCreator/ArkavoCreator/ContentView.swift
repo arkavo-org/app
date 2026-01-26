@@ -1097,10 +1097,52 @@ struct ContentCard: View {
 
 struct SettingsContent: View {
     @EnvironmentObject private var appState: AppState
+    @StateObject private var vrmDownloader = VRMDownloader()
+    @State private var modelsPath: String = ""
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                // VRM Models Directory Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("VRM Models")
+                        .font(.headline)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Models Folder")
+                                .font(.subheadline)
+                            Text(modelsPath)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Spacer()
+
+                        Button("Choose...") {
+                            vrmDownloader.selectModelsDirectory()
+                            updateModelsPath()
+                        }
+
+                        if vrmDownloader.hasCustomModelsDirectory {
+                            Button("Reset") {
+                                vrmDownloader.clearCustomModelsDirectory()
+                                updateModelsPath()
+                            }
+                            .foregroundColor(.red)
+                        }
+                    }
+
+                    Text("Select the folder containing your .vrm or .glb avatar files.")
+                        .foregroundColor(.secondary)
+                        .font(.callout)
+                }
+                .padding()
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
                 // Feedback Toggle Section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Feedback")
@@ -1122,6 +1164,13 @@ struct SettingsContent: View {
             .padding()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            updateModelsPath()
+        }
+    }
+
+    private func updateModelsPath() {
+        modelsPath = vrmDownloader.modelsDirectoryDisplayPath
     }
 }
 

@@ -5,6 +5,7 @@
 //  Created for VRM Avatar Integration (#140)
 //
 
+import AppKit
 import Foundation
 
 /// Downloads VRM models from URLs (VRM Hub or direct .vrm files)
@@ -13,6 +14,12 @@ class VRMDownloader: ObservableObject {
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
     @Published var error: Error?
+
+    /// UserDefaults key for storing the security-scoped bookmark
+    private static let modelsDirectoryBookmarkKey = "VRMModelsDirectoryBookmark"
+
+    /// Currently resolved models directory URL (with security scope started)
+    private var resolvedModelsDirectory: URL?
 
     enum DownloadError: LocalizedError {
         case invalidURL
@@ -29,7 +36,7 @@ class VRMDownloader: ObservableObject {
             case let .downloadFailed(error):
                 "Download failed: \(error.localizedDescription)"
             case .invalidFileType:
-                "Invalid file type. Only .vrm files are supported."
+                "Invalid file type. Only .vrm and .glb files are supported."
             case .saveFailed:
                 "Failed to save VRM file."
             case .vrmHubAuthRequired:
@@ -63,8 +70,9 @@ class VRMDownloader: ObservableObject {
             return try await downloadFromVRMHub(url)
         }
 
-        // Direct .vrm file download
-        guard url.pathExtension.lowercased() == "vrm" else {
+        // Direct .vrm or .glb file download
+        let ext = url.pathExtension.lowercased()
+        guard ext == "vrm" || ext == "glb" else {
             throw DownloadError.invalidFileType
         }
 
@@ -161,13 +169,7 @@ class VRMDownloader: ObservableObject {
 
     /// Saves VRM data to local file
     private func saveVRMFile(data: Data, filename: String) throws -> URL {
-        // Create destination URL in app documents directory
-        let documentsPath = FileManager.default.urls(
-            for: .documentDirectory,
-            in: .userDomainMask
-        )[0]
-
-        let modelsDirectory = documentsPath.appendingPathComponent("VRMModels", isDirectory: true)
+        let modelsDirectory = getModelsDirectory()
 
         // Create directory if it doesn't exist
         try FileManager.default.createDirectory(
@@ -188,12 +190,7 @@ class VRMDownloader: ObservableObject {
     /// Lists all downloaded VRM models
     /// - Returns: Array of local VRM file URLs
     func listDownloadedModels() -> [URL] {
-        let documentsPath = FileManager.default.urls(
-            for: .documentDirectory,
-            in: .userDomainMask,
-        )[0]
-
-        let modelsDirectory = documentsPath.appendingPathComponent("VRMModels", isDirectory: true)
+        let modelsDirectory = getModelsDirectory()
 
         print("[VRMDownloader] Checking models directory: \(modelsDirectory.path)")
 
@@ -205,8 +202,11 @@ class VRMDownloader: ObservableObject {
             return []
         }
 
-        let vrmFiles = files.filter { $0.pathExtension.lowercased() == "vrm" }
-        print("[VRMDownloader] Found \(vrmFiles.count) .vrm files in directory")
+        let vrmFiles = files.filter {
+            let ext = $0.pathExtension.lowercased()
+            return ext == "vrm" || ext == "glb"
+        }
+        print("[VRMDownloader] Found \(vrmFiles.count) VRM/GLB files in directory")
         return vrmFiles
     }
 
@@ -214,5 +214,135 @@ class VRMDownloader: ObservableObject {
     /// - Parameter url: Local file URL of the model to delete
     func deleteModel(at url: URL) throws {
         try FileManager.default.removeItem(at: url)
+    }
+
+    // MARK: - Custom Models Directory
+
+    /// Get the configured models directory URL
+    /// Returns the user-selected directory if set, otherwise falls back to sandbox Documents
+    func getModelsDirectory() -> URL {
+        // Try to resolve from saved bookmark first
+        if let resolvedURL = resolveBookmarkedDirectory() {
+            return resolvedURL
+        }
+
+        // Fall back to sandbox Documents directory
+        let documentsPath = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )[0]
+        return documentsPath.appendingPathComponent("VRMModels", isDirectory: true)
+    }
+
+    /// Check if a custom models directory is configured
+    var hasCustomModelsDirectory: Bool {
+        UserDefaults.standard.data(forKey: Self.modelsDirectoryBookmarkKey) != nil
+    }
+
+    /// Get the display path of the current models directory
+    var modelsDirectoryDisplayPath: String {
+        if let bookmarkData = UserDefaults.standard.data(forKey: Self.modelsDirectoryBookmarkKey),
+           let url = resolveBookmark(bookmarkData) {
+            return url.path
+        }
+        return "Default (App Container)"
+    }
+
+    /// Present folder picker and save bookmark for selected directory
+    func selectModelsDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select folder containing VRM models"
+        panel.prompt = "Select"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            saveDirectoryBookmark(url)
+        }
+    }
+
+    /// Clear the custom models directory and revert to default
+    func clearCustomModelsDirectory() {
+        // Stop accessing the old URL if we have one
+        resolvedModelsDirectory?.stopAccessingSecurityScopedResource()
+        resolvedModelsDirectory = nil
+
+        UserDefaults.standard.removeObject(forKey: Self.modelsDirectoryBookmarkKey)
+        print("[VRMDownloader] Cleared custom models directory, reverting to default")
+    }
+
+    /// Save a security-scoped bookmark for the directory
+    private func saveDirectoryBookmark(_ url: URL) {
+        do {
+            let bookmarkData = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(bookmarkData, forKey: Self.modelsDirectoryBookmarkKey)
+            print("[VRMDownloader] Saved bookmark for: \(url.path)")
+
+            // Immediately resolve it
+            _ = resolveBookmarkedDirectory()
+        } catch {
+            print("[VRMDownloader] Failed to create bookmark: \(error)")
+        }
+    }
+
+    /// Resolve the bookmarked directory and start accessing it
+    private func resolveBookmarkedDirectory() -> URL? {
+        // Return cached if already resolved
+        if let resolved = resolvedModelsDirectory {
+            return resolved
+        }
+
+        guard let bookmarkData = UserDefaults.standard.data(forKey: Self.modelsDirectoryBookmarkKey) else {
+            return nil
+        }
+
+        guard let url = resolveBookmark(bookmarkData) else {
+            return nil
+        }
+
+        // Start accessing the security-scoped resource
+        if url.startAccessingSecurityScopedResource() {
+            resolvedModelsDirectory = url
+            print("[VRMDownloader] Started accessing: \(url.path)")
+            return url
+        } else {
+            print("[VRMDownloader] Failed to start accessing security-scoped resource")
+            return nil
+        }
+    }
+
+    /// Resolve bookmark data to URL
+    private func resolveBookmark(_ bookmarkData: Data) -> URL? {
+        var isStale = false
+        do {
+            let url = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+
+            if isStale {
+                print("[VRMDownloader] Bookmark is stale, need to re-select directory")
+                // Could prompt user to re-select here
+                return nil
+            }
+
+            return url
+        } catch {
+            print("[VRMDownloader] Failed to resolve bookmark: \(error)")
+            return nil
+        }
+    }
+
+    /// Stop accessing security-scoped resource (call on app termination)
+    func stopAccessingModelsDirectory() {
+        resolvedModelsDirectory?.stopAccessingSecurityScopedResource()
+        resolvedModelsDirectory = nil
     }
 }
