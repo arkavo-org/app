@@ -590,13 +590,23 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         )
 
         // Convert to quaternion
-        let rotation = simd_quatf(rotationMatrix)
+        var rotation = simd_quatf(rotationMatrix)
 
-        // Apply rotation to head node
-        // Note: ARKit uses a different coordinate system than VRM
-        // ARKit: +X right, +Y up, -Z forward (camera looks at -Z)
-        // VRM: +X right, +Y up, -Z forward (model faces -Z)
-        // The coordinate systems are compatible for face tracking
+        // ARKit face tracking coordinate conversion:
+        // ARKit provides the face pose in camera space where:
+        // - Looking up gives positive X rotation
+        // - Looking right gives positive Y rotation
+        // VRM expects:
+        // - Looking up should tilt head back (negative X in VRM convention)
+        // - Looking right should turn head right
+        // We need to negate X (pitch) and Z (roll) to match VRM
+        rotation = simd_quatf(
+            ix: -rotation.imag.x,  // Negate pitch
+            iy: rotation.imag.y,   // Keep yaw
+            iz: -rotation.imag.z,  // Negate roll
+            r: rotation.real
+        )
+
         headNode.rotation = rotation
         headNode.updateLocalMatrix()
 
