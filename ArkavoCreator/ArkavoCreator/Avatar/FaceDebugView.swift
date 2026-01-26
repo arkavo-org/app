@@ -16,24 +16,24 @@ struct FaceDebugView: View {
     let blendShapes: ARKitFaceBlendShapes?
 
     // Key blend shapes to display, grouped by category
-    // ARKit uses underscore format: eyeBlink_L, mouthSmile_L, etc.
+    // Keys are converted to camelCase by ARKitDataConverter
     private let eyeShapes = [
-        ("eyeBlinkL", "eyeBlink_L"),
-        ("eyeBlinkR", "eyeBlink_R"),
-        ("eyeWideL", "eyeWide_L"),
-        ("eyeWideR", "eyeWide_R"),
+        ("eyeBlinkL", "eyeBlinkLeft"),
+        ("eyeBlinkR", "eyeBlinkRight"),
+        ("eyeWideL", "eyeWideLeft"),
+        ("eyeWideR", "eyeWideRight"),
     ]
 
     private let browShapes = [
         ("browInnerUp", "browInnerUp"),
-        ("browDownL", "browDown_L"),
-        ("browDownR", "browDown_R"),
+        ("browDownL", "browDownLeft"),
+        ("browDownR", "browDownRight"),
     ]
 
     private let mouthShapes = [
         ("jawOpen", "jawOpen"),
-        ("smileL", "mouthSmile_L"),
-        ("smileR", "mouthSmile_R"),
+        ("smileL", "mouthSmileLeft"),
+        ("smileR", "mouthSmileRight"),
         ("pucker", "mouthPucker"),
         ("funnel", "mouthFunnel"),
     ]

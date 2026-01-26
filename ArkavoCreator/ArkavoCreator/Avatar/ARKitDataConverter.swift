@@ -55,11 +55,43 @@ enum ARKitDataConverter {
         if let transformArray = metadata.headTransform {
             headTransform = toMatrix4x4(transformArray)
         }
+
+        // Convert underscore format (eyeBlink_L) to camelCase (eyeBlinkLeft) for VRMMetalKit
+        let convertedShapes = convertBlendShapeKeys(metadata.blendShapes)
+
         return ARKitFaceBlendShapes(
             timestamp: timestamp.timeIntervalSinceReferenceDate,
-            shapes: metadata.blendShapes,
+            shapes: convertedShapes,
             headTransform: headTransform
         )
+    }
+
+    /// Convert blend shape keys from underscore format to camelCase
+    /// ArkavoKit uses: eyeBlink_L, mouthSmile_L, browDown_L
+    /// VRMMetalKit expects: eyeBlinkLeft, mouthSmileLeft, browDownLeft
+    private static func convertBlendShapeKeys(_ shapes: [String: Float]) -> [String: Float] {
+        var converted: [String: Float] = [:]
+
+        for (key, value) in shapes {
+            let convertedKey = convertBlendShapeKey(key)
+            converted[convertedKey] = value
+        }
+
+        return converted
+    }
+
+    /// Convert a single blend shape key from underscore to camelCase
+    private static func convertBlendShapeKey(_ key: String) -> String {
+        // Handle _L and _R suffixes
+        if key.hasSuffix("_L") {
+            let base = String(key.dropLast(2))
+            return base + "Left"
+        } else if key.hasSuffix("_R") {
+            let base = String(key.dropLast(2))
+            return base + "Right"
+        }
+        // No conversion needed for keys without _L/_R suffix
+        return key
     }
 
     /// Convert CameraMetadataEvent to ARKitFaceBlendShapes (if face metadata)
