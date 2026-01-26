@@ -39,6 +39,18 @@ class AvatarViewModel: ObservableObject {
     // Debug: Latest face blend shapes for visualization
     @Published var latestFaceBlendShapes: ARKitFaceBlendShapes?
 
+    // MARK: - VRMA Recording
+
+    @Published var isVRMARecording = false
+    @Published var vrmaRecordingDuration: TimeInterval = 0
+    @Published var vrmaFrameCount: Int = 0
+
+    /// VRMA recorder for animation export
+    private var vrmaRecorder: VRMARecorder?
+
+    /// Last recorded VRMA session (available after stopVRMARecording)
+    private(set) var lastVRMASession: VRMASession?
+
     // MARK: - Dependencies
 
     let downloader = VRMDownloader()
@@ -248,6 +260,13 @@ class AvatarViewModel: ObservableObject {
                 // Store for debug visualization
                 latestFaceBlendShapes = blendShapes
 
+                // Capture for VRMA recording
+                if isVRMARecording, let recorder = vrmaRecorder {
+                    recorder.appendFaceFrame(face: blendShapes, timestamp: event.timestamp)
+                    vrmaRecordingDuration = recorder.recordingDuration
+                    vrmaFrameCount = recorder.frameCount
+                }
+
                 if shouldLog {
                     print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
 
@@ -305,6 +324,13 @@ class AvatarViewModel: ObservableObject {
 
                 // Store latest skeleton for debug visualization
                 latestBodySkeleton = skeleton
+
+                // Capture for VRMA recording
+                if isVRMARecording, let recorder = vrmaRecorder {
+                    recorder.appendBodyFrame(body: skeleton, timestamp: event.timestamp)
+                    vrmaRecordingDuration = recorder.recordingDuration
+                    vrmaFrameCount = recorder.frameCount
+                }
 
                 if shouldLog {
                     print("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
@@ -484,5 +510,77 @@ class AvatarViewModel: ObservableObject {
         return { [weak manager] in
             manager?.latestFrame
         }
+    }
+
+    // MARK: - VRMA Recording Methods
+
+    /// Start recording motion capture data for VRMA export
+    func startVRMARecording() {
+        guard !isVRMARecording else { return }
+
+        vrmaRecorder = VRMARecorder(frameRate: 30)
+        vrmaRecorder?.startRecording()
+        isVRMARecording = true
+        vrmaRecordingDuration = 0
+        vrmaFrameCount = 0
+
+        print("[AvatarViewModel] VRMA recording started")
+    }
+
+    /// Stop recording and export to VRMA file
+    /// - Parameter name: Name for the recording (used in filename)
+    /// - Returns: URL to the exported .vrma file, or nil if export failed
+    func stopVRMARecording(name: String = "recording") async -> URL? {
+        guard isVRMARecording, let recorder = vrmaRecorder else { return nil }
+
+        let session = recorder.stopRecording(name: name)
+        isVRMARecording = false
+        lastVRMASession = session
+
+        print("[AvatarViewModel] VRMA recording stopped: \(session.frameCount) frames, \(String(format: "%.2f", session.duration))s")
+
+        // Export to VRMA
+        guard session.frameCount > 0 else {
+            print("[AvatarViewModel] No frames captured, skipping export")
+            return nil
+        }
+
+        do {
+            // Get Documents directory for export
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let vrmaDirectory = documentsURL.appendingPathComponent("VRMA", isDirectory: true)
+
+            // Create VRMA directory if needed
+            try FileManager.default.createDirectory(at: vrmaDirectory, withIntermediateDirectories: true)
+
+            // Generate filename with timestamp
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+                .replacingOccurrences(of: ":", with: "-")
+                .replacingOccurrences(of: "T", with: "_")
+            let sanitizedName = name.replacingOccurrences(of: " ", with: "_")
+            let filename = "\(sanitizedName)_\(timestamp).vrma"
+            let fileURL = vrmaDirectory.appendingPathComponent(filename)
+
+            // Export
+            try VRMAExporter.export(session: session, to: fileURL, restPose: renderer?.model)
+
+            print("[AvatarViewModel] Exported VRMA to: \(fileURL.path)")
+            return fileURL
+
+        } catch {
+            print("[AvatarViewModel] Failed to export VRMA: \(error)")
+            return nil
+        }
+    }
+
+    /// Cancel VRMA recording without saving
+    func cancelVRMARecording() {
+        vrmaRecorder?.cancelRecording()
+        vrmaRecorder = nil
+        isVRMARecording = false
+        vrmaRecordingDuration = 0
+        vrmaFrameCount = 0
+
+        print("[AvatarViewModel] VRMA recording cancelled")
     }
 }

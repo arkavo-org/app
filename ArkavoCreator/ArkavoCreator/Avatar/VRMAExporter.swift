@@ -1,0 +1,558 @@
+//
+//  VRMAExporter.swift
+//  ArkavoCreator
+//
+//  Exports motion capture sessions to VRMA format (GLB with VRMC_vrm_animation extension).
+//  VRMA is the industry standard for VRM animations, compatible with Unity, VSeeFace, VRoid, etc.
+//
+
+import Foundation
+import simd
+import VRMMetalKit
+
+/// Error types for VRMA export
+public enum VRMAExportError: LocalizedError {
+    case noFrames
+    case serializationFailed(String)
+    case fileWriteFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .noFrames:
+            return "Cannot export: session has no frames"
+        case .serializationFailed(let reason):
+            return "VRMA serialization failed: \(reason)"
+        case .fileWriteFailed(let reason):
+            return "Failed to write VRMA file: \(reason)"
+        }
+    }
+}
+
+/// Exports VRMASession to VRMA format
+public enum VRMAExporter {
+
+    // MARK: - Public API
+
+    /// Export recorded motion to VRMA Data
+    /// - Parameters:
+    ///   - session: The motion capture session to export
+    ///   - restPose: Optional VRM model to extract rest pose from (uses T-pose if nil)
+    /// - Returns: GLB-formatted Data with VRMC_vrm_animation extension
+    public static func export(session: VRMASession, restPose: VRMModel? = nil) throws -> Data {
+        guard !session.frames.isEmpty else {
+            throw VRMAExportError.noFrames
+        }
+
+        // Build the glTF/VRMA JSON structure
+        let vrmaJSON = try buildVRMAJSON(session: session, restPose: restPose)
+
+        // Build binary buffer (keyframe data)
+        let binaryData = buildBinaryBuffer(session: session)
+
+        // Create GLB file
+        let glbData = try createGLB(json: vrmaJSON, binaryData: binaryData)
+
+        return glbData
+    }
+
+    /// Export recorded motion to VRMA file
+    /// - Parameters:
+    ///   - session: The motion capture session to export
+    ///   - url: Destination file URL
+    ///   - restPose: Optional VRM model to extract rest pose from (uses T-pose if nil)
+    public static func export(session: VRMASession, to url: URL, restPose: VRMModel? = nil) throws {
+        let data = try export(session: session, restPose: restPose)
+
+        do {
+            try data.write(to: url)
+            print("[VRMAExporter] Wrote \(data.count) bytes to \(url.lastPathComponent)")
+        } catch {
+            throw VRMAExportError.fileWriteFailed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - JSON Building
+
+    private static func buildVRMAJSON(session: VRMASession, restPose: VRMModel?) throws -> [String: Any] {
+        var gltf: [String: Any] = [:]
+
+        // Asset info
+        gltf["asset"] = [
+            "version": "2.0",
+            "generator": "ArkavoCreator VRMAExporter"
+        ]
+
+        // Determine which bones have animation data
+        let animatedBones = collectAnimatedBones(session: session)
+        let hasExpressions = session.frames.first?.faceBlendShapes != nil
+
+        // Build nodes (skeleton hierarchy for rest pose)
+        let (nodes, humanBoneNodeMap) = buildNodes(animatedBones: animatedBones, restPose: restPose)
+        gltf["nodes"] = nodes
+
+        // Build scene referencing root node
+        gltf["scenes"] = [["nodes": [0]]]
+        gltf["scene"] = 0
+
+        // Build buffer views and accessors for animation data
+        let (bufferViews, accessors, bufferByteLength) = buildAccessors(
+            session: session,
+            animatedBones: animatedBones,
+            hasExpressions: hasExpressions
+        )
+        gltf["bufferViews"] = bufferViews
+        gltf["accessors"] = accessors
+
+        // Single buffer for all animation data
+        gltf["buffers"] = [["byteLength": bufferByteLength]]
+
+        // Build animation
+        let animation = buildAnimation(
+            session: session,
+            animatedBones: animatedBones,
+            humanBoneNodeMap: humanBoneNodeMap,
+            hasExpressions: hasExpressions
+        )
+        gltf["animations"] = [animation]
+
+        // Build VRMC_vrm_animation extension
+        var extensions: [String: Any] = [:]
+        extensions["VRMC_vrm_animation"] = buildVRMAExtension(
+            animatedBones: animatedBones,
+            humanBoneNodeMap: humanBoneNodeMap,
+            hasExpressions: hasExpressions,
+            session: session
+        )
+        gltf["extensions"] = extensions
+
+        gltf["extensionsUsed"] = ["VRMC_vrm_animation"]
+
+        return gltf
+    }
+
+    /// Collect all bones that have animation data
+    private static func collectAnimatedBones(session: VRMASession) -> [VRMHumanoidBone] {
+        var bones = Set<VRMHumanoidBone>()
+
+        for frame in session.frames {
+            if let joints = frame.bodyJoints {
+                for bone in joints.keys {
+                    bones.insert(bone)
+                }
+            }
+        }
+
+        // Sort for consistent ordering
+        return bones.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    /// Build node hierarchy for skeleton
+    private static func buildNodes(
+        animatedBones: [VRMHumanoidBone],
+        restPose: VRMModel?
+    ) -> ([[String: Any]], [VRMHumanoidBone: Int]) {
+        var nodes: [[String: Any]] = []
+        var humanBoneNodeMap: [VRMHumanoidBone: Int] = [:]
+
+        // Always include hips as root even if not animated
+        let allBones: [VRMHumanoidBone] = Array(Set(animatedBones + [.hips])).sorted { $0.rawValue < $1.rawValue }
+
+        for bone in allBones {
+            let nodeIndex = nodes.count
+            humanBoneNodeMap[bone] = nodeIndex
+
+            var node: [String: Any] = [
+                "name": bone.rawValue
+            ]
+
+            // Set rest pose rotation (identity/T-pose if no model provided)
+            if let model = restPose,
+               let humanoid = model.humanoid,
+               let humanBone = humanoid.humanBones[bone],
+               humanBone.node < model.nodes.count {
+                let vrmNode = model.nodes[humanBone.node]
+                node["rotation"] = [
+                    vrmNode.rotation.imag.x,
+                    vrmNode.rotation.imag.y,
+                    vrmNode.rotation.imag.z,
+                    vrmNode.rotation.real
+                ]
+                node["translation"] = [
+                    vrmNode.translation.x,
+                    vrmNode.translation.y,
+                    vrmNode.translation.z
+                ]
+            } else {
+                // T-pose default
+                node["rotation"] = [0, 0, 0, 1]
+                node["translation"] = [0, 0, 0]
+            }
+
+            nodes.append(node)
+        }
+
+        return (nodes, humanBoneNodeMap)
+    }
+
+    /// Build buffer views and accessors for animation keyframes
+    private static func buildAccessors(
+        session: VRMASession,
+        animatedBones: [VRMHumanoidBone],
+        hasExpressions: Bool
+    ) -> ([[String: Any]], [[String: Any]], Int) {
+        var bufferViews: [[String: Any]] = []
+        var accessors: [[String: Any]] = []
+        var byteOffset = 0
+
+        let frameCount = session.frames.count
+
+        // Time accessor (shared by all channels)
+        let timeByteLength = frameCount * MemoryLayout<Float>.size
+        bufferViews.append([
+            "buffer": 0,
+            "byteOffset": byteOffset,
+            "byteLength": timeByteLength
+        ])
+        accessors.append([
+            "bufferView": bufferViews.count - 1,
+            "componentType": 5126, // FLOAT
+            "count": frameCount,
+            "type": "SCALAR",
+            "min": [0.0],
+            "max": [Double(session.duration)]
+        ])
+        byteOffset += timeByteLength
+
+        // Rotation accessors for each bone (VEC4 quaternions)
+        for _ in animatedBones {
+            let quatByteLength = frameCount * 4 * MemoryLayout<Float>.size
+            bufferViews.append([
+                "buffer": 0,
+                "byteOffset": byteOffset,
+                "byteLength": quatByteLength
+            ])
+            accessors.append([
+                "bufferView": bufferViews.count - 1,
+                "componentType": 5126, // FLOAT
+                "count": frameCount,
+                "type": "VEC4"
+            ])
+            byteOffset += quatByteLength
+        }
+
+        // Hips translation accessor (if we have body data)
+        if animatedBones.contains(.hips) {
+            let translationByteLength = frameCount * 3 * MemoryLayout<Float>.size
+            bufferViews.append([
+                "buffer": 0,
+                "byteOffset": byteOffset,
+                "byteLength": translationByteLength
+            ])
+            accessors.append([
+                "bufferView": bufferViews.count - 1,
+                "componentType": 5126, // FLOAT
+                "count": frameCount,
+                "type": "VEC3"
+            ])
+            byteOffset += translationByteLength
+        }
+
+        // Expression weight accessors (scalar per expression)
+        if hasExpressions {
+            let expressionKeys = collectExpressionKeys(session: session)
+            for _ in expressionKeys {
+                let weightByteLength = frameCount * MemoryLayout<Float>.size
+                bufferViews.append([
+                    "buffer": 0,
+                    "byteOffset": byteOffset,
+                    "byteLength": weightByteLength
+                ])
+                accessors.append([
+                    "bufferView": bufferViews.count - 1,
+                    "componentType": 5126, // FLOAT
+                    "count": frameCount,
+                    "type": "SCALAR"
+                ])
+                byteOffset += weightByteLength
+            }
+        }
+
+        return (bufferViews, accessors, byteOffset)
+    }
+
+    /// Collect all unique expression keys from session
+    private static func collectExpressionKeys(session: VRMASession) -> [String] {
+        var keys = Set<String>()
+        for frame in session.frames {
+            if let shapes = frame.faceBlendShapes {
+                for key in shapes.keys {
+                    keys.insert(key)
+                }
+            }
+        }
+        return keys.sorted()
+    }
+
+    /// Build animation channels and samplers
+    private static func buildAnimation(
+        session: VRMASession,
+        animatedBones: [VRMHumanoidBone],
+        humanBoneNodeMap: [VRMHumanoidBone: Int],
+        hasExpressions: Bool
+    ) -> [String: Any] {
+        var channels: [[String: Any]] = []
+        var samplers: [[String: Any]] = []
+
+        // Time accessor is always index 0
+        let timeAccessorIndex = 0
+        var outputAccessorIndex = 1
+
+        // Rotation channels for each bone
+        for bone in animatedBones {
+            guard let nodeIndex = humanBoneNodeMap[bone] else { continue }
+
+            samplers.append([
+                "input": timeAccessorIndex,
+                "output": outputAccessorIndex,
+                "interpolation": "LINEAR"
+            ])
+
+            channels.append([
+                "sampler": samplers.count - 1,
+                "target": [
+                    "node": nodeIndex,
+                    "path": "rotation"
+                ]
+            ])
+
+            outputAccessorIndex += 1
+        }
+
+        // Hips translation channel
+        if animatedBones.contains(.hips), let hipsNodeIndex = humanBoneNodeMap[.hips] {
+            samplers.append([
+                "input": timeAccessorIndex,
+                "output": outputAccessorIndex,
+                "interpolation": "LINEAR"
+            ])
+
+            channels.append([
+                "sampler": samplers.count - 1,
+                "target": [
+                    "node": hipsNodeIndex,
+                    "path": "translation"
+                ]
+            ])
+
+            outputAccessorIndex += 1
+        }
+
+        // Expression channels (encoded as translation.x on dedicated nodes)
+        // VRMA encodes expression weights using translation.x on expression nodes
+        if hasExpressions {
+            let expressionKeys = collectExpressionKeys(session: session)
+            for _ in expressionKeys {
+                // Expression nodes would be added after humanoid bones
+                // For simplicity, we skip expression channels in this implementation
+                // as they require additional node setup
+                outputAccessorIndex += 1
+            }
+        }
+
+        return [
+            "name": session.name,
+            "channels": channels,
+            "samplers": samplers
+        ]
+    }
+
+    /// Build VRMC_vrm_animation extension data
+    private static func buildVRMAExtension(
+        animatedBones: [VRMHumanoidBone],
+        humanBoneNodeMap: [VRMHumanoidBone: Int],
+        hasExpressions: Bool,
+        session: VRMASession
+    ) -> [String: Any] {
+        var extension_: [String: Any] = [
+            "specVersion": "1.0"
+        ]
+
+        // Humanoid bone mapping
+        var humanBones: [String: Any] = [:]
+        for bone in animatedBones {
+            if let nodeIndex = humanBoneNodeMap[bone] {
+                humanBones[bone.rawValue] = ["node": nodeIndex]
+            }
+        }
+        extension_["humanoid"] = ["humanBones": humanBones]
+
+        // Expression mapping (simplified - maps ARKit blend shapes to VRM presets)
+        if hasExpressions {
+            var preset: [String: Any] = [:]
+            var custom: [String: Any] = [:]
+
+            // Map common ARKit expressions to VRM presets
+            let arkitToVRMPreset: [String: String] = [
+                "eyeBlinkLeft": "blinkLeft",
+                "eyeBlinkRight": "blinkRight",
+                "mouthSmileLeft": "happy",
+                "mouthSmileRight": "happy",
+                "browDownLeft": "angry",
+                "browDownRight": "angry",
+                "mouthFrownLeft": "sad",
+                "mouthFrownRight": "sad",
+                "eyeWideLeft": "surprised",
+                "eyeWideRight": "surprised"
+            ]
+
+            let expressionKeys = collectExpressionKeys(session: session)
+            var nodeIndex = humanBoneNodeMap.count  // Start after humanoid bones
+
+            for key in expressionKeys {
+                if let presetName = arkitToVRMPreset[key] {
+                    if preset[presetName] == nil {
+                        preset[presetName] = ["node": nodeIndex]
+                    }
+                } else {
+                    custom[key] = ["node": nodeIndex]
+                }
+                nodeIndex += 1
+            }
+
+            extension_["expressions"] = [
+                "preset": preset,
+                "custom": custom
+            ]
+        }
+
+        return extension_
+    }
+
+    // MARK: - Binary Buffer Building
+
+    /// Build binary buffer containing all keyframe data
+    private static func buildBinaryBuffer(session: VRMASession) -> Data {
+        var buffer = Data()
+        let animatedBones = collectAnimatedBones(session: session)
+        let hasExpressions = session.frames.first?.faceBlendShapes != nil
+
+        // Write time values
+        for frame in session.frames {
+            var time = frame.time
+            buffer.append(Data(bytes: &time, count: MemoryLayout<Float>.size))
+        }
+
+        // Write rotation values for each bone
+        for bone in animatedBones {
+            for frame in session.frames {
+                var quat = frame.bodyJoints?[bone] ?? simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+                // glTF quaternion order: x, y, z, w
+                var x = quat.imag.x
+                var y = quat.imag.y
+                var z = quat.imag.z
+                var w = quat.real
+                buffer.append(Data(bytes: &x, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &y, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &z, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &w, count: MemoryLayout<Float>.size))
+            }
+        }
+
+        // Write hips translation values
+        if animatedBones.contains(.hips) {
+            for frame in session.frames {
+                var translation = frame.hipsTranslation ?? simd_float3(0, 0, 0)
+                buffer.append(Data(bytes: &translation.x, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &translation.y, count: MemoryLayout<Float>.size))
+                buffer.append(Data(bytes: &translation.z, count: MemoryLayout<Float>.size))
+            }
+        }
+
+        // Write expression weight values
+        if hasExpressions {
+            let expressionKeys = collectExpressionKeys(session: session)
+            for key in expressionKeys {
+                for frame in session.frames {
+                    var weight = frame.faceBlendShapes?[key] ?? 0.0
+                    buffer.append(Data(bytes: &weight, count: MemoryLayout<Float>.size))
+                }
+            }
+        }
+
+        return buffer
+    }
+
+    // MARK: - GLB Creation
+
+    private static func createGLB(json: [String: Any], binaryData: Data) throws -> Data {
+        // GLB structure:
+        // Header (12 bytes):
+        //   - magic: 0x46546C67 ("glTF")
+        //   - version: 2
+        //   - length: total file size
+        // JSON chunk:
+        //   - chunkLength
+        //   - chunkType: 0x4E4F534A ("JSON")
+        //   - chunkData (padded to 4-byte boundary with spaces)
+        // BIN chunk:
+        //   - chunkLength
+        //   - chunkType: 0x004E4942 ("BIN\0")
+        //   - chunkData (padded to 4-byte boundary with zeros)
+
+        // Serialize JSON
+        let jsonData: Data
+        do {
+            jsonData = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+        } catch {
+            throw VRMAExportError.serializationFailed(error.localizedDescription)
+        }
+
+        // Pad JSON to 4-byte boundary with spaces (0x20)
+        let jsonPadding = (4 - (jsonData.count % 4)) % 4
+        var paddedJSON = jsonData
+        if jsonPadding > 0 {
+            paddedJSON.append(Data(repeating: 0x20, count: jsonPadding))
+        }
+
+        // Pad binary data to 4-byte boundary with zeros (0x00)
+        let binaryPadding = (4 - (binaryData.count % 4)) % 4
+        var paddedBinary = binaryData
+        if binaryPadding > 0 {
+            paddedBinary.append(Data(repeating: 0x00, count: binaryPadding))
+        }
+
+        // Calculate total length
+        let headerLength = 12
+        let jsonChunkHeaderLength = 8
+        let binaryChunkHeaderLength = 8
+        let totalLength = headerLength + jsonChunkHeaderLength + paddedJSON.count + binaryChunkHeaderLength + paddedBinary.count
+
+        // Build GLB
+        var glbData = Data()
+
+        // Header
+        glbData.append(littleEndianUInt32(0x46546C67)) // magic "glTF"
+        glbData.append(littleEndianUInt32(2)) // version 2
+        glbData.append(littleEndianUInt32(UInt32(totalLength))) // total length
+
+        // JSON chunk header
+        glbData.append(littleEndianUInt32(UInt32(paddedJSON.count))) // chunk length
+        glbData.append(littleEndianUInt32(0x4E4F534A)) // chunk type "JSON"
+
+        // JSON chunk data
+        glbData.append(paddedJSON)
+
+        // Binary chunk
+        glbData.append(littleEndianUInt32(UInt32(paddedBinary.count))) // chunk length
+        glbData.append(littleEndianUInt32(0x004E4942)) // chunk type "BIN\0"
+        glbData.append(paddedBinary)
+
+        return glbData
+    }
+
+    /// Convert UInt32 to little-endian Data
+    private static func littleEndianUInt32(_ value: UInt32) -> Data {
+        var value = value.littleEndian
+        return Data(bytes: &value, count: MemoryLayout<UInt32>.size)
+    }
+}

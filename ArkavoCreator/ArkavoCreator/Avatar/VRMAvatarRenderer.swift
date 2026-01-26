@@ -19,7 +19,11 @@ class VRMAvatarRenderer: NSObject {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private var renderer: VRMRenderer?
-    private var model: VRMModel?
+    private var _model: VRMModel?
+
+    /// The loaded VRM model (for VRMA export rest pose)
+    var model: VRMModel? { _model }
+
     private var expressionController: VRMExpressionController? {
         renderer?.expressionController
     }
@@ -92,7 +96,7 @@ class VRMAvatarRenderer: NSObject {
 
             // Load VRM model
             let vrmModel = try await VRMModel.load(from: url, device: device)
-            model = vrmModel
+            _model = vrmModel
 
             #if DEBUG
             print("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
