@@ -390,15 +390,16 @@ public class VRMARecorder: ObservableObject {
 
             // Extract hips translation for root motion
             if arkitJoint == .hips {
-                // Convert ARKit translation to glTF/VRM (negate X and Z)
+                // Convert ARKit translation to glTF (negate Z for axis flip)
                 hipsTranslation = simd_float3(
-                    -childTransform.columns.3.x,
+                    childTransform.columns.3.x,
                     childTransform.columns.3.y,
                     -childTransform.columns.3.z
                 )
                 // Hips is root - convert model-space rotation
                 var rot = extractRotation(from: childTransform)
-                rot = simd_quatf(ix: -rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
+                // Convert ARKit to glTF (negate Z for axis flip)
+                rot = simd_quatf(ix: rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
                 rotations[vrmBone] = rot
                 continue
             }
@@ -411,11 +412,11 @@ public class VRMARecorder: ObservableObject {
                 let childRot = extractRotation(from: childTransform)
                 var localRot = simd_mul(simd_inverse(parentRot), childRot)
                 // Convert ARKit coordinate system to VRM/glTF
-                // ARKit: Y-up, camera facing -Z
-                // glTF/VRM: Y-up, forward is +Z
-                // Negate X and Z to convert from ARKit to glTF conventions
+                // ARKit: Y-up, camera facing -Z (right-handed)
+                // glTF/VRM: Y-up, forward is +Z (right-handed)
+                // Negate Z only for axis flip (ARKit→glTF)
                 localRot = simd_quatf(
-                    ix: -localRot.imag.x,
+                    ix: localRot.imag.x,
                     iy: localRot.imag.y,
                     iz: -localRot.imag.z,
                     r: localRot.real
@@ -424,7 +425,8 @@ public class VRMARecorder: ObservableObject {
             } else {
                 // No parent found, use model-space rotation as fallback
                 var rot = extractRotation(from: childTransform)
-                rot = simd_quatf(ix: -rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
+                // Convert ARKit to glTF (negate Z for axis flip)
+                rot = simd_quatf(ix: rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
                 rotations[vrmBone] = rot
             }
         }

@@ -146,6 +146,11 @@ public enum VRMAExporter {
                     bones.insert(bone)
                 }
             }
+            // Include head bone if we have head transform from face tracking
+            if frame.headTransform != nil {
+                bones.insert(.head)
+                bones.insert(.neck)  // Also animate neck for natural head movement
+            }
         }
 
         // Sort for consistent ordering
@@ -491,7 +496,29 @@ public enum VRMAExporter {
         // Write rotation values for each bone
         for bone in animatedBones {
             for frame in session.frames {
-                let quat = frame.bodyJoints?[bone] ?? simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+                var quat: simd_quatf
+
+                if let bodyQuat = frame.bodyJoints?[bone] {
+                    // Use body tracking data if available
+                    quat = bodyQuat
+                } else if (bone == .head || bone == .neck), let headTransform = frame.headTransform {
+                    // Extract rotation from face tracking head transform
+                    let rawQuat = extractRotation(from: headTransform)
+                    // Convert ARKit to glTF (negate Z for axis flip)
+                    quat = simd_quatf(
+                        ix: rawQuat.imag.x,
+                        iy: rawQuat.imag.y,
+                        iz: -rawQuat.imag.z,
+                        r: rawQuat.real
+                    )
+                    // Neck gets partial rotation (30% of head)
+                    if bone == .neck {
+                        quat = simd_slerp(simd_quatf(ix: 0, iy: 0, iz: 0, r: 1), quat, 0.3)
+                    }
+                } else {
+                    quat = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+                }
+
                 // glTF quaternion order: x, y, z, w
                 var x = quat.imag.x
                 var y = quat.imag.y
@@ -600,5 +627,20 @@ public enum VRMAExporter {
     private static func littleEndianUInt32(_ value: UInt32) -> Data {
         var value = value.littleEndian
         return Data(bytes: &value, count: MemoryLayout<UInt32>.size)
+    }
+
+    /// Extract rotation quaternion from a 4x4 transform matrix
+    private static func extractRotation(from transform: simd_float4x4) -> simd_quatf {
+        let col0 = simd_float3(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z)
+        let col1 = simd_float3(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z)
+        let col2 = simd_float3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
+
+        // Normalize columns to remove scale
+        let x = simd_normalize(col0)
+        let y = simd_normalize(col1)
+        let z = simd_normalize(col2)
+
+        let rotationMatrix = simd_float3x3(x, y, z)
+        return simd_quatf(rotationMatrix)
     }
 }
