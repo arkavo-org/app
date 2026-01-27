@@ -110,11 +110,24 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
             // Track that user manually changed the mode
             if mode != oldValue {
                 hasManualModeSelection = true
+                // If currently streaming, restart ARKit with the new mode (different camera)
+                if state == .streaming {
+                    Task { @MainActor in
+                        await restartWithNewMode()
+                    }
+                }
             }
         }
     }
     @Published private(set) var statusMessage: String = "Not connected"
     @Published private(set) var discoveredServers: [DiscoveredServer] = []
+    @Published var faceTrackingEnabled = true
+
+    // Debug: Latest tracking data for visualization
+    @Published private(set) var latestFaceBlendShapes: [ARFaceAnchor.BlendShapeLocation: NSNumber]?
+    @Published private(set) var latestBodySkeleton: ARSkeleton3D?
+    @Published private(set) var isFaceTracking = false
+    @Published private(set) var isBodyTracking = false
 
     private var hasManualModeSelection = false
     private var noDetectionFrameCount = 0
@@ -274,6 +287,33 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connectionState = .idle
     }
 
+    /// Restart ARKit capture with the new mode (switches camera)
+    private func restartWithNewMode() async {
+        print("🔄 [Mode Switch] Restarting ARKit with mode: \(mode)")
+
+        // Stop current capture but keep connection
+        captureManager?.stop()
+        captureManager = nil
+
+        // Brief delay for camera to release
+        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        // Start new capture with updated mode
+        do {
+            let newCaptureManager = ARKitCaptureManager()
+            newCaptureManager.delegate = self
+            try newCaptureManager.start(mode: mode)
+            self.captureManager = newCaptureManager
+
+            // Send new handshake with updated source ID
+            sendHandshake()
+
+            print("✅ [Mode Switch] Successfully switched to \(mode) mode")
+        } catch {
+            print("❌ [Mode Switch] Failed to restart: \(error)")
+            statusMessage = "Failed to switch camera: \(error.localizedDescription)"
+        }
+    }
 
     private func waitForDiscovery(timeout: TimeInterval) async -> DiscoveredServer? {
         // Check cache first - try to reconnect to last used Mac
@@ -461,6 +501,12 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         connection?.cancel()
         connection = nil
 
+        // Clear debug state
+        latestFaceBlendShapes = nil
+        latestBodySkeleton = nil
+        isFaceTracking = false
+        isBodyTracking = false
+
         state = .idle
         statusMessage = "Not connected"
     }
@@ -483,14 +529,17 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         switch newState {
         case .ready:
             state = .streaming
+            connectionState = .streaming
             statusMessage = "Streaming to \(host)"
             sendHandshake()
         case let .failed(error):
             state = .error(error.localizedDescription)
+            connectionState = .failed(.connectionTimeout)
             statusMessage = "Connection failed: \(error.localizedDescription)"
             stopStreaming()
         case .cancelled:
             state = .idle
+            connectionState = .idle
             statusMessage = "Disconnected"
         default:
             break
@@ -696,14 +745,36 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
 
         if hasFace && hasBody {
             print("🎭🦴 [RemoteCameraStreamer] Combined tracking: face (\(metadata.blendShapes!.count) shapes) + body")
-            sendFaceMetadata(blendShapes: metadata.blendShapes!, anchors: metadata.anchors)
+            // Update debug state
+            latestFaceBlendShapes = metadata.blendShapes
+            latestBodySkeleton = metadata.bodySkeleton
+            isFaceTracking = true
+            isBodyTracking = true
+
+            if faceTrackingEnabled {
+                sendFaceMetadata(blendShapes: metadata.blendShapes!, anchors: metadata.anchors)
+            }
             sendBodyMetadata(metadata.bodySkeleton!)
             noDetectionFrameCount = 0  // Reset counter
         } else if let blendShapes = metadata.blendShapes {
-            print("🎭 [RemoteCameraStreamer] Face tracking: \(blendShapes.count) blend shapes")
-            sendFaceMetadata(blendShapes: blendShapes, anchors: metadata.anchors)
+            // Update debug state
+            latestFaceBlendShapes = blendShapes
+            isFaceTracking = true
+            isBodyTracking = false
+            latestBodySkeleton = nil
+
+            if faceTrackingEnabled {
+                print("🎭 [RemoteCameraStreamer] Face tracking: \(blendShapes.count) blend shapes")
+                sendFaceMetadata(blendShapes: blendShapes, anchors: metadata.anchors)
+            }
             noDetectionFrameCount = 0  // Reset counter
         } else if let skeleton = metadata.bodySkeleton {
+            // Update debug state
+            latestBodySkeleton = skeleton
+            isBodyTracking = true
+            isFaceTracking = false
+            latestFaceBlendShapes = nil
+
             print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")
             sendBodyMetadata(skeleton)
             noDetectionFrameCount = 0  // Reset counter

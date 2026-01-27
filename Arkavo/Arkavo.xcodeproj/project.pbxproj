@@ -94,6 +94,8 @@
 		DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
 		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DAC1FA082C34DA7100499632 /* RemoteCameraConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */; };
+		DAC1FA0A2C34DA7100499633 /* RemoteCameraTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */; };
 		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
 		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
 		DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0002EE0112340000001B /* CreatorContentView.swift */; };
@@ -119,6 +121,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAF00002VPS00002 /* VideoProtectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF00001VPS00001 /* VideoProtectionService.swift */; };
 		DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */; };
 		DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */; };
+		DAF2B7042FF1A6A600123456 /* TrackingDebugViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF2B7032FF1A6A600123456 /* TrackingDebugViews.swift */; };
 		DAF458A02C702AE0004B44FE /* VideoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */; };
 		DAF458A42C70320F004B44FE /* VideoStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF458A32C70320F004B44FE /* VideoStreamView.swift */; };
 		DAF5E9D72D27761900016EBE /* MessageQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */; };
@@ -234,6 +237,8 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAC1F9F62C34DA7100499631 /* ArkavoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
+		DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraConnectionTests.swift; sourceTree = "<group>"; };
+		DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraTestHelpers.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoWebSocket.swift; sourceTree = "<group>"; };
 		DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorProfileDisplayView.swift; sourceTree = "<group>"; };
@@ -259,6 +264,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProtectionService.swift; sourceTree = "<group>"; };
 		DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDiscoveryService.swift; sourceTree = "<group>"; };
 		DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraStreamer.swift; sourceTree = "<group>"; };
+		DAF2B7032FF1A6A600123456 /* TrackingDebugViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingDebugViews.swift; sourceTree = "<group>"; };
 		DAF4589F2C702AE0004B44FE /* VideoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCaptureManager.swift; sourceTree = "<group>"; };
 		DAF458A32C70320F004B44FE /* VideoStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoStreamView.swift; sourceTree = "<group>"; };
 		DAF5E9D62D27761900016EBE /* MessageQueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueueManager.swift; sourceTree = "<group>"; };
@@ -367,6 +373,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DABD7D492D0D336700239F22 /* VideoCreateView.swift */,
 				DAF2B6FF2FF1A6A400123456 /* CameraDiscoveryService.swift */,
 				DAF2B7012FF1A6A500123456 /* RemoteCameraStreamer.swift */,
+				DAF2B7032FF1A6A600123456 /* TrackingDebugViews.swift */,
 				DABD7D472D0D2F2900239F22 /* VideoManager.swift */,
 				DAF00001VPS00001 /* VideoProtectionService.swift */,
 				DAAFCBCD2D09073A003FC56F /* GroupView.swift */,
@@ -473,6 +480,8 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 			children = (
 				DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */,
 				DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */,
+				DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */,
+				DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */,
 			);
 			path = ArkavoUITests;
 			sourceTree = "<group>";
@@ -724,6 +733,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DABD7D4A2D0D337000239F22 /* VideoCreateView.swift in Sources */,
 				DAF2B7002FF1A6A400123456 /* CameraDiscoveryService.swift in Sources */,
 				DAF2B7022FF1A6A500123456 /* RemoteCameraStreamer.swift in Sources */,
+				DAF2B7042FF1A6A600123456 /* TrackingDebugViews.swift in Sources */,
 				DA1C90652CB2234D00806E8A /* EntityServiceModel.swift in Sources */,
 				479D56DE2F1DBB83009600B0 /* ContactTypes.swift in Sources */,
 				DA24F91F2CB1D046003211CD /* Topics.swift in Sources */,
@@ -773,6 +783,8 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 			files = (
 				DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */,
 				DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */,
+				DAC1FA082C34DA7100499632 /* RemoteCameraConnectionTests.swift in Sources */,
+				DAC1FA0A2C34DA7100499633 /* RemoteCameraTestHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -11,11 +11,25 @@ import Metal
 import SwiftUI
 import VRMMetalKit
 
+/// Tracking mode for avatar camera positioning
+enum AvatarTrackingMode: String, CaseIterable {
+    case face = "Face"
+    case body = "Body"
+}
+
+/// Background type for avatar view
+enum AvatarBackgroundType: String, CaseIterable {
+    case solidColor = "Color"
+    case image = "Image"
+    case video = "Video"
+}
+
 /// ViewModel for avatar recording and management
 @MainActor
 class AvatarViewModel: ObservableObject {
     // MARK: - Published Properties
 
+    @Published var trackingMode: AvatarTrackingMode = .face
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
     @Published var selectedModelURL: URL? {
@@ -27,6 +41,9 @@ class AvatarViewModel: ObservableObject {
         }
     }
     @Published var backgroundColor: Color = .black
+    @Published var backgroundType: AvatarBackgroundType = .solidColor
+    @Published var backgroundImageURL: URL?
+    @Published var backgroundVideoURL: URL?
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
     @Published var isLoading = false
@@ -183,6 +200,17 @@ class AvatarViewModel: ObservableObject {
         self.renderer = renderer
     }
 
+    /// Update camera position for the given tracking mode
+    /// Note: Does NOT modify trackingMode property to avoid publishing during view updates
+    func setTrackingMode(_ mode: AvatarTrackingMode) {
+        switch mode {
+        case .face:
+            renderer?.setCameraForFace()
+        case .body:
+            renderer?.setCameraForBody()
+        }
+    }
+
     /// Load the currently selected VRM model into the renderer
     func loadSelectedModel() async {
         guard let url = selectedModelURL, let renderer else {
@@ -196,6 +224,8 @@ class AvatarViewModel: ObservableObject {
         do {
             try await renderer.loadModel(from: url)
             isModelLoaded = true
+            // Apply current tracking mode's camera position after model loads
+            setTrackingMode(trackingMode)
             print("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
         } catch {
             self.error = "Failed to load model: \(error.localizedDescription)"

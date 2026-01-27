@@ -42,6 +42,10 @@ class VRMAvatarRenderer: NSObject {
     private(set) var isPaused = false
     weak var mtkView: MTKView?
 
+    // Current camera mode for resize handling
+    private var currentCameraMode: CameraMode = .face
+    enum CameraMode { case face, body }
+
     // Idle animation state
     private var idleAnimationTimer: Timer?
     private var breathingPhase: Float = 0
@@ -111,9 +115,9 @@ class VRMAvatarRenderer: NSObject {
 
             isLoaded = true
 
-            // Perform visual self-check (async to allow rendering)
+            // Start idle animation (visual self-check disabled for recording)
             Task { @MainActor in
-                await performVisualSelfCheck(model: vrmModel)
+                // await performVisualSelfCheck(model: vrmModel)
                 startIdleAnimation()
             }
         } catch {
@@ -328,11 +332,16 @@ class VRMAvatarRenderer: NSObject {
 
     /// Position camera for face tracking (close-up view)
     func setCameraForFace() {
+        currentCameraMode = .face
         guard let renderer else { return }
 
         // Set up perspective projection - tighter FOV for face focus
         let fov: Float = 35.0 * .pi / 180.0  // Narrower FOV for portrait-style framing
-        let aspect: Float = 16.0 / 9.0
+        // Use actual drawable aspect ratio to prevent squashing
+        let drawableSize = mtkView?.drawableSize ?? CGSize(width: 1920, height: 1080)
+        let aspect: Float = drawableSize.width > 0 && drawableSize.height > 0
+            ? Float(drawableSize.width / drawableSize.height)
+            : 16.0 / 9.0  // Fallback
         let near: Float = 0.1
         let far: Float = 100.0
 
@@ -354,11 +363,16 @@ class VRMAvatarRenderer: NSObject {
 
     /// Position camera for body tracking (full body view)
     func setCameraForBody() {
+        currentCameraMode = .body
         guard let renderer else { return }
 
-        // Wider FOV to see full body
-        let fov: Float = 50.0 * .pi / 180.0  // Wider FOV for full body
-        let aspect: Float = 16.0 / 9.0
+        // FOV tuned for full body to fill screen
+        let fov: Float = 45.0 * .pi / 180.0  // Moderate FOV for full body framing
+        // Use actual drawable aspect ratio to prevent squashing
+        let drawableSize = mtkView?.drawableSize ?? CGSize(width: 1920, height: 1080)
+        let aspect: Float = drawableSize.width > 0 && drawableSize.height > 0
+            ? Float(drawableSize.width / drawableSize.height)
+            : 16.0 / 9.0  // Fallback
         let near: Float = 0.1
         let far: Float = 100.0
 
@@ -369,9 +383,10 @@ class VRMAvatarRenderer: NSObject {
             far: far
         )
 
-        // Camera pulled back and centered on torso to see full body
-        let eye = SIMD3<Float>(0, 1.0, -3.5)     // Further back, centered on torso
-        let center = SIMD3<Float>(0, 1.0, 0)     // Look at torso center
+        // Camera positioned to frame full body from head to feet, centered
+        // VRM models are ~1.7m tall with hips around 0.9m height
+        let eye = SIMD3<Float>(0, 0.9, -2.2)     // Centered on hips, close enough to fill frame
+        let center = SIMD3<Float>(0, 0.9, 0)     // Look at hip center
         let up = SIMD3<Float>(0, 1, 0)           // Up vector
 
         renderer.viewMatrix = lookAtMatrix(eye: eye, center: center, up: up)
@@ -494,7 +509,13 @@ class VRMAvatarRenderer: NSObject {
 
 extension VRMAvatarRenderer: MTKViewDelegate {
     func mtkView(_: MTKView, drawableSizeWillChange _: CGSize) {
-        // Handle resize if needed
+        // Reapply current camera mode with new aspect ratio
+        switch currentCameraMode {
+        case .face:
+            setCameraForFace()
+        case .body:
+            setCameraForBody()
+        }
     }
 
     func draw(in view: MTKView) {

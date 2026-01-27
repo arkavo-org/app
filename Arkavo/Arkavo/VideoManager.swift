@@ -27,6 +27,7 @@ final class VideoRecordingManager: @unchecked Sendable {
     // Current recording state
     private(set) var isRecording = false
     private(set) var currentVideoURL: URL?
+    private(set) var currentCameraPosition: AVCaptureDevice.Position = .back
 
     // Strong reference to current recording delegate
     private var currentRecordingDelegate: RecordingDelegate?
@@ -34,15 +35,15 @@ final class VideoRecordingManager: @unchecked Sendable {
     init() async throws {
         captureSession = AVCaptureSession()
         videoOutput = AVCaptureMovieFileOutput()
-        try await setupCaptureSession()
+        try await setupCaptureSession(cameraPosition: .back)
     }
 
-    private func setupCaptureSession() async throws {
+    private func setupCaptureSession(cameraPosition: AVCaptureDevice.Position) async throws {
         captureSession.sessionPreset = .hd1920x1080
 
         guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                         for: .video,
-                                                        position: .back)
+                                                        position: cameraPosition)
         else {
             throw VideoError.deviceNotAvailable
         }
@@ -66,9 +67,54 @@ final class VideoRecordingManager: @unchecked Sendable {
                     connection.preferredVideoStabilizationMode = .auto
                 }
             }
+
+            currentCameraPosition = cameraPosition
         } catch {
             throw VideoError.captureSessionSetupFailed
         }
+    }
+
+    /// Switch camera between front and back
+    func switchCamera(to position: AVCaptureDevice.Position) {
+        guard position != currentCameraPosition else { return }
+        guard !isRecording else {
+            print("⚠️ Cannot switch camera while recording")
+            return
+        }
+
+        captureSession.beginConfiguration()
+
+        // Remove existing video input
+        if let currentInput = captureSession.inputs.first(where: { input in
+            guard let deviceInput = input as? AVCaptureDeviceInput else { return false }
+            return deviceInput.device.hasMediaType(.video)
+        }) {
+            captureSession.removeInput(currentInput)
+        }
+
+        // Add new camera input
+        guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera,
+                                                       for: .video,
+                                                       position: position),
+              let newInput = try? AVCaptureDeviceInput(device: newDevice),
+              captureSession.canAddInput(newInput) else {
+            print("❌ Failed to switch to \(position == .front ? "front" : "back") camera")
+            captureSession.commitConfiguration()
+            return
+        }
+
+        captureSession.addInput(newInput)
+        currentCameraPosition = position
+
+        // Update video connection
+        if let connection = videoOutput.connection(with: .video) {
+            if connection.isVideoStabilizationSupported {
+                connection.preferredVideoStabilizationMode = .auto
+            }
+        }
+
+        captureSession.commitConfiguration()
+        print("📷 Switched to \(position == .front ? "front" : "back") camera")
     }
 
     func startPreview(in view: UIView) -> CALayer {

@@ -104,6 +104,7 @@ struct ContentView: View {
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                         }
+                        .accessibilityLabel("Create")
                         .padding(.top, 0)
                         .padding(.leading, 8)
                         .modifier(BounceAnimationModifier(isAwaiting: sharedState.isAwaiting || showTooltip))

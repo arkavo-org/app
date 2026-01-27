@@ -1,5 +1,6 @@
 import ArkavoKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Context-aware right panel showing source-specific settings
 struct InspectorPanel: View {
@@ -140,11 +141,32 @@ struct AvatarInspectorContent: View {
 
             Divider()
 
-            // Section: Tracking Overlays
+            // Section: Tracking
             sectionHeader("Tracking")
 
+            // Tracking Mode Selection
+            Picker("Mode", selection: $viewModel.trackingMode) {
+                ForEach(AvatarTrackingMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.trackingMode) { _, newMode in
+                viewModel.setTrackingMode(newMode)
+            }
+
+            // Face Tracking Enable/Disable
+            Toggle(isOn: $viewModel.faceTrackingEnabled) {
+                HStack {
+                    Image(systemName: "face.smiling")
+                    Text("Face Tracking")
+                }
+            }
+            .toggleStyle(.switch)
+
+            // Debug Overlays
             HStack(spacing: 8) {
-                // Body Tracking Toggle
+                // Body Tracking Overlay Toggle
                 Button {
                     showBodyTracking.toggle()
                 } label: {
@@ -162,11 +184,11 @@ struct AvatarInspectorContent: View {
                 .buttonStyle(.plain)
                 .help("Toggle Body Tracking Overlay")
 
-                // Face Tracking Toggle
+                // Face Tracking Overlay Toggle
                 Button {
                     showFaceTracking.toggle()
                 } label: {
-                    Image(systemName: "face.smiling")
+                    Image(systemName: "waveform")
                         .font(.system(size: 16))
                         .frame(width: 36, height: 36)
                         .background(showFaceTracking ? Color.accentColor.opacity(0.3) : Color.clear)
@@ -178,7 +200,7 @@ struct AvatarInspectorContent: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Face Tracking Overlay")
+                .help("Toggle Face Debug Overlay")
             }
 
             Divider()
@@ -206,6 +228,65 @@ struct AvatarInspectorContent: View {
                 }
             }
 
+            Divider()
+
+            // Section: Background
+            sectionHeader("Background")
+
+            Picker("Type", selection: $viewModel.backgroundType) {
+                ForEach(AvatarBackgroundType.allCases, id: \.self) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            switch viewModel.backgroundType {
+            case .solidColor:
+                ColorPicker("Color", selection: $viewModel.backgroundColor)
+            case .image:
+                Button("Select Image...") {
+                    selectBackgroundImage()
+                }
+                .buttonStyle(.bordered)
+                if let url = viewModel.backgroundImageURL {
+                    HStack {
+                        Text(url.lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            viewModel.backgroundImageURL = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            case .video:
+                Button("Select Video...") {
+                    selectBackgroundVideo()
+                }
+                .buttonStyle(.bordered)
+                if let url = viewModel.backgroundVideoURL {
+                    HStack {
+                        Text(url.lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            viewModel.backgroundVideoURL = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             Spacer()
         }
         .padding()
@@ -220,6 +301,34 @@ struct AvatarInspectorContent: View {
             if let url = lastExportedURL {
                 Text("Saved to:\n\(url.lastPathComponent)")
             }
+        }
+    }
+
+    private func selectBackgroundImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
+        panel.message = "Select background image"
+        panel.prompt = "Select"
+
+        if panel.runModal() == .OK {
+            viewModel.backgroundImageURL = panel.url
+        }
+    }
+
+    private func selectBackgroundVideo() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+        panel.message = "Select background video"
+        panel.prompt = "Select"
+
+        if panel.runModal() == .OK {
+            viewModel.backgroundVideoURL = panel.url
         }
     }
 }
