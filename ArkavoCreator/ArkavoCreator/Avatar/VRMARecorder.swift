@@ -17,6 +17,36 @@ public enum VRMARecordingState: Sendable {
     case stopped
 }
 
+/// Quality metrics updated during recording
+public struct CaptureQuality: Sendable {
+    /// Number of frames with body tracking data
+    public var framesWithBody: Int = 0
+
+    /// Number of frames without body tracking data
+    public var framesWithoutBody: Int = 0
+
+    /// Current consecutive frame drops
+    public var consecutiveDrops: Int = 0
+
+    /// Maximum consecutive frame drops seen
+    public var maxConsecutiveDrops: Int = 0
+
+    /// Ratio of frames with body tracking (0.0 - 1.0)
+    public var bodyTrackingRatio: Float {
+        let total = framesWithBody + framesWithoutBody
+        return total > 0 ? Float(framesWithBody) / Float(total) : 0
+    }
+
+    /// Whether capture quality meets minimum requirements
+    /// - At least 70% of frames have body tracking
+    /// - No more than 30 consecutive dropped frames (1 second at 30fps)
+    public var isAdequate: Bool {
+        return bodyTrackingRatio >= 0.7 && maxConsecutiveDrops < 30
+    }
+
+    public init() {}
+}
+
 /// A single frame of VRMA data
 public struct VRMAFrame: Sendable {
     /// Time offset from recording start in seconds
@@ -93,6 +123,7 @@ public class VRMARecorder: ObservableObject {
     @Published public private(set) var state: VRMARecordingState = .idle
     @Published public private(set) var recordingDuration: TimeInterval = 0
     @Published public private(set) var frameCount: Int = 0
+    @Published public private(set) var captureQuality = CaptureQuality()
 
     // MARK: - Recording State
 
@@ -120,6 +151,7 @@ public class VRMARecorder: ObservableObject {
         lastFrameTime = 0
         frameCount = 0
         recordingDuration = 0
+        captureQuality = CaptureQuality()
         state = .recording
 
         print("[VRMARecorder] Recording started at \(targetFrameRate) fps")
@@ -160,6 +192,7 @@ public class VRMARecorder: ObservableObject {
         startTime = nil
         frameCount = 0
         recordingDuration = 0
+        captureQuality = CaptureQuality()
         state = .idle
 
         print("[VRMARecorder] Recording cancelled")
@@ -203,6 +236,19 @@ public class VRMARecorder: ObservableObject {
         // Rate limiting
         guard time - lastFrameTime >= minFrameInterval else { return }
 
+        // Track capture quality
+        if body.joints.isEmpty {
+            captureQuality.framesWithoutBody += 1
+            captureQuality.consecutiveDrops += 1
+            captureQuality.maxConsecutiveDrops = max(
+                captureQuality.maxConsecutiveDrops,
+                captureQuality.consecutiveDrops
+            )
+        } else {
+            captureQuality.framesWithBody += 1
+            captureQuality.consecutiveDrops = 0
+        }
+
         // Convert ARKitBodySkeleton joint transforms to VRM bone rotations
         let (rotations, hipsTranslation) = convertBodyToVRMBones(body)
 
@@ -235,6 +281,21 @@ public class VRMARecorder: ObservableObject {
         // Rate limiting
         guard time - lastFrameTime >= minFrameInterval else { return }
 
+        // Track capture quality for body data
+        if let body = body {
+            if body.joints.isEmpty {
+                captureQuality.framesWithoutBody += 1
+                captureQuality.consecutiveDrops += 1
+                captureQuality.maxConsecutiveDrops = max(
+                    captureQuality.maxConsecutiveDrops,
+                    captureQuality.consecutiveDrops
+                )
+            } else {
+                captureQuality.framesWithBody += 1
+                captureQuality.consecutiveDrops = 0
+            }
+        }
+
         var rotations: [VRMHumanoidBone: simd_quatf]?
         var hipsTranslation: simd_float3?
 
@@ -258,18 +319,53 @@ public class VRMARecorder: ObservableObject {
 
     // MARK: - Body Conversion
 
+    /// ARKit skeleton hierarchy - defines parent-child relationships
+    /// ARKit joints are in model space (relative to root), we need local rotations
+    private static let arkitParentMap: [ARKitJoint: ARKitJoint] = [
+        // Spine chain
+        .spine: .hips,
+        .chest: .spine,
+        .upperChest: .chest,
+        .neck: .chest,  // or upperChest if present
+        .head: .neck,
+        // Left arm
+        .leftShoulder: .chest,
+        .leftUpperArm: .leftShoulder,
+        .leftLowerArm: .leftUpperArm,
+        .leftHand: .leftLowerArm,
+        // Right arm
+        .rightShoulder: .chest,
+        .rightUpperArm: .rightShoulder,
+        .rightLowerArm: .rightUpperArm,
+        .rightHand: .rightLowerArm,
+        // Left leg
+        .leftUpperLeg: .hips,
+        .leftLowerLeg: .leftUpperLeg,
+        .leftFoot: .leftLowerLeg,
+        .leftToes: .leftFoot,
+        // Right leg
+        .rightUpperLeg: .hips,
+        .rightLowerLeg: .rightUpperLeg,
+        .rightFoot: .rightLowerLeg,
+        .rightToes: .rightFoot
+    ]
+
     /// Convert ARKit body skeleton to VRM humanoid bone rotations
+    /// ARKit provides model-space transforms; we need local bone rotations
     private func convertBodyToVRMBones(_ skeleton: ARKitBodySkeleton) -> ([VRMHumanoidBone: simd_quatf], simd_float3?) {
         var rotations: [VRMHumanoidBone: simd_quatf] = [:]
         var hipsTranslation: simd_float3?
 
-        // ARKit joint to VRM bone mapping
+        // ARKit joint to VRM bone mapping (all key body bones)
         let jointMapping: [ARKitJoint: VRMHumanoidBone] = [
+            // Core spine chain
             .hips: .hips,
             .spine: .spine,
             .chest: .chest,
+            .upperChest: .upperChest,
             .neck: .neck,
             .head: .head,
+            // Arms
             .leftShoulder: .leftShoulder,
             .rightShoulder: .rightShoulder,
             .leftUpperArm: .leftUpperArm,
@@ -278,28 +374,58 @@ public class VRMARecorder: ObservableObject {
             .rightLowerArm: .rightLowerArm,
             .leftHand: .leftHand,
             .rightHand: .rightHand,
+            // Legs
             .leftUpperLeg: .leftUpperLeg,
             .rightUpperLeg: .rightUpperLeg,
             .leftLowerLeg: .leftLowerLeg,
             .rightLowerLeg: .rightLowerLeg,
             .leftFoot: .leftFoot,
-            .rightFoot: .rightFoot
+            .rightFoot: .rightFoot,
+            .leftToes: .leftToes,
+            .rightToes: .rightToes
         ]
 
         for (arkitJoint, vrmBone) in jointMapping {
-            if let transform = skeleton.joints[arkitJoint] {
-                // Extract rotation from transform matrix
-                let rotation = extractRotation(from: transform)
-                rotations[vrmBone] = rotation
+            guard let childTransform = skeleton.joints[arkitJoint] else { continue }
 
-                // Extract hips translation for root motion
-                if arkitJoint == .hips {
-                    hipsTranslation = simd_float3(
-                        transform.columns.3.x,
-                        transform.columns.3.y,
-                        transform.columns.3.z
-                    )
-                }
+            // Extract hips translation for root motion
+            if arkitJoint == .hips {
+                // Convert ARKit translation to glTF/VRM (negate X and Z)
+                hipsTranslation = simd_float3(
+                    -childTransform.columns.3.x,
+                    childTransform.columns.3.y,
+                    -childTransform.columns.3.z
+                )
+                // Hips is root - convert model-space rotation
+                var rot = extractRotation(from: childTransform)
+                rot = simd_quatf(ix: -rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
+                rotations[vrmBone] = rot
+                continue
+            }
+
+            // Get parent transform to compute local rotation
+            if let parentJoint = Self.arkitParentMap[arkitJoint],
+               let parentTransform = skeleton.joints[parentJoint] {
+                // Compute local rotation: localRot = inverse(parentWorldRot) * childWorldRot
+                let parentRot = extractRotation(from: parentTransform)
+                let childRot = extractRotation(from: childTransform)
+                var localRot = simd_mul(simd_inverse(parentRot), childRot)
+                // Convert ARKit coordinate system to VRM/glTF
+                // ARKit: Y-up, camera facing -Z
+                // glTF/VRM: Y-up, forward is +Z
+                // Negate X and Z to convert from ARKit to glTF conventions
+                localRot = simd_quatf(
+                    ix: -localRot.imag.x,
+                    iy: localRot.imag.y,
+                    iz: -localRot.imag.z,
+                    r: localRot.real
+                )
+                rotations[vrmBone] = localRot
+            } else {
+                // No parent found, use model-space rotation as fallback
+                var rot = extractRotation(from: childTransform)
+                rot = simd_quatf(ix: -rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
+                rotations[vrmBone] = rot
             }
         }
 

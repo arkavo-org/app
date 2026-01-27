@@ -32,6 +32,7 @@ class AvatarViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var faceTrackingStatus: String = "Awaiting face metadata"
     @Published private(set) var isModelLoaded = false
+    @Published var faceTrackingEnabled = true
 
     // Debug: Latest body skeleton for visualization
     @Published var latestBodySkeleton: ARKitBodySkeleton?
@@ -45,11 +46,25 @@ class AvatarViewModel: ObservableObject {
     @Published var vrmaRecordingDuration: TimeInterval = 0
     @Published var vrmaFrameCount: Int = 0
 
+    /// Warning message when capture quality is low during recording
+    @Published var captureQualityWarning: String?
+
+    /// Error message from last export attempt
+    @Published var lastExportError: String?
+
     /// VRMA recorder for animation export
     private var vrmaRecorder: VRMARecorder?
 
     /// Last recorded VRMA session (available after stopVRMARecording)
     private(set) var lastVRMASession: VRMASession?
+
+    /// Result of VRMA export operation
+    enum VRMAExportResult {
+        case success(URL, VRMAProcessor.QualityReport)
+        case qualityTooLow(VRMAProcessor.ProcessingError)
+        case exportFailed(Error)
+        case noFrames
+    }
 
     // MARK: - Dependencies
 
@@ -296,9 +311,11 @@ class AvatarViewModel: ObservableObject {
             let activeSources = allSources.filter { $0.isActive }
             if shouldLog {
                 print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
-                print("      └─ Renderer exists: \(renderer != nil)")
+                print("      └─ Renderer exists: \(renderer != nil), enabled: \(faceTrackingEnabled)")
             }
-            renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+            if faceTrackingEnabled {
+                renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+            }
             if shouldLog {
                 print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
             }
@@ -330,6 +347,15 @@ class AvatarViewModel: ObservableObject {
                     recorder.appendBodyFrame(body: skeleton, timestamp: event.timestamp)
                     vrmaRecordingDuration = recorder.recordingDuration
                     vrmaFrameCount = recorder.frameCount
+
+                    // Runtime quality check
+                    let quality = recorder.captureQuality
+                    if !quality.isAdequate {
+                        let percentage = Int(quality.bodyTrackingRatio * 100)
+                        captureQualityWarning = "Low tracking quality (\(percentage)%)"
+                    } else {
+                        captureQualityWarning = nil
+                    }
                 }
 
                 if shouldLog {
@@ -523,6 +549,8 @@ class AvatarViewModel: ObservableObject {
         isVRMARecording = true
         vrmaRecordingDuration = 0
         vrmaFrameCount = 0
+        captureQualityWarning = nil
+        lastExportError = nil
 
         print("[AvatarViewModel] VRMA recording started")
     }
@@ -531,20 +559,57 @@ class AvatarViewModel: ObservableObject {
     /// - Parameter name: Name for the recording (used in filename)
     /// - Returns: URL to the exported .vrma file, or nil if export failed
     func stopVRMARecording(name: String = "recording") async -> URL? {
-        guard isVRMARecording, let recorder = vrmaRecorder else { return nil }
-
-        let session = recorder.stopRecording(name: name)
-        isVRMARecording = false
-        lastVRMASession = session
-
-        print("[AvatarViewModel] VRMA recording stopped: \(session.frameCount) frames, \(String(format: "%.2f", session.duration))s")
-
-        // Export to VRMA
-        guard session.frameCount > 0 else {
-            print("[AvatarViewModel] No frames captured, skipping export")
+        let result = await stopVRMARecordingWithResult(name: name)
+        switch result {
+        case .success(let url, _):
+            return url
+        case .qualityTooLow, .exportFailed, .noFrames:
             return nil
         }
+    }
 
+    /// Stop recording and export to VRMA file with detailed result
+    /// - Parameter name: Name for the recording (used in filename)
+    /// - Returns: VRMAExportResult with detailed status
+    func stopVRMARecordingWithResult(name: String = "recording") async -> VRMAExportResult {
+        guard isVRMARecording, let recorder = vrmaRecorder else {
+            return .noFrames
+        }
+
+        isVRMARecording = false
+        captureQualityWarning = nil
+        lastExportError = nil
+
+        // Get raw session
+        let rawSession = recorder.stopRecording(name: name)
+        lastVRMASession = rawSession
+
+        print("[AvatarViewModel] VRMA recording stopped: \(rawSession.frameCount) frames, \(String(format: "%.2f", rawSession.duration))s")
+
+        // Check for empty session
+        guard rawSession.frameCount > 0 else {
+            lastExportError = "No frames captured"
+            print("[AvatarViewModel] No frames captured, skipping export")
+            return .noFrames
+        }
+
+        // Process the session (may throw if quality too low)
+        let processedSession: VRMASession
+        let report: VRMAProcessor.QualityReport
+        do {
+            (processedSession, report) = try VRMAProcessor.process(rawSession, options: .default)
+            print("[AvatarViewModel] Processing complete: \(report.summary)")
+        } catch let error as VRMAProcessor.ProcessingError {
+            lastExportError = error.localizedDescription
+            print("[AvatarViewModel] Processing failed: \(error.localizedDescription)")
+            return .qualityTooLow(error)
+        } catch {
+            lastExportError = error.localizedDescription
+            print("[AvatarViewModel] Processing failed: \(error)")
+            return .exportFailed(error)
+        }
+
+        // Export to VRMA
         do {
             // Get Documents directory for export
             let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -561,15 +626,17 @@ class AvatarViewModel: ObservableObject {
             let filename = "\(sanitizedName)_\(timestamp).vrma"
             let fileURL = vrmaDirectory.appendingPathComponent(filename)
 
-            // Export
-            try VRMAExporter.export(session: session, to: fileURL, restPose: renderer?.model)
+            // Export with identity rest pose (T-pose)
+            // Don't pass VRM model - let VRMAnimationLoader handle retargeting to target model
+            try VRMAExporter.export(session: processedSession, to: fileURL, restPose: nil)
 
             print("[AvatarViewModel] Exported VRMA to: \(fileURL.path)")
-            return fileURL
+            return .success(fileURL, report)
 
         } catch {
+            lastExportError = error.localizedDescription
             print("[AvatarViewModel] Failed to export VRMA: \(error)")
-            return nil
+            return .exportFailed(error)
         }
     }
 
@@ -580,6 +647,8 @@ class AvatarViewModel: ObservableObject {
         isVRMARecording = false
         vrmaRecordingDuration = 0
         vrmaFrameCount = 0
+        captureQualityWarning = nil
+        lastExportError = nil
 
         print("[AvatarViewModel] VRMA recording cancelled")
     }
