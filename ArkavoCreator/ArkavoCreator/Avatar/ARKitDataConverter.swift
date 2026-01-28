@@ -145,6 +145,21 @@ enum ARKitDataConverter {
         // ARKit: left_upLeg → VRM: leftUpperLeg
         // ARKit: left_leg → VRM: leftLowerLeg
         let mapping: [String: String] = [
+            // Core spine chain
+            "hips": "hips",
+            "spine_1": "spine",
+            "spine_2": "spine",
+            "spine_3": "chest",
+            "spine_4": "chest",
+            "spine_5": "chest",
+            "spine_6": "upperChest",
+            "spine_7": "upperChest",
+            "neck_1": "neck",
+            "neck_2": "neck",
+            "neck_3": "neck",
+            "neck_4": "neck",
+            "head": "head",
+
             // Legs
             "left_upLeg": "leftUpperLeg",
             "left_leg": "leftLowerLeg",
@@ -323,6 +338,18 @@ enum ARKitDataConverter {
             print("⚠️ [ARKitDataConverter] Unmapped joints (not in ARKitJoint enum):")
             print("   Total: \(unmappedJoints.count) out of \(metadata.joints.count)")
             print("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
+
+            // Log which joints ARE mapped
+            let mappedJoints = joints.keys.map { $0.rawValue }.sorted()
+            print("✅ [ARKitDataConverter] Mapped joints (\(mappedJoints.count)):")
+            print("   \(mappedJoints.joined(separator: ", "))")
+
+            // Check for missing parent joints
+            let requiredParents: [String] = ["upperChest", "leftShoulder", "rightShoulder", "spine", "chest"]
+            let missing = requiredParents.filter { parent in !mappedJoints.contains(parent) }
+            if !missing.isEmpty {
+                print("❌ [ARKitDataConverter] Missing parent joints for arms: \(missing.joined(separator: ", "))")
+            }
         }
 
         return ARKitBodySkeleton(
