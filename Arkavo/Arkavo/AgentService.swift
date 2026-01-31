@@ -53,6 +53,14 @@ final class AgentService: ObservableObject {
     /// Stream handlers for active sessions (session_id -> AgentStreamHandler)
     private var streamHandlers: [String: AgentStreamHandler] = [:]
 
+    // MARK: - Helper Methods
+
+    /// Check if an agent ID refers to THIS device's agent (on-device LLM)
+    /// Other devices' agents (even with device_agent_ prefix) are remote and need WebSocket
+    private func isThisDeviceAgent(_ agentId: String) -> Bool {
+        return agentId == localAgent.id
+    }
+
     // MARK: - Initialization
 
     init() {
@@ -93,10 +101,8 @@ final class AgentService: ObservableObject {
 
                 // Filter out any device agent from mDNS discovery
                 let remoteAgents = discoveredAgents.filter { agent in
-                    let id = agent.id.lowercased()
-                    let purpose = agent.metadata.purpose.lowercased()
-                    // Exclude if ID contains "local" or purpose mentions local AI
-                    return !id.contains("local") && !purpose.contains("local ai")
+                    // Exclude device agents (they're handled in-process)
+                    return !self.isThisDeviceAgent(agent.id)
                 }
 
                 // Get built-in device agent (first in list)
@@ -158,8 +164,7 @@ final class AgentService: ObservableObject {
         logger.log("[AgentService] Connecting to agent: \(agent.id)")
 
         // device agent doesn't need WebSocket connection - it's in-process
-        let isLocalAgent = agent.id.lowercased().contains("local")
-        if isLocalAgent {
+        if isThisDeviceAgent(agent.id) {
             logger.log("[AgentService] Skipping WebSocket connection for device agent (in-process)")
             connectedAgents[agent.id] = true // Mark as "connected" for UI purposes
             return
@@ -182,8 +187,7 @@ final class AgentService: ObservableObject {
         logger.log("[AgentService] Disconnecting from agent: \(agentId)")
 
         // device agent doesn't have WebSocket connection to disconnect
-        let isLocalAgent = agentId.lowercased().contains("local")
-        if isLocalAgent {
+        if isThisDeviceAgent(agentId) {
             logger.log("[AgentService] device agent disconnect (no-op, in-process)")
             connectedAgents[agentId] = false
             return
@@ -206,8 +210,7 @@ final class AgentService: ObservableObject {
         logger.log("[AgentService] Opening chat session with agent: \(agentId)")
 
         // For device agent, use direct in-process call (no WebSocket)
-        let isLocalAgent = agentId.lowercased().contains("local")
-        if isLocalAgent {
+        if isThisDeviceAgent(agentId) {
             logger.log("[AgentService] Using direct in-process chat for device agent")
             let sessionId = localAgent.openDirectChatSession()
 
@@ -252,8 +255,7 @@ final class AgentService: ObservableObject {
         }
 
         // For device agent, use direct in-process call
-        let isLocalAgent = agentId.lowercased().contains("local")
-        if isLocalAgent {
+        if isThisDeviceAgent(agentId) {
             logger.log("[AgentService] Using direct in-process message send for device agent")
             do {
                 // Start streaming state
@@ -336,7 +338,7 @@ final class AgentService: ObservableObject {
         logger.log("[AgentService] Closing chat session: \(sessionId)")
 
         // Check if this is a device agent session
-        if let agentId = sessionAgentMap[sessionId], agentId.lowercased().contains("local") {
+        if let agentId = sessionAgentMap[sessionId], isThisDeviceAgent(agentId) {
             logger.log("[AgentService] Closing direct device agent session")
             localAgent.closeDirectChatSession(sessionId: sessionId)
             activeSessions.removeValue(forKey: sessionId)

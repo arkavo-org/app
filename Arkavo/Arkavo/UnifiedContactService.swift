@@ -173,10 +173,22 @@ final class UnifiedContactService: ObservableObject {
         var needsReload = false
 
         for agent in agents {
-            // Skip if already persisted
+            // Skip if already persisted by agent ID
             if persistedAgentIDs.contains(agent.id) {
                 // Update online status instead
                 updateAgentOnlineStatus(agentID: agent.id, isOnline: true)
+                continue
+            }
+
+            // Skip if a contact with the same endpoint already exists
+            // This prevents duplicates when an agent authorized via QR is also discovered via mDNS
+            if allContacts.contains(where: { $0.agentEndpoint == agent.url }) {
+                logger.log("[UnifiedContactService] Skipping duplicate agent with endpoint: \(agent.url)")
+                // Update online status for the existing contact
+                if let existingContact = allContacts.first(where: { $0.agentEndpoint == agent.url }),
+                   let existingAgentID = existingContact.agentID {
+                    updateAgentOnlineStatus(agentID: existingAgentID, isOnline: true)
+                }
                 continue
             }
 
@@ -248,10 +260,17 @@ final class UnifiedContactService: ObservableObject {
     // MARK: - Contact Management
 
     /// Add a delegated agent contact (from QR code authorization)
+    /// - Parameters:
+    ///   - agentID: The agent's unique identifier (typically its DID)
+    ///   - name: Display name for the agent
+    ///   - did: The agent's DID
+    ///   - endpoint: Optional WebSocket endpoint URL for direct connection (from QR code)
+    ///   - entitlements: The agent's authorized capabilities
     func addDelegatedAgent(
         agentID: String,
         name: String,
         did: String,
+        endpoint: String? = nil,
         entitlements: AgentEntitlements
     ) async throws {
         // Check if already exists
@@ -260,22 +279,30 @@ final class UnifiedContactService: ObservableObject {
             return
         }
 
+        // Determine channel type based on whether we have a local endpoint
+        let channels: [CommunicationChannel]
+        if let endpoint = endpoint, !endpoint.isEmpty {
+            channels = [.localNetwork(endpoint: endpoint, isAvailable: true)]
+        } else {
+            channels = [.arkavoNetwork(isAvailable: true)]
+        }
+
         let profile = Profile.createAgentProfile(
             agentID: agentID,
             name: name,
             did: did,
             purpose: "Delegated agent with authorized access",
             model: nil,
-            endpoint: nil,
+            endpoint: endpoint,
             contactType: .delegatedAgent,
-            channels: [.arkavoNetwork(isAvailable: true)],
+            channels: channels,
             entitlements: entitlements
         )
 
         try await PersistenceController.shared.savePeerProfile(profile)
         persistedAgentIDs.insert(agentID)
         await loadContacts()
-        logger.log("[UnifiedContactService] Added delegated agent: \(name)")
+        logger.log("[UnifiedContactService] Added delegated agent: \(name) with endpoint: \(endpoint ?? "none")")
     }
 
     /// Delete a contact

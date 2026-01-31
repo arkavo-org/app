@@ -73,7 +73,7 @@ struct UnifiedContactDetailView: View {
                     }
 
                     // Delete button (not for device agent - this device's AI)
-                    if contact.contactTypeEnum != .deviceAgent {
+                    if contact.canBeRemoved {
                         deleteSection
                     }
                 }
@@ -88,18 +88,14 @@ struct UnifiedContactDetailView: View {
                     }
                 }
             }
-            .alert("Delete Contact?", isPresented: $showDeleteConfirmation) {
+            .alert(contact.removalConfirmationTitle, isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { /* Dismisses alert */ }
-                Button("Delete", role: .destructive) {
-                    dismiss()
+                Button("Remove", role: .destructive) {
                     onDelete(contact)
+                    dismiss()
                 }
             } message: {
-                if contact.isAgent {
-                    Text("Are you sure you want to remove \(contact.name)? You can re-discover it later.")
-                } else {
-                    Text("Are you sure you want to delete \(contact.name)? You'll also be removed from any chats you only share with this person.")
-                }
+                Text(contact.removalConfirmationMessage)
             }
             .sheet(isPresented: $showChat) {
                 UnifiedChatView(contact: contact, agentService: agentService)
@@ -375,7 +371,7 @@ struct UnifiedContactDetailView: View {
         Button {
             showDeleteConfirmation = true
         } label: {
-            Label(contact.isAgent ? "Remove Agent" : "Delete Contact", systemImage: "trash")
+            Label(contact.removalActionLabel, systemImage: "trash")
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.red.opacity(0.1))

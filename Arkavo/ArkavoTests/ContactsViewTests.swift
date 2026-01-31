@@ -278,4 +278,217 @@ final class ContactsViewTests: XCTestCase {
         profile.keyStorePrivate = mockPrivateKeyStore
         XCTAssertEqual(profile.keyStorePrivate, mockPrivateKeyStore)
     }
+
+    // MARK: - Contact UI Terminology Tests (TDD: RED phase)
+
+    func testContactRemovalTerminologyConsistency() {
+        // UI should use consistent terminology: "Remove" for all contact types
+        // Both the action button and confirmation should say "Remove"
+        let humanContact = Profile(name: "Human User")
+        let agentContact = Profile.createAgentProfile(
+            agentID: "test-agent",
+            name: "Test Agent",
+            did: nil,
+            purpose: "Testing",
+            model: nil,
+            endpoint: nil,
+            contactType: .remoteAgent,
+            channels: []
+        )
+
+        // For humans: should use "Remove Contact" not "Delete Contact"
+        let humanActionLabel = humanContact.removalActionLabel
+        XCTAssertEqual(humanActionLabel, "Remove Contact", "Human contact removal should say 'Remove Contact'")
+
+        // For agents: should use "Remove Agent"
+        let agentActionLabel = agentContact.removalActionLabel
+        XCTAssertEqual(agentActionLabel, "Remove Agent", "Agent contact removal should say 'Remove Agent'")
+
+        // Confirmation dialog title should be consistent
+        let humanConfirmTitle = humanContact.removalConfirmationTitle
+        XCTAssertEqual(humanConfirmTitle, "Remove Contact?", "Human removal confirmation should say 'Remove Contact?'")
+
+        let agentConfirmTitle = agentContact.removalConfirmationTitle
+        XCTAssertEqual(agentConfirmTitle, "Remove Agent?", "Agent removal confirmation should say 'Remove Agent?'")
+    }
+
+    func testContactTypeHasRemovalLabels() {
+        // All contact types should provide removal labels
+        for contactType in ContactType.allCases {
+            let profile = Profile(name: "Test")
+            profile.contactType = contactType.rawValue
+
+            // Skip device agent - cannot be removed
+            if contactType == .deviceAgent {
+                XCTAssertFalse(profile.canBeRemoved, "Device agent should not be removable")
+                continue
+            }
+
+            XCTAssertTrue(profile.canBeRemoved, "\(contactType) should be removable")
+            XCTAssertFalse(profile.removalActionLabel.isEmpty, "\(contactType) should have removal action label")
+            XCTAssertFalse(profile.removalConfirmationTitle.isEmpty, "\(contactType) should have confirmation title")
+            XCTAssertFalse(profile.removalConfirmationMessage.isEmpty, "\(contactType) should have confirmation message")
+        }
+    }
+
+    // MARK: - Swipe to Delete Tests
+
+    func testContactSupportsDeletion() {
+        // Non-device agent contacts should support deletion
+        let humanContact = Profile(name: "Human")
+        let remoteAgent = Profile.createAgentProfile(
+            agentID: "remote",
+            name: "Remote",
+            did: nil,
+            purpose: nil,
+            model: nil,
+            endpoint: nil,
+            contactType: .remoteAgent,
+            channels: []
+        )
+        let delegatedAgent = Profile.createAgentProfile(
+            agentID: "delegated",
+            name: "Delegated",
+            did: nil,
+            purpose: nil,
+            model: nil,
+            endpoint: nil,
+            contactType: .delegatedAgent,
+            channels: []
+        )
+        let deviceAgent = Profile.createAgentProfile(
+            agentID: "device",
+            name: "Device",
+            did: nil,
+            purpose: nil,
+            model: nil,
+            endpoint: nil,
+            contactType: .deviceAgent,
+            channels: []
+        )
+
+        XCTAssertTrue(humanContact.canBeRemoved, "Human contact should be removable")
+        XCTAssertTrue(remoteAgent.canBeRemoved, "Remote agent should be removable")
+        XCTAssertTrue(delegatedAgent.canBeRemoved, "Delegated agent should be removable")
+        XCTAssertFalse(deviceAgent.canBeRemoved, "Device agent should NOT be removable")
+    }
+
+    // MARK: - Contact Filter Tests
+
+    func testContactFilterCasesAreComplete() {
+        let allFilters = ContactFilter.allCases
+        XCTAssertEqual(allFilters.count, 4)
+        XCTAssertTrue(allFilters.contains(.all))
+        XCTAssertTrue(allFilters.contains(.people))
+        XCTAssertTrue(allFilters.contains(.agents))
+        XCTAssertTrue(allFilters.contains(.online))
+    }
+
+    func testContactFilterDisplayNames() {
+        // Each filter should have a user-friendly display name
+        XCTAssertEqual(ContactFilter.all.rawValue, "All")
+        XCTAssertEqual(ContactFilter.people.rawValue, "People")
+        XCTAssertEqual(ContactFilter.agents.rawValue, "Agents")
+        XCTAssertEqual(ContactFilter.online.rawValue, "Online")
+    }
+
+    // MARK: - Agent Profile Factory Tests
+
+    func testCreateAgentProfileWithAllFields() {
+        let profile = Profile.createAgentProfile(
+            agentID: "agent-123",
+            name: "Test Agent",
+            did: "did:key:z6Mk...",
+            purpose: "General assistance",
+            model: "gpt-4",
+            endpoint: "ws://localhost:8080",
+            contactType: .remoteAgent,
+            channels: [.localNetwork(endpoint: "ws://localhost:8080", isAvailable: true)],
+            entitlements: AgentEntitlements(read: true, write: true)
+        )
+
+        XCTAssertEqual(profile.agentID, "agent-123")
+        XCTAssertEqual(profile.name, "Test Agent")
+        XCTAssertEqual(profile.did, "did:key:z6Mk...")
+        XCTAssertEqual(profile.agentPurpose, "General assistance")
+        XCTAssertEqual(profile.agentModel, "gpt-4")
+        XCTAssertEqual(profile.agentEndpoint, "ws://localhost:8080")
+        XCTAssertEqual(profile.contactTypeEnum, .remoteAgent)
+        XCTAssertEqual(profile.channels.count, 1)
+        XCTAssertTrue(profile.entitlements.read)
+        XCTAssertTrue(profile.entitlements.write)
+        XCTAssertFalse(profile.entitlements.execute)
+    }
+
+    // MARK: - Entitlements Display Tests
+
+    func testEntitlementsDisplayList() {
+        let fullEntitlements = AgentEntitlements(read: true, write: true, execute: true, delegate: true, admin: true)
+        XCTAssertEqual(fullEntitlements.displayList.count, 5)
+
+        let chatEntitlements = AgentEntitlements(from: ["agent.capability.chat"])
+        XCTAssertTrue(chatEntitlements.read)
+        XCTAssertTrue(chatEntitlements.write)
+        XCTAssertFalse(chatEntitlements.execute)
+
+        let emptyEntitlements = AgentEntitlements()
+        XCTAssertTrue(emptyEntitlements.isEmpty)
+        XCTAssertEqual(emptyEntitlements.displayList.count, 0)
+    }
+
+    // MARK: - Agent Connection Tests (TDD: RED Phase)
+
+    /// When a delegated agent is added via QR code, its endpoint must be stored
+    /// so it can be connected later without requiring mDNS discovery
+    func testDelegatedAgentEndpointIsPersisted() {
+        // Given: A delegated agent with an RPC endpoint from QR code
+        let rpcEndpoint = "ws://192.168.1.50:8342"
+        let profile = Profile.createAgentProfile(
+            agentID: "did:key:z6MkTestDelegated",
+            name: "My Edge Agent",
+            did: "did:key:z6MkTestDelegated",
+            purpose: "Delegated from QR authorization",
+            model: nil,
+            endpoint: rpcEndpoint,
+            contactType: .delegatedAgent,
+            channels: [.localNetwork(endpoint: rpcEndpoint, isAvailable: true)]
+        )
+
+        // Then: The endpoint should be stored in the profile
+        XCTAssertEqual(profile.agentEndpoint, rpcEndpoint, "RPC endpoint should be persisted in Profile")
+
+        // And: We should be able to construct an AgentEndpoint for connection
+        let agentEndpoint = profile.toAgentEndpoint()
+        XCTAssertNotNil(agentEndpoint, "Should be able to create AgentEndpoint from Profile")
+        XCTAssertEqual(agentEndpoint?.url, rpcEndpoint, "AgentEndpoint URL should match stored endpoint")
+    }
+
+    /// Tests that a profile can indicate if it has a connectable endpoint
+    func testProfileIndicatesConnectability() {
+        // Profile with local endpoint - connectable locally
+        let localProfile = Profile.createAgentProfile(
+            agentID: "local-agent",
+            name: "Local Agent",
+            did: nil,
+            purpose: nil,
+            model: nil,
+            endpoint: "ws://192.168.1.100:8080",
+            contactType: .remoteAgent,
+            channels: [.localNetwork(endpoint: "ws://192.168.1.100:8080", isAvailable: true)]
+        )
+        XCTAssertTrue(localProfile.hasLocalEndpoint, "Profile with local endpoint should indicate it's connectable locally")
+
+        // Profile without endpoint - not connectable locally
+        let cloudProfile = Profile.createAgentProfile(
+            agentID: "cloud-agent",
+            name: "Cloud Agent",
+            did: nil,
+            purpose: nil,
+            model: nil,
+            endpoint: nil,
+            contactType: .delegatedAgent,
+            channels: [.arkavoNetwork(isAvailable: true)]
+        )
+        XCTAssertFalse(cloudProfile.hasLocalEndpoint, "Profile without local endpoint should not indicate local connectivity")
+    }
 }
