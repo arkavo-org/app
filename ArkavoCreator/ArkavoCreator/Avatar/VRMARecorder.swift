@@ -264,6 +264,57 @@ public class VRMARecorder: ObservableObject {
         recordingDuration = time
     }
 
+    /// Append a frame with already-processed VRM bone rotations
+    ///
+    /// Use this method to capture rotations that have already been processed
+    /// by ARKitBodyDriver (coordinate conversion, local rotation, smoothing applied).
+    /// This avoids duplicate conversion and captures exactly what the avatar displays.
+    ///
+    /// - Parameters:
+    ///   - rotations: Processed bone rotations from VRMNode.rotation
+    ///   - hipsTranslation: Hips translation for root motion
+    ///   - faceBlendShapes: Optional face blend shape weights
+    ///   - timestamp: Event timestamp
+    public func appendProcessedFrame(
+        rotations: [VRMHumanoidBone: simd_quatf],
+        hipsTranslation: simd_float3?,
+        faceBlendShapes: [String: Float]?,
+        timestamp: Date
+    ) {
+        guard state == .recording, let start = startTime else { return }
+
+        let time = timestamp.timeIntervalSince(start)
+
+        // Rate limiting
+        guard time - lastFrameTime >= minFrameInterval else { return }
+
+        // Track capture quality for body data
+        if rotations.isEmpty {
+            captureQuality.framesWithoutBody += 1
+            captureQuality.consecutiveDrops += 1
+            captureQuality.maxConsecutiveDrops = max(
+                captureQuality.maxConsecutiveDrops,
+                captureQuality.consecutiveDrops
+            )
+        } else {
+            captureQuality.framesWithBody += 1
+            captureQuality.consecutiveDrops = 0
+        }
+
+        let frame = VRMAFrame(
+            time: Float(time),
+            faceBlendShapes: faceBlendShapes,
+            headTransform: nil,  // Not needed when using processed rotations
+            bodyJoints: rotations,
+            hipsTranslation: hipsTranslation
+        )
+
+        frames.append(frame)
+        lastFrameTime = time
+        frameCount = frames.count
+        recordingDuration = time
+    }
+
     /// Append a combined frame with both face and body data
     /// - Parameters:
     ///   - face: ARKit face blend shapes (optional)
@@ -317,135 +368,51 @@ public class VRMARecorder: ObservableObject {
         recordingDuration = time
     }
 
+    // MARK: - Diagnostics
+
+    /// Diagnostics callback for VRM mapping stage capture
+    public typealias VRMMappingDiagnosticsCallback = (
+        _ inputJoints: [ARKitJoint: simd_float4x4],
+        _ outputRotations: [VRMHumanoidBone: simd_quatf],
+        _ missingParentJoints: [String],
+        _ usedFallback: Set<VRMHumanoidBone>,
+        _ hipsTranslation: simd_float3?
+    ) -> Void
+
+    /// Optional diagnostics callback - set by external recorder
+    public var diagnosticsCallback: VRMMappingDiagnosticsCallback?
+
     // MARK: - Body Conversion
 
-    /// ARKit skeleton hierarchy - defines parent-child relationships
-    /// ARKit joints are in model space (relative to root), we need local rotations
-    private static let arkitParentMap: [ARKitJoint: ARKitJoint] = [
-        // Spine chain
-        .spine: .hips,
-        .chest: .spine,
-        .upperChest: .chest,
-        .neck: .chest,  // or upperChest if present
-        .head: .neck,
-        // Left arm
-        .leftShoulder: .chest,
-        .leftUpperArm: .leftShoulder,
-        .leftLowerArm: .leftUpperArm,
-        .leftHand: .leftLowerArm,
-        // Right arm
-        .rightShoulder: .chest,
-        .rightUpperArm: .rightShoulder,
-        .rightLowerArm: .rightUpperArm,
-        .rightHand: .rightLowerArm,
-        // Left leg
-        .leftUpperLeg: .hips,
-        .leftLowerLeg: .leftUpperLeg,
-        .leftFoot: .leftLowerLeg,
-        .leftToes: .leftFoot,
-        // Right leg
-        .rightUpperLeg: .hips,
-        .rightLowerLeg: .rightUpperLeg,
-        .rightFoot: .rightLowerLeg,
-        .rightToes: .rightFoot
-    ]
-
     /// Convert ARKit body skeleton to VRM humanoid bone rotations
-    /// ARKit provides model-space transforms; we need local bone rotations
+    ///
+    /// Uses ARKitToVRMConverter for consistent conversion with live preview.
     private func convertBodyToVRMBones(_ skeleton: ARKitBodySkeleton) -> ([VRMHumanoidBone: simd_quatf], simd_float3?) {
-        var rotations: [VRMHumanoidBone: simd_quatf] = [:]
-        var hipsTranslation: simd_float3?
-
-        // ARKit joint to VRM bone mapping (all key body bones)
-        let jointMapping: [ARKitJoint: VRMHumanoidBone] = [
-            // Core spine chain
-            .hips: .hips,
-            .spine: .spine,
-            .chest: .chest,
-            .upperChest: .upperChest,
-            .neck: .neck,
-            .head: .head,
-            // Arms
-            .leftShoulder: .leftShoulder,
-            .rightShoulder: .rightShoulder,
-            .leftUpperArm: .leftUpperArm,
-            .rightUpperArm: .rightUpperArm,
-            .leftLowerArm: .leftLowerArm,
-            .rightLowerArm: .rightLowerArm,
-            .leftHand: .leftHand,
-            .rightHand: .rightHand,
-            // Legs
-            .leftUpperLeg: .leftUpperLeg,
-            .rightUpperLeg: .rightUpperLeg,
-            .leftLowerLeg: .leftLowerLeg,
-            .rightLowerLeg: .rightLowerLeg,
-            .leftFoot: .leftFoot,
-            .rightFoot: .rightFoot,
-            .leftToes: .leftToes,
-            .rightToes: .rightToes
-        ]
-
-        for (arkitJoint, vrmBone) in jointMapping {
-            guard let childTransform = skeleton.joints[arkitJoint] else { continue }
-
-            // Extract hips translation for root motion
-            if arkitJoint == .hips {
-                // Convert ARKit translation to glTF (negate Z for axis flip)
-                hipsTranslation = simd_float3(
-                    childTransform.columns.3.x,
-                    childTransform.columns.3.y,
-                    -childTransform.columns.3.z
-                )
-                // Hips is root - convert model-space rotation
-                var rot = extractRotation(from: childTransform)
-                // Convert ARKit to glTF (negate Z for axis flip)
-                rot = simd_quatf(ix: rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
-                rotations[vrmBone] = rot
-                continue
+        var missingParentJoints: [String] = []
+        var usedFallback: Set<VRMHumanoidBone> = []
+        
+        // Use the new ARKitToVRMConverter for all conversion logic
+        let (rotations, hipsTranslation) = ARKitToVRMConverter.convertWithDiagnostics(
+            skeleton: skeleton,
+            onUnmappedJoint: { joint in
+                if let parentJoint = ARKitToVRMConverter.arkitParentMap[joint] {
+                    missingParentJoints.append(parentJoint.rawValue)
+                }
+                if let vrmBone = ARKitToVRMConverter.jointToBoneMap[joint] {
+                    usedFallback.insert(vrmBone)
+                }
             }
+        )
 
-            // Get parent transform to compute local rotation
-            if let parentJoint = Self.arkitParentMap[arkitJoint],
-               let parentTransform = skeleton.joints[parentJoint] {
-                // Compute local rotation: localRot = inverse(parentWorldRot) * childWorldRot
-                let parentRot = extractRotation(from: parentTransform)
-                let childRot = extractRotation(from: childTransform)
-                var localRot = simd_mul(simd_inverse(parentRot), childRot)
-                // Convert ARKit coordinate system to VRM/glTF
-                // ARKit: Y-up, camera facing -Z (right-handed)
-                // glTF/VRM: Y-up, forward is +Z (right-handed)
-                // Negate Z only for axis flip (ARKit→glTF)
-                localRot = simd_quatf(
-                    ix: localRot.imag.x,
-                    iy: localRot.imag.y,
-                    iz: -localRot.imag.z,
-                    r: localRot.real
-                )
-                rotations[vrmBone] = localRot
-            } else {
-                // No parent found, use model-space rotation as fallback
-                var rot = extractRotation(from: childTransform)
-                // Convert ARKit to glTF (negate Z for axis flip)
-                rot = simd_quatf(ix: rot.imag.x, iy: rot.imag.y, iz: -rot.imag.z, r: rot.real)
-                rotations[vrmBone] = rot
-            }
-        }
+        // Call diagnostics callback if set
+        diagnosticsCallback?(
+            skeleton.joints,
+            rotations,
+            missingParentJoints,
+            usedFallback,
+            hipsTranslation
+        )
 
         return (rotations, hipsTranslation)
-    }
-
-    /// Extract rotation quaternion from a 4x4 transform matrix
-    private func extractRotation(from transform: simd_float4x4) -> simd_quatf {
-        let col0 = simd_float3(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z)
-        let col1 = simd_float3(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z)
-        let col2 = simd_float3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
-
-        // Normalize columns to remove scale
-        let x = simd_normalize(col0)
-        let y = simd_normalize(col1)
-        let z = simd_normalize(col2)
-
-        let rotationMatrix = simd_float3x3(x, y, z)
-        return simd_quatf(rotationMatrix)
     }
 }

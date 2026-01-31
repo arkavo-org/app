@@ -59,7 +59,7 @@ final class RealARKitDataTests: XCTestCase {
         )
 
         // Test hips conversion
-        if let hipsRotation = ARKitCoordinateConverter.computeVRMRotation(
+        if let hipsRotation = ARKitToVRMConverter.computeVRMRotation(
             joint: .hips,
             childTransform: joints[.hips]!,
             skeleton: skeleton
@@ -84,7 +84,7 @@ final class RealARKitDataTests: XCTestCase {
         }
 
         // Test spine local rotation
-        if let spineRotation = ARKitCoordinateConverter.computeVRMRotation(
+        if let spineRotation = ARKitToVRMConverter.computeVRMRotation(
             joint: .spine,
             childTransform: joints[.spine]!,
             skeleton: skeleton
@@ -129,13 +129,13 @@ final class RealARKitDataTests: XCTestCase {
             confidence: nil
         )
 
-        let leftArmRot = ARKitCoordinateConverter.computeVRMRotation(
+        let leftArmRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .leftUpperArm,
             childTransform: joints[.leftUpperArm]!,
             skeleton: skeleton
         )
 
-        let rightArmRot = ARKitCoordinateConverter.computeVRMRotation(
+        let rightArmRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .rightUpperArm,
             childTransform: joints[.rightUpperArm]!,
             skeleton: skeleton
@@ -162,7 +162,7 @@ final class RealARKitDataTests: XCTestCase {
         }
     }
 
-    /// Test VRMARecorder produces same output as direct ARKitCoordinateConverter
+    /// Test VRMARecorder produces same output as direct ARKitToVRMConverter
     func testRecorderMatchesConverter() {
         let recorder = VRMARecorder(frameRate: 30)
 
@@ -199,7 +199,7 @@ final class RealARKitDataTests: XCTestCase {
         _ = recorder.stopRecording()
 
         // Verify hips matches direct converter call
-        let expectedHips = ARKitCoordinateConverter.computeVRMRotation(
+        let expectedHips = ARKitToVRMConverter.computeVRMRotation(
             joint: .hips,
             childTransform: joints[.hips]!,
             skeleton: skeleton
@@ -214,7 +214,7 @@ final class RealARKitDataTests: XCTestCase {
         }
 
         // Verify spine matches
-        let expectedSpine = ARKitCoordinateConverter.computeVRMRotation(
+        let expectedSpine = ARKitToVRMConverter.computeVRMRotation(
             joint: .spine,
             childTransform: joints[.spine]!,
             skeleton: skeleton

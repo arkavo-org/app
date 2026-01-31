@@ -128,7 +128,7 @@ final class ARKitRestPoseTests: XCTestCase {
         )
 
         // Test hips conversion
-        if let hipsRot = ARKitCoordinateConverter.computeVRMRotation(
+        if let hipsRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .hips,
             childTransform: joints[.hips]!,
             skeleton: skeleton
@@ -143,7 +143,7 @@ final class ARKitRestPoseTests: XCTestCase {
         }
 
         // Test left upper leg conversion
-        if let leftLegRot = ARKitCoordinateConverter.computeVRMRotation(
+        if let leftLegRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .leftUpperLeg,
             childTransform: joints[.leftUpperLeg]!,
             skeleton: skeleton
@@ -185,14 +185,14 @@ final class ARKitRestPoseTests: XCTestCase {
         )
 
         // CALIBRATE with this skeleton as T-pose reference
-        ARKitCoordinateConverter.calibrateTpose(skeleton)
-        defer { ARKitCoordinateConverter.clearCalibration() }
+        ARKitToVRMConverter.calibrateTpose(skeleton)
+        defer { ARKitToVRMConverter.clearCalibration() }
 
-        XCTAssertTrue(ARKitCoordinateConverter.isCalibrated,
+        XCTAssertTrue(ARKitToVRMConverter.isCalibrated,
             "Calibration should be active after calibrateTpose()")
 
         // Test left upper leg - should be near identity AFTER calibration
-        if let leftLegRot = ARKitCoordinateConverter.computeVRMRotation(
+        if let leftLegRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .leftUpperLeg,
             childTransform: joints[.leftUpperLeg]!,
             skeleton: skeleton
@@ -221,9 +221,9 @@ final class ARKitRestPoseTests: XCTestCase {
         // neutral stance produces large (~130°) rotations that cause visual artifacts
 
         // Temporarily disable rest pose calibration
-        let originalSetting = ARKitCoordinateConverter.restPoseCalibrationEnabled
-        ARKitCoordinateConverter.restPoseCalibrationEnabled = false
-        defer { ARKitCoordinateConverter.restPoseCalibrationEnabled = originalSetting }
+        let originalSetting = ARKitToVRMConverter.restPoseCalibrationEnabled
+        ARKitToVRMConverter.restPoseCalibrationEnabled = false
+        defer { ARKitToVRMConverter.restPoseCalibrationEnabled = originalSetting }
 
         var joints: [ARKitJoint: simd_float4x4] = [:]
         joints[.hips] = toMatrix(Self.realHipsTransform)
@@ -236,7 +236,7 @@ final class ARKitRestPoseTests: XCTestCase {
             confidence: nil
         )
 
-        if let leftLegRot = ARKitCoordinateConverter.computeVRMRotation(
+        if let leftLegRot = ARKitToVRMConverter.computeVRMRotation(
             joint: .leftUpperLeg,
             childTransform: joints[.leftUpperLeg]!,
             skeleton: skeleton

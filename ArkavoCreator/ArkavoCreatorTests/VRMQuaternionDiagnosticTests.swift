@@ -42,9 +42,9 @@ final class VRMQuaternionDiagnosticTests: XCTestCase {
     func testTPoseProducesIdentityQuaternions() {
         // Disable rest pose calibration for this test
         // (rest pose calibration is for real ARKit data, not synthetic identity matrices)
-        let originalSetting = ARKitCoordinateConverter.restPoseCalibrationEnabled
-        ARKitCoordinateConverter.restPoseCalibrationEnabled = false
-        defer { ARKitCoordinateConverter.restPoseCalibrationEnabled = originalSetting }
+        let originalSetting = ARKitToVRMConverter.restPoseCalibrationEnabled
+        ARKitToVRMConverter.restPoseCalibrationEnabled = false
+        defer { ARKitToVRMConverter.restPoseCalibrationEnabled = originalSetting }
 
         // T-pose: all joints at identity (no rotation from parent)
         let tPoseSkeleton = makeTPoseSkeleton()
@@ -124,7 +124,7 @@ final class VRMQuaternionDiagnosticTests: XCTestCase {
         // Verify hips has coordinate correction applied (should be ~120° from identity)
         // This is the -90° X × -90° Y rotation that converts ARKit to glTF coordinates
         if let hipsRotation = capturedRotations[.hips] {
-            let expectedHipsQuat = ARKitCoordinateConverter.rootRotationCorrection
+            let expectedHipsQuat = ARKitToVRMConverter.rootRotationCorrection
             let angleFromExpected = angleBetween(hipsRotation, expectedHipsQuat)
             XCTAssertLessThan(angleFromExpected, 5.0,
                 "hips should have coordinate correction applied. Got angle \(angleFromExpected)° from expected")

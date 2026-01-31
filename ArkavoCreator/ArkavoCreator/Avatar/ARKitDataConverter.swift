@@ -172,12 +172,14 @@ enum ARKitDataConverter {
             "right_toes": "rightToes",
             "right_toesEnd": "rightToes",
 
-            // Arms
+            // Arms - include _1 variants that ARKit may provide
             "left_shoulder": "leftShoulder",
+            "left_shoulder_1": "leftShoulder",
             "left_arm": "leftUpperArm",
             "left_forearm": "leftLowerArm",
             "left_hand": "leftHand",
             "right_shoulder": "rightShoulder",
+            "right_shoulder_1": "rightShoulder",
             "right_arm": "rightUpperArm",
             "right_forearm": "rightLowerArm",
             "right_hand": "rightHand",
@@ -304,33 +306,53 @@ enum ARKitDataConverter {
         return ARKitJoint(rawValue: cleanName)
     }
 
+    /// Diagnostics callback for conversion stage capture
+    /// 
+    /// Note: For full ARKit to VRM conversion diagnostics, use ARKitToVRMConverter
+    /// which provides coordinate conversion and bone mapping in one place.
+    public typealias ConversionDiagnosticsCallback = (
+        _ inputMetadata: ARBodyMetadata,
+        _ outputSkeleton: ARKitBodySkeleton,
+        _ mappedJoints: [String: String],
+        _ unmappedJoints: [(name: String, transform: [Float]?)],
+        _ invalidTransformJoints: [String]
+    ) -> Void
+
     /// Convert ARBodyMetadata to ARKitBodySkeleton
     ///
     /// - Parameters:
     ///   - metadata: Body metadata from camera source
     ///   - timestamp: Timestamp when the event was received
+    ///   - diagnosticsCallback: Optional callback for diagnostics capture
     /// - Returns: ARKit body skeleton compatible with VRMMetalKit
     static func toARKitBodySkeleton(
         _ metadata: ARBodyMetadata,
-        timestamp: Date
+        timestamp: Date,
+        diagnosticsCallback: ConversionDiagnosticsCallback? = nil
     ) -> ARKitBodySkeleton {
         var joints: [ARKitJoint: simd_float4x4] = [:]
         var unmappedJoints: [String] = []
+        var unmappedJointsWithTransforms: [(name: String, transform: [Float]?)] = []
+        var invalidTransformJoints: [String] = []
+        var mappedJointsRecord: [String: String] = [:]
 
         for joint in metadata.joints {
             // Map joint name to ARKitJoint enum
             guard let arkitJoint = toARKitJoint(joint.name) else {
                 unmappedJoints.append(joint.name)
+                unmappedJointsWithTransforms.append((name: joint.name, transform: joint.transform))
                 continue
             }
 
             // Convert transform array to matrix
             guard let matrix = toMatrix4x4(joint.transform) else {
                 print("⚠️ [ARKitDataConverter] Invalid transform for joint: \(joint.name)")
+                invalidTransformJoints.append(joint.name)
                 continue
             }
 
             joints[arkitJoint] = matrix
+            mappedJointsRecord[joint.name] = arkitJoint.rawValue
         }
 
         // Log unmapped joints (only first time)
@@ -340,24 +362,35 @@ enum ARKitDataConverter {
             print("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
 
             // Log which joints ARE mapped
-            let mappedJoints = joints.keys.map { $0.rawValue }.sorted()
-            print("✅ [ARKitDataConverter] Mapped joints (\(mappedJoints.count)):")
-            print("   \(mappedJoints.joined(separator: ", "))")
+            let mappedJointsList = joints.keys.map { $0.rawValue }.sorted()
+            print("✅ [ARKitDataConverter] Mapped joints (\(mappedJointsList.count)):")
+            print("   \(mappedJointsList.joined(separator: ", "))")
 
             // Check for missing parent joints
             let requiredParents: [String] = ["upperChest", "leftShoulder", "rightShoulder", "spine", "chest"]
-            let missing = requiredParents.filter { parent in !mappedJoints.contains(parent) }
+            let missing = requiredParents.filter { parent in !mappedJointsList.contains(parent) }
             if !missing.isEmpty {
                 print("❌ [ARKitDataConverter] Missing parent joints for arms: \(missing.joined(separator: ", "))")
             }
         }
 
-        return ARKitBodySkeleton(
+        let skeleton = ARKitBodySkeleton(
             timestamp: timestamp.timeIntervalSinceReferenceDate,
             joints: joints,
             isTracked: !joints.isEmpty,
             confidence: nil
         )
+
+        // Call diagnostics callback if provided
+        diagnosticsCallback?(
+            metadata,
+            skeleton,
+            mappedJointsRecord,
+            unmappedJointsWithTransforms,
+            invalidTransformJoints
+        )
+
+        return skeleton
     }
 
     /// Convert CameraMetadataEvent to ARKitBodySkeleton (if body metadata)

@@ -67,7 +67,7 @@ final class PoseCalibrationDiagnosticTests: XCTestCase {
                 print("  \(joint.rawValue): MISSING")
                 continue
             }
-            let worldRot = ARKitCoordinateConverter.extractRotation(from: transform)
+            let worldRot = ARKitToVRMConverter.extractRotation(from: transform)
             print("  \(joint.rawValue): \(formatQuat(worldRot))")
         }
 
@@ -75,14 +75,14 @@ final class PoseCalibrationDiagnosticTests: XCTestCase {
         for joint in keyJoints {
             guard let childTransform = skeleton.joints[joint] else { continue }
 
-            if let parentJoint = ARKitCoordinateConverter.arkitParentMap[joint],
+            if let parentJoint = ARKitToVRMConverter.arkitParentMap[joint],
                let parentTransform = skeleton.joints[parentJoint] {
-                let parentRot = ARKitCoordinateConverter.extractRotation(from: parentTransform)
-                let childRot = ARKitCoordinateConverter.extractRotation(from: childTransform)
+                let parentRot = ARKitToVRMConverter.extractRotation(from: parentTransform)
+                let childRot = ARKitToVRMConverter.extractRotation(from: childTransform)
                 let localRot = simd_mul(simd_inverse(parentRot), childRot)
                 print("  \(joint.rawValue): \(formatQuat(localRot))")
             } else if joint == .hips {
-                let worldRot = ARKitCoordinateConverter.extractRotation(from: childTransform)
+                let worldRot = ARKitToVRMConverter.extractRotation(from: childTransform)
                 print("  \(joint.rawValue) (root): \(formatQuat(worldRot))")
             }
         }
@@ -90,7 +90,7 @@ final class PoseCalibrationDiagnosticTests: XCTestCase {
         print("\nCONVERTED VRM ROTATIONS (after all corrections):")
         for joint in keyJoints {
             guard let transform = skeleton.joints[joint] else { continue }
-            if let vrmRot = ARKitCoordinateConverter.computeVRMRotation(
+            if let vrmRot = ARKitToVRMConverter.computeVRMRotation(
                 joint: joint,
                 childTransform: transform,
                 skeleton: skeleton
@@ -193,7 +193,7 @@ final class PoseCalibrationDiagnosticTests: XCTestCase {
 
         """
 
-        let offsets = ARKitCoordinateConverter.aposeToTposeOffsets
+        let offsets = ARKitToVRMConverter.aposeToTposeOffsets
 
         report += "\nConfigured offsets:\n"
         for (joint, offset) in offsets.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
