@@ -17,6 +17,7 @@
 import simd
 import VRMMetalKit
 import XCTest
+@testable import ArkavoCreator
 
 /// Diagnostic tests for ARKitToVRMConverter
 ///
@@ -28,6 +29,7 @@ import XCTest
 ///
 /// Note: These tests use ARKitToVRMConverter which is now part of ArkavoCreator
 /// (not VRMMetalKit) to keep ARKit-specific logic separate from general VRM rendering.
+@MainActor
 final class ARKitToVRMConverterTests: XCTestCase {
     // MARK: - Test Helpers
 
