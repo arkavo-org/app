@@ -60,11 +60,31 @@ public actor AgentWebSocketTransport {
         self.webSocketTask = task
         self.endpoint = endpoint
 
-        // Start receiving messages
-        startReceiving(task: task)
-
-        // Resume the task
+        // Resume the task to initiate connection
         task.resume()
+
+        // Verify connection by sending a ping and waiting for pong
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                task.sendPing { error in
+                    if let error = error {
+                        continuation.resume(throwing: AgentError.connectionFailed(error.localizedDescription))
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            task.cancel(with: .abnormalClosure, reason: nil)
+            session.invalidateAndCancel()
+            self.webSocketTask = nil
+            self.session = nil
+            self.endpoint = nil
+            throw error
+        }
+
+        // Start receiving messages after connection is verified
+        startReceiving(task: task)
 
         self.isConnected = true
     }

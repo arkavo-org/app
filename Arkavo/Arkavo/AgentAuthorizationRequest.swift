@@ -1,18 +1,20 @@
 import Foundation
 
 /// Represents a pending authorization request for a local agent scanned via QR or deep link.
-/// Expected URL format: arkavo://agent/authorize?did=...&name=...&entitlements=scope1,scope2
+/// Expected URL format: arkavo://agent/authorize?did=...&name=...&entitlements=scope1,scope2&rpc=ws://host:port
 public struct AgentAuthorizationRequest: Identifiable, Equatable {
     public let id: UUID
     public let did: String
     public let name: String?
     public let entitlements: [String]
+    public let rpcEndpoint: String?
 
-    public init(id: UUID = UUID(), did: String, name: String?, entitlements: [String]) {
+    public init(id: UUID = UUID(), did: String, name: String?, entitlements: [String], rpcEndpoint: String? = nil) {
         self.id = id
         self.did = did
         self.name = name
         self.entitlements = entitlements
+        self.rpcEndpoint = rpcEndpoint
     }
 
     /// Validates that a DID string conforms to the expected format.
@@ -43,6 +45,8 @@ public struct AgentAuthorizationRequest: Identifiable, Equatable {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return AgentAuthorizationRequest(did: did, name: name, entitlements: entitlements)
+        // Parse optional RPC endpoint for local agent registration
+        let rpcEndpoint = queryItems.first(where: { $0.name == "rpc" })?.value
+        return AgentAuthorizationRequest(did: did, name: name, entitlements: entitlements, rpcEndpoint: rpcEndpoint)
     }
 }
