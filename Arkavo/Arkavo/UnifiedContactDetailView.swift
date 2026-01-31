@@ -97,7 +97,7 @@ struct UnifiedContactDetailView: View {
             } message: {
                 Text(contact.removalConfirmationMessage)
             }
-            .sheet(isPresented: $showChat) {
+            .fullScreenCover(isPresented: $showChat) {
                 UnifiedChatView(contact: contact, agentService: agentService)
             }
         }
