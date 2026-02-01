@@ -78,9 +78,8 @@ class VRMAvatarRenderer: NSObject {
 
         super.init()
 
-        // Initialize renderer with standard 3D mode (not Toon2D)
+        // Initialize renderer (uses standard 3D MToon rendering by default)
         let vrmRenderer = VRMRenderer(device: device)
-        vrmRenderer.renderingMode = .standard  // Use standard 3D MToon rendering
         renderer = vrmRenderer
 
         print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode and ARKit driver")
@@ -425,16 +424,10 @@ class VRMAvatarRenderer: NSObject {
     // MARK: - Manual Pose Application
 
     /// Set a specific bone's rotation
+    /// 
+    /// Uses VRMMetalKit's setLocalRotation API for thread-safe bone manipulation.
     private func setBonePose(_ model: VRMModel, bone: VRMHumanoidBone, rotation: simd_quatf) {
-        guard let humanoid = model.humanoid,
-              let boneInfo = humanoid.humanBones[bone],
-              boneInfo.node >= 0 && boneInfo.node < model.nodes.count else {
-            return
-        }
-
-        let node = model.nodes[boneInfo.node]
-        node.rotation = rotation
-        node.updateLocalMatrix()
+        model.setLocalRotation(rotation, for: bone)
     }
 
     /// Update world transforms after applying poses
@@ -688,6 +681,9 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         faceDriver.resetFilters()
     }
 
+    // Debug frame counter for logging
+    private static var bodyTrackingLogCounter = 0
+
     /// Apply ARKit body tracking skeleton to the VRM avatar
     ///
     /// Uses the ARKitBodyDriver for proper mapping, smoothing, and skeleton retargeting.
@@ -701,9 +697,21 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             return
         }
 
-        #if DEBUG
-        print("[VRMAvatarRenderer] Applying body tracking - \(skeleton.joints.count) joints")
-        #endif
+        // Log hips input rotation every 60 frames
+        Self.bodyTrackingLogCounter += 1
+        let shouldLog = Self.bodyTrackingLogCounter % 60 == 0
+
+        if shouldLog {
+            if let hipsTransform = skeleton.joints[.hips] {
+                // Extract rotation from matrix
+                let col0 = simd_float3(hipsTransform.columns.0.x, hipsTransform.columns.0.y, hipsTransform.columns.0.z)
+                let col1 = simd_float3(hipsTransform.columns.1.x, hipsTransform.columns.1.y, hipsTransform.columns.1.z)
+                let col2 = simd_float3(hipsTransform.columns.2.x, hipsTransform.columns.2.y, hipsTransform.columns.2.z)
+                let rotMatrix = simd_float3x3(simd_normalize(col0), simd_normalize(col1), simd_normalize(col2))
+                let inputRot = simd_quatf(rotMatrix)
+                print("[BodyTrack] Hips INPUT: w=\(String(format: "%.3f", inputRot.real)), x=\(String(format: "%.3f", inputRot.imag.x)), y=\(String(format: "%.3f", inputRot.imag.y)), z=\(String(format: "%.3f", inputRot.imag.z))")
+            }
+        }
 
         // Use ARKitBodyDriver to map, smooth, and apply skeleton
         bodyDriver.update(
@@ -711,6 +719,17 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             nodes: model.nodes,
             humanoid: model.humanoid
         )
+
+        if shouldLog {
+            // Log output rotation from VRM hips node
+            if let humanoid = model.humanoid,
+               let hipsBone = humanoid.humanBones[.hips],
+               hipsBone.node >= 0 && hipsBone.node < model.nodes.count {
+                let hipsNode = model.nodes[hipsBone.node]
+                let outRot = hipsNode.rotation
+                print("[BodyTrack] Hips OUTPUT: w=\(String(format: "%.3f", outRot.real)), x=\(String(format: "%.3f", outRot.imag.x)), y=\(String(format: "%.3f", outRot.imag.y)), z=\(String(format: "%.3f", outRot.imag.z))")
+            }
+        }
     }
 
     /// Apply body tracking from multiple sources (for multi-camera setup)
@@ -756,38 +775,23 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         centerAvatarHips(model)
     }
 
-    /// Center the avatar by zeroing out hips and all parent translations
+    /// Center the avatar by zeroing out hips translation
     ///
     /// ARKit body tracking provides world-space positions which can move the avatar
     /// out of the camera view. This method keeps the avatar centered by zeroing the
-    /// translation of hips and ALL parent nodes up to the root.
+    /// X and Z translation while preserving Y (height) for jump/squat detection.
+    ///
+    /// Uses VRMMetalKit's setHipsTranslation API for thread-safe manipulation.
     private func centerAvatarHips(_ model: VRMModel) {
-        guard let humanoid = model.humanoid,
-              let hipsBone = humanoid.humanBones[.hips],
-              hipsBone.node >= 0 && hipsBone.node < model.nodes.count else {
+        // Get current hips translation
+        guard let currentTranslation = model.getHipsTranslation() else {
             return
         }
-
-        var currentNode: VRMNode? = model.nodes[hipsBone.node]
-
-        // Zero out X and Z translation for hips and ALL ancestors
-        // This handles cases where hips has parent nodes (scene root, armature, etc.)
-        // that also contain ARKit world-space position data
-        while let node = currentNode {
-            // Keep Y component for height variation (squat/jump)
-            // Zero X and Z to keep avatar centered horizontally
-            node.translation = SIMD3<Float>(0, node.translation.y, 0)
-            node.updateLocalMatrix()
-
-            // Move up the hierarchy
-            currentNode = node.parent
-        }
-
-        // Update world transforms from all roots
-        let rootNodes = model.nodes.filter { $0.parent == nil }
-        for root in rootNodes {
-            root.updateWorldTransform()
-        }
+        
+        // Keep Y component for height variation (squat/jump)
+        // Zero X and Z to keep avatar centered horizontally
+        let centeredTranslation = SIMD3<Float>(0, currentTranslation.y, 0)
+        model.setHipsTranslation(centeredTranslation)
     }
 
     /// Reset body tracking filters (call when switching avatars or restarting)
