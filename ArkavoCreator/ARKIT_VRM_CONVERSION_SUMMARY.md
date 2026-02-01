@@ -29,9 +29,10 @@ Successfully implemented and tested the ARKit to VRM coordinate conversion syste
 │                     VRMMetalKit (Platform Agnostic)              │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │              VRMModel / VRMNode                           │  │
-│  │  - setLocalRotation(_:for:) - FUTURE API                 │  │
-│  │  - setHipsTranslation(_:) - FUTURE API                   │  │
-│  │  - getRestPose() - FUTURE API                            │  │
+│  │  - setLocalRotation(_:for:) ✅ IMPLEMENTED               │  │
+│  │  - getLocalRotation(for:) ✅ IMPLEMENTED                 │  │
+│  │  - setHipsTranslation(_:) ✅ IMPLEMENTED                 │  │
+│  │  - getHipsTranslation() ✅ IMPLEMENTED                   │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -101,22 +102,31 @@ Created 3 test `.vrma` files for VRMMetalKit validation:
 
 All files are valid GLB 2.0 with VRMC_vrm_animation extension.
 
-## VRMMetalKit API Requirements
+## VRMMetalKit API Integration ✅
 
-For clean integration, VRMMetalKit should provide:
+VRMMetalKit has implemented the requested convenience methods:
 
 ```swift
-// Set local rotation for a specific bone
+// Set/Get local rotation for a specific bone
 func setLocalRotation(_ rotation: simd_quatf, for bone: VRMHumanoidBone)
+func getLocalRotation(for bone: VRMHumanoidBone) -> simd_quatf?
 
-// Set hips/root translation
+// Set/Get hips/root translation
 func setHipsTranslation(_ translation: simd_float3)
-
-// Query rest pose for calibration
-func getRestPose() -> [VRMHumanoidBone: simd_quatf]
+func getHipsTranslation() -> simd_float3?
 ```
 
-This keeps VRMMetalKit platform-agnostic while ArkavoCreator handles ARKit-specific conversion.
+### ArkavoCreator Integration
+
+ArkavoCreator now uses these thread-safe APIs:
+
+- **`setBonePose()`** → Uses `model.setLocalRotation(_:for:)` for thread-safe bone manipulation
+- **`centerAvatarHips()`** → Uses `model.setHipsTranslation()` and `model.getHipsTranslation()` for root motion control
+
+This provides:
+- **Thread Safety**: All VRMModel operations are internally locked
+- **Clean API**: No direct node manipulation needed
+- **Platform Agnostic**: VRMMetalKit remains ARKit-independent
 
 ## Current Status
 
@@ -129,16 +139,14 @@ This keeps VRMMetalKit platform-agnostic while ArkavoCreator handles ARKit-speci
 - [x] Concurrency safety (@MainActor)
 - [x] Test VRMA file generation
 - [x] Test file updates
-
-### Known Issues ⚠️
-- 3 end-to-end tests fail due to test environment (not logic bugs)
-- VRMMetalKit still contains old ARKitCoordinateConverter (needs removal)
+- [x] **VRMMetalKit API integration** (setLocalRotation, getLocalRotation, setHipsTranslation, getHipsTranslation)
+- [x] **End-to-end tests fixed** (6/6 passing)
 
 ### Next Steps 📋
-1. VRMMetalKit team to remove ARKitCoordinateConverter
-2. VRMMetalKit to implement clean API (setLocalRotation, setHipsTranslation, getRestPose)
-3. Update ArkavoCreator to use new VRMMetalKit API
-4. Fix end-to-end test environment issues
+1. ~~VRMMetalKit to implement clean API~~ ✅ Done
+2. ~~Update ArkavoCreator to use new VRMMetalKit API~~ ✅ Done
+3. Consider VRMMetalKit removing ARKitCoordinateConverter (optional - team decided to keep)
+4. Future: getRestPose() for calibration (if needed)
 
 ## Files Changed
 
