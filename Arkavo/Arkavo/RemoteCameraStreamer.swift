@@ -573,9 +573,9 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
 
     private func sendMetadata(_ metadata: CameraMetadata) {
         let event = CameraMetadataEvent(sourceID: sourceID, metadata: metadata)
-        print("📨 [RemoteCameraStreamer] Encoding metadata message for sourceID: \(sourceID)")
+//        print("📨 [RemoteCameraStreamer] Encoding metadata message for sourceID: \(sourceID)")
         send(message: .metadata(event))
-        print("   └─ Metadata message queued for send")
+//        print("   └─ Metadata message queued for send")
     }
 
     private func send(message: RemoteCameraMessage) {
@@ -744,7 +744,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
         let hasBody = metadata.bodySkeleton != nil
 
         if hasFace && hasBody {
-            print("🎭🦴 [RemoteCameraStreamer] Combined tracking: face (\(metadata.blendShapes!.count) shapes) + body")
+//            print("🎭🦴 [RemoteCameraStreamer] Combined tracking: face (\(metadata.blendShapes!.count) shapes) + body")
             // Update debug state
             latestFaceBlendShapes = metadata.blendShapes
             latestBodySkeleton = metadata.bodySkeleton
@@ -775,7 +775,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
             isFaceTracking = false
             latestFaceBlendShapes = nil
 
-            print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")
+//            print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")
             sendBodyMetadata(skeleton)
             noDetectionFrameCount = 0  // Reset counter
         } else {

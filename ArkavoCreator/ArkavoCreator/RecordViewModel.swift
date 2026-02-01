@@ -506,9 +506,9 @@ final class RecordViewModel {
         } else {
             session = try RecordingSession()
             session.metadataHandler = { event in
-                print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
+                // print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
                 NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
-                print("   └─ Notification posted: .cameraMetadataUpdated")
+                // print("   └─ Notification posted: .cameraMetadataUpdated")
             }
             session.remoteSourcesHandler = { [weak self] sources in
                 Task { @MainActor in

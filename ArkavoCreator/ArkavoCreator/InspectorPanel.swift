@@ -203,6 +203,39 @@ struct AvatarInspectorContent: View {
                 .help("Toggle Face Debug Overlay")
             }
 
+            #if DEBUG
+            // Pipeline Diagnostics (DEBUG only)
+            Divider()
+            sectionHeader("Pipeline Diagnostics")
+
+            HStack {
+                Circle()
+                    .fill(viewModel.diagnosticsRecorder.isCapturing ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
+                Text(viewModel.diagnosticsRecorder.isCapturing ? "Capturing" : "Idle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(viewModel.diagnosticsRecorder.captureCount) events")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                if let url = viewModel.exportDiagnostics(name: "pipeline_capture") {
+                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Export Diagnostics")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.diagnosticsRecorder.captureCount == 0)
+            .help("Export captured pipeline data to ~/Documents/Diagnostics/")
+            #endif
+
             Divider()
 
             // Section: Select Avatar

@@ -247,13 +247,18 @@ public enum VRMAExporter {
             "byteOffset": byteOffset,
             "byteLength": timeByteLength
         ])
+        // Compute normalized duration (accounting for possible non-zero start time)
+        let startTime = session.frames.first?.time ?? 0
+        let endTime = session.frames.last?.time ?? session.duration
+        let normalizedDuration = endTime - startTime
+
         accessors.append([
             "bufferView": bufferViews.count - 1,
             "componentType": 5126, // FLOAT
             "count": frameCount,
             "type": "SCALAR",
             "min": [0.0],
-            "max": [Double(session.duration)]
+            "max": [Double(normalizedDuration)]
         ])
         byteOffset += timeByteLength
 
@@ -487,9 +492,10 @@ public enum VRMAExporter {
         let animatedBones = collectAnimatedBones(session: session)
         let expressionKeys = session.frames.first?.faceBlendShapes != nil ? collectExpressionKeys(session: session) : []
 
-        // Write time values
+        // Write time values - normalize so first frame is t=0
+        let startTime = session.frames.first?.time ?? 0
         for frame in session.frames {
-            var time = frame.time
+            var time = frame.time - startTime
             buffer.append(Data(bytes: &time, count: MemoryLayout<Float>.size))
         }
 
