@@ -225,7 +225,32 @@ class AgentTester {
             print("  Created at: \(session.createdAt)")
             print("")
 
-            // Send message
+            // Track received response
+            var receivedDeltas: [MessageDelta] = []
+            var responseComplete = false
+
+            // CRITICAL: Subscribe to chat_stream BEFORE sending message
+            // This ensures we receive the streaming response deltas
+            print("⏳ Subscribing to chat_stream...")
+            try await chatManager.subscribeToStream(sessionId: session.id) { delta in
+                receivedDeltas.append(delta)
+
+                switch delta.delta {
+                case .text(let text):
+                    print("← Received text: \(text.prefix(100))...")
+                case .toolCall(let id, let name, _, _):
+                    print("← Tool call: \(name ?? "unknown") (\(id))")
+                case .streamEnd:
+                    print("← Stream ended")
+                    responseComplete = true
+                case .error(let code, let message):
+                    print("← Error \(code): \(message)")
+                    responseComplete = true
+                }
+            }
+            print("✓ Subscribed to chat_stream\n")
+
+            // NOW send message (after subscribing)
             let message = "Hello from ArkavoAgent test! Can you respond?"
             print("→ Sending message: '\(message)'")
             try await chatManager.sendMessage(
@@ -234,16 +259,44 @@ class AgentTester {
             )
             print("✓ Message sent\n")
 
-            // Note: In real implementation, would subscribe to deltas here
-            // For now, just wait a moment
-            print("⏳ Waiting for response (simulated - full streaming not impl in test)")
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            // Wait for response with timeout
+            print("⏳ Waiting for response...")
+            let timeout = 240 // 120 seconds (240 half-second intervals) - LLM may take 60-90s
+            var elapsed = 0
+            while !responseComplete && elapsed < timeout {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                elapsed += 1
+                if elapsed % 2 == 0 {
+                    print("  \(elapsed / 2)s... (deltas received: \(receivedDeltas.count))")
+                }
+            }
+            print("")
+
+            if responseComplete {
+                print("✅ PASS: Received complete response")
+                print("  Total deltas: \(receivedDeltas.count)")
+
+                // Reconstruct the full response text
+                var fullText = ""
+                for delta in receivedDeltas {
+                    if case .text(let text) = delta.delta {
+                        fullText += text
+                    }
+                }
+                if !fullText.isEmpty {
+                    let preview = fullText.prefix(200)
+                    print("  Response preview: \(preview)...")
+                }
+            } else {
+                print("⚠️ WARN: Response timed out after \(timeout / 2)s (120 seconds)")
+                print("  Deltas received: \(receivedDeltas.count)")
+            }
             print("")
 
             // Close session
             print("⏳ Closing session...")
             await chatManager.closeSession(sessionId: session.id)
-            print("✅ PASS: Session closed\n")
+            print("✅ Session closed\n")
 
             // Cleanup
             await manager.disconnect(from: agent.id)
