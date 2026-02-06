@@ -129,6 +129,65 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
     @Published private(set) var isFaceTracking = false
     @Published private(set) var isBodyTracking = false
 
+    // Tracking state for UI feedback
+    @Published private(set) var trackingState: TrackingState = .notTracking
+
+    enum TrackingState: Equatable {
+        case notTracking
+        case searching
+        case faceTracking
+        case bodyTracking
+        case combinedTracking
+        case lostTracking
+
+        var icon: String {
+            switch self {
+            case .notTracking, .searching:
+                return "eye.slash"
+            case .faceTracking:
+                return "face.smiling"
+            case .bodyTracking:
+                return "figure.walk"
+            case .combinedTracking:
+                return "person.fill"
+            case .lostTracking:
+                return "exclamationmark.triangle"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .notTracking, .searching:
+                return .gray
+            case .faceTracking:
+                return .cyan
+            case .bodyTracking:
+                return .green
+            case .combinedTracking:
+                return .purple
+            case .lostTracking:
+                return .orange
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .notTracking:
+                return "Not tracking"
+            case .searching:
+                return "Searching..."
+            case .faceTracking:
+                return "Face detected"
+            case .bodyTracking:
+                return "Body detected"
+            case .combinedTracking:
+                return "Face + Body"
+            case .lostTracking:
+                return "Lost tracking"
+            }
+        }
+    }
+
     private var hasManualModeSelection = false
     private var noDetectionFrameCount = 0
     private var hasAutoSwitchedMode = false
@@ -506,6 +565,7 @@ final class RemoteCameraStreamer: NSObject, ObservableObject {
         latestBodySkeleton = nil
         isFaceTracking = false
         isBodyTracking = false
+        trackingState = .notTracking
 
         state = .idle
         statusMessage = "Not connected"
@@ -750,6 +810,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
             latestBodySkeleton = metadata.bodySkeleton
             isFaceTracking = true
             isBodyTracking = true
+            trackingState = .combinedTracking
 
             if faceTrackingEnabled {
                 sendFaceMetadata(blendShapes: metadata.blendShapes!, anchors: metadata.anchors)
@@ -762,6 +823,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
             isFaceTracking = true
             isBodyTracking = false
             latestBodySkeleton = nil
+            trackingState = .faceTracking
 
             if faceTrackingEnabled {
                 print("🎭 [RemoteCameraStreamer] Face tracking: \(blendShapes.count) blend shapes")
@@ -774,6 +836,7 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
             isBodyTracking = true
             isFaceTracking = false
             latestFaceBlendShapes = nil
+            trackingState = .bodyTracking
 
 //            print("🦴 [RemoteCameraStreamer] Body tracking: skeleton detected")
             sendBodyMetadata(skeleton)
@@ -781,6 +844,19 @@ extension RemoteCameraStreamer: ARKitCaptureManagerDelegate {
         } else {
             // No detection - implement smart fallback
             noDetectionFrameCount += 1
+
+            // Update tracking state if we've lost tracking
+            if isFaceTracking || isBodyTracking {
+                trackingState = .lostTracking
+            } else if trackingState != .searching {
+                trackingState = .searching
+            }
+
+            // Reset tracking flags after short delay
+            if noDetectionFrameCount >= 15 { // ~0.5 seconds
+                isFaceTracking = false
+                isBodyTracking = false
+            }
 
             // After threshold frames (~2 seconds at 30fps) with no detection, try switching modes
             if !hasManualModeSelection && !hasAutoSwitchedMode && noDetectionFrameCount >= RemoteCameraConstants.modeDetectionFrameThreshold {

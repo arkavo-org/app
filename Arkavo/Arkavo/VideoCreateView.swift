@@ -203,86 +203,263 @@ struct ModernRecordingInterface: View {
     // Debug overlay toggles (enabled by default)
     @AppStorage("showBodyTrackingDebug") private var showBodyTrackingDebug = true
     @AppStorage("showFaceTrackingDebug") private var showFaceTrackingDebug = true
+    @AppStorage("showDebugOverlays") private var showDebugOverlays = true
+
+    // Track overlay visibility separately from settings
+    @State private var overlaysHidden = false
 
     var body: some View {
-        ZStack {
-            // Camera Preview
-            PreviewViewWrapper(viewModel: viewModel)
-                .ignoresSafeArea()
-                .overlay {
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .black.opacity(0.3),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom,
-                    )
+        GeometryReader { geometry in
+            ZStack {
+                // Camera Preview
+                PreviewViewWrapper(viewModel: viewModel)
                     .ignoresSafeArea()
-                }
-
-            // Debug overlays (floating on camera preview)
-            if viewModel.remoteStreamer.connectionState == .streaming {
-                VStack {
-                    HStack(alignment: .top, spacing: 8) {
-                        if showBodyTrackingDebug {
-                            BodyTrackingDebugView(
-                                skeleton: viewModel.remoteStreamer.latestBodySkeleton,
-                                isTracking: viewModel.remoteStreamer.isBodyTracking
-                            )
-                        }
-                        if showFaceTrackingDebug {
-                            FaceTrackingDebugView(
-                                blendShapes: viewModel.remoteStreamer.latestFaceBlendShapes,
-                                isTracking: viewModel.remoteStreamer.isFaceTracking
-                            )
-                        }
-                        Spacer()
-                    }
-                    .padding(.top, 60)
-                    .padding(.horizontal, 16)
-                    Spacer()
-                }
-            }
-
-            VStack {
-                TextField("Add a description...", text: $videoDescription)
-                    .textFieldStyle(.roundedBorder)
-                    .padding()
-                    .background(.ultraThinMaterial)
-
-                StreamingCard(streamer: viewModel.remoteStreamer) { mode in
-                    viewModel.switchCameraForMode(mode)
-                }
-                .padding(.horizontal)
-
-                Spacer()
-
-                VStack(spacing: 32) {
-                    ProgressBar(progress: viewModel.recordingProgress)
-                        .frame(height: 3)
-                        .padding(.horizontal)
-
-                    ZStack {
-                        RecordingControl(
-                            viewModel: viewModel,
-                            description: videoDescription,
-                            onComplete: onComplete,
+                    .overlay {
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .black.opacity(0.3),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom,
                         )
-
-                        HStack {
-                            FlipCameraButton {
-                                viewModel.flipCamera()
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 32)
+                        .ignoresSafeArea()
                     }
-                    .padding(.bottom, 80)
+
+                // Debug overlays - only show when enabled AND not hidden
+                if showDebugOverlays && !overlaysHidden && viewModel.remoteStreamer.connectionState == .streaming {
+                    DebugOverlayContainer(
+                        viewModel: viewModel,
+                        showBodyTracking: $showBodyTrackingDebug,
+                        showFaceTracking: $showFaceTrackingDebug,
+                        screenSize: geometry.size
+                    )
+                }
+
+                // Quick toggle button for overlays (when streaming)
+                if viewModel.remoteStreamer.connectionState == .streaming {
+                    OverlayToggleButton(
+                        isHidden: $overlaysHidden,
+                        showBodyTracking: showBodyTrackingDebug,
+                        showFaceTracking: showFaceTrackingDebug
+                    )
+                    .position(x: geometry.size.width - 40, y: geometry.size.height / 2)
+                }
+
+                VStack {
+                    TextField("Add a description...", text: $videoDescription)
+                        .textFieldStyle(.roundedBorder)
+                        .padding()
+                        .background(.ultraThinMaterial)
+
+                    StreamingCard(streamer: viewModel.remoteStreamer) { mode in
+                        viewModel.switchCameraForMode(mode)
+                    }
+                    .padding(.horizontal)
+
+                    Spacer()
+
+                    VStack(spacing: 32) {
+                        ProgressBar(progress: viewModel.recordingProgress)
+                            .frame(height: 3)
+                            .padding(.horizontal)
+
+                        ZStack {
+                            RecordingControl(
+                                viewModel: viewModel,
+                                description: videoDescription,
+                                onComplete: onComplete,
+                            )
+
+                            HStack {
+                                FlipCameraButton {
+                                    viewModel.flipCamera()
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 32)
+                        }
+                        .padding(.bottom, 80)
+                    }
                 }
             }
         }
         .statusBar(hidden: true)
+    }
+}
+
+// MARK: - Debug Overlay Container
+
+private struct DebugOverlayContainer: View {
+    @ObservedObject var viewModel: VideoRecordingViewModel
+    @Binding var showBodyTracking: Bool
+    @Binding var showFaceTracking: Bool
+    let screenSize: CGSize
+
+    // Dynamic sizing based on screen size
+    private var overlaySize: CGSize {
+        let isCompact = screenSize.width < 400
+        return isCompact ? DebugOverlaySize.compact : DebugOverlaySize.standard
+    }
+
+    var body: some View {
+        VStack {
+            // Tracking status bar
+            TrackingStatusBar(
+                isFaceTracking: viewModel.remoteStreamer.isFaceTracking,
+                isBodyTracking: viewModel.remoteStreamer.isBodyTracking,
+                faceCount: viewModel.remoteStreamer.latestFaceBlendShapes?.count,
+                bodyCount: viewModel.remoteStreamer.latestBodySkeleton?.definition.jointNames.count
+            )
+            .padding(.top, 50)
+
+            Spacer()
+
+            // Debug overlay cards at bottom
+            HStack(alignment: .bottom, spacing: 12) {
+                if showBodyTracking {
+                    BodyTrackingDebugView(
+                        skeleton: viewModel.remoteStreamer.latestBodySkeleton,
+                        isTracking: viewModel.remoteStreamer.isBodyTracking,
+                        size: overlaySize
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                if showFaceTracking {
+                    FaceTrackingDebugView(
+                        blendShapes: viewModel.remoteStreamer.latestFaceBlendShapes,
+                        isTracking: viewModel.remoteStreamer.isFaceTracking,
+                        size: overlaySize
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 180) // Above recording controls
+        }
+    }
+}
+
+// MARK: - Tracking Status Bar
+
+private struct TrackingStatusBar: View {
+    let isFaceTracking: Bool
+    let isBodyTracking: Bool
+    let faceCount: Int?
+    let bodyCount: Int?
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Spacer()
+
+            if isFaceTracking || !isBodyTracking {
+                TrackingStatusPill(
+                    icon: "face.smiling.fill",
+                    label: "Face",
+                    count: faceCount,
+                    isActive: isFaceTracking,
+                    activeColor: .cyan
+                )
+            }
+
+            if isBodyTracking || !isFaceTracking {
+                TrackingStatusPill(
+                    icon: "figure.walk",
+                    label: "Body",
+                    count: bodyCount,
+                    isActive: isBodyTracking,
+                    activeColor: .green
+                )
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
+private struct TrackingStatusPill: View {
+    let icon: String
+    let label: String
+    let count: Int?
+    let isActive: Bool
+    let activeColor: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+            if let count = count {
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(activeColor.opacity(0.3)))
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(isActive ? activeColor.opacity(0.25) : Color.gray.opacity(0.3))
+        )
+        .overlay(
+            Capsule()
+                .stroke(isActive ? activeColor.opacity(0.6) : Color.gray.opacity(0.4), lineWidth: 1.5)
+        )
+    }
+}
+
+// MARK: - Overlay Toggle Button
+
+private struct OverlayToggleButton: View {
+    @Binding var isHidden: Bool
+    let showBodyTracking: Bool
+    let showFaceTracking: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3)) {
+                isHidden.toggle()
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: isHidden ? "eye.slash" : "eye")
+                    .font(.system(size: 16, weight: .semibold))
+
+                // Mini indicators showing what's enabled
+                if !isHidden {
+                    HStack(spacing: 3) {
+                        if showBodyTracking {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 6, height: 6)
+                        }
+                        if showFaceTracking {
+                            Circle()
+                                .fill(Color.cyan)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+            }
+            .foregroundColor(.white)
+            .frame(width: 44, height: isHidden ? 44 : 60)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isHidden ? Color.gray.opacity(0.4) : Color.white.opacity(0.3), lineWidth: 1)
+            )
+        }
     }
 }
 
