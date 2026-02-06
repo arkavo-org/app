@@ -93,11 +93,20 @@
 		DAC1F9ED2C34DA7100499631 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9EC2C34DA7100499631 /* Assets.xcassets */; };
 		DAC1F9F12C34DA7100499631 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DAC1F9F02C34DA7100499631 /* Preview Assets.xcassets */; };
 		DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */; };
-		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
+		DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile;
+		DAFF0005EE0112340000001A /* PatreonMembershipScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile;
+		DAFF0006EE0112340000001A /* SimpleScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFF0006EE0112340000001B /* SimpleScreenshotUITests.swift */; };
+ fileRef = DAFF0005EE0112340000001B /* PatreonMembershipScreenshotUITests.swift */; };
+ fileRef = DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */; };
 		DAC1FA082C34DA7100499632 /* RemoteCameraConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */; };
 		DAC1FA0A2C34DA7100499633 /* RemoteCameraTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */; };
 		DAC8E62F2CF7D8DE00AA0F71 /* ArkavoWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */; };
 		DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */; };
+		DAFF0001EE0112340000001A /* PatreonMembershipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFF0001EE0112340000001B /* PatreonMembershipsView.swift */; };
+		DAFF0003EE0112340000001A /* PatreonMembershipStore.swift in Sources */ = {isa = PBXBuildFile;
+		DAFF0004EE0112340000001A /* PatreonMembershipStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFF0004EE0112340000001B /* PatreonMembershipStoreTests.swift */; };
+ fileRef = DAFF0003EE0112340000001B /* PatreonMembershipStore.swift */; };
+		DAFF0002EE0112340000001A /* PatreonMemberContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFF0002EE0112340000001B /* PatreonMemberContentView.swift */; };
 		DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0002EE0112340000001B /* CreatorContentView.swift */; };
 		DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0003EE0112340000001B /* ContentDetailView.swift */; };
 		DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */; };
@@ -239,11 +248,19 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAC1F9F62C34DA7100499631 /* ArkavoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA002C34DA7100499631 /* ArkavoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArkavoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITests.swift; sourceTree = "<group>"; };
+		DAFF0005EE0112340000001B /* PatreonMembershipScreenshotUITests.swift */ = {isa = PBXFileReference;
+		DAFF0006EE0112340000001B /* SimpleScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleScreenshotUITests.swift; sourceTree = "<group>"; };
+ lastKnownFileType = sourcecode.swift; path = PatreonMembershipScreenshotUITests.swift; sourceTree = "<group>"; };
 		DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraConnectionTests.swift; sourceTree = "<group>"; };
 		DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCameraTestHelpers.swift; sourceTree = "<group>"; };
 		DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		DAC8E62E2CF7D8D200AA0F71 /* ArkavoWebSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoWebSocket.swift; sourceTree = "<group>"; };
 		DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorProfileDisplayView.swift; sourceTree = "<group>"; };
+		DAFF0001EE0112340000001B /* PatreonMembershipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonMembershipsView.swift; sourceTree = "<group>"; };
+		DAFF0003EE0112340000001B /* PatreonMembershipStore.swift */ = {isa = PBXFileReference;
+		DAFF0004EE0112340000001B /* PatreonMembershipStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonMembershipStoreTests.swift; sourceTree = "<group>"; };
+ lastKnownFileType = sourcecode.swift; path = PatreonMembershipStore.swift; sourceTree = "<group>"; };
+		DAFF0002EE0112340000001B /* PatreonMemberContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatreonMemberContentView.swift; sourceTree = "<group>"; };
 		DACC0002EE0112340000001B /* CreatorContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatorContentView.swift; sourceTree = "<group>"; };
 		DACC0003EE0112340000001B /* ContentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentDetailView.swift; sourceTree = "<group>"; };
 		DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDFVideoPlayerView.swift; sourceTree = "<group>"; };
@@ -390,6 +407,11 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DAAFCBC92D08F9D4003FC56F /* CreatorView.swift */,
 				DACC0001EE0112340000001B /* CreatorProfileDisplayView.swift */,
 				DACC0002EE0112340000001B /* CreatorContentView.swift */,
+				DAFF0001EE0112340000001B /* PatreonMembershipsView.swift */,
+				DAFF0002EE0112340000001B /* PatreonMemberContentView.swift */,
+				DAFF0003EE0112340000001B /* PatreonMembershipStore.swift */,
+
+
 				DACC0003EE0112340000001B /* ContentDetailView.swift */,
 				DACC0005EE0112340000001B /* TDFVideoPlayerView.swift */,
 				DA57A1CBFD16D843B5A96A8E /* FMP4VideoPlayerView.swift */,
@@ -477,6 +499,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DAE94DD82DC5B56C00FB0EFE /* ProfileKeyStorePersistenceTests.swift */,
 				DAE94DE12DC6A00000FB0EFE /* StreamCreationTests.swift */,
 				51D858B161FE4E2B81869636 /* AgentAuthorizationTests.swift */,
+				DAFF0004EE0112340000001B /* PatreonMembershipStoreTests.swift */,
 			);
 			path = ArkavoTests;
 			sourceTree = "<group>";
@@ -487,6 +510,8 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DAC1FA042C34DA7100499631 /* ArkavoUITests.swift */,
 				DAC1FA062C34DA7100499631 /* ArkavoUITestsLaunchTests.swift */,
 				DAC1FA092C34DA7100499632 /* RemoteCameraConnectionTests.swift */,
+				DAFF0005EE0112340000001B /* PatreonMembershipScreenshotUITests.swift */,
+				DAFF0006EE0112340000001B /* SimpleScreenshotUITests.swift */,
 				DAC1FA0B2C34DA7100499633 /* RemoteCameraTestHelpers.swift */,
 			);
 			path = ArkavoUITests;
@@ -717,6 +742,11 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DAAFCBCA2D08F9DB003FC56F /* CreatorView.swift in Sources */,
 				DACC0001EE0112340000001A /* CreatorProfileDisplayView.swift in Sources */,
 				DACC0002EE0112340000001A /* CreatorContentView.swift in Sources */,
+				DAFF0001EE0112340000001A /* PatreonMembershipsView.swift in Sources */,
+				DAFF0002EE0112340000001A /* PatreonMemberContentView.swift in Sources */,
+				DAFF0003EE0112340000001A /* PatreonMembershipStore.swift in Sources */,
+
+
 				DACC0003EE0112340000001A /* ContentDetailView.swift in Sources */,
 				DACC0005EE0112340000001A /* TDFVideoPlayerView.swift in Sources */,
 				DA047B753157EC4402A59EA3 /* FMP4VideoPlayerView.swift in Sources */,
@@ -782,6 +812,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DAE94DDE2DC5B56C00FB0EFE /* KeyExchangeTests.swift in Sources */,
 				DAE94DE02DC6A00000FB0EFE /* StreamCreationTests.swift in Sources */,
 				7DCF2EFEBF404378A9254CA0 /* AgentAuthorizationTests.swift in Sources */,
+				DAFF0004EE0112340000001A /* PatreonMembershipStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -790,6 +821,8 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 			buildActionMask = 2147483647;
 			files = (
 				DAC1FA072C34DA7100499631 /* ArkavoUITestsLaunchTests.swift in Sources */,
+				DAFF0005EE0112340000001A /* PatreonMembershipScreenshotUITests.swift in Sources */,
+				DAFF0006EE0112340000001A /* SimpleScreenshotUITests.swift in Sources */,
 				DAC1FA052C34DA7100499631 /* ArkavoUITests.swift in Sources */,
 				DAC1FA082C34DA7100499632 /* RemoteCameraConnectionTests.swift in Sources */,
 				DAC1FA0A2C34DA7100499633 /* RemoteCameraTestHelpers.swift in Sources */,

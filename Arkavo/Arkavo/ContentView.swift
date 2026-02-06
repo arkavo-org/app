@@ -1,9 +1,11 @@
 import ArkavoKit
 import SwiftUI
+import UserNotifications
 
 enum Tab {
     case home
     case chats
+    case memberships
     case social
     case profile
 
@@ -11,6 +13,7 @@ enum Tab {
         switch self {
         case .home: "Home"
         case .chats: "Chats"
+        case .memberships: "Memberships"
         case .social: "Social"
         case .profile: "Profile"
         }
@@ -20,6 +23,7 @@ enum Tab {
         switch self {
         case .home: "play.circle.fill"
         case .chats: "bubble.left.and.bubble.right.fill"
+        case .memberships: "heart.fill"
         case .social: "network"
         case .profile: "person.circle.fill"
         }
@@ -29,6 +33,7 @@ enum Tab {
 struct ContentView: View {
     @EnvironmentObject var sharedState: SharedState
     @EnvironmentObject var agentService: AgentService
+    @StateObject private var membershipStore = PatreonMembershipStore()
     @State private var isCollapsed = false
     @State private var showMenuButton = true
 //    @StateObject private var protectorService = ProtectorService()
@@ -36,6 +41,10 @@ struct ContentView: View {
     @State private var timeOnScreen: TimeInterval = 0
     let tooltipTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let collapseTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
+    
+    private var isPatreonLinked: Bool {
+        KeychainManager.isPatreonAccountLinked()
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -63,6 +72,8 @@ struct ContentView: View {
                         .onDisappear {
                             sharedState.selectedStreamPublicID = nil
                         }
+                case .memberships:
+                    PatreonMembershipsView()
                 case .social:
                     if sharedState.isOfflineMode {
                         // Show network connection prompt when offline
@@ -130,18 +141,32 @@ struct ContentView: View {
             ZStack {
                 if !isCollapsed {
                     // Expanded TabView
-                    HStack(spacing: 20) {
-                        ForEach([Tab.home, .chats, .social, .profile], id: \.self) { tab in
+                    HStack(spacing: isPatreonLinked ? 16 : 20) {
+                        let tabs: [Tab] = isPatreonLinked 
+                            ? [.home, .chats, .memberships, .social, .profile]
+                            : [.home, .chats, .social, .profile]
+                        
+                        ForEach(tabs, id: \.self) { tab in
                             Button {
                                 handleTabSelection(tab)
                             } label: {
-                                Image(systemName: tab.icon)
-                                    .font(.title3)
-                                    .foregroundColor(sharedState.selectedTab == tab ? .primary : .secondary)
+                                ZStack {
+                                    Image(systemName: tab.icon)
+                                        .font(.title3)
+                                        .foregroundColor(sharedState.selectedTab == tab ? .primary : .secondary)
+                                    
+                                    // Badge for memberships tab
+                                    if tab == .memberships && membershipStore.hasUnreadContent {
+                                        Circle()
+                                            .fill(Color.red)
+                                            .frame(width: 8, height: 8)
+                                            .offset(x: 10, y: -8)
+                                    }
+                                }
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, isPatreonLinked ? 16 : 20)
                     .padding(.vertical, 10)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
@@ -158,12 +183,22 @@ struct ContentView: View {
                     Button {
                         expandMenu()
                     } label: {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
+                        ZStack {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                            
+                            // Badge on menu button when memberships have unread content
+                            if isPatreonLinked && membershipStore.hasUnreadContent {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: 12, y: -12)
+                            }
+                        }
                     }
                     .transition(.opacity)
                 }
@@ -199,10 +234,28 @@ struct ContentView: View {
                 }
             }
         }
-        .onChange(of: sharedState.selectedTab) { _, _ in
+        .onChange(of: sharedState.selectedTab) { _, newTab in
             // Reset timer when tab changes
             timeOnScreen = 0
             showTooltip = false
+            
+            // When memberships tab is selected, refresh data
+            if newTab == .memberships {
+                Task {
+                    await membershipStore.loadMembershipsWithUnread()
+                }
+            }
+        }
+        .task {
+            // Request notification permission on first launch
+            UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .alert, .sound]) { granted, _ in
+                print("[ContentView] Notification permission: \(granted)")
+            }
+            
+            // Initial load of membership data if Patreon is linked
+            if isPatreonLinked {
+                await membershipStore.loadMembershipsWithUnread()
+            }
         }
         // Also respond to isAwaiting changes
         .onChange(of: sharedState.isAwaiting) { _, isNowAwaiting in
@@ -308,6 +361,8 @@ struct EmptyStateView: View {
             "No conversations yet. Tap '+' to start a new chat or create a group."
         case .home:
             "Share your first video! Tap '+' to get started."
+        case .memberships:
+            "Support creators on Patreon to see their exclusive content here."
         case .social:
             "Start the conversation! Tap '+' to create your first post."
         case .profile:

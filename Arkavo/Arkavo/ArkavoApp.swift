@@ -1035,6 +1035,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture" // create a video
         case .chats: "Message" // start a conversation
+        case .memberships: "View" // view creator content
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -1044,6 +1045,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture video"
         case .chats: "New conversation"
+        case .memberships: "View memberships"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }

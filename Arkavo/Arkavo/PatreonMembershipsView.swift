@@ -1,4 +1,5 @@
 import ArkavoSocial
+import SwiftData
 import SwiftUI
 
 // MARK: - Patreon Memberships View
@@ -6,7 +7,14 @@ import SwiftUI
 /// Displays a list of Patreon creators the user supports
 struct PatreonMembershipsView: View {
     @StateObject private var viewModel = PatreonMembershipsViewModel()
+    @StateObject private var store: PatreonMembershipStore
     @State private var selectedMembership: PatreonMembership?
+    @Environment(\.modelContext) private var modelContext
+
+    init() {
+        // Store will be properly initialized with modelContext in onAppear
+        _store = StateObject(wrappedValue: PatreonMembershipStore())
+    }
 
     var body: some View {
         List {
@@ -20,26 +28,48 @@ struct PatreonMembershipsView: View {
         .navigationTitle("Supported Creators")
         .navigationBarTitleDisplayMode(.large)
         .task {
-            await viewModel.loadMemberships()
+            await loadData()
         }
         .refreshable {
-            await viewModel.loadMemberships()
+            await loadData()
         }
         .sheet(item: $selectedMembership) { membership in
             NavigationStack {
-                PatreonMemberContentView(membership: membership)
+                PatreonMemberContentView(
+                    membership: membership,
+                    store: store
+                )
+            }
+        }
+        .onAppear {
+            // Refresh data when view appears
+            Task {
+                await loadData()
             }
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK") { }
             Button("Retry") {
                 Task {
-                    await viewModel.loadMemberships()
+                    await loadData()
                 }
             }
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
         }
+        .onAppear {
+            // Reinitialize store with proper context if needed
+            if store.totalUnreadCount == 0 && !viewModel.memberships.isEmpty {
+                Task {
+                    await store.refreshUnreadCounts(for: viewModel.memberships)
+                }
+            }
+        }
+    }
+
+    private func loadData() async {
+        await viewModel.loadMemberships()
+        await store.refreshUnreadCounts(for: viewModel.memberships)
     }
 
     private var emptyStateSection: some View {
@@ -76,18 +106,34 @@ struct PatreonMembershipsView: View {
     private var membershipsSection: some View {
         Section {
             ForEach(viewModel.memberships) { membership in
-                MembershipRow(membership: membership)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selectedMembership = membership
-                    }
+                MembershipRow(
+                    membership: membership,
+                    unreadCount: store.unreadCount(for: membership.id)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedMembership = membership
+                }
             }
         } header: {
-            Text("Active Memberships")
-                .font(.caption)
-                .textCase(.uppercase)
+            HStack {
+                Text("Active Memberships")
+                    .font(.caption)
+                    .textCase(.uppercase)
+
+                Spacer()
+
+                if store.hasUnreadContent {
+                    HStack(spacing: 4) {
+                        UnreadDot()
+                        Text("\(store.totalUnreadCount) new")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
         } footer: {
-            if viewModel.isLoading {
+            if viewModel.isLoading || store.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -100,11 +146,19 @@ struct PatreonMembershipsView: View {
 
 private struct MembershipRow: View {
     let membership: PatreonMembership
+    let unreadCount: Int
 
     var body: some View {
         HStack(spacing: 16) {
-            // Creator Avatar
-            CreatorAvatar(url: membership.creatorAvatarURL, name: membership.creatorName)
+            // Creator Avatar with badge overlay
+            ZStack(alignment: .topTrailing) {
+                CreatorAvatar(url: membership.creatorAvatarURL, name: membership.creatorName)
+
+                if unreadCount > 0 {
+                    UnreadBadge(count: unreadCount)
+                        .offset(x: 6, y: -6)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -116,6 +170,17 @@ private struct MembershipRow: View {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(.green)
                             .font(.caption)
+                    }
+
+                    if unreadCount > 0 {
+                        Text("NEW")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.red)
+                            .cornerRadius(4)
                     }
                 }
 

@@ -1,4 +1,5 @@
 import ArkavoSocial
+import SwiftData
 import SwiftUI
 
 // MARK: - Patreon Member Content View
@@ -7,10 +8,12 @@ import SwiftUI
 struct PatreonMemberContentView: View {
     let membership: PatreonMembership
     @StateObject private var viewModel: PatreonMemberContentViewModel
+    @ObservedObject var store: PatreonMembershipStore
     @Environment(\.dismiss) private var dismiss
 
-    init(membership: PatreonMembership) {
+    init(membership: PatreonMembership, store: PatreonMembershipStore? = nil) {
         self.membership = membership
+        self.store = store ?? PatreonMembershipStore()
         _viewModel = StateObject(wrappedValue: PatreonMemberContentViewModel(membership: membership))
     }
 
@@ -49,6 +52,10 @@ struct PatreonMemberContentView: View {
         }
         .refreshable {
             await viewModel.loadPosts()
+        }
+        .onAppear {
+            // Mark as viewed when user opens the content
+            store.markAsViewed(membershipId: membership.id)
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK") { }
@@ -311,10 +318,26 @@ private struct PostCard: View {
         .shadow(radius: 2)
         .sheet(isPresented: $showingShareSheet) {
             if let url = post.url {
-                ShareSheet(activityItems: [url])
+                ActivityViewController(activityItems: [url])
             }
         }
     }
+}
+
+// MARK: - Activity View Controller
+
+private struct ActivityViewController: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: activityItems,
+            applicationActivities: applicationActivities
+        )
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - View Model
@@ -354,22 +377,6 @@ final class PatreonMemberContentViewModel: ObservableObject {
             showError = true
         }
     }
-}
-
-// MARK: - Share Sheet
-
-private struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-    var applicationActivities: [UIActivity]? = nil
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(
-            activityItems: activityItems,
-            applicationActivities: applicationActivities
-        )
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Preview
