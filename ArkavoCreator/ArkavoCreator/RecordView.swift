@@ -155,35 +155,41 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.black.opacity(0.2))
                     }
-                } else if !studioState.isAudioOnly {
-                    // Empty stage placeholder when no screen share
+                } else if !studioState.isAudioOnly && studioState.visualSource != .avatar {
+                    // Empty stage placeholder when no screen share (but not in avatar mode)
                     stagePlaceholderView
                 }
 
                 // Layer 2: Visual source overlay
                 if studioState.visualSource == .avatar {
-                    // VTuber-style: Large transparent overlay with drop shadow
-                    let avatarWidth = geometry.size.width * 0.4
-                    let avatarHeight = avatarWidth * (16 / 9)  // Taller aspect for waist-up
+                    if enableScreen {
+                        // PiP mode over screen: Transparent overlay with drop shadow
+                        let avatarWidth = geometry.size.width * 0.4
+                        let avatarHeight = avatarWidth * (16 / 9)  // Taller aspect for waist-up
 
-                    AvatarRecordView(viewModel: avatarViewModel, isTransparent: true)
-                        .frame(width: avatarWidth, height: avatarHeight)
-                        .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
-                        .offset(x: -20, y: -20)
-                        .offset(pipOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    pipOffset = CGSize(
-                                        width: lastPipOffset.width + value.translation.width,
-                                        height: lastPipOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    lastPipOffset = pipOffset
-                                }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        AvatarRecordView(viewModel: avatarViewModel, isTransparent: true)
+                            .frame(width: avatarWidth, height: avatarHeight)
+                            .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+                            .offset(x: -20, y: -20)
+                            .offset(pipOffset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        pipOffset = CGSize(
+                                            width: lastPipOffset.width + value.translation.width,
+                                            height: lastPipOffset.height + value.translation.height
+                                        )
+                                    }
+                                    .onEnded { _ in
+                                        lastPipOffset = pipOffset
+                                    }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    } else {
+                        // Full stage mode: Avatar fills the entire stage with background
+                        AvatarRecordView(viewModel: avatarViewModel, isTransparent: false)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
 
                 } else if studioState.visualSource == .face {
                     // Traditional PIP: Boxed camera feed (or floating head when enabled)

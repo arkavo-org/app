@@ -1,3 +1,4 @@
+import AVKit
 import Metal
 import SwiftUI
 
@@ -15,7 +16,15 @@ struct AvatarRecordView: View {
     var isTransparent: Bool = false
 
     var body: some View {
-        previewPane
+        ZStack {
+            // Background layer (only when not transparent PiP mode)
+            if !isTransparent {
+                backgroundView
+            }
+
+            // Avatar layer
+            previewPane
+        }
             .alert("Error", isPresented: $showError, presenting: viewModel.error) { _ in
                 Button("OK") {
                     viewModel.error = nil
@@ -27,6 +36,10 @@ struct AvatarRecordView: View {
                 initializeRendererIfNeeded()
                 viewModel.renderer?.resume()
                 viewModel.activate()
+                // Apply current tracking mode's camera position (deferred to avoid publishing during view update)
+                Task { @MainActor in
+                    viewModel.setTrackingMode(viewModel.trackingMode)
+                }
                 // Auto-load last selected model
                 Task {
                     await viewModel.autoLoadIfNeeded()
@@ -81,6 +94,34 @@ struct AvatarRecordView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
+    @ViewBuilder
+    private var backgroundView: some View {
+        switch viewModel.backgroundType {
+        case .solidColor:
+            viewModel.backgroundColor
+                .ignoresSafeArea()
+        case .image:
+            if let url = viewModel.backgroundImageURL,
+               let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .ignoresSafeArea()
+            } else {
+                viewModel.backgroundColor
+                    .ignoresSafeArea()
+            }
+        case .video:
+            if let url = viewModel.backgroundVideoURL {
+                VideoBackgroundView(url: url)
+                    .ignoresSafeArea()
+            } else {
+                viewModel.backgroundColor
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
     /// Initialize renderer in the view model if not already created
     private func initializeRendererIfNeeded() {
         guard viewModel.renderer == nil else { return }
@@ -92,6 +133,48 @@ struct AvatarRecordView: View {
         }
 
         viewModel.attachRenderer(VRMAvatarRenderer(device: device))
+    }
+}
+
+// MARK: - Video Background View
+
+/// Looping video player for background
+struct VideoBackgroundView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> NSView {
+        let containerView = NSView()
+        containerView.wantsLayer = true
+
+        let player = AVQueuePlayer()
+        let playerLayer = AVPlayerLayer(player: player)
+        playerLayer.videoGravity = .resizeAspectFill
+        containerView.layer?.addSublayer(playerLayer)
+
+        // Set up looper
+        let playerItem = AVPlayerItem(url: url)
+        let looper = AVPlayerLooper(player: player, templateItem: playerItem)
+        context.coordinator.looper = looper
+
+        player.play()
+        context.coordinator.player = player
+        context.coordinator.playerLayer = playerLayer
+
+        return containerView
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.playerLayer?.frame = nsView.bounds
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var player: AVQueuePlayer?
+        var playerLayer: AVPlayerLayer?
+        var looper: AVPlayerLooper?
     }
 }
 

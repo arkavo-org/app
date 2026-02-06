@@ -1,3 +1,4 @@
+import ArkavoKit
 import CryptoKit
 import Foundation
 import SwiftData
@@ -87,6 +88,54 @@ final class Profile: Identifiable, Codable {
         channels.first { $0.isAvailable && $0.type == .localNetwork }
             ?? channels.first { $0.isAvailable && $0.type == .arkavoNetwork }
             ?? channels.first { $0.isAvailable && $0.type == .p2p }
+    }
+
+    /// Whether this profile has a local endpoint for direct connection
+    var hasLocalEndpoint: Bool {
+        agentEndpoint != nil && agentEndpoint?.isEmpty == false
+    }
+
+    /// Convert this Profile to an AgentEndpoint for direct connection
+    /// Returns nil if no local endpoint is available
+    func toAgentEndpoint() -> AgentEndpoint? {
+        guard let agentID = agentID, let endpoint = agentEndpoint, !endpoint.isEmpty else {
+            return nil
+        }
+        return AgentEndpoint(
+            id: agentID,
+            url: endpoint,
+            metadata: AgentMetadata(
+                name: name,
+                purpose: agentPurpose ?? "",
+                model: agentModel ?? ""
+            )
+        )
+    }
+
+    // MARK: - Removal UI Properties
+
+    /// Whether this contact can be removed (device agent cannot)
+    var canBeRemoved: Bool {
+        contactTypeEnum != .deviceAgent
+    }
+
+    /// Action label for removal button (consistent terminology)
+    var removalActionLabel: String {
+        isAgent ? "Remove Agent" : "Remove Contact"
+    }
+
+    /// Confirmation dialog title for removal
+    var removalConfirmationTitle: String {
+        isAgent ? "Remove Agent?" : "Remove Contact?"
+    }
+
+    /// Confirmation dialog message for removal
+    var removalConfirmationMessage: String {
+        if isAgent {
+            return "Are you sure you want to remove \(name)? You can re-discover it later."
+        } else {
+            return "You can add \(name) again later."
+        }
     }
 
     // MARK: - P2P Key Storage

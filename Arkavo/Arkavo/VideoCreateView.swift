@@ -1,10 +1,17 @@
 import ArkavoKit
-import ArkavoKit
 import AVFoundation
 import CryptoKit
 import FlatBuffers
 import SwiftData
 import SwiftUI
+
+// MARK: - UserDefaults Extension
+
+extension UserDefaults {
+    func contains(key: String) -> Bool {
+        return object(forKey: key) != nil
+    }
+}
 
 // MARK: - Main View
 
@@ -193,59 +200,266 @@ struct ModernRecordingInterface: View {
     @Binding var videoDescription: String
     let onComplete: (UploadResult?) async -> Void
 
+    // Debug overlay toggles (enabled by default)
+    @AppStorage("showBodyTrackingDebug") private var showBodyTrackingDebug = true
+    @AppStorage("showFaceTrackingDebug") private var showFaceTrackingDebug = true
+    @AppStorage("showDebugOverlays") private var showDebugOverlays = true
+
+    // Track overlay visibility separately from settings
+    @State private var overlaysHidden = false
+
     var body: some View {
-        ZStack {
-            // Camera Preview
-            PreviewViewWrapper(viewModel: viewModel)
-                .ignoresSafeArea()
-                .overlay {
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .black.opacity(0.3),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom,
-                    )
+        GeometryReader { geometry in
+            ZStack {
+                // Camera Preview
+                PreviewViewWrapper(viewModel: viewModel)
                     .ignoresSafeArea()
+                    .overlay {
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .black.opacity(0.3),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom,
+                        )
+                        .ignoresSafeArea()
+                    }
+
+                // Debug overlays - only show when enabled AND not hidden
+                if showDebugOverlays && !overlaysHidden && viewModel.remoteStreamer.connectionState == .streaming {
+                    DebugOverlayContainer(
+                        viewModel: viewModel,
+                        showBodyTracking: $showBodyTrackingDebug,
+                        showFaceTracking: $showFaceTrackingDebug,
+                        screenSize: geometry.size
+                    )
                 }
 
-            VStack {
-                TextField("Add a description...", text: $videoDescription)
-                    .textFieldStyle(.roundedBorder)
-                    .padding()
-                    .background(.ultraThinMaterial)
+                // Quick toggle button for overlays (when streaming)
+                if viewModel.remoteStreamer.connectionState == .streaming {
+                    OverlayToggleButton(
+                        isHidden: $overlaysHidden,
+                        showBodyTracking: showBodyTrackingDebug,
+                        showFaceTracking: showFaceTrackingDebug
+                    )
+                    .position(x: geometry.size.width - 40, y: geometry.size.height / 2)
+                }
 
-                StreamingCard(streamer: viewModel.remoteStreamer)
+                VStack {
+                    TextField("Add a description...", text: $videoDescription)
+                        .textFieldStyle(.roundedBorder)
+                        .padding()
+                        .background(.ultraThinMaterial)
+
+                    StreamingCard(streamer: viewModel.remoteStreamer) { mode in
+                        viewModel.switchCameraForMode(mode)
+                    }
                     .padding(.horizontal)
 
-                Spacer()
+                    Spacer()
 
-                VStack(spacing: 32) {
-                    ProgressBar(progress: viewModel.recordingProgress)
-                        .frame(height: 3)
-                        .padding(.horizontal)
+                    VStack(spacing: 32) {
+                        ProgressBar(progress: viewModel.recordingProgress)
+                            .frame(height: 3)
+                            .padding(.horizontal)
 
-                    ZStack {
-                        RecordingControl(
-                            viewModel: viewModel,
-                            description: videoDescription,
-                            onComplete: onComplete,
-                        )
+                        ZStack {
+                            RecordingControl(
+                                viewModel: viewModel,
+                                description: videoDescription,
+                                onComplete: onComplete,
+                            )
 
-                        HStack {
-                            FlipCameraButton {
-                                viewModel.flipCamera()
+                            HStack {
+                                FlipCameraButton {
+                                    viewModel.flipCamera()
+                                }
+                                Spacer()
                             }
-                            Spacer()
+                            .padding(.horizontal, 32)
                         }
-                        .padding(.horizontal, 32)
+                        .padding(.bottom, 80)
                     }
-                    .padding(.bottom, 80)
                 }
             }
         }
         .statusBar(hidden: true)
+    }
+}
+
+// MARK: - Debug Overlay Container
+
+private struct DebugOverlayContainer: View {
+    @ObservedObject var viewModel: VideoRecordingViewModel
+    @Binding var showBodyTracking: Bool
+    @Binding var showFaceTracking: Bool
+    let screenSize: CGSize
+
+    // Dynamic sizing based on screen size
+    private var overlaySize: CGSize {
+        let isCompact = screenSize.width < 400
+        return isCompact ? DebugOverlaySize.compact : DebugOverlaySize.standard
+    }
+
+    var body: some View {
+        VStack {
+            // Tracking status bar
+            TrackingStatusBar(
+                isFaceTracking: viewModel.remoteStreamer.isFaceTracking,
+                isBodyTracking: viewModel.remoteStreamer.isBodyTracking,
+                faceCount: viewModel.remoteStreamer.latestFaceBlendShapes?.count,
+                bodyCount: viewModel.remoteStreamer.latestBodySkeleton?.definition.jointNames.count
+            )
+            .padding(.top, 50)
+
+            Spacer()
+
+            // Debug overlay cards at bottom
+            HStack(alignment: .bottom, spacing: 12) {
+                if showBodyTracking {
+                    BodyTrackingDebugView(
+                        skeleton: viewModel.remoteStreamer.latestBodySkeleton,
+                        isTracking: viewModel.remoteStreamer.isBodyTracking,
+                        size: overlaySize
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                if showFaceTracking {
+                    FaceTrackingDebugView(
+                        blendShapes: viewModel.remoteStreamer.latestFaceBlendShapes,
+                        isTracking: viewModel.remoteStreamer.isFaceTracking,
+                        size: overlaySize
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 180) // Above recording controls
+        }
+    }
+}
+
+// MARK: - Tracking Status Bar
+
+private struct TrackingStatusBar: View {
+    let isFaceTracking: Bool
+    let isBodyTracking: Bool
+    let faceCount: Int?
+    let bodyCount: Int?
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Spacer()
+
+            if isFaceTracking || !isBodyTracking {
+                TrackingStatusPill(
+                    icon: "face.smiling.fill",
+                    label: "Face",
+                    count: faceCount,
+                    isActive: isFaceTracking,
+                    activeColor: .cyan
+                )
+            }
+
+            if isBodyTracking || !isFaceTracking {
+                TrackingStatusPill(
+                    icon: "figure.walk",
+                    label: "Body",
+                    count: bodyCount,
+                    isActive: isBodyTracking,
+                    activeColor: .green
+                )
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
+private struct TrackingStatusPill: View {
+    let icon: String
+    let label: String
+    let count: Int?
+    let isActive: Bool
+    let activeColor: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+            if let count = count {
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(activeColor.opacity(0.3)))
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(isActive ? activeColor.opacity(0.25) : Color.gray.opacity(0.3))
+        )
+        .overlay(
+            Capsule()
+                .stroke(isActive ? activeColor.opacity(0.6) : Color.gray.opacity(0.4), lineWidth: 1.5)
+        )
+    }
+}
+
+// MARK: - Overlay Toggle Button
+
+private struct OverlayToggleButton: View {
+    @Binding var isHidden: Bool
+    let showBodyTracking: Bool
+    let showFaceTracking: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3)) {
+                isHidden.toggle()
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: isHidden ? "eye.slash" : "eye")
+                    .font(.system(size: 16, weight: .semibold))
+
+                // Mini indicators showing what's enabled
+                if !isHidden {
+                    HStack(spacing: 3) {
+                        if showBodyTracking {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 6, height: 6)
+                        }
+                        if showFaceTracking {
+                            Circle()
+                                .fill(Color.cyan)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+            }
+            .foregroundColor(.white)
+            .frame(width: 44, height: isHidden ? 44 : 60)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isHidden ? Color.gray.opacity(0.4) : Color.white.opacity(0.3), lineWidth: 1)
+            )
+        }
     }
 }
 
@@ -267,58 +481,211 @@ struct FlipCameraButton: View {
 
 struct StreamingCard: View {
     @ObservedObject var streamer: RemoteCameraStreamer
+    var onModeChange: ((ARKitCaptureManager.Mode) -> Void)?
     @State private var showDeveloperMode = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var longPressTimer: Timer?
 
-    var body: some View {
-        VStack(spacing: 0) {
-            // Main smart button
-            Button(action: handleTap) {
-                VStack(spacing: 12) {
-                    // Icon that changes based on state
-                    ZStack {
-                        Image(systemName: iconName)
-                            .font(.system(size: 48))
-                            .foregroundStyle(iconColor)
-                            .symbolEffect(.pulse, isActive: isAnimating)
+    // Debug overlay toggles (enabled by default)
+    @AppStorage("showBodyTrackingDebug") private var showBodyTrackingDebug = true
+    @AppStorage("showFaceTrackingDebug") private var showFaceTrackingDebug = true
 
-                        if showProgress {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
+    private var isBodyTracking: Bool {
+        streamer.mode == .body
+    }
+
+    private var isFaceTracking: Bool {
+        streamer.mode == .face
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Tracking mode toggles
+            HStack(spacing: 16) {
+                // Face tracking button
+                Button {
+                    streamer.mode = .face
+                    onModeChange?(.face)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "face.smiling")
+                        Text("Face")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(isFaceTracking ? .white : .primary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(isFaceTracking ? Color.blue : Color.gray.opacity(0.2))
+                    .clipShape(Capsule())
+                }
+
+                // Body tracking button
+                Button {
+                    streamer.mode = .body
+                    onModeChange?(.body)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.stand")
+                        Text("Body")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(isBodyTracking ? .white : .primary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(isBodyTracking ? Color.green : Color.gray.opacity(0.2))
+                    .clipShape(Capsule())
+                }
+            }
+
+            // Main smart button (hidden when streaming - replaced by stop button)
+            if streamer.connectionState != .streaming {
+                Button(action: handleTap) {
+                    VStack(spacing: 12) {
+                        // Icon that changes based on state
+                        ZStack {
+                            Image(systemName: iconName)
+                                .font(.system(size: 48))
+                                .foregroundStyle(iconColor)
+                                .symbolEffect(.pulse, isActive: isAnimating)
+
+                            if showProgress {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                            }
+                        }
+
+                        // Title that adapts to connection state
+                        Text(title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        // Subtitle with mode info when streaming
+                        if let subtitle = subtitle {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                }
+                .buttonStyle(.plain)
+                .background(buttonBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(borderColor, lineWidth: 2)
+                )
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 3.0)
+                        .onEnded { _ in
+                            showDeveloperMode = true
+                        }
+                )
+            } else {
+                // Streaming active - show status, debug toggles, and stop button
+                VStack(spacing: 12) {
+                    // Status indicator
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 12, height: 12)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.green.opacity(0.5), lineWidth: 4)
+                                    .scaleEffect(1.5)
+                            )
 
-                    // Title that adapts to connection state
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Streaming Active")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
 
-                    // Subtitle with mode info when streaming
-                    if let subtitle = subtitle {
-                        Text(subtitle)
-                            .font(.caption)
+                            Text(subtitle ?? "")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                    // Debug overlay toggles
+                    HStack(spacing: 8) {
+                        // Body tracking debug toggle
+                        Button {
+                            showBodyTrackingDebug.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "figure.walk")
+                                    .font(.system(size: 12))
+                                Text("Body")
+                                    .font(.caption2)
+                            }
+                            .foregroundStyle(showBodyTrackingDebug ? .white : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(showBodyTrackingDebug ? Color.green : Color.gray.opacity(0.2))
+                            .clipShape(Capsule())
+                        }
+
+                        // Face tracking debug toggle
+                        Button {
+                            showFaceTrackingDebug.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "face.smiling")
+                                    .font(.system(size: 12))
+                                Text("Face")
+                                    .font(.caption2)
+                            }
+                            .foregroundStyle(showFaceTrackingDebug ? .white : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(showFaceTrackingDebug ? Color.cyan : Color.gray.opacity(0.2))
+                            .clipShape(Capsule())
+                        }
+
+                        Spacer()
+
+                        Text("Debug")
+                            .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            }
-            .buttonStyle(.plain)
-            .background(buttonBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(borderColor, lineWidth: 2)
-            )
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 3.0)
-                    .onEnded { _ in
-                        showDeveloperMode = true
+                    .padding(.horizontal, 16)
+
+                    // Stop button
+                    Button {
+                        Task {
+                            await streamer.smartDisconnect()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("Stop Streaming")
+                                .font(.headline)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
-            )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+                .background(Color.green.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(Color.green, lineWidth: 2)
+                )
+            }
+
 
             // Developer mode (expandable)
             if showDeveloperMode {
@@ -411,19 +778,17 @@ struct StreamingCard: View {
     private var subtitle: String? {
         switch streamer.connectionState {
         case .idle:
-            return "Tap to connect automatically"
+            let cameraHint = streamer.mode == .face ? "Front camera" : "Back camera"
+            return "Tap to connect • \(cameraHint)"
         case .streaming:
-            if let mode = streamer.autoDetectedMode {
-                switch mode {
-                case .face:
-                    return "📱 Front Camera • Face Tracking"
-                case .body:
-                    return "📱 Back Camera • Body Tracking"
-                case .combined:
-                    return "📱📱 Dual Device • Face + Body"
-                }
+            switch streamer.mode {
+            case .face:
+                return "Front Camera • Face Tracking"
+            case .body:
+                return "Back Camera • Body Tracking"
+            case .combined:
+                return "Dual Device • Face + Body"
             }
-            return nil
         case .failed(let error):
             return error.recoverySuggestion
         default:
@@ -521,41 +886,27 @@ struct DeveloperModeView: View {
                 }
             }
 
-            // Mode picker with VTuber style descriptions
-            VStack(alignment: .leading, spacing: 8) {
-                Text("VTuber Style")
-                    .font(.caption)
-                    .fontWeight(.medium)
-
-                Picker("Mode", selection: $streamer.mode) {
-                    Text("Face Only").tag(ARKitCaptureManager.Mode.face)
-                    Text("Full Body").tag(ARKitCaptureManager.Mode.body)
-                    Text("Dual Device").tag(ARKitCaptureManager.Mode.combined)
+            // Mode info
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: modeIcon)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(modeInstructions)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
 
-                // Mode-specific instructions
-                VStack(alignment: .leading, spacing: 4) {
+                if streamer.mode == .body {
                     HStack(spacing: 4) {
-                        Image(systemName: modeIcon)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(modeInstructions)
+                        Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.orange)
+                        Text("Mount device on stand facing you")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
                     }
-
-                    if streamer.mode == .body {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                            Text("Mount iPhone on stand facing you (like webcam)")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                        }
-                        .padding(.top, 2)
-                    }
+                    .padding(.top, 2)
                 }
             }
 
@@ -1073,8 +1424,16 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
     }
 
     func flipCamera() {
-        // Implementation for camera flip functionality
-        // This would interact with the AVCaptureDevice to switch between front and back cameras
+        guard let recordingManager else { return }
+        let newPosition: AVCaptureDevice.Position = recordingManager.currentCameraPosition == .back ? .front : .back
+        recordingManager.switchCamera(to: newPosition)
+    }
+
+    /// Switch camera to match ARKit mode (front for face, back for body)
+    func switchCameraForMode(_ mode: ARKitCaptureManager.Mode) {
+        guard let recordingManager else { return }
+        let targetPosition: AVCaptureDevice.Position = mode == .face ? .front : .back
+        recordingManager.switchCamera(to: targetPosition)
     }
 
     func createThoughtWithPolicy(videoData: Data, metadata: Thought.Metadata) async throws -> Thought {

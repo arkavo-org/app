@@ -55,11 +55,43 @@ enum ARKitDataConverter {
         if let transformArray = metadata.headTransform {
             headTransform = toMatrix4x4(transformArray)
         }
+
+        // Convert underscore format (eyeBlink_L) to camelCase (eyeBlinkLeft) for VRMMetalKit
+        let convertedShapes = convertBlendShapeKeys(metadata.blendShapes)
+
         return ARKitFaceBlendShapes(
             timestamp: timestamp.timeIntervalSinceReferenceDate,
-            shapes: metadata.blendShapes,
+            shapes: convertedShapes,
             headTransform: headTransform
         )
+    }
+
+    /// Convert blend shape keys from underscore format to camelCase
+    /// ArkavoKit uses: eyeBlink_L, mouthSmile_L, browDown_L
+    /// VRMMetalKit expects: eyeBlinkLeft, mouthSmileLeft, browDownLeft
+    private static func convertBlendShapeKeys(_ shapes: [String: Float]) -> [String: Float] {
+        var converted: [String: Float] = [:]
+
+        for (key, value) in shapes {
+            let convertedKey = convertBlendShapeKey(key)
+            converted[convertedKey] = value
+        }
+
+        return converted
+    }
+
+    /// Convert a single blend shape key from underscore to camelCase
+    private static func convertBlendShapeKey(_ key: String) -> String {
+        // Handle _L and _R suffixes
+        if key.hasSuffix("_L") {
+            let base = String(key.dropLast(2))
+            return base + "Left"
+        } else if key.hasSuffix("_R") {
+            let base = String(key.dropLast(2))
+            return base + "Right"
+        }
+        // No conversion needed for keys without _L/_R suffix
+        return key
     }
 
     /// Convert CameraMetadataEvent to ARKitFaceBlendShapes (if face metadata)
@@ -113,6 +145,21 @@ enum ARKitDataConverter {
         // ARKit: left_upLeg → VRM: leftUpperLeg
         // ARKit: left_leg → VRM: leftLowerLeg
         let mapping: [String: String] = [
+            // Core spine chain
+            "hips": "hips",
+            "spine_1": "spine",
+            "spine_2": "spine",
+            "spine_3": "chest",
+            "spine_4": "chest",
+            "spine_5": "chest",
+            "spine_6": "upperChest",
+            "spine_7": "upperChest",
+            "neck_1": "neck",
+            "neck_2": "neck",
+            "neck_3": "neck",
+            "neck_4": "neck",
+            "head": "head",
+
             // Legs
             "left_upLeg": "leftUpperLeg",
             "left_leg": "leftLowerLeg",
@@ -125,12 +172,14 @@ enum ARKitDataConverter {
             "right_toes": "rightToes",
             "right_toesEnd": "rightToes",
 
-            // Arms
+            // Arms - include _1 variants that ARKit may provide
             "left_shoulder": "leftShoulder",
+            "left_shoulder_1": "leftShoulder",
             "left_arm": "leftUpperArm",
             "left_forearm": "leftLowerArm",
             "left_hand": "leftHand",
             "right_shoulder": "rightShoulder",
+            "right_shoulder_1": "rightShoulder",
             "right_arm": "rightUpperArm",
             "right_forearm": "rightLowerArm",
             "right_hand": "rightHand",
@@ -257,33 +306,53 @@ enum ARKitDataConverter {
         return ARKitJoint(rawValue: cleanName)
     }
 
+    /// Diagnostics callback for conversion stage capture
+    /// 
+    /// Note: For full ARKit to VRM conversion diagnostics, use ARKitToVRMConverter
+    /// which provides coordinate conversion and bone mapping in one place.
+    public typealias ConversionDiagnosticsCallback = (
+        _ inputMetadata: ARBodyMetadata,
+        _ outputSkeleton: ARKitBodySkeleton,
+        _ mappedJoints: [String: String],
+        _ unmappedJoints: [(name: String, transform: [Float]?)],
+        _ invalidTransformJoints: [String]
+    ) -> Void
+
     /// Convert ARBodyMetadata to ARKitBodySkeleton
     ///
     /// - Parameters:
     ///   - metadata: Body metadata from camera source
     ///   - timestamp: Timestamp when the event was received
+    ///   - diagnosticsCallback: Optional callback for diagnostics capture
     /// - Returns: ARKit body skeleton compatible with VRMMetalKit
     static func toARKitBodySkeleton(
         _ metadata: ARBodyMetadata,
-        timestamp: Date
+        timestamp: Date,
+        diagnosticsCallback: ConversionDiagnosticsCallback? = nil
     ) -> ARKitBodySkeleton {
         var joints: [ARKitJoint: simd_float4x4] = [:]
         var unmappedJoints: [String] = []
+        var unmappedJointsWithTransforms: [(name: String, transform: [Float]?)] = []
+        var invalidTransformJoints: [String] = []
+        var mappedJointsRecord: [String: String] = [:]
 
         for joint in metadata.joints {
             // Map joint name to ARKitJoint enum
             guard let arkitJoint = toARKitJoint(joint.name) else {
                 unmappedJoints.append(joint.name)
+                unmappedJointsWithTransforms.append((name: joint.name, transform: joint.transform))
                 continue
             }
 
             // Convert transform array to matrix
             guard let matrix = toMatrix4x4(joint.transform) else {
                 print("⚠️ [ARKitDataConverter] Invalid transform for joint: \(joint.name)")
+                invalidTransformJoints.append(joint.name)
                 continue
             }
 
             joints[arkitJoint] = matrix
+            mappedJointsRecord[joint.name] = arkitJoint.rawValue
         }
 
         // Log unmapped joints (only first time)
@@ -291,14 +360,37 @@ enum ARKitDataConverter {
             print("⚠️ [ARKitDataConverter] Unmapped joints (not in ARKitJoint enum):")
             print("   Total: \(unmappedJoints.count) out of \(metadata.joints.count)")
             print("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
+
+            // Log which joints ARE mapped
+            let mappedJointsList = joints.keys.map { $0.rawValue }.sorted()
+            print("✅ [ARKitDataConverter] Mapped joints (\(mappedJointsList.count)):")
+            print("   \(mappedJointsList.joined(separator: ", "))")
+
+            // Check for missing parent joints
+            let requiredParents: [String] = ["upperChest", "leftShoulder", "rightShoulder", "spine", "chest"]
+            let missing = requiredParents.filter { parent in !mappedJointsList.contains(parent) }
+            if !missing.isEmpty {
+                print("❌ [ARKitDataConverter] Missing parent joints for arms: \(missing.joined(separator: ", "))")
+            }
         }
 
-        return ARKitBodySkeleton(
+        let skeleton = ARKitBodySkeleton(
             timestamp: timestamp.timeIntervalSinceReferenceDate,
             joints: joints,
             isTracked: !joints.isEmpty,
             confidence: nil
         )
+
+        // Call diagnostics callback if provided
+        diagnosticsCallback?(
+            metadata,
+            skeleton,
+            mappedJointsRecord,
+            unmappedJointsWithTransforms,
+            invalidTransformJoints
+        )
+
+        return skeleton
     }
 
     /// Convert CameraMetadataEvent to ARKitBodySkeleton (if body metadata)

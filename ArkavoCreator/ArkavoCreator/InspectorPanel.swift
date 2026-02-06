@@ -1,5 +1,6 @@
 import ArkavoKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Context-aware right panel showing source-specific settings
 struct InspectorPanel: View {
@@ -120,13 +121,52 @@ struct AvatarInspectorContent: View {
     @AppStorage("showFaceTracking") private var showFaceTracking = false
     var onLoadModel: () -> Void
 
+    @State private var showExportSheet = false
+    @State private var exportName = ""
+    @State private var lastExportedURL: URL?
+    @State private var showExportSuccess = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Section: Tracking Overlays
+            // Section: VRMA Recording
+            sectionHeader("Motion Capture")
+
+            VRMARecordingControls(
+                viewModel: viewModel,
+                onRecordingStopped: { url in
+                    lastExportedURL = url
+                    showExportSuccess = url != nil
+                }
+            )
+
+            Divider()
+
+            // Section: Tracking
             sectionHeader("Tracking")
 
+            // Tracking Mode Selection
+            Picker("Mode", selection: $viewModel.trackingMode) {
+                ForEach(AvatarTrackingMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.trackingMode) { _, newMode in
+                viewModel.setTrackingMode(newMode)
+            }
+
+            // Face Tracking Enable/Disable
+            Toggle(isOn: $viewModel.faceTrackingEnabled) {
+                HStack {
+                    Image(systemName: "face.smiling")
+                    Text("Face Tracking")
+                }
+            }
+            .toggleStyle(.switch)
+
+            // Debug Overlays
             HStack(spacing: 8) {
-                // Body Tracking Toggle
+                // Body Tracking Overlay Toggle
                 Button {
                     showBodyTracking.toggle()
                 } label: {
@@ -144,11 +184,11 @@ struct AvatarInspectorContent: View {
                 .buttonStyle(.plain)
                 .help("Toggle Body Tracking Overlay")
 
-                // Face Tracking Toggle
+                // Face Tracking Overlay Toggle
                 Button {
                     showFaceTracking.toggle()
                 } label: {
-                    Image(systemName: "face.smiling")
+                    Image(systemName: "waveform")
                         .font(.system(size: 16))
                         .frame(width: 36, height: 36)
                         .background(showFaceTracking ? Color.accentColor.opacity(0.3) : Color.clear)
@@ -160,8 +200,41 @@ struct AvatarInspectorContent: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Face Tracking Overlay")
+                .help("Toggle Face Debug Overlay")
             }
+
+            #if DEBUG
+            // Pipeline Diagnostics (DEBUG only)
+            Divider()
+            sectionHeader("Pipeline Diagnostics")
+
+            HStack {
+                Circle()
+                    .fill(viewModel.diagnosticsRecorder.isCapturing ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
+                Text(viewModel.diagnosticsRecorder.isCapturing ? "Capturing" : "Idle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(viewModel.diagnosticsRecorder.captureCount) events")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                if let url = viewModel.exportDiagnostics(name: "pipeline_capture") {
+                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Export Diagnostics")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.diagnosticsRecorder.captureCount == 0)
+            .help("Export captured pipeline data to ~/Documents/Diagnostics/")
+            #endif
 
             Divider()
 
@@ -188,9 +261,312 @@ struct AvatarInspectorContent: View {
                 }
             }
 
+            Divider()
+
+            // Section: Background
+            sectionHeader("Background")
+
+            Picker("Type", selection: $viewModel.backgroundType) {
+                ForEach(AvatarBackgroundType.allCases, id: \.self) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            switch viewModel.backgroundType {
+            case .solidColor:
+                ColorPicker("Color", selection: $viewModel.backgroundColor)
+            case .image:
+                Button("Select Image...") {
+                    selectBackgroundImage()
+                }
+                .buttonStyle(.bordered)
+                if let url = viewModel.backgroundImageURL {
+                    HStack {
+                        Text(url.lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            viewModel.backgroundImageURL = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            case .video:
+                Button("Select Video...") {
+                    selectBackgroundVideo()
+                }
+                .buttonStyle(.bordered)
+                if let url = viewModel.backgroundVideoURL {
+                    HStack {
+                        Text(url.lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            viewModel.backgroundVideoURL = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             Spacer()
         }
         .padding()
+        .alert("Export Successful", isPresented: $showExportSuccess) {
+            Button("Show in Finder") {
+                if let url = lastExportedURL {
+                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                }
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let url = lastExportedURL {
+                Text("Saved to:\n\(url.lastPathComponent)")
+            }
+        }
+    }
+
+    private func selectBackgroundImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
+        panel.message = "Select background image"
+        panel.prompt = "Select"
+
+        if panel.runModal() == .OK {
+            viewModel.backgroundImageURL = panel.url
+        }
+    }
+
+    private func selectBackgroundVideo() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+        panel.message = "Select background video"
+        panel.prompt = "Select"
+
+        if panel.runModal() == .OK {
+            viewModel.backgroundVideoURL = panel.url
+        }
+    }
+}
+
+// MARK: - VRMA Recording Controls
+
+private struct VRMARecordingControls: View {
+    @ObservedObject var viewModel: AvatarViewModel
+    var onRecordingStopped: (URL?) -> Void
+
+    @State private var showNameSheet = false
+    @State private var recordingName = "animation"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Recording status and controls
+            HStack(spacing: 12) {
+                // Record/Stop button
+                Button {
+                    if viewModel.isVRMARecording {
+                        showNameSheet = true
+                    } else {
+                        viewModel.startVRMARecording()
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(viewModel.isVRMARecording ? Color.red : Color.red.opacity(0.8))
+                            .frame(width: 44, height: 44)
+
+                        if viewModel.isVRMARecording {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white)
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 18, height: 18)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(viewModel.isVRMARecording ? "Stop Recording" : "Start Recording")
+                .disabled(!viewModel.isModelLoaded)
+
+                // Status text
+                VStack(alignment: .leading, spacing: 2) {
+                    if viewModel.isVRMARecording {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .opacity(pulsingOpacity)
+                            Text("Recording")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.red)
+                        }
+
+                        Text(formatDuration(viewModel.vrmaRecordingDuration))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Ready to Record")
+                            .font(.subheadline)
+                            .foregroundStyle(viewModel.isModelLoaded ? .primary : .secondary)
+
+                        if !viewModel.isModelLoaded {
+                            Text("Load a model first")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Cancel button (only when recording)
+                if viewModel.isVRMARecording {
+                    Button {
+                        viewModel.cancelVRMARecording()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Cancel Recording")
+                }
+            }
+
+            // Frame counter (when recording)
+            if viewModel.isVRMARecording {
+                HStack {
+                    Image(systemName: "film")
+                        .foregroundStyle(.secondary)
+                    Text("\(viewModel.vrmaFrameCount) frames")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text("30 fps")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .sheet(isPresented: $showNameSheet) {
+            VRMAExportSheet(
+                name: $recordingName,
+                duration: viewModel.vrmaRecordingDuration,
+                frameCount: viewModel.vrmaFrameCount,
+                onExport: {
+                    Task {
+                        let url = await viewModel.stopVRMARecording(name: recordingName)
+                        onRecordingStopped(url)
+                    }
+                    showNameSheet = false
+                },
+                onCancel: {
+                    viewModel.cancelVRMARecording()
+                    showNameSheet = false
+                }
+            )
+        }
+    }
+
+    private var pulsingOpacity: Double {
+        let time = Date().timeIntervalSinceReferenceDate
+        return 0.5 + 0.5 * sin(time * 3)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        let tenths = Int((duration.truncatingRemainder(dividingBy: 1)) * 10)
+        return String(format: "%d:%02d.%d", minutes, seconds, tenths)
+    }
+}
+
+// MARK: - VRMA Export Sheet
+
+private struct VRMAExportSheet: View {
+    @Binding var name: String
+    let duration: TimeInterval
+    let frameCount: Int
+    var onExport: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Save Recording")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Name")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField("Animation name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack(spacing: 16) {
+                VStack {
+                    Text(formatDuration(duration))
+                        .font(.title2.monospacedDigit())
+                    Text("Duration")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+                    .frame(height: 40)
+
+                VStack {
+                    Text("\(frameCount)")
+                        .font(.title2.monospacedDigit())
+                    Text("Frames")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button("Discard", role: .destructive) {
+                    onCancel()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Save") {
+                    onExport()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 300)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

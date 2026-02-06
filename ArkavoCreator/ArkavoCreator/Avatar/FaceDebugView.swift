@@ -16,6 +16,7 @@ struct FaceDebugView: View {
     let blendShapes: ARKitFaceBlendShapes?
 
     // Key blend shapes to display, grouped by category
+    // Keys are converted to camelCase by ARKitDataConverter
     private let eyeShapes = [
         ("eyeBlinkL", "eyeBlinkLeft"),
         ("eyeBlinkR", "eyeBlinkRight"),

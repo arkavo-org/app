@@ -4,15 +4,17 @@ import PackageDescription
 let package = Package(
     name: "ArkavoAgentTest",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v26)
     ],
     dependencies: [
-        .package(path: "../ArkavoAgent")
+        .package(path: "../ArkavoKit")
     ],
     targets: [
         .executableTarget(
             name: "ArkavoAgentTest",
-            dependencies: ["ArkavoAgent"],
+            dependencies: [
+                .product(name: "ArkavoKit", package: "ArkavoKit")
+            ],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
             ]

@@ -137,15 +137,19 @@ struct ChatsView: View {
         } message: { conversation in
             Text("This will remove the conversation with \(conversation.title).")
         }
-        // Chat overlay for when conversation is selected
+        // Chat overlay for stream chats
         .overlay {
-            if sharedState.showChatOverlay {
-                if let streamPublicID = sharedState.selectedStreamPublicID {
-                    ChatOverlay(streamPublicID: streamPublicID)
-                } else if let contact = selectedConversation?.profile, contact.isAgent {
-                    UnifiedChatView(contact: contact, agentService: agentService)
-                        .transition(.move(edge: .trailing))
-                }
+            if sharedState.showChatOverlay, let streamPublicID = sharedState.selectedStreamPublicID {
+                ChatOverlay(streamPublicID: streamPublicID)
+            }
+        }
+        // Full screen cover for agent chats - proper modal with dismiss support
+        .fullScreenCover(isPresented: Binding(
+            get: { sharedState.showChatOverlay && sharedState.selectedStreamPublicID == nil && selectedConversation?.profile?.isAgent == true },
+            set: { if !$0 { sharedState.showChatOverlay = false } }
+        )) {
+            if let contact = selectedConversation?.profile {
+                UnifiedChatView(contact: contact, agentService: agentService)
             }
         }
         .task {
@@ -460,7 +464,7 @@ struct ChatsCreateView: View {
                     dismiss()
                 }
             }
-            .sheet(item: $selectedChatContact) { contact in
+            .fullScreenCover(item: $selectedChatContact) { contact in
                 UnifiedChatView(contact: contact, agentService: agentService)
             }
         }

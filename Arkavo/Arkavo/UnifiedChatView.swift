@@ -210,20 +210,40 @@ struct UnifiedChatView: View {
         // Connect to agent if not already connected
         if !agentService.isConnected(to: agentID) {
             do {
-                // Find the agent endpoint
-                guard let endpoint = agentService.discoveredAgents.first(where: { $0.id == agentID }) else {
-                    // For delegated agents, try connecting via Arkavo network
-                    logger.log("[UnifiedChat] Agent not discovered locally, using Arkavo network")
-                    // TODO: Implement Arkavo network routing
-                    error = "Agent not available on local network"
+                // Try to find endpoint from multiple sources:
+                // 1. First check discovered agents (mDNS)
+                // 2. Then check stored endpoint in contact Profile
+                let endpoint: AgentEndpoint
+                if let discoveredEndpoint = agentService.discoveredAgents.first(where: { $0.id == agentID }) {
+                    endpoint = discoveredEndpoint
+                    logger.log("[UnifiedChat] Using discovered endpoint for agent: \(agentID)")
+                } else if let storedEndpoint = contact.toAgentEndpoint() {
+                    // Use stored endpoint from Profile (set during QR authorization)
+                    endpoint = storedEndpoint
+                    logger.log("[UnifiedChat] Using stored endpoint for agent: \(agentID) at \(storedEndpoint.url)")
+                } else {
+                    // No endpoint available - agent cannot be reached
+                    logger.error("[UnifiedChat] No endpoint available for agent: \(agentID)")
+                    error = "Agent endpoint not available. Try re-scanning the QR code."
                     return
                 }
 
+                // Connect to the agent
                 try await agentService.connect(to: endpoint)
+
+                // Wait for connection to actually be established (with timeout)
+                let connectionTimeout = Date().addingTimeInterval(10)
+                while !agentService.isConnected(to: agentID) {
+                    if Date() > connectionTimeout {
+                        throw AgentError.connectionFailed("Connection timed out")
+                    }
+                    try await Task.sleep(nanoseconds: 100_000_000) // 100ms polling
+                }
+
                 logger.log("[UnifiedChat] Connected to agent: \(agentID)")
             } catch {
                 logger.error("[UnifiedChat] Failed to connect: \(String(describing: error))")
-                self.error = "Failed to connect to agent"
+                self.error = "Failed to connect to agent: \(error.localizedDescription)"
                 return
             }
         }

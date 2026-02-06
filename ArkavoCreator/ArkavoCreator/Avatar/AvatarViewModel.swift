@@ -11,11 +11,25 @@ import Metal
 import SwiftUI
 import VRMMetalKit
 
+/// Tracking mode for avatar camera positioning
+enum AvatarTrackingMode: String, CaseIterable {
+    case face = "Face"
+    case body = "Body"
+}
+
+/// Background type for avatar view
+enum AvatarBackgroundType: String, CaseIterable {
+    case solidColor = "Color"
+    case image = "Image"
+    case video = "Video"
+}
+
 /// ViewModel for avatar recording and management
 @MainActor
 class AvatarViewModel: ObservableObject {
     // MARK: - Published Properties
 
+    @Published var trackingMode: AvatarTrackingMode = .face
     @Published var recordingMode: RecordingMode = .avatar
     @Published var downloadedModels: [URL] = []
     @Published var selectedModelURL: URL? {
@@ -27,17 +41,52 @@ class AvatarViewModel: ObservableObject {
         }
     }
     @Published var backgroundColor: Color = .black
+    @Published var backgroundType: AvatarBackgroundType = .solidColor
+    @Published var backgroundImageURL: URL?
+    @Published var backgroundVideoURL: URL?
     @Published var avatarScale: Double = 1.0
     @Published var error: String?
     @Published var isLoading = false
     @Published var faceTrackingStatus: String = "Awaiting face metadata"
     @Published private(set) var isModelLoaded = false
+    @Published var faceTrackingEnabled = true
 
     // Debug: Latest body skeleton for visualization
     @Published var latestBodySkeleton: ARKitBodySkeleton?
 
     // Debug: Latest face blend shapes for visualization
     @Published var latestFaceBlendShapes: ARKitFaceBlendShapes?
+
+    // MARK: - VRMA Recording
+
+    @Published var isVRMARecording = false
+    @Published var vrmaRecordingDuration: TimeInterval = 0
+    @Published var vrmaFrameCount: Int = 0
+
+    /// Warning message when capture quality is low during recording
+    @Published var captureQualityWarning: String?
+
+    /// Error message from last export attempt
+    @Published var lastExportError: String?
+
+    // MARK: - Pipeline Diagnostics
+
+    /// Pipeline diagnostics recorder for analysis and test generation
+    let diagnosticsRecorder = PipelineDiagnosticsRecorder()
+
+    /// VRMA recorder for animation export
+    private var vrmaRecorder: VRMARecorder?
+
+    /// Last recorded VRMA session (available after stopVRMARecording)
+    private(set) var lastVRMASession: VRMASession?
+
+    /// Result of VRMA export operation
+    enum VRMAExportResult {
+        case success(URL, VRMAProcessor.QualityReport)
+        case qualityTooLow(VRMAProcessor.ProcessingError)
+        case exportFailed(Error)
+        case noFrames
+    }
 
     // MARK: - Dependencies
 
@@ -70,6 +119,13 @@ class AvatarViewModel: ObservableObject {
     // MARK: - Initialization
 
     init() {
+        // Enable pipeline diagnostics for debugging and test generation
+        #if DEBUG
+        diagnosticsRecorder.config.enabled = true
+        diagnosticsRecorder.config.maxFramesToCapture = 500
+        print("[AvatarViewModel] Pipeline diagnostics ENABLED (DEBUG build)")
+        #endif
+
         refreshModels()
         print("[AvatarViewModel] Initializing - subscribing to face & body metadata notifications")
         let observer = NotificationCenter.default.addObserver(
@@ -156,6 +212,17 @@ class AvatarViewModel: ObservableObject {
         self.renderer = renderer
     }
 
+    /// Update camera position for the given tracking mode
+    /// Note: Does NOT modify trackingMode property to avoid publishing during view updates
+    func setTrackingMode(_ mode: AvatarTrackingMode) {
+        switch mode {
+        case .face:
+            renderer?.setCameraForFace()
+        case .body:
+            renderer?.setCameraForBody()
+        }
+    }
+
     /// Load the currently selected VRM model into the renderer
     func loadSelectedModel() async {
         guard let url = selectedModelURL, let renderer else {
@@ -169,6 +236,8 @@ class AvatarViewModel: ObservableObject {
         do {
             try await renderer.loadModel(from: url)
             isModelLoaded = true
+            // Apply current tracking mode's camera position after model loads
+            setTrackingMode(trackingMode)
             print("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
         } catch {
             self.error = "Failed to load model: \(error.localizedDescription)"
@@ -199,6 +268,11 @@ class AvatarViewModel: ObservableObject {
         isActive = true
         #if DEBUG
         print("▶️ [AvatarViewModel] Activated - will process metadata")
+        // Start diagnostics capture if enabled
+        if diagnosticsRecorder.config.enabled {
+            diagnosticsRecorder.startCapture()
+            print("📊 [AvatarViewModel] Diagnostics capture started")
+        }
         #endif
     }
 
@@ -207,6 +281,27 @@ class AvatarViewModel: ObservableObject {
         #if DEBUG
         print("⏸️ [AvatarViewModel] Deactivated - will ignore metadata")
         #endif
+    }
+
+    // MARK: - Diagnostics Export
+
+    /// Export current diagnostics session to Documents/Diagnostics
+    /// Call this after a capture session to save the data for analysis
+    @discardableResult
+    func exportDiagnostics(name: String = "pipeline_diagnostics") -> URL? {
+        guard diagnosticsRecorder.isCapturing || diagnosticsRecorder.captureCount > 0 else {
+            print("⚠️ [AvatarViewModel] No diagnostics to export")
+            return nil
+        }
+
+        do {
+            let url = try diagnosticsRecorder.exportSession(name: name)
+            print("✅ [AvatarViewModel] Diagnostics exported to: \(url.path)")
+            return url
+        } catch {
+            print("❌ [AvatarViewModel] Failed to export diagnostics: \(error)")
+            return nil
+        }
     }
 
     // MARK: - Multi-Source Management
@@ -219,9 +314,16 @@ class AvatarViewModel: ObservableObject {
     /// and uses the ARFaceSource infrastructure for proper multi-source handling.
     private func handleMetadataEvent(_ event: CameraMetadataEvent) {
         // Early exit if not active (avatar mode not visible)
-        guard isActive else { return }
+        guard isActive else {
+            // Log every 60th dropped event to avoid spam
+            if logFrameCount % 60 == 0 {
+                print("⚠️ [AvatarViewModel] Metadata received but isActive=false (avatar view not visible). Switch to Avatar mode to see tracking.")
+            }
+            logFrameCount += 1
+            return
+        }
 
-        let shouldLog = logFrameCount % 30 == 0  // Log every 30th frame (~1 per second at 30fps)
+        let shouldLog = false // logFrameCount % 30 == 0  // Log every 30th frame (~1 per second at 30fps)
         logFrameCount += 1
 
         if shouldLog {
@@ -232,6 +334,11 @@ class AvatarViewModel: ObservableObject {
         if case let .arFace(faceMetadata) = event.metadata {
             if shouldLog {
                 print("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
+            }
+
+            // Capture raw ARKit data for diagnostics
+            if diagnosticsRecorder.isCapturing {
+                diagnosticsRecorder.captureRawARKit(event: event)
             }
 
             // Get or create source for this camera
@@ -247,6 +354,13 @@ class AvatarViewModel: ObservableObject {
 
                 // Store for debug visualization
                 latestFaceBlendShapes = blendShapes
+
+                // Capture for VRMA recording
+                if isVRMARecording, let recorder = vrmaRecorder {
+                    recorder.appendFaceFrame(face: blendShapes, timestamp: event.timestamp)
+                    vrmaRecordingDuration = recorder.recordingDuration
+                    vrmaFrameCount = recorder.frameCount
+                }
 
                 if shouldLog {
                     print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
@@ -277,9 +391,11 @@ class AvatarViewModel: ObservableObject {
             let activeSources = allSources.filter { $0.isActive }
             if shouldLog {
                 print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
-                print("      └─ Renderer exists: \(renderer != nil)")
+                print("      └─ Renderer exists: \(renderer != nil), enabled: \(faceTrackingEnabled)")
             }
-            renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+            if faceTrackingEnabled {
+                renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
+            }
             if shouldLog {
                 print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
             }
@@ -293,26 +409,56 @@ class AvatarViewModel: ObservableObject {
                 print("   🦴 [AvatarViewModel] Body metadata received: \(bodyMetadata.joints.count) joints")
             }
 
+            // Capture raw ARKit data for diagnostics
+            if diagnosticsRecorder.isCapturing {
+                diagnosticsRecorder.captureRawARKit(event: event)
+            }
+
             // Get or create body source for this camera
             let source = getOrCreateBodySource(for: event.sourceID)
             if shouldLog {
                 print("   📍 [AvatarViewModel] Using body source: \(source.sourceID)")
             }
 
-            // Convert and update source with new data
-            if let skeleton = ARKitDataConverter.toARKitBodySkeleton(event) {
-                source.update(skeleton: skeleton)
+            // Convert and update source with new data, with diagnostics callback
+            let diagnosticsCallback: ARKitDataConverter.ConversionDiagnosticsCallback? = diagnosticsRecorder.isCapturing ? { [weak self] inputMetadata, outputSkeleton, mappedJoints, unmappedJoints, invalidTransformJoints in
+                self?.diagnosticsRecorder.captureConversion(
+                    inputMetadata: inputMetadata,
+                    outputSkeleton: outputSkeleton,
+                    mappedJoints: mappedJoints,
+                    unmappedJoints: unmappedJoints,
+                    invalidTransformJoints: invalidTransformJoints
+                )
+            } : nil
 
-                // Store latest skeleton for debug visualization
-                latestBodySkeleton = skeleton
+            let skeleton = ARKitDataConverter.toARKitBodySkeleton(
+                bodyMetadata,
+                timestamp: event.timestamp,
+                diagnosticsCallback: diagnosticsCallback
+            )
+            source.update(skeleton: skeleton)
 
-                if shouldLog {
-                    print("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
+            // Store latest skeleton for debug visualization
+            latestBodySkeleton = skeleton
+
+            // Capture for VRMA recording
+            if isVRMARecording, let recorder = vrmaRecorder {
+                recorder.appendBodyFrame(body: skeleton, timestamp: event.timestamp)
+                vrmaRecordingDuration = recorder.recordingDuration
+                vrmaFrameCount = recorder.frameCount
+
+                // Runtime quality check
+                let quality = recorder.captureQuality
+                if !quality.isAdequate {
+                    let percentage = Int(quality.bodyTrackingRatio * 100)
+                    captureQualityWarning = "Low tracking quality (\(percentage)%)"
+                } else {
+                    captureQualityWarning = nil
                 }
-            } else {
-                if shouldLog {
-                    print("   ❌ [AvatarViewModel] Failed to convert to ARKitBodySkeleton")
-                }
+            }
+
+            if shouldLog {
+                print("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
             }
 
             // Update renderer with all active body sources
@@ -484,5 +630,145 @@ class AvatarViewModel: ObservableObject {
         return { [weak manager] in
             manager?.latestFrame
         }
+    }
+
+    // MARK: - VRMA Recording Methods
+
+    /// Start recording motion capture data for VRMA export
+    func startVRMARecording() {
+        guard !isVRMARecording else { return }
+
+        vrmaRecorder = VRMARecorder(frameRate: 30)
+
+        // Wire up VRM mapping diagnostics if diagnostics are enabled
+        if diagnosticsRecorder.config.enabled {
+            vrmaRecorder?.diagnosticsCallback = { [weak self] inputJoints, outputRotations, missingParentJoints, usedFallback, hipsTranslation in
+                self?.diagnosticsRecorder.captureVRMMapping(
+                    inputJoints: inputJoints,
+                    outputRotations: outputRotations,
+                    missingParentJoints: missingParentJoints,
+                    usedFallback: usedFallback,
+                    hipsTranslation: hipsTranslation
+                )
+            }
+        }
+
+        vrmaRecorder?.startRecording()
+        isVRMARecording = true
+        vrmaRecordingDuration = 0
+        vrmaFrameCount = 0
+        captureQualityWarning = nil
+        lastExportError = nil
+
+        print("[AvatarViewModel] VRMA recording started")
+    }
+
+    /// Stop recording and export to VRMA file
+    /// - Parameter name: Name for the recording (used in filename)
+    /// - Returns: URL to the exported .vrma file, or nil if export failed
+    func stopVRMARecording(name: String = "recording") async -> URL? {
+        let result = await stopVRMARecordingWithResult(name: name)
+        switch result {
+        case .success(let url, _):
+            return url
+        case .qualityTooLow, .exportFailed, .noFrames:
+            return nil
+        }
+    }
+
+    /// Stop recording and export to VRMA file with detailed result
+    /// - Parameter name: Name for the recording (used in filename)
+    /// - Returns: VRMAExportResult with detailed status
+    func stopVRMARecordingWithResult(name: String = "recording") async -> VRMAExportResult {
+        guard isVRMARecording, let recorder = vrmaRecorder else {
+            return .noFrames
+        }
+
+        isVRMARecording = false
+        captureQualityWarning = nil
+        lastExportError = nil
+
+        // Get raw session
+        let rawSession = recorder.stopRecording(name: name)
+        lastVRMASession = rawSession
+
+        print("[AvatarViewModel] VRMA recording stopped: \(rawSession.frameCount) frames, \(String(format: "%.2f", rawSession.duration))s")
+
+        // Check for empty session
+        guard rawSession.frameCount > 0 else {
+            lastExportError = "No frames captured"
+            print("[AvatarViewModel] No frames captured, skipping export")
+            return .noFrames
+        }
+
+        // Process the session (may throw if quality too low)
+        let processedSession: VRMASession
+        let report: VRMAProcessor.QualityReport
+        let processingOptions = VRMAProcessor.Options.default
+        do {
+            (processedSession, report) = try VRMAProcessor.process(rawSession, options: processingOptions)
+            print("[AvatarViewModel] Processing complete: \(report.summary)")
+
+            // Capture processing diagnostics
+            if diagnosticsRecorder.isCapturing {
+                diagnosticsRecorder.captureProcessing(
+                    inputSession: rawSession,
+                    outputSession: processedSession,
+                    options: processingOptions,
+                    report: report
+                )
+            }
+        } catch let error as VRMAProcessor.ProcessingError {
+            lastExportError = error.localizedDescription
+            print("[AvatarViewModel] Processing failed: \(error.localizedDescription)")
+            return .qualityTooLow(error)
+        } catch {
+            lastExportError = error.localizedDescription
+            print("[AvatarViewModel] Processing failed: \(error)")
+            return .exportFailed(error)
+        }
+
+        // Export to VRMA
+        do {
+            // Get Documents directory for export
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let vrmaDirectory = documentsURL.appendingPathComponent("VRMA", isDirectory: true)
+
+            // Create VRMA directory if needed
+            try FileManager.default.createDirectory(at: vrmaDirectory, withIntermediateDirectories: true)
+
+            // Generate filename with timestamp
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+                .replacingOccurrences(of: ":", with: "-")
+                .replacingOccurrences(of: "T", with: "_")
+            let sanitizedName = name.replacingOccurrences(of: " ", with: "_")
+            let filename = "\(sanitizedName)_\(timestamp).vrma"
+            let fileURL = vrmaDirectory.appendingPathComponent(filename)
+
+            // Export with identity rest pose (T-pose)
+            // Don't pass VRM model - let VRMAnimationLoader handle retargeting to target model
+            try VRMAExporter.export(session: processedSession, to: fileURL, restPose: nil)
+
+            print("[AvatarViewModel] Exported VRMA to: \(fileURL.path)")
+            return .success(fileURL, report)
+
+        } catch {
+            lastExportError = error.localizedDescription
+            print("[AvatarViewModel] Failed to export VRMA: \(error)")
+            return .exportFailed(error)
+        }
+    }
+
+    /// Cancel VRMA recording without saving
+    func cancelVRMARecording() {
+        vrmaRecorder?.cancelRecording()
+        vrmaRecorder = nil
+        isVRMARecording = false
+        vrmaRecordingDuration = 0
+        vrmaFrameCount = 0
+        captureQualityWarning = nil
+        lastExportError = nil
+
+        print("[AvatarViewModel] VRMA recording cancelled")
     }
 }

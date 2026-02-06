@@ -162,6 +162,11 @@ struct ArkavoApp: App {
                 AgentAuthorizationView(
                     request: request,
                     onAuthorize: {
+                        // Set the DID for Liquid Glass highlight effect
+                        sharedState.newlyAddedContactDID = request.did
+                        // Close the "New Conversation" overlay to show contacts
+                        sharedState.showCreateView = false
+                        // Clear the pending authorization
                         pendingAgentAuthorization = nil
                     },
                     onCancel: {
@@ -1011,6 +1016,7 @@ class SharedState: ObservableObject {
     @Published var skipRegistration: Bool = false
     @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
     @Published var selectedNetworkDomain: String = "arkavo.social"
+    @Published var newlyAddedContactDID: String?  // For Liquid Glass highlight effect
 
     // Store additional state values that don't need @Published
     private var stateStorage: [String: Any] = [:]
@@ -1029,6 +1035,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture" // create a video
         case .chats: "Message" // start a conversation
+        case .memberships: "View" // view creator content
         case .social: "Publish" // post to the feed
         case .profile: "Express" // personalize your profile
         }
@@ -1038,6 +1045,7 @@ class SharedState: ObservableObject {
         switch selectedTab {
         case .home: "Capture video"
         case .chats: "New conversation"
+        case .memberships: "View memberships"
         case .social: "Publish post"
         case .profile: "Express yourself"
         }

@@ -19,7 +19,11 @@ class VRMAvatarRenderer: NSObject {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private var renderer: VRMRenderer?
-    private var model: VRMModel?
+    private var _model: VRMModel?
+
+    /// The loaded VRM model (for VRMA export rest pose)
+    var model: VRMModel? { _model }
+
     private var expressionController: VRMExpressionController? {
         renderer?.expressionController
     }
@@ -37,6 +41,10 @@ class VRMAvatarRenderer: NSObject {
     // Lifecycle state
     private(set) var isPaused = false
     weak var mtkView: MTKView?
+
+    // Current camera mode for resize handling
+    private var currentCameraMode: CameraMode = .face
+    enum CameraMode { case face, body }
 
     // Idle animation state
     private var idleAnimationTimer: Timer?
@@ -70,9 +78,8 @@ class VRMAvatarRenderer: NSObject {
 
         super.init()
 
-        // Initialize renderer with standard 3D mode (not Toon2D)
+        // Initialize renderer (uses standard 3D MToon rendering by default)
         let vrmRenderer = VRMRenderer(device: device)
-        vrmRenderer.renderingMode = .standard  // Use standard 3D MToon rendering
         renderer = vrmRenderer
 
         print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode and ARKit driver")
@@ -92,7 +99,7 @@ class VRMAvatarRenderer: NSObject {
 
             // Load VRM model
             let vrmModel = try await VRMModel.load(from: url, device: device)
-            model = vrmModel
+            _model = vrmModel
 
             #if DEBUG
             print("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
@@ -107,9 +114,9 @@ class VRMAvatarRenderer: NSObject {
 
             isLoaded = true
 
-            // Perform visual self-check (async to allow rendering)
+            // Start idle animation (visual self-check disabled for recording)
             Task { @MainActor in
-                await performVisualSelfCheck(model: vrmModel)
+                // await performVisualSelfCheck(model: vrmModel)
                 startIdleAnimation()
             }
         } catch {
@@ -324,11 +331,16 @@ class VRMAvatarRenderer: NSObject {
 
     /// Position camera for face tracking (close-up view)
     func setCameraForFace() {
+        currentCameraMode = .face
         guard let renderer else { return }
 
         // Set up perspective projection - tighter FOV for face focus
         let fov: Float = 35.0 * .pi / 180.0  // Narrower FOV for portrait-style framing
-        let aspect: Float = 16.0 / 9.0
+        // Use actual drawable aspect ratio to prevent squashing
+        let drawableSize = mtkView?.drawableSize ?? CGSize(width: 1920, height: 1080)
+        let aspect: Float = drawableSize.width > 0 && drawableSize.height > 0
+            ? Float(drawableSize.width / drawableSize.height)
+            : 16.0 / 9.0  // Fallback
         let near: Float = 0.1
         let far: Float = 100.0
 
@@ -350,11 +362,16 @@ class VRMAvatarRenderer: NSObject {
 
     /// Position camera for body tracking (full body view)
     func setCameraForBody() {
+        currentCameraMode = .body
         guard let renderer else { return }
 
-        // Wider FOV to see full body
-        let fov: Float = 50.0 * .pi / 180.0  // Wider FOV for full body
-        let aspect: Float = 16.0 / 9.0
+        // FOV tuned for full body to fill screen
+        let fov: Float = 45.0 * .pi / 180.0  // Moderate FOV for full body framing
+        // Use actual drawable aspect ratio to prevent squashing
+        let drawableSize = mtkView?.drawableSize ?? CGSize(width: 1920, height: 1080)
+        let aspect: Float = drawableSize.width > 0 && drawableSize.height > 0
+            ? Float(drawableSize.width / drawableSize.height)
+            : 16.0 / 9.0  // Fallback
         let near: Float = 0.1
         let far: Float = 100.0
 
@@ -365,9 +382,10 @@ class VRMAvatarRenderer: NSObject {
             far: far
         )
 
-        // Camera pulled back and centered on torso to see full body
-        let eye = SIMD3<Float>(0, 1.0, -3.5)     // Further back, centered on torso
-        let center = SIMD3<Float>(0, 1.0, 0)     // Look at torso center
+        // Camera positioned to frame full body from head to feet, centered
+        // VRM models are ~1.7m tall with hips around 0.9m height
+        let eye = SIMD3<Float>(0, 0.9, -2.2)     // Centered on hips, close enough to fill frame
+        let center = SIMD3<Float>(0, 0.9, 0)     // Look at hip center
         let up = SIMD3<Float>(0, 1, 0)           // Up vector
 
         renderer.viewMatrix = lookAtMatrix(eye: eye, center: center, up: up)
@@ -407,15 +425,9 @@ class VRMAvatarRenderer: NSObject {
 
     /// Set a specific bone's rotation
     private func setBonePose(_ model: VRMModel, bone: VRMHumanoidBone, rotation: simd_quatf) {
-        guard let humanoid = model.humanoid,
-              let boneInfo = humanoid.humanBones[bone],
-              boneInfo.node >= 0 && boneInfo.node < model.nodes.count else {
-            return
-        }
-
-        let node = model.nodes[boneInfo.node]
-        node.rotation = rotation
-        node.updateLocalMatrix()
+        guard let nodeIndex = model.humanoid?.getBoneNode(bone),
+              nodeIndex < model.nodes.count else { return }
+        model.nodes[nodeIndex].rotation = rotation
     }
 
     /// Update world transforms after applying poses
@@ -490,7 +502,13 @@ class VRMAvatarRenderer: NSObject {
 
 extension VRMAvatarRenderer: MTKViewDelegate {
     func mtkView(_: MTKView, drawableSizeWillChange _: CGSize) {
-        // Handle resize if needed
+        // Reapply current camera mode with new aspect ratio
+        switch currentCameraMode {
+        case .face:
+            setCameraForFace()
+        case .body:
+            setCameraForBody()
+        }
     }
 
     func draw(in view: MTKView) {
@@ -586,13 +604,23 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         )
 
         // Convert to quaternion
-        let rotation = simd_quatf(rotationMatrix)
+        var rotation = simd_quatf(rotationMatrix)
 
-        // Apply rotation to head node
-        // Note: ARKit uses a different coordinate system than VRM
-        // ARKit: +X right, +Y up, -Z forward (camera looks at -Z)
-        // VRM: +X right, +Y up, -Z forward (model faces -Z)
-        // The coordinate systems are compatible for face tracking
+        // ARKit face tracking coordinate conversion:
+        // ARKit provides the face pose in camera space where:
+        // - Looking up gives positive X rotation
+        // - Looking right gives positive Y rotation
+        // VRM expects:
+        // - Looking up should tilt head back (negative X in VRM convention)
+        // - Looking right should turn head right
+        // We need to negate X (pitch) and Z (roll) to match VRM
+        rotation = simd_quatf(
+            ix: -rotation.imag.x,  // Negate pitch
+            iy: rotation.imag.y,   // Keep yaw
+            iz: -rotation.imag.z,  // Negate roll
+            r: rotation.real
+        )
+
         headNode.rotation = rotation
         headNode.updateLocalMatrix()
 
@@ -653,6 +681,9 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         faceDriver.resetFilters()
     }
 
+    // Debug frame counter for logging
+    private static var bodyTrackingLogCounter = 0
+
     /// Apply ARKit body tracking skeleton to the VRM avatar
     ///
     /// Uses the ARKitBodyDriver for proper mapping, smoothing, and skeleton retargeting.
@@ -666,9 +697,21 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             return
         }
 
-        #if DEBUG
-        print("[VRMAvatarRenderer] Applying body tracking - \(skeleton.joints.count) joints")
-        #endif
+        // Log hips input rotation every 60 frames
+        Self.bodyTrackingLogCounter += 1
+        let shouldLog = Self.bodyTrackingLogCounter % 60 == 0
+
+        if shouldLog {
+            if let hipsTransform = skeleton.joints[.hips] {
+                // Extract rotation from matrix
+                let col0 = simd_float3(hipsTransform.columns.0.x, hipsTransform.columns.0.y, hipsTransform.columns.0.z)
+                let col1 = simd_float3(hipsTransform.columns.1.x, hipsTransform.columns.1.y, hipsTransform.columns.1.z)
+                let col2 = simd_float3(hipsTransform.columns.2.x, hipsTransform.columns.2.y, hipsTransform.columns.2.z)
+                let rotMatrix = simd_float3x3(simd_normalize(col0), simd_normalize(col1), simd_normalize(col2))
+                let inputRot = simd_quatf(rotMatrix)
+                print("[BodyTrack] Hips INPUT: w=\(String(format: "%.3f", inputRot.real)), x=\(String(format: "%.3f", inputRot.imag.x)), y=\(String(format: "%.3f", inputRot.imag.y)), z=\(String(format: "%.3f", inputRot.imag.z))")
+            }
+        }
 
         // Use ARKitBodyDriver to map, smooth, and apply skeleton
         bodyDriver.update(
@@ -676,6 +719,17 @@ extension VRMAvatarRenderer: MTKViewDelegate {
             nodes: model.nodes,
             humanoid: model.humanoid
         )
+
+        if shouldLog {
+            // Log output rotation from VRM hips node
+            if let humanoid = model.humanoid,
+               let hipsBone = humanoid.humanBones[.hips],
+               hipsBone.node >= 0 && hipsBone.node < model.nodes.count {
+                let hipsNode = model.nodes[hipsBone.node]
+                let outRot = hipsNode.rotation
+                print("[BodyTrack] Hips OUTPUT: w=\(String(format: "%.3f", outRot.real)), x=\(String(format: "%.3f", outRot.imag.x)), y=\(String(format: "%.3f", outRot.imag.y)), z=\(String(format: "%.3f", outRot.imag.z))")
+            }
+        }
     }
 
     /// Apply body tracking from multiple sources (for multi-camera setup)
@@ -721,38 +775,20 @@ extension VRMAvatarRenderer: MTKViewDelegate {
         centerAvatarHips(model)
     }
 
-    /// Center the avatar by zeroing out hips and all parent translations
+    /// Center the avatar by zeroing out hips translation
     ///
     /// ARKit body tracking provides world-space positions which can move the avatar
     /// out of the camera view. This method keeps the avatar centered by zeroing the
-    /// translation of hips and ALL parent nodes up to the root.
+    /// X and Z translation while preserving Y (height) for jump/squat detection.
+    ///
     private func centerAvatarHips(_ model: VRMModel) {
-        guard let humanoid = model.humanoid,
-              let hipsBone = humanoid.humanBones[.hips],
-              hipsBone.node >= 0 && hipsBone.node < model.nodes.count else {
-            return
-        }
+        guard let nodeIndex = model.humanoid?.getBoneNode(.hips),
+              nodeIndex < model.nodes.count else { return }
+        let currentTranslation = model.nodes[nodeIndex].translation
 
-        var currentNode: VRMNode? = model.nodes[hipsBone.node]
-
-        // Zero out X and Z translation for hips and ALL ancestors
-        // This handles cases where hips has parent nodes (scene root, armature, etc.)
-        // that also contain ARKit world-space position data
-        while let node = currentNode {
-            // Keep Y component for height variation (squat/jump)
-            // Zero X and Z to keep avatar centered horizontally
-            node.translation = SIMD3<Float>(0, node.translation.y, 0)
-            node.updateLocalMatrix()
-
-            // Move up the hierarchy
-            currentNode = node.parent
-        }
-
-        // Update world transforms from all roots
-        let rootNodes = model.nodes.filter { $0.parent == nil }
-        for root in rootNodes {
-            root.updateWorldTransform()
-        }
+        // Keep Y component for height variation (squat/jump)
+        // Zero X and Z to keep avatar centered horizontally
+        model.nodes[nodeIndex].translation = SIMD3<Float>(0, currentTranslation.y, 0)
     }
 
     /// Reset body tracking filters (call when switching avatars or restarting)

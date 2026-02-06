@@ -11,6 +11,7 @@ struct ContactsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showFilterMenu = false
     @State private var showSearchBar = false
+    @FocusState private var isSearchFocused: Bool
 
     var filteredContacts: [Profile] {
         contactService.filteredContacts(searchText: searchText)
@@ -39,8 +40,11 @@ struct ContactsView: View {
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 showSearchBar.toggle()
-                                if !showSearchBar {
+                                if showSearchBar {
+                                    isSearchFocused = true
+                                } else {
                                     searchText = ""
+                                    isSearchFocused = false
                                 }
                             }
                         } label: {
@@ -51,6 +55,7 @@ struct ContactsView: View {
                                 .padding(.vertical, 10)
                                 .background(.ultraThinMaterial, in: Capsule())
                         }
+                        .accessibilityLabel(showSearchBar ? "Close search" : "Search contacts")
 
                         // Filter button
                         FilterButton(
@@ -96,6 +101,7 @@ struct ContactsView: View {
 
                                     TextField("Search", text: $searchText)
                                         .font(.body)
+                                        .focused($isSearchFocused)
 
                                     if !searchText.isEmpty {
                                         Button {
@@ -115,16 +121,30 @@ struct ContactsView: View {
 
                             // Contact cards
                             ForEach(filteredContacts) { contact in
-                                ContactCard(contact: contact, agentService: agentService) {
+                                ContactCard(
+                                    contact: contact,
+                                    agentService: agentService,
+                                    isHighlighted: isContactHighlighted(contact)
+                                ) {
                                     selectedContact = contact
                                 }
-                                .contextMenu {
-                                    if contact.contactTypeEnum != .deviceAgent {
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    if contact.canBeRemoved {
                                         Button(role: .destructive) {
                                             contactToDelete = contact
                                             showDeleteConfirmation = true
                                         } label: {
                                             Label("Remove", systemImage: "trash")
+                                        }
+                                    }
+                                }
+                                .contextMenu {
+                                    if contact.canBeRemoved {
+                                        Button(role: .destructive) {
+                                            contactToDelete = contact
+                                            showDeleteConfirmation = true
+                                        } label: {
+                                            Label(contact.removalActionLabel, systemImage: "trash")
                                         }
                                     }
                                 }
@@ -149,7 +169,11 @@ struct ContactsView: View {
                 showDeleteConfirmation = true
             }
         }
-        .alert("Remove Contact?", isPresented: $showDeleteConfirmation, presenting: contactToDelete) { contact in
+        .alert(
+            contactToDelete?.removalConfirmationTitle ?? "Remove?",
+            isPresented: $showDeleteConfirmation,
+            presenting: contactToDelete
+        ) { contact in
             Button("Cancel", role: .cancel) {
                 contactToDelete = nil
             }
@@ -159,10 +183,19 @@ struct ContactsView: View {
                 }
             }
         } message: { contact in
-            Text("You can add \(contact.name) again later.")
+            Text(contact.removalConfirmationMessage)
         }
         .task {
             contactService.configure(agentService: agentService)
+        }
+        .onChange(of: sharedState.newlyAddedContactDID) { _, newValue in
+            if newValue != nil {
+                // Haptic feedback for new contact
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                // Clear the highlight after animation
+                clearHighlightAfterDelay()
+            }
         }
     }
 
@@ -172,6 +205,24 @@ struct ContactsView: View {
             contactToDelete = nil
         } catch {
             print("Failed to delete contact: \(error)")
+        }
+    }
+
+    /// Check if a contact should be highlighted (newly added)
+    private func isContactHighlighted(_ contact: Profile) -> Bool {
+        guard let newDID = sharedState.newlyAddedContactDID else { return false }
+        return contact.did == newDID
+    }
+
+    /// Clear the highlight effect after animation completes
+    private func clearHighlightAfterDelay() {
+        Task {
+            try? await Task.sleep(nanoseconds: 3_500_000_000) // 3.5 seconds
+            await MainActor.run {
+                withAnimation {
+                    sharedState.newlyAddedContactDID = nil
+                }
+            }
         }
     }
 }
@@ -217,6 +268,7 @@ struct FilterButton: View {
                     .stroke(currentFilter == .all ? Color.clear : Color.primary.opacity(0.1), lineWidth: 1)
             )
         }
+        .accessibilityLabel("Filter contacts: \(currentFilter.rawValue)")
     }
 }
 
@@ -225,7 +277,10 @@ struct FilterButton: View {
 struct ContactCard: View {
     let contact: Profile
     let agentService: AgentService
+    var isHighlighted: Bool = false
     let onTap: () -> Void
+
+    @State private var shimmerOffset: CGFloat = -1.0
 
     private var isOnline: Bool {
         if contact.isAgent {
@@ -313,9 +368,45 @@ struct ContactCard: View {
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(Color.primary.opacity(0.04), lineWidth: 1)
             )
+            .overlay(
+                // Liquid Glass highlight effect
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                accentColor.opacity(0.6),
+                                .white.opacity(0.8),
+                                accentColor.opacity(0.6),
+                                .clear
+                            ],
+                            startPoint: UnitPoint(x: shimmerOffset - 0.3, y: 0.5),
+                            endPoint: UnitPoint(x: shimmerOffset + 0.3, y: 0.5)
+                        ),
+                        lineWidth: isHighlighted ? 2 : 0
+                    )
+            )
+            .shadow(
+                color: isHighlighted ? accentColor.opacity(0.4) : .clear,
+                radius: isHighlighted ? 12 : 0,
+                x: 0,
+                y: 4
+            )
+            .scaleEffect(isHighlighted ? 1.02 : 1.0)
         }
         .buttonStyle(ContactCardButtonStyle())
         .accessibilityIdentifier("contact-\(contact.id)")
+        .onChange(of: isHighlighted) { _, highlighted in
+            if highlighted {
+                // Animate shimmer across the card
+                withAnimation(.easeInOut(duration: 1.5).repeatCount(2, autoreverses: false)) {
+                    shimmerOffset = 2.0
+                }
+            } else {
+                shimmerOffset = -1.0
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isHighlighted)
     }
 }
 

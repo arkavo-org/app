@@ -1,3 +1,4 @@
+import ArkavoAgent
 import ArkavoSocial
 import OSLog
 import SwiftUI
@@ -133,31 +134,40 @@ struct AgentAuthorizationView: View {
         let agentDID = request.did
         let agentName = request.name ?? "Authorized Agent"
         let agentEntitlements = request.entitlements
+        let rpcEndpoint = request.rpcEndpoint
 
         logger.log("[AgentAuth] Authorizing agent: \(agentDID)")
 
         Task {
             do {
-                // First authorize with the backend
-                try await AgentAuthorizationService.shared.authorizeAgent(
-                    did: agentDID,
-                    name: agentName,
-                    entitlements: agentEntitlements
-                )
-                logger.log("[AgentAuth] Agent authorized successfully")
+                if let rpcEndpoint = rpcEndpoint {
+                    // Use local RPC registration for agents with rpc endpoint
+                    try await authorizeViaRPC(endpoint: rpcEndpoint, agentDID: agentDID)
+                    logger.log("[AgentAuth] Agent authorized via local RPC")
+                } else {
+                    // Fallback: Use cloud authorization for agents without rpc endpoint
+                    try await AgentAuthorizationService.shared.authorizeAgent(
+                        did: agentDID,
+                        name: agentName,
+                        entitlements: agentEntitlements
+                    )
+                    logger.log("[AgentAuth] Agent authorized via cloud")
+                }
 
                 // Configure contact service if needed
                 contactService.configure(agentService: agentService)
 
                 // Create a Profile contact for this delegated agent
+                // Pass the RPC endpoint so we can connect directly later
                 let entitlements = AgentEntitlements(from: agentEntitlements)
                 try await contactService.addDelegatedAgent(
                     agentID: agentDID, // Use DID as agent ID for delegated agents
                     name: agentName,
                     did: agentDID,
+                    endpoint: rpcEndpoint, // Store endpoint for future connections
                     entitlements: entitlements
                 )
-                logger.log("[AgentAuth] Created contact for delegated agent")
+                logger.log("[AgentAuth] Created contact for delegated agent with endpoint: \(rpcEndpoint ?? "none")")
 
                 await MainActor.run {
                     onAuthorize()
@@ -169,6 +179,34 @@ struct AgentAuthorizationView: View {
                     self.isAuthorizing = false
                 }
             }
+        }
+    }
+
+    private func authorizeViaRPC(endpoint: String, agentDID: String) async throws {
+        // Create endpoint for the agent
+        let agentEndpoint = AgentEndpoint(
+            id: agentDID,
+            url: endpoint,
+            metadata: AgentMetadata(name: request.name ?? "Agent", purpose: "", model: "")
+        )
+
+        // Connect via WebSocket
+        let transport = AgentWebSocketTransport()
+        try await transport.connect(to: agentEndpoint)
+
+        defer {
+            Task { await transport.close() }
+        }
+
+        // Get or create device DID for registration
+        let deviceDID = try KeychainManager.getDIDKey().did
+
+        // Perform RPC registration
+        let registrationService = AgentRPCRegistrationService(transport: transport)
+        let success = try await registrationService.register(deviceId: deviceDID)
+
+        if !success {
+            throw RegistrationError.registrationFailed
         }
     }
 

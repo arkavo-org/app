@@ -4,12 +4,14 @@ import SwiftUI
 
 struct ConnectedAccountsView: View {
     @StateObject private var appleSignInService = AppleSignInService()
+    @StateObject private var membershipStore = PatreonMembershipStore()
     @State private var isPatreonLinked = KeychainManager.isPatreonAccountLinked()
     @State private var showingAppleDisconnectAlert = false
     @State private var showingPatreonDisconnectAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var isPatreonConnecting = false
+    @State private var showingMemberships = false
 
     var body: some View {
         List {
@@ -21,8 +23,65 @@ struct ConnectedAccountsView: View {
             } footer: {
                 Text("Link accounts to enhance your profile. Your primary authentication remains via passkey.")
             }
+
+            if isPatreonLinked {
+                Section {
+                    Button {
+                        showingMemberships = true
+                    } label: {
+                        HStack {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "heart.fill")
+                                    .foregroundStyle(.orange)
+                                    .frame(width: 32)
+
+                                if membershipStore.hasUnreadContent {
+                                    UnreadDot()
+                                        .offset(x: 4, y: -4)
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 8) {
+                                    Text("Supported Creators")
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+
+                                    if membershipStore.hasUnreadContent {
+                                        Text("\(membershipStore.totalUnreadCount) new")
+                                            .font(.caption2)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red)
+                                            .cornerRadius(10)
+                                    }
+                                }
+
+                                Text("View exclusive member content")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } footer: {
+                    Text("Access exclusive posts and content from creators you support on Patreon.")
+                }
+            }
         }
         .navigationTitle("Connected Accounts")
+        .sheet(isPresented: $showingMemberships) {
+            NavigationStack {
+                PatreonMembershipsView()
+            }
+        }
         .alert("Disconnect Apple Account", isPresented: $showingAppleDisconnectAlert) {
             Button("Cancel", role: .cancel) { /* Dismisses alert */ }
             Button("Disconnect", role: .destructive) {
@@ -46,6 +105,11 @@ struct ConnectedAccountsView: View {
         }
         .task {
             await appleSignInService.verifyCredentialState()
+        }
+        .task {
+            if isPatreonLinked {
+                await membershipStore.loadMembershipsWithUnread()
+            }
         }
     }
 
