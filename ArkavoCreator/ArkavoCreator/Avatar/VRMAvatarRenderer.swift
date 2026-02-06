@@ -424,10 +424,10 @@ class VRMAvatarRenderer: NSObject {
     // MARK: - Manual Pose Application
 
     /// Set a specific bone's rotation
-    /// 
-    /// Uses VRMMetalKit's setLocalRotation API for thread-safe bone manipulation.
     private func setBonePose(_ model: VRMModel, bone: VRMHumanoidBone, rotation: simd_quatf) {
-        model.setLocalRotation(rotation, for: bone)
+        guard let nodeIndex = model.humanoid?.getBoneNode(bone),
+              nodeIndex < model.nodes.count else { return }
+        model.nodes[nodeIndex].rotation = rotation
     }
 
     /// Update world transforms after applying poses
@@ -781,17 +781,14 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     /// out of the camera view. This method keeps the avatar centered by zeroing the
     /// X and Z translation while preserving Y (height) for jump/squat detection.
     ///
-    /// Uses VRMMetalKit's setHipsTranslation API for thread-safe manipulation.
     private func centerAvatarHips(_ model: VRMModel) {
-        // Get current hips translation
-        guard let currentTranslation = model.getHipsTranslation() else {
-            return
-        }
-        
+        guard let nodeIndex = model.humanoid?.getBoneNode(.hips),
+              nodeIndex < model.nodes.count else { return }
+        let currentTranslation = model.nodes[nodeIndex].translation
+
         // Keep Y component for height variation (squat/jump)
         // Zero X and Z to keep avatar centered horizontally
-        let centeredTranslation = SIMD3<Float>(0, currentTranslation.y, 0)
-        model.setHipsTranslation(centeredTranslation)
+        model.nodes[nodeIndex].translation = SIMD3<Float>(0, currentTranslation.y, 0)
     }
 
     /// Reset body tracking filters (call when switching avatars or restarting)
