@@ -7,9 +7,6 @@
    <FileRef
       location = "group:ArkavoCreator/ArkavoCreator.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "absolute:/Users/arkavo/Projects/VRMMetalKit">
-   </FileRef>
    <Group
       location = "group:HYPERforum"
       name = "HYPERforum">
@@ -83,7 +80,4 @@
          </FileRef>
       </Group>
    </Group>
-   <FileRef
-      location = "group:Untitled.swift">
-   </FileRef>
 </Workspace>
