@@ -298,7 +298,7 @@ struct SectionContainer: View {
                                     try await twitchClient.handleCallback(url)
                                     webViewPresenter.dismiss()
                                 } catch {
-                                    print("Twitch OAuth error: \(error)")
+                                    debugLog("Twitch OAuth error: \(error)")
                                 }
                             }
                         }
@@ -333,7 +333,7 @@ struct SectionContainer: View {
                                 } catch YouTubeError.userCancelled {
                                     // User cancelled, no action needed
                                 } catch {
-                                    print("YouTube OAuth error: \(error)")
+                                    debugLog("YouTube OAuth error: \(error)")
                                 }
                             }
                         }
@@ -364,7 +364,7 @@ struct SectionContainer: View {
                                     try await patreonClient.handleCallback(url)
                                     webViewPresenter.dismiss()
                                 } catch {
-                                    print("Patreon OAuth error: \(error)")
+                                    debugLog("Patreon OAuth error: \(error)")
                                 }
                             }
                         }
@@ -408,7 +408,7 @@ struct SectionContainer: View {
                                     try await micropubClient.handleCallback(url)
                                     webViewPresenter.dismiss()
                                 } catch {
-                                    print("Micro.blog OAuth error: \(error)")
+                                    debugLog("Micro.blog OAuth error: \(error)")
                                 }
                             }
                         }

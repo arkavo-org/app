@@ -154,7 +154,7 @@ public class VRMARecorder: ObservableObject {
         captureQuality = CaptureQuality()
         state = .recording
 
-        print("[VRMARecorder] Recording started at \(targetFrameRate) fps")
+        debugLog("[VRMARecorder] Recording started at \(targetFrameRate) fps")
     }
 
     /// Stop recording and return the captured session
@@ -176,7 +176,7 @@ public class VRMARecorder: ObservableObject {
             createdAt: start
         )
 
-        print("[VRMARecorder] Recording stopped: \(frames.count) frames, \(String(format: "%.2f", duration))s")
+        debugLog("[VRMARecorder] Recording stopped: \(frames.count) frames, \(String(format: "%.2f", duration))s")
 
         // Reset for next recording
         frames.removeAll()
@@ -195,7 +195,7 @@ public class VRMARecorder: ObservableObject {
         captureQuality = CaptureQuality()
         state = .idle
 
-        print("[VRMARecorder] Recording cancelled")
+        debugLog("[VRMARecorder] Recording cancelled")
     }
 
     // MARK: - Frame Capture

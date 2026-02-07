@@ -72,7 +72,7 @@ class TwitchAuthClient: ObservableObject {
     /// Generates the OAuth authorization URL
     /// Uses standard Authorization Code Grant Flow (no PKCE)
     func generateAuthorizationURL() -> URL {
-        print("🔍 Generating authorization URL (Authorization Code Grant Flow)")
+        debugLog("🔍 Generating authorization URL (Authorization Code Grant Flow)")
 
         var components = URLComponents(string: authURL)!
         components.queryItems = [
@@ -84,7 +84,7 @@ class TwitchAuthClient: ObservableObject {
         ]
 
         let url = components.url!
-        print("🔍 Authorization URL: \(url.absoluteString)")
+        debugLog("🔍 Authorization URL: \(url.absoluteString)")
         return url
     }
 
@@ -228,10 +228,10 @@ class TwitchAuthClient: ObservableObject {
     // MARK: - Private Methods
 
     private func exchangeCodeForToken(_ code: String) async throws {
-        print("🔍 Exchanging code for token (Authorization Code Grant Flow)...")
-        print("🔍 Client ID: \(clientId)")
-        print("🔍 Redirect URI: \(redirectURI)")
-        print("🔍 Code: \(code)")
+        debugLog("🔍 Exchanging code for token (Authorization Code Grant Flow)...")
+        debugLog("🔍 Client ID: \(clientId)")
+        debugLog("🔍 Redirect URI: \(redirectURI)")
+        debugLog("🔍 Code: \(code)")
 
         // Build the request body as form data
         // Use client_secret for Authorization Code Grant Flow (not PKCE)
@@ -244,7 +244,7 @@ class TwitchAuthClient: ObservableObject {
             URLQueryItem(name: "redirect_uri", value: redirectURI)
         ]
 
-        print("🔍 Token request parameters: client_id, client_secret, code, grant_type, redirect_uri")
+        debugLog("🔍 Token request parameters: client_id, client_secret, code, grant_type, redirect_uri")
 
         var request = URLRequest(url: URL(string: tokenURL)!)
         request.httpMethod = "POST"
@@ -255,18 +255,18 @@ class TwitchAuthClient: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ Token exchange: Invalid HTTP response")
+            debugLog("❌ Token exchange: Invalid HTTP response")
             throw TwitchError.tokenExchangeFailed
         }
 
         // Log the response for debugging
-        print("🔍 Token exchange response status: \(httpResponse.statusCode)")
+        debugLog("🔍 Token exchange response status: \(httpResponse.statusCode)")
         if let responseString = String(data: data, encoding: .utf8) {
-            print("🔍 Token exchange response body: \(responseString)")
+            debugLog("🔍 Token exchange response body: \(responseString)")
         }
 
         guard httpResponse.statusCode == 200 else {
-            print("❌ Token exchange failed with status: \(httpResponse.statusCode)")
+            debugLog("❌ Token exchange failed with status: \(httpResponse.statusCode)")
             throw TwitchError.tokenExchangeFailed
         }
 

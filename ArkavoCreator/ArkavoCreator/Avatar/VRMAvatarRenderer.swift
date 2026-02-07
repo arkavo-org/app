@@ -82,7 +82,7 @@ class VRMAvatarRenderer: NSObject {
         let vrmRenderer = VRMRenderer(device: device)
         renderer = vrmRenderer
 
-        print("[VRMAvatarRenderer] Initialized with standard 3D rendering mode and ARKit driver")
+        debugLog("[VRMAvatarRenderer] Initialized with standard 3D rendering mode and ARKit driver")
         setupCamera()
     }
 
@@ -94,7 +94,7 @@ class VRMAvatarRenderer: NSObject {
 
         do {
             #if DEBUG
-            print("[VRMAvatarRenderer] Loading model from: \(url.path)")
+            debugLog("[VRMAvatarRenderer] Loading model from: \(url.path)")
             #endif
 
             // Load VRM model
@@ -102,14 +102,14 @@ class VRMAvatarRenderer: NSObject {
             _model = vrmModel
 
             #if DEBUG
-            print("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
+            debugLog("[VRMAvatarRenderer] Model loaded successfully, nodes: \(vrmModel.nodes.count)")
             #endif
 
             // Load into renderer
             renderer?.loadModel(vrmModel)
 
             #if DEBUG
-            print("[VRMAvatarRenderer] Model loaded into renderer")
+            debugLog("[VRMAvatarRenderer] Model loaded into renderer")
             #endif
 
             isLoaded = true
@@ -120,7 +120,7 @@ class VRMAvatarRenderer: NSObject {
                 startIdleAnimation()
             }
         } catch {
-            print("[VRMAvatarRenderer] Failed to load model: \(error)")
+            debugLog("[VRMAvatarRenderer] Failed to load model: \(error)")
             self.error = error
             isLoaded = false
             throw error
@@ -132,20 +132,20 @@ class VRMAvatarRenderer: NSObject {
     /// Performs a visual self-check by animating through expressions
     private func performVisualSelfCheck(model: VRMModel) async {
         #if DEBUG
-        print("\n🎬 [Visual Self-Check] Starting expression animation test...")
+        debugLog("\n🎬 [Visual Self-Check] Starting expression animation test...")
 
         guard let expressionController else {
-            print("❌ [Visual Self-Check] No expression controller available")
+            debugLog("❌ [Visual Self-Check] No expression controller available")
             return
         }
 
         guard let expressions = model.expressions else {
-            print("❌ [Visual Self-Check] Model has no expressions defined")
+            debugLog("❌ [Visual Self-Check] Model has no expressions defined")
             return
         }
 
         // Report available expressions
-        print("📋 [Visual Self-Check] Model has \(expressions.preset.count) preset expressions")
+        debugLog("📋 [Visual Self-Check] Model has \(expressions.preset.count) preset expressions")
 
         // Test key expressions with visible animation
         let testExpressions: [(VRMExpressionPreset, String, TimeInterval)] = [
@@ -162,13 +162,13 @@ class VRMAvatarRenderer: NSObject {
             (.neutral, "Neutral", 0.5)
         ]
 
-        print("\n🔬 [Visual Self-Check] Animating expressions (watch the avatar!)...")
+        debugLog("\n🔬 [Visual Self-Check] Animating expressions (watch the avatar!)...")
 
         for (preset, name, duration) in testExpressions {
             if expressions.preset[preset] != nil {
                 // Animate to the expression
                 expressionController.setExpressionWeight(preset, weight: 1.0)
-                print("   → \(name)")
+                debugLog("   → \(name)")
 
                 // Hold the expression
                 try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
@@ -187,24 +187,24 @@ class VRMAvatarRenderer: NSObject {
         let available = arkitMappedExpressions.filter { expressions.preset[$0] != nil }
         let coverage = Float(available.count) / Float(arkitMappedExpressions.count) * 100
 
-        print("\n🎭 [Visual Self-Check] ARKit face tracking compatibility:")
-        print("   📊 Expression coverage: \(available.count)/\(arkitMappedExpressions.count) (\(String(format: "%.0f", coverage))%)")
+        debugLog("\n🎭 [Visual Self-Check] ARKit face tracking compatibility:")
+        debugLog("   📊 Expression coverage: \(available.count)/\(arkitMappedExpressions.count) (\(String(format: "%.0f", coverage))%)")
 
         if coverage >= 80 {
-            print("   ✨ Excellent - full face tracking support")
+            debugLog("   ✨ Excellent - full face tracking support")
         } else if coverage >= 50 {
-            print("   ⚡ Good - most expressions will work")
+            debugLog("   ⚡ Good - most expressions will work")
         } else {
-            print("   ⚠️  Limited - some expressions missing")
+            debugLog("   ⚠️  Limited - some expressions missing")
         }
 
         // Test body tracking if available
         if model.humanoid != nil {
-            print("\n🦴 [Visual Self-Check] Testing body tracking capabilities...")
+            debugLog("\n🦴 [Visual Self-Check] Testing body tracking capabilities...")
 
             // Zoom out for full body view
             setCameraForBody()
-            print("   📷 Camera zoomed out for full body view")
+            debugLog("   📷 Camera zoomed out for full body view")
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second to transition
 
             // Define poses with their application functions
@@ -216,22 +216,22 @@ class VRMAvatarRenderer: NSObject {
                 ("Neutral", applyNeutralPose, 0.5)
             ]
 
-            print("\n🔬 [Visual Self-Check] Applying body poses...")
+            debugLog("\n🔬 [Visual Self-Check] Applying body poses...")
             for (poseName, poseFunc, duration) in bodyPoses {
-                print("   → \(poseName)")
+                debugLog("   → \(poseName)")
                 poseFunc(model)  // Apply the pose
                 try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             }
 
             // Zoom back in for face
             setCameraForFace()
-            print("   📷 Camera zoomed back to face view")
+            debugLog("   📷 Camera zoomed back to face view")
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s transition
         } else {
-            print("\n⚠️  [Visual Self-Check] No humanoid skeleton found - skipping body pose tests")
+            debugLog("\n⚠️  [Visual Self-Check] No humanoid skeleton found - skipping body pose tests")
         }
 
-        print("\n✅ [Visual Self-Check] Complete - starting idle animation\n")
+        debugLog("\n✅ [Visual Self-Check] Complete - starting idle animation\n")
         #endif
     }
 
@@ -241,7 +241,7 @@ class VRMAvatarRenderer: NSObject {
         stopIdleAnimation()
 
         #if DEBUG
-        print("💤 [Idle Animation] Starting breathing and blink animation")
+        debugLog("💤 [Idle Animation] Starting breathing and blink animation")
         #endif
 
         nextBlinkTime = CACurrentMediaTime() + Double.random(in: 2.0...5.0)
@@ -304,7 +304,7 @@ class VRMAvatarRenderer: NSObject {
         mtkView?.isPaused = true
 
         #if DEBUG
-        print("⏸️ [VRMAvatarRenderer] Paused")
+        debugLog("⏸️ [VRMAvatarRenderer] Paused")
         #endif
     }
 
@@ -319,7 +319,7 @@ class VRMAvatarRenderer: NSObject {
         }
 
         #if DEBUG
-        print("▶️ [VRMAvatarRenderer] Resumed")
+        debugLog("▶️ [VRMAvatarRenderer] Resumed")
         #endif
     }
 
@@ -552,13 +552,13 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     func applyFaceTracking(blendShapes: ARKitFaceBlendShapes) {
         guard let expressionController else {
             #if DEBUG
-            print("[VRMAvatarRenderer] No expression controller available for face tracking")
+            debugLog("[VRMAvatarRenderer] No expression controller available for face tracking")
             #endif
             return
         }
 
         #if DEBUG
-        print("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes, headTransform: \(blendShapes.headTransform != nil ? "yes" : "no")")
+        debugLog("[VRMAvatarRenderer] Applying face tracking - \(blendShapes.shapes.count) blend shapes, headTransform: \(blendShapes.headTransform != nil ? "yes" : "no")")
         #endif
 
         // Use ARKitFaceDriver to map, smooth, and apply blend shapes
@@ -639,15 +639,15 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     ) {
         guard let expressionController else {
             if updateCount == 0 {
-                print("   ❌ [VRMAvatarRenderer] No expression controller, cannot apply face tracking")
+                debugLog("   ❌ [VRMAvatarRenderer] No expression controller, cannot apply face tracking")
             }
             return
         }
 
         // Log available expressions in the model (only once, not every frame)
         if let model = model, let expressions = model.expressions, updateCount == 0 {
-            print("🎨 [VRMAvatarRenderer] First face tracking update - model has \(expressions.preset.count) expression presets")
-            print("   💤 [VRMAvatarRenderer] Pausing idle animation for live face tracking")
+            debugLog("🎨 [VRMAvatarRenderer] First face tracking update - model has \(expressions.preset.count) expression presets")
+            debugLog("   💤 [VRMAvatarRenderer] Pausing idle animation for live face tracking")
             updateCount += 1
         }
 
@@ -692,7 +692,7 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     func applyBodyTracking(skeleton: ARKitBodySkeleton) {
         guard let model else {
             #if DEBUG
-            print("[VRMAvatarRenderer] No model available for body tracking")
+            debugLog("[VRMAvatarRenderer] No model available for body tracking")
             #endif
             return
         }
@@ -709,7 +709,7 @@ extension VRMAvatarRenderer: MTKViewDelegate {
                 let col2 = simd_float3(hipsTransform.columns.2.x, hipsTransform.columns.2.y, hipsTransform.columns.2.z)
                 let rotMatrix = simd_float3x3(simd_normalize(col0), simd_normalize(col1), simd_normalize(col2))
                 let inputRot = simd_quatf(rotMatrix)
-                print("[BodyTrack] Hips INPUT: w=\(String(format: "%.3f", inputRot.real)), x=\(String(format: "%.3f", inputRot.imag.x)), y=\(String(format: "%.3f", inputRot.imag.y)), z=\(String(format: "%.3f", inputRot.imag.z))")
+                debugLog("[BodyTrack] Hips INPUT: w=\(String(format: "%.3f", inputRot.real)), x=\(String(format: "%.3f", inputRot.imag.x)), y=\(String(format: "%.3f", inputRot.imag.y)), z=\(String(format: "%.3f", inputRot.imag.z))")
             }
         }
 
@@ -727,7 +727,7 @@ extension VRMAvatarRenderer: MTKViewDelegate {
                hipsBone.node >= 0 && hipsBone.node < model.nodes.count {
                 let hipsNode = model.nodes[hipsBone.node]
                 let outRot = hipsNode.rotation
-                print("[BodyTrack] Hips OUTPUT: w=\(String(format: "%.3f", outRot.real)), x=\(String(format: "%.3f", outRot.imag.x)), y=\(String(format: "%.3f", outRot.imag.y)), z=\(String(format: "%.3f", outRot.imag.z))")
+                debugLog("[BodyTrack] Hips OUTPUT: w=\(String(format: "%.3f", outRot.real)), x=\(String(format: "%.3f", outRot.imag.x)), y=\(String(format: "%.3f", outRot.imag.y)), z=\(String(format: "%.3f", outRot.imag.z))")
             }
         }
     }
@@ -743,14 +743,14 @@ extension VRMAvatarRenderer: MTKViewDelegate {
     ) {
         guard let model else {
             if updateCount == 0 {
-                print("   ❌ [VRMAvatarRenderer] No model, cannot apply body tracking")
+                debugLog("   ❌ [VRMAvatarRenderer] No model, cannot apply body tracking")
             }
             return
         }
 
         // Log available humanoid bones in the model (only once, not every frame)
         if model.humanoid != nil, updateCount == 0 {
-            print("🦴 [VRMAvatarRenderer] First body tracking update - model has humanoid bones")
+            debugLog("🦴 [VRMAvatarRenderer] First body tracking update - model has humanoid bones")
             updateCount += 1
         }
 

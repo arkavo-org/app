@@ -78,7 +78,7 @@ final class VRMFrameCaptureManager {
         try createRenderTargets(size: size)
         try createPixelBufferPool(size: size)
 
-        print("[VRMFrameCaptureManager] Initialized: \(Int(size.width))x\(Int(size.height))@\(frameRate)fps")
+        debugLog("[VRMFrameCaptureManager] Initialized: \(Int(size.width))x\(Int(size.height))@\(frameRate)fps")
     }
 
     // Note: Timer cleanup happens automatically when the object is deallocated
@@ -91,7 +91,7 @@ final class VRMFrameCaptureManager {
     func startCapture() {
         guard !isCapturing else { return }
         guard renderer != nil else {
-            print("[VRMFrameCaptureManager] Cannot start capture - no renderer set")
+            debugLog("[VRMFrameCaptureManager] Cannot start capture - no renderer set")
             return
         }
 
@@ -105,7 +105,7 @@ final class VRMFrameCaptureManager {
             }
         }
 
-        print("[VRMFrameCaptureManager] Started capture at \(targetFrameRate)fps")
+        debugLog("[VRMFrameCaptureManager] Started capture at \(targetFrameRate)fps")
     }
 
     /// Stop capturing frames
@@ -116,7 +116,7 @@ final class VRMFrameCaptureManager {
         frameTimer = nil
         isCapturing = false
 
-        print("[VRMFrameCaptureManager] Stopped capture")
+        debugLog("[VRMFrameCaptureManager] Stopped capture")
     }
 
     /// Capture a single frame synchronously (for immediate use)
@@ -186,7 +186,7 @@ final class VRMFrameCaptureManager {
         }
         depthTexture = depth
 
-        print("[VRMFrameCaptureManager] Created render targets: \(Int(size.width))x\(Int(size.height))")
+        debugLog("[VRMFrameCaptureManager] Created render targets: \(Int(size.width))x\(Int(size.height))")
     }
 
     private func createPixelBufferPool(size: CGSize) throws {
@@ -213,7 +213,7 @@ final class VRMFrameCaptureManager {
             throw VRMCaptureError.pixelBufferPoolCreationFailed
         }
 
-        print("[VRMFrameCaptureManager] Created pixel buffer pool")
+        debugLog("[VRMFrameCaptureManager] Created pixel buffer pool")
     }
 
     private func captureFrame() {
@@ -266,7 +266,7 @@ final class VRMFrameCaptureManager {
         let status = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
 
         guard status == kCVReturnSuccess, let pb = pixelBuffer else {
-            print("[VRMFrameCaptureManager] Failed to create pixel buffer from pool")
+            debugLog("[VRMFrameCaptureManager] Failed to create pixel buffer from pool")
             return nil
         }
 

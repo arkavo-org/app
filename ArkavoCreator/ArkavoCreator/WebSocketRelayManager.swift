@@ -23,7 +23,7 @@ actor WebSocketRelayManager {
             webSocket?.resume()
 
             try await ping()
-            print("Local WebSocket relay connected successfully")
+            debugLog("Local WebSocket relay connected successfully")
 
             receiveMessages()
         #endif
@@ -65,7 +65,7 @@ actor WebSocketRelayManager {
     private func handleReceivedMessage(_ result: Result<URLSessionWebSocketTask.Message, Error>) async {
         switch result {
         case let .success(message):
-            print("Local WebSocket received: \(message)")
+            debugLog("Local WebSocket received: \(message)")
             // Handle the message (e.g., relay it)
 
             // Continue listening for the next message by calling receiveMessages again
@@ -73,7 +73,7 @@ actor WebSocketRelayManager {
             receiveMessages()
         case let .failure(error):
             // Handle disconnection or errors
-            print("Local WebSocket error: \(error)")
+            debugLog("Local WebSocket error: \(error)")
             // Consider implementing reconnection logic or error handling
             // Call disconnect safely within the actor's context
             disconnect() // Example: disconnect on error
@@ -83,7 +83,7 @@ actor WebSocketRelayManager {
     // This method accesses actor state (webSocket)
     func relayMessage(_ data: Data) async throws {
         #if DEBUG
-            print("Relaying message to localhost:8080")
+            debugLog("Relaying message to localhost:8080")
             guard let socket = webSocket else {
                 throw URLError(.networkConnectionLost)
             }
@@ -97,7 +97,7 @@ actor WebSocketRelayManager {
         let socketToCancel = webSocket
         webSocket = nil // Set to nil before cancelling to prevent race conditions on access
         socketToCancel?.cancel(with: .goingAway, reason: nil)
-        print("Local WebSocket relay disconnected.")
+        debugLog("Local WebSocket relay disconnected.")
     }
 
     // Deinit runs on the actor's executor
@@ -106,6 +106,6 @@ actor WebSocketRelayManager {
         let socketToCancel = webSocket
         webSocket = nil
         socketToCancel?.cancel(with: .goingAway, reason: nil)
-        print("Local WebSocket relay deinitialized and disconnected.")
+        debugLog("Local WebSocket relay deinitialized and disconnected.")
     }
 }

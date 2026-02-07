@@ -35,21 +35,21 @@ public actor HLSRecordingProtectionService {
         }
 
         // 1. Fetch KAS RSA public key
-        print("🔑 Fetching KAS RSA public key...")
+        debugLog("🔑 Fetching KAS RSA public key...")
         let rsaPublicKeyPEM = try await fetchKASRSAPublicKey()
 
         // 2. Convert video to HLS segments
-        print("🎬 Converting video to HLS segments...")
+        debugLog("🎬 Converting video to HLS segments...")
         let converter = HLSConverter()
         let hlsResult = try await converter.convert(
             videoURL: videoURL,
             outputDirectory: tempDir,
             segmentDuration: 6.0
         )
-        print("   Created \(hlsResult.segmentURLs.count) segments")
+        debugLog("   Created \(hlsResult.segmentURLs.count) segments")
 
         // 3. Package into HLS TDF archive
-        print("📦 Packaging HLS segments into TDF archive...")
+        debugLog("📦 Packaging HLS segments into TDF archive...")
         let packager = HLSTDFPackager(
             kasURL: kasURL,
             kasPublicKeyPEM: rsaPublicKeyPEM,
@@ -61,7 +61,7 @@ public actor HLSRecordingProtectionService {
             hlsResult: hlsResult,
             assetID: assetID
         )
-        print("✅ HLS TDF archive created: \(tdfData.count) bytes")
+        debugLog("✅ HLS TDF archive created: \(tdfData.count) bytes")
 
         return tdfData
     }

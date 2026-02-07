@@ -123,18 +123,18 @@ class AvatarViewModel: ObservableObject {
         #if DEBUG
         diagnosticsRecorder.config.enabled = true
         diagnosticsRecorder.config.maxFramesToCapture = 500
-        print("[AvatarViewModel] Pipeline diagnostics ENABLED (DEBUG build)")
+        debugLog("[AvatarViewModel] Pipeline diagnostics ENABLED (DEBUG build)")
         #endif
 
         refreshModels()
-        print("[AvatarViewModel] Initializing - subscribing to face & body metadata notifications")
+        debugLog("[AvatarViewModel] Initializing - subscribing to face & body metadata notifications")
         let observer = NotificationCenter.default.addObserver(
             forName: .cameraMetadataUpdated,
             object: nil,
             queue: .main
         ) { [weak self] notification in
             guard let event = notification.object as? CameraMetadataEvent else {
-                print("[AvatarViewModel] Received notification but couldn't cast to CameraMetadataEvent")
+                debugLog("[AvatarViewModel] Received notification but couldn't cast to CameraMetadataEvent")
                 return
             }
             Task { @MainActor [weak self] in
@@ -143,7 +143,7 @@ class AvatarViewModel: ObservableObject {
             }
         }
         metadataObserver = MetadataObserverToken(observer)
-        print("[AvatarViewModel] Face & body tracking is ENABLED and ready to receive metadata")
+        debugLog("[AvatarViewModel] Face & body tracking is ENABLED and ready to receive metadata")
     }
 
     deinit {
@@ -156,9 +156,9 @@ class AvatarViewModel: ObservableObject {
 
     func refreshModels() {
         let models = downloader.listDownloadedModels()
-        print("[AvatarViewModel] Found \(models.count) VRM models:")
+        debugLog("[AvatarViewModel] Found \(models.count) VRM models:")
         for model in models {
-            print("  - \(model.lastPathComponent) at \(model.path)")
+            debugLog("  - \(model.lastPathComponent) at \(model.path)")
         }
         downloadedModels = models.sorted { $0.lastPathComponent < $1.lastPathComponent }
 
@@ -169,7 +169,7 @@ class AvatarViewModel: ObservableObject {
             // Only restore if the file still exists
             if downloadedModels.contains(savedURL) {
                 selectedModelURL = savedURL
-                print("[AvatarViewModel] Restored last selected model: \(savedURL.lastPathComponent)")
+                debugLog("[AvatarViewModel] Restored last selected model: \(savedURL.lastPathComponent)")
             }
         }
 
@@ -238,7 +238,7 @@ class AvatarViewModel: ObservableObject {
             isModelLoaded = true
             // Apply current tracking mode's camera position after model loads
             setTrackingMode(trackingMode)
-            print("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
+            debugLog("[AvatarViewModel] Model loaded successfully: \(url.lastPathComponent)")
         } catch {
             self.error = "Failed to load model: \(error.localizedDescription)"
             isModelLoaded = false
@@ -258,7 +258,7 @@ class AvatarViewModel: ObservableObject {
         }
 
         hasAttemptedAutoLoad = true
-        print("[AvatarViewModel] Auto-loading last selected model...")
+        debugLog("[AvatarViewModel] Auto-loading last selected model...")
         await loadSelectedModel()
     }
 
@@ -267,11 +267,11 @@ class AvatarViewModel: ObservableObject {
     func activate() {
         isActive = true
         #if DEBUG
-        print("▶️ [AvatarViewModel] Activated - will process metadata")
+        debugLog("▶️ [AvatarViewModel] Activated - will process metadata")
         // Start diagnostics capture if enabled
         if diagnosticsRecorder.config.enabled {
             diagnosticsRecorder.startCapture()
-            print("📊 [AvatarViewModel] Diagnostics capture started")
+            debugLog("📊 [AvatarViewModel] Diagnostics capture started")
         }
         #endif
     }
@@ -279,7 +279,7 @@ class AvatarViewModel: ObservableObject {
     func deactivate() {
         isActive = false
         #if DEBUG
-        print("⏸️ [AvatarViewModel] Deactivated - will ignore metadata")
+        debugLog("⏸️ [AvatarViewModel] Deactivated - will ignore metadata")
         #endif
     }
 
@@ -290,16 +290,16 @@ class AvatarViewModel: ObservableObject {
     @discardableResult
     func exportDiagnostics(name: String = "pipeline_diagnostics") -> URL? {
         guard diagnosticsRecorder.isCapturing || diagnosticsRecorder.captureCount > 0 else {
-            print("⚠️ [AvatarViewModel] No diagnostics to export")
+            debugLog("⚠️ [AvatarViewModel] No diagnostics to export")
             return nil
         }
 
         do {
             let url = try diagnosticsRecorder.exportSession(name: name)
-            print("✅ [AvatarViewModel] Diagnostics exported to: \(url.path)")
+            debugLog("✅ [AvatarViewModel] Diagnostics exported to: \(url.path)")
             return url
         } catch {
-            print("❌ [AvatarViewModel] Failed to export diagnostics: \(error)")
+            debugLog("❌ [AvatarViewModel] Failed to export diagnostics: \(error)")
             return nil
         }
     }
@@ -317,7 +317,7 @@ class AvatarViewModel: ObservableObject {
         guard isActive else {
             // Log every 60th dropped event to avoid spam
             if logFrameCount % 60 == 0 {
-                print("⚠️ [AvatarViewModel] Metadata received but isActive=false (avatar view not visible). Switch to Avatar mode to see tracking.")
+                debugLog("⚠️ [AvatarViewModel] Metadata received but isActive=false (avatar view not visible). Switch to Avatar mode to see tracking.")
             }
             logFrameCount += 1
             return
@@ -327,13 +327,13 @@ class AvatarViewModel: ObservableObject {
         logFrameCount += 1
 
         if shouldLog {
-            print("🎭 [AvatarViewModel] handleMetadataEvent called for source: \(event.sourceID)")
+            debugLog("🎭 [AvatarViewModel] handleMetadataEvent called for source: \(event.sourceID)")
         }
 
         // Handle face tracking metadata
         if case let .arFace(faceMetadata) = event.metadata {
             if shouldLog {
-                print("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
+                debugLog("   ✅ [AvatarViewModel] Face metadata received: \(faceMetadata.blendShapes.count) blend shapes")
             }
 
             // Capture raw ARKit data for diagnostics
@@ -344,7 +344,7 @@ class AvatarViewModel: ObservableObject {
             // Get or create source for this camera
             let source = getOrCreateSource(for: event.sourceID)
             if shouldLog {
-                print("   📍 [AvatarViewModel] Using face source: \(source.sourceID)")
+                debugLog("   📍 [AvatarViewModel] Using face source: \(source.sourceID)")
             }
 
             // Convert and update source with new data
@@ -363,7 +363,7 @@ class AvatarViewModel: ObservableObject {
                 }
 
                 if shouldLog {
-                    print("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
+                    debugLog("   📊 [AvatarViewModel] Updated source with \(blendShapes.shapes.count) blend shapes")
 
                     // Log key expression blend shapes for debugging
                     let eyeBlinkLeft = blendShapes.weight(for: "eyeBlinkLeft")
@@ -375,14 +375,14 @@ class AvatarViewModel: ObservableObject {
                     let browOuterUpRight = blendShapes.weight(for: "browOuterUpRight")
                     let jawOpen = blendShapes.weight(for: "jawOpen")
 
-                    print("      └─ eyeBlinkL: \(String(format: "%.3f", eyeBlinkLeft)), eyeBlinkR: \(String(format: "%.3f", eyeBlinkRight))")
-                    print("      └─ smileL: \(String(format: "%.3f", mouthSmileLeft)), smileR: \(String(format: "%.3f", mouthSmileRight))")
-                    print("      └─ browInner: \(String(format: "%.3f", browInnerUp)), browOuter: \(String(format: "%.3f", (browOuterUpLeft + browOuterUpRight) / 2))")
-                    print("      └─ jawOpen: \(String(format: "%.3f", jawOpen))")
+                    debugLog("      └─ eyeBlinkL: \(String(format: "%.3f", eyeBlinkLeft)), eyeBlinkR: \(String(format: "%.3f", eyeBlinkRight))")
+                    debugLog("      └─ smileL: \(String(format: "%.3f", mouthSmileLeft)), smileR: \(String(format: "%.3f", mouthSmileRight))")
+                    debugLog("      └─ browInner: \(String(format: "%.3f", browInnerUp)), browOuter: \(String(format: "%.3f", (browOuterUpLeft + browOuterUpRight) / 2))")
+                    debugLog("      └─ jawOpen: \(String(format: "%.3f", jawOpen))")
                 }
             } else {
                 if shouldLog {
-                    print("   ❌ [AvatarViewModel] Failed to convert to ARKitFaceBlendShapes")
+                    debugLog("   ❌ [AvatarViewModel] Failed to convert to ARKitFaceBlendShapes")
                 }
             }
 
@@ -390,14 +390,14 @@ class AvatarViewModel: ObservableObject {
             let allSources = Array(faceSources.values)
             let activeSources = allSources.filter { $0.isActive }
             if shouldLog {
-                print("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
-                print("      └─ Renderer exists: \(renderer != nil), enabled: \(faceTrackingEnabled)")
+                debugLog("   🎯 [AvatarViewModel] Applying face tracking: \(activeSources.count) active / \(allSources.count) total sources")
+                debugLog("      └─ Renderer exists: \(renderer != nil), enabled: \(faceTrackingEnabled)")
             }
             if faceTrackingEnabled {
                 renderer?.applyFaceTracking(sources: allSources, priority: .latestActive)
             }
             if shouldLog {
-                print("   ✅ [AvatarViewModel] Face tracking applied to renderer")
+                debugLog("   ✅ [AvatarViewModel] Face tracking applied to renderer")
             }
 
             // Update status based on active sources
@@ -406,7 +406,7 @@ class AvatarViewModel: ObservableObject {
         // Handle body tracking metadata
         else if case let .arBody(bodyMetadata) = event.metadata {
             if shouldLog {
-                print("   🦴 [AvatarViewModel] Body metadata received: \(bodyMetadata.joints.count) joints")
+                debugLog("   🦴 [AvatarViewModel] Body metadata received: \(bodyMetadata.joints.count) joints")
             }
 
             // Capture raw ARKit data for diagnostics
@@ -417,7 +417,7 @@ class AvatarViewModel: ObservableObject {
             // Get or create body source for this camera
             let source = getOrCreateBodySource(for: event.sourceID)
             if shouldLog {
-                print("   📍 [AvatarViewModel] Using body source: \(source.sourceID)")
+                debugLog("   📍 [AvatarViewModel] Using body source: \(source.sourceID)")
             }
 
             // Convert and update source with new data, with diagnostics callback
@@ -458,24 +458,24 @@ class AvatarViewModel: ObservableObject {
             }
 
             if shouldLog {
-                print("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
+                debugLog("   📊 [AvatarViewModel] Updated source with \(skeleton.joints.count) joint transforms")
             }
 
             // Update renderer with all active body sources
             let allBodySources = Array(bodySources.values)
             let activeBodySources = allBodySources.filter { $0.isActive }
             if shouldLog {
-                print("   🎯 [AvatarViewModel] Applying body tracking: \(activeBodySources.count) active / \(allBodySources.count) total sources")
-                print("      └─ Renderer exists: \(renderer != nil)")
+                debugLog("   🎯 [AvatarViewModel] Applying body tracking: \(activeBodySources.count) active / \(allBodySources.count) total sources")
+                debugLog("      └─ Renderer exists: \(renderer != nil)")
             }
             renderer?.applyBodyTracking(sources: allBodySources, priority: .latestActive)
             if shouldLog {
-                print("   ✅ [AvatarViewModel] Body tracking applied to renderer")
+                debugLog("   ✅ [AvatarViewModel] Body tracking applied to renderer")
             }
         }
         else {
             if shouldLog {
-                print("   ⚠️  [AvatarViewModel] Received unknown metadata type, ignoring")
+                debugLog("   ⚠️  [AvatarViewModel] Received unknown metadata type, ignoring")
             }
         }
     }
@@ -542,7 +542,7 @@ class AvatarViewModel: ObservableObject {
     /// - Parameter session: The recording session to connect to
     func connectToRecordingSession(_ session: RecordingSession) {
         guard let renderer else {
-            print("[AvatarViewModel] Cannot connect to recording session - no renderer")
+            debugLog("[AvatarViewModel] Cannot connect to recording session - no renderer")
             return
         }
 
@@ -550,14 +550,14 @@ class AvatarViewModel: ObservableObject {
         if captureManager == nil {
             do {
                 guard let device = MTLCreateSystemDefaultDevice() else {
-                    print("[AvatarViewModel] Failed to create Metal device for capture")
+                    debugLog("[AvatarViewModel] Failed to create Metal device for capture")
                     return
                 }
                 captureManager = try VRMFrameCaptureManager(device: device)
                 captureManager?.renderer = renderer
-                print("[AvatarViewModel] Created VRM capture manager")
+                debugLog("[AvatarViewModel] Created VRM capture manager")
             } catch {
-                print("[AvatarViewModel] Failed to create capture manager: \(error)")
+                debugLog("[AvatarViewModel] Failed to create capture manager: \(error)")
                 return
             }
         }
@@ -574,14 +574,14 @@ class AvatarViewModel: ObservableObject {
             return manager?.latestFrame
         }
 
-        print("[AvatarViewModel] Connected avatar capture to recording session")
+        debugLog("[AvatarViewModel] Connected avatar capture to recording session")
     }
 
     /// Disconnect from recording session
     func disconnectFromRecordingSession(_ session: RecordingSession) {
         session.avatarTextureProvider = nil
         captureManager?.stopCapture()
-        print("[AvatarViewModel] Disconnected avatar capture from recording session")
+        debugLog("[AvatarViewModel] Disconnected avatar capture from recording session")
     }
 
     /// Start capturing avatar frames for streaming/preview
@@ -600,33 +600,33 @@ class AvatarViewModel: ObservableObject {
         // Create capture manager if needed
         if captureManager == nil {
             guard let renderer else {
-                print("[AvatarViewModel] getTextureProvider: No renderer available")
+                debugLog("[AvatarViewModel] getTextureProvider: No renderer available")
                 return nil
             }
 
             do {
                 guard let device = MTLCreateSystemDefaultDevice() else {
-                    print("[AvatarViewModel] getTextureProvider: Failed to create Metal device")
+                    debugLog("[AvatarViewModel] getTextureProvider: Failed to create Metal device")
                     return nil
                 }
                 captureManager = try VRMFrameCaptureManager(device: device)
                 captureManager?.renderer = renderer
-                print("[AvatarViewModel] getTextureProvider: Created capture manager")
+                debugLog("[AvatarViewModel] getTextureProvider: Created capture manager")
             } catch {
-                print("[AvatarViewModel] getTextureProvider: Failed to create capture manager: \(error)")
+                debugLog("[AvatarViewModel] getTextureProvider: Failed to create capture manager: \(error)")
                 return nil
             }
         }
 
         guard let manager = captureManager else {
-            print("[AvatarViewModel] getTextureProvider: No capture manager")
+            debugLog("[AvatarViewModel] getTextureProvider: No capture manager")
             return nil
         }
 
         // Start capture if not already running
         manager.startCapture()
 
-        print("[AvatarViewModel] getTextureProvider: Returning provider")
+        debugLog("[AvatarViewModel] getTextureProvider: Returning provider")
         return { [weak manager] in
             manager?.latestFrame
         }
@@ -660,7 +660,7 @@ class AvatarViewModel: ObservableObject {
         captureQualityWarning = nil
         lastExportError = nil
 
-        print("[AvatarViewModel] VRMA recording started")
+        debugLog("[AvatarViewModel] VRMA recording started")
     }
 
     /// Stop recording and export to VRMA file
@@ -692,12 +692,12 @@ class AvatarViewModel: ObservableObject {
         let rawSession = recorder.stopRecording(name: name)
         lastVRMASession = rawSession
 
-        print("[AvatarViewModel] VRMA recording stopped: \(rawSession.frameCount) frames, \(String(format: "%.2f", rawSession.duration))s")
+        debugLog("[AvatarViewModel] VRMA recording stopped: \(rawSession.frameCount) frames, \(String(format: "%.2f", rawSession.duration))s")
 
         // Check for empty session
         guard rawSession.frameCount > 0 else {
             lastExportError = "No frames captured"
-            print("[AvatarViewModel] No frames captured, skipping export")
+            debugLog("[AvatarViewModel] No frames captured, skipping export")
             return .noFrames
         }
 
@@ -707,7 +707,7 @@ class AvatarViewModel: ObservableObject {
         let processingOptions = VRMAProcessor.Options.default
         do {
             (processedSession, report) = try VRMAProcessor.process(rawSession, options: processingOptions)
-            print("[AvatarViewModel] Processing complete: \(report.summary)")
+            debugLog("[AvatarViewModel] Processing complete: \(report.summary)")
 
             // Capture processing diagnostics
             if diagnosticsRecorder.isCapturing {
@@ -720,11 +720,11 @@ class AvatarViewModel: ObservableObject {
             }
         } catch let error as VRMAProcessor.ProcessingError {
             lastExportError = error.localizedDescription
-            print("[AvatarViewModel] Processing failed: \(error.localizedDescription)")
+            debugLog("[AvatarViewModel] Processing failed: \(error.localizedDescription)")
             return .qualityTooLow(error)
         } catch {
             lastExportError = error.localizedDescription
-            print("[AvatarViewModel] Processing failed: \(error)")
+            debugLog("[AvatarViewModel] Processing failed: \(error)")
             return .exportFailed(error)
         }
 
@@ -749,12 +749,12 @@ class AvatarViewModel: ObservableObject {
             // Don't pass VRM model - let VRMAnimationLoader handle retargeting to target model
             try VRMAExporter.export(session: processedSession, to: fileURL, restPose: nil)
 
-            print("[AvatarViewModel] Exported VRMA to: \(fileURL.path)")
+            debugLog("[AvatarViewModel] Exported VRMA to: \(fileURL.path)")
             return .success(fileURL, report)
 
         } catch {
             lastExportError = error.localizedDescription
-            print("[AvatarViewModel] Failed to export VRMA: \(error)")
+            debugLog("[AvatarViewModel] Failed to export VRMA: \(error)")
             return .exportFailed(error)
         }
     }
@@ -769,6 +769,6 @@ class AvatarViewModel: ObservableObject {
         captureQualityWarning = nil
         lastExportError = nil
 
-        print("[AvatarViewModel] VRMA recording cancelled")
+        debugLog("[AvatarViewModel] VRMA recording cancelled")
     }
 }

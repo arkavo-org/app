@@ -17,7 +17,7 @@ enum Config {
 
     /// Print current configuration (useful for debugging)
     static func printCurrentConfig() {
-        print("""
+        debugLog("""
         === Arkavo Configuration ===
         Auth URL: \(arkavoAuthURL.absoluteString)
         WebSocket URL: \(arkavoWebSocketURL.absoluteString)

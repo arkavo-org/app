@@ -14,7 +14,7 @@ struct ArkavoWorkflowView: View {
     private var authState: ArkavoAuthState { ArkavoAuthState.shared }
 
     init() {
-        print("ArkavoWorkflowView: Initializing")
+        debugLog("ArkavoWorkflowView: Initializing")
         _viewModel = StateObject(wrappedValue: ViewModelFactory.shared.makeWorkflowViewModel())
     }
 
@@ -441,7 +441,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     @Published var errorMessage: String?
 
     init(client: ArkavoClient, messageDelegate: ArkavoMessageChainDelegate) {
-        print("WorkflowViewModel: Initializing with ArkavoClient")
+        debugLog("WorkflowViewModel: Initializing with ArkavoClient")
         self.client = client
         self.messageDelegate = messageDelegate
 
@@ -453,38 +453,38 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     // MARK: - ArkavoClientDelegate Methods
 
     func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
-        print("WorkflowViewModel: Client state changed to: \(state)")
+        debugLog("WorkflowViewModel: Client state changed to: \(state)")
         Task { @MainActor in
             switch state {
             case let .error(error):
                 self.errorMessage = error.localizedDescription
             case .disconnected:
-                print("WorkflowViewModel: Client disconnected")
+                debugLog("WorkflowViewModel: Client disconnected")
             case .connecting:
-                print("WorkflowViewModel: Client connecting")
+                debugLog("WorkflowViewModel: Client connecting")
             case .authenticating:
-                print("WorkflowViewModel: Client authenticating")
+                debugLog("WorkflowViewModel: Client authenticating")
             case .connected:
-                print("WorkflowViewModel: Client connected")
+                debugLog("WorkflowViewModel: Client connected")
             }
         }
     }
 
     func clientDidReceiveMessage(_: ArkavoClient, message: Data) {
-        print("WorkflowViewModel: Received message of size: \(message.count)")
+        debugLog("WorkflowViewModel: Received message of size: \(message.count)")
         if let messageType = message.first {
             switch messageType {
             case 0x06:
-                print("WorkflowViewModel: Received type 6 message")
+                debugLog("WorkflowViewModel: Received type 6 message")
                 handleType6Message(message.dropFirst())
             default:
-                print("WorkflowViewModel: Received message with type: \(messageType)")
+                debugLog("WorkflowViewModel: Received message with type: \(messageType)")
             }
         }
     }
 
     func clientDidReceiveError(_: ArkavoClient, error: Error) {
-        print("WorkflowViewModel: Received error: \(error)")
+        debugLog("WorkflowViewModel: Received error: \(error)")
         Task { @MainActor in
             self.errorMessage = error.localizedDescription
         }
@@ -493,13 +493,13 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
     // MARK: - Private Message Handlers
 
     private func handleType6Message(_ messageData: Data) {
-        print("WorkflowViewModel: Processing type 6 message of size: \(messageData.count)")
+        debugLog("WorkflowViewModel: Processing type 6 message of size: \(messageData.count)")
     }
 
     // MARK: - Content Processing
 
     func processContent(_ url: URL) async throws {
-        print("WorkflowViewModel: Starting content processing for \(url)")
+        debugLog("WorkflowViewModel: Starting content processing for \(url)")
         isLoading = true
         defer { isLoading = false }
 
@@ -519,8 +519,8 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             } else {
                 inputPath
             }
-            print("Current working directory: \(fileManager.currentDirectoryPath)")
-            print("Checking file: \(path)")
+            debugLog("Current working directory: \(fileManager.currentDirectoryPath)")
+            debugLog("Checking file: \(path)")
 
             let videoURL = URL(fileURLWithPath: path)
 
@@ -528,7 +528,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
             guard fileManager.fileExists(atPath: videoURL.path),
                   fileManager.isReadableFile(atPath: videoURL.path)
             else {
-                print("Video file doesn't exist or isn't readable")
+                debugLog("Video file doesn't exist or isn't readable")
                 throw ArkavoError.invalidURL
             }
 
@@ -543,14 +543,14 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
 
             // Process the video with progress updates
             let segmentations = try await processor.processVideo(url: videoURL) { progress in
-                print("Processing progress: \(Int(progress * 100))%")
+                debugLog("Processing progress: \(Int(progress * 100))%")
             }
 
-            print("Processed \(segmentations.count) frames")
+            debugLog("Processed \(segmentations.count) frames")
 
             // Analyze segmentations for significant changes
             let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
-            print("Found \(changes.count) significant scene changes")
+            debugLog("Found \(changes.count) significant scene changes")
 
             // Process scene matches
             for segmentation in segmentations {
@@ -558,17 +558,17 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
                 let matches = await matchDetector.findMatches(for: sceneData)
 
                 if !matches.isEmpty {
-                    print("Found matches at \(sceneData.timestamp):")
+                    debugLog("Found matches at \(sceneData.timestamp):")
                     for match in matches {
-                        print("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
+                        debugLog("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
                     }
                 }
             }
 
-            print("Content processing completed successfully")
+            debugLog("Content processing completed successfully")
 
         } catch {
-            print("Content processing failed: \(error)")
+            debugLog("Content processing failed: \(error)")
             throw error
         }
     }
@@ -599,10 +599,10 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
                 let first20Bytes = message.data.prefix(20)
                 let hexString = first20Bytes.map { String(format: "%02x", $0) }.joined(separator: " ")
 
-                print("Message \(message.id): \(hexString)")
+                debugLog("Message \(message.id): \(hexString)")
 
                 try await client.sendMessage(message.data)
-                print("Sent message: \(message.id)")
+                debugLog("Sent message: \(message.id)")
             }
         } catch {
             errorMessage = "Failed to send message: \(error.localizedDescription)"

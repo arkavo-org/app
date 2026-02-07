@@ -36,7 +36,7 @@ enum RecordingsFolderAccess {
             try storeBookmark(for: selected)
             return selected
         } catch {
-            print("⚠️ Failed to store bookmark: \(error)")
+            debugLog("⚠️ Failed to store bookmark: \(error)")
             return nil
         }
     }

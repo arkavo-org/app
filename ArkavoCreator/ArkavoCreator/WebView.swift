@@ -49,7 +49,7 @@ class WebViewCoordinator: NSObject, WKNavigationDelegate {
             }
 
             // Block navigation to untrusted domains
-            print("WebView: Blocked navigation to untrusted domain: \(url.host ?? "unknown")")
+            debugLog("WebView: Blocked navigation to untrusted domain: \(url.host ?? "unknown")")
             decisionHandler(.cancel)
             return
         }

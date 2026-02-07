@@ -42,7 +42,7 @@ public class PipelineDiagnosticsRecorder: ObservableObject {
         startTime = Date()
         isCapturing = true
 
-        print("[PipelineDiagnostics] Capture started")
+        debugLog("[PipelineDiagnostics] Capture started")
     }
 
     /// Stop capturing and return the session
@@ -67,7 +67,7 @@ public class PipelineDiagnosticsRecorder: ObservableObject {
             metadata: createMetadata()
         )
 
-        print("[PipelineDiagnostics] Capture stopped: \(captures.count) events")
+        debugLog("[PipelineDiagnostics] Capture stopped: \(captures.count) events")
 
         captures.removeAll()
         startTime = nil
@@ -329,7 +329,7 @@ public class PipelineDiagnosticsRecorder: ObservableObject {
 
         try session.exportJSON(to: fileURL)
 
-        print("[PipelineDiagnostics] Exported to: \(fileURL.path)")
+        debugLog("[PipelineDiagnostics] Exported to: \(fileURL.path)")
 
         return fileURL
     }

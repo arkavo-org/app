@@ -65,7 +65,7 @@ public enum VRMAExporter {
 
         do {
             try data.write(to: url)
-            print("[VRMAExporter] Wrote \(data.count) bytes to \(url.lastPathComponent)")
+            debugLog("[VRMAExporter] Wrote \(data.count) bytes to \(url.lastPathComponent)")
         } catch {
             throw VRMAExportError.fileWriteFailed(error.localizedDescription)
         }

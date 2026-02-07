@@ -28,7 +28,7 @@ final class ArkavoAuthState {
     /// Check stored credentials and attempt auto-login
     func checkStoredCredentials() async {
         guard KeychainManager.getAuthenticationToken() != nil else {
-            print("[ArkavoAuthState] No stored token found")
+            debugLog("[ArkavoAuthState] No stored token found")
             return
         }
 
@@ -37,11 +37,11 @@ final class ArkavoAuthState {
             ?? UserDefaults.standard.string(forKey: "arkavo_account_name")
 
         guard let storedName else {
-            print("[ArkavoAuthState] No stored account name found")
+            debugLog("[ArkavoAuthState] No stored account name found")
             return
         }
 
-        print("[ArkavoAuthState] Found stored credentials for: \(storedName)")
+        debugLog("[ArkavoAuthState] Found stored credentials for: \(storedName)")
         isLoading = true
         errorMessage = nil
 
@@ -49,9 +49,9 @@ final class ArkavoAuthState {
             try await client.connect(accountName: storedName)
             isAuthenticated = true
             accountName = storedName
-            print("[ArkavoAuthState] Auto-login successful")
+            debugLog("[ArkavoAuthState] Auto-login successful")
         } catch {
-            print("[ArkavoAuthState] Auto-login failed: \(error)")
+            debugLog("[ArkavoAuthState] Auto-login failed: \(error)")
             // Clear invalid credentials
             KeychainManager.deleteAuthenticationToken()
             UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
@@ -65,7 +65,7 @@ final class ArkavoAuthState {
     func login(accountName: String) async {
         guard !accountName.isEmpty else { return }
 
-        print("[ArkavoAuthState] Starting login for: \(accountName)")
+        debugLog("[ArkavoAuthState] Starting login for: \(accountName)")
         isLoading = true
         errorMessage = nil
 
@@ -77,9 +77,9 @@ final class ArkavoAuthState {
 
             // Save for future sessions
             UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
-            print("[ArkavoAuthState] Login successful")
+            debugLog("[ArkavoAuthState] Login successful")
         } catch {
-            print("[ArkavoAuthState] Login failed: \(error)")
+            debugLog("[ArkavoAuthState] Login failed: \(error)")
             errorMessage = "Login failed. Please try again."
         }
 
@@ -89,30 +89,30 @@ final class ArkavoAuthState {
     /// Register a new account with passkey on this device
     func register(accountName: String) async {
         guard !accountName.isEmpty else {
-            print("[ArkavoAuthState] Registration attempted with empty account name")
+            debugLog("[ArkavoAuthState] Registration attempted with empty account name")
             return
         }
 
-        print("[ArkavoAuthState] Starting registration for: \(accountName)")
+        debugLog("[ArkavoAuthState] Starting registration for: \(accountName)")
         isLoading = true
         errorMessage = nil
 
         do {
             // Generate DID using Secure Enclave (or get existing one)
             let did = try client.generateDID()
-            print("[ArkavoAuthState] Generated/retrieved DID: \(did)")
+            debugLog("[ArkavoAuthState] Generated/retrieved DID: \(did)")
 
             // Register with the server
-            print("[ArkavoAuthState] Registering with server...")
+            debugLog("[ArkavoAuthState] Registering with server...")
             let token = try await client.registerUser(handle: accountName, did: did)
 
             // Save the token
             try KeychainManager.saveAuthenticationToken(token)
-            print("[ArkavoAuthState] Registration successful, token saved")
+            debugLog("[ArkavoAuthState] Registration successful, token saved")
 
             // Save credentials to shared keychain for other Arkavo apps
             try KeychainManager.saveArkavoCredentials(handle: accountName, did: did)
-            print("[ArkavoAuthState] Saved credentials to shared keychain")
+            debugLog("[ArkavoAuthState] Saved credentials to shared keychain")
 
             // Now connect with the new passkey
             try await client.connect(accountName: accountName)
@@ -122,9 +122,9 @@ final class ArkavoAuthState {
 
             // Save for future sessions
             UserDefaults.standard.set(accountName, forKey: "arkavo_account_name")
-            print("[ArkavoAuthState] Connected successfully")
+            debugLog("[ArkavoAuthState] Connected successfully")
         } catch {
-            print("[ArkavoAuthState] Registration failed: \(error)")
+            debugLog("[ArkavoAuthState] Registration failed: \(error)")
             errorMessage = "Registration failed: \(error.localizedDescription)"
         }
 
@@ -133,7 +133,7 @@ final class ArkavoAuthState {
 
     /// Logout and clear credentials
     func logout() async {
-        print("[ArkavoAuthState] Logging out")
+        debugLog("[ArkavoAuthState] Logging out")
         await client.disconnect()
 
         KeychainManager.deleteAuthenticationToken()
@@ -141,7 +141,7 @@ final class ArkavoAuthState {
 
         isAuthenticated = false
         accountName = ""
-        print("[ArkavoAuthState] Logout complete")
+        debugLog("[ArkavoAuthState] Logout complete")
     }
 }
 

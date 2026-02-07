@@ -121,7 +121,7 @@ struct ArkavoCreatorApp: App {
                 }
             }
             .onOpenURL { url in
-                print("ac url: \(url.absoluteString)")
+                debugLog("ac url: \(url.absoluteString)")
 
                 // Validate URL scheme and host
                 guard url.scheme == "arkavocreator",
@@ -141,7 +141,7 @@ struct ArkavoCreatorApp: App {
                             do {
                                 let _ = try await patreonClient.exchangeCode(code)
                             } catch {
-                                print("Patreon OAuth error: \(error)")
+                                debugLog("Patreon OAuth error: \(error)")
                             }
                         }
                     }
@@ -187,7 +187,7 @@ struct ArkavoCreatorApp: App {
                     )
 
                 default:
-                    print("Unknown OAuth callback path: \(url.path)")
+                    debugLog("Unknown OAuth callback path: \(url.path)")
                 }
             }
         }
@@ -268,9 +268,9 @@ class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegat
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        print("\n=== WebAuthn Authorization Completed ===")
+        debugLog("\n=== WebAuthn Authorization Completed ===")
         guard let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
-            print("Error: Invalid credential type received")
+            debugLog("Error: Invalid credential type received")
             continuation.resume(throwing: ArkavoError.authenticationFailed("Invalid credential type"))
             return
         }
@@ -278,10 +278,10 @@ class WebAuthnAuthenticationDelegate: NSObject, ASAuthorizationControllerDelegat
     }
 
     func authorizationController(controller _: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("\n=== WebAuthn Authorization Error ===")
-        print("Error occurred: \(error.localizedDescription)")
+        debugLog("\n=== WebAuthn Authorization Error ===")
+        debugLog("Error occurred: \(error.localizedDescription)")
         if let authError = error as? ASAuthorizationError {
-            print("Authorization Error Code: \(authError.code.rawValue)")
+            debugLog("Authorization Error Code: \(authError.code.rawValue)")
         }
         continuation.resume(throwing: error)
     }
@@ -302,12 +302,12 @@ private enum AssociatedKeys {
 
 class DefaultMacPresentationProvider: NSObject, ASAuthorizationControllerPresentationContextProviding {
     func presentationAnchor(for _: ASAuthorizationController) -> ASPresentationAnchor {
-        print("Providing presentation anchor...")
+        debugLog("Providing presentation anchor...")
         guard let window = NSApplication.shared.windows.first else {
-            print("Warning: No window found, creating new window")
+            debugLog("Warning: No window found, creating new window")
             return NSWindow()
         }
-        print("Using window: \(window)")
+        debugLog("Using window: \(window)")
         return window
     }
 }
