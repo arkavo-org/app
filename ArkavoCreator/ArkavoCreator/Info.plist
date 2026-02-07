@@ -18,7 +18,7 @@
 			</dict>
 		</array>
 		<key>LSMinimumSystemVersion</key>
-		<string>10.15</string>
+		<string>26.0</string>
 		<key>CFBundleDisplayName</key>
 		<string>Arkavo Creator</string>
 		<key>NSMicrophoneUsageDescription</key>

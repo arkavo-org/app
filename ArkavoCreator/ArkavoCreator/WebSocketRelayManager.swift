@@ -4,33 +4,29 @@ import Foundation
 actor WebSocketRelayManager {
     // webSocket is now isolated by the actor
     private var webSocket: URLSessionWebSocketTask?
-    private let localWebSocketURL = URL(string: "ws://localhost:8080")!
+    #if DEBUG
+        private let localWebSocketURL = URL(string: "ws://localhost:8080")!
+    #endif
     // URLSession is Sendable and immutable after initialization
     private let session: URLSession
 
     init() {
         let config = URLSessionConfiguration.default
-        // URLSession delegate queue can be used for more control, but default is fine here.
-        // The delegate methods will run on the specified queue, not the actor's executor.
-        // However, we are not using a delegate here.
         session = URLSession(configuration: config)
     }
 
     func connect() async throws {
-        // Create WebSocket connection to localhost
-        let request = URLRequest(url: localWebSocketURL)
-        // Accessing actor state (webSocket)
-        webSocket = session.webSocketTask(with: request)
-        webSocket?.resume()
+        #if DEBUG
+            // Create WebSocket connection to localhost
+            let request = URLRequest(url: localWebSocketURL)
+            webSocket = session.webSocketTask(with: request)
+            webSocket?.resume()
 
-        // Send initial ping to verify connection
-        // Calls to actor methods are implicitly on the actor's executor
-        try await ping()
-        print("Local WebSocket relay connected successfully")
+            try await ping()
+            print("Local WebSocket relay connected successfully")
 
-        // Start listening for messages
-        // Calls to actor methods are implicitly on the actor's executor
-        receiveMessages()
+            receiveMessages()
+        #endif
     }
 
     // This method accesses actor state (webSocket)
@@ -86,13 +82,13 @@ actor WebSocketRelayManager {
 
     // This method accesses actor state (webSocket)
     func relayMessage(_ data: Data) async throws {
-        print("Relaying message to localhost:8080")
-        // Access webSocket safely within the actor
-        guard let socket = webSocket else {
-            // Handle error: not connected or already disconnected
-            throw URLError(.networkConnectionLost) // Or a custom error
-        }
-        try await socket.send(.data(data))
+        #if DEBUG
+            print("Relaying message to localhost:8080")
+            guard let socket = webSocket else {
+                throw URLError(.networkConnectionLost)
+            }
+            try await socket.send(.data(data))
+        #endif
     }
 
     // This method accesses actor state (webSocket)
