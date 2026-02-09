@@ -40,6 +40,10 @@ let package = Package(
             name: "tdf-fetch",
             targets: ["TDFFetchCLI"]
         ),
+        .executable(
+            name: "c2pa-test",
+            targets: ["C2PATestCLI"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "d8ffeff"),
@@ -109,8 +113,13 @@ let package = Package(
         ),
         .target(
             name: "ArkavoC2PA",
-            dependencies: [],
+            dependencies: ["C2paOpenTDF"],
             swiftSettings: sharedSwiftSettings
+        ),
+        .binaryTarget(
+            name: "C2paOpenTDF",
+            url: "https://github.com/arkavo-org/c2pa-opentdf-rs/releases/download/v0.1.0/C2paOpenTDF.xcframework.zip",
+            checksum: "e5aa0415b9753cd4be2692146953a62af6bf3bce4fad960fed7d51e3ac886ec7"
         ),
         .target(
             name: "ArkavoStore",
@@ -140,6 +149,14 @@ let package = Package(
                 .product(name: "IrohSwift", package: "iroh-swift"),
             ],
             swiftSettings: sharedSwiftSettings
+        ),
+        .executableTarget(
+            name: "C2PATestCLI",
+            dependencies: ["ArkavoC2PA"],
+            swiftSettings: sharedSwiftSettings,
+            linkerSettings: [
+                .linkedFramework("SystemConfiguration"),
+            ]
         ),
     ]
 )

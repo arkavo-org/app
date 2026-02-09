@@ -1,4 +1,4 @@
-// C2PA support temporarily disabled
+// C2PA signing pending c2pa-opentdf-rs integration
 // import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
@@ -168,8 +168,7 @@ final class RecordViewModel {
             let outputURL = try await session.stopRecording()
             debugLog("✅ Recording session stopped, output at: \(outputURL.path)")
 
-            // C2PA signing disabled temporarily to fix race condition issues
-            // TODO: Re-enable C2PA signing after file validation is added
+            // C2PA signing pending c2pa-opentdf-rs integration
             // let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
 
             isRecording = false
@@ -198,8 +197,7 @@ final class RecordViewModel {
         isProcessing = false
     }
 
-    // MARK: - C2PA Signing (Temporarily Disabled)
-    // TODO: Re-enable when c2patool is bundled with the app
+    // MARK: - C2PA Signing (pending c2pa-opentdf-rs integration)
     /*
     private func signRecording(outputURL: URL, recordingTitle: String, recordingDuration: TimeInterval) async throws -> URL {
         // Build C2PA manifest
@@ -220,14 +218,14 @@ final class RecordViewModel {
         let manifest = builder.build()
 
         // Sign the recording
-        let signer = try C2PASigner()
+        let signer = try C2PASigner(signingMode: .selfSigned)
         let signedURL = outputURL.deletingPathExtension().appendingPathExtension("signed.mov")
 
         do {
             try await signer.sign(
                 inputFile: outputURL,
                 outputFile: signedURL,
-                manifest: manifest,
+                manifest: manifest
             )
 
             // Replace original with signed version

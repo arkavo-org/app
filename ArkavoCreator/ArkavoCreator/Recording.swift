@@ -3,7 +3,7 @@ import AVFoundation
 import AppKit
 import ArkavoSocial
 import ArkavoMediaKit
-// C2PA support temporarily disabled
+// C2PA signing pending c2pa-opentdf-rs integration
 // import ArkavoC2PA
 
 // MARK: - Notification Names
@@ -269,8 +269,7 @@ final class RecordingsManager: ObservableObject {
     }
 
     func verifyC2PA(for recording: Recording) async -> Recording.C2PAStatus {
-        // C2PA verification temporarily disabled - c2patool not available
-        // TODO: Re-enable when c2patool is bundled with the app
+        // C2PA verification pending c2pa-opentdf-rs integration
         return .unsigned
     }
 
