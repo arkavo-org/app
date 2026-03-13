@@ -142,7 +142,7 @@ class CreatorProfileViewModel: ObservableObject {
             await ProfileTicketCache.shared.cache(ticket, for: profile.publicID)
 
             lastTicket = ticket
-            print("Profile published with ticket: \(ticket.ticket)")
+            debugLog("Profile published with ticket: \(ticket.ticket)")
             syncState = .synced(ticket: ticket.ticket)
         } catch {
             syncState = .error(error.localizedDescription)

@@ -235,7 +235,7 @@ struct RecordingsLibraryView: View {
 
         if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
-                print("🎬 Opening protected player for: \(recording.title)")
+                debugLog("🎬 Opening protected player for: \(recording.title)")
                 protectedPlayerRecording = recording
             } label: {
                 Label("Play Protected (FairPlay)", systemImage: "play.tv")
@@ -386,12 +386,12 @@ struct RecordingsLibraryView: View {
             let creatorPublicID = Data(repeating: 0, count: 32)
 
             // Publish to Iroh
-            print("🌐 Publishing to Iroh network...")
+            debugLog("🌐 Publishing to Iroh network...")
             let ticket = try await contentService.publishContentWithRetry(
                 info: contentInfo,
                 creatorPublicID: creatorPublicID
             )
-            print("✅ Published with ticket: \(ticket.ticket)")
+            debugLog("✅ Published with ticket: \(ticket.ticket)")
 
             // Cache the ticket
             await ContentTicketCache.shared.cache(ticket, for: ticket.contentID)
@@ -403,7 +403,7 @@ struct RecordingsLibraryView: View {
             // Refresh recordings to update status
             await manager.loadRecordings()
         } catch {
-            print("❌ Publish error: \(error)")
+            debugLog("❌ Publish error: \(error)")
             publishError = error.localizedDescription
             showingPublishError = true
         }
@@ -662,13 +662,13 @@ final class PlayerStatusObserver: NSObject {
 
         // Observe player status
         playerStatusObservation = player.observe(\.status, options: [.new, .initial]) { player, change in
-            print("🎬 [Observer] AVPlayer status: \(player.status.rawValue) (\(player.status.description))")
+            debugLog("🎬 [Observer] AVPlayer status: \(player.status.rawValue) (\(player.status.description))")
             if player.status == .failed, let error = player.error {
-                print("❌ [Observer] AVPlayer failed: \(error.localizedDescription)")
+                debugLog("❌ [Observer] AVPlayer failed: \(error.localizedDescription)")
                 if let nsError = error as NSError? {
-                    print("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
+                    debugLog("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
                     if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-                        print("❌ [Observer] Underlying: \(underlying)")
+                        debugLog("❌ [Observer] Underlying: \(underlying)")
                     }
                 }
             }
@@ -676,10 +676,10 @@ final class PlayerStatusObserver: NSObject {
 
         // Observe time control status (playing, paused, waiting)
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { player, _ in
-            print("🎬 [Observer] TimeControlStatus: \(player.timeControlStatus.rawValue) (\(player.timeControlStatus.description))")
+            debugLog("🎬 [Observer] TimeControlStatus: \(player.timeControlStatus.rawValue) (\(player.timeControlStatus.description))")
             if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
                 if let reason = player.reasonForWaitingToPlay {
-                    print("⏳ [Observer] Waiting reason: \(reason.rawValue)")
+                    debugLog("⏳ [Observer] Waiting reason: \(reason.rawValue)")
                 }
             }
         }
@@ -701,13 +701,13 @@ final class PlayerStatusObserver: NSObject {
         itemStatusObservation?.invalidate()
 
         itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { item, _ in
-            print("📼 [Observer] AVPlayerItem status: \(item.status.rawValue) (\(item.status.description))")
+            debugLog("📼 [Observer] AVPlayerItem status: \(item.status.rawValue) (\(item.status.description))")
             if item.status == .failed, let error = item.error {
-                print("❌ [Observer] AVPlayerItem failed: \(error.localizedDescription)")
+                debugLog("❌ [Observer] AVPlayerItem failed: \(error.localizedDescription)")
                 if let nsError = error as NSError? {
-                    print("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
+                    debugLog("❌ [Observer] Domain: \(nsError.domain), Code: \(nsError.code)")
                     for (key, value) in nsError.userInfo {
-                        print("❌ [Observer] UserInfo[\(key)]: \(value)")
+                        debugLog("❌ [Observer] UserInfo[\(key)]: \(value)")
                     }
                 }
             }
@@ -715,7 +715,7 @@ final class PlayerStatusObserver: NSObject {
             // Log error logs when status changes
             if let errorLog = item.errorLog() {
                 for event in errorLog.events {
-                    print("📊 [Observer] Error event: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
+                    debugLog("📊 [Observer] Error event: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
                 }
             }
         }
@@ -787,7 +787,7 @@ struct ProtectedVideoPlayerView: View {
     init(recording: Recording, kasURL: URL) {
         self.recording = recording
         self.kasURL = kasURL
-        print("🎬 ProtectedVideoPlayerView initialized for: \(recording.title)")
+        debugLog("🎬 ProtectedVideoPlayerView initialized for: \(recording.title)")
     }
 
     /// Content format detected in TDF archive
@@ -999,29 +999,29 @@ struct ProtectedVideoPlayerView: View {
             if let tempDir = tempDirectory {
                 try? FileManager.default.removeItem(at: tempDir)
                 tempDirectory = nil
-                print("🗑️ Cleaned up temp directory")
+                debugLog("🗑️ Cleaned up temp directory")
             }
         }
     }
 
     private func loadManifest() async {
-        print("📂 Loading manifest from: \(recording.tdfURL.path)")
+        debugLog("📂 Loading manifest from: \(recording.tdfURL.path)")
         isLoading = true
         defer {
             isLoading = false
-            print("📂 Manifest loading complete. isLoading = false")
+            debugLog("📂 Manifest loading complete. isLoading = false")
         }
 
         // Get the bookmarked recordings directory for security-scoped access
         guard let recordingsDirectory = RecordingsFolderAccess.getBookmarkedFolder() else {
-            print("❌ No bookmarked recordings folder")
+            debugLog("❌ No bookmarked recordings folder")
             errorMessage = "Please re-select the recordings folder"
             return
         }
 
         // Start security-scoped access on the directory
         guard recordingsDirectory.startAccessingSecurityScopedResource() else {
-            print("❌ Cannot access recordings directory")
+            debugLog("❌ Cannot access recordings directory")
             errorMessage = "Cannot access recordings folder"
             return
         }
@@ -1029,9 +1029,9 @@ struct ProtectedVideoPlayerView: View {
 
         do {
             // Extract manifest from TDF ZIP archive
-            print("📦 Extracting manifest from TDF archive...")
+            debugLog("📦 Extracting manifest from TDF archive...")
             let json = try TDFArchiveReader.extractManifest(from: recording.tdfURL)
-            print("✅ Manifest extracted successfully: \(json.keys)")
+            debugLog("✅ Manifest extracted successfully: \(json.keys)")
 
             // Parse manifest
             let encInfo = json["encryptionInformation"] as? [String: Any]
@@ -1067,12 +1067,12 @@ struct ProtectedVideoPlayerView: View {
                let decoded = try? JSONSerialization.jsonObject(with: encryptedMetadataData) as? [String: Any],
                decoded["type"] as? String == "fmp4-fairplay" {
                 fmp4Info = decoded
-                print("📋 Found fMP4 metadata in encryptedMetadata")
+                debugLog("📋 Found fMP4 metadata in encryptedMetadata")
             }
             // Fall back to legacy meta.fmp4 or meta.fairplay
             else if let legacyInfo = meta?["fmp4"] as? [String: Any] ?? meta?["fairplay"] as? [String: Any] {
                 fmp4Info = legacyInfo
-                print("📋 Found fMP4 metadata in legacy meta field")
+                debugLog("📋 Found fMP4 metadata in legacy meta field")
             }
 
             // Check for fMP4/FairPlay format
@@ -1096,11 +1096,11 @@ struct ProtectedVideoPlayerView: View {
                     segmentFilenames: segmentFilenames
                 )
                 contentFormat = .fmp4
-                print("✅ fMP4/FairPlay manifest parsed: \(segmentFilenames.count) segments")
-                print("   Asset ID: \(assetID)")
-                print("   Playlist: \(playlistFilename)")
-                print("   Init: \(initFilename)")
-                print("   IV from manifest: '\(ivString)' (length: \(ivString.count))")
+                debugLog("✅ fMP4/FairPlay manifest parsed: \(segmentFilenames.count) segments")
+                debugLog("   Asset ID: \(assetID)")
+                debugLog("   Playlist: \(playlistFilename)")
+                debugLog("   Init: \(initFilename)")
+                debugLog("   IV from manifest: '\(ivString)' (length: \(ivString.count))")
             }
             // Fall back to HLS format
             else if let hlsInfo = meta?["hls"] as? [String: Any],
@@ -1124,7 +1124,7 @@ struct ProtectedVideoPlayerView: View {
                     policyBindingHash: policyBinding?["hash"]
                 )
                 contentFormat = .hls
-                print("✅ HLS manifest parsed: \(segmentIVs.count) segments")
+                debugLog("✅ HLS manifest parsed: \(segmentIVs.count) segments")
             }
 
             manifestInfo = ManifestInfo(
@@ -1136,9 +1136,9 @@ struct ProtectedVideoPlayerView: View {
                 hlsManifest: hlsManifest,
                 fmp4Manifest: fmp4Manifest
             )
-            print("✅ Manifest parsed: format=\(contentFormat.displayName), algorithm=\(algorithm), size=\(tdfSizeString)")
+            debugLog("✅ Manifest parsed: format=\(contentFormat.displayName), algorithm=\(algorithm), size=\(tdfSizeString)")
         } catch {
-            print("❌ Manifest loading error: \(error)")
+            debugLog("❌ Manifest loading error: \(error)")
             errorMessage = error.localizedDescription
         }
     }
@@ -1196,7 +1196,7 @@ struct ProtectedVideoPlayerView: View {
             }
 
         } catch {
-            print("❌ Playback error: \(error)")
+            debugLog("❌ Playback error: \(error)")
             playbackError = error.localizedDescription
             isPreparingPlayback = false
         }
@@ -1205,7 +1205,7 @@ struct ProtectedVideoPlayerView: View {
     /// fMP4/FairPlay playback - extracts and plays with hardware DRM
     private func startFMP4Playback(fmp4Manifest: FMP4Manifest, authToken: String) async throws {
         playbackStatus = "Extracting fMP4 content..."
-        print("🎬 Starting fMP4/FairPlay playback...")
+        debugLog("🎬 Starting fMP4/FairPlay playback...")
 
         // Extract fMP4 content to temp directory
         let tempDir = FileManager.default.temporaryDirectory
@@ -1215,9 +1215,9 @@ struct ProtectedVideoPlayerView: View {
 
         // Use TDFArchiveReader to extract all files
         let files = try TDFArchiveReader.extractAllFiles(from: recording.tdfURL, to: tempDir)
-        print("✅ Extracted \(files.count) files to: \(tempDir.path)")
+        debugLog("✅ Extracted \(files.count) files to: \(tempDir.path)")
         for file in files {
-            print("   - \(file.lastPathComponent)")
+            debugLog("   - \(file.lastPathComponent)")
         }
 
         // Find the playlist file
@@ -1228,10 +1228,10 @@ struct ProtectedVideoPlayerView: View {
 
         // Fix playlist: Inject IV from manifest if missing
         // FairPlay requires the IV to be explicit in the playlist for correct decryption
-        print("🔧 Manifest IV: '\(fmp4Manifest.iv)' (length: \(fmp4Manifest.iv.count))")
+        debugLog("🔧 Manifest IV: '\(fmp4Manifest.iv)' (length: \(fmp4Manifest.iv.count))")
         if !fmp4Manifest.iv.isEmpty {
             var playlistContent = try String(contentsOf: localPlaylistPath, encoding: .utf8)
-            print("📄 Original playlist:\n\(playlistContent)")
+            debugLog("📄 Original playlist:\n\(playlistContent)")
 
             // Convert IV to Hex if it looks like Base64 (TDF usually uses Base64)
             var hexIV = fmp4Manifest.iv
@@ -1250,28 +1250,28 @@ struct ProtectedVideoPlayerView: View {
                     }
                     if let data = Data(base64Encoded: padded), data.count == 16 {
                         hexIV = "0x" + data.map { String(format: "%02X", $0) }.joined()
-                        print("🔧 Converted Base64 IV to Hex: \(hexIV)")
+                        debugLog("🔧 Converted Base64 IV to Hex: \(hexIV)")
                     } else {
                         // Not valid Base64, treat as hex
                         hexIV = "0x" + hexIV.uppercased()
-                        print("🔧 Added 0x prefix to IV: \(hexIV)")
+                        debugLog("🔧 Added 0x prefix to IV: \(hexIV)")
                     }
                 } else if hexIV.count == 32 {
                     // Already hex, just add prefix
                     hexIV = "0x" + hexIV.uppercased()
-                    print("🔧 Added 0x prefix to hex IV: \(hexIV)")
+                    debugLog("🔧 Added 0x prefix to hex IV: \(hexIV)")
                 } else {
                     // Unknown format, add prefix and hope for the best
                     hexIV = "0x" + hexIV.uppercased()
-                    print("⚠️ Unknown IV format (length: \(fmp4Manifest.iv.count)), added 0x prefix: \(hexIV)")
+                    debugLog("⚠️ Unknown IV format (length: \(fmp4Manifest.iv.count)), added 0x prefix: \(hexIV)")
                 }
             } else {
-                print("🔧 IV already has 0x prefix: \(hexIV)")
+                debugLog("🔧 IV already has 0x prefix: \(hexIV)")
             }
 
             // Check if IV is already present
             if !playlistContent.contains("IV=") {
-                print("🔧 Injecting IV into playlist: \(hexIV)")
+                debugLog("🔧 Injecting IV into playlist: \(hexIV)")
                 // Regex to find the #EXT-X-KEY line and append IV
                 // Pattern matches: #EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://..." ...
                 // We want to insert IV=0x... after the URI
@@ -1288,22 +1288,22 @@ struct ProtectedVideoPlayerView: View {
                 )
 
                 if playlistContent != originalContent {
-                    print("✅ IV injected successfully")
-                    print("📄 Modified playlist:\n\(playlistContent)")
+                    debugLog("✅ IV injected successfully")
+                    debugLog("📄 Modified playlist:\n\(playlistContent)")
                     try playlistContent.write(to: localPlaylistPath, atomically: true, encoding: .utf8)
                 } else {
-                    print("⚠️ Regex did not match #EXT-X-KEY line - IV not injected")
+                    debugLog("⚠️ Regex did not match #EXT-X-KEY line - IV not injected")
                     // Try to show what lines exist for debugging
                     let lines = playlistContent.components(separatedBy: "\n")
                     for line in lines where line.contains("EXT-X-KEY") {
-                        print("   Found key line: \(line)")
+                        debugLog("   Found key line: \(line)")
                     }
                 }
             } else {
-                print("ℹ️ IV already present in playlist, skipping injection")
+                debugLog("ℹ️ IV already present in playlist, skipping injection")
             }
         } else {
-            print("⚠️ Manifest IV is empty, cannot inject")
+            debugLog("⚠️ Manifest IV is empty, cannot inject")
         }
 
         // Start local HTTP server to serve fMP4 content
@@ -1312,7 +1312,7 @@ struct ProtectedVideoPlayerView: View {
         do {
             let baseURL = try server.start()
             httpServer = server
-            print("🌐 HTTP server started at: \(baseURL)")
+            debugLog("🌐 HTTP server started at: \(baseURL)")
         } catch {
             throw FMP4PlaybackError.serverStartFailed(error)
         }
@@ -1351,16 +1351,16 @@ struct ProtectedVideoPlayerView: View {
         // Wait for the content key to be delivered before starting playback
         playbackStatus = "Requesting decryption key..."
         let skdURI = "skd://\(fmp4Manifest.assetID)"
-        print("🔐 Proactively requesting content key for: \(skdURI)")
+        debugLog("🔐 Proactively requesting content key for: \(skdURI)")
 
         // Use continuation to await key delivery
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             delegate.onKeyDelivered = {
-                print("✅ Content key delivered, starting playback...")
+                debugLog("✅ Content key delivered, starting playback...")
                 continuation.resume()
             }
             delegate.onKeyFailed = { error in
-                print("❌ Content key failed: \(error)")
+                debugLog("❌ Content key failed: \(error)")
                 continuation.resume(throwing: error)
             }
 
@@ -1392,7 +1392,7 @@ struct ProtectedVideoPlayerView: View {
             queue: .main
         ) { notification in
             if let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error {
-                print("❌ [Notification] AVPlayerItem failed to play to end: \(error.localizedDescription)")
+                debugLog("❌ [Notification] AVPlayerItem failed to play to end: \(error.localizedDescription)")
             }
         }
 
@@ -1404,45 +1404,45 @@ struct ProtectedVideoPlayerView: View {
             if let item = notification.object as? AVPlayerItem,
                let errorLog = item.errorLog(),
                let lastEvent = errorLog.events.last {
-                print("❌ [Notification] Error log entry: \(lastEvent.errorComment ?? "Unknown") (code: \(lastEvent.errorStatusCode), domain: \(lastEvent.errorDomain))")
+                debugLog("❌ [Notification] Error log entry: \(lastEvent.errorComment ?? "Unknown") (code: \(lastEvent.errorStatusCode), domain: \(lastEvent.errorDomain))")
             }
         }
 
         // Check for immediate errors
         if playerItem.status == .failed {
-            print("❌ PlayerItem failed immediately: \(playerItem.error?.localizedDescription ?? "Unknown")")
+            debugLog("❌ PlayerItem failed immediately: \(playerItem.error?.localizedDescription ?? "Unknown")")
         }
 
         // Start playback
         avPlayer.play()
-        print("▶️ fMP4/FairPlay playback started")
+        debugLog("▶️ fMP4/FairPlay playback started")
 
         // Log detailed playback status after delays
         for delay in [1.0, 3.0, 5.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak avPlayer, weak playerItem] in
                 guard let avPlayer = avPlayer, let playerItem = playerItem else { return }
-                print("📊 [\(delay)s] AVPlayer status: \(avPlayer.status.description), timeControl: \(avPlayer.timeControlStatus.description)")
-                print("📊 [\(delay)s] PlayerItem status: \(playerItem.status.description), duration: \(playerItem.duration.seconds)s")
-                print("📊 [\(delay)s] Current time: \(avPlayer.currentTime().seconds)s, rate: \(avPlayer.rate)")
+                debugLog("📊 [\(delay)s] AVPlayer status: \(avPlayer.status.description), timeControl: \(avPlayer.timeControlStatus.description)")
+                debugLog("📊 [\(delay)s] PlayerItem status: \(playerItem.status.description), duration: \(playerItem.duration.seconds)s")
+                debugLog("📊 [\(delay)s] Current time: \(avPlayer.currentTime().seconds)s, rate: \(avPlayer.rate)")
                 if let error = playerItem.error {
-                    print("❌ [\(delay)s] PlayerItem error: \(error.localizedDescription)")
+                    debugLog("❌ [\(delay)s] PlayerItem error: \(error.localizedDescription)")
                     if let nsError = error as NSError? {
-                        print("❌ [\(delay)s] Domain: \(nsError.domain), Code: \(nsError.code)")
+                        debugLog("❌ [\(delay)s] Domain: \(nsError.domain), Code: \(nsError.code)")
                         for (key, value) in nsError.userInfo {
-                            print("❌ [\(delay)s] UserInfo[\(key)]: \(value)")
+                            debugLog("❌ [\(delay)s] UserInfo[\(key)]: \(value)")
                         }
                     }
                 }
                 if let accessLog = playerItem.accessLog() {
-                    print("📊 [\(delay)s] Access log: \(accessLog.events.count) events")
+                    debugLog("📊 [\(delay)s] Access log: \(accessLog.events.count) events")
                     for event in accessLog.events {
-                        print("   - URI: \(event.uri ?? "nil"), bytes: \(event.numberOfBytesTransferred), duration: \(event.durationWatched)s")
+                        debugLog("   - URI: \(event.uri ?? "nil"), bytes: \(event.numberOfBytesTransferred), duration: \(event.durationWatched)s")
                     }
                 }
                 if let errorLog = playerItem.errorLog() {
-                    print("📊 [\(delay)s] Error log: \(errorLog.events.count) events")
+                    debugLog("📊 [\(delay)s] Error log: \(errorLog.events.count) events")
                     for event in errorLog.events {
-                        print("   - Error: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
+                        debugLog("   - Error: \(event.errorComment ?? "nil"), code: \(event.errorStatusCode), domain: \(event.errorDomain)")
                     }
                 }
             }
@@ -1467,7 +1467,7 @@ struct ProtectedVideoPlayerView: View {
     private func startHLSPlayback(hlsManifest: HLSManifest, authToken: String) async throws {
         // Read TDF data
         let tdfData = try Data(contentsOf: recording.tdfURL)
-        print("📂 Loaded TDF archive: \(tdfData.count) bytes")
+        debugLog("📂 Loaded TDF archive: \(tdfData.count) bytes")
 
         // Extract HLS content
         playbackStatus = "Extracting HLS segments..."
@@ -1475,7 +1475,7 @@ struct ProtectedVideoPlayerView: View {
             .appendingPathComponent("hls-player-\(UUID().uuidString)")
         let extractor = HLSTDFExtractor(kasURL: kasURL)
         let localAsset = try await extractor.extract(tdfData: tdfData, outputDirectory: tempDir)
-        print("✅ Extracted \(localAsset.segmentURLs.count) segments")
+        debugLog("✅ Extracted \(localAsset.segmentURLs.count) segments")
 
         if useFairPlay {
             // FairPlay playback - hardware decryption via Secure Enclave
@@ -1502,7 +1502,7 @@ struct ProtectedVideoPlayerView: View {
         authToken: String
     ) async throws {
         playbackStatus = "Setting up FairPlay..."
-        print("🔐 Starting FairPlay playback...")
+        debugLog("🔐 Starting FairPlay playback...")
 
         // Create FairPlay manifest for key delegate
         let manifest = HLSManifestLite(
@@ -1534,7 +1534,7 @@ struct ProtectedVideoPlayerView: View {
         session.addContentKeyRecipient(asset)
 
         playbackStatus = "Requesting FairPlay key..."
-        print("🔐 Asset added as content key recipient")
+        debugLog("🔐 Asset added as content key recipient")
 
         // Create player
         let playerItem = AVPlayerItem(asset: asset)
@@ -1546,7 +1546,7 @@ struct ProtectedVideoPlayerView: View {
         isPreparingPlayback = false
 
         avPlayer.play()
-        print("▶️ FairPlay playback started")
+        debugLog("▶️ FairPlay playback started")
     }
 
     /// Local decryption playback (fallback)
@@ -1559,7 +1559,7 @@ struct ProtectedVideoPlayerView: View {
         // Unwrap key from KAS
         playbackStatus = "Obtaining decryption key..."
         let symmetricKey = try await unwrapKeyFromKAS(manifest: hlsManifest, ntdfToken: authToken)
-        print("✅ Key unwrapped successfully")
+        debugLog("✅ Key unwrapped successfully")
 
         // Decrypt segments and create playable content
         playbackStatus = "Decrypting content..."
@@ -1578,7 +1578,7 @@ struct ProtectedVideoPlayerView: View {
 
         // Start playback
         avPlayer.play()
-        print("▶️ Local decryption playback started")
+        debugLog("▶️ Local decryption playback started")
     }
 
     private func unwrapKeyFromKAS(manifest: HLSManifest, ntdfToken: String) async throws -> SymmetricKey {
@@ -1648,7 +1648,7 @@ struct ProtectedVideoPlayerView: View {
         // 1. clientPublicKey in request (derived from clientPrivateKey)
         // 2. JWT signing (converted to P256.Signing key)
         // 3. ECDH unwrap of response (using clientPrivateKey)
-        print("🔑 Sending RSA rewrap request to KAS: \(manifest.kasURL.appendingPathComponent("v2/rewrap"))")
+        debugLog("🔑 Sending RSA rewrap request to KAS: \(manifest.kasURL.appendingPathComponent("v2/rewrap"))")
         let result = try await kasClient.rewrapTDF(
             manifest: tdfManifest,
             clientPrivateKey: clientPrivateKey

@@ -70,9 +70,9 @@ class ArkavoMessageManager: ObservableObject {
         do {
             try fileManager.createDirectory(at: messageDirectory,
                                             withIntermediateDirectories: true)
-            print("Message directory created/verified at: \(messageDirectory.path)")
+            debugLog("Message directory created/verified at: \(messageDirectory.path)")
         } catch {
-            print("Error creating message directory: \(error)")
+            debugLog("Error creating message directory: \(error)")
         }
 
         // Initialize relay manager and connect
@@ -99,11 +99,11 @@ class ArkavoMessageManager: ObservableObject {
                 // @MainActor isolated 'relayManager' property safely.
                 await MainActor.run {
                     self.relayManager = localRelayManager
-                    print("Local WebSocket relay initialized and connected.")
+                    debugLog("Local WebSocket relay initialized and connected.")
                 }
             } catch {
                 // Handle errors, potentially updating UI or state on the main actor.
-                print("Failed to initialize or connect relay: \(error)")
+                debugLog("Failed to initialize or connect relay: \(error)")
                 // Optionally update state on the main actor:
                 // await MainActor.run { self.lastError = "Relay init failed: \(error)" }
             }
@@ -134,17 +134,17 @@ class ArkavoMessageManager: ObservableObject {
                 } catch {
                     // Handle cancellation error during sleep
                     if error is CancellationError {
-                        print("Replay task cancelled during sleep.")
+                        debugLog("Replay task cancelled during sleep.")
                         break
                     } else {
-                        print("Error during sleep: \(error)")
+                        debugLog("Error during sleep: \(error)")
                     }
                 }
             }
             // Ensure isReplaying is set to false when the loop finishes or is cancelled
             await MainActor.run { [weak self] in
                 self?.isReplaying = false
-                print("Replay task finished or cancelled.")
+                debugLog("Replay task finished or cancelled.")
             }
         }
     }
@@ -168,11 +168,11 @@ class ArkavoMessageManager: ObservableObject {
             if replayToProduction {
                 // Send to production server (assuming arkavoClient.sendMessage is safe to call from MainActor)
                 try await arkavoClient.sendMessage(message.data)
-                print("Replayed message \(message.id) to production server")
+                debugLog("Replayed message \(message.id) to production server")
             } else {
                 // Send to local relay via the async relayMessage method
                 try await relayMessage(message) // This call is safe from @MainActor
-                print("Replayed message \(message.id) to localhost")
+                debugLog("Replayed message \(message.id) to localhost")
             }
 
             // Update message status (must be done on MainActor)
@@ -199,7 +199,7 @@ class ArkavoMessageManager: ObservableObject {
             }
             saveMessage(updatedMessage) // saveMessage is synchronous, runs on MainActor
 
-            print("Failed to replay message \(message.id): \(error)")
+            debugLog("Failed to replay message \(message.id): \(error)")
         }
 
         currentReplayIndex += 1
@@ -231,7 +231,7 @@ class ArkavoMessageManager: ObservableObject {
                     try await relayMessage(message)
                 } catch {
                     // Handle error from relaying if necessary
-                    print("Error relaying newly handled message \(message.id): \(error)")
+                    debugLog("Error relaying newly handled message \(message.id): \(error)")
                     // Maybe update message status to failed here as well?
                 }
             }
@@ -242,7 +242,7 @@ class ArkavoMessageManager: ObservableObject {
     private func relayMessage(_ message: ArkavoMessage) async throws {
         // Accessing relayManager here is safe because we are on the MainActor
         guard let relayManager else {
-            print("Relay manager not initialized")
+            debugLog("Relay manager not initialized")
             throw RelayError.notInitialized // Throw a specific error
         }
 
@@ -250,9 +250,9 @@ class ArkavoMessageManager: ObservableObject {
             // This correctly awaits the call to the actor's method.
             // Swift handles hopping to the actor's executor and back.
             try await relayManager.relayMessage(message.data)
-            print("Message \(message.id) relayed to localhost")
+            debugLog("Message \(message.id) relayed to localhost")
         } catch {
-            print("Failed to relay message \(message.id): \(error)")
+            debugLog("Failed to relay message \(message.id): \(error)")
             // Re-throw the error caught from the actor call
             throw RelayError.relayFailed(error)
         }
@@ -267,9 +267,9 @@ class ArkavoMessageManager: ObservableObject {
             let data = try encoder.encode(message)
             // Consider making file writing asynchronous if it becomes a bottleneck
             try data.write(to: fileURL)
-            print("Successfully saved message \(message.id) to \(fileURL.path)")
+            debugLog("Successfully saved message \(message.id) to \(fileURL.path)")
         } catch {
-            print("Error saving message: \(error)")
+            debugLog("Error saving message: \(error)")
         }
     }
 
@@ -293,9 +293,9 @@ class ArkavoMessageManager: ObservableObject {
             // Update the @Published property on the MainActor
             messages = loadedMessages.sorted { $0.timestamp < $1.timestamp } // Sort ascending for replay order
 
-            print("Loaded \(messages.count) messages from filesystem")
+            debugLog("Loaded \(messages.count) messages from filesystem")
         } catch {
-            print("Error loading messages: \(error)")
+            debugLog("Error loading messages: \(error)")
         }
     }
 
@@ -303,7 +303,7 @@ class ArkavoMessageManager: ObservableObject {
         // Ensure replay task is cancelled
         isReplaying = false
         replayTask?.cancel()
-        print("ArkavoMessageManager deinit: Replay task cancelled.")
+        debugLog("ArkavoMessageManager deinit: Replay task cancelled.")
         // Disconnect local relay if needed (consider if relayManager should be disconnected)
         // Task { await relayManager?.disconnect() } // Example if disconnect is needed
     }

@@ -55,8 +55,9 @@ final class VRMFrameCaptureManager {
     // Callbacks
     var onFrame: ((CVPixelBuffer) -> Void)?
 
-    // Reference to renderer
+    // Reference to renderer (one of these should be set)
     weak var renderer: VRMAvatarRenderer?
+    weak var museRenderer: MuseAvatarRenderer?
 
     // MARK: - Initialization
 
@@ -78,7 +79,7 @@ final class VRMFrameCaptureManager {
         try createRenderTargets(size: size)
         try createPixelBufferPool(size: size)
 
-        print("[VRMFrameCaptureManager] Initialized: \(Int(size.width))x\(Int(size.height))@\(frameRate)fps")
+        debugLog("[VRMFrameCaptureManager] Initialized: \(Int(size.width))x\(Int(size.height))@\(frameRate)fps")
     }
 
     // Note: Timer cleanup happens automatically when the object is deallocated
@@ -90,8 +91,8 @@ final class VRMFrameCaptureManager {
     /// Start capturing frames from the VRM renderer
     func startCapture() {
         guard !isCapturing else { return }
-        guard renderer != nil else {
-            print("[VRMFrameCaptureManager] Cannot start capture - no renderer set")
+        guard renderer != nil || museRenderer != nil else {
+            debugLog("[VRMFrameCaptureManager] Cannot start capture - no renderer set")
             return
         }
 
@@ -105,7 +106,7 @@ final class VRMFrameCaptureManager {
             }
         }
 
-        print("[VRMFrameCaptureManager] Started capture at \(targetFrameRate)fps")
+        debugLog("[VRMFrameCaptureManager] Started capture at \(targetFrameRate)fps")
     }
 
     /// Stop capturing frames
@@ -116,26 +117,35 @@ final class VRMFrameCaptureManager {
         frameTimer = nil
         isCapturing = false
 
-        print("[VRMFrameCaptureManager] Stopped capture")
+        debugLog("[VRMFrameCaptureManager] Stopped capture")
     }
 
     /// Capture a single frame synchronously (for immediate use)
     /// - Returns: CVPixelBuffer containing the current avatar render, or nil if unavailable
     func captureTexture() -> CVPixelBuffer? {
-        guard let renderer,
-              let colorTexture,
+        guard let colorTexture,
               let depthTexture,
               let commandBuffer = commandQueue.makeCommandBuffer()
         else {
             return nil
         }
 
-        // Render VRM to offscreen texture
-        renderer.renderToTexture(
-            colorTexture: colorTexture,
-            depthTexture: depthTexture,
-            commandBuffer: commandBuffer
-        )
+        // Render VRM to offscreen texture (use whichever renderer is set)
+        if let renderer {
+            renderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else if let museRenderer {
+            museRenderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else {
+            return nil
+        }
 
         // Synchronize texture for CPU access (only needed for managed storage mode)
         // Shared storage mode doesn't need synchronization on Apple Silicon
@@ -186,7 +196,7 @@ final class VRMFrameCaptureManager {
         }
         depthTexture = depth
 
-        print("[VRMFrameCaptureManager] Created render targets: \(Int(size.width))x\(Int(size.height))")
+        debugLog("[VRMFrameCaptureManager] Created render targets: \(Int(size.width))x\(Int(size.height))")
     }
 
     private func createPixelBufferPool(size: CGSize) throws {
@@ -213,12 +223,11 @@ final class VRMFrameCaptureManager {
             throw VRMCaptureError.pixelBufferPoolCreationFailed
         }
 
-        print("[VRMFrameCaptureManager] Created pixel buffer pool")
+        debugLog("[VRMFrameCaptureManager] Created pixel buffer pool")
     }
 
     private func captureFrame() {
         guard isCapturing,
-              let renderer,
               let colorTexture,
               let depthTexture,
               let commandBuffer = commandQueue.makeCommandBuffer()
@@ -226,12 +235,22 @@ final class VRMFrameCaptureManager {
             return
         }
 
-        // Render VRM to offscreen texture
-        renderer.renderToTexture(
-            colorTexture: colorTexture,
-            depthTexture: depthTexture,
-            commandBuffer: commandBuffer
-        )
+        // Render VRM to offscreen texture (use whichever renderer is set)
+        if let renderer {
+            renderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else if let museRenderer {
+            museRenderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else {
+            return
+        }
 
         // Synchronize texture for CPU access (only needed for managed storage mode)
         // Shared storage mode doesn't need synchronization on Apple Silicon
@@ -266,7 +285,7 @@ final class VRMFrameCaptureManager {
         let status = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
 
         guard status == kCVReturnSuccess, let pb = pixelBuffer else {
-            print("[VRMFrameCaptureManager] Failed to create pixel buffer from pool")
+            debugLog("[VRMFrameCaptureManager] Failed to create pixel buffer from pool")
             return nil
         }
 

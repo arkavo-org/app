@@ -71,7 +71,7 @@ struct PatreonLoginView: View {
                                         try await patreonClient.handleCallback(url)
                                         webViewPresenter.dismiss()
                                     } catch {
-                                        print("Patreon OAuth error: \(error)")
+                                        debugLog("Patreon OAuth error: \(error)")
                                         // Keep the window open on error to show any error pages
                                     }
                                 }

@@ -93,7 +93,7 @@ struct StreamDestinationPicker: View {
                                         await fetchYouTubeStreamKey()
                                     } else {
                                         // Need to authenticate first
-                                        print("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
+                                        debugLog("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
                                         do {
                                             try await youtubeClient.authenticateWithLocalServer()
                                             // After auth, fetch the stream key
@@ -234,7 +234,7 @@ struct StreamDestinationPicker: View {
     private func fetchYouTubeStreamKey() async {
         do {
             if let key = try await youtubeClient.fetchStreamKey() {
-                print("[StreamDestinationPicker] Fetched YouTube stream key: \(key.prefix(8))...")
+                debugLog("[StreamDestinationPicker] Fetched YouTube stream key: \(key.prefix(8))...")
                 await MainActor.run {
                     streamViewModel.streamKey = key
                     streamViewModel.saveStreamKey()

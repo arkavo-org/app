@@ -100,12 +100,12 @@ enum ARKitDataConverter {
     /// - Returns: ARKit blend shapes, or nil if not face tracking metadata
     static func toARKitFaceBlendShapes(_ event: CameraMetadataEvent) -> ARKitFaceBlendShapes? {
         guard case let .arFace(faceMetadata) = event.metadata else {
-            print("🔄 [ARKitDataConverter] Event metadata is not .arFace, returning nil")
+            debugLog("🔄 [ARKitDataConverter] Event metadata is not .arFace, returning nil")
             return nil
         }
-        print("🔄 [ARKitDataConverter] Converting face metadata with \(faceMetadata.blendShapes.count) blend shapes, headTransform: \(faceMetadata.headTransform != nil ? "yes" : "no")")
+        debugLog("🔄 [ARKitDataConverter] Converting face metadata with \(faceMetadata.blendShapes.count) blend shapes, headTransform: \(faceMetadata.headTransform != nil ? "yes" : "no")")
         let result = toARKitFaceBlendShapes(faceMetadata, timestamp: event.timestamp)
-        print("   └─ Converted to ARKitFaceBlendShapes with \(result.shapes.count) shapes, headTransform: \(result.headTransform != nil ? "yes" : "no")")
+        debugLog("   └─ Converted to ARKitFaceBlendShapes with \(result.shapes.count) shapes, headTransform: \(result.headTransform != nil ? "yes" : "no")")
         return result
     }
 
@@ -346,7 +346,7 @@ enum ARKitDataConverter {
 
             // Convert transform array to matrix
             guard let matrix = toMatrix4x4(joint.transform) else {
-                print("⚠️ [ARKitDataConverter] Invalid transform for joint: \(joint.name)")
+                debugLog("⚠️ [ARKitDataConverter] Invalid transform for joint: \(joint.name)")
                 invalidTransformJoints.append(joint.name)
                 continue
             }
@@ -357,20 +357,20 @@ enum ARKitDataConverter {
 
         // Log unmapped joints (only first time)
         if !unmappedJoints.isEmpty && !Self.hasLoggedUnmappedJoints.getAndSet() {
-            print("⚠️ [ARKitDataConverter] Unmapped joints (not in ARKitJoint enum):")
-            print("   Total: \(unmappedJoints.count) out of \(metadata.joints.count)")
-            print("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
+            debugLog("⚠️ [ARKitDataConverter] Unmapped joints (not in ARKitJoint enum):")
+            debugLog("   Total: \(unmappedJoints.count) out of \(metadata.joints.count)")
+            debugLog("   First 10: \(unmappedJoints.prefix(10).joined(separator: ", "))")
 
             // Log which joints ARE mapped
             let mappedJointsList = joints.keys.map { $0.rawValue }.sorted()
-            print("✅ [ARKitDataConverter] Mapped joints (\(mappedJointsList.count)):")
-            print("   \(mappedJointsList.joined(separator: ", "))")
+            debugLog("✅ [ARKitDataConverter] Mapped joints (\(mappedJointsList.count)):")
+            debugLog("   \(mappedJointsList.joined(separator: ", "))")
 
             // Check for missing parent joints
             let requiredParents: [String] = ["upperChest", "leftShoulder", "rightShoulder", "spine", "chest"]
             let missing = requiredParents.filter { parent in !mappedJointsList.contains(parent) }
             if !missing.isEmpty {
-                print("❌ [ARKitDataConverter] Missing parent joints for arms: \(missing.joined(separator: ", "))")
+                debugLog("❌ [ARKitDataConverter] Missing parent joints for arms: \(missing.joined(separator: ", "))")
             }
         }
 

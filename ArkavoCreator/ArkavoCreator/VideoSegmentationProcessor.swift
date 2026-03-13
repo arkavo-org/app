@@ -94,11 +94,11 @@ public class VideoSegmentationProcessor {
                 let progress = Double(index + 1) / Double(times.count)
                 await MainActor.run {
 //                    progressHandler?(progress)
-                    print("progress \(progress)")
+                    debugLog("progress \(progress)")
                 }
 
             } catch {
-                print("Error processing frame at \(CMTimeGetSeconds(time))s: \(error)")
+                debugLog("Error processing frame at \(CMTimeGetSeconds(time))s: \(error)")
                 // Continue processing other frames
                 continue
             }
@@ -282,7 +282,7 @@ public class VideoSceneDetector {
         let durationSeconds = CMTimeGetSeconds(duration)
 
         let segmentations = try await segmentationProcessor.processVideo(url: videoURL) { progress in
-            print("Processing progress: \(Int(progress * 100))%")
+            debugLog("Processing progress: \(Int(progress * 100))%")
         }
 
         var significantScenes: [SceneSegmentationData] = []

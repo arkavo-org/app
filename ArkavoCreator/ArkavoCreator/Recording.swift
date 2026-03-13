@@ -3,7 +3,7 @@ import AVFoundation
 import AppKit
 import ArkavoSocial
 import ArkavoMediaKit
-// C2PA support temporarily disabled
+// C2PA signing pending c2pa-opentdf-rs integration
 // import ArkavoC2PA
 
 // MARK: - Notification Names
@@ -127,13 +127,13 @@ final class RecordingsManager: ObservableObject {
         // Check if we have a bookmarked folder, otherwise we'll need user to select one
         if let folder = RecordingsFolderAccess.getBookmarkedFolder() {
             recordingsDirectory = folder
-            print("📂 [RecordingsManager] recordingsDirectory: \(recordingsDirectory.path)")
+            debugLog("📂 [RecordingsManager] recordingsDirectory: \(recordingsDirectory.path)")
         } else {
             // Use sandboxed container as temporary fallback until user selects folder
             let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             recordingsDirectory = documentsURL.appendingPathComponent("Recordings", isDirectory: true)
             needsFolderSelection = true
-            print("📂 [RecordingsManager] no folder selected, using fallback: \(recordingsDirectory.path)")
+            debugLog("📂 [RecordingsManager] no folder selected, using fallback: \(recordingsDirectory.path)")
         }
 
         // Listen for recording completed notifications
@@ -156,7 +156,7 @@ final class RecordingsManager: ObservableObject {
         if let folder = await RecordingsFolderAccess.chooseRecordingsFolder() {
             recordingsDirectory = folder
             needsFolderSelection = false
-            print("📂 [RecordingsManager] user selected: \(folder.path)")
+            debugLog("📂 [RecordingsManager] user selected: \(folder.path)")
             await loadRecordings()
         }
     }
@@ -164,7 +164,7 @@ final class RecordingsManager: ObservableObject {
     func loadRecordings() async {
         // Start security-scoped access for the recordings directory
         guard recordingsDirectory.startAccessingSecurityScopedResource() else {
-            print("Error loading recordings: Cannot access recordings directory")
+            debugLog("Error loading recordings: Cannot access recordings directory")
             recordings = []
             return
         }
@@ -218,7 +218,7 @@ final class RecordingsManager: ObservableObject {
             recordings = loadedRecordings.sorted { $0.date > $1.date } // Most recent first
 
         } catch {
-            print("Error loading recordings: \(error)")
+            debugLog("Error loading recordings: \(error)")
             recordings = []
         }
     }
@@ -226,7 +226,7 @@ final class RecordingsManager: ObservableObject {
     func deleteRecording(_ recording: Recording) {
         // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
         guard recordingsDirectory.startAccessingSecurityScopedResource() else {
-            print("Error deleting recording: Cannot access recordings directory")
+            debugLog("Error deleting recording: Cannot access recordings directory")
             return
         }
         defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
@@ -243,14 +243,14 @@ final class RecordingsManager: ObservableObject {
                 await loadRecordings()
             }
         } catch {
-            print("Error deleting recording: \(error)")
+            debugLog("Error deleting recording: \(error)")
         }
     }
 
     func generateThumbnail(for recording: Recording) async -> NSImage? {
         // Start security-scoped access on the directory (the bookmark is on the directory, not individual files)
         guard recordingsDirectory.startAccessingSecurityScopedResource() else {
-            print("Error generating thumbnail: Cannot access recordings directory")
+            debugLog("Error generating thumbnail: Cannot access recordings directory")
             return nil
         }
         defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
@@ -263,14 +263,13 @@ final class RecordingsManager: ObservableObject {
             let (cgImage, _) = try await imageGenerator.image(at: .zero)
             return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         } catch {
-            print("Error generating thumbnail: \(error)")
+            debugLog("Error generating thumbnail: \(error)")
             return nil
         }
     }
 
     func verifyC2PA(for recording: Recording) async -> Recording.C2PAStatus {
-        // C2PA verification temporarily disabled - c2patool not available
-        // TODO: Re-enable when c2patool is bundled with the app
+        // C2PA verification pending c2pa-opentdf-rs integration
         return .unsigned
     }
 
@@ -309,23 +308,23 @@ final class RecordingsManager: ObservableObject {
         defer { recordingsDirectory.stopAccessingSecurityScopedResource() }
 
         // Load video data (potentially large file)
-        print("📂 Loading video data from: \(videoURL.path)")
+        debugLog("📂 Loading video data from: \(videoURL.path)")
         let videoData = try Data(contentsOf: videoURL)
-        print("📂 Loaded \(videoData.count) bytes")
+        debugLog("📂 Loaded \(videoData.count) bytes")
 
         // Create protection service and encrypt
         let protectionService = RecordingProtectionService(kasURL: kasURL)
-        print("🔐 Starting TDF3 protection...")
+        debugLog("🔐 Starting TDF3 protection...")
         let tdfArchive = try await protectionService.protectVideo(
             videoData: videoData,
             assetID: assetID
         )
-        print("✅ TDF archive created: \(tdfArchive.count) bytes")
+        debugLog("✅ TDF archive created: \(tdfArchive.count) bytes")
 
         // Write TDF archive
         try tdfArchive.write(to: tdfURL)
-        print("💾 Protected recording: \(title)")
-        print("💾 TDF archive: \(tdfURL.path)")
+        debugLog("💾 Protected recording: \(title)")
+        debugLog("💾 TDF archive: \(tdfURL.path)")
     }
 
     /// Protect a recording with HLS segmentation for streaming playback
@@ -348,19 +347,19 @@ final class RecordingsManager: ObservableObject {
 
         // Create HLS protection service
         let protectionService = HLSRecordingProtectionService(kasURL: kasURL)
-        print("🎬 Starting HLS TDF protection for: \(title)")
+        debugLog("🎬 Starting HLS TDF protection for: \(title)")
 
         // Convert to HLS and package into TDF
         let tdfArchive = try await protectionService.protectVideoHLS(
             videoURL: videoURL,
             assetID: assetID
         )
-        print("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
+        debugLog("✅ HLS TDF archive created: \(tdfArchive.count) bytes")
 
         // Write TDF archive
         try tdfArchive.write(to: tdfURL)
-        print("💾 Protected HLS recording: \(title)")
-        print("💾 TDF archive: \(tdfURL.path)")
+        debugLog("💾 Protected HLS recording: \(title)")
+        debugLog("💾 TDF archive: \(tdfURL.path)")
     }
 
     /// Protect a recording with fMP4/CBCS for true FairPlay hardware DRM
@@ -383,19 +382,19 @@ final class RecordingsManager: ObservableObject {
 
         // Create fMP4 protection service
         let protectionService = FMP4RecordingProtectionService(kasURL: kasURL)
-        print("🎬 Starting fMP4 FairPlay protection for: \(title)")
+        debugLog("🎬 Starting fMP4 FairPlay protection for: \(title)")
 
         // Convert to fMP4/CBCS and package into TDF
         let tdfArchive = try await protectionService.protectVideo(
             videoURL: videoURL,
             assetID: assetID
         )
-        print("✅ fMP4 TDF archive created: \(tdfArchive.count) bytes")
+        debugLog("✅ fMP4 TDF archive created: \(tdfArchive.count) bytes")
 
         // Write TDF archive
         try tdfArchive.write(to: tdfURL)
-        print("💾 Protected fMP4 recording: \(title)")
-        print("💾 TDF archive: \(tdfURL.path)")
+        debugLog("💾 Protected fMP4 recording: \(title)")
+        debugLog("💾 TDF archive: \(tdfURL.path)")
     }
 }
 

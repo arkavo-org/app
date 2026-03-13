@@ -1,5 +1,5 @@
 {
-  "originHash" : "a768a546135d6b9ebcbcc74666fd7a6013c3f56b295f6fb6b44013ef717e9cf8",
+  "originHash" : "b83820b1903c2b4e25758a74513a6cf115920ddc7a5730a528e6e691a3c49c6a",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -35,6 +35,15 @@
       "state" : {
         "branch" : "d8ffeff",
         "revision" : "d8ffeff99e00ec3334aa57b1fe5f9e1c7f38d2a9"
+      }
+    },
+    {
+      "identity" : "vrmmetalkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/VRMMetalKit",
+      "state" : {
+        "revision" : "f84cea22aa7dc60470a2fd691f30e4c59c5d31a3",
+        "version" : "0.9.2"
       }
     },
     {

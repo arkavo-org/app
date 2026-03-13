@@ -1,4 +1,4 @@
-// C2PA support temporarily disabled
+// C2PA signing pending c2pa-opentdf-rs integration
 // import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
@@ -26,6 +26,7 @@ final class RecordViewModel {
     var enableDesktop: Bool = true
     var enableAvatar: Bool = false
     var avatarTextureProvider: (@Sendable () -> CVPixelBuffer?)?
+    var museTextureProvider: (@Sendable () -> CVPixelBuffer?)?
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -119,7 +120,10 @@ final class RecordViewModel {
             if enableAvatar, let provider = avatarTextureProvider {
                 session.avatarTextureProvider = provider
             }
-            print("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL")")
+            if let museProvider = museTextureProvider {
+                session.museTextureProvider = museProvider
+            }
+            debugLog("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL"), museTextureProvider: \(session.museTextureProvider != nil ? "SET" : "NIL")")
             session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition
@@ -164,12 +168,11 @@ final class RecordViewModel {
         isProcessing = true
 
         do {
-            print("⏹️ Stopping recording session...")
+            debugLog("⏹️ Stopping recording session...")
             let outputURL = try await session.stopRecording()
-            print("✅ Recording session stopped, output at: \(outputURL.path)")
+            debugLog("✅ Recording session stopped, output at: \(outputURL.path)")
 
-            // C2PA signing disabled temporarily to fix race condition issues
-            // TODO: Re-enable C2PA signing after file validation is added
+            // C2PA signing pending c2pa-opentdf-rs integration
             // let signedURL = try await signRecording(outputURL: outputURL, recordingTitle: title, recordingDuration: duration)
 
             isRecording = false
@@ -179,7 +182,7 @@ final class RecordViewModel {
             RecordingState.shared.setRecordingSession(nil)
 
             // Recording complete - saved successfully
-            print("✅ Recording saved: \(outputURL.path)")
+            debugLog("✅ Recording saved: \(outputURL.path)")
 
             // Post notification to refresh library
             NotificationCenter.default.post(name: .recordingCompleted, object: nil)
@@ -188,18 +191,17 @@ final class RecordViewModel {
             // Stop stream monitor tracking
             StreamMonitorViewModel.shared.stopMonitoring()
         } catch let error as RecorderError {
-            print("❌ RecorderError during stop: \(error)")
+            debugLog("❌ RecorderError during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         } catch {
-            print("❌ Error during stop: \(error)")
+            debugLog("❌ Error during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         }
 
         isProcessing = false
     }
 
-    // MARK: - C2PA Signing (Temporarily Disabled)
-    // TODO: Re-enable when c2patool is bundled with the app
+    // MARK: - C2PA Signing (pending c2pa-opentdf-rs integration)
     /*
     private func signRecording(outputURL: URL, recordingTitle: String, recordingDuration: TimeInterval) async throws -> URL {
         // Build C2PA manifest
@@ -220,14 +222,14 @@ final class RecordViewModel {
         let manifest = builder.build()
 
         // Sign the recording
-        let signer = try C2PASigner()
+        let signer = try C2PASigner(signingMode: .selfSigned)
         let signedURL = outputURL.deletingPathExtension().appendingPathExtension("signed.mov")
 
         do {
             try await signer.sign(
                 inputFile: outputURL,
                 outputFile: signedURL,
-                manifest: manifest,
+                manifest: manifest
             )
 
             // Replace original with signed version
@@ -237,7 +239,7 @@ final class RecordViewModel {
             return outputURL
         } catch {
             // If signing fails, keep the unsigned recording
-            print("C2PA signing failed: \(error.localizedDescription), keeping unsigned recording")
+            debugLog("C2PA signing failed: \(error.localizedDescription), keeping unsigned recording")
             return outputURL
         }
     }
@@ -506,9 +508,9 @@ final class RecordViewModel {
         } else {
             session = try RecordingSession()
             session.metadataHandler = { event in
-                // print("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
+                // debugLog("📢 [RecordViewModel] metadataHandler called, posting notification for \(event.sourceID)")
                 NotificationCenter.default.post(name: .cameraMetadataUpdated, object: event)
-                // print("   └─ Notification posted: .cameraMetadataUpdated")
+                // debugLog("   └─ Notification posted: .cameraMetadataUpdated")
             }
             session.remoteSourcesHandler = { [weak self] sources in
                 Task { @MainActor in
@@ -553,13 +555,13 @@ final class RecordViewModel {
         if remoteBridgeEnabled {
             let portValue = UInt16(remoteBridgePort) ?? 0
             let serviceName = suggestedHostname
-            print("🔧 [RecordViewModel] Enabling remote camera bridge with port: \(portValue == 0 ? "auto" : String(portValue))")
+            debugLog("🔧 [RecordViewModel] Enabling remote camera bridge with port: \(portValue == 0 ? "auto" : String(portValue))")
             try? session.enableRemoteCameraBridge(port: portValue, serviceName: serviceName)
 
             // Get the actual port that was assigned
             if let server = session.remoteCameraServer {
                 actualPort = server.port
-                print("✅ [RecordViewModel] Remote camera server active on port \(actualPort)")
+                debugLog("✅ [RecordViewModel] Remote camera server active on port \(actualPort)")
             }
         }
 
@@ -606,9 +608,9 @@ final class RecordViewModel {
             return  // No change, skip processing
         }
 
-        print("📱 [RemoteCameras] Received source update: \(sources.count) source(s)")
+        debugLog("📱 [RemoteCameras] Received source update: \(sources.count) source(s)")
         for source in sources {
-            print("  └─ \(source)")
+            debugLog("  └─ \(source)")
         }
 
         remoteCameraSources = newSources
@@ -620,10 +622,10 @@ final class RecordViewModel {
         let remainingSlots = max(0, MultiCameraLayout.maxSupportedSources - selectedCameraIDs.count)
         if remainingSlots > 0 {
             selectedCameraIDs.append(contentsOf: missing.prefix(remainingSlots))
-            print("✅ [RemoteCameras] Auto-selected \(missing.prefix(remainingSlots).count) new source(s)")
+            debugLog("✅ [RemoteCameras] Auto-selected \(missing.prefix(remainingSlots).count) new source(s)")
         }
 
-        print("📋 [RemoteCameras] Total selected cameras: \(selectedCameraIDs)")
+        debugLog("📋 [RemoteCameras] Total selected cameras: \(selectedCameraIDs)")
         recordingSession?.setCameraSources(selectedCameraIDs)
         refreshCameraPreview()
     }

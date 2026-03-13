@@ -192,13 +192,13 @@ class VRMDownloader: ObservableObject {
     func listDownloadedModels() -> [URL] {
         let modelsDirectory = getModelsDirectory()
 
-        print("[VRMDownloader] Checking models directory: \(modelsDirectory.path)")
+        debugLog("[VRMDownloader] Checking models directory: \(modelsDirectory.path)")
 
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: modelsDirectory,
             includingPropertiesForKeys: nil,
         ) else {
-            print("[VRMDownloader] Could not read directory (may not exist yet)")
+            debugLog("[VRMDownloader] Could not read directory (may not exist yet)")
             return []
         }
 
@@ -206,7 +206,7 @@ class VRMDownloader: ObservableObject {
             let ext = $0.pathExtension.lowercased()
             return ext == "vrm" || ext == "glb"
         }
-        print("[VRMDownloader] Found \(vrmFiles.count) VRM/GLB files in directory")
+        debugLog("[VRMDownloader] Found \(vrmFiles.count) VRM/GLB files in directory")
         return vrmFiles
     }
 
@@ -269,7 +269,7 @@ class VRMDownloader: ObservableObject {
         resolvedModelsDirectory = nil
 
         UserDefaults.standard.removeObject(forKey: Self.modelsDirectoryBookmarkKey)
-        print("[VRMDownloader] Cleared custom models directory, reverting to default")
+        debugLog("[VRMDownloader] Cleared custom models directory, reverting to default")
     }
 
     /// Save a security-scoped bookmark for the directory
@@ -281,12 +281,12 @@ class VRMDownloader: ObservableObject {
                 relativeTo: nil
             )
             UserDefaults.standard.set(bookmarkData, forKey: Self.modelsDirectoryBookmarkKey)
-            print("[VRMDownloader] Saved bookmark for: \(url.path)")
+            debugLog("[VRMDownloader] Saved bookmark for: \(url.path)")
 
             // Immediately resolve it
             _ = resolveBookmarkedDirectory()
         } catch {
-            print("[VRMDownloader] Failed to create bookmark: \(error)")
+            debugLog("[VRMDownloader] Failed to create bookmark: \(error)")
         }
     }
 
@@ -308,10 +308,10 @@ class VRMDownloader: ObservableObject {
         // Start accessing the security-scoped resource
         if url.startAccessingSecurityScopedResource() {
             resolvedModelsDirectory = url
-            print("[VRMDownloader] Started accessing: \(url.path)")
+            debugLog("[VRMDownloader] Started accessing: \(url.path)")
             return url
         } else {
-            print("[VRMDownloader] Failed to start accessing security-scoped resource")
+            debugLog("[VRMDownloader] Failed to start accessing security-scoped resource")
             return nil
         }
     }
@@ -328,14 +328,14 @@ class VRMDownloader: ObservableObject {
             )
 
             if isStale {
-                print("[VRMDownloader] Bookmark is stale, need to re-select directory")
+                debugLog("[VRMDownloader] Bookmark is stale, need to re-select directory")
                 // Could prompt user to re-select here
                 return nil
             }
 
             return url
         } catch {
-            print("[VRMDownloader] Failed to resolve bookmark: \(error)")
+            debugLog("[VRMDownloader] Failed to resolve bookmark: \(error)")
             return nil
         }
     }
