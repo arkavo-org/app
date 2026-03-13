@@ -12,6 +12,7 @@ struct ContentView: View {
     @StateObject var micropubClient: MicropubClient
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
+    @ObservedObject var agentService: CreatorAgentService
     @StateObject private var twitchClient = TwitchAuthClient(
         clientId: Secrets.twitchClientId,
         clientSecret: Secrets.twitchClientSecret
@@ -34,7 +35,8 @@ struct ContentView: View {
                 micropubClient: micropubClient,
                 blueskyClient: blueskyClient,
                 youtubeClient: youtubeClient,
-                twitchClient: twitchClient
+                twitchClient: twitchClient,
+                agentService: agentService
             )
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
@@ -102,6 +104,7 @@ enum NavigationSection: String, CaseIterable, Codable {
     case studio = "Studio"
     case library = "Library"
     case workflow = "Workflow"
+    case assistant = "AI Assistant"
     case patrons = "Patron Management"
     case protection = "Protection"
     case social = "Marketing"
@@ -122,6 +125,7 @@ enum NavigationSection: String, CaseIterable, Codable {
         case .studio: "video.bubble.left.fill"
         case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
+        case .assistant: "cpu"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
         case .social: "square.and.arrow.up.circle"
@@ -136,6 +140,7 @@ enum NavigationSection: String, CaseIterable, Codable {
         case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
+        case .assistant: "AI-Powered Creation Tools"
         case .patrons: "Manage Your Community"
         case .protection: "Protection"
         case .social: "Share Your Content"
@@ -170,6 +175,7 @@ struct SectionContainer: View {
     @ObservedObject var blueskyClient: BlueskyClient
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
+    @ObservedObject var agentService: CreatorAgentService
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
 
@@ -495,6 +501,51 @@ struct SectionContainer: View {
         ArkavoLoginSheet(authState: arkavoAuthState)
     }
 
+    private var agentDashboardContent: some View {
+        Group {
+            let connectedCount = agentService.connectedAgents.filter { $0.value }.count
+            let activeModel = agentService.discoveredAgents
+                .first { $0.url != "local://in-process" && agentService.isConnected(to: $0.id) }?
+                .metadata.model
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: connectedCount > 0 ? "cpu.fill" : "cpu")
+                        .font(.title)
+                        .foregroundStyle(connectedCount > 0 ? .green : .secondary)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(connectedCount) agent(s) connected")
+                            .font(.headline)
+                        if let model = activeModel {
+                            Text("Active model: \(model)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Button("New Chat") {
+                        // Navigate to assistant tab
+                    }
+                    .controlSize(.small)
+
+                    Button("Draft Post") {
+                        // Navigate to tools tab
+                    }
+                    .controlSize(.small)
+                }
+
+                if !agentService.activeSessions.isEmpty {
+                    Text("\(agentService.activeSessions.count) active session(s)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     // Computed property for sorted dashboard sections
     private var sortedDashboardSections: [DashboardSectionItem] {
         var sections: [DashboardSectionItem] = []
@@ -562,6 +613,16 @@ struct SectionContainer: View {
             content: AnyView(blueskyDashboardContent)
         ))
 
+        // AI Agent Section
+        let hasConnectedAgent = !agentService.connectedAgents.filter({ $0.value }).isEmpty
+        sections.append(DashboardSectionItem(
+            id: "agent",
+            title: "AI Agent",
+            isAuthenticated: hasConnectedAgent,
+            hasActiveContent: !agentService.activeSessions.isEmpty,
+            content: AnyView(agentDashboardContent)
+        ))
+
         // Sort by priority (active content first, then authenticated, then not authenticated)
         return sections.sorted { $0.sortPriority < $1.sortPriority }
     }
@@ -603,8 +664,12 @@ struct SectionContainer: View {
                 ArkavoWorkflowView()
                     .transition(.moveAndFade())
                     .id("content")
+            case .assistant:
+                AssistantSectionView(agentService: agentService)
+                    .transition(.moveAndFade())
+                    .id("assistant")
             case .settings:
-                SettingsContent()
+                SettingsContent(agentService: agentService)
                     .transition(.moveAndFade())
                     .id("settings")
             default:
@@ -614,6 +679,27 @@ struct SectionContainer: View {
             }
         }
         .animation(.smooth, value: selectedSection)
+    }
+}
+
+// MARK: - Assistant Section View
+
+struct AssistantSectionView: View {
+    @ObservedObject var agentService: CreatorAgentService
+    @State private var selectedTab = 0
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Agents", systemImage: "antenna.radiowaves.left.and.right", value: 0) {
+                AgentDiscoveryPanel(agentService: agentService)
+            }
+            Tab("Tools", systemImage: "wand.and.stars", value: 1) {
+                CreatorToolsView(agentService: agentService)
+            }
+            Tab("Budget", systemImage: "dollarsign.circle", value: 2) {
+                BudgetDashboardView(agentService: agentService)
+            }
+        }
     }
 }
 
@@ -1099,6 +1185,7 @@ struct SettingsContent: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var vrmDownloader = VRMDownloader()
     @State private var modelsPath: String = ""
+    var agentService: CreatorAgentService?
 
     var body: some View {
         ScrollView {
@@ -1143,6 +1230,11 @@ struct SettingsContent: View {
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
+                // AI Agent Settings Section
+                if let agentService {
+                    AgentSettingsSection(agentService: agentService)
+                }
+
                 // Feedback Toggle Section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Feedback")
@@ -1171,6 +1263,59 @@ struct SettingsContent: View {
 
     private func updateModelsPath() {
         modelsPath = vrmDownloader.modelsDirectoryDisplayPath
+    }
+}
+
+// MARK: - Agent Settings Section
+
+struct AgentSettingsSection: View {
+    @ObservedObject var agentService: CreatorAgentService
+    @State private var manualURL: String = ""
+    @State private var dailyCap: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AI Agent")
+                .font(.headline)
+
+            // Manual connection URL
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Connection URL")
+                    .font(.subheadline)
+                TextField("ws://localhost:8342", text: $manualURL)
+                    .textFieldStyle(.roundedBorder)
+                    .onAppear { manualURL = agentService.manualConnectionURL }
+                    .onChange(of: manualURL) { _, newValue in
+                        agentService.manualConnectionURL = newValue
+                    }
+            }
+
+            // Auto-discover toggle
+            Toggle("Auto-discover agents on local network", isOn: $agentService.autoDiscoverEnabled)
+                .toggleStyle(.switch)
+
+            // Daily budget cap
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Default daily budget cap (USD)")
+                    .font(.subheadline)
+                TextField("5.00", text: $dailyCap)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .onAppear { dailyCap = String(format: "%.2f", agentService.dailyBudgetCap) }
+                    .onChange(of: dailyCap) { _, newValue in
+                        if let value = Double(newValue) {
+                            agentService.dailyBudgetCap = value
+                        }
+                    }
+            }
+
+            Text("Configure how ArkavoCreator connects to arkavo-edge AI agents.")
+                .foregroundColor(.secondary)
+                .font(.callout)
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

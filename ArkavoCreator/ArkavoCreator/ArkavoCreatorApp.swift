@@ -16,6 +16,7 @@ class WindowAccessor: ObservableObject {
 @main
 struct ArkavoCreatorApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
+    @StateObject private var agentService = CreatorAgentService()
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
@@ -52,11 +53,15 @@ struct ArkavoCreatorApp: App {
                 micropubClient: micropubClient,
                 blueskyClient: blueskyClient,
                 youtubeClient: youtubeClient,
+                agentService: agentService
             )
             .onAppear {
                 // Load stored tokens
                 redditClient.loadStoredTokens()
                 micropubClient.loadStoredTokens()
+
+                // Start agent discovery
+                agentService.onAppearActive()
 
                 // Initialize Iroh P2P node for content publishing
                 Task {
