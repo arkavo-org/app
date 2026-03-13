@@ -94,6 +94,12 @@ final class CreatorAgentService: ObservableObject {
         self.autoDiscoverEnabled = UserDefaults.standard.object(forKey: "CreatorAgent.AutoDiscover") as? Bool ?? true
         self.dailyBudgetCap = UserDefaults.standard.object(forKey: "CreatorAgent.DailyBudgetCap") as? Double ?? 5.0
 
+        // Skip agent setup when AI feature is disabled
+        guard FeatureFlags.aiAgent else {
+            logger.log("[CreatorAgentService] AI agent feature disabled, skipping initialization")
+            return
+        }
+
         // Add built-in device agent as first agent (always available, no discovery)
         let localAgentEndpoint = AgentEndpoint(
             id: localAgent.id,
@@ -466,6 +472,8 @@ final class CreatorAgentService: ObservableObject {
     // MARK: - Lifecycle
 
     func onAppearActive() {
+        guard FeatureFlags.aiAgent else { return }
+
         logger.log("[CreatorAgentService] App became active")
 
         do {

@@ -69,12 +69,19 @@ final class RecordViewModel {
     // Security-scoped resource for recordings folder (held during recording)
     private var scopedFolderURL: URL?
 
+    // Standalone audio level monitor (always-on, independent of recording)
+    private var audioMonitorSession: AVCaptureSession?
+    private var audioMonitorOutput: AVCaptureAudioDataOutput?
+    private let audioMonitorQueue = DispatchQueue(label: "com.arkavo.audioMonitor")
+    private var audioMonitorDelegate: AudioLevelDelegate?
+
     // MARK: - Initialization
 
     init() {
         generateDefaultTitle()
         refreshCameraDevices()
         refreshScreenDevices()
+        startAudioMonitor()
     }
 
     // MARK: - Screen Selection
@@ -324,7 +331,6 @@ final class RecordViewModel {
             Task { @MainActor [weak self] in
                 guard let self, let session = recordingSession else { return }
                 duration = session.duration
-                audioLevel = session.audioLevel
             }
         }
     }
@@ -332,6 +338,47 @@ final class RecordViewModel {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    // MARK: - Always-On Audio Level Monitor
+
+    private func startAudioMonitor() {
+        let session = AVCaptureSession()
+        session.sessionPreset = .low
+
+        guard let device = AVCaptureDevice.default(for: .audio),
+              let input = try? AVCaptureDeviceInput(device: device) else {
+            return
+        }
+
+        guard session.canAddInput(input) else { return }
+        session.addInput(input)
+
+        let output = AVCaptureAudioDataOutput()
+        let delegate = AudioLevelDelegate { [weak self] level in
+            Task { @MainActor [weak self] in
+                self?.audioLevel = level
+            }
+        }
+        output.setSampleBufferDelegate(delegate, queue: audioMonitorQueue)
+
+        guard session.canAddOutput(output) else { return }
+        session.addOutput(output)
+
+        audioMonitorDelegate = delegate
+        audioMonitorOutput = output
+        audioMonitorSession = session
+
+        DispatchQueue.global(qos: .utility).async {
+            session.startRunning()
+        }
+    }
+
+    func stopAudioMonitor() {
+        audioMonitorSession?.stopRunning()
+        audioMonitorSession = nil
+        audioMonitorOutput = nil
+        audioMonitorDelegate = nil
     }
 
     // MARK: - Utilities
@@ -668,5 +715,54 @@ final class RecordViewModel {
 
     var connectionInfo: String {
         "arkavo://connect?host=\(suggestedHostname)&port=\(actualPort)"
+    }
+}
+
+// MARK: - Audio Level Delegate
+
+private final class AudioLevelDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
+    private let onLevel: @Sendable (Float) -> Void
+
+    init(onLevel: @escaping @Sendable (Float) -> Void) {
+        self.onLevel = onLevel
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
+              let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+
+        var length = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+
+        guard let dataPointer else { return }
+
+        var sum: Float = 0.0
+        let isFloat = asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0
+
+        if isFloat {
+            let samples = length / MemoryLayout<Float32>.size
+            guard samples > 0 else { return }
+            dataPointer.withMemoryRebound(to: Float32.self, capacity: samples) { ptr in
+                for i in 0..<samples {
+                    let s = ptr[i]
+                    sum += s * s
+                }
+            }
+            let rms = sqrt(sum / Float(samples))
+            onLevel(min(1.0, rms * 3))
+        } else {
+            let samples = length / MemoryLayout<Int16>.size
+            guard samples > 0 else { return }
+            dataPointer.withMemoryRebound(to: Int16.self, capacity: samples) { ptr in
+                for i in 0..<samples {
+                    let s = Float(ptr[i]) / Float(Int16.max)
+                    sum += s * s
+                }
+            }
+            let rms = sqrt(sum / Float(samples))
+            onLevel(min(1.0, rms * 10))
+        }
     }
 }

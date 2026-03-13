@@ -288,6 +288,9 @@ public final class RecordingSession: Sendable {
         if mode.needsMicrophone {
             print("🎙️ RecordingSession: Adding microphone to audio router")
             let micSource = await audioRouter.addMicrophone()
+            micSource.onLevelUpdate = { @Sendable [weak self] level in
+                self?.audioLevel = level
+            }
             print("🎙️ RecordingSession: Microphone source created: \(micSource.sourceID)")
         }
 
@@ -804,7 +807,6 @@ public final class RecordingSession: Sendable {
     }
 
     // Debug throttle for floating head logging
-    nonisolated(unsafe) private static var lastFloatingHeadLogTime: Date?
 
     private func dispatchPreview(for identifier: String, buffer: CMSampleBuffer) {
         guard let handler = previewHandler,
@@ -816,24 +818,12 @@ public final class RecordingSession: Sendable {
         var cgImage: CGImage?
         let isFloatingHead = compositor.floatingHeadEnabled
 
-        // Debug logging (throttled to once per second)
-        let now = Date()
-        if Self.lastFloatingHeadLogTime == nil || now.timeIntervalSince(Self.lastFloatingHeadLogTime!) >= 1.0 {
-            Self.lastFloatingHeadLogTime = now
-            print("🎭 [Preview] floatingHeadEnabled=\(isFloatingHead)")
-        }
-
         // Apply person segmentation for floating head preview
         // Skip during recording to avoid running segmentation twice (compositor handles it)
         if isFloatingHead && !_isRecording {
             let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
             if let segmentedImage = compositor.applyFloatingHeadSegmentation(to: ciImage, pixelBuffer: pixelBuffer) {
                 cgImage = previewCIContext.createCGImage(segmentedImage, from: segmentedImage.extent)
-                if Self.lastFloatingHeadLogTime == now {
-                    print("🎭 [Preview] Segmentation applied successfully")
-                }
-            } else if Self.lastFloatingHeadLogTime == now {
-                print("🎭 [Preview] Segmentation returned nil")
             }
         }
 

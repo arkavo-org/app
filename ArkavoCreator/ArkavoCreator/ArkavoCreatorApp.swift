@@ -64,8 +64,10 @@ struct ArkavoCreatorApp: App {
                 agentService.onAppearActive()
 
                 // Initialize Iroh P2P node for content publishing
-                Task {
-                    await ArkavoIrohManager.shared.initialize()
+                if FeatureFlags.contentProtection {
+                    Task {
+                        await ArkavoIrohManager.shared.initialize()
+                    }
                 }
                 // uncomment for Screenshots
 //                if let window = NSApplication.shared.windows.first {

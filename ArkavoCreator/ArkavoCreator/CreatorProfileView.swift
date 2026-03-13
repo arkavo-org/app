@@ -841,7 +841,7 @@ private struct ProfileActionsSection: View {
             Button("Save Profile") {
                 Task {
                     await viewModel.saveDraft()
-                    if ArkavoIrohManager.shared.isReady {
+                    if FeatureFlags.contentProtection, ArkavoIrohManager.shared.isReady {
                         await viewModel.publishProfile()
                     }
                 }

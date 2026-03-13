@@ -399,23 +399,6 @@ struct RecordView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("Toggle_Mic")
                 .help("Toggle Microphone")
-
-                // Audio Level Meter (green gradient)
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.gray.opacity(0.3))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.green, .green.opacity(0.7)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: 40 * viewModel.audioLevelPercentage())
-                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
-                }
-                .frame(width: 40, height: 6)
-                .opacity(viewModel.enableMicrophone ? 1.0 : 0.3)
             }
 
             Spacer()

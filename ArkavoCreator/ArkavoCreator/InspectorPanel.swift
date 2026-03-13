@@ -12,19 +12,25 @@ struct InspectorPanel: View {
 
     var body: some View {
         ScrollView {
-            switch visualSource {
-            case .face:
-                FaceInspectorContent(viewModel: recordViewModel)
-            case .avatar:
-                AvatarInspectorContent(
-                    viewModel: avatarViewModel,
-                    onLoadModel: onLoadAvatarModel
-                )
-            case .muse:
-                MuseInspectorContent(onLoadModel: onLoadAvatarModel)
-            case nil:
-                // Audio-only mode
-                AudioInspectorContent(viewModel: recordViewModel)
+            VStack(spacing: 0) {
+                switch visualSource {
+                case .face:
+                    FaceInspectorContent(viewModel: recordViewModel)
+                case .avatar:
+                    AvatarInspectorContent(
+                        viewModel: avatarViewModel,
+                        onLoadModel: onLoadAvatarModel
+                    )
+                case .muse:
+                    MuseInspectorContent(onLoadModel: onLoadAvatarModel)
+                case nil:
+                    AudioInspectorContent(viewModel: recordViewModel)
+                }
+
+                // Always show audio level meter
+                if visualSource != nil {
+                    AudioLevelMeter(viewModel: recordViewModel)
+                }
             }
         }
         .frame(width: 280)
@@ -644,24 +650,52 @@ struct AudioInspectorContent: View {
                     Capsule()
                         .fill(Color.gray.opacity(0.3))
                     Capsule()
-                        .fill(levelColor(for: viewModel.audioLevelPercentage()))
+                        .fill(viewModel.enableMicrophone ? Color.green : Color.gray)
                         .frame(width: max(0, 252 * viewModel.audioLevelPercentage()))
                         .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
                 }
                 .frame(height: 8)
 
-                Text(String(format: "%.0f%%", viewModel.audioLevelPercentage() * 100))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
 
             Spacer()
         }
         .padding()
     }
+}
 
-    private func levelColor(for level: Double) -> Color {
-        if level < 0.5 { .green } else if level < 0.8 { .yellow } else { .red }
+// MARK: - Audio Level Meter
+
+struct AudioLevelMeter: View {
+    @Bindable var viewModel: RecordViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Divider()
+
+            sectionHeader("Audio Level")
+            HStack(spacing: 8) {
+                Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
+                    .foregroundStyle(viewModel.enableMicrophone ? .green : .secondary)
+                Text(viewModel.enableMicrophone ? "Active" : "Muted")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.gray.opacity(0.3))
+                    Capsule()
+                        .fill(viewModel.enableMicrophone ? Color.green : Color.gray)
+                        .frame(width: max(0, 252 * viewModel.audioLevelPercentage()))
+                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
+                }
+                .frame(height: 8)
+
+            }
+        }
+        .padding()
     }
 }
 
