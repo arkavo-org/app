@@ -66,6 +66,9 @@ final class RecordViewModel {
     // Timer for updating duration
     private var timer: Timer?
 
+    // Security-scoped resource for recordings folder (held during recording)
+    private var scopedFolderURL: URL?
+
     // MARK: - Initialization
 
     init() {
@@ -158,6 +161,9 @@ final class RecordViewModel {
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             RecordingState.shared.setRecordingSession(nil)
+            // Release scoped access if we acquired it before failing
+            scopedFolderURL?.stopAccessingSecurityScopedResource()
+            scopedFolderURL = nil
         }
     }
 
@@ -197,6 +203,10 @@ final class RecordViewModel {
             debugLog("❌ Error during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         }
+
+        // Release security-scoped access to the recordings folder
+        scopedFolderURL?.stopAccessingSecurityScopedResource()
+        scopedFolderURL = nil
 
         isProcessing = false
     }
@@ -346,20 +356,25 @@ final class RecordViewModel {
             throw CocoaError(.userCancelled)
         }
 
-        return try RecordingsFolderAccess.withScopedAccess(folder) {
-            // Create recordings directory if needed
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-
-            // Generate filename with appropriate extension based on recording mode
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd_HHmmss"
-            // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
-            let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
-            let ext = isAudioOnly ? "m4a" : "mov"
-            let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
-
-            return folder.appendingPathComponent(filename)
+        // Start security-scoped access and keep it alive for the duration of recording.
+        // The previous withScopedAccess pattern stopped access before AVAssetWriter could write.
+        guard folder.startAccessingSecurityScopedResource() else {
+            throw CocoaError(.fileReadNoPermission)
         }
+        scopedFolderURL = folder
+
+        // Create recordings directory if needed
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        // Generate filename with appropriate extension based on recording mode
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
+        let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
+        let ext = isAudioOnly ? "m4a" : "mov"
+        let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
+
+        return folder.appendingPathComponent(filename)
     }
 
     func getAvailableDevices() -> (screens: [ScreenInfo], cameras: [CameraInfo], microphones: [AudioDeviceInfo]) {

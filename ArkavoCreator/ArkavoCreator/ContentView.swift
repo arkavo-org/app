@@ -1287,11 +1287,52 @@ struct SettingsContent: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var vrmDownloader = VRMDownloader()
     @State private var modelsPath: String = ""
+    @State private var libraryPath: String = ""
     var agentService: CreatorAgentService?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                // Library Path Section
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Recordings Folder")
+                                    .font(.subheadline)
+                                Text(libraryPath.isEmpty ? "Not selected" : libraryPath)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+
+                            Spacer()
+
+                            Button("Choose...") {
+                                Task {
+                                    await RecordingsFolderAccess.chooseRecordingsFolder()
+                                    updateLibraryPath()
+                                }
+                            }
+
+                            if RecordingsFolderAccess.hasFolderSelected {
+                                Button("Reset") {
+                                    RecordingsFolderAccess.clearBookmark()
+                                    updateLibraryPath()
+                                }
+                                .foregroundColor(.red)
+                            }
+                        }
+
+                        Text("Select where recordings are saved. The app needs permission to write to this folder.")
+                            .foregroundColor(.secondary)
+                            .font(.callout)
+                    }
+                } label: {
+                    Label("Library", systemImage: "folder")
+                }
+
                 // VRM Models Directory Section
                 if FeatureFlags.avatar {
                     VStack(alignment: .leading, spacing: 12) {
@@ -1362,11 +1403,16 @@ struct SettingsContent: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             updateModelsPath()
+            updateLibraryPath()
         }
     }
 
     private func updateModelsPath() {
         modelsPath = vrmDownloader.modelsDirectoryDisplayPath
+    }
+
+    private func updateLibraryPath() {
+        libraryPath = RecordingsFolderAccess.getBookmarkedFolder()?.path ?? ""
     }
 }
 
