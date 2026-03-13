@@ -1,0 +1,15 @@
+{
+  "originHash" : "bada40e31b8394c8d2c6a989fed977cf2cf6ff3cc6546dd934cae3a5619e6fcc",
+  "pins" : [
+    {
+      "identity" : "vrmmetalkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/VRMMetalKit",
+      "state" : {
+        "revision" : "f84cea22aa7dc60470a2fd691f30e4c59c5d31a3",
+        "version" : "0.9.2"
+      }
+    }
+  ],
+  "version" : 3
+}

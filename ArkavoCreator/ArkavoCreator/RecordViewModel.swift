@@ -26,6 +26,7 @@ final class RecordViewModel {
     var enableDesktop: Bool = true
     var enableAvatar: Bool = false
     var avatarTextureProvider: (@Sendable () -> CVPixelBuffer?)?
+    var museTextureProvider: (@Sendable () -> CVPixelBuffer?)?
     var availableCameras: [CameraInfo] = []
     var selectedCameraIDs: [String] = []
     var cameraLayout: MultiCameraLayout = .pictureInPicture
@@ -119,7 +120,10 @@ final class RecordViewModel {
             if enableAvatar, let provider = avatarTextureProvider {
                 session.avatarTextureProvider = provider
             }
-            debugLog("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL")")
+            if let museProvider = museTextureProvider {
+                session.museTextureProvider = museProvider
+            }
+            debugLog("🎬 [RecordViewModel] Starting recording - enableAvatar: \(enableAvatar), avatarTextureProvider: \(session.avatarTextureProvider != nil ? "SET" : "NIL"), museTextureProvider: \(session.museTextureProvider != nil ? "SET" : "NIL")")
             session.selectedDisplayID = selectedScreenID
             session.watermarkEnabled = watermarkEnabled
             session.watermarkPosition = watermarkPosition

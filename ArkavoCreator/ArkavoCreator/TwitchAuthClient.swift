@@ -34,7 +34,8 @@ class TwitchAuthClient: ObservableObject {
     private let tokenURL = "https://id.twitch.tv/oauth2/token"
     private let scopes = [
         "user:read:email",
-        "channel:read:stream_key"  // Note: This scope may not actually work - Twitch restricts stream key access
+        "channel:read:stream_key",  // Note: This scope may not actually work - Twitch restricts stream key access
+        "chat:read"  // Read chat messages for Muse avatar reactions
     ]
 
     // MARK: - Initialization

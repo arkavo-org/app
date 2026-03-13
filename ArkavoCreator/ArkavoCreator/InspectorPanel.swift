@@ -20,6 +20,8 @@ struct InspectorPanel: View {
                     viewModel: avatarViewModel,
                     onLoadModel: onLoadAvatarModel
                 )
+            case .muse:
+                MuseInspectorContent(onLoadModel: onLoadAvatarModel)
             case nil:
                 // Audio-only mode
                 AudioInspectorContent(viewModel: recordViewModel)
@@ -593,6 +595,28 @@ private struct AvatarRow: View {
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Muse AI Avatar Content
+
+struct MuseInspectorContent: View {
+    var onLoadModel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            sectionHeader("Muse AI Avatar")
+
+            Text("AI-driven avatar with procedural animation, lip sync, and chat reactions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button("Load VRM Model", action: onLoadModel)
+                .buttonStyle(.bordered)
+
+            Spacer()
+        }
+        .padding()
     }
 }
 

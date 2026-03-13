@@ -49,7 +49,8 @@ let package = Package(
         .package(url: "https://github.com/arkavo-org/OpenTDFKit", revision: "d8ffeff"),
         .package(url: "https://github.com/arkavo-org/iroh-swift", from: "0.2.5"),
         .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.19"),
-        .package(path: "../ArkavoMediaKit")
+        .package(path: "../ArkavoMediaKit"),
+        .package(path: "../MuseCore")
     ],
     targets: [
         .target(
@@ -118,8 +119,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "C2paOpenTDF",
-            url: "https://github.com/arkavo-org/c2pa-opentdf-rs/releases/download/v0.1.0/C2paOpenTDF.xcframework.zip",
-            checksum: "e5aa0415b9753cd4be2692146953a62af6bf3bce4fad960fed7d51e3ac886ec7"
+            path: "Frameworks/C2paOpenTDF.xcframework"
         ),
         .target(
             name: "ArkavoStore",

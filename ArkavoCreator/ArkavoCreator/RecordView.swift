@@ -13,6 +13,7 @@ struct RecordView: View {
     @State private var viewModel = RecordViewModel()
     @State private var streamViewModel = StreamViewModel()
     @StateObject private var avatarViewModel = AvatarViewModel()
+    @StateObject private var museAvatarViewModel = MuseAvatarViewModel()
     @State private var enableScreen: Bool = false
     @State private var showStreamSetup: Bool = false
     @State private var showInspector: Bool = false
@@ -76,8 +77,8 @@ struct RecordView: View {
             if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
                 try? viewModel.activatePreviewPipeline()
-            } else if studioState.visualSource == .avatar {
-                // Avatar mode needs remote camera bridge for face tracking metadata
+            } else if studioState.visualSource == .avatar || studioState.visualSource == .muse {
+                // Avatar/Muse mode needs remote camera bridge for face tracking metadata
                 try? viewModel.activatePreviewPipeline()
             }
             // Load saved stream key for current platform
@@ -155,13 +156,13 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.black.opacity(0.2))
                     }
-                } else if !studioState.isAudioOnly && studioState.visualSource != .avatar {
-                    // Empty stage placeholder when no screen share (but not in avatar mode)
+                } else if !studioState.isAudioOnly && studioState.visualSource != .avatar && studioState.visualSource != .muse {
+                    // Empty stage placeholder when no screen share (but not in avatar/muse mode)
                     stagePlaceholderView
                 }
 
                 // Layer 2: Visual source overlay
-                if studioState.visualSource == .avatar {
+                if studioState.visualSource == .avatar || studioState.visualSource == .muse {
                     if enableScreen {
                         // PiP mode over screen: Transparent overlay with drop shadow
                         let avatarWidth = geometry.size.width * 0.4
@@ -474,6 +475,12 @@ struct RecordView: View {
                         if studioState.enableAvatar {
                             viewModel.avatarTextureProvider = avatarViewModel.getTextureProvider()
                         }
+                        if studioState.enableMuse {
+                            viewModel.museTextureProvider = museAvatarViewModel.getTextureProvider()
+                            if let audioSource = museAvatarViewModel.getAudioSource() {
+                                viewModel.recordingSession?.addMuseAudioSource(audioSource)
+                            }
+                        }
                         await viewModel.startRecording()
                     }
                 } label: {
@@ -563,7 +570,7 @@ struct RecordView: View {
     private func syncViewModelState() {
         // Derive camera/desktop state from visual source and screen toggle
         viewModel.enableCamera = studioState.enableCamera
-        viewModel.enableAvatar = studioState.enableAvatar
+        viewModel.enableAvatar = studioState.enableAvatar || studioState.enableMuse
         viewModel.enableDesktop = enableScreen
 
         if studioState.visualSource == .face {
@@ -571,8 +578,8 @@ struct RecordView: View {
             // Refresh camera list and activate preview pipeline
             viewModel.refreshCameraDevices()
             try? viewModel.activatePreviewPipeline()
-        } else if studioState.visualSource == .avatar {
-            // Avatar mode needs remote camera bridge for face tracking metadata
+        } else if studioState.visualSource == .avatar || studioState.visualSource == .muse {
+            // Avatar/Muse mode needs remote camera bridge for face tracking metadata
             try? viewModel.activatePreviewPipeline()
         } else {
             // Audio-only mode - ensure camera preview is stopped

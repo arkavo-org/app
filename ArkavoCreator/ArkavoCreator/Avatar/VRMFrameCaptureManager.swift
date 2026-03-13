@@ -55,8 +55,9 @@ final class VRMFrameCaptureManager {
     // Callbacks
     var onFrame: ((CVPixelBuffer) -> Void)?
 
-    // Reference to renderer
+    // Reference to renderer (one of these should be set)
     weak var renderer: VRMAvatarRenderer?
+    weak var museRenderer: MuseAvatarRenderer?
 
     // MARK: - Initialization
 
@@ -90,7 +91,7 @@ final class VRMFrameCaptureManager {
     /// Start capturing frames from the VRM renderer
     func startCapture() {
         guard !isCapturing else { return }
-        guard renderer != nil else {
+        guard renderer != nil || museRenderer != nil else {
             debugLog("[VRMFrameCaptureManager] Cannot start capture - no renderer set")
             return
         }
@@ -122,20 +123,29 @@ final class VRMFrameCaptureManager {
     /// Capture a single frame synchronously (for immediate use)
     /// - Returns: CVPixelBuffer containing the current avatar render, or nil if unavailable
     func captureTexture() -> CVPixelBuffer? {
-        guard let renderer,
-              let colorTexture,
+        guard let colorTexture,
               let depthTexture,
               let commandBuffer = commandQueue.makeCommandBuffer()
         else {
             return nil
         }
 
-        // Render VRM to offscreen texture
-        renderer.renderToTexture(
-            colorTexture: colorTexture,
-            depthTexture: depthTexture,
-            commandBuffer: commandBuffer
-        )
+        // Render VRM to offscreen texture (use whichever renderer is set)
+        if let renderer {
+            renderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else if let museRenderer {
+            museRenderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else {
+            return nil
+        }
 
         // Synchronize texture for CPU access (only needed for managed storage mode)
         // Shared storage mode doesn't need synchronization on Apple Silicon
@@ -218,7 +228,6 @@ final class VRMFrameCaptureManager {
 
     private func captureFrame() {
         guard isCapturing,
-              let renderer,
               let colorTexture,
               let depthTexture,
               let commandBuffer = commandQueue.makeCommandBuffer()
@@ -226,12 +235,22 @@ final class VRMFrameCaptureManager {
             return
         }
 
-        // Render VRM to offscreen texture
-        renderer.renderToTexture(
-            colorTexture: colorTexture,
-            depthTexture: depthTexture,
-            commandBuffer: commandBuffer
-        )
+        // Render VRM to offscreen texture (use whichever renderer is set)
+        if let renderer {
+            renderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else if let museRenderer {
+            museRenderer.renderToTexture(
+                colorTexture: colorTexture,
+                depthTexture: depthTexture,
+                commandBuffer: commandBuffer
+            )
+        } else {
+            return
+        }
 
         // Synchronize texture for CPU access (only needed for managed storage mode)
         // Shared storage mode doesn't need synchronization on Apple Silicon

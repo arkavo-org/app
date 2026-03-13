@@ -11,6 +11,7 @@
 		DA6DEA3E2EE648540042F66F /* ArkavoC2PA in Frameworks */ = {isa = PBXBuildFile; productRef = DA6DEA3D2EE648540042F66F /* ArkavoC2PA */; };
 		DA6DEA402EE648540042F66F /* ArkavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = DA6DEA3F2EE648540042F66F /* ArkavoKit */; };
 		DAHLS0012EE6000000000001 /* ArkavoMediaKit in Frameworks */ = {isa = PBXBuildFile; productRef = DAHLS0012EE6000000000002 /* ArkavoMediaKit */; };
+		DAMC00012EE7000000000001 /* MuseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DAMC00012EE7000000000002 /* MuseCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 				DA6DEA3C2EE6483B0042F66F /* VRMMetalKit in Frameworks */,
 				DA6DEA402EE648540042F66F /* ArkavoKit in Frameworks */,
 				DAHLS0012EE6000000000001 /* ArkavoMediaKit in Frameworks */,
+				DAMC00012EE7000000000001 /* MuseCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,6 +129,7 @@
 				DA6DEA3D2EE648540042F66F /* ArkavoC2PA */,
 				DA6DEA3F2EE648540042F66F /* ArkavoKit */,
 				DAHLS0012EE6000000000002 /* ArkavoMediaKit */,
+				DAMC00012EE7000000000002 /* MuseCore */,
 			);
 			productName = ArkavoCreator;
 			productReference = DA91A9BA2CFB625000BE9912 /* ArkavoCreator.app */;
@@ -214,6 +217,7 @@
 				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
 				REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */,
 				DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
+				DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -642,6 +646,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoKit;
 		};
+		DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../MuseCore;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -672,6 +680,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
 			productName = ArkavoMediaKit;
+		};
+		DAMC00012EE7000000000002 /* MuseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */;
+			productName = MuseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

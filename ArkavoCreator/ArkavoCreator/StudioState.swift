@@ -4,6 +4,7 @@ import SwiftUI
 enum VisualSource: String, CaseIterable, Identifiable, Codable {
     case face = "Face"
     case avatar = "Avatar"
+    case muse = "Muse"
 
     var id: String { rawValue }
 
@@ -11,6 +12,7 @@ enum VisualSource: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .face: return "person.fill"
         case .avatar: return "sparkles"
+        case .muse: return "brain.head.profile"
         }
     }
 
@@ -18,6 +20,7 @@ enum VisualSource: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .face: return "Show your camera feed"
         case .avatar: return "Use VRM avatar with face tracking"
+        case .muse: return "AI-driven avatar with speech and animation"
         }
     }
 }
@@ -120,6 +123,11 @@ final class StudioState {
     /// Whether avatar should be enabled
     var enableAvatar: Bool {
         visualSource == .avatar
+    }
+
+    /// Whether Muse AI avatar should be enabled
+    var enableMuse: Bool {
+        visualSource == .muse
     }
 
     /// Whether this is audio-only mode (no visual source selected)
