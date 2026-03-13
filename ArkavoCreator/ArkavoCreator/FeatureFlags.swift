@@ -13,6 +13,8 @@ enum FeatureFlags {
     static let contentProtection = false
     /// Arkavo encrypted streaming platform
     static let arkavoStreaming = false
+    /// Patreon patron management
+    static let patreon = false
     /// Workflow management section
     static let workflow = false
     /// Marketing/social section

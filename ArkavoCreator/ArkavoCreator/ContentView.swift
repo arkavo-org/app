@@ -117,6 +117,7 @@ enum NavigationSection: String, CaseIterable, Codable {
             case .protection: return FeatureFlags.contentProtection
             case .social: return FeatureFlags.social
             case .assistant: return FeatureFlags.aiAgent
+            case .patrons: return FeatureFlags.patreon
             default: return true
             }
         }
@@ -565,13 +566,15 @@ struct SectionContainer: View {
         ))
 
         // Patreon Section
-        sections.append(DashboardSectionItem(
-            id: "patreon",
-            title: "Patreon",
-            isAuthenticated: patreonClient.isAuthenticated,
-            hasActiveContent: hasActiveContent(for: "Patreon"),
-            content: AnyView(patreonDashboardContent)
-        ))
+        if FeatureFlags.patreon {
+            sections.append(DashboardSectionItem(
+                id: "patreon",
+                title: "Patreon",
+                isAuthenticated: patreonClient.isAuthenticated,
+                hasActiveContent: hasActiveContent(for: "Patreon"),
+                content: AnyView(patreonDashboardContent)
+            ))
+        }
 
         // Reddit Section
         sections.append(DashboardSectionItem(
