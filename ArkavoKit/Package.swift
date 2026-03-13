@@ -113,12 +113,8 @@ let package = Package(
         ),
         .target(
             name: "ArkavoC2PA",
-            dependencies: ["C2paOpenTDF"],
+            dependencies: [],
             swiftSettings: sharedSwiftSettings
-        ),
-        .binaryTarget(
-            name: "C2paOpenTDF",
-            path: "Frameworks/C2paOpenTDF.xcframework"
         ),
         .target(
             name: "ArkavoStore",

@@ -1,4 +1,6 @@
+#if canImport(C2paOpenTDF)
 import C2paOpenTDF
+#endif
 import Foundation
 
 /// How to provide signing credentials
@@ -20,6 +22,7 @@ public actor C2PASigner {
         case invalidInput
         case missingSigningCertificate
         case sdkError(String)
+        case frameworkNotAvailable
 
         public var errorDescription: String? {
             switch self {
@@ -33,6 +36,8 @@ public actor C2PASigner {
                 return "Signing certificate not configured"
             case .sdkError(let message):
                 return "C2PA SDK error: \(message)"
+            case .frameworkNotAvailable:
+                return "C2paOpenTDF framework not available — build with the xcframework to enable C2PA signing"
             }
         }
     }
@@ -53,6 +58,7 @@ public actor C2PASigner {
         outputFile: URL,
         manifest: C2PAManifest
     ) async throws {
+        #if canImport(C2paOpenTDF)
         let manifestData = try JSONEncoder().encode(manifest)
         guard let manifestJSON = String(data: manifestData, encoding: .utf8) else {
             throw SigningError.manifestCreationFailed
@@ -72,8 +78,12 @@ public actor C2PASigner {
         guard resultCode == SUCCESS else {
             throw SigningError.signingFailed(errorMessage ?? "unknown error")
         }
+        #else
+        throw SigningError.frameworkNotAvailable
+        #endif
     }
 
+    #if canImport(C2paOpenTDF)
     private nonisolated static func callSign(
         inputPath: String, outputPath: String,
         manifestJSON: String, cert: String, key: String
@@ -84,9 +94,11 @@ public actor C2PASigner {
         )
         return (result, errorPtr)
     }
+    #endif
 
     /// Verifies a C2PA manifest in a file
     public func verify(file: URL) async throws -> C2PAValidationResult {
+        #if canImport(C2paOpenTDF)
         let filePath = file.path
 
         let (resultCode, resultPtr, errorPtr) = Self.callVerify(filePath: filePath)
@@ -116,8 +128,12 @@ public actor C2PASigner {
             manifestJSON: manifestJSON,
             error: nil
         )
+        #else
+        throw SigningError.frameworkNotAvailable
+        #endif
     }
 
+    #if canImport(C2paOpenTDF)
     private nonisolated static func callVerify(
         filePath: String
     ) -> (C2paResultCode, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<CChar>?) {
@@ -126,9 +142,11 @@ public actor C2PASigner {
         let result = c2pa_verify_file(filePath, &resultPtr, &errorPtr)
         return (result, resultPtr, errorPtr)
     }
+    #endif
 
     /// Extracts manifest information without full validation
     public func info(file: URL) async throws -> C2PAInfo {
+        #if canImport(C2paOpenTDF)
         let filePath = file.path
 
         let (resultCode, infoPtr, errorPtr) = Self.callInfo(filePath: filePath)
@@ -140,8 +158,12 @@ public actor C2PASigner {
 
         let infoJSON = consumeFFIString(infoPtr) ?? ""
         return C2PAInfo(rawOutput: infoJSON)
+        #else
+        throw SigningError.frameworkNotAvailable
+        #endif
     }
 
+    #if canImport(C2paOpenTDF)
     private nonisolated static func callInfo(
         filePath: String
     ) -> (C2paResultCode, UnsafeMutablePointer<CChar>?, UnsafeMutablePointer<CChar>?) {
@@ -159,6 +181,7 @@ public actor C2PASigner {
         c2pa_string_free(ptr)
         return str
     }
+    #endif
 }
 
 // MARK: - Validation Result
