@@ -203,37 +203,9 @@ struct RecordingsLibraryView: View {
             playerRecording = recording
         }
 
-        Divider()
+        if FeatureFlags.contentProtection && FileManager.default.fileExists(atPath: recording.tdfURL.path) {
+            Divider()
 
-        // TDF3 Protection options
-        Button {
-            Task {
-                await protectRecording(recording)
-            }
-        } label: {
-            Label("Protect with TDF3", systemImage: "lock.shield")
-        }
-        .disabled(isProtecting)
-
-        Button {
-            Task {
-                await protectRecordingHLS(recording)
-            }
-        } label: {
-            Label("Protect with HLS (Streaming)", systemImage: "play.tv.fill")
-        }
-        .disabled(isProtecting)
-
-        Button {
-            Task {
-                await protectRecordingFMP4(recording)
-            }
-        } label: {
-            Label("Protect with FairPlay (fMP4)", systemImage: "lock.shield.fill")
-        }
-        .disabled(isProtecting)
-
-        if FileManager.default.fileExists(atPath: recording.tdfURL.path) {
             Button {
                 debugLog("🎬 Opening protected player for: \(recording.title)")
                 protectedPlayerRecording = recording
@@ -246,35 +218,16 @@ struct RecordingsLibraryView: View {
             } label: {
                 Label("Show TDF Archive", systemImage: "doc.zipper")
             }
+        }
 
-            Divider()
-
-            // Iroh P2P Publishing
-            Button {
-                Task {
-                    await publishToIroh(recording)
-                }
-            } label: {
-                Label("Publish to Network", systemImage: "globe")
-            }
-            .disabled(isPublishing || !ArkavoIrohManager.shared.isReady)
-
-            if recording.irohStatus.isPublished, let ticket = recording.irohStatus.contentTicket {
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(ticket.ticket, forType: .string)
-                } label: {
-                    Label("Copy Content Ticket", systemImage: "doc.on.doc")
-                }
+        if FeatureFlags.provenance {
+            Button("View Provenance") {
+                selectedRecording = recording
+                showingProvenance = true
             }
         }
 
         Divider()
-
-        Button("View Provenance") {
-            selectedRecording = recording
-            showingProvenance = true
-        }
 
         Button("Show in Finder") {
             NSWorkspace.shared.selectFile(recording.url.path, inFileViewerRootedAtPath: "")

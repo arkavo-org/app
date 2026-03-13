@@ -36,7 +36,7 @@ final class RecordViewModel {
             recordingSession?.floatingHeadEnabled = floatingHeadEnabled
         }
     }
-    var remoteBridgeEnabled: Bool = true
+    var remoteBridgeEnabled: Bool = FeatureFlags.remoteCameraBridge
     var remoteBridgePort: String = "0"  // 0 = auto-assign available port
     var remoteCameraSources: [String] = []
     private(set) var actualPort: UInt16 = 0  // The actual port being used

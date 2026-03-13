@@ -111,11 +111,19 @@ enum NavigationSection: String, CaseIterable, Codable {
     case settings = "Settings"
 
     static func availableSections(isCreator: Bool) -> [NavigationSection] {
-        if isCreator {
-            allCases
-        } else {
-            allCases.filter { $0 != .patrons }
+        var base = allCases.filter { section in
+            switch section {
+            case .workflow: return FeatureFlags.workflow
+            case .protection: return FeatureFlags.contentProtection
+            case .social: return FeatureFlags.social
+            case .assistant: return FeatureFlags.aiAgent
+            default: return true
+            }
         }
+        if !isCreator {
+            base = base.filter { $0 != .patrons }
+        }
+        return base
     }
 
     var systemImage: String {
@@ -525,18 +533,6 @@ struct SectionContainer: View {
                     }
                 }
 
-                HStack(spacing: 8) {
-                    Button("New Chat") {
-                        // Navigate to assistant tab
-                    }
-                    .controlSize(.small)
-
-                    Button("Draft Post") {
-                        // Navigate to tools tab
-                    }
-                    .controlSize(.small)
-                }
-
                 if !agentService.activeSessions.isEmpty {
                     Text("\(agentService.activeSessions.count) active session(s)")
                         .font(.caption)
@@ -549,15 +545,6 @@ struct SectionContainer: View {
     // Computed property for sorted dashboard sections
     private var sortedDashboardSections: [DashboardSectionItem] {
         var sections: [DashboardSectionItem] = []
-
-        // Arkavo Section (first for encrypted streaming)
-        sections.append(DashboardSectionItem(
-            id: "arkavo",
-            title: "Arkavo",
-            isAuthenticated: arkavoAuthState.isAuthenticated,
-            hasActiveContent: false,
-            content: AnyView(arkavoDashboardContent)
-        ))
 
         // Twitch Section
         sections.append(DashboardSectionItem(
@@ -611,16 +598,6 @@ struct SectionContainer: View {
             isAuthenticated: blueskyClient.isAuthenticated,
             hasActiveContent: false,
             content: AnyView(blueskyDashboardContent)
-        ))
-
-        // AI Agent Section
-        let hasConnectedAgent = !agentService.connectedAgents.filter({ $0.value }).isEmpty
-        sections.append(DashboardSectionItem(
-            id: "agent",
-            title: "AI Agent",
-            isAuthenticated: hasConnectedAgent,
-            hasActiveContent: !agentService.activeSessions.isEmpty,
-            content: AnyView(agentDashboardContent)
         ))
 
         // Sort by priority (active content first, then authenticated, then not authenticated)
@@ -1191,47 +1168,49 @@ struct SettingsContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // VRM Models Directory Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("VRM Models")
-                        .font(.headline)
+                if FeatureFlags.avatar {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("VRM Models")
+                            .font(.headline)
 
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Models Folder")
-                                .font(.subheadline)
-                            Text(modelsPath)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Models Folder")
+                                    .font(.subheadline)
+                                Text(modelsPath)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
 
-                        Spacer()
+                            Spacer()
 
-                        Button("Choose...") {
-                            vrmDownloader.selectModelsDirectory()
-                            updateModelsPath()
-                        }
-
-                        if vrmDownloader.hasCustomModelsDirectory {
-                            Button("Reset") {
-                                vrmDownloader.clearCustomModelsDirectory()
+                            Button("Choose...") {
+                                vrmDownloader.selectModelsDirectory()
                                 updateModelsPath()
                             }
-                            .foregroundColor(.red)
-                        }
-                    }
 
-                    Text("Select the folder containing your .vrm or .glb avatar files.")
-                        .foregroundColor(.secondary)
-                        .font(.callout)
+                            if vrmDownloader.hasCustomModelsDirectory {
+                                Button("Reset") {
+                                    vrmDownloader.clearCustomModelsDirectory()
+                                    updateModelsPath()
+                                }
+                                .foregroundColor(.red)
+                            }
+                        }
+
+                        Text("Select the folder containing your .vrm or .glb avatar files.")
+                            .foregroundColor(.secondary)
+                            .font(.callout)
+                    }
+                    .padding()
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .padding()
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 // AI Agent Settings Section
-                if let agentService {
+                if FeatureFlags.aiAgent, let agentService {
                     AgentSettingsSection(agentService: agentService)
                 }
 

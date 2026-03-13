@@ -642,13 +642,13 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoMediaKit;
 		};
-		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoKit;
-		};
 		DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MuseCore;
+		};
+		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 

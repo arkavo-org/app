@@ -309,7 +309,7 @@ struct RecordView: View {
         HStack(spacing: 16) {
             // Left: Visual Source Toggle (Face/Avatar - both can be off for audio-only)
             HStack(spacing: 4) {
-                ForEach(VisualSource.allCases) { source in
+                ForEach(VisualSource.availableSources) { source in
                     let isSelected = studioState.visualSource == source
                     Button {
                         studioState.toggleVisualSource(source)

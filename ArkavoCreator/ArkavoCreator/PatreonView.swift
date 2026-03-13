@@ -206,18 +206,6 @@ struct PatronView: View {
             }
         }
         .navigationTitle("Patrons")
-        #if !os(visionOS)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingMessageComposer = true }) {
-                        Image(systemName: "envelope")
-                    }
-                }
-            }
-        #endif
-            .sheet(isPresented: $showingMessageComposer) {
-                MessageComposerView(patreonClient: patreonClient)
-            }
             .sheet(item: $selectedPatron) { patron in
                 PatronDetailView(patron: patron, patreonClient: patreonClient)
             }
@@ -290,17 +278,9 @@ struct PatronDetailView: View {
         }
         .navigationTitle("Patron Details")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingMessageComposer = true }) {
-                    Image(systemName: "envelope")
-                }
-            }
             ToolbarItem(placement: .cancellationAction) {
                 Button("Done") { dismiss() }
             }
-        }
-        .sheet(isPresented: $showingMessageComposer) {
-            MessageComposerView(patreonClient: patreonClient)
         }
     }
 }
