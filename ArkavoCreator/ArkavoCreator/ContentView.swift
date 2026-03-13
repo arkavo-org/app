@@ -40,54 +40,6 @@ struct ContentView: View {
             )
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
-            .toolbar {
-                if patreonClient.isAuthenticated || redditClient.isAuthenticated || youtubeClient.isAuthenticated || micropubClient.isAuthenticated ||
-                    blueskyClient.isAuthenticated || twitchClient.isAuthenticated
-                {
-                    ToolbarItemGroup {
-                        Button(action: {
-                            selectedSection = .social
-                        }) {
-                            Image(systemName: "bell")
-                        }
-                        .help("Notifications")
-                        Menu {
-                            if patreonClient.isAuthenticated {
-                                Button("Patreon Sign Out", action: {
-                                    patreonClient.logout()
-                                })
-                            }
-                            if redditClient.isAuthenticated {
-                                Button("Reddit Sign Out", action: {
-                                    redditClient.logout()
-                                })
-                            }
-                            if micropubClient.isAuthenticated {
-                                Button("Micro.blog Sign Out", action: {
-                                    micropubClient.logout()
-                                })
-                            }
-                            if blueskyClient.isAuthenticated {
-                                Button("Bluesky Sign Out", action: {
-                                    blueskyClient.logout()
-                                })
-                            }
-                            if youtubeClient.isAuthenticated {
-                                Button("YouTube Sign Out", action: {
-                                    youtubeClient.logout()
-                                })
-                            }
-                            if twitchClient.isAuthenticated {
-                                Button("Twitch Sign Out", action: {
-                                    twitchClient.logout()
-                                })
-                            }
-                        } label: {
-                            Image(systemName: "person.circle")
-                        }
-                    }
-                }
-            }
         }
         .environmentObject(appState)
         .onChange(of: selectedSection) { _, newValue in
@@ -214,90 +166,170 @@ struct SectionContainer: View {
     private var twitchDashboardContent: some View {
         Group {
             if twitchClient.isAuthenticated, let username = twitchClient.username {
-                HStack(alignment: .top, spacing: 16) {
-                    // Profile Image
-                    if let profileImageURL = twitchClient.profileImageURL,
-                       let url = URL(string: profileImageURL) {
-                        AsyncImage(url: url) { image in
-                            image
+                VStack(alignment: .leading, spacing: 12) {
+                    // Header: Profile image + username + LIVE badge
+                    HStack(alignment: .center, spacing: 12) {
+                        if let profileImageURL = twitchClient.profileImageURL,
+                           let url = URL(string: profileImageURL) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } placeholder: {
+                                ProgressView()
+                            }
+                            .frame(width: 48, height: 48)
+                            .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.circle.fill")
                                 .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            ProgressView()
+                                .foregroundColor(.purple)
+                                .frame(width: 48, height: 48)
                         }
-                        .frame(width: 60, height: 60)
-                        .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .foregroundColor(.purple)
-                            .frame(width: 60, height: 60)
-                    }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Username and Status
-                        HStack {
-                            Text(username)
-                                .font(.headline)
+                        Text(username)
+                            .font(.headline)
 
-                            if twitchClient.isLive {
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(Color.red)
-                                        .frame(width: 8, height: 8)
-                                    Text("LIVE")
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.red)
-                                }
+                        if let type = twitchClient.broadcasterType, !type.isEmpty {
+                            Text(type.capitalized)
+                                .font(.caption2)
+                                .fontWeight(.bold)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.1))
-                                .cornerRadius(4)
-                            }
+                                .background(type == "partner" ? Color.purple : Color.blue)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
                         }
 
-                        // Follower Count
-                        if let followerCount = twitchClient.followerCount {
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.caption)
-                                Text("\(formatNumber(followerCount)) followers")
-                                    .font(.subheadline)
-                            }
-                            .foregroundColor(.secondary)
-                        }
+                        Spacer()
 
-                        // Viewer Count (when live)
-                        if twitchClient.isLive, let viewerCount = twitchClient.viewerCount {
+                        if twitchClient.isLive {
                             HStack(spacing: 4) {
-                                Image(systemName: "eye.fill")
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                Text("LIVE")
                                     .font(.caption)
-                                Text("\(formatNumber(viewerCount)) viewers")
-                                    .font(.subheadline)
+                                    .fontWeight(.bold)
                                     .foregroundColor(.red)
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                    }
+
+                    // Stats row
+                    HStack(spacing: 8) {
+                        if let followerCount = twitchClient.followerCount {
+                            twitchStatCapsule(
+                                icon: "person.2.fill",
+                                value: formatNumber(followerCount),
+                                label: "followers"
+                            )
                         }
 
-                        // Channel Description
-                        if let description = twitchClient.channelDescription, !description.isEmpty {
-                            Text(description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        if twitchClient.isLive, let viewerCount = twitchClient.viewerCount {
+                            twitchStatCapsule(
+                                icon: "eye.fill",
+                                value: formatNumber(viewerCount),
+                                label: "viewers",
+                                tint: .red
+                            )
+                        }
+                    }
+
+                    // Tags
+                    if !twitchClient.channelTags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 4) {
+                                ForEach(twitchClient.channelTags.prefix(5), id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.purple.opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+
+                    // Stream info
+                    if let title = twitchClient.streamTitle, !title.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(title)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
                                 .lineLimit(2)
-                        }
 
-                        // Refresh Button
+                            if let game = twitchClient.gameName, !game.isEmpty {
+                                Label(game, systemImage: "gamecontroller.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if twitchClient.isLive, let startedAt = twitchClient.streamStartedAt {
+                                Label(formatUptime(from: startedAt), systemImage: "clock.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.5))
+                        .cornerRadius(8)
+                    }
+
+                    // Recent VODs (when offline)
+                    if !twitchClient.isLive, !twitchClient.recentVideos.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recent VODs")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                            ForEach(twitchClient.recentVideos.prefix(3)) { video in
+                                HStack {
+                                    Text(video.title)
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(formatNumber(video.view_count))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Image(systemName: "eye")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.5))
+                        .cornerRadius(8)
+                    }
+
+                    // Quick actions
+                    HStack(spacing: 12) {
                         Button {
                             Task {
                                 await twitchClient.refreshChannelData()
                             }
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                Text("Refresh")
-                            }
-                            .font(.caption)
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Spacer()
+
+                        Button {
+                            twitchClient.logout()
+                        } label: {
+                            Text("Sign Out")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .buttonStyle(.borderless)
                         .controlSize(.small)
@@ -324,15 +356,53 @@ struct SectionContainer: View {
         }
     }
 
+    private func twitchStatCapsule(icon: String, value: String, label: String, tint: Color = .secondary) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+            Text(label)
+                .font(.caption2)
+        }
+        .foregroundColor(tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.1))
+        .cornerRadius(12)
+    }
+
+    private func formatUptime(from startDate: Date) -> String {
+        let interval = Date().timeIntervalSince(startDate)
+        let hours = Int(interval) / 3600
+        let minutes = (Int(interval) % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
+    }
+
     private var youtubeDashboardContent: some View {
         Group {
             if youtubeClient.isAuthenticated {
                 if let channelInfo = youtubeClient.channelInfo {
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(channelInfo.title)
                             .font(.headline)
                         Text("\(channelInfo.subscriberCount) subscribers")
                         Text("\(channelInfo.videoCount) videos")
+
+                        HStack {
+                            Spacer()
+                            Button("Sign Out") {
+                                youtubeClient.logout()
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                            .foregroundColor(.secondary)
+                        }
                     }
                 }
             } else {
@@ -368,7 +438,20 @@ struct SectionContainer: View {
     private var patreonDashboardContent: some View {
         Group {
             if patreonClient.isAuthenticated {
-                PatreonRootView(patreonClient: patreonClient)
+                VStack(alignment: .leading, spacing: 8) {
+                    PatreonRootView(patreonClient: patreonClient)
+
+                    HStack {
+                        Spacer()
+                        Button("Sign Out") {
+                            patreonClient.logout()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundColor(.secondary)
+                    }
+                }
             } else {
                 Button("Login with Patreon") {
                     webViewPresenter.present(
@@ -393,7 +476,20 @@ struct SectionContainer: View {
     private var redditDashboardContent: some View {
         Group {
             if redditClient.isAuthenticated {
-                RedditRootView(redditClient: redditClient)
+                VStack(alignment: .leading, spacing: 8) {
+                    RedditRootView(redditClient: redditClient)
+
+                    HStack {
+                        Spacer()
+                        Button("Sign Out") {
+                            redditClient.logout()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundColor(.secondary)
+                    }
+                }
             } else {
                 Button("Login with Reddit") {
                     webViewPresenter.present(
@@ -412,7 +508,20 @@ struct SectionContainer: View {
     private var microblogDashboardContent: some View {
         Group {
             if micropubClient.isAuthenticated {
-                MicroblogRootView(micropubClient: micropubClient)
+                VStack(alignment: .leading, spacing: 8) {
+                    MicroblogRootView(micropubClient: micropubClient)
+
+                    HStack {
+                        Spacer()
+                        Button("Sign Out") {
+                            micropubClient.logout()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundColor(.secondary)
+                    }
+                }
             } else {
                 Button("Login with Micro.blog") {
                     webViewPresenter.present(
@@ -437,7 +546,20 @@ struct SectionContainer: View {
     private var blueskyDashboardContent: some View {
         Group {
             if blueskyClient.isAuthenticated {
-                BlueskyRootView(blueskyClient: blueskyClient)
+                VStack(alignment: .leading, spacing: 8) {
+                    BlueskyRootView(blueskyClient: blueskyClient)
+
+                    HStack {
+                        Spacer()
+                        Button("Sign Out") {
+                            blueskyClient.logout()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundColor(.secondary)
+                    }
+                }
             } else {
                 BlueskyLoginView(blueskyClient: blueskyClient)
             }
@@ -625,7 +747,7 @@ struct SectionContainer: View {
                 .transition(.moveAndFade())
                 .id("dashboard")
             case .profile:
-                CreatorProfileView()
+                CreatorProfileView(twitchClient: twitchClient)
                     .transition(.moveAndFade())
                     .id("profile")
             case .patrons:
@@ -633,7 +755,7 @@ struct SectionContainer: View {
                     .transition(.moveAndFade())
                     .id("patrons")
             case .studio:
-                RecordView(youtubeClient: youtubeClient)
+                RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient)
                     .transition(.moveAndFade())
                     .id("studio")
             case .library:

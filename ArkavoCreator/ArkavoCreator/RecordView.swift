@@ -7,6 +7,7 @@ struct RecordView: View {
     // MARK: - Properties
 
     @ObservedObject var youtubeClient: YouTubeClient
+    @ObservedObject var twitchClient: TwitchAuthClient
 
     // MARK: - Private State
 
@@ -90,6 +91,7 @@ struct RecordView: View {
             StreamDestinationPicker(
                 streamViewModel: streamViewModel,
                 youtubeClient: youtubeClient,
+                twitchClient: twitchClient,
                 onStartStream: { destination, streamKey in
                     Task { await startStreaming(destination: destination, streamKey: streamKey) }
                 }

@@ -6,6 +6,7 @@ import ArkavoStreaming
 struct StreamDestinationPicker: View {
     @Bindable var streamViewModel: StreamViewModel
     @ObservedObject var youtubeClient: YouTubeClient
+    @ObservedObject var twitchClient: TwitchAuthClient
     var onStartStream: (RTMPPublisher.Destination, String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -67,6 +68,19 @@ struct StreamDestinationPicker: View {
                                 .stroke(.white.opacity(0.2), lineWidth: 1)
                         )
 
+                    if streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated {
+                        Button {
+                            Task { await fetchTwitchStreamKey() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Fetch stream key from Twitch")
+                    }
+
                     if streamViewModel.selectedPlatform == .youtube {
                         Button {
                             Task {
@@ -92,6 +106,20 @@ struct StreamDestinationPicker: View {
                         }
                         .buttonStyle(.plain)
                         .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
+                    }
+                }
+
+                if streamViewModel.selectedPlatform == .twitch && streamViewModel.streamKey.isEmpty {
+                    if twitchClient.isAuthenticated, let username = twitchClient.username {
+                        Link(destination: URL(string: "https://dashboard.twitch.tv/u/\(username.lowercased())/settings/stream")!) {
+                            Label("Copy stream key from Twitch Dashboard", systemImage: "arrow.up.right.square")
+                                .font(.caption)
+                        }
+                    } else {
+                        Link(destination: URL(string: "https://dashboard.twitch.tv/settings/stream")!) {
+                            Label("Copy stream key from Twitch Dashboard", systemImage: "arrow.up.right.square")
+                                .font(.caption)
+                        }
                     }
                 }
             }
@@ -186,6 +214,20 @@ struct StreamDestinationPicker: View {
         // Dismiss if successful
         if streamViewModel.error == nil {
             dismiss()
+        }
+    }
+
+    private func fetchTwitchStreamKey() async {
+        do {
+            if let key = try await twitchClient.fetchStreamKey() {
+                debugLog("[StreamDestinationPicker] Fetched Twitch stream key: \(key.prefix(8))...")
+                streamViewModel.streamKey = key
+                streamViewModel.saveStreamKey()
+            } else {
+                streamViewModel.error = "Could not fetch stream key — copy it from the Twitch Dashboard"
+            }
+        } catch {
+            streamViewModel.error = "Could not fetch Twitch stream key: \(error.localizedDescription)"
         }
     }
 
