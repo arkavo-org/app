@@ -18,9 +18,14 @@ struct RecordView: View {
     @State private var enableScreen: Bool = false
     @State private var showStreamSetup: Bool = false
     @State private var showInspector: Bool = false
+    @State private var showChat: Bool = false
+    @State private var chatViewModel = ChatPanelViewModel()
     @State private var pulsing: Bool = false
     @State private var pipOffset: CGSize = .zero
     @State private var lastPipOffset: CGSize = .zero
+    // Scene state restoration
+    @State private var preScenemicEnabled: Bool = true
+    @State private var preSceneVisualSource: VisualSource? = .face
 
     // Shared state (not part of init)
     @ObservedObject private var previewStore = CameraPreviewStore.shared
@@ -37,6 +42,12 @@ struct RecordView: View {
 
             // MARK: - Main Stage + Inspector
             HStack(spacing: 0) {
+                // Chat Panel (left side)
+                if showChat {
+                    ChatPanelView(viewModel: chatViewModel, isVisible: $showChat)
+                        .transition(.move(edge: .leading))
+                }
+
                 ZStack {
                     // Ambient Background
                     LinearGradient(
@@ -48,6 +59,11 @@ struct RecordView: View {
 
                     stageCompositionView
                         .clipped()
+
+                    // Scene overlay (topmost layer)
+                    if studioState.isSceneOverlayActive {
+                        SceneOverlayView(scene: studioState.activeScene)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -87,6 +103,9 @@ struct RecordView: View {
         }
         .onChange(of: studioState.visualSource) { _, _ in syncViewModelState() }
         .onChange(of: enableScreen) { _, _ in syncViewModelState() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            Task { await viewModel.cleanup() }
+        }
         .sheet(isPresented: $showStreamSetup) {
             StreamDestinationPicker(
                 streamViewModel: streamViewModel,
@@ -380,26 +399,7 @@ struct RecordView: View {
                 }
             }
 
-            // Mic Toggle + Audio Meter
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.enableMicrophone.toggle()
-                } label: {
-                    Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
-                        .font(.system(size: 14))
-                        .padding(8)
-                        .background(viewModel.enableMicrophone ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(viewModel.enableMicrophone ? Color.accentColor : Color.clear, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("Toggle_Mic")
-                .help("Toggle Microphone")
-            }
+            audioAndSceneControls
 
             Spacer()
 
@@ -428,6 +428,25 @@ struct RecordView: View {
                 .clipShape(Capsule())
                 .opacity(viewModel.isRecording ? 1.0 : 0.5)
 
+                // Chat Toggle (Twitch only)
+                if streamViewModel.selectedPlatform == .twitch {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showChat.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 14))
+                            .padding(8)
+                            .foregroundStyle(showChat ? .primary : .secondary)
+                            .background(showChat ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .background(.regularMaterial)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Toggle Chat Panel")
+                }
+
                 // Inspector Toggle
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -446,6 +465,79 @@ struct RecordView: View {
                 .help("Toggle Inspector (⌘I)")
                 .keyboardShortcut("i", modifiers: .command)
             }
+        }
+    }
+
+    private var audioAndSceneControls: some View {
+        HStack(spacing: 8) {
+            // Mic Toggle
+            Button {
+                viewModel.enableMicrophone.toggle()
+            } label: {
+                Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
+                    .font(.system(size: 14))
+                    .padding(8)
+                    .background(viewModel.enableMicrophone ? Color.accentColor.opacity(0.2) : Color.clear)
+                    .background(.regularMaterial)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(viewModel.enableMicrophone ? Color.accentColor : Color.clear, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("Toggle_Mic")
+            .help("Toggle Microphone")
+
+            // Desktop Audio Toggle
+            Button {
+                viewModel.toggleDesktopAudio()
+            } label: {
+                Image(systemName: viewModel.enableDesktopAudio ? "speaker.wave.2.fill" : "speaker.slash")
+                    .font(.system(size: 14))
+                    .padding(8)
+                    .background(viewModel.enableDesktopAudio ? Color.accentColor.opacity(0.2) : Color.clear)
+                    .background(.regularMaterial)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(viewModel.enableDesktopAudio ? Color.accentColor : Color.clear, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("Toggle_DesktopAudio")
+            .help("Toggle Desktop Audio")
+
+            // Scene Picker
+            Menu {
+                ForEach(ScenePreset.allCases) { scene in
+                    Button {
+                        switchScene(to: scene)
+                    } label: {
+                        Label(scene.rawValue, systemImage: scene.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: studioState.activeScene.icon)
+                        .font(.system(size: 14))
+                    if studioState.isSceneOverlayActive {
+                        Text(studioState.activeScene.rawValue)
+                            .font(.caption.weight(.medium))
+                    }
+                }
+                .padding(8)
+                .background(studioState.isSceneOverlayActive ? Color.orange.opacity(0.3) : Color.clear)
+                .background(.regularMaterial)
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(studioState.isSceneOverlayActive ? Color.orange : Color.clear, lineWidth: 1)
+                )
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Scene Presets")
         }
     }
 
@@ -580,6 +672,37 @@ struct RecordView: View {
         if level < 0.5 { .green } else if level < 0.8 { .yellow } else { .red }
     }
 
+    // MARK: - Scene Switching
+
+    private func switchScene(to scene: ScenePreset) {
+        let currentScene = studioState.activeScene
+
+        if scene != .live && currentScene == .live {
+            // Leaving live — save current state
+            preScenemicEnabled = viewModel.enableMicrophone
+            preSceneVisualSource = studioState.visualSource
+        }
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            studioState.activeScene = scene
+        }
+
+        if scene == .live {
+            // Returning to live — restore saved state
+            viewModel.enableMicrophone = preScenemicEnabled
+            if let source = preSceneVisualSource {
+                if studioState.visualSource != source {
+                    studioState.visualSource = source
+                }
+            }
+        } else {
+            // Non-live scene — apply scene settings
+            if scene.muteMic {
+                viewModel.enableMicrophone = false
+            }
+        }
+    }
+
     // MARK: - Streaming
 
     private func startStreaming(destination: RTMPPublisher.Destination, streamKey: String) async {
@@ -610,12 +733,20 @@ struct RecordView: View {
                 try await session.startStreaming(to: destination, streamKey: streamKey)
             }
             streamViewModel.isStreaming = true
+
+            // Auto-connect Twitch chat
+            if streamViewModel.selectedPlatform == .twitch {
+                chatViewModel.connect(twitchClient: twitchClient)
+                withAnimation { showChat = true }
+            }
         } catch {
             streamViewModel.error = error.localizedDescription
         }
     }
 
     private func stopStreaming() async {
+        chatViewModel.disconnect()
+        showChat = false
         await streamViewModel.stopStreaming()
     }
 }

@@ -89,6 +89,16 @@ final class StudioState {
         }
     }
 
+    /// Active scene preset
+    var activeScene: ScenePreset = .live {
+        didSet {
+            UserDefaults.standard.set(activeScene.rawValue, forKey: "studio.activeScene")
+        }
+    }
+
+    /// Whether a non-live scene overlay is active
+    var isSceneOverlayActive: Bool { activeScene != .live }
+
     // MARK: - Persisted Output Preference
 
     var defaultOutput: OutputMode {
@@ -114,6 +124,11 @@ final class StudioState {
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")
         selectedVRMPath = UserDefaults.standard.string(forKey: "studio.selectedVRMPath")
         floatingHeadEnabled = UserDefaults.standard.bool(forKey: "studio.floatingHeadEnabled")
+
+        if let sceneRaw = UserDefaults.standard.string(forKey: "studio.activeScene"),
+           let scene = ScenePreset(rawValue: sceneRaw) {
+            activeScene = scene
+        }
 
         if let outputRaw = UserDefaults.standard.string(forKey: "studio.defaultOutput"),
            let output = OutputMode(rawValue: outputRaw)

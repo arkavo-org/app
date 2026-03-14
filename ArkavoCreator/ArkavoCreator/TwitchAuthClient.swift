@@ -31,7 +31,7 @@ class TwitchAuthClient: ObservableObject {
 
     // MARK: - Private Properties
 
-    private var accessToken: String?
+    private(set) var accessToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var notificationObserver: NSObjectProtocol?
 

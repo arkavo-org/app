@@ -643,19 +643,27 @@ struct AudioInspectorContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Section: Audio Level
-            sectionHeader("Audio Level")
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.3))
-                    Capsule()
-                        .fill(viewModel.enableMicrophone ? Color.green : Color.gray)
-                        .frame(width: max(0, 252 * viewModel.audioLevelPercentage()))
-                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
-                }
-                .frame(height: 8)
+            // Mic level + volume
+            AudioSourceMeter(
+                label: "Mic",
+                icon: "mic.fill",
+                level: viewModel.audioLevelPercentage(),
+                volume: $viewModel.micVolume,
+                isActive: viewModel.enableMicrophone
+            )
 
+            // Desktop audio level + volume
+            if viewModel.enableDesktopAudio {
+                Divider()
+                sectionHeader("Desktop Audio")
+
+                AudioSourceMeter(
+                    label: "Desktop",
+                    icon: "speaker.wave.2.fill",
+                    level: viewModel.desktopAudioLevelPercentage(),
+                    volume: $viewModel.desktopAudioVolume,
+                    isActive: true
+                )
             }
 
             Spacer()
@@ -670,32 +678,74 @@ struct AudioLevelMeter: View {
     @Bindable var viewModel: RecordViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             Divider()
 
-            sectionHeader("Audio Level")
-            HStack(spacing: 8) {
-                Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
-                    .foregroundStyle(viewModel.enableMicrophone ? .green : .secondary)
-                Text(viewModel.enableMicrophone ? "Active" : "Muted")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            sectionHeader("Audio")
 
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.3))
-                    Capsule()
-                        .fill(viewModel.enableMicrophone ? Color.green : Color.gray)
-                        .frame(width: max(0, 252 * viewModel.audioLevelPercentage()))
-                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
-                }
-                .frame(height: 8)
+            AudioSourceMeter(
+                label: "Mic",
+                icon: "mic.fill",
+                level: viewModel.audioLevelPercentage(),
+                volume: $viewModel.micVolume,
+                isActive: viewModel.enableMicrophone
+            )
 
+            if viewModel.enableDesktopAudio {
+                AudioSourceMeter(
+                    label: "Desktop",
+                    icon: "speaker.wave.2.fill",
+                    level: viewModel.desktopAudioLevelPercentage(),
+                    volume: $viewModel.desktopAudioVolume,
+                    isActive: true
+                )
             }
         }
         .padding()
+    }
+}
+
+// MARK: - Audio Source Meter (reusable)
+
+private struct AudioSourceMeter: View {
+    let label: String
+    let icon: String
+    let level: Double
+    @Binding var volume: Float
+    let isActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Level bar
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.gray.opacity(0.3))
+                Capsule()
+                    .fill(isActive ? levelColor : Color.gray)
+                    .frame(width: max(0, 252 * level * Double(volume)))
+                    .animation(.linear(duration: 0.067), value: level)
+            }
+            .frame(height: 6)
+
+            // Volume slider
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(isActive ? .primary : .secondary)
+                    .frame(width: 14)
+                Slider(value: $volume, in: 0...1)
+                Text("\(Int(volume * 100))%")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, alignment: .trailing)
+            }
+        }
+    }
+
+    private var levelColor: Color {
+        if level < 0.5 { .green }
+        else if level < 0.8 { .yellow }
+        else { .red }
     }
 }
 
