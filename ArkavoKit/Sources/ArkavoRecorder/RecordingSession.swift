@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import os
 
 #if os(macOS)
 @preconcurrency import AVFoundation
@@ -83,7 +84,7 @@ public final class RecordingSession: Sendable {
     // Recording state tracked locally for synchronous access
     // This is updated when recording starts/stops
     nonisolated(unsafe) private var _isRecording: Bool = false
-    nonisolated(unsafe) private var _isStreamingActive: Bool = false
+    private let _streamingActive = OSAllocatedUnfairLock(initialState: false)
     nonisolated(unsafe) private var recordingStartTime: Date?
     private let previewCIContext = CIContext()
 
@@ -462,14 +463,14 @@ public final class RecordingSession: Sendable {
         }
 
         // If preview-only mode (no recording or streaming), don't process for encoding
-        guard !isScreenPreviewOnly || _isStreamingActive else { return }
+        guard !isScreenPreviewOnly || _streamingActive.withLock({ $0 }) else { return }
 
         // Continue with recording/streaming if active
         await processFrameSync(screen: screenBuffer)
     }
 
     private nonisolated func processFrameSync(screen screenBuffer: CMSampleBuffer) async {
-        guard _isRecording || _isStreamingActive else { return }
+        guard _isRecording || _streamingActive.withLock({ $0 }) else { return }
 
         let mode = await MainActor.run { self.inputMode }
 
@@ -526,7 +527,7 @@ public final class RecordingSession: Sendable {
 
     /// Processes a frame for camera-only or avatar-only modes (called by timer)
     private nonisolated func processCameraOrAvatarFrame() async {
-        guard _isRecording || _isStreamingActive else { return }
+        guard _isRecording || _streamingActive.withLock({ $0 }) else { return }
 
         let mode = await MainActor.run { self.inputMode }
         let canvasSize = standardCanvasSize
@@ -594,7 +595,7 @@ public final class RecordingSession: Sendable {
     }
 
     private nonisolated func processAudioSampleSync(_ audioSample: CMSampleBuffer, sourceID: String) async {
-        guard _isRecording || _isStreamingActive else {
+        guard _isRecording || _streamingActive.withLock({ $0 }) else {
             return
         }
 
@@ -667,7 +668,7 @@ public final class RecordingSession: Sendable {
     /// Start frame generation for streaming-only mode (no recording to file).
     /// In camera/avatar modes, starts the 30fps frame driver timer.
     /// In desktop modes, screen capture is already running from preview — frames will now
-    /// pass through processFrameSync since _isStreamingActive is true.
+    /// pass through processFrameSync since streaming is active.
     /// Also starts audio routing so mic audio reaches the encoder.
     private func startStreamingFrameGeneration() {
         let mode = inputMode
@@ -699,7 +700,7 @@ public final class RecordingSession: Sendable {
     /// Start streaming to RTMP destination
     public func startStreaming(to destination: RTMPPublisher.Destination, streamKey: String) async throws {
         try await encoder.startStreaming(to: destination, streamKey: streamKey)
-        _isStreamingActive = true
+        _streamingActive.withLock { $0 = true }
         // Start frame generation if not already recording
         if !_isRecording {
             startStreamingFrameGeneration()
@@ -713,7 +714,7 @@ public final class RecordingSession: Sendable {
     ///   - streamKey: Stream key (e.g., live/test)
     public func startNTDFStreaming(kasURL: URL, rtmpURL: String, streamKey: String) async throws {
         try await encoder.startNTDFStreaming(kasURL: kasURL, rtmpURL: rtmpURL, streamKey: streamKey)
-        _isStreamingActive = true
+        _streamingActive.withLock { $0 = true }
         // Start frame generation if not already recording
         if !_isRecording {
             startStreamingFrameGeneration()
@@ -722,7 +723,7 @@ public final class RecordingSession: Sendable {
 
     /// Stop streaming
     public func stopStreaming() async {
-        _isStreamingActive = false
+        _streamingActive.withLock { $0 = false }
         await encoder.stopStreaming()
         await encoder.stopNTDFStreaming()
     }

@@ -81,7 +81,7 @@ final class RecordViewModel {
     }
 
     // Standalone audio level monitor (always-on, independent of recording)
-    private var audioMonitorSession: AVCaptureSession?
+    nonisolated(unsafe) private var audioMonitorSession: AVCaptureSession?
     private var audioMonitorOutput: AVCaptureAudioDataOutput?
     private let audioMonitorQueue = DispatchQueue(label: "com.arkavo.audioMonitor")
     private var audioMonitorDelegate: AudioLevelDelegate?
@@ -99,6 +99,11 @@ final class RecordViewModel {
         refreshCameraDevices()
         refreshScreenDevices()
         startAudioMonitor()
+    }
+
+    deinit {
+        let session = audioMonitorSession
+        session?.stopRunning()
     }
 
     // MARK: - Screen Selection
@@ -454,7 +459,7 @@ final class RecordViewModel {
         desktopAudioLevel = 0.0
     }
 
-    private static func computeRMS(from sampleBuffer: CMSampleBuffer) -> Float {
+    nonisolated static func computeRMS(from sampleBuffer: CMSampleBuffer) -> Float {
         guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
               let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return 0 }
@@ -860,41 +865,7 @@ private final class AudioLevelDelegate: NSObject, AVCaptureAudioDataOutputSample
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
-              let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
-
-        var length = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
-
-        guard let dataPointer else { return }
-
-        var sum: Float = 0.0
-        let isFloat = asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0
-
-        if isFloat {
-            let samples = length / MemoryLayout<Float32>.size
-            guard samples > 0 else { return }
-            dataPointer.withMemoryRebound(to: Float32.self, capacity: samples) { ptr in
-                for i in 0..<samples {
-                    let s = ptr[i]
-                    sum += s * s
-                }
-            }
-            let rms = sqrt(sum / Float(samples))
-            onLevel(min(1.0, rms * 3))
-        } else {
-            let samples = length / MemoryLayout<Int16>.size
-            guard samples > 0 else { return }
-            dataPointer.withMemoryRebound(to: Int16.self, capacity: samples) { ptr in
-                for i in 0..<samples {
-                    let s = Float(ptr[i]) / Float(Int16.max)
-                    sum += s * s
-                }
-            }
-            let rms = sqrt(sum / Float(samples))
-            onLevel(min(1.0, rms * 10))
-        }
+        let level = RecordViewModel.computeRMS(from: sampleBuffer)
+        onLevel(level)
     }
 }

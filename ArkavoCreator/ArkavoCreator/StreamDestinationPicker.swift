@@ -237,7 +237,7 @@ struct StreamDestinationPicker: View {
 
             if streamViewModel.selectedPlatform == .twitch && streamViewModel.streamKey.isEmpty {
                 if let username = twitchClient.username {
-                    Link(destination: URL(string: "https://dashboard.twitch.tv/u/\(username.lowercased())/settings/stream")!) {
+                    Link(destination: URL(string: "https://dashboard.twitch.tv/u/\(username.lowercased())/settings/stream") ?? URL(string: "https://dashboard.twitch.tv")!) {
                         Label("Copy stream key from Twitch Dashboard", systemImage: "arrow.up.right.square")
                             .font(.caption)
                     }

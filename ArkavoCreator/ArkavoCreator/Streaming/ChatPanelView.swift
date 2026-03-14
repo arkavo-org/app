@@ -176,7 +176,12 @@ private struct ChatMessageRow: View {
         let colors: [Color] = [
             .red, .blue, .green, .orange, .purple, .pink, .teal, .cyan, .mint, .indigo
         ]
-        let hash = abs(username.hashValue)
-        return colors[hash % colors.count]
+        // DJB2 hash for deterministic colors across app launches
+        // (String.hashValue is randomized per process)
+        var hash: UInt64 = 5381
+        for byte in username.utf8 {
+            hash = ((hash &<< 5) &+ hash) &+ UInt64(byte)
+        }
+        return colors[Int(hash % UInt64(colors.count))]
     }
 }
