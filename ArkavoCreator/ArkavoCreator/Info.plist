@@ -31,11 +31,5 @@
 		<string>Arkavo Creator requires access to encrypt and protect your content.</string>
 		<key>NSDocumentsFolderUsageDescription</key>
 		<string>ArkavoCreator saves your video recordings to the Documents folder.</string>
-		<key>NSLocalNetworkUsageDescription</key>
-		<string>ArkavoCreator uses your local network to connect with remote camera devices.</string>
-		<key>NSBonjourServices</key>
-		<array>
-			<string>_arkavo-remote._tcp</string>
-		</array>
 	</dict>
 </plist>
