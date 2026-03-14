@@ -281,7 +281,7 @@ struct StreamDestinationPicker: View {
     private func fetchTwitchStreamKey() async {
         do {
             if let key = try await twitchClient.fetchStreamKey() {
-                debugLog("[StreamDestinationPicker] Fetched Twitch stream key: \(key.prefix(8))...")
+                debugLog("[StreamDestinationPicker] Fetched Twitch stream key")
                 streamViewModel.streamKey = key
                 streamViewModel.saveStreamKey()
             } else {
@@ -295,7 +295,7 @@ struct StreamDestinationPicker: View {
     private func fetchYouTubeStreamKey() async {
         do {
             if let key = try await youtubeClient.fetchStreamKey() {
-                debugLog("[StreamDestinationPicker] Fetched YouTube stream key: \(key.prefix(8))...")
+                debugLog("[StreamDestinationPicker] Fetched YouTube stream key")
                 await MainActor.run {
                     streamViewModel.streamKey = key
                     streamViewModel.saveStreamKey()

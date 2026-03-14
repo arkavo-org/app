@@ -285,7 +285,7 @@ public final class RecordingSession: Sendable {
             print("⚠️ [RecordingSession] Avatar enabled but no texture provider set!")
         }
 
-        // STEP 2: Add microphone to audio router (but don't start yet)
+        // STEP 2: Add audio sources to audio router (but don't start yet)
         if mode.needsMicrophone {
             print("🎙️ RecordingSession: Adding microphone to audio router")
             let micSource = await audioRouter.addMicrophone()
@@ -293,6 +293,13 @@ public final class RecordingSession: Sendable {
                 self?.audioLevel = level
             }
             print("🎙️ RecordingSession: Microphone source created: \(micSource.sourceID)")
+        }
+
+        // Add desktop/screen audio if enabled
+        if enableScreenAudio {
+            print("🔊 RecordingSession: Adding screen audio to audio router")
+            let _ = await audioRouter.addScreenAudio()
+            print("🔊 RecordingSession: Screen audio source created")
         }
 
         // STEP 3: Start encoder FIRST with pre-created audio tracks for all sources
@@ -614,20 +621,18 @@ public final class RecordingSession: Sendable {
 
     // MARK: - Audio Source Management
 
-    /// Enable screen audio capture (macOS only)
-    public var enableScreenAudio: Bool = false {
-        didSet {
-            if enableScreenAudio && !oldValue {
-                Task { @MainActor in
-                    let _ = await audioRouter.addScreenAudio()
-                }
-            }
-        }
-    }
+    /// Enable screen audio capture (macOS only).
+    /// Set before calling startRecording() or startStreaming().
+    nonisolated(unsafe) public var enableScreenAudio: Bool = false
 
     /// Get audio router for advanced audio source management
     public var audioSourceRouter: AudioRouter {
         audioRouter
+    }
+
+    /// Set volume gain for an audio source (0.0 = silent, 1.0 = full)
+    public nonisolated func setAudioGain(_ gain: Float, for sourceID: String) {
+        audioMixer.setGain(gain, for: sourceID)
     }
 
     /// Get camera preview session (first active camera if available)
@@ -672,8 +677,17 @@ public final class RecordingSession: Sendable {
             startCameraFrameDriver()
         }
 
-        // Start audio routing
-        Task {
+        // Add audio sources if not already added (streaming without recording)
+        Task { @MainActor in
+            if mode.needsMicrophone && !audioRouter.allSourceIDs.contains("microphone") {
+                let micSource = audioRouter.addMicrophone()
+                micSource.onLevelUpdate = { @Sendable [weak self] level in
+                    self?.audioLevel = level
+                }
+            }
+            if enableScreenAudio && !audioRouter.allSourceIDs.contains("screen") {
+                let _ = audioRouter.addScreenAudio()
+            }
             try? await audioRouter.startAll()
         }
 

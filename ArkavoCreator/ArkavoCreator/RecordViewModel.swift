@@ -73,8 +73,12 @@ final class RecordViewModel {
     // Desktop audio
     var enableDesktopAudio: Bool = false
     var desktopAudioLevel: Float = 0.0
-    var micVolume: Float = 1.0
-    var desktopAudioVolume: Float = 1.0
+    var micVolume: Float = 1.0 {
+        didSet { recordingSession?.setAudioGain(micVolume, for: "microphone") }
+    }
+    var desktopAudioVolume: Float = 1.0 {
+        didSet { recordingSession?.setAudioGain(desktopAudioVolume, for: "screen") }
+    }
 
     // Standalone audio level monitor (always-on, independent of recording)
     private var audioMonitorSession: AVCaptureSession?
@@ -153,6 +157,9 @@ final class RecordViewModel {
             session.watermarkOpacity = watermarkOpacity
             session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
+            session.enableScreenAudio = enableDesktopAudio
+            session.setAudioGain(micVolume, for: "microphone")
+            session.setAudioGain(desktopAudioVolume, for: "screen")
 
             if enableCamera {
                 ensureDefaultCameraSelection()
@@ -314,6 +321,9 @@ final class RecordViewModel {
             session.enableAvatar = enableAvatar
             session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
+            session.enableScreenAudio = enableDesktopAudio
+            session.setAudioGain(micVolume, for: "microphone")
+            session.setAudioGain(desktopAudioVolume, for: "screen")
 
             if enableCamera {
                 ensureDefaultCameraSelection()
@@ -406,6 +416,8 @@ final class RecordViewModel {
             enableDesktopAudio = true
             startDesktopAudioMonitor()
         }
+        // Sync to recording session for live updates
+        recordingSession?.enableScreenAudio = enableDesktopAudio
     }
 
     private func startDesktopAudioMonitor() {

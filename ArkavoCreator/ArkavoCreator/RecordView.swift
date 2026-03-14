@@ -24,7 +24,7 @@ struct RecordView: View {
     @State private var pipOffset: CGSize = .zero
     @State private var lastPipOffset: CGSize = .zero
     // Scene state restoration
-    @State private var preScenemicEnabled: Bool = true
+    @State private var preSceneMicEnabled: Bool = true
     @State private var preSceneVisualSource: VisualSource? = .face
 
     // Shared state (not part of init)
@@ -657,7 +657,7 @@ struct RecordView: View {
 
         if scene != .live && currentScene == .live {
             // Leaving live — save current state
-            preScenemicEnabled = viewModel.enableMicrophone
+            preSceneMicEnabled = viewModel.enableMicrophone
             preSceneVisualSource = studioState.visualSource
         }
 
@@ -667,7 +667,7 @@ struct RecordView: View {
 
         if scene == .live {
             // Returning to live — restore saved state
-            viewModel.enableMicrophone = preScenemicEnabled
+            viewModel.enableMicrophone = preSceneMicEnabled
             if let source = preSceneVisualSource {
                 if studioState.visualSource != source {
                     studioState.visualSource = source

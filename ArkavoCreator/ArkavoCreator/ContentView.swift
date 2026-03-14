@@ -731,53 +731,57 @@ struct SectionContainer: View {
 
     var body: some View {
         ZStack {
-            switch selectedSection {
-            case .dashboard:
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Render sorted sections
-                        ForEach(sortedDashboardSections) { section in
-                            DashboardCard(title: section.title) {
-                                section.content
+            // Keep RecordView always alive so streaming isn't interrupted by tab switches
+            RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient)
+                .opacity(selectedSection == .studio ? 1 : 0)
+                .allowsHitTesting(selectedSection == .studio)
+                .id("studio")
+
+            if selectedSection != .studio {
+                switch selectedSection {
+                case .dashboard:
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // Render sorted sections
+                            ForEach(sortedDashboardSections) { section in
+                                DashboardCard(title: section.title) {
+                                    section.content
+                                }
                             }
                         }
+                        .padding()
                     }
-                    .padding()
+                    .transition(.moveAndFade())
+                    .id("dashboard")
+                case .profile:
+                    CreatorProfileView(twitchClient: twitchClient)
+                        .transition(.moveAndFade())
+                        .id("profile")
+                case .patrons:
+                    PatronManagementView(patreonClient: patreonClient)
+                        .transition(.moveAndFade())
+                        .id("patrons")
+                case .library:
+                    RecordingsLibraryView()
+                        .transition(.moveAndFade())
+                        .id("library")
+                case .workflow:
+                    ArkavoWorkflowView()
+                        .transition(.moveAndFade())
+                        .id("content")
+                case .assistant:
+                    AssistantSectionView(agentService: agentService)
+                        .transition(.moveAndFade())
+                        .id("assistant")
+                case .settings:
+                    SettingsContent(agentService: agentService)
+                        .transition(.moveAndFade())
+                        .id("settings")
+                default:
+                    DefaultSectionView(section: selectedSection)
+                        .transition(.moveAndFade())
+                        .id(selectedSection.rawValue)
                 }
-                .transition(.moveAndFade())
-                .id("dashboard")
-            case .profile:
-                CreatorProfileView(twitchClient: twitchClient)
-                    .transition(.moveAndFade())
-                    .id("profile")
-            case .patrons:
-                PatronManagementView(patreonClient: patreonClient)
-                    .transition(.moveAndFade())
-                    .id("patrons")
-            case .studio:
-                RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient)
-                    .transition(.moveAndFade())
-                    .id("studio")
-            case .library:
-                RecordingsLibraryView()
-                    .transition(.moveAndFade())
-                    .id("library")
-            case .workflow:
-                ArkavoWorkflowView()
-                    .transition(.moveAndFade())
-                    .id("content")
-            case .assistant:
-                AssistantSectionView(agentService: agentService)
-                    .transition(.moveAndFade())
-                    .id("assistant")
-            case .settings:
-                SettingsContent(agentService: agentService)
-                    .transition(.moveAndFade())
-                    .id("settings")
-            default:
-                DefaultSectionView(section: selectedSection)
-                    .transition(.moveAndFade())
-                    .id(selectedSection.rawValue)
             }
         }
         .animation(.smooth, value: selectedSection)
