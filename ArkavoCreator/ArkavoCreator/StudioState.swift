@@ -6,6 +6,16 @@ enum VisualSource: String, CaseIterable, Identifiable, Codable {
     case avatar = "Avatar"
     case muse = "Muse"
 
+    /// Sources gated by feature flags
+    static var availableSources: [VisualSource] {
+        var sources: [VisualSource] = [.face]
+        if FeatureFlags.avatar {
+            sources.append(.avatar)
+            sources.append(.muse)
+        }
+        return sources
+    }
+
     var id: String { rawValue }
 
     var icon: String {
@@ -79,6 +89,16 @@ final class StudioState {
         }
     }
 
+    /// Active scene preset
+    var activeScene: ScenePreset = .live {
+        didSet {
+            UserDefaults.standard.set(activeScene.rawValue, forKey: "studio.activeScene")
+        }
+    }
+
+    /// Whether a non-live scene overlay is active
+    var isSceneOverlayActive: Bool { activeScene != .live }
+
     // MARK: - Persisted Output Preference
 
     var defaultOutput: OutputMode {
@@ -92,7 +112,8 @@ final class StudioState {
     private init() {
         // Load persisted values
         if let sourceRaw = UserDefaults.standard.string(forKey: "studio.visualSource"),
-           let source = VisualSource(rawValue: sourceRaw)
+           let source = VisualSource(rawValue: sourceRaw),
+           VisualSource.availableSources.contains(source)
         {
             self.visualSource = source
         } else {
@@ -103,6 +124,11 @@ final class StudioState {
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")
         selectedVRMPath = UserDefaults.standard.string(forKey: "studio.selectedVRMPath")
         floatingHeadEnabled = UserDefaults.standard.bool(forKey: "studio.floatingHeadEnabled")
+
+        if let sceneRaw = UserDefaults.standard.string(forKey: "studio.activeScene"),
+           let scene = ScenePreset(rawValue: sceneRaw) {
+            activeScene = scene
+        }
 
         if let outputRaw = UserDefaults.standard.string(forKey: "studio.defaultOutput"),
            let output = OutputMode(rawValue: outputRaw)

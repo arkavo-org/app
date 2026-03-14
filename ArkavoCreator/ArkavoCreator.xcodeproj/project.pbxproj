@@ -445,7 +445,7 @@
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
@@ -494,7 +494,7 @@
 				DEVELOPMENT_TEAM = M8GS7ZT95Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
@@ -642,13 +642,13 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoMediaKit;
 		};
-		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoKit;
-		};
 		DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MuseCore;
+		};
+		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ArkavoKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 

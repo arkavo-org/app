@@ -12,19 +12,25 @@ struct InspectorPanel: View {
 
     var body: some View {
         ScrollView {
-            switch visualSource {
-            case .face:
-                FaceInspectorContent(viewModel: recordViewModel)
-            case .avatar:
-                AvatarInspectorContent(
-                    viewModel: avatarViewModel,
-                    onLoadModel: onLoadAvatarModel
-                )
-            case .muse:
-                MuseInspectorContent(onLoadModel: onLoadAvatarModel)
-            case nil:
-                // Audio-only mode
-                AudioInspectorContent(viewModel: recordViewModel)
+            VStack(spacing: 0) {
+                switch visualSource {
+                case .face:
+                    FaceInspectorContent(viewModel: recordViewModel)
+                case .avatar:
+                    AvatarInspectorContent(
+                        viewModel: avatarViewModel,
+                        onLoadModel: onLoadAvatarModel
+                    )
+                case .muse:
+                    MuseInspectorContent(onLoadModel: onLoadAvatarModel)
+                case nil:
+                    AudioInspectorContent(viewModel: recordViewModel)
+                }
+
+                // Always show audio level meter
+                if visualSource != nil {
+                    AudioLevelMeter(viewModel: recordViewModel)
+                }
             }
         }
         .frame(width: 280)
@@ -637,31 +643,109 @@ struct AudioInspectorContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Section: Audio Level
-            sectionHeader("Audio Level")
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.3))
-                    Capsule()
-                        .fill(levelColor(for: viewModel.audioLevelPercentage()))
-                        .frame(width: max(0, 252 * viewModel.audioLevelPercentage()))
-                        .animation(.linear(duration: 0.1), value: viewModel.audioLevelPercentage())
-                }
-                .frame(height: 8)
+            // Mic level + volume
+            AudioSourceMeter(
+                label: "Mic",
+                icon: "mic.fill",
+                level: viewModel.audioLevelPercentage(),
+                volume: $viewModel.micVolume,
+                isActive: viewModel.enableMicrophone
+            )
 
-                Text(String(format: "%.0f%%", viewModel.audioLevelPercentage() * 100))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+            // Desktop audio level + volume
+            if viewModel.enableDesktopAudio {
+                Divider()
+                sectionHeader("Desktop Audio")
+
+                AudioSourceMeter(
+                    label: "Desktop",
+                    icon: "speaker.wave.2.fill",
+                    level: viewModel.desktopAudioLevelPercentage(),
+                    volume: $viewModel.desktopAudioVolume,
+                    isActive: true
+                )
             }
 
             Spacer()
         }
         .padding()
     }
+}
 
-    private func levelColor(for level: Double) -> Color {
-        if level < 0.5 { .green } else if level < 0.8 { .yellow } else { .red }
+// MARK: - Audio Level Meter
+
+struct AudioLevelMeter: View {
+    @Bindable var viewModel: RecordViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Divider()
+
+            sectionHeader("Audio")
+
+            AudioSourceMeter(
+                label: "Mic",
+                icon: "mic.fill",
+                level: viewModel.audioLevelPercentage(),
+                volume: $viewModel.micVolume,
+                isActive: viewModel.enableMicrophone
+            )
+
+            if viewModel.enableDesktopAudio {
+                AudioSourceMeter(
+                    label: "Desktop",
+                    icon: "speaker.wave.2.fill",
+                    level: viewModel.desktopAudioLevelPercentage(),
+                    volume: $viewModel.desktopAudioVolume,
+                    isActive: true
+                )
+            }
+        }
+        .padding()
+    }
+}
+
+// MARK: - Audio Source Meter (reusable)
+
+private struct AudioSourceMeter: View {
+    let label: String
+    let icon: String
+    let level: Double
+    @Binding var volume: Float
+    let isActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Level bar
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.gray.opacity(0.3))
+                Capsule()
+                    .fill(isActive ? levelColor : Color.gray)
+                    .frame(width: max(0, 252 * level * Double(volume)))
+                    .animation(.linear(duration: 0.067), value: level)
+            }
+            .frame(height: 6)
+
+            // Volume slider
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(isActive ? .primary : .secondary)
+                    .frame(width: 14)
+                Slider(value: $volume, in: 0...1)
+                Text("\(Int(volume * 100))%")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, alignment: .trailing)
+            }
+        }
+    }
+
+    private var levelColor: Color {
+        if level < 0.5 { .green }
+        else if level < 0.8 { .yellow }
+        else { .red }
     }
 }
 

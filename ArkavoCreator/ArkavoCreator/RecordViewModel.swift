@@ -2,6 +2,7 @@
 // import ArkavoC2PA
 import ArkavoKit
 import AVFoundation
+import CoreMedia
 import CoreVideo
 import Foundation
 import SwiftUI
@@ -36,7 +37,7 @@ final class RecordViewModel {
             recordingSession?.floatingHeadEnabled = floatingHeadEnabled
         }
     }
-    var remoteBridgeEnabled: Bool = true
+    var remoteBridgeEnabled: Bool = FeatureFlags.remoteCameraBridge
     var remoteBridgePort: String = "0"  // 0 = auto-assign available port
     var remoteCameraSources: [String] = []
     private(set) var actualPort: UInt16 = 0  // The actual port being used
@@ -66,12 +67,43 @@ final class RecordViewModel {
     // Timer for updating duration
     private var timer: Timer?
 
+    // Security-scoped resource for recordings folder (held during recording)
+    private var scopedFolderURL: URL?
+
+    // Desktop audio
+    var enableDesktopAudio: Bool = false
+    var desktopAudioLevel: Float = 0.0
+    var micVolume: Float = 1.0 {
+        didSet { recordingSession?.setAudioGain(micVolume, for: "microphone") }
+    }
+    var desktopAudioVolume: Float = 1.0 {
+        didSet { recordingSession?.setAudioGain(desktopAudioVolume, for: "screen") }
+    }
+
+    // Standalone audio level monitor (always-on, independent of recording)
+    nonisolated(unsafe) private var audioMonitorSession: AVCaptureSession?
+    private var audioMonitorOutput: AVCaptureAudioDataOutput?
+    private let audioMonitorQueue = DispatchQueue(label: "com.arkavo.audioMonitor")
+    private var audioMonitorDelegate: AudioLevelDelegate?
+
+    // Desktop audio monitor
+    private var desktopAudioSource: ScreenAudioSource?
+    private var lastMicLevelUpdate: CFAbsoluteTime = 0
+    private var lastDesktopLevelUpdate: CFAbsoluteTime = 0
+    private static let levelUpdateInterval: CFAbsoluteTime = 1.0 / 15.0 // ~15 FPS
+
     // MARK: - Initialization
 
     init() {
         generateDefaultTitle()
         refreshCameraDevices()
         refreshScreenDevices()
+        startAudioMonitor()
+    }
+
+    deinit {
+        let session = audioMonitorSession
+        session?.stopRunning()
     }
 
     // MARK: - Screen Selection
@@ -130,6 +162,9 @@ final class RecordViewModel {
             session.watermarkOpacity = watermarkOpacity
             session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
+            session.enableScreenAudio = enableDesktopAudio
+            session.setAudioGain(micVolume, for: "microphone")
+            session.setAudioGain(desktopAudioVolume, for: "screen")
 
             if enableCamera {
                 ensureDefaultCameraSelection()
@@ -158,6 +193,9 @@ final class RecordViewModel {
         } catch {
             self.error = "Failed to start recording: \(error.localizedDescription)"
             RecordingState.shared.setRecordingSession(nil)
+            // Release scoped access if we acquired it before failing
+            scopedFolderURL?.stopAccessingSecurityScopedResource()
+            scopedFolderURL = nil
         }
     }
 
@@ -197,6 +235,10 @@ final class RecordViewModel {
             debugLog("❌ Error during stop: \(error)")
             self.error = "Failed to stop recording: \(error.localizedDescription). The operation could not be completed."
         }
+
+        // Release security-scoped access to the recordings folder
+        scopedFolderURL?.stopAccessingSecurityScopedResource()
+        scopedFolderURL = nil
 
         isProcessing = false
     }
@@ -284,6 +326,9 @@ final class RecordViewModel {
             session.enableAvatar = enableAvatar
             session.floatingHeadEnabled = floatingHeadEnabled
             session.cameraLayoutStrategy = resolvedCameraLayout()
+            session.enableScreenAudio = enableDesktopAudio
+            session.setAudioGain(micVolume, for: "microphone")
+            session.setAudioGain(desktopAudioVolume, for: "screen")
 
             if enableCamera {
                 ensureDefaultCameraSelection()
@@ -314,7 +359,6 @@ final class RecordViewModel {
             Task { @MainActor [weak self] in
                 guard let self, let session = recordingSession else { return }
                 duration = session.duration
-                audioLevel = session.audioLevel
             }
         }
     }
@@ -322,6 +366,152 @@ final class RecordViewModel {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    // MARK: - Always-On Audio Level Monitor
+
+    private func startAudioMonitor() {
+        let session = AVCaptureSession()
+        session.sessionPreset = .low
+
+        guard let device = AVCaptureDevice.default(for: .audio),
+              let input = try? AVCaptureDeviceInput(device: device) else {
+            return
+        }
+
+        guard session.canAddInput(input) else { return }
+        session.addInput(input)
+
+        let output = AVCaptureAudioDataOutput()
+        let delegate = AudioLevelDelegate { [weak self] level in
+            let now = CFAbsoluteTimeGetCurrent()
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self, now - lastMicLevelUpdate >= Self.levelUpdateInterval else { return }
+                lastMicLevelUpdate = now
+                audioLevel = level
+            }
+        }
+        output.setSampleBufferDelegate(delegate, queue: audioMonitorQueue)
+
+        guard session.canAddOutput(output) else { return }
+        session.addOutput(output)
+
+        audioMonitorDelegate = delegate
+        audioMonitorOutput = output
+        audioMonitorSession = session
+
+        DispatchQueue.global(qos: .utility).async {
+            session.startRunning()
+        }
+    }
+
+    func stopAudioMonitor() {
+        audioMonitorSession?.stopRunning()
+        audioMonitorSession = nil
+        audioMonitorOutput = nil
+        audioMonitorDelegate = nil
+    }
+
+    func toggleDesktopAudio() {
+        if enableDesktopAudio {
+            enableDesktopAudio = false
+            stopDesktopAudioMonitor()
+        } else {
+            enableDesktopAudio = true
+            startDesktopAudioMonitor()
+        }
+        // Sync to recording session for live updates
+        recordingSession?.enableScreenAudio = enableDesktopAudio
+    }
+
+    private func startDesktopAudioMonitor() {
+        let source = ScreenAudioSource(sourceID: "monitor-desktop-audio")
+        source.onSample = { [weak self] sampleBuffer in
+            guard let self else { return }
+            let level = Self.computeRMS(from: sampleBuffer)
+            let now = CFAbsoluteTimeGetCurrent()
+            Task { @MainActor [weak self] in
+                guard let self, now - lastDesktopLevelUpdate >= Self.levelUpdateInterval else { return }
+                lastDesktopLevelUpdate = now
+                desktopAudioLevel = level
+            }
+        }
+        desktopAudioSource = source
+        Task {
+            do {
+                try await source.start()
+            } catch {
+                await MainActor.run {
+                    self.error = "Desktop audio requires Screen Recording permission. Open System Settings > Privacy & Security > Screen Recording."
+                    self.enableDesktopAudio = false
+                }
+            }
+        }
+    }
+
+    private func stopDesktopAudioMonitor() {
+        guard let source = desktopAudioSource else { return }
+        Task {
+            try? await source.stop()
+        }
+        desktopAudioSource = nil
+        desktopAudioLevel = 0.0
+    }
+
+    nonisolated static func computeRMS(from sampleBuffer: CMSampleBuffer) -> Float {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
+              let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return 0 }
+
+        var length = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+        guard let dataPointer else { return 0 }
+
+        var sum: Float = 0.0
+        if asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
+            let samples = length / MemoryLayout<Float32>.size
+            guard samples > 0 else { return 0 }
+            dataPointer.withMemoryRebound(to: Float32.self, capacity: samples) { ptr in
+                for i in 0..<samples {
+                    let s = ptr[i]
+                    sum += s * s
+                }
+            }
+            return min(1.0, sqrt(sum / Float(samples)) * 3)
+        } else {
+            let samples = length / MemoryLayout<Int16>.size
+            guard samples > 0 else { return 0 }
+            dataPointer.withMemoryRebound(to: Int16.self, capacity: samples) { ptr in
+                for i in 0..<samples {
+                    let s = Float(ptr[i]) / Float(Int16.max)
+                    sum += s * s
+                }
+            }
+            return min(1.0, sqrt(sum / Float(samples)) * 10)
+        }
+    }
+
+    /// Cleanly shuts down all capture resources (mic, camera, screen).
+    /// Called on app termination to release hardware.
+    func cleanup() async {
+        stopAudioMonitor()
+        stopDesktopAudioMonitor()
+        stopTimer()
+
+        if isRecording {
+            await stopRecording()
+        }
+
+        if let session = recordingSession {
+            session.stopCameraPreview()
+            session.stopScreenPreview()
+            try? await session.stopStreaming()
+        }
+
+        recordingSession = nil
+        RecordingState.shared.setRecordingSession(nil)
     }
 
     // MARK: - Utilities
@@ -346,20 +536,25 @@ final class RecordViewModel {
             throw CocoaError(.userCancelled)
         }
 
-        return try RecordingsFolderAccess.withScopedAccess(folder) {
-            // Create recordings directory if needed
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-
-            // Generate filename with appropriate extension based on recording mode
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd_HHmmss"
-            // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
-            let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
-            let ext = isAudioOnly ? "m4a" : "mov"
-            let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
-
-            return folder.appendingPathComponent(filename)
+        // Start security-scoped access and keep it alive for the duration of recording.
+        // The previous withScopedAccess pattern stopped access before AVAssetWriter could write.
+        guard folder.startAccessingSecurityScopedResource() else {
+            throw CocoaError(.fileReadNoPermission)
         }
+        scopedFolderURL = folder
+
+        // Create recordings directory if needed
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        // Generate filename with appropriate extension based on recording mode
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        // Use .m4a for audio-only (no camera, no desktop, no avatar), .mov for video
+        let isAudioOnly = !enableCamera && !enableDesktop && !enableAvatar
+        let ext = isAudioOnly ? "m4a" : "mov"
+        let filename = "arkavo_recording_\(formatter.string(from: Date())).\(ext)"
+
+        return folder.appendingPathComponent(filename)
     }
 
     func getAvailableDevices() -> (screens: [ScreenInfo], cameras: [CameraInfo], microphones: [AudioDeviceInfo]) {
@@ -384,6 +579,10 @@ final class RecordViewModel {
 
     func audioLevelPercentage() -> Double {
         Double(min(1.0, max(0.0, audioLevel)))
+    }
+
+    func desktopAudioLevelPercentage() -> Double {
+        Double(min(1.0, max(0.0, desktopAudioLevel)))
     }
 
     // MARK: - Input Validation
@@ -653,5 +852,20 @@ final class RecordViewModel {
 
     var connectionInfo: String {
         "arkavo://connect?host=\(suggestedHostname)&port=\(actualPort)"
+    }
+}
+
+// MARK: - Audio Level Delegate
+
+private final class AudioLevelDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
+    private let onLevel: @Sendable (Float) -> Void
+
+    init(onLevel: @escaping @Sendable (Float) -> Void) {
+        self.onLevel = onLevel
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let level = RecordViewModel.computeRMS(from: sampleBuffer)
+        onLevel(level)
     }
 }

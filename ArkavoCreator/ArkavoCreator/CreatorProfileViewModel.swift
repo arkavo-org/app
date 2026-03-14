@@ -40,7 +40,7 @@ class CreatorProfileViewModel: ObservableObject {
     private let draftKey = "CreatorProfileDraft"
 
     var canPublish: Bool {
-        !profile.displayName.isEmpty && ArkavoIrohManager.shared.isReady
+        !profile.displayName.isEmpty
     }
 
     /// The profile service (from ArkavoIrohManager)
@@ -112,7 +112,7 @@ class CreatorProfileViewModel: ObservableObject {
 
     func publishProfile() async {
         guard canPublish else {
-            errorMessage = "Cannot publish: display name is required and iroh must be initialized"
+            errorMessage = "Cannot publish: display name is required"
             showError = true
             return
         }

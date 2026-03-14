@@ -6,10 +6,12 @@ import ArkavoStreaming
 struct StreamDestinationPicker: View {
     @Bindable var streamViewModel: StreamViewModel
     @ObservedObject var youtubeClient: YouTubeClient
+    @ObservedObject var twitchClient: TwitchAuthClient
     var onStartStream: (RTMPPublisher.Destination, String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = false
+    @State private var showTwitchAuth = false
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
 
@@ -37,101 +39,25 @@ struct StreamDestinationPicker: View {
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
-                    ForEach(StreamViewModel.StreamPlatform.allCases) { platform in
-                        let isArkavoDisabled = platform == .arkavo && !arkavoAuthState.isAuthenticated
+                    ForEach(StreamViewModel.StreamPlatform.allCases.filter { $0 != .arkavo || FeatureFlags.arkavoStreaming }) { platform in
                         PlatformCard(
                             platform: platform,
                             isSelected: streamViewModel.selectedPlatform == platform,
-                            isDisabled: isArkavoDisabled,
                             action: {
-                                if !isArkavoDisabled {
-                                    streamViewModel.selectedPlatform = platform
-                                    streamViewModel.loadStreamKey()
-                                }
+                                streamViewModel.selectedPlatform = platform
+                                streamViewModel.loadStreamKey()
                             }
                         )
                     }
                 }
-
-                // Show login prompt if Arkavo is selected but not authenticated
-                if streamViewModel.selectedPlatform == .arkavo && !arkavoAuthState.isAuthenticated {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("Login to Arkavo on Dashboard to enable encrypted streaming")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(8)
-                    .background(.orange.opacity(0.1))
-                    .cornerRadius(6)
-                }
             }
 
-            // Stream Key Input (not shown for Arkavo)
-            if streamViewModel.selectedPlatform != .arkavo {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Stream Key")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        SecureField("Enter your stream key", text: $streamViewModel.streamKey)
-                            .textFieldStyle(.plain)
-                            .padding(12)
-                            .background(.background.opacity(0.5))
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-
-                        if streamViewModel.selectedPlatform == .youtube {
-                            Button {
-                                Task {
-                                    if youtubeClient.isAuthenticated {
-                                        await fetchYouTubeStreamKey()
-                                    } else {
-                                        // Need to authenticate first
-                                        debugLog("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
-                                        do {
-                                            try await youtubeClient.authenticateWithLocalServer()
-                                            // After auth, fetch the stream key
-                                            await fetchYouTubeStreamKey()
-                                        } catch {
-                                            await MainActor.run {
-                                                streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
-                                    .padding(10)
-                                    .background(.ultraThinMaterial)
-                                    .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-                            .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
-                        }
-                    }
-                }
+            // Stream Key / Auth Section
+            if streamViewModel.selectedPlatform == .twitch && !twitchClient.isAuthenticated {
+                // Twitch not authenticated — prompt to connect
+                twitchConnectSection
             } else {
-                // Arkavo encrypted streaming info
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "lock.shield.fill")
-                            .foregroundStyle(.green)
-                        Text("End-to-end encrypted stream")
-                            .font(.subheadline)
-                    }
-                    Text("Your stream will be encrypted using NanoTDF before transmission to 100.arkavo.net")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .background(.green.opacity(0.1))
-                .cornerRadius(8)
+                streamKeySection
             }
 
             // Custom RTMP URL (if custom platform)
@@ -199,12 +125,133 @@ struct StreamDestinationPicker: View {
         .background(.ultraThinMaterial)
     }
 
+    // MARK: - Twitch Connect (unauthenticated)
+
+    private var twitchConnectSection: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 36))
+                .foregroundStyle(.orange)
+
+            Text("Connect your Twitch account to go live")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                showTwitchAuth = true
+            } label: {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                    Text("Connect to Twitch")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.purple)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showTwitchAuth) {
+                WebView(
+                    url: twitchClient.authorizationURL,
+                    handleCallback: { url in
+                        Task {
+                            do {
+                                try await twitchClient.handleCallback(url)
+                                showTwitchAuth = false
+                                // Auto-fetch stream key after successful auth
+                                await fetchTwitchStreamKey()
+                            } catch {
+                                debugLog("Twitch OAuth error: \(error)")
+                            }
+                        }
+                    }
+                )
+                .frame(width: 500, height: 700)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Stream Key Input (authenticated)
+
+    private var streamKeySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Stream Key")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                SecureField("Enter your stream key", text: $streamViewModel.streamKey)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(.background.opacity(0.5))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                    )
+
+                if streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated {
+                    Button {
+                        Task { await fetchTwitchStreamKey() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fetch stream key from Twitch")
+                }
+
+                if streamViewModel.selectedPlatform == .youtube {
+                    Button {
+                        Task {
+                            if youtubeClient.isAuthenticated {
+                                await fetchYouTubeStreamKey()
+                            } else {
+                                debugLog("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
+                                do {
+                                    try await youtubeClient.authenticateWithLocalServer()
+                                    await fetchYouTubeStreamKey()
+                                } catch {
+                                    await MainActor.run {
+                                        streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
+                }
+            }
+
+            if streamViewModel.selectedPlatform == .twitch && streamViewModel.streamKey.isEmpty {
+                if let username = twitchClient.username {
+                    Link(destination: URL(string: "https://dashboard.twitch.tv/u/\(username.lowercased())/settings/stream") ?? URL(string: "https://dashboard.twitch.tv")!) {
+                        Label("Copy stream key from Twitch Dashboard", systemImage: "arrow.up.right.square")
+                            .font(.caption)
+                    }
+                }
+            }
+        }
+    }
+
     private var canStartStream: Bool {
-        // Arkavo requires authentication
-        if streamViewModel.selectedPlatform == .arkavo && !arkavoAuthState.isAuthenticated {
+        // Block streaming when Twitch is selected but not authenticated
+        if streamViewModel.selectedPlatform == .twitch && !twitchClient.isAuthenticated {
             return false
         }
-        let hasValidKey = streamViewModel.selectedPlatform == .arkavo || !streamViewModel.streamKey.isEmpty
+        let hasValidKey = !streamViewModel.streamKey.isEmpty
         return hasValidKey &&
         (streamViewModel.selectedPlatform != .custom || !streamViewModel.customRTMPURL.isEmpty)
     }
@@ -231,10 +278,24 @@ struct StreamDestinationPicker: View {
         }
     }
 
+    private func fetchTwitchStreamKey() async {
+        do {
+            if let key = try await twitchClient.fetchStreamKey() {
+                debugLog("[StreamDestinationPicker] Fetched Twitch stream key")
+                streamViewModel.streamKey = key
+                streamViewModel.saveStreamKey()
+            } else {
+                streamViewModel.error = "Could not fetch stream key — copy it from the Twitch Dashboard"
+            }
+        } catch {
+            streamViewModel.error = "Could not fetch Twitch stream key: \(error.localizedDescription)"
+        }
+    }
+
     private func fetchYouTubeStreamKey() async {
         do {
             if let key = try await youtubeClient.fetchStreamKey() {
-                debugLog("[StreamDestinationPicker] Fetched YouTube stream key: \(key.prefix(8))...")
+                debugLog("[StreamDestinationPicker] Fetched YouTube stream key")
                 await MainActor.run {
                     streamViewModel.streamKey = key
                     streamViewModel.saveStreamKey()

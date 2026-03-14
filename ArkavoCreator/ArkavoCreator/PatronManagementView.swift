@@ -57,29 +57,6 @@ struct PatronManagementView: View {
                 filterStatus: $filterStatus,
                 selectedPatrons: $selectedPatrons,
             )
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Menu {
-                        Button("CSV", action: { /* TODO: Implement CSV export */ })
-                        Button("Excel", action: { /* TODO: Implement Excel export */ })
-                        Button("PDF", action: { /* TODO: Implement PDF export */ })
-                    } label: {
-                        Label("Export", systemImage: "square.and.arrow.up")
-                    }
-
-                    if !selectedPatrons.isEmpty {
-                        Menu {
-                            Button("Send Message", action: sendMessageToSelected)
-                            Button("Export Selected", action: exportSelectedData)
-                            Divider()
-                            Button("Remove Selected", action: removeSelected)
-                                .foregroundColor(.red)
-                        } label: {
-                            Label("Actions", systemImage: "ellipsis.circle")
-                        }
-                    }
-                }
-            }
         }
         .sheet(isPresented: $showNewTierSheet) {
             NewTierSheet()
@@ -87,17 +64,6 @@ struct PatronManagementView: View {
         }
     }
 
-    private func sendMessageToSelected() {
-        // Implement send message functionality
-    }
-
-    private func exportSelectedData() {
-        // Implement export functionality
-    }
-
-    private func removeSelected() {
-        // Implement remove functionality with confirmation
-    }
 }
 
 // MARK: - Campaigns Sidebar
@@ -141,12 +107,6 @@ struct CampaignsSidebar: View {
                     ForEach(campaigns) { campaign in
                         CampaignRow(campaign: campaign)
                             .tag(campaign)
-                            .contextMenu {
-                                Button("Edit") { /* TODO: Implement edit */ }
-                                Button("Duplicate") { /* TODO: Implement duplicate */ }
-                                Divider()
-                                Button("Archive", role: .destructive) { /* TODO: Implement archive */ }
-                            }
                     }
                 }
             } header: {
@@ -450,7 +410,9 @@ struct NewCampaignSheet: View {
         true
     }
 
-    func createCampaign() { /* TODO: Implement campaign creation */ }
+    func createCampaign() {
+        dismiss()
+    }
 }
 
 // MARK: - Tiers Sidebar
@@ -829,11 +791,5 @@ struct TierRowView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .contextMenu {
-            Button("Edit") { /* TODO: Implement edit */ }
-            Button("Duplicate") { /* TODO: Implement duplicate */ }
-            Divider()
-            Button("Archive", role: .destructive) { /* TODO: Implement archive */ }
-        }
     }
 }

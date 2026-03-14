@@ -13,6 +13,11 @@ enum RecordingsFolderAccess {
         UserDefaults.standard.data(forKey: bookmarkKey) != nil
     }
 
+    /// Clears the stored bookmark so the user can pick a new folder
+    static func clearBookmark() {
+        UserDefaults.standard.removeObject(forKey: bookmarkKey)
+    }
+
     /// Shows folder picker and stores bookmark. Must be called on main thread.
     @MainActor
     static func chooseRecordingsFolder() async -> URL? {

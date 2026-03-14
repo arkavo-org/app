@@ -6,6 +6,7 @@ import SwiftUI
 
 struct CreatorProfileView: View {
     @StateObject private var viewModel = CreatorProfileViewModel()
+    @ObservedObject var twitchClient: TwitchAuthClient
     @State private var showingAvatarPicker = false
     @State private var showingBannerPicker = false
 
@@ -15,8 +16,15 @@ struct CreatorProfileView: View {
                 // Header Section
                 ProfileHeaderSection(
                     profile: $viewModel.profile,
+                    twitchProfileImageURL: twitchClient.profileImageURL,
                     onAvatarTap: { showingAvatarPicker = true },
-                    onBannerTap: { showingBannerPicker = true }
+                    onBannerTap: { showingBannerPicker = true },
+                    onUseTwitchAvatar: {
+                        if let urlString = twitchClient.profileImageURL,
+                           let url = URL(string: urlString) {
+                            viewModel.profile.avatarURL = url
+                        }
+                    }
                 )
 
                 // Basic Info Section
@@ -32,12 +40,18 @@ struct CreatorProfileView: View {
                 StreamingScheduleSection(schedule: $viewModel.profile.streamingSchedule)
 
                 // Patron Tiers Section
-                PatronTiersSection(tiers: $viewModel.profile.patronTiers)
+                if FeatureFlags.patreon {
+                    PatronTiersSection(tiers: $viewModel.profile.patronTiers)
+                }
 
                 // Sync Status and Actions
                 ProfileActionsSection(viewModel: viewModel)
             }
             .padding()
+        }
+        .onChange(of: twitchClient.username) { _, newUsername in
+            guard let username = newUsername, viewModel.profile.displayName.isEmpty else { return }
+            importTwitchToProfile(username: username)
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK") { /* Dismisses alert */ }
@@ -57,6 +71,77 @@ struct CreatorProfileView: View {
             allowsMultipleSelection: false
         ) { result in
             handleImageSelection(result, for: .banner)
+        }
+    }
+
+    private func importTwitchToProfile(username: String) {
+        withAnimation(.easeInOut) {
+            viewModel.profile.displayName = username
+
+            if let description = twitchClient.channelDescription, !description.isEmpty, viewModel.profile.bio.isEmpty {
+                viewModel.profile.bio = description
+            }
+
+            if let profileImageURL = twitchClient.profileImageURL,
+               let url = URL(string: profileImageURL),
+               viewModel.profile.avatarURL == nil {
+                viewModel.profile.avatarURL = url
+            }
+
+            // Add Twitch social link if not already present
+            if !viewModel.profile.socialLinks.contains(where: { $0.platform == .twitch }) {
+                if let linkURL = URL(string: "https://twitch.tv/\(username.lowercased())") {
+                    let link = CreatorSocialLink(
+                        platform: .twitch,
+                        username: username,
+                        url: linkURL,
+                        isVerified: true
+                    )
+                    viewModel.profile.socialLinks.append(link)
+                }
+            }
+
+            // Map Twitch tags to content categories
+            if viewModel.profile.contentCategories.isEmpty {
+                let tagMapping: [String: ContentCategory] = [
+                    "gaming": .gaming, "music": .music, "art": .art,
+                    "technology": .technology, "education": .education,
+                    "sports": .sports, "cooking": .cooking,
+                    "fitness": .fitness, "science": .science,
+                    "comedy": .comedy, "entertainment": .entertainment,
+                ]
+                for tag in twitchClient.channelTags {
+                    let lowered = tag.lowercased()
+                    if let category = tagMapping[lowered],
+                       !viewModel.profile.contentCategories.contains(category) {
+                        viewModel.profile.contentCategories.append(category)
+                    }
+                }
+            }
+
+            // Map Twitch schedule to streaming schedule
+            if viewModel.profile.streamingSchedule == nil, !twitchClient.schedule.isEmpty {
+                let formatter = ISO8601DateFormatter()
+                let calendar = Calendar.current
+                var slots: [ScheduleSlot] = []
+                for segment in twitchClient.schedule {
+                    guard let start = formatter.date(from: segment.start_time),
+                          let end = formatter.date(from: segment.end_time) else { continue }
+                    let components = calendar.dateComponents([.weekday, .hour, .minute], from: start)
+                    let duration = Int(end.timeIntervalSince(start) / 60)
+                    let slot = ScheduleSlot(
+                        dayOfWeek: components.weekday ?? 1,
+                        startHour: components.hour ?? 0,
+                        startMinute: components.minute ?? 0,
+                        durationMinutes: max(duration, 15),
+                        title: segment.title
+                    )
+                    slots.append(slot)
+                }
+                if !slots.isEmpty {
+                    viewModel.profile.streamingSchedule = StreamingSchedule(slots: slots)
+                }
+            }
         }
     }
 
@@ -86,8 +171,10 @@ struct CreatorProfileView: View {
 
 private struct ProfileHeaderSection: View {
     @Binding var profile: CreatorProfile
+    let twitchProfileImageURL: String?
     let onAvatarTap: () -> Void
     let onBannerTap: () -> Void
+    let onUseTwitchAvatar: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,7 +198,13 @@ private struct ProfileHeaderSection: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Button(action: onBannerTap) {
+                        Menu {
+                            Button("Choose Image...") { onBannerTap() }
+                            Divider()
+                            if profile.bannerURL != nil {
+                                Button("Remove", role: .destructive) { profile.bannerURL = nil }
+                            }
+                        } label: {
                             Image(systemName: "camera.fill")
                                 .font(.caption)
                                 .padding(8)
@@ -126,6 +219,13 @@ private struct ProfileHeaderSection: View {
             .frame(height: 180)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .contextMenu {
+                Button("Choose Banner Image...") { onBannerTap() }
+                Divider()
+                if profile.bannerURL != nil {
+                    Button("Remove Banner", role: .destructive) { profile.bannerURL = nil }
+                }
+            }
 
             // Avatar (overlapping banner)
             ZStack {
@@ -147,7 +247,16 @@ private struct ProfileHeaderSection: View {
             .clipShape(Circle())
             .overlay(Circle().stroke(Color(NSColor.windowBackgroundColor), lineWidth: 4))
             .overlay(alignment: .bottomTrailing) {
-                Button(action: onAvatarTap) {
+                Menu {
+                    Button("Choose Image...") { onAvatarTap() }
+                    if twitchProfileImageURL != nil {
+                        Button("Use Twitch Avatar") { onUseTwitchAvatar() }
+                    }
+                    Divider()
+                    if profile.avatarURL != nil {
+                        Button("Remove", role: .destructive) { profile.avatarURL = nil }
+                    }
+                } label: {
                     Image(systemName: "camera.fill")
                         .font(.caption2)
                         .padding(6)
@@ -155,6 +264,16 @@ private struct ProfileHeaderSection: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+            }
+            .contextMenu {
+                Button("Choose Image...") { onAvatarTap() }
+                if twitchProfileImageURL != nil {
+                    Button("Use Twitch Avatar") { onUseTwitchAvatar() }
+                }
+                Divider()
+                if profile.avatarURL != nil {
+                    Button("Remove", role: .destructive) { profile.avatarURL = nil }
+                }
             }
             .offset(y: -50)
         }
@@ -168,39 +287,37 @@ private struct BasicInfoSection: View {
     @Binding var profile: CreatorProfile
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Basic Information")
-                .font(.headline)
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                TextField("Display Name", text: $profile.displayName)
+                    .textFieldStyle(.roundedBorder)
 
-            TextField("Display Name", text: $profile.displayName)
-                .textFieldStyle(.roundedBorder)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Bio")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                TextEditor(text: $profile.bio)
-                    .frame(minHeight: 100)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            if let handle = profile.handle {
-                HStack {
-                    Text("Handle:")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bio")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text("@\(handle)")
-                        .fontWeight(.medium)
+                    TextEditor(text: $profile.bio)
+                        .frame(minHeight: 100)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                .font(.subheadline)
+
+                if let handle = profile.handle {
+                    HStack {
+                        Text("Handle:")
+                            .foregroundColor(.secondary)
+                        Text("@\(handle)")
+                            .fontWeight(.medium)
+                    }
+                    .font(.subheadline)
+                }
             }
+        } label: {
+            Label("Basic Information", systemImage: "person.text.rectangle")
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -214,57 +331,65 @@ private struct SocialLinksSection: View {
     @State private var newURL = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Social Links")
-                    .font(.headline)
-                Spacer()
-                Button(action: { showingAddLink = true }) {
-                    Image(systemName: "plus.circle")
-                }
-                .buttonStyle(.borderless)
-            }
-
-            if socialLinks.isEmpty {
-                Text("No social links added yet")
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(socialLinks) { link in
-                    HStack {
-                        Image(systemName: link.platform.iconName)
-                            .frame(width: 24)
-                            .foregroundColor(.accentColor)
-
-                        VStack(alignment: .leading) {
-                            Text(link.platform.rawValue)
-                                .font(.subheadline)
-                            Text("@\(link.username)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if link.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(.blue)
-                        }
-
-                        Button(action: { socialLinks.removeAll { $0.id == link.id } }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.borderless)
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Spacer()
+                    Button(action: { showingAddLink = true }) {
+                        Image(systemName: "plus.circle")
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.borderless)
+                }
+
+                if socialLinks.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "link.badge.plus")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                        Text("Connect your community")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("Add Social Link") { showingAddLink = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                } else {
+                    ForEach(socialLinks) { link in
+                        HStack {
+                            Image(systemName: link.platform.iconName)
+                                .frame(width: 24)
+                                .foregroundColor(.accentColor)
+
+                            VStack(alignment: .leading) {
+                                Text(link.platform.rawValue)
+                                    .font(.subheadline)
+                                Text("@\(link.username)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            if link.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundColor(.blue)
+                            }
+
+                            Button(action: { socialLinks.removeAll { $0.id == link.id } }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
             }
+        } label: {
+            Label("Social Links", systemImage: "link")
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $showingAddLink) {
             AddSocialLinkSheet(
                 platform: $newPlatform,
@@ -342,32 +467,30 @@ private struct ContentCategoriesSection: View {
     @Binding var categories: [ContentCategory]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Content Categories")
-                .font(.headline)
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Select categories that describe your content")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
 
-            Text("Select categories that describe your content")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            FlowLayout(spacing: 8) {
-                ForEach(ContentCategory.allCases, id: \.self) { category in
-                    CategoryChip(
-                        category: category,
-                        isSelected: categories.contains(category)
-                    ) {
-                        if categories.contains(category) {
-                            categories.removeAll { $0 == category }
-                        } else {
-                            categories.append(category)
+                FlowLayout(spacing: 8) {
+                    ForEach(ContentCategory.allCases, id: \.self) { category in
+                        CategoryChip(
+                            category: category,
+                            isSelected: categories.contains(category)
+                        ) {
+                            if categories.contains(category) {
+                                categories.removeAll { $0 == category }
+                            } else {
+                                categories.append(category)
+                            }
                         }
                     }
                 }
             }
+        } label: {
+            Label("Content Categories", systemImage: "tag")
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -375,6 +498,7 @@ private struct CategoryChip: View {
     let category: ContentCategory
     let isSelected: Bool
     let onTap: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
@@ -386,11 +510,14 @@ private struct CategoryChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color.gray.opacity(0.2))
+            .background(isSelected ? Color.accentColor : Color.gray.opacity(isHovered ? 0.3 : 0.2))
             .foregroundColor(isSelected ? .white : .primary)
             .clipShape(Capsule())
+            .scaleEffect(isHovered && !isSelected ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 }
 
@@ -401,56 +528,64 @@ private struct StreamingScheduleSection: View {
     @State private var showingAddSlot = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Streaming Schedule")
-                    .font(.headline)
-                Spacer()
-                Button(action: { showingAddSlot = true }) {
-                    Image(systemName: "plus.circle")
-                }
-                .buttonStyle(.borderless)
-            }
-
-            if let schedule, !schedule.slots.isEmpty {
-                ForEach(schedule.slots) { slot in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(slot.dayName)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text(slot.formattedTime)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if let title = slot.title {
-                            Text(title)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Text("\(slot.durationMinutes) min")
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.2))
-                            .clipShape(Capsule())
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Spacer()
+                    Button(action: { showingAddSlot = true }) {
+                        Image(systemName: "plus.circle")
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.borderless)
                 }
-            } else {
-                Text("No streaming schedule set")
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .padding(.vertical, 8)
+
+                if let schedule, !schedule.slots.isEmpty {
+                    ForEach(schedule.slots) { slot in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(slot.dayName)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text(slot.formattedTime)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            if let title = slot.title {
+                                Text(title)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Text("\(slot.durationMinutes) min")
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.2))
+                                .clipShape(Capsule())
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.plus")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                        Text("Let viewers know when you're live")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button("Add Time Slot") { showingAddSlot = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
             }
+        } label: {
+            Label("Streaming Schedule", systemImage: "calendar")
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .sheet(isPresented: $showingAddSlot) {
             AddScheduleSlotSheet { slot in
                 if schedule == nil {
@@ -672,6 +807,7 @@ private struct ProfileActionsSection: View {
                 case .idle:
                     Image(systemName: "cloud")
                         .foregroundColor(.secondary)
+                        .help("Profile sync status — publish to share via the Arkavo network")
                     Text("Not synced")
                         .foregroundColor(.secondary)
                 case .syncing:
@@ -682,11 +818,13 @@ private struct ProfileActionsSection: View {
                 case .synced:
                     Image(systemName: "checkmark.cloud.fill")
                         .foregroundColor(.green)
+                        .help("Profile sync status — publish to share via the Arkavo network")
                     Text("Synced")
                         .foregroundColor(.green)
                 case .error:
                     Image(systemName: "exclamationmark.cloud.fill")
                         .foregroundColor(.red)
+                        .help("Profile sync status — publish to share via the Arkavo network")
                     Text("Sync failed")
                         .foregroundColor(.red)
                 }
@@ -699,20 +837,19 @@ private struct ProfileActionsSection: View {
             }
             .font(.subheadline)
 
-            // Action Buttons
-            HStack(spacing: 16) {
-                Button("Save Draft") {
-                    Task { await viewModel.saveDraft() }
+            // Single Save Profile button
+            Button("Save Profile") {
+                Task {
+                    await viewModel.saveDraft()
+                    if FeatureFlags.contentProtection, ArkavoIrohManager.shared.isReady {
+                        await viewModel.publishProfile()
+                    }
                 }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.isSaving)
-
-                Button("Publish Profile") {
-                    Task { await viewModel.publishProfile() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canPublish || viewModel.isSaving)
             }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(!viewModel.canPublish || viewModel.isSaving)
+            .help("Save your profile locally")
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
@@ -764,4 +901,3 @@ struct FlowLayout: Layout {
         }
     }
 }
-

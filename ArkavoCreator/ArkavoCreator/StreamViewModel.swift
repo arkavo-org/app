@@ -241,10 +241,10 @@ final class StreamViewModel {
             // Validate it's not a URL (bad cached value)
             if !savedKey.hasPrefix("http://") && !savedKey.hasPrefix("https://") {
                 streamKey = savedKey
-                debugLog("[StreamViewModel] Loaded stream key for \(selectedPlatform.rawValue): \(savedKey.prefix(8))...")
+                debugLog("[StreamViewModel] Loaded stream key for \(selectedPlatform.rawValue)")
             } else {
                 // Clear invalid cached URL
-                debugLog("[StreamViewModel] Clearing invalid cached stream key (was URL): \(savedKey)")
+                debugLog("[StreamViewModel] Clearing invalid cached stream key (was URL)")
                 KeychainManager.deleteStreamKey(for: selectedPlatform.rawValue)
             }
         }
@@ -262,7 +262,7 @@ final class StreamViewModel {
         // Save stream key to Keychain (but never save URLs)
         if !streamKey.isEmpty && !streamKey.hasPrefix("http://") && !streamKey.hasPrefix("https://") {
             try? KeychainManager.saveStreamKey(streamKey, for: selectedPlatform.rawValue)
-            debugLog("[StreamViewModel] Saved stream key for \(selectedPlatform.rawValue): \(streamKey.prefix(8))...")
+            debugLog("[StreamViewModel] Saved stream key for \(selectedPlatform.rawValue)")
         }
 
         // Save custom RTMP URL if custom platform

@@ -19,10 +19,19 @@ class TwitchAuthClient: ObservableObject {
     @Published var profileImageURL: String?
     @Published var isLive = false
     @Published var viewerCount: Int?
+    @Published var streamTitle: String?
+    @Published var gameName: String?
+    @Published var streamStartedAt: Date?
+    @Published var broadcasterType: String?
+    @Published var channelTags: [String] = []
+    @Published var broadcasterLanguage: String?
+    @Published var contentClassificationLabels: [String] = []
+    @Published var recentVideos: [TwitchVideo] = []
+    @Published var schedule: [TwitchScheduleSegment] = []
 
     // MARK: - Private Properties
 
-    private var accessToken: String?
+    private(set) var accessToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var notificationObserver: NSObjectProtocol?
 
@@ -132,6 +141,15 @@ class TwitchAuthClient: ObservableObject {
         profileImageURL = nil
         isLive = false
         viewerCount = nil
+        streamTitle = nil
+        gameName = nil
+        streamStartedAt = nil
+        broadcasterType = nil
+        channelTags = []
+        broadcasterLanguage = nil
+        contentClassificationLabels = []
+        recentVideos = []
+        schedule = []
         KeychainManager.deleteStreamKey(for: "twitch")
         clearStoredCredentials()
     }
@@ -159,11 +177,15 @@ class TwitchAuthClient: ObservableObject {
             self.userId = user.id
             self.profileImageURL = user.profile_image_url
             self.channelDescription = user.description
+            self.broadcasterType = user.broadcaster_type
 
             // Fetch additional info
             Task {
                 try? await fetchChannelInfo()
                 try? await fetchStreamStatus()
+                try? await fetchChannelDetails()
+                try? await fetchRecentVideos()
+                try? await fetchSchedule()
             }
         }
     }
@@ -211,10 +233,117 @@ class TwitchAuthClient: ObservableObject {
         if let stream = streamResponse.data.first {
             self.isLive = true
             self.viewerCount = stream.viewer_count
+            self.streamTitle = stream.title
+            self.gameName = stream.game_name
+            let formatter = ISO8601DateFormatter()
+            self.streamStartedAt = formatter.date(from: stream.started_at)
         } else {
             self.isLive = false
             self.viewerCount = nil
         }
+    }
+
+    /// Fetches channel details (tags, language, content classification)
+    func fetchChannelDetails() async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/channels?broadcaster_id=\(userId)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let channelResponse = try JSONDecoder().decode(TwitchChannelResponse.self, from: data)
+        if let channel = channelResponse.data.first {
+            self.channelTags = channel.tags ?? []
+            self.broadcasterLanguage = channel.broadcaster_language
+            self.contentClassificationLabels = channel.content_classification_labels ?? []
+        }
+    }
+
+    /// Fetches recent VODs
+    func fetchRecentVideos() async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/videos?user_id=\(userId)&type=archive&first=5")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let videoResponse = try JSONDecoder().decode(TwitchVideoResponse.self, from: data)
+        self.recentVideos = videoResponse.data
+    }
+
+    /// Fetches stream schedule
+    func fetchSchedule() async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/schedule?broadcaster_id=\(userId)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TwitchError.apiFailed
+        }
+
+        // 404 means no schedule configured — not an error
+        if httpResponse.statusCode == 404 {
+            self.schedule = []
+            return
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let scheduleResponse = try JSONDecoder().decode(TwitchScheduleResponse.self, from: data)
+        self.schedule = scheduleResponse.data?.segments ?? []
+    }
+
+    /// Fetches the stream key for the authenticated broadcaster
+    func fetchStreamKey() async throws -> String? {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/streams/key?broadcaster_id=\(userId)")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            return nil
+        }
+
+        struct StreamKeyResponse: Decodable {
+            struct StreamKeyData: Decodable {
+                let stream_key: String
+            }
+            let data: [StreamKeyData]
+        }
+
+        let decoded = try JSONDecoder().decode(StreamKeyResponse.self, from: data)
+        return decoded.data.first?.stream_key
     }
 
     /// Refreshes all channel data
@@ -352,6 +481,7 @@ private struct TwitchUser: Codable {
     let email: String?
     let profile_image_url: String?
     let description: String?
+    let broadcaster_type: String?
 }
 
 private struct TwitchFollowerResponse: Codable {
@@ -378,6 +508,61 @@ private struct TwitchStream: Codable {
     let title: String
     let viewer_count: Int
     let started_at: String
+}
+
+private struct TwitchChannelResponse: Codable {
+    let data: [TwitchChannel]
+}
+
+private struct TwitchChannel: Codable {
+    let broadcaster_language: String?
+    let game_name: String?
+    let game_id: String?
+    let title: String?
+    let delay: Int?
+    let tags: [String]?
+    let content_classification_labels: [String]?
+    let is_branded_content: Bool?
+}
+
+private struct TwitchVideoResponse: Codable {
+    let data: [TwitchVideo]
+}
+
+private struct TwitchScheduleResponse: Codable {
+    let data: TwitchScheduleData?
+}
+
+private struct TwitchScheduleData: Codable {
+    let segments: [TwitchScheduleSegment]?
+    let broadcaster_id: String?
+    let broadcaster_name: String?
+}
+
+// MARK: - Public Models
+
+struct TwitchVideo: Identifiable, Codable {
+    let id: String
+    let title: String
+    let url: String
+    let duration: String
+    let view_count: Int
+    let created_at: String
+    let thumbnail_url: String
+}
+
+struct TwitchScheduleSegment: Identifiable, Codable {
+    let id: String
+    let start_time: String
+    let end_time: String
+    let title: String
+    let canceled_until: String?
+    let category: TwitchScheduleCategory?
+}
+
+struct TwitchScheduleCategory: Codable {
+    let id: String
+    let name: String
 }
 
 // MARK: - Errors
