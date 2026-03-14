@@ -33,12 +33,10 @@ struct RecordView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // MARK: - Studio Header
-            studioHeader
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-                .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .bottom)
+            // MARK: - Studio Header (thin separator only)
+            Rectangle()
+                .fill(.white.opacity(0.1))
+                .frame(height: 1)
 
             // MARK: - Main Stage + Inspector
             HStack(spacing: 0) {
@@ -121,34 +119,8 @@ struct RecordView: View {
     // MARK: - Studio Header
 
     private var studioHeader: some View {
+        // Minimal header — stream status is shown in the bottom control bar
         HStack(spacing: 16) {
-            Spacer()
-
-            // Center: Stream Status (when streaming)
-            if streamViewModel.isStreaming {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 8, height: 8)
-                        .opacity(pulsing ? 1.0 : 0.5)
-                    Text("LIVE")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.red)
-                    Text(streamViewModel.formattedDuration)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.primary.opacity(0.7))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                        pulsing = true
-                    }
-                }
-            }
-
             Spacer()
         }
     }
@@ -240,8 +212,8 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
 
-                // Audio-only mode visualization
-                if studioState.isAudioOnly {
+                // Audio-only mode visualization (only when no screen share active)
+                if studioState.isAudioOnly && !enableScreen {
                     audioOnlyView
                 }
             }
@@ -545,7 +517,7 @@ struct RecordView: View {
         // Fixed-width container to prevent layout shifts
         HStack(spacing: 8) {
             if !viewModel.isRecording {
-                // Start Recording button
+                // Start Recording button — gray/subtle when idle (save to disk)
                 Button {
                     Task {
                         // Set up avatar texture provider before recording starts
@@ -562,15 +534,21 @@ struct RecordView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "record.circle.fill")
+                        Circle()
+                            .fill(viewModel.canStartRecording ? Color.red : Color.gray)
+                            .frame(width: 10, height: 10)
                         Text("REC")
                     }
                     .font(.headline)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(viewModel.canStartRecording ? Color.red : Color.gray)
-                    .foregroundColor(.white)
+                    .background(.regularMaterial)
+                    .foregroundColor(viewModel.canStartRecording ? .primary : .secondary)
                     .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isProcessing || !viewModel.canStartRecording)
