@@ -163,6 +163,8 @@ struct SectionContainer: View {
 
     // MARK: - Individual Platform Dashboard Views
 
+    @State private var twitchCardHovered = false
+
     private var twitchDashboardContent: some View {
         Group {
             if twitchClient.isAuthenticated, let username = twitchClient.username {
@@ -282,6 +284,65 @@ struct SectionContainer: View {
                         .cornerRadius(8)
                     }
 
+                    // Channel info (when offline — show channel title, language, description)
+                    if !twitchClient.isLive {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if let title = twitchClient.channelTitle, !title.isEmpty {
+                                Text(title)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .lineLimit(2)
+                            }
+
+                            if let game = twitchClient.gameName, !game.isEmpty {
+                                Label(game, systemImage: "gamecontroller.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if let lang = twitchClient.broadcasterLanguage, !lang.isEmpty {
+                                Label(lang.uppercased(), systemImage: "globe")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.5))
+                        .cornerRadius(8)
+                    }
+
+                    // Upcoming schedule
+                    if !twitchClient.schedule.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Upcoming Schedule")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                            ForEach(twitchClient.schedule.prefix(3)) { segment in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(segment.title)
+                                            .font(.caption2)
+                                            .lineLimit(1)
+                                        if let category = segment.category {
+                                            Text(category.name)
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Text(formatScheduleDate(segment.start_time))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(8)
+                                .background(.quaternary.opacity(0.5))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+
                     // Recent VODs (when offline)
                     if !twitchClient.isLive, !twitchClient.recentVideos.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -309,47 +370,51 @@ struct SectionContainer: View {
                         .cornerRadius(8)
                     }
 
-                    // Quick actions
-                    HStack(spacing: 12) {
-                        Button {
-                            Task {
-                                await twitchClient.refreshChannelData()
+                }
+                .overlay(alignment: .topTrailing) {
+                    if twitchCardHovered {
+                        HStack(spacing: 4) {
+                            Button {
+                                Task { await twitchClient.refreshChannelData() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2)
+                                    .frame(width: 22, height: 22)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
                             }
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                            .buttonStyle(.plain)
+                            .help("Refresh")
 
-                        Spacer()
-
-                        Button {
-                            twitchClient.logout()
-                        } label: {
-                            Text("Sign Out")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Button {
+                                twitchClient.logout()
+                            } label: {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                    .font(.caption2)
+                                    .frame(width: 22, height: 22)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Sign Out")
                         }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
+                        .transition(.opacity)
+                    }
+                }
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        twitchCardHovered = hovering
                     }
                 }
             } else {
                 Button("Login with Twitch") {
-                    webViewPresenter.present(
-                        url: twitchClient.authorizationURL,
-                        handleCallback: { url in
-                            Task {
-                                do {
-                                    try await twitchClient.handleCallback(url)
-                                    webViewPresenter.dismiss()
-                                } catch {
-                                    debugLog("Twitch OAuth error: \(error)")
-                                }
-                            }
+                    Task {
+                        do {
+                            try await twitchClient.authenticateWithSystemBrowser()
+                        } catch {
+                            debugLog("Twitch OAuth error: \(error)")
                         }
-                    )
+                    }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -381,6 +446,14 @@ struct SectionContainer: View {
             return "\(hours)h \(minutes)m"
         }
         return "\(minutes)m"
+    }
+
+    private func formatScheduleDate(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: isoString) else { return isoString }
+        let display = DateFormatter()
+        display.dateFormat = "EEE, MMM d h:mm a"
+        return display.string(from: date)
     }
 
     private var youtubeDashboardContent: some View {
@@ -679,13 +752,15 @@ struct SectionContainer: View {
         ))
 
         // YouTube Section
-        sections.append(DashboardSectionItem(
-            id: "youtube",
-            title: "YouTube",
-            isAuthenticated: youtubeClient.isAuthenticated,
-            hasActiveContent: hasActiveContent(for: "YouTube"),
-            content: AnyView(youtubeDashboardContent)
-        ))
+        if FeatureFlags.youtube {
+            sections.append(DashboardSectionItem(
+                id: "youtube",
+                title: "YouTube",
+                isAuthenticated: youtubeClient.isAuthenticated,
+                hasActiveContent: hasActiveContent(for: "YouTube"),
+                content: AnyView(youtubeDashboardContent)
+            ))
+        }
 
         // Patreon Section
         if FeatureFlags.patreon {
@@ -699,31 +774,37 @@ struct SectionContainer: View {
         }
 
         // Reddit Section
-        sections.append(DashboardSectionItem(
-            id: "reddit",
-            title: "Reddit",
-            isAuthenticated: redditClient.isAuthenticated,
-            hasActiveContent: hasActiveContent(for: "Reddit"),
-            content: AnyView(redditDashboardContent)
-        ))
+        if FeatureFlags.social {
+            sections.append(DashboardSectionItem(
+                id: "reddit",
+                title: "Reddit",
+                isAuthenticated: redditClient.isAuthenticated,
+                hasActiveContent: hasActiveContent(for: "Reddit"),
+                content: AnyView(redditDashboardContent)
+            ))
+        }
 
         // Micro.blog Section
-        sections.append(DashboardSectionItem(
-            id: "microblog",
-            title: "Micro.blog",
-            isAuthenticated: micropubClient.isAuthenticated,
-            hasActiveContent: false,
-            content: AnyView(microblogDashboardContent)
-        ))
+        if FeatureFlags.social {
+            sections.append(DashboardSectionItem(
+                id: "microblog",
+                title: "Micro.blog",
+                isAuthenticated: micropubClient.isAuthenticated,
+                hasActiveContent: false,
+                content: AnyView(microblogDashboardContent)
+            ))
+        }
 
         // Bluesky Section
-        sections.append(DashboardSectionItem(
-            id: "bluesky",
-            title: "Bluesky",
-            isAuthenticated: blueskyClient.isAuthenticated,
-            hasActiveContent: false,
-            content: AnyView(blueskyDashboardContent)
-        ))
+        if FeatureFlags.social {
+            sections.append(DashboardSectionItem(
+                id: "bluesky",
+                title: "Bluesky",
+                isAuthenticated: blueskyClient.isAuthenticated,
+                hasActiveContent: false,
+                content: AnyView(blueskyDashboardContent)
+            ))
+        }
 
         // Sort by priority (active content first, then authenticated, then not authenticated)
         return sections.sorted { $0.sortPriority < $1.sortPriority }

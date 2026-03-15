@@ -117,8 +117,8 @@ final class StudioState {
         {
             self.visualSource = source
         } else {
-            // Default to face
-            visualSource = .face
+            // Default to no visual source (camera off)
+            visualSource = nil
         }
 
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")

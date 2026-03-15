@@ -84,7 +84,10 @@ enum WebViewConfiguration {
         prefs.allowsContentJavaScript = true
         config.defaultWebpagePreferences = prefs
 
-        // Add any additional configuration here
+        // Use the default website data store so WKWebView can access
+        // Apple Passwords / AutoFill credentials from the system keychain
+        config.websiteDataStore = .default()
+
         return config
     }
 }

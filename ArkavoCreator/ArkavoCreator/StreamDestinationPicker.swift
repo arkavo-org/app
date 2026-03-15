@@ -2,7 +2,8 @@ import SwiftUI
 import ArkavoKit
 import ArkavoStreaming
 
-/// A sheet that allows users to quickly select a streaming destination and go live
+/// A sheet that allows users to quickly select a streaming destination and go live.
+/// For Twitch (authenticated), shows a two-step flow: destination + stream info editing.
 struct StreamDestinationPicker: View {
     @Bindable var streamViewModel: StreamViewModel
     @ObservedObject var youtubeClient: YouTubeClient
@@ -11,11 +12,38 @@ struct StreamDestinationPicker: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = false
-    @State private var showTwitchAuth = false
+    @State private var showStreamInfo = false
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
 
+    /// Whether the stream info step is available (Twitch + authenticated)
+    private var hasStreamInfoStep: Bool {
+        streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated
+    }
+
     var body: some View {
+        Group {
+            if showStreamInfo {
+                StreamInfoFormView(
+                    twitchClient: twitchClient,
+                    onBack: { showStreamInfo = false },
+                    onStartStream: {
+                        await startStream()
+                        // Dismiss handled inside startStream
+                    }
+                )
+                .padding(24)
+                .frame(width: 480, height: 620)
+                .background(.ultraThinMaterial)
+            } else {
+                destinationStep
+            }
+        }
+    }
+
+    // MARK: - Step 1: Destination Selection
+
+    private var destinationStep: some View {
         VStack(spacing: 24) {
             // Header
             HStack {
@@ -39,7 +67,10 @@ struct StreamDestinationPicker: View {
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
-                    ForEach(StreamViewModel.StreamPlatform.allCases.filter { $0 != .arkavo || FeatureFlags.arkavoStreaming }) { platform in
+                    ForEach(StreamViewModel.StreamPlatform.allCases.filter {
+                        ($0 != .arkavo || FeatureFlags.arkavoStreaming) &&
+                        ($0 != .youtube || FeatureFlags.youtube)
+                    }) { platform in
                         PlatformCard(
                             platform: platform,
                             isSelected: streamViewModel.selectedPlatform == platform,
@@ -54,7 +85,6 @@ struct StreamDestinationPicker: View {
 
             // Stream Key / Auth Section
             if streamViewModel.selectedPlatform == .twitch && !twitchClient.isAuthenticated {
-                // Twitch not authenticated — prompt to connect
                 twitchConnectSection
             } else {
                 streamKeySection
@@ -92,33 +122,56 @@ struct StreamDestinationPicker: View {
 
             Spacer()
 
-            // Go Live Button
-            Button {
-                Task { await startStream() }
-            } label: {
-                HStack {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
+            // Action Button: "Next" for Twitch (to stream info), "Start Streaming" for others
+            if hasStreamInfoStep {
+                Button {
+                    showStreamInfo = true
+                } label: {
+                    HStack {
+                        Text("Next: Edit Stream Info")
+                        Image(systemName: "chevron.right")
                     }
-                    Text("Start Streaming")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        canStartStream
+                            ? LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)
+                            : LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                 }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    canStartStream
-                        ? LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)
-                        : LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing)
-                )
-                .foregroundColor(.white)
-                .cornerRadius(12)
+                .buttonStyle(.plain)
+                .disabled(!canStartStream)
+            } else {
+                Button {
+                    Task { await startStream() }
+                } label: {
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                        }
+                        Text("Start Streaming")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        canStartStream
+                            ? LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)
+                            : LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canStartStream || isLoading)
             }
-            .buttonStyle(.plain)
-            .disabled(!canStartStream || isLoading)
         }
         .padding(24)
         .frame(width: 400, height: 450)
@@ -139,7 +192,14 @@ struct StreamDestinationPicker: View {
                 .multilineTextAlignment(.center)
 
             Button {
-                showTwitchAuth = true
+                Task {
+                    do {
+                        try await twitchClient.authenticateWithSystemBrowser()
+                        await fetchTwitchStreamKey()
+                    } catch {
+                        debugLog("Twitch OAuth error: \(error)")
+                    }
+                }
             } label: {
                 HStack {
                     Image(systemName: "person.crop.circle.badge.plus")
@@ -153,24 +213,6 @@ struct StreamDestinationPicker: View {
                 .cornerRadius(10)
             }
             .buttonStyle(.plain)
-            .sheet(isPresented: $showTwitchAuth) {
-                WebView(
-                    url: twitchClient.authorizationURL,
-                    handleCallback: { url in
-                        Task {
-                            do {
-                                try await twitchClient.handleCallback(url)
-                                showTwitchAuth = false
-                                // Auto-fetch stream key after successful auth
-                                await fetchTwitchStreamKey()
-                            } catch {
-                                debugLog("Twitch OAuth error: \(error)")
-                            }
-                        }
-                    }
-                )
-                .frame(width: 500, height: 700)
-            }
         }
         .padding(.vertical, 8)
     }

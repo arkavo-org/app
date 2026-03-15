@@ -22,8 +22,17 @@ final class RecordViewModel {
     // Configuration
     var title: String = ""
     var pipPosition: PiPPosition = .bottomRight
-    var enableCamera: Bool = true
-    var enableMicrophone: Bool = true
+    var enableCamera: Bool = false
+    var enableMicrophone: Bool = false {
+        didSet {
+            if enableMicrophone {
+                startAudioMonitor()
+            } else {
+                stopAudioMonitor()
+                audioLevel = 0.0
+            }
+        }
+    }
     var enableDesktop: Bool = true
     var enableAvatar: Bool = false
     var avatarTextureProvider: (@Sendable () -> CVPixelBuffer?)?
@@ -98,7 +107,6 @@ final class RecordViewModel {
         generateDefaultTitle()
         refreshCameraDevices()
         refreshScreenDevices()
-        startAudioMonitor()
     }
 
     deinit {

@@ -149,17 +149,52 @@ struct CreatorProfileView: View {
         switch result {
         case let .success(urls):
             if let url = urls.first {
-                switch type {
-                case .avatar:
-                    viewModel.profile.avatarURL = url
-                case .banner:
-                    viewModel.profile.bannerURL = url
+                // fileImporter returns security-scoped URLs that AsyncImage can't access.
+                // Copy the file into the app's support directory for persistent access.
+                do {
+                    let persistedURL = try copyImageToAppSupport(url, type: type)
+                    switch type {
+                    case .avatar:
+                        viewModel.profile.avatarURL = persistedURL
+                    case .banner:
+                        viewModel.profile.bannerURL = persistedURL
+                    }
+                } catch {
+                    viewModel.errorMessage = "Failed to save image: \(error.localizedDescription)"
+                    viewModel.showError = true
                 }
             }
         case let .failure(error):
             viewModel.errorMessage = error.localizedDescription
             viewModel.showError = true
         }
+    }
+
+    private func copyImageToAppSupport(_ sourceURL: URL, type: ImageType) throws -> URL {
+        guard sourceURL.startAccessingSecurityScopedResource() else {
+            throw CocoaError(.fileReadNoPermission)
+        }
+        defer { sourceURL.stopAccessingSecurityScopedResource() }
+
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let imagesDir = appSupport.appendingPathComponent("ProfileImages", isDirectory: true)
+        try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+
+        let filename = "\(type == .avatar ? "avatar" : "banner").\(sourceURL.pathExtension)"
+        let destURL = imagesDir.appendingPathComponent(filename)
+
+        // Replace existing file
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            try FileManager.default.removeItem(at: destURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destURL)
+
+        return destURL
     }
 
     private enum ImageType {
@@ -181,10 +216,15 @@ private struct ProfileHeaderSection: View {
             // Banner
             ZStack {
                 if let bannerURL = profile.bannerURL {
-                    AsyncImage(url: bannerURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.3)
+                    if bannerURL.isFileURL, let nsImage = NSImage(contentsOf: bannerURL) {
+                        Image(nsImage: nsImage)
+                            .resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        AsyncImage(url: bannerURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.gray.opacity(0.3)
+                        }
                     }
                 } else {
                     LinearGradient(
@@ -230,10 +270,15 @@ private struct ProfileHeaderSection: View {
             // Avatar (overlapping banner)
             ZStack {
                 if let avatarURL = profile.avatarURL {
-                    AsyncImage(url: avatarURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.blue.opacity(0.3)
+                    if avatarURL.isFileURL, let nsImage = NSImage(contentsOf: avatarURL) {
+                        Image(nsImage: nsImage)
+                            .resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        AsyncImage(url: avatarURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.blue.opacity(0.3)
+                        }
                     }
                 } else {
                     Circle()
@@ -838,17 +883,31 @@ private struct ProfileActionsSection: View {
             .font(.subheadline)
 
             // Single Save Profile button
-            Button("Save Profile") {
+            Button {
                 Task {
                     await viewModel.saveDraft()
                     if FeatureFlags.contentProtection, ArkavoIrohManager.shared.isReady {
                         await viewModel.publishProfile()
                     }
                 }
+            } label: {
+                HStack(spacing: 8) {
+                    if viewModel.isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if viewModel.showSavedConfirmation {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Saved!")
+                    } else {
+                        Text("Save Profile")
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
-            .disabled(!viewModel.canPublish || viewModel.isSaving)
+            .disabled(viewModel.isSaving)
             .help("Save your profile locally")
         }
         .padding()
