@@ -307,9 +307,11 @@ public final class CompositorManager: Sendable {
         }
 
         // Add scene overlay if active (Starting Soon, BRB, Ending)
+        #if os(macOS)
         if let overlayText = sceneOverlayText, !overlayText.isEmpty {
             composited = addSceneOverlay(to: composited, screenSize: screenSize, text: overlayText)
         }
+        #endif
 
         // Scale to output resolution if different from source
         let finalImage: CIImage
@@ -508,6 +510,7 @@ public final class CompositorManager: Sendable {
     }
 
     /// Adds watermark to the composited image
+    #if os(macOS)
     /// Renders a full-screen scene overlay (gradient background + icon + centered text)
     private func addSceneOverlay(to image: CIImage, screenSize: CGSize, text: String) -> CIImage {
         let cacheKey = "\(text)|\(sceneOverlayIcon ?? "")"
@@ -616,6 +619,7 @@ public final class CompositorManager: Sendable {
 
         return overlayImage.composited(over: image)
     }
+    #endif
 
     private func addWatermark(to image: CIImage, screenSize: CGSize) -> CIImage {
         guard let watermark = watermarkImage else {
