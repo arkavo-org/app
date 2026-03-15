@@ -212,8 +212,8 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
 
-                // Audio-only mode visualization (only when no screen share active)
-                if studioState.isAudioOnly && !enableScreen {
+                // Audio-only mode visualization (only when mic is on and no screen share)
+                if studioState.isAudioOnly && !enableScreen && viewModel.enableMicrophone {
                     audioOnlyView
                 }
             }
@@ -385,20 +385,20 @@ struct RecordView: View {
 
             // Right: Recording Duration + Settings
             HStack(spacing: 12) {
-                // Recording Duration
+                // Duration (recording or streaming)
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(viewModel.isRecording ? .red : .clear)
+                        .fill(viewModel.isRecording ? .red : (streamViewModel.isStreaming ? .purple : .clear))
                         .frame(width: 8, height: 8)
-                    Text(viewModel.isRecording ? viewModel.formattedDuration() : "00:00")
+                    Text(activeDuration)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundStyle(viewModel.isRecording ? .primary : .secondary)
+                        .foregroundStyle(isActive ? .primary : .secondary)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
-                .opacity(viewModel.isRecording ? 1.0 : 0.5)
+                .opacity(isActive ? 1.0 : 0.5)
 
                 // Chat Toggle (Twitch only)
                 if streamViewModel.selectedPlatform == .twitch {
@@ -646,6 +646,19 @@ struct RecordView: View {
         }
     }
 
+    private var isActive: Bool {
+        viewModel.isRecording || streamViewModel.isStreaming
+    }
+
+    private var activeDuration: String {
+        if viewModel.isRecording {
+            return viewModel.formattedDuration()
+        } else if streamViewModel.isStreaming {
+            return streamViewModel.formattedDuration
+        }
+        return "00:00"
+    }
+
     private func levelColor(for level: Double) -> Color {
         if level < 0.5 { .green } else if level < 0.8 { .yellow } else { .red }
     }
@@ -677,6 +690,42 @@ struct RecordView: View {
             // Non-live scene — apply scene settings
             if scene.muteMic {
                 viewModel.enableMicrophone = false
+            }
+        }
+
+        // Update compositor scene overlay so it renders into the stream
+        updateSceneOverlay(scene)
+    }
+
+    private func updateSceneOverlay(_ scene: ScenePreset) {
+        guard let session = viewModel.recordingSession ?? RecordingState.shared.recordingSession else { return }
+
+        if scene == .live {
+            session.sceneOverlayText = nil
+            session.sceneOverlayIcon = nil
+            session.sceneOverlayGradientColors = nil
+        } else {
+            session.sceneOverlayText = scene.overlayText
+            session.sceneOverlayIcon = scene.icon
+            // Map scene gradient colors to CGColors
+            switch scene {
+            case .startingSoon:
+                session.sceneOverlayGradientColors = (
+                    start: CGColor(red: 0.0, green: 0.0, blue: 0.8, alpha: 0.85),
+                    end: CGColor(red: 0.5, green: 0.0, blue: 0.8, alpha: 0.85)
+                )
+            case .brb:
+                session.sceneOverlayGradientColors = (
+                    start: CGColor(red: 0.9, green: 0.5, blue: 0.0, alpha: 0.85),
+                    end: CGColor(red: 0.9, green: 0.3, blue: 0.4, alpha: 0.85)
+                )
+            case .ending:
+                session.sceneOverlayGradientColors = (
+                    start: CGColor(red: 0.3, green: 0.0, blue: 0.5, alpha: 0.85),
+                    end: CGColor(red: 0.5, green: 0.0, blue: 0.8, alpha: 0.85)
+                )
+            default:
+                session.sceneOverlayGradientColors = nil
             }
         }
     }
@@ -711,6 +760,7 @@ struct RecordView: View {
                 try await session.startStreaming(to: destination, streamKey: streamKey)
             }
             streamViewModel.isStreaming = true
+            streamViewModel.startStatisticsPolling()
 
             // Auto-connect Twitch chat
             if streamViewModel.selectedPlatform == .twitch {

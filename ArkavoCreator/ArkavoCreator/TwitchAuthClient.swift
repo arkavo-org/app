@@ -1,5 +1,6 @@
 import ArkavoKit
 import ArkavoSocial
+import AuthenticationServices
 import Combine
 import CommonCrypto
 import Foundation
@@ -26,6 +27,9 @@ class TwitchAuthClient: ObservableObject {
     @Published var channelTags: [String] = []
     @Published var broadcasterLanguage: String?
     @Published var contentClassificationLabels: [String] = []
+    @Published var channelTitle: String?
+    @Published var gameId: String?
+    @Published var isBrandedContent: Bool = false
     @Published var recentVideos: [TwitchVideo] = []
     @Published var schedule: [TwitchScheduleSegment] = []
 
@@ -44,6 +48,7 @@ class TwitchAuthClient: ObservableObject {
     private let scopes = [
         "user:read:email",
         "channel:read:stream_key",  // Note: This scope may not actually work - Twitch restricts stream key access
+        "channel:manage:broadcast",  // Required for updating stream title, category, tags
         "chat:read"  // Read chat messages for Muse avatar reactions
     ]
 
@@ -93,14 +98,43 @@ class TwitchAuthClient: ObservableObject {
             URLQueryItem(name: "force_verify", value: "true")
         ]
 
-        let url = components.url!
-        debugLog("🔍 Authorization URL: \(url.absoluteString)")
+        guard let url = components.url else {
+            // This should never fail with valid components, but handle gracefully
+            return URL(string: "https://id.twitch.tv/oauth2/authorize")!
+        }
         return url
     }
 
     /// Convenience property that generates a new authorization URL
     var authorizationURL: URL {
         generateAuthorizationURL()
+    }
+
+    /// Authenticate using ASWebAuthenticationSession (system browser).
+    /// Supports Apple Passwords, passkeys, and is not blocked by OAuth providers.
+    func authenticateWithSystemBrowser() async throws {
+        let authURL = generateAuthorizationURL()
+        let callbackScheme = "arkavocreator"
+
+        let callbackURL: URL = try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(
+                url: authURL,
+                callbackURLScheme: callbackScheme
+            ) { url, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let url {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(throwing: TwitchError.noAuthCode)
+                }
+            }
+            session.prefersEphemeralWebBrowserSession = false
+            session.presentationContextProvider = SystemBrowserContextProvider.shared
+            session.start()
+        }
+
+        try await handleCallback(callbackURL)
     }
 
     /// Handles the OAuth callback
@@ -148,6 +182,9 @@ class TwitchAuthClient: ObservableObject {
         channelTags = []
         broadcasterLanguage = nil
         contentClassificationLabels = []
+        channelTitle = nil
+        gameId = nil
+        isBrandedContent = false
         recentVideos = []
         schedule = []
         KeychainManager.deleteStreamKey(for: "twitch")
@@ -265,6 +302,10 @@ class TwitchAuthClient: ObservableObject {
             self.channelTags = channel.tags ?? []
             self.broadcasterLanguage = channel.broadcaster_language
             self.contentClassificationLabels = channel.content_classification_labels ?? []
+            self.channelTitle = channel.title
+            self.gameId = channel.game_id
+            self.gameName = channel.game_name
+            self.isBrandedContent = channel.is_branded_content ?? false
         }
     }
 
@@ -344,6 +385,80 @@ class TwitchAuthClient: ObservableObject {
 
         let decoded = try JSONDecoder().decode(StreamKeyResponse.self, from: data)
         return decoded.data.first?.stream_key
+    }
+
+    /// Updates channel info (title, category, tags, language, content labels)
+    /// Requires `channel:manage:broadcast` scope
+    func updateChannelInfo(
+        title: String? = nil,
+        gameId: String? = nil,
+        language: String? = nil,
+        tags: [String]? = nil,
+        contentClassificationLabels: [TwitchContentLabel]? = nil,
+        isBrandedContent: Bool? = nil
+    ) async throws {
+        guard let token = accessToken, let userId = userId else {
+            throw TwitchError.notAuthenticated
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/channels?broadcaster_id=\(userId)")!)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = [:]
+        if let title { body["title"] = title }
+        if let gameId { body["game_id"] = gameId }
+        if let language { body["broadcaster_language"] = language }
+        if let tags { body["tags"] = tags }
+        if let contentClassificationLabels {
+            body["content_classification_labels"] = contentClassificationLabels.map {
+                ["id": $0.id, "is_enabled": $0.isEnabled] as [String: Any]
+            }
+        }
+        if let isBrandedContent { body["is_branded_content"] = isBrandedContent }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TwitchError.apiFailed
+        }
+
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            throw TwitchError.scopeRequired
+        }
+
+        guard httpResponse.statusCode == 204 else {
+            throw TwitchError.apiFailed
+        }
+    }
+
+    /// Searches Twitch categories (games) by name
+    func searchCategories(query: String) async throws -> [TwitchCategory] {
+        guard let token = accessToken else {
+            throw TwitchError.notAuthenticated
+        }
+
+        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            return []
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/search/categories?query=\(encodedQuery)&first=10")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientId, forHTTPHeaderField: "Client-Id")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw TwitchError.apiFailed
+        }
+
+        let searchResponse = try JSONDecoder().decode(TwitchCategorySearchResponse.self, from: data)
+        return searchResponse.data
     }
 
     /// Refreshes all channel data
@@ -574,6 +689,7 @@ enum TwitchError: LocalizedError {
     case tokenExchangeFailed
     case notAuthenticated
     case apiFailed
+    case scopeRequired
 
     var errorDescription: String? {
         switch self {
@@ -589,6 +705,35 @@ enum TwitchError: LocalizedError {
             return "Not authenticated"
         case .apiFailed:
             return "Twitch API request failed"
+        case .scopeRequired:
+            return "Please reconnect your Twitch account to enable stream info editing"
         }
     }
+}
+
+// MARK: - ASWebAuthenticationSession Context Provider
+
+private class SystemBrowserContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    static let shared = SystemBrowserContextProvider()
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor()
+    }
+}
+
+// MARK: - Category & Content Label Models
+
+struct TwitchCategory: Identifiable, Codable {
+    let id: String
+    let name: String
+    let box_art_url: String?
+}
+
+struct TwitchContentLabel: Sendable {
+    let id: String
+    let isEnabled: Bool
+}
+
+private struct TwitchCategorySearchResponse: Codable {
+    let data: [TwitchCategory]
 }

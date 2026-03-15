@@ -197,6 +197,11 @@ final class StreamViewModel {
         duration = 0
     }
 
+    /// Start polling stream statistics (duration, bitrate, etc.)
+    func startStatisticsPolling() {
+        startStatisticsTimer()
+    }
+
     // MARK: - Private Methods
 
     private func startStatisticsTimer() {

@@ -58,13 +58,14 @@ class CreatorProfileViewModel: ObservableObject {
                 handle: credentials.handle,
                 displayName: credentials.handle
             )
-            loadDraft()
         } else {
             // Create placeholder profile
             profile = CreatorProfile(
                 displayName: ""
             )
         }
+        // Always load saved draft — works with or without Arkavo credentials
+        loadDraft()
     }
 
     // MARK: - Public ID Generation
@@ -93,15 +94,23 @@ class CreatorProfileViewModel: ObservableObject {
         }
     }
 
+    @Published var showSavedConfirmation = false
+
     func saveDraft() async {
         isSaving = true
         defer { isSaving = false }
 
         do {
             profile.updatedAt = Date()
+            profile.version += 1
             let data = try profile.toData()
             UserDefaults.standard.set(data, forKey: draftKey)
-            syncState = .idle
+            showSavedConfirmation = true
+            // Auto-dismiss after 2 seconds
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                showSavedConfirmation = false
+            }
         } catch {
             showError = true
             errorMessage = "Failed to save draft: \(error.localizedDescription)"
