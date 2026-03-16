@@ -450,10 +450,9 @@ final class RecordViewModel {
             do {
                 try await source.start()
             } catch {
-                await MainActor.run {
-                    self.error = "Desktop audio requires Screen Recording permission. Open System Settings > Privacy & Security > Screen Recording."
-                    self.enableDesktopAudio = false
-                }
+                // Permission likely not yet active — macOS requires restart.
+                // Keep enableDesktopAudio=true so it's used after relaunch.
+                print("⚠️ Desktop audio: \(error.localizedDescription) — will activate after app restart")
             }
         }
     }
