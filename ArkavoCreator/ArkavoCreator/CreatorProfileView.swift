@@ -291,6 +291,7 @@ private struct ProfileHeaderSection: View {
             .frame(width: 100, height: 100)
             .clipShape(Circle())
             .overlay(Circle().stroke(Color(NSColor.windowBackgroundColor), lineWidth: 4))
+            .onTapGesture { onAvatarTap() }
             .overlay(alignment: .bottomTrailing) {
                 Menu {
                     Button("Choose Image...") { onAvatarTap() }
