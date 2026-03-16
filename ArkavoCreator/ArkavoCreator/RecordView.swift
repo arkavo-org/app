@@ -392,9 +392,10 @@ struct RecordView: View {
                         .frame(width: 8, height: 8)
                     Text(activeDuration)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(isActive ? .primary : .secondary)
                 }
-                .padding(.horizontal, 10)
+                .frame(width: 90)
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
@@ -637,7 +638,10 @@ struct RecordView: View {
             // Avatar/Muse mode needs remote camera bridge for face tracking metadata
             try? viewModel.activatePreviewPipeline()
         } else {
-            // Audio-only mode - ensure camera preview is stopped
+            // Audio-only mode — still need a session for screen share
+            if enableScreen {
+                try? viewModel.activatePreviewPipeline()
+            }
             viewModel.refreshCameraPreview()
         }
 
