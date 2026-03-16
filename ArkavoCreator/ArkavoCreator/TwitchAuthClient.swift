@@ -38,6 +38,7 @@ class TwitchAuthClient: ObservableObject {
     private(set) var accessToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var notificationObserver: NSObjectProtocol?
+    private var authSession: ASWebAuthenticationSession?
 
     // OAuth Configuration
     private let clientId: String
@@ -120,7 +121,9 @@ class TwitchAuthClient: ObservableObject {
             let session = ASWebAuthenticationSession(
                 url: authURL,
                 callbackURLScheme: callbackScheme
-            ) { url, error in
+            ) { [weak self] url, error in
+                // Clear the retained session now that the callback has fired
+                Task { @MainActor in self?.authSession = nil }
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let url {
@@ -131,6 +134,8 @@ class TwitchAuthClient: ObservableObject {
             }
             session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = SystemBrowserContextProvider.shared
+            // Retain the session so it survives until the callback fires
+            self.authSession = session
             session.start()
         }
 
