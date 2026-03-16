@@ -118,27 +118,38 @@ class TwitchAuthClient: ObservableObject {
         let callbackScheme = "arkavocreator"
 
         let callbackURL: URL = try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(
-                url: authURL,
-                callbackURLScheme: callbackScheme
-            ) { [weak self] url, error in
-                // Clear the retained session now that the callback has fired
-                Task { @MainActor in self?.authSession = nil }
+            // Explicitly type as @Sendable to strip MainActor isolation from the closure.
+            // ASWebAuthenticationSession calls its completion handler on a background XPC queue;
+            // without @Sendable, Swift 6 inherits @MainActor isolation from the enclosing context
+            // and the runtime crashes with dispatch_assert_queue_fail at closure entry.
+            let completionHandler: @Sendable (URL?, (any Error)?) -> Void = { url, error in
+                debugLog("🔍 ASWebAuthenticationSession callback fired on thread: \(Thread.current)")
                 if let error {
+                    debugLog("🔍 Auth session completed with error: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                 } else if let url {
+                    debugLog("🔍 Auth session completed with URL: \(url)")
                     continuation.resume(returning: url)
                 } else {
+                    debugLog("🔍 Auth session completed with no URL and no error")
                     continuation.resume(throwing: TwitchError.noAuthCode)
                 }
             }
+            let session = ASWebAuthenticationSession(
+                url: authURL,
+                callbackURLScheme: callbackScheme,
+                completionHandler: completionHandler
+            )
             session.prefersEphemeralWebBrowserSession = false
             session.presentationContextProvider = SystemBrowserContextProvider.shared
             // Retain the session so it survives until the callback fires
             self.authSession = session
+            debugLog("🔍 Starting ASWebAuthenticationSession")
             session.start()
         }
 
+        // Clear the session reference now that the callback has fired (we're back on MainActor)
+        self.authSession = nil
         try await handleCallback(callbackURL)
     }
 
@@ -479,9 +490,7 @@ class TwitchAuthClient: ObservableObject {
 
     private func exchangeCodeForToken(_ code: String) async throws {
         debugLog("🔍 Exchanging code for token (Authorization Code Grant Flow)...")
-        debugLog("🔍 Client ID: \(clientId)")
         debugLog("🔍 Redirect URI: \(redirectURI)")
-        debugLog("🔍 Code: \(code)")
 
         // Build the request body as form data
         // Use client_secret for Authorization Code Grant Flow (not PKCE)
@@ -493,8 +502,6 @@ class TwitchAuthClient: ObservableObject {
             URLQueryItem(name: "grant_type", value: "authorization_code"),
             URLQueryItem(name: "redirect_uri", value: redirectURI)
         ]
-
-        debugLog("🔍 Token request parameters: client_id, client_secret, code, grant_type, redirect_uri")
 
         var request = URLRequest(url: URL(string: tokenURL)!)
         request.httpMethod = "POST"
@@ -509,11 +516,7 @@ class TwitchAuthClient: ObservableObject {
             throw TwitchError.tokenExchangeFailed
         }
 
-        // Log the response for debugging
         debugLog("🔍 Token exchange response status: \(httpResponse.statusCode)")
-        if let responseString = String(data: data, encoding: .utf8) {
-            debugLog("🔍 Token exchange response body: \(responseString)")
-        }
 
         guard httpResponse.statusCode == 200 else {
             debugLog("❌ Token exchange failed with status: \(httpResponse.statusCode)")
