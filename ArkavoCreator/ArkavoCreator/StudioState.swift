@@ -52,7 +52,7 @@ enum OutputMode: String, CaseIterable, Identifiable, Codable {
 
 /// Persisted studio preferences
 /// Visual source (Face/Avatar) is toggleable - can be none for audio-only
-/// Stage controls (Screen/Mic) remain runtime state in RecordViewModel
+/// Audio controls (Mic/Desktop Audio toggles and volumes) are persisted here
 @MainActor
 @Observable
 final class StudioState {
@@ -99,6 +99,24 @@ final class StudioState {
     /// Whether a non-live scene overlay is active
     var isSceneOverlayActive: Bool { activeScene != .live }
 
+    // MARK: - Persisted Audio Controls
+
+    var enableMicrophone: Bool {
+        didSet { UserDefaults.standard.set(enableMicrophone, forKey: "studio.enableMicrophone") }
+    }
+
+    var enableDesktopAudio: Bool {
+        didSet { UserDefaults.standard.set(enableDesktopAudio, forKey: "studio.enableDesktopAudio") }
+    }
+
+    var micVolume: Float {
+        didSet { UserDefaults.standard.set(micVolume, forKey: "studio.micVolume") }
+    }
+
+    var desktopAudioVolume: Float {
+        didSet { UserDefaults.standard.set(desktopAudioVolume, forKey: "studio.desktopAudioVolume") }
+    }
+
     // MARK: - Persisted Output Preference
 
     var defaultOutput: OutputMode {
@@ -124,6 +142,13 @@ final class StudioState {
         selectedCameraID = UserDefaults.standard.string(forKey: "studio.selectedCameraID")
         selectedVRMPath = UserDefaults.standard.string(forKey: "studio.selectedVRMPath")
         floatingHeadEnabled = UserDefaults.standard.bool(forKey: "studio.floatingHeadEnabled")
+
+        enableMicrophone = UserDefaults.standard.bool(forKey: "studio.enableMicrophone")
+        enableDesktopAudio = UserDefaults.standard.bool(forKey: "studio.enableDesktopAudio")
+        let savedMicVol = UserDefaults.standard.float(forKey: "studio.micVolume")
+        micVolume = savedMicVol > 0 ? savedMicVol : 1.0
+        let savedDesktopVol = UserDefaults.standard.float(forKey: "studio.desktopAudioVolume")
+        desktopAudioVolume = savedDesktopVol > 0 ? savedDesktopVol : 1.0
 
         if let sceneRaw = UserDefaults.standard.string(forKey: "studio.activeScene"),
            let scene = ScenePreset(rawValue: sceneRaw) {
