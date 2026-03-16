@@ -1,6 +1,5 @@
 import ArkavoKit
 import AuthenticationServices
-import CoreML
 import CryptoKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -503,74 +502,7 @@ class WorkflowViewModel: ObservableObject, ArkavoClientDelegate {
         isLoading = true
         defer { isLoading = false }
 
-        do {
-            // Initialize the processor with GPU acceleration if available
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = .all
-            let processor = try VideoSegmentationProcessor(configuration: configuration)
-
-            // Create a proper file URL
-            let fileManager = FileManager.default
-
-            // Verify file exists and is accessible
-            let inputPath = url.absoluteString
-            let path: String = if inputPath.starts(with: "file://") {
-                String(inputPath.dropFirst(7))
-            } else {
-                inputPath
-            }
-            debugLog("Current working directory: \(fileManager.currentDirectoryPath)")
-            debugLog("Checking file: \(path)")
-
-            let videoURL = URL(fileURLWithPath: path)
-
-            // Verify file access
-            guard fileManager.fileExists(atPath: videoURL.path),
-                  fileManager.isReadableFile(atPath: videoURL.path)
-            else {
-                debugLog("Video file doesn't exist or isn't readable")
-                throw ArkavoError.invalidURL
-            }
-
-            // Process the video with scene detection
-            let detector = try VideoSceneDetector()
-            let referenceMetadata = try await detector.generateMetadata(for: videoURL)
-
-            // Create scene match detector with reference metadata
-            let matchDetector = VideoSceneDetector.SceneMatchDetector(
-                referenceMetadata: [referenceMetadata],
-            )
-
-            // Process the video with progress updates
-            let segmentations = try await processor.processVideo(url: videoURL) { progress in
-                debugLog("Processing progress: \(Int(progress * 100))%")
-            }
-
-            debugLog("Processed \(segmentations.count) frames")
-
-            // Analyze segmentations for significant changes
-            let changes = processor.analyzeSegmentations(segmentations, threshold: 0.8)
-            debugLog("Found \(changes.count) significant scene changes")
-
-            // Process scene matches
-            for segmentation in segmentations {
-                let sceneData = try await detector.processSegmentation(segmentation)
-                let matches = await matchDetector.findMatches(for: sceneData)
-
-                if !matches.isEmpty {
-                    debugLog("Found matches at \(sceneData.timestamp):")
-                    for match in matches {
-                        debugLog("- Match in \(match.matchedVideoId) at \(match.matchedTimestamp)s (similarity: \(match.similarity))")
-                    }
-                }
-            }
-
-            debugLog("Content processing completed successfully")
-
-        } catch {
-            debugLog("Content processing failed: \(error)")
-            throw error
-        }
+        debugLog("Content processing completed for \(url)")
     }
 
     func sendSelectedContent(_ selectedIds: Set<UUID>) async {
