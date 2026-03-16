@@ -25,6 +25,7 @@ final class RecordViewModel {
     var enableCamera: Bool = false
     var enableMicrophone: Bool = false {
         didSet {
+            StudioState.shared.enableMicrophone = enableMicrophone
             if enableMicrophone {
                 startAudioMonitor()
             } else {
@@ -80,13 +81,21 @@ final class RecordViewModel {
     private var scopedFolderURL: URL?
 
     // Desktop audio
-    var enableDesktopAudio: Bool = false
+    var enableDesktopAudio: Bool = false {
+        didSet { StudioState.shared.enableDesktopAudio = enableDesktopAudio }
+    }
     var desktopAudioLevel: Float = 0.0
     var micVolume: Float = 1.0 {
-        didSet { recordingSession?.setAudioGain(micVolume, for: "microphone") }
+        didSet {
+            recordingSession?.setAudioGain(micVolume, for: "microphone")
+            StudioState.shared.micVolume = micVolume
+        }
     }
     var desktopAudioVolume: Float = 1.0 {
-        didSet { recordingSession?.setAudioGain(desktopAudioVolume, for: "screen") }
+        didSet {
+            recordingSession?.setAudioGain(desktopAudioVolume, for: "screen")
+            StudioState.shared.desktopAudioVolume = desktopAudioVolume
+        }
     }
 
     // Standalone audio level monitor (always-on, independent of recording)
@@ -104,9 +113,18 @@ final class RecordViewModel {
     // MARK: - Initialization
 
     init() {
+        // Load persisted audio settings without triggering didSet side effects
+        let state = StudioState.shared
+        _enableMicrophone = state.enableMicrophone
+        _enableDesktopAudio = state.enableDesktopAudio
+        _micVolume = state.micVolume
+        _desktopAudioVolume = state.desktopAudioVolume
         generateDefaultTitle()
         refreshCameraDevices()
         refreshScreenDevices()
+        // Start monitors for restored state
+        if _enableMicrophone { startAudioMonitor() }
+        if _enableDesktopAudio { startDesktopAudioMonitor() }
     }
 
     deinit {
