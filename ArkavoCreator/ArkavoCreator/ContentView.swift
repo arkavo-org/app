@@ -13,10 +13,12 @@ struct ContentView: View {
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
     @ObservedObject var agentService: CreatorAgentService
+    var assistantViewModel: AssistantViewModel
     @StateObject private var twitchClient = TwitchAuthClient(
         clientId: Secrets.twitchClientId,
         clientSecret: Secrets.twitchClientSecret
     )
+    @State private var showAssistantPanel = false
 
     var body: some View {
         NavigationSplitView {
@@ -36,14 +38,32 @@ struct ContentView: View {
                 blueskyClient: blueskyClient,
                 youtubeClient: youtubeClient,
                 twitchClient: twitchClient,
-                agentService: agentService
+                agentService: agentService,
+                assistantViewModel: assistantViewModel
             )
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
+            .toolbar {
+                if FeatureFlags.localAssistant {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showAssistantPanel.toggle()
+                        } label: {
+                            Image(systemName: "wand.and.stars")
+                        }
+                        .keyboardShortcut("a", modifiers: [.command, .shift])
+                        .help("AI Assistant (⌘⇧A)")
+                    }
+                }
+            }
+            .sheet(isPresented: $showAssistantPanel) {
+                AssistantPanelView(viewModel: assistantViewModel)
+            }
         }
         .environmentObject(appState)
         .onChange(of: selectedSection) { _, newValue in
             UserDefaults.standard.saveSelectedTab(newValue)
+            assistantViewModel.updateContext(newValue)
         }
     }
 }
@@ -68,7 +88,7 @@ enum NavigationSection: String, CaseIterable, Codable {
             case .workflow: return FeatureFlags.workflow
             case .protection: return FeatureFlags.contentProtection
             case .social: return FeatureFlags.social
-            case .assistant: return FeatureFlags.aiAgent
+            case .assistant: return FeatureFlags.aiAgent || FeatureFlags.localAssistant
             case .patrons: return FeatureFlags.patreon
             default: return true
             }
@@ -137,6 +157,7 @@ struct SectionContainer: View {
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
     @ObservedObject var agentService: CreatorAgentService
+    var assistantViewModel: AssistantViewModel
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
 
@@ -851,9 +872,15 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("content")
                 case .assistant:
-                    AssistantSectionView(agentService: agentService)
-                        .transition(.moveAndFade())
-                        .id("assistant")
+                    if FeatureFlags.localAssistant {
+                        AssistantChatView(viewModel: assistantViewModel)
+                            .transition(.moveAndFade())
+                            .id("local-assistant")
+                    } else {
+                        AssistantSectionView(agentService: agentService)
+                            .transition(.moveAndFade())
+                            .id("assistant")
+                    }
                 case .settings:
                     SettingsContent(agentService: agentService)
                         .transition(.moveAndFade())

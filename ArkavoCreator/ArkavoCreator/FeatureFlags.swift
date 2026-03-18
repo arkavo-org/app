@@ -21,4 +21,6 @@ enum FeatureFlags {
     static let workflow = false
     /// Marketing/social section
     static let social = false
+    /// Local on-device AI assistant (MLX)
+    static let localAssistant = true
 }
