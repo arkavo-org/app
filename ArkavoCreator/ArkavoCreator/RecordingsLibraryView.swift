@@ -464,17 +464,10 @@ struct RecordingCard: View {
                 .lineLimit(1)
 
             // Metadata
-            HStack(spacing: 12) {
-                Label(recording.formattedDate, systemImage: "calendar")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                Label(recording.formattedFileSize, systemImage: "doc")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text(recording.formattedCardSubtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
         }
         .padding(12)
         .background(Color(NSColor.controlBackgroundColor))

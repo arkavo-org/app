@@ -1272,32 +1272,18 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            List(selection: $selectedSection) {
-                ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
-                    NavigationLink(value: section) {
-                        Label(section.rawValue, systemImage: section.systemImage)
-                    }
+        List(selection: $selectedSection) {
+            ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                NavigationLink(value: section) {
+                    Label(section.rawValue, systemImage: section.systemImage)
                 }
             }
 
-            Divider()
-
-            Button {
-                selectedSection = .settings
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: selectedSection == .settings ? "gear.circle.fill" : "gear")
-                        .font(.system(size: 14))
-                    Text("Settings")
-                        .font(.subheadline)
-                    Spacer()
+            Section {
+                NavigationLink(value: NavigationSection.settings) {
+                    Label("Settings", systemImage: "gear")
                 }
-                .foregroundStyle(selectedSection == .settings ? .primary : .secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
-            .buttonStyle(.plain)
         }
         .listStyle(.sidebar)
         .task {
@@ -1393,24 +1379,21 @@ struct SettingsContent: View {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "envelope.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color.accentColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Send Feedback")
-                                .font(.headline)
-                            Text("Help us improve ArkavoCreator")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    HStack(spacing: 8) {
+                        Image(systemName: "envelope")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Send Feedback")
+                            .font(.subheadline)
                         Spacer()
                         Image(systemName: "arrow.up.right")
-                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
-                    .padding()
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
                     .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
 
@@ -1442,13 +1425,13 @@ struct SettingsContent: View {
                                     RecordingsFolderAccess.clearBookmark()
                                     updateLibraryPath()
                                 }
-                                .foregroundColor(.red)
+                                .foregroundColor(.secondary)
                             }
                         }
 
                         Text("Select where recordings are saved. The app needs permission to write to this folder.")
-                            .foregroundColor(.secondary)
-                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
                     }
                 } label: {
                     Label("Library", systemImage: "folder")

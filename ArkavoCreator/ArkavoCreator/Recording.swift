@@ -113,6 +113,13 @@ struct Recording: Identifiable, Sendable {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    var formattedCardSubtitle: String {
+        let tf = DateFormatter()
+        tf.dateStyle = .none
+        tf.timeStyle = .short
+        return "\(tf.string(from: date)) \u{2022} \(formattedDuration) \u{2022} \(formattedFileSize)"
+    }
 }
 
 /// Manages recordings on disk
@@ -197,10 +204,11 @@ final class RecordingsManager: ObservableObject {
                     duration = 0
                 }
 
-                // Extract title from metadata or use filename
-                let title = url.deletingPathExtension().lastPathComponent
-                    .replacingOccurrences(of: "arkavo_recording_", with: "")
-                    .replacingOccurrences(of: "_", with: " ")
+                // Format title as a human-readable date
+                let titleFormatter = DateFormatter()
+                titleFormatter.dateStyle = .long
+                titleFormatter.timeStyle = .none
+                let title = titleFormatter.string(from: creationDate)
 
                 let recording = Recording(
                     id: UUID(),

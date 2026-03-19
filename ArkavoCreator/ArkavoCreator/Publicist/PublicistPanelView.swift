@@ -100,6 +100,9 @@ struct PublicistPanelView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(4)
+                .background(Color.black.opacity(0.2))
+                .cornerRadius(8)
             }
         }
     }
@@ -129,6 +132,9 @@ struct PublicistPanelView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .padding(4)
+            .background(Color.black.opacity(0.2))
+            .cornerRadius(8)
         }
     }
 
@@ -140,12 +146,28 @@ struct PublicistPanelView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            TextEditor(text: $viewModel.sourceText)
-                .font(.caption)
-                .frame(minHeight: 40, maxHeight: 80)
-                .padding(6)
-                .background(.quaternary)
-                .cornerRadius(6)
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $viewModel.sourceText)
+                    .font(.caption)
+                    .frame(minHeight: 40, maxHeight: 80)
+                    .padding(6)
+                    .scrollContentBackground(.hidden)
+
+                if viewModel.sourceText.isEmpty {
+                    Text("Paste or type source content...")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 14)
+                        .allowsHitTesting(false)
+                }
+            }
+            .background(.quaternary)
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.1))
+            )
         }
     }
 
@@ -167,7 +189,7 @@ struct PublicistPanelView: View {
             Spacer()
 
             if let limit = viewModel.selectedPlatform.characterLimit {
-                Text("\(limit) max")
+                Text("\(limit) chars")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

@@ -372,10 +372,10 @@ struct RecordView: View {
                             if screen.isPrimary {
                                 Circle()
                                     .fill(Color.yellow)
-                                    .frame(width: 8, height: 8)
+                                    .frame(width: 12, height: 12)
                                     .overlay(
                                         Image(systemName: "star.fill")
-                                            .font(.system(size: 5))
+                                            .font(.system(size: 8))
                                             .foregroundColor(.black)
                                     )
                                     .offset(x: 2, y: -2)
@@ -410,13 +410,13 @@ struct RecordView: View {
                     Text(activeDuration)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundStyle(isActive ? .primary : .secondary)
+                        .foregroundStyle(.primary)
                 }
                 .frame(width: 90)
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
-                .opacity(isActive ? 1.0 : 0.5)
+                .opacity(isActive ? 1.0 : 0.7)
 
                 // Producer Toggle
                 if FeatureFlags.localAssistant {
@@ -648,7 +648,7 @@ struct RecordView: View {
             .background(
                 streamViewModel.isStreaming
                     ? AnyShapeStyle(Color.red)
-                    : AnyShapeStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+                    : AnyShapeStyle(Color.red.opacity(0.4))
             )
             .foregroundColor(.white)
             .clipShape(Capsule())
