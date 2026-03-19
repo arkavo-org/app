@@ -1,15 +1,15 @@
 import Foundation
 
-/// Describes platform-specific constraints and actions for the AI assistant
+/// Describes platform-specific constraints and actions for the Publicist
 protocol PlatformContext {
     var platformName: String { get }
     var systemPromptFragment: String { get }
     var characterLimit: Int? { get }
-    var suggestedActions: [AssistantAction] { get }
+    var suggestedActions: [PublicistAction] { get }
 }
 
-/// Actions the assistant can perform based on the current platform
-enum AssistantAction: String, CaseIterable, Sendable {
+/// Actions the Publicist can perform based on the current platform
+enum PublicistAction: String, CaseIterable, Sendable {
     case draftPost = "Draft Post"
     case rewrite = "Rewrite"
     case adjustTone = "Adjust Tone"
@@ -23,7 +23,7 @@ enum AssistantAction: String, CaseIterable, Sendable {
 struct BlueskyContext: PlatformContext {
     let platformName = "Bluesky"
     let characterLimit: Int? = 300
-    let suggestedActions: [AssistantAction] = [.draftPost, .rewrite, .adjustTone, .adaptCrossPlatform]
+    let suggestedActions: [PublicistAction] = [.draftPost, .rewrite, .adjustTone, .adaptCrossPlatform]
     var systemPromptFragment: String {
         """
         Currently helping with: Bluesky
@@ -36,7 +36,7 @@ struct BlueskyContext: PlatformContext {
 struct YouTubeContext: PlatformContext {
     let platformName = "YouTube"
     let characterLimit: Int? = 5000
-    let suggestedActions: [AssistantAction] = [.generateTitle, .generateDescription, .adjustTone, .adaptCrossPlatform]
+    let suggestedActions: [PublicistAction] = [.generateTitle, .generateDescription, .adjustTone, .adaptCrossPlatform]
     var systemPromptFragment: String {
         """
         Currently helping with: YouTube
@@ -51,7 +51,7 @@ struct YouTubeContext: PlatformContext {
 struct TwitchContext: PlatformContext {
     let platformName = "Twitch"
     let characterLimit: Int? = 140
-    let suggestedActions: [AssistantAction] = [.generateTitle, .draftPost, .adjustTone]
+    let suggestedActions: [PublicistAction] = [.generateTitle, .draftPost, .adjustTone]
     var systemPromptFragment: String {
         """
         Currently helping with: Twitch
@@ -65,7 +65,7 @@ struct TwitchContext: PlatformContext {
 struct RedditContext: PlatformContext {
     let platformName = "Reddit"
     let characterLimit: Int? = nil
-    let suggestedActions: [AssistantAction] = [.draftPost, .generateTitle, .rewrite, .adjustTone]
+    let suggestedActions: [PublicistAction] = [.draftPost, .generateTitle, .rewrite, .adjustTone]
     var systemPromptFragment: String {
         """
         Currently helping with: Reddit
@@ -79,7 +79,7 @@ struct RedditContext: PlatformContext {
 struct MicropubContext: PlatformContext {
     let platformName = "Micro.blog"
     let characterLimit: Int? = nil
-    let suggestedActions: [AssistantAction] = [.draftPost, .rewrite, .adjustTone, .generateTitle]
+    let suggestedActions: [PublicistAction] = [.draftPost, .rewrite, .adjustTone, .generateTitle]
     var systemPromptFragment: String {
         """
         Currently helping with: Micro.blog / Micropub
@@ -92,7 +92,7 @@ struct MicropubContext: PlatformContext {
 struct LibraryContext: PlatformContext {
     let platformName = "Library"
     let characterLimit: Int? = nil
-    let suggestedActions: [AssistantAction] = [.generateTitle, .generateDescription]
+    let suggestedActions: [PublicistAction] = [.generateTitle, .generateDescription]
     var systemPromptFragment: String {
         """
         Currently helping with: Recording Library
@@ -105,7 +105,7 @@ struct LibraryContext: PlatformContext {
 struct GenericContext: PlatformContext {
     let platformName = "General"
     let characterLimit: Int? = nil
-    let suggestedActions: [AssistantAction] = [.draftPost, .rewrite, .adjustTone, .adaptCrossPlatform]
+    let suggestedActions: [PublicistAction] = [.draftPost, .rewrite, .adjustTone, .adaptCrossPlatform]
     var systemPromptFragment: String {
         """
         Currently in general mode. Help with any content creation task.
@@ -122,13 +122,13 @@ extension NavigationSection {
         switch self {
         case .dashboard: GenericContext()
         case .profile: GenericContext()
-        case .studio: GenericContext()
+        case .studio: TwitchContext()
         case .library: LibraryContext()
         case .workflow: GenericContext()
         case .assistant: GenericContext()
         case .patrons: GenericContext()
         case .protection: GenericContext()
-        case .social: GenericContext()
+        case .social: BlueskyContext()
         case .settings: GenericContext()
         }
     }

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Composes system prompts for the content creation assistant
-enum AssistantPromptBuilder {
+/// Composes system prompts for the Publicist role's content creation tasks
+enum PublicistPromptBuilder {
     /// Build a system prompt incorporating platform context
     static func buildSystemPrompt(for context: any PlatformContext) -> String {
         """
-        You are a content creation assistant for a social media creator. \
+        You are Muse in Publicist mode — a content creation specialist for a social media creator. \
         You help draft, rewrite, and adapt content across platforms. \
         Be concise, creative, and match the tone appropriate for each platform.
 
@@ -41,7 +41,7 @@ enum AssistantPromptBuilder {
 
     /// Build a prompt for a specific action
     static func buildActionPrompt(
-        action: AssistantAction,
+        action: PublicistAction,
         inputText: String?,
         context: any PlatformContext
     ) -> String {

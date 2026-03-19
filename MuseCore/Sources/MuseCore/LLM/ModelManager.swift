@@ -21,12 +21,19 @@ public final class ModelManager {
 
     private let backend: MLXBackend
 
-    /// The backend used by this manager — pass to AssistantViewModel
+    /// Monotonic counter — progress callbacks with a stale generation are ignored
+    private var loadGeneration: Int = 0
+
+    /// The MLX backend for streaming generation
     public var streamingProvider: MLXBackend { backend }
 
     public init() {
         backend = MLXBackend()
         refreshAvailableModels()
+        // Auto-load the default model if it's already cached on disk
+        if ModelRegistry.isModelCached(selectedModel) {
+            Task { await loadSelectedModel() }
+        }
     }
 
     /// Refresh which models are available based on system memory
@@ -53,14 +60,33 @@ public final class ModelManager {
 
     /// Load the currently selected model
     public func loadSelectedModel() async {
-        guard state != .loading else { return }
+        switch state {
+        case .loading, .downloading, .ready:
+            return
+        case .idle, .error, .unloaded:
+            break
+        }
 
-        state = .loading
+        loadGeneration += 1
+        let currentGeneration = loadGeneration
+        let isCached = ModelRegistry.isModelCached(selectedModel)
+        state = isCached ? .loading : .downloading(progress: 0)
 
         do {
-            try await backend.loadModel(selectedModel.huggingFaceID)
+            try await backend.loadModel(selectedModel.huggingFaceID) { [weak self] progress in
+                // Only show download progress when actually downloading from network
+                guard !isCached else { return }
+                Task { @MainActor in
+                    guard let self, self.loadGeneration == currentGeneration else { return }
+                    self.state = .downloading(progress: progress)
+                }
+            }
+            guard loadGeneration == currentGeneration else { return }
+            state = .loading
+            await Task.yield()
             state = .ready
         } catch {
+            guard loadGeneration == currentGeneration else { return }
             state = .error(error.localizedDescription)
         }
     }

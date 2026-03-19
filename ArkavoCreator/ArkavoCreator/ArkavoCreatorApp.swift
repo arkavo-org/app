@@ -20,7 +20,6 @@ struct ArkavoCreatorApp: App {
     @StateObject private var agentService = CreatorAgentService()
 
     @State private var modelManager = ModelManager()
-    @State private var assistantViewModel: AssistantViewModel?
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
@@ -58,14 +57,9 @@ struct ArkavoCreatorApp: App {
                 blueskyClient: blueskyClient,
                 youtubeClient: youtubeClient,
                 agentService: agentService,
-                assistantViewModel: assistantViewModel ?? AssistantViewModel(modelManager: modelManager)
+                modelManager: modelManager
             )
             .onAppear {
-                // Initialize assistant view model
-                if assistantViewModel == nil {
-                    assistantViewModel = AssistantViewModel(modelManager: modelManager)
-                }
-
                 // Load stored tokens
                 redditClient.loadStoredTokens()
                 micropubClient.loadStoredTokens()

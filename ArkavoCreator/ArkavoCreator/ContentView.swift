@@ -1,4 +1,5 @@
 import ArkavoKit
+import MuseCore
 import SwiftUI
 
 // MARK: - Main Content View
@@ -13,12 +14,11 @@ struct ContentView: View {
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
     @ObservedObject var agentService: CreatorAgentService
-    var assistantViewModel: AssistantViewModel
+    var modelManager: ModelManager
     @StateObject private var twitchClient = TwitchAuthClient(
         clientId: Secrets.twitchClientId,
         clientSecret: Secrets.twitchClientSecret
     )
-    @State private var showAssistantPanel = false
 
     var body: some View {
         NavigationSplitView {
@@ -39,31 +39,14 @@ struct ContentView: View {
                 youtubeClient: youtubeClient,
                 twitchClient: twitchClient,
                 agentService: agentService,
-                assistantViewModel: assistantViewModel
+                modelManager: modelManager
             )
             .navigationTitle(selectedSection.rawValue)
             .navigationSubtitle(selectedSection.subtitle)
-            .toolbar {
-                if FeatureFlags.localAssistant {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            showAssistantPanel.toggle()
-                        } label: {
-                            Image(systemName: "wand.and.stars")
-                        }
-                        .keyboardShortcut("a", modifiers: [.command, .shift])
-                        .help("AI Assistant (⌘⇧A)")
-                    }
-                }
-            }
-            .sheet(isPresented: $showAssistantPanel) {
-                AssistantPanelView(viewModel: assistantViewModel)
-            }
         }
         .environmentObject(appState)
         .onChange(of: selectedSection) { _, newValue in
             UserDefaults.standard.saveSelectedTab(newValue)
-            assistantViewModel.updateContext(newValue)
         }
     }
 }
@@ -76,7 +59,7 @@ enum NavigationSection: String, CaseIterable, Codable {
     case studio = "Studio"
     case library = "Library"
     case workflow = "Workflow"
-    case assistant = "AI Assistant"
+    case assistant = "Publicist"
     case patrons = "Patron Management"
     case protection = "Protection"
     case social = "Marketing"
@@ -106,7 +89,7 @@ enum NavigationSection: String, CaseIterable, Codable {
         case .studio: "video.bubble.left.fill"
         case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
-        case .assistant: "cpu"
+        case .assistant: "megaphone"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
         case .social: "square.and.arrow.up.circle"
@@ -121,7 +104,7 @@ enum NavigationSection: String, CaseIterable, Codable {
         case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
-        case .assistant: "AI-Powered Creation Tools"
+        case .assistant: "Platform Content Creation"
         case .patrons: "Manage Your Community"
         case .protection: "Protection"
         case .social: "Share Your Content"
@@ -157,7 +140,7 @@ struct SectionContainer: View {
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
     @ObservedObject var agentService: CreatorAgentService
-    var assistantViewModel: AssistantViewModel
+    var modelManager: ModelManager
     @StateObject private var webViewPresenter = WebViewPresenter()
     @Namespace private var animation
 
@@ -834,7 +817,7 @@ struct SectionContainer: View {
     var body: some View {
         ZStack {
             // Keep RecordView always alive so streaming isn't interrupted by tab switches
-            RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient)
+            RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient, modelManager: modelManager)
                 .opacity(selectedSection == .studio ? 1 : 0)
                 .allowsHitTesting(selectedSection == .studio)
                 .id("studio")
@@ -873,9 +856,9 @@ struct SectionContainer: View {
                         .id("content")
                 case .assistant:
                     if FeatureFlags.localAssistant {
-                        AssistantChatView(viewModel: assistantViewModel)
+                        PublicistView(viewModel: PublicistViewModel(modelManager: modelManager))
                             .transition(.moveAndFade())
-                            .id("local-assistant")
+                            .id("publicist")
                     } else {
                         AssistantSectionView(agentService: agentService)
                             .transition(.moveAndFade())

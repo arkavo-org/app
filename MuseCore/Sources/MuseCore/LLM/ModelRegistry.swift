@@ -69,13 +69,16 @@ public enum ModelRegistry {
         models.filter { $0.estimatedMemoryMB <= memoryBudgetMB }
     }
 
-    /// Check if a model's files exist in the HuggingFace cache
+    /// Check if a model's files exist in the local cache.
+    /// MLX uses `Caches/models/<org>/<repo>` via the system caches directory,
+    /// which resolves correctly inside the App Sandbox container.
     public static func isModelCached(_ model: ModelInfo) -> Bool {
-        let cacheDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/huggingface/hub")
-        let repoDir = cacheDir.appendingPathComponent(
-            "models--\(model.huggingFaceID.replacingOccurrences(of: "/", with: "--"))"
-        )
-        return FileManager.default.fileExists(atPath: repoDir.path)
+        guard let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return false
+        }
+        let modelDir = cachesURL
+            .appendingPathComponent("models")
+            .appendingPathComponent(model.huggingFaceID)
+        return FileManager.default.fileExists(atPath: modelDir.path)
     }
 }

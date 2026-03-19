@@ -1,6 +1,7 @@
 import ArkavoKit
 import ArkavoStreaming
 import AVFoundation
+import MuseCore
 import SwiftUI
 
 struct RecordView: View {
@@ -8,6 +9,7 @@ struct RecordView: View {
 
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
+    var modelManager: ModelManager?
 
     // MARK: - Private State
 
@@ -19,7 +21,9 @@ struct RecordView: View {
     @State private var showStreamSetup: Bool = false
     @State private var showInspector: Bool = false
     @State private var showChat: Bool = false
+    @State private var showProducerPanel: Bool = false
     @State private var chatViewModel = ChatPanelViewModel()
+    @State private var producerViewModel: ProducerViewModel?
     @State private var pulsing: Bool = false
     @State private var pipOffset: CGSize = .zero
     @State private var lastPipOffset: CGSize = .zero
@@ -65,6 +69,11 @@ struct RecordView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                if let producerVM = producerViewModel, showProducerPanel {
+                    ProducerPanelView(viewModel: producerVM, isVisible: $showProducerPanel)
+                        .transition(.move(edge: .trailing))
+                }
+
                 if showInspector {
                     InspectorPanel(
                         visualSource: studioState.visualSource,
@@ -88,6 +97,9 @@ struct RecordView: View {
         }
         .navigationTitle("Studio")
         .onAppear {
+            if producerViewModel == nil, let mm = modelManager {
+                producerViewModel = ProducerViewModel(modelManager: mm)
+            }
             syncViewModelState()
             if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
@@ -400,6 +412,27 @@ struct RecordView: View {
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
                 .opacity(isActive ? 1.0 : 0.5)
+
+                // Producer Toggle
+                if FeatureFlags.localAssistant {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showProducerPanel.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "theatermask.and.paintbrush")
+                            .font(.system(size: 14))
+                            .padding(8)
+                            .foregroundStyle(showProducerPanel ? .primary : .secondary)
+                            .background(showProducerPanel ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .background(.regularMaterial)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Toggle Producer Panel (⌘P)")
+                    .keyboardShortcut("p", modifiers: .command)
+                    .accessibilityIdentifier("Toggle_Producer")
+                }
 
                 // Chat Toggle (Twitch only)
                 if streamViewModel.selectedPlatform == .twitch {

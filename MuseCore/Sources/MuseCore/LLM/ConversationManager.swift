@@ -46,6 +46,19 @@ public final class ConversationManager {
     /// Voice locale for language-specific prompts
     public var voiceLocale: VoiceLocale = .english
 
+    /// Active role determines the system prompt personality
+    public var activeRole: AvatarRole = .sidekick
+
+    /// Dynamic context appended to system prompt (stream state for Producer, platform constraints for Publicist)
+    public var contextInjection: String?
+
+    /// Switch to a new role, clearing history and context
+    public func switchRole(_ role: AvatarRole) {
+        activeRole = role
+        clearHistory()
+        contextInjection = nil
+    }
+
     /// Initialize with configurable history limit
     /// - Parameters:
     ///   - maxHistoryMessages: Maximum messages to keep (default: 20)
@@ -276,15 +289,23 @@ public final class ConversationManager {
         messages = Array(recentMessages)
     }
 
-    /// Get the Avatar Muse system prompt
-    /// Defines the AI's personality, boundaries, and behavioral guidelines
-    /// Designed for adult users (17+)
-    /// Returns Japanese prompt when Japanese locale is selected
+    /// Get the system prompt for the active role and locale.
+    /// For sidekick, uses the full Muse personality prompt.
+    /// For producer/publicist, uses the role-specific prompt from RolePromptProvider.
     private func getSystemPrompt() -> String {
-        if voiceLocale.isJapanese {
-            return getJapaneseSystemPrompt()
+        let basePrompt: String
+        switch activeRole {
+        case .sidekick:
+            // Sidekick uses the full personality prompt for avatar interaction
+            basePrompt = voiceLocale.isJapanese ? getJapaneseSystemPrompt() : getEnglishSystemPrompt()
+        case .producer, .publicist:
+            basePrompt = RolePromptProvider.systemPrompt(for: activeRole, locale: voiceLocale)
         }
-        return getEnglishSystemPrompt()
+
+        if let context = contextInjection {
+            return basePrompt + "\n\n# Current Context\n\(context)"
+        }
+        return basePrompt
     }
 
     /// English system prompt - casual, friendly American-style personality
