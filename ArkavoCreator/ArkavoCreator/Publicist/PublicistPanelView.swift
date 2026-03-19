@@ -29,7 +29,7 @@ struct PublicistPanelView: View {
                 }
 
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         isVisible = false
                     }
                 } label: {

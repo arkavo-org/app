@@ -1,10 +1,11 @@
 import MuseCore
 import SwiftUI
 
-/// Private overlay panel for the Producer role — slides in from trailing edge in Studio
+/// Unified Producer panel — command center with stream health, actions, suggestions, and chat feed
 struct ProducerPanelView: View {
     var viewModel: ProducerViewModel
     @Binding var isVisible: Bool
+    var chatViewModel: ChatPanelViewModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,7 +13,7 @@ struct ProducerPanelView: View {
             HStack {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(viewModel.streamState.isLive ? Color.green : Color.gray)
+                        .fill(viewModel.modelManager.isReady ? Color.green : Color.gray)
                         .frame(width: 8, height: 8)
                     Text("Producer")
                         .font(.headline)
@@ -21,7 +22,7 @@ struct ProducerPanelView: View {
                 Spacer()
 
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         isVisible = false
                     }
                 } label: {
@@ -36,30 +37,84 @@ struct ProducerPanelView: View {
 
             Divider()
 
+            // Sections 1-3: Health, Actions, Suggestions (fixed height, scrollable)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Stream Health
                     streamHealthSection
-
                     Divider()
-
-                    // Quick Actions
                     quickActionsSection
-
                     Divider()
-
-                    // Suggestions
                     suggestionsSection
                 }
                 .padding(16)
             }
+            .frame(maxHeight: 320)
+
+            Divider()
+
+            // Section 4: Chat Monitor (fills remaining space)
+            if let chatVM = chatViewModel {
+                chatMonitorSection(chatVM)
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.title3)
+                        .foregroundStyle(.tertiary)
+                    Text("Chat appears when streaming")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .frame(width: 300)
-        .background(.ultraThinMaterial)
-        .overlay(
-            Rectangle().frame(width: 1).foregroundColor(.white.opacity(0.1)),
-            alignment: .leading
-        )
+    }
+
+    // MARK: - Chat Monitor
+
+    @ViewBuilder
+    private func chatMonitorSection(_ chatVM: ChatPanelViewModel) -> some View {
+        VStack(spacing: 0) {
+            // Chat header
+            HStack {
+                Circle()
+                    .fill(chatVM.isConnected ? Color.green : Color.gray)
+                    .frame(width: 6, height: 6)
+                Text("Chat")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(chatVM.messages.count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            // Dense chat feed
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(chatVM.messages) { message in
+                            Text("\(Text(message.displayName).bold()): \(message.content)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.primary.opacity(0.85))
+                                .lineLimit(2)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 1)
+                                .id(message.id)
+                        }
+                    }
+                }
+                .onChange(of: chatVM.messages.count) { _, _ in
+                    if let lastID = chatVM.messages.last?.id {
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            proxy.scrollTo(lastID, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: - Stream Health

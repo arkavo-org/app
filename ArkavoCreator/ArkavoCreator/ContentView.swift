@@ -21,28 +21,35 @@ struct ContentView: View {
     )
 
     var body: some View {
-        NavigationSplitView {
-            Sidebar(
-                selectedSection: $selectedSection,
-                patreonClient: patreonClient,
-                redditClient: redditClient,
-                blueskyClient: blueskyClient,
-                youtubeClient: youtubeClient
+        ZStack {
+            LinearGradient(
+                colors: [Color(white: 0.1), Color(white: 0.15), Color(white: 0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-        } detail: {
-            SectionContainer(
-                selectedSection: selectedSection,
-                patreonClient: patreonClient,
-                redditClient: redditClient,
-                micropubClient: micropubClient,
-                blueskyClient: blueskyClient,
-                youtubeClient: youtubeClient,
-                twitchClient: twitchClient,
-                agentService: agentService,
-                modelManager: modelManager
-            )
-            .navigationTitle(selectedSection.rawValue)
-            .navigationSubtitle(selectedSection.subtitle)
+            .ignoresSafeArea()
+
+            NavigationSplitView {
+                Sidebar(
+                    selectedSection: $selectedSection,
+                    patreonClient: patreonClient,
+                    redditClient: redditClient,
+                    blueskyClient: blueskyClient,
+                    youtubeClient: youtubeClient
+                )
+            } detail: {
+                SectionContainer(
+                    selectedSection: selectedSection,
+                    patreonClient: patreonClient,
+                    redditClient: redditClient,
+                    micropubClient: micropubClient,
+                    blueskyClient: blueskyClient,
+                    youtubeClient: youtubeClient,
+                    twitchClient: twitchClient,
+                    agentService: agentService,
+                    modelManager: modelManager
+                )
+            }
         }
         .environmentObject(appState)
         .onChange(of: selectedSection) { _, newValue in
@@ -254,9 +261,10 @@ struct SectionContainer: View {
                                 ForEach(twitchClient.channelTags.prefix(5), id: \.self) { tag in
                                     Text(tag)
                                         .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
-                                        .background(Color.purple.opacity(0.15))
+                                        .background(Color.white.opacity(0.08))
                                         .clipShape(Capsule())
                                 }
                             }
@@ -407,7 +415,7 @@ struct SectionContainer: View {
                     }
                 }
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         twitchCardHovered = hovering
                     }
                 }
@@ -853,7 +861,7 @@ struct SectionContainer: View {
                                     if publicistViewModel == nil {
                                         publicistViewModel = PublicistViewModel(modelManager: modelManager)
                                     }
-                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                                         showPublicistPanel.toggle()
                                     }
                                 } label: {
@@ -897,7 +905,7 @@ struct SectionContainer: View {
                 }
             }
         }
-        .animation(.smooth, value: selectedSection)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedSection)
     }
 }
 
@@ -983,8 +991,20 @@ struct DashboardCard<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.25), .white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        )
+        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
     }
 }
 
@@ -1087,7 +1107,7 @@ struct PreviewAlert: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
-        .background(.background.secondary)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -1117,7 +1137,7 @@ struct FeatureCard: View {
         }
         .padding()
         .frame(height: 160)
-        .background(.background.secondary)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -1207,13 +1227,13 @@ struct IconRail: View {
                 hoverTask = Task {
                     try? await Task.sleep(for: .milliseconds(300))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         isExpanded = true
                     }
                 }
             } else {
                 // Collapse immediately when leaving
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     isExpanded = false
                 }
             }
@@ -1354,7 +1374,7 @@ struct ContentCard: View {
                     .controlSize(.small)
                 }
                 .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -1392,7 +1412,7 @@ struct SettingsContent: View {
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
@@ -1475,7 +1495,7 @@ struct SettingsContent: View {
                             .font(.callout)
                     }
                     .padding()
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
@@ -1552,7 +1572,7 @@ struct AgentSettingsSection: View {
                 .font(.callout)
         }
         .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

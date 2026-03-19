@@ -16,7 +16,7 @@ struct RecordingsLibraryView: View {
     @State private var protectionError: String?
     @State private var showingProtectionError = false
     @State private var recordingToDelete: Recording?
-    @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
+    @State private var gridColumns = [GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 20)]
 
     // Iroh publishing state
     @State private var isPublishing = false
@@ -29,17 +29,11 @@ struct RecordingsLibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            headerView
-
-            Divider()
-
-            // Content
             if manager.recordings.isEmpty {
                 emptyStateView
             } else {
                 ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                    LazyVGrid(columns: gridColumns, spacing: 20) {
                         ForEach(manager.recordings) { recording in
                             RecordingCard(recording: recording)
                                 .accessibilityIdentifier("RecordingCard_\(recording.id)")
@@ -53,6 +47,16 @@ struct RecordingsLibraryView: View {
                     }
                     .padding()
                 }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await manager.loadRecordings() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh")
             }
         }
         .sheet(item: $playerRecording) { recording in
@@ -137,36 +141,13 @@ struct RecordingsLibraryView: View {
 
     // MARK: - View Components
 
-    private var headerView: some View {
-        HStack {
-            Text("Recordings")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            Text("\(manager.recordings.count) recording\(manager.recordings.count == 1 ? "" : "s")")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-
-            Button {
-                Task {
-                    await manager.loadRecordings()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Refresh")
-        }
-        .padding()
-    }
-
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             if manager.needsFolderSelection {
                 Image(systemName: "folder.badge.questionmark")
                     .font(.system(size: 60))
                     .foregroundColor(.blue)
+                    .shadow(color: .blue.opacity(0.15), radius: 20)
 
                 Text("Choose Recordings Folder")
                     .font(.title2)
@@ -185,6 +166,7 @@ struct RecordingsLibraryView: View {
                 Image(systemName: "video.slash")
                     .font(.system(size: 60))
                     .foregroundColor(.secondary)
+                    .shadow(color: .blue.opacity(0.15), radius: 20)
 
                 Text("No Recordings Yet")
                     .font(.title2)
@@ -379,8 +361,8 @@ struct RecordingCard: View {
     @State private var tdfStatus: Recording.TDFProtectionStatus?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
+        VStack(alignment: .leading, spacing: 0) {
+            // Thumbnail (flush to card edges — outer clipShape handles corners)
             ZStack {
                 if let thumbnail = thumbnail {
                     Image(nsImage: thumbnail)
@@ -388,12 +370,10 @@ struct RecordingCard: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(height: 150)
                         .clipped()
-                        .cornerRadius(8)
                 } else {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.2))
                         .frame(height: 150)
-                        .cornerRadius(8)
                         .overlay {
                             ProgressView()
                         }
@@ -402,7 +382,6 @@ struct RecordingCard: View {
                 // Badges (top-left)
                 VStack {
                     HStack(spacing: 4) {
-                        // TDF Badge
                         if let status = tdfStatus, status.isProtected {
                             HStack(spacing: 4) {
                                 Image(systemName: "lock.shield.fill")
@@ -419,7 +398,6 @@ struct RecordingCard: View {
                             .accessibilityIdentifier("TDF3Badge")
                         }
 
-                        // C2PA Badge
                         if let status = c2paStatus, status.isSigned {
                             HStack(spacing: 4) {
                                 Image(systemName: status.isValid ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
@@ -458,21 +436,33 @@ struct RecordingCard: View {
                 }
             }
 
-            // Title
-            Text(recording.title)
-                .font(.headline)
-                .lineLimit(1)
+            // Title + Metadata (with padding)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(recording.title)
+                    .font(.headline)
+                    .lineLimit(1)
 
-            // Metadata
-            Text(recording.formattedCardSubtitle)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
+                Text(recording.formattedCardSubtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(12)
         }
-        .padding(12)
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.25), .white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        )
+        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
         .task {
             await loadThumbnail()
         }
