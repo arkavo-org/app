@@ -65,21 +65,20 @@ enum NavigationSection: String, CaseIterable, Codable {
     case social = "Marketing"
     case settings = "Settings"
 
+    /// Five clean sidebar items: Dashboard, Profile, Studio, Library, Settings.
+    /// Other sections are gated behind feature flags (all currently disabled).
     static func availableSections(isCreator: Bool) -> [NavigationSection] {
-        var base = allCases.filter { section in
+        allCases.filter { section in
             switch section {
+            case .dashboard, .profile, .studio, .library, .settings:
+                return true
             case .workflow: return FeatureFlags.workflow
             case .protection: return FeatureFlags.contentProtection
             case .social: return FeatureFlags.social
-            case .assistant: return FeatureFlags.aiAgent || FeatureFlags.localAssistant
+            case .assistant: return FeatureFlags.aiAgent
             case .patrons: return FeatureFlags.patreon
-            default: return true
             }
         }
-        if !isCreator {
-            base = base.filter { $0 != .patrons }
-        }
-        return base
     }
 
     var systemImage: String {
@@ -99,7 +98,7 @@ enum NavigationSection: String, CaseIterable, Codable {
 
     var subtitle: String {
         switch self {
-        case .dashboard: "Overview"
+        case .dashboard: "Your Social Command Center"
         case .profile: "Your Creator Profile"
         case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
@@ -142,6 +141,8 @@ struct SectionContainer: View {
     @ObservedObject var agentService: CreatorAgentService
     var modelManager: ModelManager
     @StateObject private var webViewPresenter = WebViewPresenter()
+    @State private var showPublicistPanel = false
+    @State private var publicistViewModel: PublicistViewModel?
     @Namespace private var animation
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
@@ -825,16 +826,43 @@ struct SectionContainer: View {
             if selectedSection != .studio {
                 switch selectedSection {
                 case .dashboard:
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            // Render sorted sections
-                            ForEach(sortedDashboardSections) { section in
-                                DashboardCard(title: section.title) {
-                                    section.content
+                    HStack(spacing: 0) {
+                        ScrollView {
+                            VStack(spacing: 24) {
+                                ForEach(sortedDashboardSections) { section in
+                                    DashboardCard(title: section.title) {
+                                        section.content
+                                    }
                                 }
                             }
+                            .padding()
                         }
-                        .padding()
+                        .frame(maxWidth: .infinity)
+
+                        // Publicist panel (trailing edge)
+                        if FeatureFlags.localAssistant, showPublicistPanel,
+                           let pubVM = publicistViewModel {
+                            PublicistPanelView(viewModel: pubVM, isVisible: $showPublicistPanel)
+                                .transition(.move(edge: .trailing))
+                        }
+                    }
+                    .toolbar {
+                        if FeatureFlags.localAssistant {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button {
+                                    if publicistViewModel == nil {
+                                        publicistViewModel = PublicistViewModel(modelManager: modelManager)
+                                    }
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showPublicistPanel.toggle()
+                                    }
+                                } label: {
+                                    Image(systemName: "megaphone")
+                                }
+                                .keyboardShortcut("e", modifiers: [.command])
+                                .help("Publicist (⌘E)")
+                            }
+                        }
                     }
                     .transition(.moveAndFade())
                     .id("dashboard")
@@ -855,15 +883,9 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("content")
                 case .assistant:
-                    if FeatureFlags.localAssistant {
-                        PublicistView(viewModel: PublicistViewModel(modelManager: modelManager))
-                            .transition(.moveAndFade())
-                            .id("publicist")
-                    } else {
-                        AssistantSectionView(agentService: agentService)
-                            .transition(.moveAndFade())
-                            .id("assistant")
-                    }
+                    AssistantSectionView(agentService: agentService)
+                        .transition(.moveAndFade())
+                        .id("assistant")
                 case .settings:
                     SettingsContent(agentService: agentService)
                         .transition(.moveAndFade())
@@ -1114,7 +1136,6 @@ extension AnyTransition {
 // MARK: - Icon Rail View (Compact Navigation)
 
 struct IconRail: View {
-    @EnvironmentObject private var appState: AppState
     @Binding var selectedSection: NavigationSection
     @ObservedObject var patreonClient: PatreonClient
     @ObservedObject var redditClient: RedditClient
@@ -1146,22 +1167,6 @@ struct IconRail: View {
             }
 
             Spacer()
-
-            // Feedback button (if enabled)
-            if appState.isFeedbackEnabled {
-                Button {
-                    if let url = URL(string: "mailto:info@arkavo.com") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Image(systemName: "envelope")
-                        .font(.system(size: 18))
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Send Feedback")
-            }
 
             // Settings at bottom
             IconRailButton(
@@ -1269,35 +1274,30 @@ struct Sidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             List(selection: $selectedSection) {
-                Section {
-                    ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
-                        NavigationLink(value: section) {
-                            Label(section.rawValue, systemImage: section.systemImage)
-                        }
-                    }
-                }
-                Section {
-                    NavigationLink(value: NavigationSection.settings) {
-                        Label(NavigationSection.settings.rawValue,
-                              systemImage: NavigationSection.settings.systemImage)
+                ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                    NavigationLink(value: section) {
+                        Label(section.rawValue, systemImage: section.systemImage)
                     }
                 }
             }
-            if appState.isFeedbackEnabled {
-                Divider()
-                Button(action: {
-                    if let url = URL(string: "mailto:info@arkavo.com") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "envelope")
-                        Text("Send Feedback")
-                    }
+
+            Divider()
+
+            Button {
+                selectedSection = .settings
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: selectedSection == .settings ? "gear.circle.fill" : "gear")
+                        .font(.system(size: 14))
+                    Text("Settings")
+                        .font(.subheadline)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .padding(10)
+                .foregroundStyle(selectedSection == .settings ? .primary : .secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
+            .buttonStyle(.plain)
         }
         .listStyle(.sidebar)
         .task {
@@ -1379,7 +1379,6 @@ struct ContentCard: View {
 }
 
 struct SettingsContent: View {
-    @EnvironmentObject private var appState: AppState
     @StateObject private var vrmDownloader = VRMDownloader()
     @State private var modelsPath: String = ""
     @State private var libraryPath: String = ""
@@ -1388,6 +1387,33 @@ struct SettingsContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                // Send Feedback
+                Button {
+                    if let url = URL(string: "mailto:info@arkavo.com") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "envelope.fill")
+                            .font(.title2)
+                            .foregroundStyle(Color.accentColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Send Feedback")
+                                .font(.headline)
+                            Text("Help us improve ArkavoCreator")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+
                 // Library Path Section
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
@@ -1474,22 +1500,6 @@ struct SettingsContent: View {
                 if FeatureFlags.aiAgent, let agentService {
                     AgentSettingsSection(agentService: agentService)
                 }
-
-                // Feedback Toggle Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Feedback")
-                        .font(.headline)
-
-                    Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
-                        .toggleStyle(.switch)
-
-                    Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
-                        .foregroundColor(.secondary)
-                        .font(.callout)
-                }
-                .padding()
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 Spacer()
             }

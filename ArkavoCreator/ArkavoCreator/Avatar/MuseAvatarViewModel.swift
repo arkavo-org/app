@@ -31,12 +31,17 @@ class MuseAvatarViewModel: ObservableObject {
     private var ttsAudioSource: MuseTTSAudioSource?
     private var edgeLLMProvider: EdgeLLMProvider?
     private var llmFallbackChain: LLMFallbackChain?
+    private var mlxResponseProvider: MLXResponseProvider?
+    private var conversationManager: ConversationManager?
 
     /// Stream chat reactor for processing chat messages
     private(set) var chatReactor: StreamChatReactor?
 
     /// Agent service for Edge LLM backend
     weak var agentService: CreatorAgentService?
+
+    /// Shared model manager — provides the MLX backend for Sidekick inference
+    weak var modelManager: ModelManager?
 
     // MARK: - Initialization
 
@@ -79,15 +84,24 @@ class MuseAvatarViewModel: ObservableObject {
         self.chatReactor = reactor
     }
 
-    /// Configure LLM providers (Edge + fallback)
+    /// Configure LLM providers (Edge + MLX Local fallback)
     private func setupLLMProviders() {
         var providers: [any LLMResponseProvider] = []
 
-        // Edge provider (highest priority) — if agent service is available
+        // Edge provider (priority 0) — if agent service is available
         if let agentService {
             let edge = EdgeLLMProvider(agentService: agentService)
             self.edgeLLMProvider = edge
             providers.append(edge)
+        }
+
+        // MLX Local provider (priority 2) — on-device via shared ModelManager
+        if let modelManager {
+            let mlx = MLXResponseProvider(backend: modelManager.streamingProvider)
+            mlx.activeRole = .sidekick
+            mlx.voiceLocale = .english
+            self.mlxResponseProvider = mlx
+            providers.append(mlx)
         }
 
         // Create fallback chain
@@ -96,6 +110,12 @@ class MuseAvatarViewModel: ObservableObject {
             chain.addProvider(provider)
         }
         self.llmFallbackChain = chain
+
+        // Setup conversation manager for multi-turn context
+        let cm = ConversationManager(maxHistoryMessages: 20)
+        cm.activeRole = .sidekick
+        cm.voiceLocale = .english
+        self.conversationManager = cm
     }
 
     // MARK: - Model Loading
@@ -156,13 +176,13 @@ class MuseAvatarViewModel: ObservableObject {
         lastChatMessage = "\(message.displayName): \(message.content)"
 
         do {
-            let prompt = """
-            You are a friendly AI avatar co-hosting a live stream. \
-            A viewer named \(message.displayName) said: "\(message.content)". \
-            Respond briefly and naturally (1-2 sentences). Be warm and engaging.
-            """
+            // Build prompt with conversation history and viewer context
+            let userMessage = "\(message.displayName) says: \(message.content)"
+            conversationManager?.addUserMessage(userMessage)
+            let prompt = conversationManager?.buildPromptForMessage(userMessage) ?? userMessage
 
             let (response, _) = try await chain.generate(prompt: prompt)
+            conversationManager?.addAssistantMessage(response.message)
             await speak(response.message)
 
             // Handle tool calls (emotes, expressions)

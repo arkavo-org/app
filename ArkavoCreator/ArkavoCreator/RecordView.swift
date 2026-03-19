@@ -100,6 +100,11 @@ struct RecordView: View {
             if producerViewModel == nil, let mm = modelManager {
                 producerViewModel = ProducerViewModel(modelManager: mm)
             }
+            // Wire shared ModelManager and initialize Muse avatar for Sidekick
+            if museAvatarViewModel.modelManager == nil {
+                museAvatarViewModel.modelManager = modelManager
+                museAvatarViewModel.setup()
+            }
             syncViewModelState()
             if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
