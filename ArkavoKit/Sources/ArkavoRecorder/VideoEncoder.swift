@@ -32,22 +32,30 @@ public actor VideoEncoder {
 
     public private(set) var isRecording: Bool = false
 
-    // Streaming support
-    private var rtmpPublisher: RTMPPublisher?
+    // Streaming support — per-destination state for simulcast fan-out
+    struct StreamDestination {
+        let id: String
+        let publisher: RTMPPublisher
+        var videoSendTask: Task<Void, Never>?
+        var audioSendTask: Task<Void, Never>?
+        var videoContinuation: AsyncStream<EncodedVideoFrame>.Continuation?
+        var audioContinuation: AsyncStream<EncodedAudioFrame>.Continuation?
+        var sentVideoSequenceHeader: Bool = false
+        var sentAudioSequenceHeader: Bool = false
+    }
+    private var streamDestinations: [String: StreamDestination] = [:]
     private var ntdfStreamingManager: NTDFStreamingManager?
-    private var isStreaming: Bool = false
     private var isNTDFStreaming: Bool = false
 
-    /// Whether any streaming (regular RTMP or NTDF) is active — used by RecordingSession
-    /// to gate frame generation when streaming without recording
+    /// Whether any streaming (regular RTMP or NTDF) is active
+    private var isStreaming: Bool { !streamDestinations.isEmpty }
     public var isStreamingActive: Bool { isStreaming || isNTDFStreaming }
+
     private var videoFormatDescription: CMFormatDescription?
     private var audioFormatDescription: CMFormatDescription?
-    private var sentVideoSequenceHeader: Bool = false
-    private var sentAudioSequenceHeader: Bool = false
-    private var streamStartTime: CMTime?  // Stream start time for relative timestamps
-    private var lastStreamVideoTimestamp: CMTime = .zero  // Last video timestamp sent to stream
-    private var lastStreamAudioTimestamp: CMTime = .zero  // Last audio timestamp sent to stream
+    private var streamStartTime: CMTime?
+    private var lastStreamVideoTimestamp: CMTime = .zero
+    private var lastStreamAudioTimestamp: CMTime = .zero
 
     // Encoding settings - adaptive based on system capabilities
     private let videoWidth: Int
@@ -621,179 +629,215 @@ public actor VideoEncoder {
 
     // MARK: - Streaming Methods
 
-    // Frame queue continuations for serialized sending
-    private var videoFrameContinuation: AsyncStream<EncodedVideoFrame>.Continuation?
-    private var audioFrameContinuation: AsyncStream<EncodedAudioFrame>.Continuation?
-    private var videoSendTask: Task<Void, Never>?
-    private var audioSendTask: Task<Void, Never>?
+    // Shared frame queue (not per-destination — destinations get their own via fan-out)
     private var silentAudioTask: Task<Void, Never>?
 
-    /// Start streaming to RTMP destination(s) while recording
+    /// Start streaming to one RTMP destination (convenience wrapper)
     public func startStreaming(to destination: RTMPPublisher.Destination, streamKey: String) async throws {
-        guard !isStreaming else {
+        try await startStreaming(to: [(id: destination.platform, destination: destination, streamKey: streamKey)])
+    }
+
+    /// Start streaming to multiple RTMP destinations simultaneously (simulcast)
+    public func startStreaming(to destinations: [(id: String, destination: RTMPPublisher.Destination, streamKey: String)]) async throws {
+        guard streamDestinations.isEmpty else {
             print("⚠️ Already streaming")
             return
         }
 
-        print("📡 Starting RTMP stream...")
+        print("📡 Starting RTMP stream to \(destinations.count) destination(s)...")
 
-        let publisher = RTMPPublisher()
-        try await publisher.connect(to: destination, streamKey: streamKey)
-
-        // Send stream metadata (@setDataFrame onMetaData) immediately after connect
-        // sendMetadata/FLVMuxer expect values in bits/sec and convert to kbps internally
-        try await publisher.sendMetadata(
-            width: videoWidth,
-            height: videoHeight,
-            framerate: Double(frameRate),
-            videoBitrate: Double(videoBitrate),
-            audioBitrate: 128_000
-        )
-
-        // Create video encoder
+        // Create shared media encoders (encode once, fan out to all destinations)
         let videoEncoder = ArkavoMedia.VideoEncoder(quality: .auto)
         try videoEncoder.start()
-
-        // Create audio encoder
         let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: 128_000)
 
-        // Create AsyncStreams to serialize frame sending (prevents burst/out-of-order issues)
-        let (videoStream, videoContinuation) = AsyncStream<EncodedVideoFrame>.makeStream()
-        let (audioStream, audioContinuation) = AsyncStream<EncodedAudioFrame>.makeStream()
-        self.videoFrameContinuation = videoContinuation
-        self.audioFrameContinuation = audioContinuation
-
-        // Wire up video encoder callback - just queue frames
-        // Capture continuation locally to avoid actor isolation issues
-        let videoCont = videoContinuation
-        videoEncoder.onFrame = { frame in
-            videoCont.yield(frame)
-        }
-
-        // Wire up audio encoder callback - just queue frames
-        let audioCont = audioContinuation
-        audioEncoder.onFrame = { frame in
-            audioCont.yield(frame)
-        }
-
-        // Start video send task - serializes frame sending
-        // Frames arrive from camera at realtime pace, so we just need to send them in order
-        // without additional pacing (the camera/encoder already gates the frame rate)
-        videoSendTask = Task { [weak self, weak publisher] in
-            for await frame in videoStream {
-                guard let self = self, let publisher = publisher else { break }
-                guard !Task.isCancelled else { break }
-
-                do {
-                    // Send sequence header ONLY ONCE on first keyframe
-                    let needsHeader = await self.shouldSendVideoSequenceHeader()
-                    if frame.isKeyframe, needsHeader, let formatDesc = frame.formatDescription {
-                        try await publisher.sendVideoSequenceHeader(formatDescription: formatDesc)
-                        await self.markVideoSequenceHeaderSent()
-                        print("✅ Sent video sequence header (ONCE)")
-                    }
-
-                    // Send video frame immediately - frames arrive at realtime from camera
-                    try await publisher.send(video: frame)
-                } catch is CancellationError {
-                    break
-                } catch {
-                    print("❌ Failed to send video frame: \(error)")
+        // Connect all destinations in parallel
+        try await withThrowingTaskGroup(of: StreamDestination.self) { group in
+            for dest in destinations {
+                group.addTask {
+                    let publisher = RTMPPublisher()
+                    try await publisher.connect(to: dest.destination, streamKey: dest.streamKey)
+                    try await publisher.sendMetadata(
+                        width: self.videoWidth,
+                        height: self.videoHeight,
+                        framerate: Double(self.frameRate),
+                        videoBitrate: Double(self.videoBitrate),
+                        audioBitrate: 128_000
+                    )
+                    print("✅ [\(dest.id)] RTMP connected")
+                    return StreamDestination(id: dest.id, publisher: publisher)
                 }
+            }
+
+            for try await dest in group {
+                streamDestinations[dest.id] = dest
             }
         }
 
-        // Start audio send task - serializes frame sending
-        // Audio frames arrive from encoder at realtime pace
-        audioSendTask = Task { [weak self, weak publisher] in
-            for await frame in audioStream {
-                guard let self = self, let publisher = publisher else { break }
-                guard !Task.isCancelled else { break }
+        // Create per-destination AsyncStreams and send tasks
+        for id in streamDestinations.keys {
+            guard var dest = streamDestinations[id] else { continue }
 
-                do {
-                    // Send sequence header ONLY ONCE on first frame
-                    let needsHeader = await self.shouldSendAudioSequenceHeader()
-                    if needsHeader, let formatDesc = frame.formatDescription {
-                        // Extract AudioSpecificConfig from format description
-                        var asc = Data()
-                        var size: Int = 0
-                        if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDesc, sizeOut: &size), size > 0 {
-                            asc = Data(bytes: cookie, count: size)
-                        } else {
-                            // Manual ASC construction for AAC-LC 48kHz stereo
-                            let byte1: UInt8 = 0x11  // (2<<3)|(3>>1) = AAC-LC, 48kHz
-                            let byte2: UInt8 = 0x90  // ((3&1)<<7)|(2<<3) = 48kHz, stereo
-                            asc = Data([byte1, byte2])
+            let (videoStream, videoCont) = AsyncStream<EncodedVideoFrame>.makeStream(
+                bufferingPolicy: .bufferingNewest(30)
+            )
+            let (audioStream, audioCont) = AsyncStream<EncodedAudioFrame>.makeStream(
+                bufferingPolicy: .bufferingNewest(30)
+            )
+            dest.videoContinuation = videoCont
+            dest.audioContinuation = audioCont
+
+            // Per-destination video send task with frame rate limiting
+            let publisher = dest.publisher
+            let destId = id
+            let targetInterval: Double = 1.0 / Double(self.frameRate) // ~33ms for 30fps
+            dest.videoSendTask = Task { [weak self] in
+                var lastSendTime: ContinuousClock.Instant? = nil
+                var frameCount: UInt64 = 0
+                for await frame in videoStream {
+                    guard let self = self else { break }
+                    guard !Task.isCancelled else { break }
+
+                    // Rate limit: skip frames that arrive faster than target fps
+                    let now = ContinuousClock.now
+                    if let last = lastSendTime {
+                        let elapsed = now - last
+                        if elapsed < .milliseconds(Int(targetInterval * 900)) && !frame.isKeyframe {
+                            continue // Drop frame — too fast
                         }
-
-                        try await publisher.sendAudioSequenceHeader(asc: asc)
-                        await self.markAudioSequenceHeaderSent()
-                        print("✅ Sent audio sequence header (ONCE)")
                     }
 
-                    // Send audio frame immediately - frames arrive at realtime from encoder
-                    try await publisher.send(audio: frame)
-                } catch is CancellationError {
-                    break
-                } catch {
-                    print("❌ Failed to send audio frame: \(error)")
+                    do {
+                        let needsHeader = await self.shouldSendVideoHeader(for: destId)
+                        if frame.isKeyframe, needsHeader, let formatDesc = frame.formatDescription {
+                            try await publisher.sendVideoSequenceHeader(formatDescription: formatDesc)
+                            await self.markVideoHeaderSent(for: destId)
+                            print("✅ [\(destId)] Sent video sequence header")
+                        }
+                        try await publisher.send(video: frame)
+                        lastSendTime = now
+                        frameCount += 1
+                        if frameCount == 1 || frameCount % 900 == 0 {
+                            print("📤 [\(destId)] video #\(frameCount)")
+                        }
+                    } catch is CancellationError {
+                        break
+                    } catch {
+                        print("❌ [\(destId)] Video send error: \(error.localizedDescription)")
+                    }
                 }
             }
+
+            // Per-destination audio send task
+            dest.audioSendTask = Task { [weak self] in
+                var audioFrameCount: UInt64 = 0
+                for await frame in audioStream {
+                    guard let self = self else { break }
+                    guard !Task.isCancelled else { break }
+                    audioFrameCount += 1
+                    if audioFrameCount == 1 || audioFrameCount % 500 == 0 {
+                        print("🔊 [\(destId)] audio #\(audioFrameCount) (\(frame.data.count)B)")
+                    }
+                    do {
+                        let needsHeader = await self.shouldSendAudioHeader(for: destId)
+                        if needsHeader, let formatDesc = frame.formatDescription {
+                            var asc = Data()
+                            var size: Int = 0
+                            if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDesc, sizeOut: &size), size > 0 {
+                                asc = Data(bytes: cookie, count: size)
+                            } else {
+                                let byte1: UInt8 = 0x11
+                                let byte2: UInt8 = 0x90
+                                asc = Data([byte1, byte2])
+                            }
+                            try await publisher.sendAudioSequenceHeader(asc: asc)
+                            await self.markAudioHeaderSent(for: destId)
+                            print("✅ [\(destId)] Sent audio sequence header")
+                        }
+                        try await publisher.send(audio: frame)
+                    } catch is CancellationError {
+                        break
+                    } catch {
+                        print("❌ [\(destId)] Audio send error: \(error.localizedDescription)")
+                    }
+                }
+            }
+
+            streamDestinations[id] = dest
+        }
+
+        // Capture all continuations locally for the fan-out closures
+        // (onFrame is nonisolated, can't access actor-isolated streamDestinations)
+        let videoConts = streamDestinations.values.compactMap { $0.videoContinuation }
+        let audioConts = streamDestinations.values.compactMap { $0.audioContinuation }
+
+        videoEncoder.onFrame = { frame in
+            for cont in videoConts { cont.yield(frame) }
+        }
+        audioEncoder.onFrame = { frame in
+            for cont in audioConts { cont.yield(frame) }
         }
 
         streamVideoEncoder = videoEncoder
         streamAudioEncoder = audioEncoder
-        rtmpPublisher = publisher
-        isStreaming = true
-        sentVideoSequenceHeader = false
-        sentAudioSequenceHeader = false
         streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
         lastStreamVideoTimestamp = .zero
         lastStreamAudioTimestamp = .zero
 
-        // Start silent audio generator to ensure audio track is always present
-        // (YouTube requires audio+video to mark a stream as active)
         startSilentAudioGenerator(encoder: audioEncoder)
 
-        print("✅ RTMP stream started with video and audio encoding")
+        print("✅ RTMP stream started to \(streamDestinations.count) destination(s)")
     }
 
-    /// Stop streaming
+    /// Stop streaming to all destinations
     public func stopStreaming() async {
-        guard isStreaming, let publisher = rtmpPublisher else { return }
+        guard isStreaming else { return }
 
-        print("📡 Stopping RTMP stream...")
+        print("📡 Stopping RTMP stream (\(streamDestinations.count) destination(s))...")
 
-        // Stop silent audio generator
         silentAudioTask?.cancel()
         silentAudioTask = nil
 
-        // Finish the frame queues first
-        videoFrameContinuation?.finish()
-        audioFrameContinuation?.finish()
-        videoFrameContinuation = nil
-        audioFrameContinuation = nil
+        // Tear down all destinations
+        for (id, dest) in streamDestinations {
+            dest.videoContinuation?.finish()
+            dest.audioContinuation?.finish()
+            dest.videoSendTask?.cancel()
+            dest.audioSendTask?.cancel()
+            await dest.publisher.disconnect()
+            print("📡 [\(id)] Disconnected")
+        }
+        streamDestinations.removeAll()
 
-        // Wait for send tasks to complete
-        videoSendTask?.cancel()
-        audioSendTask?.cancel()
-        videoSendTask = nil
-        audioSendTask = nil
-
-        await publisher.disconnect()
-
-        // Stop encoders
         streamVideoEncoder?.stop()
         streamAudioEncoder = nil
         streamVideoEncoder = nil
-
-        rtmpPublisher = nil
-        isStreaming = false
-        sentVideoSequenceHeader = false
-        sentAudioSequenceHeader = false
         streamStartTime = nil
 
         print("✅ RTMP stream stopped")
+    }
+
+    /// Stop streaming to a single destination (others continue)
+    public func stopStreaming(id: String) async {
+        guard var dest = streamDestinations.removeValue(forKey: id) else { return }
+
+        dest.videoContinuation?.finish()
+        dest.audioContinuation?.finish()
+        dest.videoSendTask?.cancel()
+        dest.audioSendTask?.cancel()
+        await dest.publisher.disconnect()
+        print("📡 [\(id)] Disconnected (remaining: \(streamDestinations.count))")
+
+        // If no destinations left, clean up shared state
+        if streamDestinations.isEmpty {
+            silentAudioTask?.cancel()
+            silentAudioTask = nil
+            streamVideoEncoder?.stop()
+            streamAudioEncoder = nil
+            streamVideoEncoder = nil
+            streamStartTime = nil
+            print("✅ All RTMP streams stopped")
+        }
     }
 
     /// Generates silent PCM audio and feeds it to the audio encoder.
@@ -816,8 +860,8 @@ public actor VideoEncoder {
             while !Task.isCancelled {
                 guard let self = self, await self.isStreaming else { break }
 
-                // Only generate silent audio if no real audio is flowing
-                if await !self.sentAudioSequenceHeader || true {
+                // Always generate silent audio as fallback
+                if true {
                     // Create a CMSampleBuffer with silent PCM data
                     var formatDesc: CMAudioFormatDescription?
                     var asbd = AudioStreamBasicDescription(
@@ -924,40 +968,32 @@ public actor VideoEncoder {
         // Create audio encoder
         let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: audioBitrate)
 
-        // Create AsyncStreams to serialize frame sending
-        let (videoStream, videoContinuation) = AsyncStream<EncodedVideoFrame>.makeStream()
-        let (audioStream, audioContinuation) = AsyncStream<EncodedAudioFrame>.makeStream()
-        self.videoFrameContinuation = videoContinuation
-        self.audioFrameContinuation = audioContinuation
+        // NTDF uses its own dedicated frame queues (not part of simulcast fan-out)
+        let (videoStream, ntdfVideoCont) = AsyncStream<EncodedVideoFrame>.makeStream()
+        let (audioStream, ntdfAudioCont) = AsyncStream<EncodedAudioFrame>.makeStream()
+        ntdfVideoContinuation = ntdfVideoCont
+        ntdfAudioContinuation = ntdfAudioCont
 
-        // Wire up video encoder callback
-        let videoCont = videoContinuation
         videoEncoder.onFrame = { frame in
-            videoCont.yield(frame)
+            ntdfVideoCont.yield(frame)
         }
-
-        // Wire up audio encoder callback
-        let audioCont = audioContinuation
         audioEncoder.onFrame = { frame in
-            audioCont.yield(frame)
+            ntdfAudioCont.yield(frame)
         }
 
-        // Start video send task with encryption
-        videoSendTask = Task { [weak self, weak manager] in
-            for await frame in videoStream {
-                guard let self = self, let manager = manager else { break }
-                guard !Task.isCancelled else { break }
+        var ntdfSentVideoHeader = false
+        var ntdfSentAudioHeader = false
 
+        ntdfVideoSendTask = Task { [weak manager] in
+            for await frame in videoStream {
+                guard let manager = manager else { break }
+                guard !Task.isCancelled else { break }
                 do {
-                    // Send sequence header ONLY ONCE on first keyframe (unencrypted)
-                    let needsHeader = await self.shouldSendVideoSequenceHeader()
-                    if frame.isKeyframe, needsHeader, let formatDesc = frame.formatDescription {
+                    if frame.isKeyframe, !ntdfSentVideoHeader, let formatDesc = frame.formatDescription {
                         try await manager.sendVideoSequenceHeader(formatDescription: formatDesc)
-                        await self.markVideoSequenceHeaderSent()
+                        ntdfSentVideoHeader = true
                         print("✅ Sent video sequence header (ONCE)")
                     }
-
-                    // Send encrypted video frame
                     try await manager.sendEncryptedVideo(frame: frame)
                 } catch is CancellationError {
                     break
@@ -967,32 +1003,23 @@ public actor VideoEncoder {
             }
         }
 
-        // Start audio send task with encryption
-        audioSendTask = Task { [weak self, weak manager] in
+        ntdfAudioSendTask = Task { [weak manager] in
             for await frame in audioStream {
-                guard let self = self, let manager = manager else { break }
+                guard let manager = manager else { break }
                 guard !Task.isCancelled else { break }
-
                 do {
-                    // Send sequence header ONLY ONCE on first frame (unencrypted)
-                    let needsHeader = await self.shouldSendAudioSequenceHeader()
-                    if needsHeader, let formatDesc = frame.formatDescription {
+                    if !ntdfSentAudioHeader, let formatDesc = frame.formatDescription {
                         var asc = Data()
                         var size: Int = 0
                         if let cookie = CMAudioFormatDescriptionGetMagicCookie(formatDesc, sizeOut: &size), size > 0 {
                             asc = Data(bytes: cookie, count: size)
                         } else {
-                            let byte1: UInt8 = 0x11
-                            let byte2: UInt8 = 0x90
-                            asc = Data([byte1, byte2])
+                            asc = Data([0x11, 0x90])
                         }
-
                         try await manager.sendAudioSequenceHeader(asc: asc)
-                        await self.markAudioSequenceHeaderSent()
+                        ntdfSentAudioHeader = true
                         print("✅ Sent audio sequence header (ONCE)")
                     }
-
-                    // Send encrypted audio frame
                     try await manager.sendEncryptedAudio(frame: frame)
                 } catch is CancellationError {
                     break
@@ -1006,8 +1033,6 @@ public actor VideoEncoder {
         streamAudioEncoder = audioEncoder
         ntdfStreamingManager = manager
         isNTDFStreaming = true
-        sentVideoSequenceHeader = false
-        sentAudioSequenceHeader = false
         streamStartTime = startTime ?? CMClockGetTime(CMClockGetHostTimeClock())
         lastStreamVideoTimestamp = .zero
         lastStreamAudioTimestamp = .zero
@@ -1015,35 +1040,36 @@ public actor VideoEncoder {
         print("✅ NTDF-encrypted stream started")
     }
 
+    // NTDF-specific frame queue state
+    private var ntdfVideoContinuation: AsyncStream<EncodedVideoFrame>.Continuation?
+    private var ntdfAudioContinuation: AsyncStream<EncodedAudioFrame>.Continuation?
+    private var ntdfVideoSendTask: Task<Void, Never>?
+    private var ntdfAudioSendTask: Task<Void, Never>?
+
     /// Stop NTDF streaming
     public func stopNTDFStreaming() async {
         guard isNTDFStreaming, let manager = ntdfStreamingManager else { return }
 
         print("🔐 Stopping NTDF stream...")
 
-        // Finish the frame queues first
-        videoFrameContinuation?.finish()
-        audioFrameContinuation?.finish()
-        videoFrameContinuation = nil
-        audioFrameContinuation = nil
+        ntdfVideoContinuation?.finish()
+        ntdfAudioContinuation?.finish()
+        ntdfVideoContinuation = nil
+        ntdfAudioContinuation = nil
 
-        // Wait for send tasks to complete
-        videoSendTask?.cancel()
-        audioSendTask?.cancel()
-        videoSendTask = nil
-        audioSendTask = nil
+        ntdfVideoSendTask?.cancel()
+        ntdfAudioSendTask?.cancel()
+        ntdfVideoSendTask = nil
+        ntdfAudioSendTask = nil
 
         await manager.disconnect()
 
-        // Stop encoders
         streamVideoEncoder?.stop()
         streamAudioEncoder = nil
         streamVideoEncoder = nil
 
         ntdfStreamingManager = nil
         isNTDFStreaming = false
-        sentVideoSequenceHeader = false
-        sentAudioSequenceHeader = false
         streamStartTime = nil
 
         print("✅ NTDF stream stopped")
@@ -1052,8 +1078,9 @@ public actor VideoEncoder {
     /// Get streaming statistics
     public var streamStatistics: RTMPPublisher.StreamStatistics? {
         get async {
-            if let publisher = rtmpPublisher {
-                return await publisher.statistics
+            // Return stats from first active destination
+            if let firstDest = streamDestinations.values.first {
+                return await firstDest.publisher.statistics
             }
             if let manager = ntdfStreamingManager {
                 return await manager.statistics
@@ -1062,26 +1089,33 @@ public actor VideoEncoder {
         }
     }
 
-    // MARK: - Sequence Header State Helpers (for actor-safe callback access)
-
-    /// Returns true if video sequence header has not yet been sent
-    private func shouldSendVideoSequenceHeader() -> Bool {
-        !sentVideoSequenceHeader
+    /// Get statistics for a specific destination
+    public func streamStatistics(for id: String) async -> RTMPPublisher.StreamStatistics? {
+        guard let dest = streamDestinations[id] else { return nil }
+        return await dest.publisher.statistics
     }
 
-    /// Marks video sequence header as sent
-    private func markVideoSequenceHeaderSent() {
-        sentVideoSequenceHeader = true
+    /// IDs of all active streaming destinations
+    public var activeDestinationIds: [String] {
+        Array(streamDestinations.keys)
     }
 
-    /// Returns true if audio sequence header has not yet been sent
-    private func shouldSendAudioSequenceHeader() -> Bool {
-        !sentAudioSequenceHeader
+    // MARK: - Per-Destination Sequence Header State
+
+    private func shouldSendVideoHeader(for id: String) -> Bool {
+        !(streamDestinations[id]?.sentVideoSequenceHeader ?? true)
     }
 
-    /// Marks audio sequence header as sent
-    private func markAudioSequenceHeaderSent() {
-        sentAudioSequenceHeader = true
+    private func markVideoHeaderSent(for id: String) {
+        streamDestinations[id]?.sentVideoSequenceHeader = true
+    }
+
+    private func shouldSendAudioHeader(for id: String) -> Bool {
+        !(streamDestinations[id]?.sentAudioSequenceHeader ?? true)
+    }
+
+    private func markAudioHeaderSent(for id: String) {
+        streamDestinations[id]?.sentAudioSequenceHeader = true
     }
 
     // MARK: - VTCompressionSession Setup

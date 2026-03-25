@@ -16,20 +16,22 @@ struct StreamDestinationPicker: View {
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
 
-    /// Whether the stream info step is available (Twitch + authenticated)
+    /// Whether the stream info step is available
     private var hasStreamInfoStep: Bool {
-        streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated
+        (streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated) ||
+        (streamViewModel.selectedPlatform == .youtube && youtubeClient.isAuthenticated)
     }
 
     var body: some View {
         Group {
             if showStreamInfo {
                 StreamInfoFormView(
+                    platform: streamViewModel.selectedPlatform,
                     twitchClient: twitchClient,
+                    youtubeClient: youtubeClient,
                     onBack: { showStreamInfo = false },
                     onStartStream: {
                         await startStream()
-                        // Dismiss handled inside startStream
                     }
                 )
                 .padding(24)
@@ -73,21 +75,39 @@ struct StreamDestinationPicker: View {
                     }) { platform in
                         PlatformCard(
                             platform: platform,
-                            isSelected: streamViewModel.selectedPlatform == platform,
+                            isSelected: streamViewModel.selectedPlatforms.contains(platform),
                             action: {
-                                streamViewModel.selectedPlatform = platform
+                                // Toggle multi-select
+                                if streamViewModel.selectedPlatforms.contains(platform) {
+                                    // Don't allow deselecting the last platform
+                                    if streamViewModel.selectedPlatforms.count > 1 {
+                                        streamViewModel.selectedPlatforms.remove(platform)
+                                    }
+                                } else {
+                                    streamViewModel.selectedPlatforms.insert(platform)
+                                }
                                 streamViewModel.loadStreamKey()
                             }
                         )
                     }
                 }
+
+                if streamViewModel.selectedPlatforms.count > 1 {
+                    Text("Simulcast: \(streamViewModel.estimatedTotalBitrate) estimated upload")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            // Stream Key / Auth Section
-            if streamViewModel.selectedPlatform == .twitch && !twitchClient.isAuthenticated {
-                twitchConnectSection
-            } else {
-                streamKeySection
+            // Stream Key / Auth Section — per selected platform
+            ForEach(Array(streamViewModel.selectedPlatforms).sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { platform in
+                if platform == .twitch && !twitchClient.isAuthenticated {
+                    twitchConnectSection
+                } else if platform == .youtube && !youtubeClient.isAuthenticated {
+                    youtubeConnectSection
+                } else if platform.requiresStreamKey {
+                    streamKeySection(for: platform)
+                }
             }
 
             // Custom RTMP URL (if custom platform)
@@ -217,16 +237,59 @@ struct StreamDestinationPicker: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: - Stream Key Input (authenticated)
+    // MARK: - YouTube Connect (unauthenticated)
 
-    private var streamKeySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Stream Key")
+    private var youtubeConnectSection: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.red)
+
+            Text("Connect your YouTube account to go live")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                Task {
+                    do {
+                        try await youtubeClient.authenticateWithLocalServer()
+                    } catch {
+                        debugLog("YouTube OAuth error: \(error)")
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                    Text("Connect to YouTube")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Stream Key Input (per platform)
+
+    private func streamKeySection(for platform: StreamViewModel.StreamPlatform) -> some View {
+        let keyBinding = Binding<String>(
+            get: { streamViewModel.platformConfigs[platform]?.streamKey ?? "" },
+            set: { streamViewModel.platformConfigs[platform, default: StreamViewModel.PlatformConfig()].streamKey = $0 }
+        )
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("\(platform.rawValue) Stream Key")
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
             HStack {
-                SecureField("Enter your stream key", text: $streamViewModel.streamKey)
+                SecureField("Enter your stream key", text: keyBinding)
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(.background.opacity(0.5))
@@ -236,7 +299,7 @@ struct StreamDestinationPicker: View {
                             .stroke(.white.opacity(0.2), lineWidth: 1)
                     )
 
-                if streamViewModel.selectedPlatform == .twitch && twitchClient.isAuthenticated {
+                if platform == .twitch && twitchClient.isAuthenticated {
                     Button {
                         Task { await fetchTwitchStreamKey() }
                     } label: {
@@ -249,35 +312,21 @@ struct StreamDestinationPicker: View {
                     .help("Fetch stream key from Twitch")
                 }
 
-                if streamViewModel.selectedPlatform == .youtube {
+                if platform == .youtube && youtubeClient.isAuthenticated {
                     Button {
-                        Task {
-                            if youtubeClient.isAuthenticated {
-                                await fetchYouTubeStreamKey()
-                            } else {
-                                debugLog("[StreamDestinationPicker] YouTube not authenticated, starting auth flow...")
-                                do {
-                                    try await youtubeClient.authenticateWithLocalServer()
-                                    await fetchYouTubeStreamKey()
-                                } catch {
-                                    await MainActor.run {
-                                        streamViewModel.error = "YouTube login failed: \(error.localizedDescription)"
-                                    }
-                                }
-                            }
-                        }
+                        Task { await fetchYouTubeStreamKey() }
                     } label: {
-                        Image(systemName: youtubeClient.isAuthenticated ? "arrow.clockwise" : "person.crop.circle.badge.plus")
+                        Image(systemName: "arrow.clockwise")
                             .padding(10)
                             .background(.ultraThinMaterial)
                             .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
-                    .help(youtubeClient.isAuthenticated ? "Fetch stream key from YouTube" : "Login to YouTube to fetch stream key")
+                    .help("Fetch stream key from YouTube")
                 }
             }
 
-            if streamViewModel.selectedPlatform == .twitch && streamViewModel.streamKey.isEmpty {
+            if platform == .twitch && keyBinding.wrappedValue.isEmpty {
                 if let username = twitchClient.username {
                     Link(destination: URL(string: "https://dashboard.twitch.tv/u/\(username.lowercased())/settings/stream") ?? URL(string: "https://dashboard.twitch.tv")!) {
                         Label("Copy stream key from Twitch Dashboard", systemImage: "arrow.up.right.square")
@@ -289,32 +338,34 @@ struct StreamDestinationPicker: View {
     }
 
     private var canStartStream: Bool {
-        // Block streaming when Twitch is selected but not authenticated
-        if streamViewModel.selectedPlatform == .twitch && !twitchClient.isAuthenticated {
-            return false
+        // Check all selected platforms have what they need
+        for platform in streamViewModel.selectedPlatforms {
+            if platform == .twitch && !twitchClient.isAuthenticated { return false }
+            if platform.requiresStreamKey {
+                let key = streamViewModel.platformConfigs[platform]?.streamKey ?? ""
+                if key.isEmpty { return false }
+            }
+            if platform == .custom && streamViewModel.customRTMPURL.isEmpty { return false }
         }
-        let hasValidKey = !streamViewModel.streamKey.isEmpty
-        return hasValidKey &&
-        (streamViewModel.selectedPlatform != .custom || !streamViewModel.customRTMPURL.isEmpty)
+        return !streamViewModel.selectedPlatforms.isEmpty
     }
 
     private func startStream() async {
         isLoading = true
         defer { isLoading = false }
 
-        // Save the stream key
         streamViewModel.saveStreamKey()
 
-        // Create destination
+        // Build destination for primary platform (RecordView handles multi-destination)
+        let primary = streamViewModel.selectedPlatform
         let destination = RTMPPublisher.Destination(
-            url: streamViewModel.effectiveRTMPURL,
-            platform: streamViewModel.selectedPlatform.rawValue.lowercased()
+            url: primary == .custom ? streamViewModel.customRTMPURL : primary.rtmpURL,
+            platform: primary.rawValue.lowercased()
         )
+        let key = streamViewModel.platformConfigs[primary]?.streamKey ?? ""
 
-        // Start streaming
-        await onStartStream(destination, streamViewModel.streamKey)
+        await onStartStream(destination, key)
 
-        // Dismiss if successful
         if streamViewModel.error == nil {
             dismiss()
         }
@@ -324,7 +375,7 @@ struct StreamDestinationPicker: View {
         do {
             if let key = try await twitchClient.fetchStreamKey() {
                 debugLog("[StreamDestinationPicker] Fetched Twitch stream key")
-                streamViewModel.streamKey = key
+                streamViewModel.platformConfigs[.twitch, default: StreamViewModel.PlatformConfig()].streamKey = key
                 streamViewModel.saveStreamKey()
             } else {
                 streamViewModel.error = "Could not fetch stream key — copy it from the Twitch Dashboard"
@@ -339,7 +390,7 @@ struct StreamDestinationPicker: View {
             if let key = try await youtubeClient.fetchStreamKey() {
                 debugLog("[StreamDestinationPicker] Fetched YouTube stream key")
                 await MainActor.run {
-                    streamViewModel.streamKey = key
+                    streamViewModel.platformConfigs[.youtube, default: StreamViewModel.PlatformConfig()].streamKey = key
                     streamViewModel.saveStreamKey()
                 }
             }

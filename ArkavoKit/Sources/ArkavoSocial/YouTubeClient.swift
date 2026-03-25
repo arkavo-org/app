@@ -670,6 +670,49 @@ public actor YouTubeClient: ObservableObject {
         }
     }
 
+    /// Fetches the liveChatId for a broadcast
+    public func getLiveChatId(broadcastId: String) async throws -> String? {
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts?id=\(broadcastId)&part=snippet")!
+        let request = try await makeAuthorizedRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            return nil
+        }
+
+        struct BroadcastListResponse: Codable {
+            let items: [YouTubeBroadcastResponse]
+        }
+        let listResponse = try JSONDecoder().decode(BroadcastListResponse.self, from: data)
+        return listResponse.items.first?.snippet?.liveChatId
+    }
+
+    /// Fetches live chat messages using OAuth token (not API key)
+    public func fetchLiveChatMessages(liveChatId: String, pageToken: String?) async throws -> YouTubeLiveChatResult {
+        var urlComponents = URLComponents(string: "https://www.googleapis.com/youtube/v3/liveChat/messages")!
+        urlComponents.queryItems = [
+            URLQueryItem(name: "liveChatId", value: liveChatId),
+            URLQueryItem(name: "part", value: "snippet,authorDetails"),
+        ]
+        if let pageToken = pageToken {
+            urlComponents.queryItems?.append(URLQueryItem(name: "pageToken", value: pageToken))
+        }
+
+        let request = try await makeAuthorizedRequest(url: urlComponents.url!)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw YouTubeError.httpError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        let chatResponse = try JSONDecoder().decode(YouTubeLiveChatResponse.self, from: data)
+        return YouTubeLiveChatResult(
+            messages: chatResponse.items,
+            nextPageToken: chatResponse.nextPageToken,
+            pollingIntervalMs: chatResponse.pollingIntervalMillis
+        )
+    }
+
     /// Creates a live stream and returns its ID (not just the stream key)
     private func createLiveStreamAndReturnId() async throws -> String {
         let url = URL(string: "https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn,contentDetails")!
@@ -702,7 +745,12 @@ public actor YouTubeClient: ObservableObject {
 
 struct YouTubeBroadcastResponse: Codable {
     let id: String
+    let snippet: Snippet?
     let status: Status?
+
+    struct Snippet: Codable {
+        let liveChatId: String?
+    }
 
     struct Status: Codable {
         let lifeCycleStatus: String?
@@ -835,5 +883,46 @@ public enum YouTubeError: LocalizedError {
         case let .unknown(error):
             "Unknown error: \(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: - Live Chat Response Types
+
+public struct YouTubeLiveChatResult: Sendable {
+    public let messages: [YouTubeLiveChatMessage]
+    public let nextPageToken: String?
+    public let pollingIntervalMs: Int?
+}
+
+public struct YouTubeLiveChatResponse: Codable {
+    public let nextPageToken: String?
+    public let pollingIntervalMillis: Int?
+    public let items: [YouTubeLiveChatMessage]
+}
+
+public struct YouTubeLiveChatMessage: Codable, Sendable {
+    public let id: String
+    public let snippet: Snippet
+    public let authorDetails: AuthorDetails
+
+    public struct Snippet: Codable, Sendable {
+        public let type: String
+        public let displayMessage: String
+        public let publishedAt: String
+        public let superChatDetails: SuperChatDetails?
+
+        public struct SuperChatDetails: Codable, Sendable {
+            public let amountMicros: String
+            public let currency: String
+            public let userComment: String?
+        }
+    }
+
+    public struct AuthorDetails: Codable, Sendable {
+        public let channelId: String
+        public let displayName: String
+        public let isChatOwner: Bool
+        public let isChatModerator: Bool
+        public let isChatSponsor: Bool
     }
 }

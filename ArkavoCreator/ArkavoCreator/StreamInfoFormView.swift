@@ -1,19 +1,30 @@
 import SwiftUI
+import ArkavoKit
 
-/// Stream info editing form for Twitch (title, category, tags, language, content labels)
+/// Universal stream info editing form for Twitch & YouTube.
 /// Embedded in the StreamDestinationPicker as step 2 of the go-live flow.
 struct StreamInfoFormView: View {
-    @ObservedObject var twitchClient: TwitchAuthClient
+    let platform: StreamViewModel.StreamPlatform
 
-    // Stream info fields
+    // Platform clients (provide the one that matches `platform`)
+    var twitchClient: TwitchAuthClient?
+    @ObservedObject var youtubeClient: YouTubeClient
+
+    // Stream info fields (shared)
     @State var streamTitle: String = ""
+    @State var tags: [String] = []
+    @State var language: String = "en"
+
+    // Twitch-specific
     @State var goLiveNotification: String = ""
     @State var categoryName: String = ""
     @State var categoryId: String = ""
-    @State var tags: [String] = []
-    @State var language: String = "en"
     @State var isRerun: Bool = false
     @State var isBrandedContent: Bool = false
+
+    // YouTube-specific
+    @State var privacyStatus: String = "public"
+    @State var youtubeDescription: String = ""
 
     // UI state
     @State private var newTag: String = ""
@@ -31,6 +42,7 @@ struct StreamInfoFormView: View {
     private static let titleLimit = 140
     private static let tagCharLimit = 25
     private static let maxTags = 10
+    private static let descriptionLimit = 5000
 
     private static let languages: [(code: String, name: String)] = [
         ("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "German"),
@@ -62,25 +74,23 @@ struct StreamInfoFormView: View {
 
                 Spacer()
 
-                // Invisible spacer to balance the back button
-                Color.clear.frame(width: 50, height: 1)
+                // Platform badge
+                Text(platform.rawValue)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(platformColor.opacity(0.2))
+                    .foregroundStyle(platformColor)
+                    .cornerRadius(6)
             }
             .padding(.bottom, 16)
 
             // Scrollable form
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Title
+                    // Title (universal)
                     fieldSection(label: "Title", counter: "\(streamTitle.count)/\(Self.titleLimit)") {
-                        TextField("Stream title", text: $streamTitle)
-                            .textFieldStyle(.plain)
-                            .padding(10)
-                            .background(.background.opacity(0.5))
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
+                        styledTextField("Stream title", text: $streamTitle)
                             .onChange(of: streamTitle) { _, newValue in
                                 if newValue.count > Self.titleLimit {
                                     streamTitle = String(newValue.prefix(Self.titleLimit))
@@ -88,92 +98,105 @@ struct StreamInfoFormView: View {
                             }
                     }
 
-                    // Go Live Notification
-                    fieldSection(label: "Go Live Notification", counter: "\(goLiveNotification.count)/\(Self.titleLimit)") {
-                        TextField("Notification text for followers", text: $goLiveNotification)
-                            .textFieldStyle(.plain)
-                            .padding(10)
-                            .background(.background.opacity(0.5))
-                            .cornerRadius(8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-                            .onChange(of: goLiveNotification) { _, newValue in
-                                if newValue.count > Self.titleLimit {
-                                    goLiveNotification = String(newValue.prefix(Self.titleLimit))
+                    // Twitch: Go Live Notification
+                    if platform == .twitch {
+                        fieldSection(label: "Go Live Notification", counter: "\(goLiveNotification.count)/\(Self.titleLimit)") {
+                            styledTextField("Notification text for followers", text: $goLiveNotification)
+                                .onChange(of: goLiveNotification) { _, newValue in
+                                    if newValue.count > Self.titleLimit {
+                                        goLiveNotification = String(newValue.prefix(Self.titleLimit))
+                                    }
                                 }
-                            }
+                        }
                     }
 
-                    // Category
-                    fieldSection(label: "Category") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                TextField("Search categories", text: $categoryName)
-                                    .textFieldStyle(.plain)
-                                    .padding(10)
-                                    .background(.background.opacity(0.5))
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(.white.opacity(0.2), lineWidth: 1)
-                                    )
-                                    .onChange(of: categoryName) { _, newValue in
-                                        debouncedCategorySearch(query: newValue)
-                                    }
-
-                                if isSearchingCategories {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                }
-                            }
-
-                            if showCategoryResults && !categorySearchResults.isEmpty {
-                                VStack(spacing: 0) {
-                                    ForEach(categorySearchResults) { category in
-                                        Button {
-                                            categoryName = category.name
-                                            categoryId = category.id
-                                            showCategoryResults = false
-                                            categorySearchResults = []
-                                        } label: {
-                                            Text(category.name)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.horizontal, 10)
-                                                .padding(.vertical, 6)
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        if category.id != categorySearchResults.last?.id {
-                                            Divider().opacity(0.3)
-                                        }
-                                    }
-                                }
-                                .background(.background.opacity(0.8))
+                    // YouTube: Description
+                    if platform == .youtube {
+                        fieldSection(label: "Description", counter: "\(youtubeDescription.count)/\(Self.descriptionLimit)") {
+                            TextEditor(text: $youtubeDescription)
+                                .font(.body)
+                                .frame(minHeight: 60, maxHeight: 100)
+                                .padding(6)
+                                .background(.background.opacity(0.5))
                                 .cornerRadius(8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .stroke(.white.opacity(0.15), lineWidth: 1)
+                                        .stroke(.white.opacity(0.2), lineWidth: 1)
                                 )
+                                .onChange(of: youtubeDescription) { _, newValue in
+                                    if newValue.count > Self.descriptionLimit {
+                                        youtubeDescription = String(newValue.prefix(Self.descriptionLimit))
+                                    }
+                                }
+                        }
+                    }
+
+                    // Twitch: Category search
+                    if platform == .twitch {
+                        fieldSection(label: "Category") {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    styledTextField("Search categories", text: $categoryName)
+                                        .onChange(of: categoryName) { _, newValue in
+                                            debouncedCategorySearch(query: newValue)
+                                        }
+
+                                    if isSearchingCategories {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                    }
+                                }
+
+                                if showCategoryResults && !categorySearchResults.isEmpty {
+                                    VStack(spacing: 0) {
+                                        ForEach(categorySearchResults) { category in
+                                            Button {
+                                                categoryName = category.name
+                                                categoryId = category.id
+                                                showCategoryResults = false
+                                                categorySearchResults = []
+                                            } label: {
+                                                Text(category.name)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 6)
+                                                    .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+
+                                            if category.id != categorySearchResults.last?.id {
+                                                Divider().opacity(0.3)
+                                            }
+                                        }
+                                    }
+                                    .background(.background.opacity(0.8))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(.white.opacity(0.15), lineWidth: 1)
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // Tags
+                    // YouTube: Privacy
+                    if platform == .youtube {
+                        fieldSection(label: "Privacy") {
+                            Picker("", selection: $privacyStatus) {
+                                Text("Public").tag("public")
+                                Text("Unlisted").tag("unlisted")
+                                Text("Private").tag("private")
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                    }
+
+                    // Tags (universal)
                     fieldSection(label: "Tags", counter: "\(tags.count)/\(Self.maxTags)") {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                TextField("Add a tag", text: $newTag)
-                                    .textFieldStyle(.plain)
-                                    .padding(10)
-                                    .background(.background.opacity(0.5))
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(.white.opacity(0.2), lineWidth: 1)
-                                    )
+                                styledTextField("Add a tag", text: $newTag)
                                     .onChange(of: newTag) { _, newValue in
                                         if newValue.count > Self.tagCharLimit {
                                             newTag = String(newValue.prefix(Self.tagCharLimit))
@@ -191,7 +214,7 @@ struct StreamInfoFormView: View {
                                 .disabled(newTag.isEmpty || tags.count >= Self.maxTags)
                             }
 
-                            Text("Up to \(Self.maxTags) tags. Each tag max \(Self.tagCharLimit) characters, no spaces or special characters.")
+                            Text("Up to \(Self.maxTags) tags. Each tag max \(Self.tagCharLimit) characters.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
 
@@ -219,7 +242,7 @@ struct StreamInfoFormView: View {
                         }
                     }
 
-                    // Language
+                    // Language (universal)
                     fieldSection(label: "Stream Language") {
                         Picker("", selection: $language) {
                             ForEach(Self.languages, id: \.code) { lang in
@@ -229,20 +252,22 @@ struct StreamInfoFormView: View {
                         .labelsHidden()
                     }
 
-                    // Content Classification
-                    fieldSection(label: "Content Classification") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle("Rerun", isOn: $isRerun)
-                                .font(.subheadline)
-                            Text("Let viewers know your stream was previously recorded.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                    // Twitch: Content Classification
+                    if platform == .twitch {
+                        fieldSection(label: "Content Classification") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle("Rerun", isOn: $isRerun)
+                                    .font(.subheadline)
+                                Text("Let viewers know your stream was previously recorded.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
 
-                            Toggle("Branded Content", isOn: $isBrandedContent)
-                                .font(.subheadline)
-                            Text("Let viewers know if your stream features branded content.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                Toggle("Branded Content", isOn: $isBrandedContent)
+                                    .font(.subheadline)
+                                Text("Let viewers know if your stream features branded content.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -252,7 +277,7 @@ struct StreamInfoFormView: View {
             if needsReauth {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
-                    Text("Please reconnect Twitch to update stream info.")
+                    Text("Please reconnect \(platform.rawValue) to update stream info.")
                         .font(.caption)
                 }
                 .foregroundStyle(.orange)
@@ -301,10 +326,32 @@ struct StreamInfoFormView: View {
             .disabled(isSaving)
             .padding(.top, 12)
         }
-        .onAppear { loadFromTwitch() }
+        .onAppear { loadFromPlatform() }
+    }
+
+    // MARK: - Platform color
+
+    private var platformColor: Color {
+        switch platform {
+        case .twitch: .purple
+        case .youtube: .red
+        default: .blue
+        }
     }
 
     // MARK: - Helpers
+
+    private func styledTextField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.plain)
+            .padding(10)
+            .background(.background.opacity(0.5))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+    }
 
     private func fieldSection<Content: View>(label: String, counter: String? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -340,6 +387,8 @@ struct StreamInfoFormView: View {
         newTag = ""
     }
 
+    // MARK: - Twitch category search
+
     private func debouncedCategorySearch(query: String) {
         categorySearchTask?.cancel()
         guard !query.isEmpty else {
@@ -350,11 +399,11 @@ struct StreamInfoFormView: View {
 
         categorySearchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let twitch = twitchClient else { return }
 
             isSearchingCategories = true
             do {
-                let results = try await twitchClient.searchCategories(query: query)
+                let results = try await twitch.searchCategories(query: query)
                 if !Task.isCancelled {
                     categorySearchResults = results
                     showCategoryResults = true
@@ -368,14 +417,29 @@ struct StreamInfoFormView: View {
         }
     }
 
-    private func loadFromTwitch() {
-        streamTitle = twitchClient.channelTitle ?? twitchClient.streamTitle ?? ""
-        goLiveNotification = ""
-        categoryName = twitchClient.gameName ?? ""
-        categoryId = twitchClient.gameId ?? ""
-        tags = twitchClient.channelTags
-        language = twitchClient.broadcasterLanguage ?? "en"
-        isBrandedContent = twitchClient.isBrandedContent
+    // MARK: - Load / Save
+
+    private func loadFromPlatform() {
+        switch platform {
+        case .twitch:
+            guard let twitch = twitchClient else { return }
+            streamTitle = twitch.channelTitle ?? twitch.streamTitle ?? ""
+            goLiveNotification = ""
+            categoryName = twitch.gameName ?? ""
+            categoryId = twitch.gameId ?? ""
+            tags = twitch.channelTags
+            language = twitch.broadcasterLanguage ?? "en"
+            isBrandedContent = twitch.isBrandedContent
+
+        case .youtube:
+            streamTitle = ""
+            youtubeDescription = ""
+            privacyStatus = "public"
+            language = "en"
+
+        default:
+            break
+        }
     }
 
     private func saveAndStartStream() async {
@@ -383,13 +447,29 @@ struct StreamInfoFormView: View {
         saveError = nil
         needsReauth = false
 
-        do {
-            // Build content classification labels
-            var ccls: [TwitchContentLabel] = []
-            // Rerun is not a standard CCL — it's handled differently on Twitch.
-            // We include branded content via the is_branded_content param.
+        switch platform {
+        case .twitch:
+            await saveTwitchAndStart()
+        case .youtube:
+            // YouTube broadcast info is set at creation time;
+            // title is passed through StreamViewModel.title
+            await onStartStream()
+        default:
+            await onStartStream()
+        }
 
-            try await twitchClient.updateChannelInfo(
+        isSaving = false
+    }
+
+    private func saveTwitchAndStart() async {
+        guard let twitch = twitchClient else {
+            await onStartStream()
+            return
+        }
+
+        do {
+            let ccls: [TwitchContentLabel] = []
+            try await twitch.updateChannelInfo(
                 title: streamTitle.isEmpty ? nil : streamTitle,
                 gameId: categoryId.isEmpty ? nil : categoryId,
                 language: language,
@@ -397,19 +477,13 @@ struct StreamInfoFormView: View {
                 contentClassificationLabels: ccls.isEmpty ? nil : ccls,
                 isBrandedContent: isBrandedContent
             )
-
-            // Success — now start the stream
             await onStartStream()
         } catch TwitchError.scopeRequired {
             needsReauth = true
-            // Still allow streaming even if update fails
             await onStartStream()
         } catch {
             saveError = "Failed to update stream info: \(error.localizedDescription)"
-            // Still allow streaming even if update fails
             await onStartStream()
         }
-
-        isSaving = false
     }
 }

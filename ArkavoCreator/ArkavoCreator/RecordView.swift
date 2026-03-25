@@ -804,9 +804,8 @@ struct RecordView: View {
     // MARK: - Streaming
 
     private func startStreaming(destination: RTMPPublisher.Destination, streamKey: String) async {
-        // Ensure we have an active session (either from recording or create one for streaming)
+        // Ensure we have an active session
         if RecordingState.shared.recordingSession == nil {
-            // Start a preview-mode session for streaming without recording
             await viewModel.startPreviewSession()
         }
 
@@ -816,42 +815,66 @@ struct RecordView: View {
                 return
             }
 
-            // Check if this is Arkavo (NTDF-encrypted streaming)
-            if streamViewModel.selectedPlatform == .arkavo {
+            let selectedPlatforms = streamViewModel.selectedPlatforms
+
+            // Handle Arkavo NTDF separately
+            if selectedPlatforms.contains(.arkavo) {
                 guard let kasURL = URL(string: "https://100.arkavo.net") else {
                     streamViewModel.error = "Invalid KAS URL"
                     return
                 }
                 try await session.startNTDFStreaming(
                     kasURL: kasURL,
-                    rtmpURL: destination.url,
+                    rtmpURL: StreamViewModel.StreamPlatform.arkavo.rtmpURL,
                     streamKey: "live/creator"
                 )
-            } else {
-                // For YouTube, create a broadcast and bind it before starting RTMP
-                if streamViewModel.selectedPlatform == .youtube {
+            }
+
+            // Build RTMP destinations for all non-Arkavo platforms
+            let rtmpPlatforms = selectedPlatforms.filter { !$0.isEncrypted }
+            if !rtmpPlatforms.isEmpty {
+                // YouTube: create broadcast before RTMP
+                if rtmpPlatforms.contains(.youtube) {
                     let broadcastId = try await youtubeClient.createAndBindBroadcast(title: streamViewModel.title)
-                    streamViewModel.youtubeClient = youtubeClient
-                    streamViewModel.youtubeBroadcastId = broadcastId
+                    streamViewModel.platformConfigs[.youtube, default: StreamViewModel.PlatformConfig()].broadcastId = broadcastId
                     debugLog("[RecordView] Created YouTube broadcast: \(broadcastId)")
                 }
 
-                try await session.startStreaming(to: destination, streamKey: streamKey)
+                // Build destinations array
+                var destinations: [(id: String, destination: RTMPPublisher.Destination, streamKey: String)] = []
+                for platform in rtmpPlatforms {
+                    let config = streamViewModel.platformConfigs[platform] ?? StreamViewModel.PlatformConfig()
+                    let url = platform == .custom ? streamViewModel.customRTMPURL : platform.rtmpURL
+                    let dest = RTMPPublisher.Destination(url: url, platform: platform.rawValue.lowercased())
+                    var key = config.streamKey
+                    if platform == .twitch && streamViewModel.isBandwidthTest {
+                        key += "?bandwidthtest=true"
+                    }
+                    destinations.append((id: platform.rawValue.lowercased(), destination: dest, streamKey: key))
+                }
+
+                try await session.startStreaming(destinations: destinations)
             }
+
             streamViewModel.isStreaming = true
             streamViewModel.startStatisticsPolling()
 
-            // Auto-connect Twitch chat
-            if streamViewModel.selectedPlatform == .twitch {
-                chatViewModel.connect(twitchClient: twitchClient)
+            // Auto-connect chat for all selected platforms (unified feed)
+            if selectedPlatforms.contains(.twitch) && twitchClient.isAuthenticated {
+                chatViewModel.connectTwitch(twitchClient: twitchClient)
+            }
+            if selectedPlatforms.contains(.youtube),
+               let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
+                chatViewModel.connectYouTube(youtubeClient: youtubeClient, broadcastId: broadcastId)
+            }
+            if selectedPlatforms.contains(.twitch) || selectedPlatforms.contains(.youtube) {
                 withAnimation { showRightPanel = true }
             }
 
-            // YouTube: transition broadcast to live after RTMP data starts flowing
-            if streamViewModel.selectedPlatform == .youtube,
-               let broadcastId = streamViewModel.youtubeBroadcastId {
-                streamViewModel.youtubeTransitionTask = Task {
-                    // Wait for YouTube to ingest RTMP data and mark stream as active
+            // YouTube: transition broadcast to live
+            if selectedPlatforms.contains(.youtube),
+               let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
+                streamViewModel.platformConfigs[.youtube]?.transitionTask = Task {
                     try? await Task.sleep(for: .seconds(15))
                     guard !Task.isCancelled else { return }
                     for attempt in 1...5 {
