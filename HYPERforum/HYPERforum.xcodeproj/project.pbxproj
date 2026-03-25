@@ -330,7 +330,7 @@
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 			};
 			name = Debug;
 		};
@@ -370,7 +370,7 @@
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 			};
 			name = Release;
 		};
@@ -388,7 +388,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HYPERforum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HYPERforum";
 			};
 			name = Debug;
@@ -407,7 +407,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HYPERforum.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HYPERforum";
 			};
 			name = Release;
@@ -425,7 +425,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 				TEST_TARGET_NAME = HYPERforum;
 			};
 			name = Debug;
@@ -443,7 +443,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 6.3;
 				TEST_TARGET_NAME = HYPERforum;
 			};
 			name = Release;

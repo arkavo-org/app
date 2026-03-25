@@ -1023,7 +1023,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
@@ -1074,7 +1074,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
@@ -1096,7 +1096,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Arkavo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Arkavo";
 				XROS_DEPLOYMENT_TARGET = 2.0;
@@ -1119,7 +1119,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Arkavo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Arkavo";
 				XROS_DEPLOYMENT_TARGET = 2.0;
@@ -1141,7 +1141,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				TEST_TARGET_NAME = Arkavo;
 				XROS_DEPLOYMENT_TARGET = 2.0;
@@ -1163,7 +1163,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 6.2;
+				SWIFT_VERSION = 6.3;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				TEST_TARGET_NAME = Arkavo;
 				XROS_DEPLOYMENT_TARGET = 2.0;
