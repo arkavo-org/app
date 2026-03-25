@@ -130,7 +130,7 @@ public actor YouTubeClient: ObservableObject {
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectUri),
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.force-ssl"),
+            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl"),
             URLQueryItem(name: "access_type", value: "offline"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge", value: challenge),
@@ -499,9 +499,215 @@ public actor YouTubeClient: ObservableObject {
             throw YouTubeError.httpError(statusCode: httpResponse.statusCode)
         }
     }
+
+    // MARK: - Broadcast Lifecycle
+
+    /// Creates a broadcast, binds it to a stream, and returns the broadcast ID.
+    /// Call this before starting RTMP streaming to YouTube.
+    public func createAndBindBroadcast(title: String) async throws -> String {
+        // 1. Get or create a live stream
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveStreams?part=cdn,snippet&mine=true")!
+        let listRequest = try await makeAuthorizedRequest(url: url)
+        let (listData, listResponse) = try await URLSession.shared.data(for: listRequest)
+
+        guard let listHttp = listResponse as? HTTPURLResponse, listHttp.statusCode == 200 else {
+            throw YouTubeError.googleError("Failed to list live streams")
+        }
+
+        let streamResponse = try JSONDecoder().decode(YouTubeLiveStreamResponse.self, from: listData)
+        let streamId: String
+        if let existing = streamResponse.items.first {
+            streamId = existing.id
+        } else {
+            streamId = try await createLiveStreamAndReturnId()
+        }
+
+        // 2. Create a broadcast
+        let broadcastURL = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,contentDetails,status")!
+        var broadcastRequest = try await makeAuthorizedRequest(url: broadcastURL)
+        broadcastRequest.httpMethod = "POST"
+
+        let now = ISO8601DateFormatter().string(from: Date().addingTimeInterval(10))
+        let broadcastBody: [String: Any] = [
+            "snippet": [
+                "title": title.isEmpty ? "Arkavo Creator Live" : title,
+                "scheduledStartTime": now
+            ],
+            "contentDetails": [
+                "enableAutoStart": false,
+                "enableAutoStop": true
+            ],
+            "status": [
+                "privacyStatus": "public"
+            ]
+        ]
+        broadcastRequest.httpBody = try JSONSerialization.data(withJSONObject: broadcastBody)
+
+        let (broadcastData, broadcastResponse) = try await URLSession.shared.data(for: broadcastRequest)
+        guard let broadcastHttp = broadcastResponse as? HTTPURLResponse,
+              (200...201).contains(broadcastHttp.statusCode) else {
+            if let errorResponse = try? JSONDecoder().decode(GoogleErrorResponse.self, from: broadcastData) {
+                throw YouTubeError.googleError("Broadcast creation failed: \(errorResponse.error_description ?? errorResponse.error)")
+            }
+            let code = (broadcastResponse as? HTTPURLResponse)?.statusCode ?? 0
+            throw YouTubeError.googleError("Broadcast creation failed (HTTP \(code))")
+        }
+
+        let broadcast = try JSONDecoder().decode(YouTubeBroadcastResponse.self, from: broadcastData)
+        let broadcastId = broadcast.id
+
+        // 3. Bind the stream to the broadcast
+        let bindURL = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts/bind?id=\(broadcastId)&part=id,contentDetails&streamId=\(streamId)")!
+        var bindRequest = try await makeAuthorizedRequest(url: bindURL)
+        bindRequest.httpMethod = "POST"
+        bindRequest.httpBody = Data() // empty body required
+
+        let (_, bindResponse) = try await URLSession.shared.data(for: bindRequest)
+        guard let bindHttp = bindResponse as? HTTPURLResponse, bindHttp.statusCode == 200 else {
+            throw YouTubeError.googleError("Failed to bind stream to broadcast")
+        }
+
+        return broadcastId
+    }
+
+    /// Check the current lifecycle status of a broadcast
+    public func getBroadcastStatus(broadcastId: String) async throws -> String {
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts?id=\(broadcastId)&part=status")!
+        let request = try await makeAuthorizedRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw YouTubeError.googleError("Failed to get broadcast status")
+        }
+
+        struct BroadcastListResponse: Codable {
+            let items: [YouTubeBroadcastResponse]
+        }
+        let listResponse = try JSONDecoder().decode(BroadcastListResponse.self, from: data)
+        return listResponse.items.first?.status?.lifeCycleStatus ?? "unknown"
+    }
+
+    /// Transitions a broadcast to "live" status via testing → live.
+    /// Waits for the broadcast to reach "ready" state first.
+    public func transitionBroadcastToLive(broadcastId: String) async throws {
+        // Wait for broadcast to reach "ready" state (YouTube verifies the stream)
+        for i in 1...12 {
+            let status = try await getBroadcastStatus(broadcastId: broadcastId)
+            print("[YouTubeClient] Broadcast status: \(status) (check \(i)/12)")
+            if status == "ready" || status == "testing" || status == "live" {
+                break
+            }
+            if i == 12 {
+                throw YouTubeError.googleError("Broadcast stuck in '\(status)' state. YouTube may not be receiving audio+video.")
+            }
+            try await Task.sleep(for: .seconds(5))
+        }
+
+        // Transition: ready → testing
+        let currentStatus = try await getBroadcastStatus(broadcastId: broadcastId)
+        if currentStatus == "ready" {
+            try await transitionBroadcast(broadcastId: broadcastId, to: "testing")
+            // Wait for testing state to be confirmed
+            try await Task.sleep(for: .seconds(5))
+        }
+
+        // Transition: testing → live (skip if already live)
+        let afterTesting = try await getBroadcastStatus(broadcastId: broadcastId)
+        if afterTesting == "testing" {
+            try await transitionBroadcast(broadcastId: broadcastId, to: "live")
+        }
+    }
+
+    /// Transition a broadcast to a specific status
+    private func transitionBroadcast(broadcastId: String, to status: String) async throws {
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=\(status)&id=\(broadcastId)&part=status")!
+        var request = try await makeAuthorizedRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = Data()
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw YouTubeError.invalidResponse
+        }
+
+        // Log the full response for debugging
+        if httpResponse.statusCode != 200 {
+            let body = String(data: data, encoding: .utf8) ?? "no body"
+            print("[YouTubeClient] Transition to '\(status)' failed (HTTP \(httpResponse.statusCode)): \(body)")
+        }
+
+        // 412 means stream isn't active yet — caller should retry
+        if httpResponse.statusCode == 412 {
+            throw YouTubeError.googleError("Stream not active yet for '\(status)' transition.")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            // Parse YouTube API v3 error format
+            if let apiError = try? JSONDecoder().decode(YouTubeAPIError.self, from: data),
+               let reason = apiError.error.errors.first?.reason {
+                throw YouTubeError.googleError("Transition to '\(status)': \(reason) - \(apiError.error.message)")
+            }
+            if let errorResponse = try? JSONDecoder().decode(GoogleErrorResponse.self, from: data) {
+                throw YouTubeError.googleError("Transition to '\(status)': \(errorResponse.error_description ?? errorResponse.error)")
+            }
+            throw YouTubeError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        print("[YouTubeClient] Broadcast transitioned to '\(status)'")
+    }
+
+    /// Ends a broadcast by transitioning to "complete".
+    public func endBroadcast(broadcastId: String) async throws {
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=\(broadcastId)&part=status")!
+        var request = try await makeAuthorizedRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = Data()
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            // Best-effort — don't throw on end
+            return
+        }
+    }
+
+    /// Creates a live stream and returns its ID (not just the stream key)
+    private func createLiveStreamAndReturnId() async throws -> String {
+        let url = URL(string: "https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn,contentDetails")!
+        var request = try await makeAuthorizedRequest(url: url)
+        request.httpMethod = "POST"
+
+        let requestBody: [String: Any] = [
+            "snippet": ["title": "Arkavo Creator Stream"],
+            "cdn": [
+                "ingestionType": "rtmp",
+                "frameRate": "30fps",
+                "resolution": "1080p"
+            ],
+            "contentDetails": ["isReusable": true]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...201).contains(httpResponse.statusCode) else {
+            throw YouTubeError.googleError("Failed to create live stream")
+        }
+
+        let stream = try JSONDecoder().decode(YouTubeLiveStreamResponse.LiveStream.self, from: data)
+        return stream.id
+    }
 }
 
 // MARK: - Supporting Types
+
+struct YouTubeBroadcastResponse: Codable {
+    let id: String
+    let status: Status?
+
+    struct Status: Codable {
+        let lifeCycleStatus: String?
+    }
+}
 
 struct YouTubeLiveStreamResponse: Codable {
     let items: [LiveStream]
@@ -522,6 +728,23 @@ struct YouTubeLiveStreamResponse: Codable {
                 let streamName: String  // This is the stream key
                 let ingestionAddress: String  // RTMP URL
             }
+        }
+    }
+}
+
+/// YouTube API v3 error response format
+struct YouTubeAPIError: Codable {
+    let error: ErrorBody
+
+    struct ErrorBody: Codable {
+        let code: Int
+        let message: String
+        let errors: [ErrorDetail]
+
+        struct ErrorDetail: Codable {
+            let message: String
+            let domain: String
+            let reason: String
         }
     }
 }

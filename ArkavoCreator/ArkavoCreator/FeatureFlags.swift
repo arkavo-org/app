@@ -14,7 +14,7 @@ enum FeatureFlags {
     /// Arkavo encrypted streaming platform
     static let arkavoStreaming = false
     /// YouTube streaming and OAuth integration
-    static let youtube = false
+    static let youtube = true
     /// Patreon patron management
     static let patreon = false
     /// Workflow management section

@@ -828,6 +828,14 @@ struct RecordView: View {
                     streamKey: "live/creator"
                 )
             } else {
+                // For YouTube, create a broadcast and bind it before starting RTMP
+                if streamViewModel.selectedPlatform == .youtube {
+                    let broadcastId = try await youtubeClient.createAndBindBroadcast(title: streamViewModel.title)
+                    streamViewModel.youtubeClient = youtubeClient
+                    streamViewModel.youtubeBroadcastId = broadcastId
+                    debugLog("[RecordView] Created YouTube broadcast: \(broadcastId)")
+                }
+
                 try await session.startStreaming(to: destination, streamKey: streamKey)
             }
             streamViewModel.isStreaming = true
@@ -837,6 +845,29 @@ struct RecordView: View {
             if streamViewModel.selectedPlatform == .twitch {
                 chatViewModel.connect(twitchClient: twitchClient)
                 withAnimation { showRightPanel = true }
+            }
+
+            // YouTube: transition broadcast to live after RTMP data starts flowing
+            if streamViewModel.selectedPlatform == .youtube,
+               let broadcastId = streamViewModel.youtubeBroadcastId {
+                streamViewModel.youtubeTransitionTask = Task {
+                    // Wait for YouTube to ingest RTMP data and mark stream as active
+                    try? await Task.sleep(for: .seconds(15))
+                    guard !Task.isCancelled else { return }
+                    for attempt in 1...5 {
+                        guard !Task.isCancelled else { return }
+                        do {
+                            try await youtubeClient.transitionBroadcastToLive(broadcastId: broadcastId)
+                            debugLog("[RecordView] YouTube broadcast transitioned to LIVE")
+                            break
+                        } catch {
+                            debugLog("[RecordView] YouTube transition attempt \(attempt)/5: \(error.localizedDescription)")
+                            if attempt < 5 {
+                                try? await Task.sleep(for: .seconds(10))
+                            }
+                        }
+                    }
+                }
             }
         } catch {
             streamViewModel.error = error.localizedDescription

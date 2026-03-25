@@ -80,6 +80,9 @@ final class StreamViewModel {
 
     private var statisticsTimer: Timer?
     var twitchClient: TwitchAuthClient?
+    var youtubeClient: YouTubeClient?
+    var youtubeBroadcastId: String?
+    var youtubeTransitionTask: Task<Void, Never>?
     private var recordingState = RecordingState.shared
 
     // MARK: - Computed Properties
@@ -153,6 +156,13 @@ final class StreamViewModel {
                     streamKey: "live/creator"  // Default stream key for Arkavo
                 )
             } else {
+                // For YouTube, create a broadcast and bind it before starting RTMP
+                if selectedPlatform == .youtube, let ytClient = youtubeClient {
+                    let broadcastId = try await ytClient.createAndBindBroadcast(title: title)
+                    youtubeBroadcastId = broadcastId
+                    debugLog("[StreamViewModel] Created YouTube broadcast: \(broadcastId)")
+                }
+
                 // Create RTMP destination for other platforms
                 let destination = RTMPPublisher.Destination(
                     url: effectiveRTMPURL,
@@ -171,6 +181,22 @@ final class StreamViewModel {
             // Start statistics polling
             startStatisticsTimer()
 
+            // For YouTube with enableAutoStart, the broadcast transitions automatically
+            // when YouTube detects the RTMP stream. If not using autoStart, transition manually:
+            if selectedPlatform == .youtube, let ytClient = youtubeClient, let broadcastId = youtubeBroadcastId {
+                Task {
+                    // Wait for YouTube to receive and process the RTMP data
+                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                    do {
+                        try await ytClient.transitionBroadcastToLive(broadcastId: broadcastId)
+                        debugLog("[StreamViewModel] YouTube broadcast is now LIVE")
+                    } catch {
+                        // enableAutoStart should handle this, log but don't fail
+                        debugLog("[StreamViewModel] YouTube transition note: \(error.localizedDescription)")
+                    }
+                }
+            }
+
         } catch {
             self.error = error.localizedDescription
             isConnecting = false
@@ -180,6 +206,15 @@ final class StreamViewModel {
 
     func stopStreaming() async {
         guard let session = recordingState.getRecordingSession(), isStreaming else { return }
+
+        // Cancel YouTube transition task first, then end broadcast
+        youtubeTransitionTask?.cancel()
+        youtubeTransitionTask = nil
+        if let ytClient = youtubeClient, let broadcastId = youtubeBroadcastId {
+            try? await ytClient.endBroadcast(broadcastId: broadcastId)
+            youtubeBroadcastId = nil
+            debugLog("[StreamViewModel] Ended YouTube broadcast")
+        }
 
         await session.stopStreaming()
 

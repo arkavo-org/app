@@ -86,7 +86,12 @@ public final class AudioEncoder: Sendable {
     /// - Parameters:
     ///   - sampleBuffer: PCM audio sample buffer
     ///   - timestamp: Presentation timestamp
+    nonisolated(unsafe) private var feedCount = 0
     public func feed(_ sampleBuffer: CMSampleBuffer) {
+        feedCount += 1
+        if feedCount == 1 || feedCount % 500 == 0 {
+            print("🔊 AudioEncoder.feed() called #\(feedCount), accumulated=\(inputBufferFrameCount)/\(targetFrameCount)")
+        }
         // Extract PCM data from CMSampleBuffer
         guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
             print("❌ AudioEncoder: No data buffer")
@@ -190,7 +195,9 @@ public final class AudioEncoder: Sendable {
 
             onFrame?(frame)
 
-            // Removed excessive logging - frame encoding is normal operation
+            if feedCount <= 3 {
+                print("🔊 AudioEncoder: Emitted AAC frame \(aacData.count)B at \(timestamp.seconds)s")
+            }
         }
 
         // Reset buffer for next accumulation

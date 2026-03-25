@@ -626,6 +626,7 @@ public actor VideoEncoder {
     private var audioFrameContinuation: AsyncStream<EncodedAudioFrame>.Continuation?
     private var videoSendTask: Task<Void, Never>?
     private var audioSendTask: Task<Void, Never>?
+    private var silentAudioTask: Task<Void, Never>?
 
     /// Start streaming to RTMP destination(s) while recording
     public func startStreaming(to destination: RTMPPublisher.Destination, streamKey: String) async throws {
@@ -750,6 +751,10 @@ public actor VideoEncoder {
         lastStreamVideoTimestamp = .zero
         lastStreamAudioTimestamp = .zero
 
+        // Start silent audio generator to ensure audio track is always present
+        // (YouTube requires audio+video to mark a stream as active)
+        startSilentAudioGenerator(encoder: audioEncoder)
+
         print("✅ RTMP stream started with video and audio encoding")
     }
 
@@ -758,6 +763,10 @@ public actor VideoEncoder {
         guard isStreaming, let publisher = rtmpPublisher else { return }
 
         print("📡 Stopping RTMP stream...")
+
+        // Stop silent audio generator
+        silentAudioTask?.cancel()
+        silentAudioTask = nil
 
         // Finish the frame queues first
         videoFrameContinuation?.finish()
@@ -785,6 +794,97 @@ public actor VideoEncoder {
         streamStartTime = nil
 
         print("✅ RTMP stream stopped")
+    }
+
+    /// Generates silent PCM audio and feeds it to the audio encoder.
+    /// Ensures the RTMP stream always has an audio track (required by YouTube).
+    /// Real audio from mic/mixer will supplement this; the silent frames
+    /// act as a fallback when no audio source is active.
+    private func startSilentAudioGenerator(encoder: ArkavoMedia.AudioEncoder) {
+        silentAudioTask = Task { [weak self] in
+            // 48kHz stereo Int16 PCM, 1024 frames per AAC packet
+            let sampleRate: Double = 48000
+            let channels: UInt32 = 2
+            let framesPerPacket: Int = 1024
+            let bytesPerFrame = Int(channels) * MemoryLayout<Int16>.size
+            let bufferSize = framesPerPacket * bytesPerFrame
+            let silentData = Data(count: bufferSize) // all zeros = silence
+            let interval = Double(framesPerPacket) / sampleRate // ~21.3ms
+
+            var sampleTime: Double = 0
+
+            while !Task.isCancelled {
+                guard let self = self, await self.isStreaming else { break }
+
+                // Only generate silent audio if no real audio is flowing
+                if await !self.sentAudioSequenceHeader || true {
+                    // Create a CMSampleBuffer with silent PCM data
+                    var formatDesc: CMAudioFormatDescription?
+                    var asbd = AudioStreamBasicDescription(
+                        mSampleRate: sampleRate,
+                        mFormatID: kAudioFormatLinearPCM,
+                        mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
+                        mBytesPerPacket: UInt32(bytesPerFrame),
+                        mFramesPerPacket: 1,
+                        mBytesPerFrame: UInt32(bytesPerFrame),
+                        mChannelsPerFrame: channels,
+                        mBitsPerChannel: 16,
+                        mReserved: 0
+                    )
+                    CMAudioFormatDescriptionCreate(
+                        allocator: kCFAllocatorDefault,
+                        asbd: &asbd,
+                        layoutSize: 0,
+                        layout: nil,
+                        magicCookieSize: 0,
+                        magicCookie: nil,
+                        extensions: nil,
+                        formatDescriptionOut: &formatDesc
+                    )
+
+                    if let formatDesc = formatDesc {
+                        var blockBuffer: CMBlockBuffer?
+                        silentData.withUnsafeBytes { rawPtr in
+                            let ptr = UnsafeMutableRawPointer(mutating: rawPtr.baseAddress!)
+                            CMBlockBufferCreateWithMemoryBlock(
+                                allocator: kCFAllocatorDefault,
+                                memoryBlock: ptr,
+                                blockLength: bufferSize,
+                                blockAllocator: kCFAllocatorNull, // we manage the memory
+                                customBlockSource: nil,
+                                offsetToData: 0,
+                                dataLength: bufferSize,
+                                flags: 0,
+                                blockBufferOut: &blockBuffer
+                            )
+                        }
+
+                        if let blockBuffer = blockBuffer {
+                            let pts = CMTime(seconds: sampleTime, preferredTimescale: CMTimeScale(sampleRate))
+                            var sampleBuffer: CMSampleBuffer?
+                            CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+                                allocator: kCFAllocatorDefault,
+                                dataBuffer: blockBuffer,
+                                formatDescription: formatDesc,
+                                sampleCount: framesPerPacket,
+                                presentationTimeStamp: pts,
+                                packetDescriptions: nil,
+                                sampleBufferOut: &sampleBuffer
+                            )
+
+                            if let sampleBuffer = sampleBuffer {
+                                encoder.feed(sampleBuffer)
+                            }
+                        }
+                    }
+
+                    sampleTime += interval
+                }
+
+                try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
+            }
+        }
+        print("🔇 Silent audio generator started (fallback for YouTube)")
     }
 
     // MARK: - NTDF Streaming Methods
