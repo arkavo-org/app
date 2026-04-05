@@ -2,10 +2,13 @@ import Foundation
 import MLX
 import MLXLMCommon
 import MLXLLM
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
 import Synchronization
 
 /// MLX-based streaming LLM provider for on-device inference.
-/// Wraps mlx-swift-examples v2 model loading and generation.
+/// Uses mlx-swift-lm with HuggingFace download and tokenization.
 public final class MLXBackend: @unchecked Sendable {
     private let state = Mutex(BackendState())
 
@@ -19,15 +22,22 @@ public final class MLXBackend: @unchecked Sendable {
         }
     }
 
-    /// Load a model by HuggingFace ID
+    /// Load a model by HuggingFace ID (downloads on first use, cached after)
     public func loadModel(_ huggingFaceID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let container = try await MLXLMCommon.loadModelContainer(
-            id: huggingFaceID
-        ) { progress in
-            let fraction = progress.fractionCompleted
-            debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
-            onProgress?(fraction)
-        }
+        let config = ModelConfiguration(
+            id: huggingFaceID,
+            defaultPrompt: "Hello",
+            extraEOSTokens: ["<end_of_turn>"]
+        )
+
+        let container = try await #huggingFaceLoadModelContainer(
+            configuration: config,
+            progressHandler: { progress in
+                let fraction = progress.fractionCompleted
+                debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
+                onProgress?(fraction)
+            }
+        )
 
         // Set memory limit to 75% of system RAM for safety
         let systemMemoryGB = ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)
@@ -40,7 +50,7 @@ public final class MLXBackend: @unchecked Sendable {
     /// Unload the current model to free GPU memory
     public func unloadModel() {
         state.withLock { $0.modelContainer = nil }
-        MLX.GPU.clearCache()
+        MLX.Memory.clearCache()
     }
 
     public func generate(
@@ -73,7 +83,7 @@ public final class MLXBackend: @unchecked Sendable {
                         repetitionPenalty: 1.1
                     )
 
-                    try await container.perform { context in
+                    try await container.perform(nonSendable: userInput) { context, userInput in
                         let lmInput = try await context.processor.prepare(input: userInput)
                         let stream = try MLXLMCommon.generate(
                             input: lmInput,

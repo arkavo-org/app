@@ -47,6 +47,14 @@ public enum ModelRegistry {
             quantization: "bf16"
         ),
         ModelInfo(
+            id: "gemma-4-e4b",
+            displayName: "Gemma 4 E4B",
+            huggingFaceID: "mlx-community/gemma-4-e4b-it-8bit",
+            estimatedMemoryMB: 9000,
+            parameterCount: "8B (4B active MoE)",
+            quantization: "8-bit"
+        ),
+        ModelInfo(
             id: "qwen3.5-9b",
             displayName: "Qwen 3.5 9B",
             huggingFaceID: "mlx-community/Qwen3.5-9B",
