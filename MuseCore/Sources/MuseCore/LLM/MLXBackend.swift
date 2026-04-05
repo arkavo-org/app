@@ -22,7 +22,8 @@ public final class MLXBackend: @unchecked Sendable {
         }
     }
 
-    /// Load a model by HuggingFace ID (downloads on first use, cached after)
+    /// Load a model by HuggingFace ID (downloads on first use, cached after).
+    /// Uses shared ~/.cache/huggingface/hub to reuse models downloaded by Python CLI.
     public func loadModel(_ huggingFaceID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
         let config = ModelConfiguration(
             id: huggingFaceID,
@@ -30,14 +31,21 @@ public final class MLXBackend: @unchecked Sendable {
             extraEOSTokens: ["<end_of_turn>"]
         )
 
-        let container = try await #huggingFaceLoadModelContainer(
-            configuration: config,
-            progressHandler: { progress in
-                let fraction = progress.fractionCompleted
-                debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
-                onProgress?(fraction)
-            }
-        )
+        // Use shared HF cache (not sandboxed container) so Python-downloaded models are found
+        let sharedCache = HubCache(location: .init(
+            path: "~/.cache/huggingface/hub"))
+        let hub = HubClient(cache: sharedCache)
+        let downloader = #hubDownloader(hub)
+        let tokenizerLoader = #huggingFaceTokenizerLoader()
+
+        let container = try await LLMModelFactory.shared.loadContainer(
+            from: downloader, using: tokenizerLoader,
+            configuration: config
+        ) { progress in
+            let fraction = progress.fractionCompleted
+            debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
+            onProgress?(fraction)
+        }
 
         // Set memory limit to 75% of system RAM for safety
         let systemMemoryGB = ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)
