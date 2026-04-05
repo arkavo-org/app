@@ -31,12 +31,12 @@ public enum ModelRegistry {
     /// All supported models, ordered by size
     public static let models: [ModelInfo] = [
         ModelInfo(
-            id: "gemma-3-270m",
-            displayName: "Gemma 3 270M",
-            huggingFaceID: "mlx-community/gemma-3-270m-it-bf16",
-            estimatedMemoryMB: 906,
-            parameterCount: "270M",
-            quantization: "bf16"
+            id: "gemma-4-e4b",
+            displayName: "Gemma 4 E4B",
+            huggingFaceID: "mlx-community/gemma-4-e4b-it-8bit",
+            estimatedMemoryMB: 9000,
+            parameterCount: "8B (4B active MoE)",
+            quantization: "8-bit"
         ),
         ModelInfo(
             id: "qwen3.5-0.8b",
@@ -45,14 +45,6 @@ public enum ModelRegistry {
             estimatedMemoryMB: 1600,
             parameterCount: "0.8B",
             quantization: "bf16"
-        ),
-        ModelInfo(
-            id: "gemma-4-e4b",
-            displayName: "Gemma 4 E4B",
-            huggingFaceID: "mlx-community/gemma-4-e4b-it-8bit",
-            estimatedMemoryMB: 9000,
-            parameterCount: "8B (4B active MoE)",
-            quantization: "8-bit"
         ),
         ModelInfo(
             id: "qwen3.5-9b",
@@ -64,7 +56,7 @@ public enum ModelRegistry {
         ),
     ]
 
-    /// The default model (smallest, already cached)
+    /// The default model
     public static let defaultModel = models[0]
 
     /// Find a model by its ID
