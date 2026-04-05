@@ -79,11 +79,15 @@ class MuseAvatarViewModel: ObservableObject {
         self.chatReactor = reactor
     }
 
-    /// Configure LLM providers (Edge + fallback)
+    /// Configure LLM providers (Gemma 4 + Edge + fallback)
     private func setupLLMProviders() {
         var providers: [any LLMResponseProvider] = []
 
-        // Edge provider (highest priority) — if agent service is available
+        // Gemma 4 on-device provider (highest priority)
+        let gemma4 = Gemma4Provider()
+        providers.append(gemma4)
+
+        // Edge provider — if agent service is available
         if let agentService {
             let edge = EdgeLLMProvider(agentService: agentService)
             self.edgeLLMProvider = edge
