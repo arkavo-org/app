@@ -895,7 +895,7 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("assistant")
                 case .settings:
-                    SettingsContent(agentService: agentService)
+                    SettingsContent(agentService: agentService, modelManager: modelManager)
                         .transition(.moveAndFade())
                         .id("settings")
                 default:
@@ -1389,6 +1389,7 @@ struct SettingsContent: View {
     @State private var modelsPath: String = ""
     @State private var libraryPath: String = ""
     var agentService: CreatorAgentService?
+    var modelManager: ModelManager?
 
     var body: some View {
         ScrollView {
@@ -1499,6 +1500,11 @@ struct SettingsContent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
 
+                // AI Model Settings Section
+                if let modelManager {
+                    AIModelSettingsSection(modelManager: modelManager)
+                }
+
                 // AI Agent Settings Section
                 if FeatureFlags.aiAgent, let agentService {
                     AgentSettingsSection(agentService: agentService)
@@ -1521,6 +1527,138 @@ struct SettingsContent: View {
 
     private func updateLibraryPath() {
         libraryPath = RecordingsFolderAccess.getBookmarkedFolder()?.path ?? ""
+    }
+}
+
+// MARK: - AI Model Settings Section
+
+struct AIModelSettingsSection: View {
+    @Bindable var modelManager: ModelManager
+    @State private var customCachePath: String = ""
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                // Preferred Model Picker
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Preferred Model")
+                        .font(.subheadline)
+                    Picker("Model", selection: Binding(
+                        get: { modelManager.selectedModel },
+                        set: { model in Task { await modelManager.selectModel(model) } }
+                    )) {
+                        ForEach(ModelRegistry.models) { model in
+                            HStack {
+                                Text(model.displayName)
+                                Text("(\(model.quantization))")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .tag(model)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                // Model State
+                HStack(spacing: 8) {
+                    switch modelManager.state {
+                    case .idle:
+                        Image(systemName: "circle")
+                            .foregroundStyle(.secondary)
+                        Text("Not loaded")
+                            .foregroundStyle(.secondary)
+                    case .downloading(let progress):
+                        ProgressView(value: progress)
+                            .frame(width: 60)
+                        Text("Downloading \(Int(progress * 100))%")
+                    case .loading:
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading into memory...")
+                    case .ready:
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Ready (\(modelManager.selectedModel.parameterCount))")
+                    case .error(let msg):
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(msg)
+                            .lineLimit(2)
+                            .font(.caption)
+                    case .unloaded(let reason):
+                        Image(systemName: "moon.zzz")
+                            .foregroundStyle(.secondary)
+                        Text("Unloaded: \(reason)")
+                    }
+                    Spacer()
+
+                    // Load / Unload button
+                    if modelManager.state == .ready {
+                        Button("Unload") {
+                            Task { await modelManager.unloadModel() }
+                        }
+                        .foregroundStyle(.secondary)
+                    } else if case .idle = modelManager.state {
+                        Button("Load") {
+                            Task { await modelManager.loadSelectedModel() }
+                        }
+                    } else if case .error = modelManager.state {
+                        Button("Retry") {
+                            Task { await modelManager.loadSelectedModel() }
+                        }
+                    }
+                }
+                .font(.subheadline)
+
+                Divider()
+
+                // Model Cache Folder
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Model Cache Folder")
+                                .font(.subheadline)
+                            Text(customCachePath.isEmpty ? "~/.cache/huggingface/hub (default)" : customCachePath)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Spacer()
+
+                        Button("Choose...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Select the folder containing HuggingFace model caches"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                modelManager.customCacheDirectory = url
+                                customCachePath = url.path
+                            }
+                        }
+
+                        if modelManager.customCacheDirectory != nil {
+                            Button("Reset") {
+                                modelManager.customCacheDirectory = nil
+                                customCachePath = ""
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text("Models are downloaded from HuggingFace on first use. Reuse models cached by Python or other tools.")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                }
+            }
+        } label: {
+            Label("AI Model", systemImage: "cpu")
+        }
+        .onAppear {
+            customCachePath = modelManager.customCacheDirectory?.path ?? ""
+        }
     }
 }
 

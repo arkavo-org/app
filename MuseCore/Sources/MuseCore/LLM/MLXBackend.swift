@@ -6,13 +6,18 @@ import MLXHuggingFace
 import HuggingFace
 import Tokenizers
 import Synchronization
+import OSLog
 
 /// MLX-based streaming LLM provider for on-device inference.
 /// Uses mlx-swift-lm with HuggingFace download and tokenization.
 public final class MLXBackend: @unchecked Sendable {
     private let state = Mutex(BackendState())
+    private let logger = Logger(subsystem: "com.arkavo.musecore", category: "MLXBackend")
 
     public let providerName = "MLX Local"
+
+    /// Custom model cache directory (nil = use shared HF cache)
+    public var customCacheDirectory: URL?
 
     public init() {}
 
@@ -23,7 +28,6 @@ public final class MLXBackend: @unchecked Sendable {
     }
 
     /// Load a model by HuggingFace ID (downloads on first use, cached after).
-    /// Uses shared ~/.cache/huggingface/hub to reuse models downloaded by Python CLI.
     public func loadModel(_ huggingFaceID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
         let config = ModelConfiguration(
             id: huggingFaceID,
@@ -31,13 +35,30 @@ public final class MLXBackend: @unchecked Sendable {
             extraEOSTokens: ["<end_of_turn>"]
         )
 
-        // Use shared HF cache (not sandboxed container) so Python-downloaded models are found
-        let sharedCache = HubCache(location: .init(
-            path: "~/.cache/huggingface/hub"))
+        // Determine cache location
+        let cacheLocation: CacheLocationProvider
+        if let customDir = customCacheDirectory {
+            logger.info("Using custom model cache: \(customDir.path)")
+            cacheLocation = .fixed(directory: customDir)
+        } else {
+            logger.info("Using shared HF cache: ~/.cache/huggingface/hub")
+            cacheLocation = .init(path: "~/.cache/huggingface/hub")
+        }
+
+        let sharedCache = HubCache(location: cacheLocation)
+        logger.info("Cache directory resolved to: \(sharedCache.cacheDirectory.path)")
+
+        // Check if model is already in cache
+        let modelDir = sharedCache.cacheDirectory
+            .appendingPathComponent("models--\(huggingFaceID.replacingOccurrences(of: "/", with: "--"))")
+        let isCached = FileManager.default.fileExists(atPath: modelDir.path)
+        logger.info("Model \(huggingFaceID) cached: \(isCached) at \(modelDir.path)")
+
         let hub = HubClient(cache: sharedCache)
         let downloader = #hubDownloader(hub)
         let tokenizerLoader = #huggingFaceTokenizerLoader()
 
+        logger.info("Starting model load: \(huggingFaceID)")
         let container = try await LLMModelFactory.shared.loadContainer(
             from: downloader, using: tokenizerLoader,
             configuration: config
@@ -46,6 +67,7 @@ public final class MLXBackend: @unchecked Sendable {
             debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
             onProgress?(fraction)
         }
+        logger.info("Model loaded successfully: \(huggingFaceID)")
 
         // Set memory limit to 75% of system RAM for safety
         let systemMemoryGB = ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)
