@@ -279,25 +279,27 @@ struct RegistrationView: View {
 //                generatedScreenNames = []
             case .generateScreenName:
                 if skipPasskeysFlag {
-                    let newProfile = Profile(
-                        name: selectedScreenName,
-                        interests: Array(selectedInterests).joined(separator: ","),
-                        hasHighEncryption: true,
-                        hasHighIdentityAssurance: true,
-                    )
-                    Task { await onComplete(newProfile) }
+                    let name = selectedScreenName
+                    let interests = Array(selectedInterests).joined(separator: ",")
+                    let complete = onComplete
+                    Task {
+                        let profile = Profile(
+                            name: name, interests: interests,
+                            hasHighEncryption: true, hasHighIdentityAssurance: true)
+                        await complete(profile)
+                    }
                 } else {
                     currentStep = .enablePasskeys
                 }
             case .enablePasskeys:
-                let newProfile = Profile(
-                    name: selectedScreenName,
-                    interests: Array(selectedInterests).joined(separator: ","),
-                    hasHighEncryption: true,
-                    hasHighIdentityAssurance: true,
-                )
+                let name = selectedScreenName
+                let interests = Array(selectedInterests).joined(separator: ",")
+                let complete = onComplete
                 Task {
-                    await onComplete(newProfile)
+                    let profile = Profile(
+                        name: name, interests: interests,
+                        hasHighEncryption: true, hasHighIdentityAssurance: true)
+                    await complete(profile)
                 }
             }
         }
