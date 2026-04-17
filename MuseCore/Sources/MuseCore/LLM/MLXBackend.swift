@@ -17,7 +17,10 @@ public final class MLXBackend: @unchecked Sendable {
     public let providerName = "MLX Local"
 
     /// Custom model cache directory (nil = use shared HF cache)
-    public var customCacheDirectory: URL?
+    public var customCacheDirectory: URL? {
+        get { state.withLock { $0.customCacheDirectory } }
+        set { state.withLock { $0.customCacheDirectory = newValue } }
+    }
 
     public init() {}
 
@@ -35,9 +38,9 @@ public final class MLXBackend: @unchecked Sendable {
             extraEOSTokens: ["<end_of_turn>"]
         )
 
-        // Determine cache location
+        // Determine cache location — snapshot under lock to avoid races
         let cacheLocation: CacheLocationProvider
-        if let customDir = customCacheDirectory {
+        if let customDir = state.withLock({ $0.customCacheDirectory }) {
             logger.info("Using custom model cache: \(customDir.path)")
             cacheLocation = .fixed(directory: customDir)
         } else {
@@ -121,35 +124,24 @@ public final class MLXBackend: @unchecked Sendable {
                             context: context
                         )
 
-                        var pendingText = ""
+                        var buffer = StopSequenceBuffer(stopSequences: ["<end_of_turn>", "<eos>"])
+                        var terminated = false
                         for await generation in stream {
                             if Task.isCancelled { break }
                             if let chunk = generation.chunk {
-                                pendingText += chunk
-                                // Check for stop sequences in the accumulated buffer
-                                if let stopRange = pendingText.range(of: "<end_of_turn>") {
-                                    let clean = String(pendingText[pendingText.startIndex..<stopRange.lowerBound])
-                                    if !clean.isEmpty {
-                                        continuation.yield(clean)
-                                    }
-                                    break
+                                switch buffer.append(chunk) {
+                                case .emit(let text):
+                                    if !text.isEmpty { continuation.yield(text) }
+                                case .terminate(let text):
+                                    if !text.isEmpty { continuation.yield(text) }
+                                    terminated = true
                                 }
-                                // Hold back text that could be the start of a stop sequence
-                                let holdBack = "<end_of_turn>".count
-                                if pendingText.count > holdBack {
-                                    let emitEnd = pendingText.index(pendingText.endIndex, offsetBy: -holdBack)
-                                    let emit = String(pendingText[pendingText.startIndex..<emitEnd])
-                                    pendingText = String(pendingText[emitEnd...])
-                                    continuation.yield(emit)
-                                }
+                                if terminated { break }
                             }
                         }
-                        // Flush remaining text that isn't a stop sequence
-                        let trimmed = pendingText
-                            .replacingOccurrences(of: "<end_of_turn>", with: "")
-                            .replacingOccurrences(of: "<eos>", with: "")
-                        if !trimmed.isEmpty {
-                            continuation.yield(trimmed)
+                        if !terminated {
+                            let trailing = buffer.flush()
+                            if !trailing.isEmpty { continuation.yield(trailing) }
                         }
                     }
 
@@ -212,6 +204,7 @@ public enum StreamingLLMError: Error, LocalizedError {
 private struct BackendState: ~Copyable {
     var modelContainer: ModelContainer?
     var generationTask: Task<Void, Never>?
+    var customCacheDirectory: URL?
 
     init() {}
 }

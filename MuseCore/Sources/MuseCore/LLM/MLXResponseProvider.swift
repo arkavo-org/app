@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import Synchronization
 
 /// Wraps MLXBackend to conform to LLMResponseProvider.
 /// Collects the full token stream into a ConstrainedResponse,
@@ -7,15 +8,25 @@ import OSLog
 public final class MLXResponseProvider: LLMResponseProvider, @unchecked Sendable {
     private let backend: MLXBackend
     private let logger = Logger(subsystem: "com.arkavo.musecore", category: "MLXResponseProvider")
+    private let state = Mutex(ProviderState())
 
     /// Role determines the system prompt used for generation
-    public var activeRole: AvatarRole = .sidekick
+    public var activeRole: AvatarRole {
+        get { state.withLock { $0.activeRole } }
+        set { state.withLock { $0.activeRole = newValue } }
+    }
 
     /// Voice locale for language-specific prompts
-    public var voiceLocale: VoiceLocale = .english
+    public var voiceLocale: VoiceLocale {
+        get { state.withLock { $0.voiceLocale } }
+        set { state.withLock { $0.voiceLocale = newValue } }
+    }
 
     /// Optional context injection (stream state for Producer, platform constraints for Publicist)
-    public var contextInjection: String?
+    public var contextInjection: String? {
+        get { state.withLock { $0.contextInjection } }
+        set { state.withLock { $0.contextInjection = newValue } }
+    }
 
     public init(backend: MLXBackend) {
         self.backend = backend
@@ -59,12 +70,24 @@ public final class MLXResponseProvider: LLMResponseProvider, @unchecked Sendable
     }
 
     private func buildSystemPrompt() -> String {
-        var prompt = RolePromptProvider.systemPrompt(for: activeRole, locale: voiceLocale)
-        if let context = contextInjection {
+        // Snapshot all three values under a single lock acquisition
+        let snapshot = state.withLock { ($0.activeRole, $0.voiceLocale, $0.contextInjection) }
+        var prompt = RolePromptProvider.systemPrompt(for: snapshot.0, locale: snapshot.1)
+        if let context = snapshot.2 {
             prompt += "\n\n# Current Context\n\(context)"
         }
         return prompt
     }
+}
+
+// MARK: - Internal State
+
+private struct ProviderState: ~Copyable {
+    var activeRole: AvatarRole = .sidekick
+    var voiceLocale: VoiceLocale = .english
+    var contextInjection: String?
+
+    init() {}
 }
 
 // MARK: - ParsedToolCall Extension

@@ -27,7 +27,7 @@ enum PublicistPlatform: String, CaseIterable, Sendable {
     var characterLimit: Int? {
         switch self {
         case .bluesky: 300
-        case .twitch: 140
+        case .twitch: 500 // Twitch IRC chat message limit
         case .youtube: 5000
         case .reddit, .microblog, .patreon: nil
         }

@@ -22,8 +22,10 @@ final class TwitchEventSubClient {
     private var keepaliveTimer: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
 
-    private var eventContinuation: AsyncStream<StreamEvent>.Continuation?
-    private(set) var events: AsyncStream<StreamEvent>!
+    private let eventContinuation: AsyncStream<StreamEvent>.Continuation
+    /// Event stream — created once and preserved across reconnects so existing
+    /// consumers keep receiving events without needing to re-subscribe.
+    let events: AsyncStream<StreamEvent>
 
     /// OAuth token and client ID for Helix API subscription calls
     private let accessToken: () -> String?
@@ -49,9 +51,9 @@ final class TwitchEventSubClient {
         self.userId = userId
         self.ensureValidToken = ensureValidToken
 
-        self.events = AsyncStream { continuation in
-            self.eventContinuation = continuation
-        }
+        let (stream, continuation) = AsyncStream<StreamEvent>.makeStream()
+        self.events = stream
+        self.eventContinuation = continuation
     }
 
     // MARK: - Connection
@@ -74,7 +76,17 @@ final class TwitchEventSubClient {
         }
     }
 
+    /// Permanently disconnect and finish the event stream.
+    /// After calling this, consumers of `events` will see the stream terminate.
     func disconnect() {
+        tearDownConnection()
+        eventContinuation.finish()
+        logger.info("Disconnected from Twitch EventSub")
+    }
+
+    /// Tear down transport state without finishing the event stream.
+    /// Used internally before reconnecting so existing consumers keep receiving events.
+    private func tearDownConnection() {
         isConnected = false
         keepaliveTimer?.cancel()
         keepaliveTimer = nil
@@ -85,8 +97,6 @@ final class TwitchEventSubClient {
         urlSession?.invalidateAndCancel()
         urlSession = nil
         sessionId = nil
-        eventContinuation?.finish()
-        logger.info("Disconnected from Twitch EventSub")
     }
 
     // MARK: - Receive Loop
@@ -182,7 +192,7 @@ final class TwitchEventSubClient {
         else { return }
 
         guard let event = parseEvent(type: subscriptionType, data: eventData) else { return }
-        eventContinuation?.yield(event)
+        eventContinuation.yield(event)
     }
 
     private func handleReconnect(_ json: [String: Any]) {
@@ -357,8 +367,10 @@ final class TwitchEventSubClient {
         if httpResponse.statusCode == 202 {
             logger.info("Subscribed to \(type)")
         } else {
-            let responseBody = String(data: data, encoding: .utf8) ?? "no body"
-            logger.error("Subscribe to \(type) failed (\(httpResponse.statusCode)): \(responseBody)")
+            // Truncate body to avoid leaking incidental sensitive fields into OS logs
+            let body = String(data: data, encoding: .utf8) ?? "no body"
+            let truncated = body.count > 200 ? String(body.prefix(200)) + "…" : body
+            logger.error("Subscribe to \(type) failed (\(httpResponse.statusCode)): \(truncated)")
         }
     }
 
@@ -383,13 +395,7 @@ final class TwitchEventSubClient {
     }
 
     private func reconnect() async {
-        disconnect()
-
-        // Re-create the event stream for new consumers
-        self.events = AsyncStream { continuation in
-            self.eventContinuation = continuation
-        }
-
+        tearDownConnection()
         try? await Task.sleep(for: .seconds(1))
         await connect()
     }

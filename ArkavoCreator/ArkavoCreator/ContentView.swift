@@ -883,7 +883,7 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("patrons")
                 case .library:
-                    RecordingsLibraryView()
+                    RecordingsLibraryView(youtubeClient: youtubeClient)
                         .transition(.moveAndFade())
                         .id("library")
                 case .workflow:

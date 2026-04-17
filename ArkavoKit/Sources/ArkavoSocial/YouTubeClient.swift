@@ -130,7 +130,10 @@ public actor YouTubeClient: ObservableObject {
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectUri),
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl"),
+            // `youtube`: account management, broadcasts, liveChat read/write.
+            // `youtube.upload`: required for video uploads from Library.
+            // `youtube.force-ssl`: required for liveChat message insert.
+            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.force-ssl"),
             URLQueryItem(name: "access_type", value: "offline"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge", value: challenge),
@@ -527,11 +530,13 @@ public actor YouTubeClient: ObservableObject {
         var broadcastRequest = try await makeAuthorizedRequest(url: broadcastURL)
         broadcastRequest.httpMethod = "POST"
 
-        let now = ISO8601DateFormatter().string(from: Date().addingTimeInterval(10))
+        // 60s buffer tolerates request latency, clock skew, and YouTube's own
+        // "scheduledStartTime must be in the future" validation. 10s was too tight.
+        let scheduledStart = ISO8601DateFormatter().string(from: Date().addingTimeInterval(60))
         let broadcastBody: [String: Any] = [
             "snippet": [
                 "title": title.isEmpty ? "Arkavo Creator Live" : title,
-                "scheduledStartTime": now
+                "scheduledStartTime": scheduledStart
             ],
             "contentDetails": [
                 "enableAutoStart": false,
@@ -738,6 +743,216 @@ public actor YouTubeClient: ObservableObject {
 
         let stream = try JSONDecoder().decode(YouTubeLiveStreamResponse.LiveStream.self, from: data)
         return stream.id
+    }
+
+    // MARK: - Video Upload
+
+    /// Privacy status for uploaded videos.
+    public enum VideoPrivacy: String, Sendable, CaseIterable {
+        case privateVideo = "private"
+        case unlisted
+        case publicVideo = "public"
+
+        public var displayName: String {
+            switch self {
+            case .privateVideo: "Private"
+            case .unlisted: "Unlisted"
+            case .publicVideo: "Public"
+            }
+        }
+    }
+
+    /// Metadata for a video upload.
+    public struct VideoUploadMetadata: Sendable {
+        public let title: String
+        public let description: String
+        public let tags: [String]
+        public let privacy: VideoPrivacy
+        public let categoryId: String
+
+        /// `categoryId` 22 is "People & Blogs" — a safe default for personal content.
+        public init(
+            title: String,
+            description: String = "",
+            tags: [String] = [],
+            privacy: VideoPrivacy = .privateVideo,
+            categoryId: String = "22"
+        ) {
+            self.title = title
+            self.description = description
+            self.tags = tags
+            self.privacy = privacy
+            self.categoryId = categoryId
+        }
+    }
+
+    /// Upload a video file to YouTube using the resumable upload protocol.
+    ///
+    /// Uses a two-step flow:
+    ///   1. POST to `uploadType=resumable` with metadata — server returns an upload URL in `Location`.
+    ///   2. PUT the video bytes in chunks to that URL, reporting progress.
+    ///
+    /// - Parameters:
+    ///   - fileURL: local video file to upload. Must be readable for the duration of the call.
+    ///   - metadata: title, description, tags, privacy.
+    ///   - mimeType: MIME type (e.g. "video/quicktime", "video/mp4"). Defaults to quicktime.
+    ///   - onProgress: bytes-sent / total-bytes fraction in [0, 1]. Called on an arbitrary queue.
+    /// - Returns: The YouTube video ID.
+    public func uploadVideo(
+        fileURL: URL,
+        metadata: VideoUploadMetadata,
+        mimeType: String = "video/quicktime",
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> String {
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        guard let totalSize = attrs[.size] as? Int64, totalSize > 0 else {
+            throw YouTubeError.googleError("Upload source is empty or unreadable")
+        }
+
+        // Step 1: initiate the resumable session
+        let uploadURL = try await initiateResumableUpload(
+            metadata: metadata,
+            totalSize: totalSize,
+            mimeType: mimeType
+        )
+
+        // Step 2: stream chunks
+        return try await uploadResumableChunks(
+            to: uploadURL,
+            fileURL: fileURL,
+            totalSize: totalSize,
+            mimeType: mimeType,
+            onProgress: onProgress
+        )
+    }
+
+    private func initiateResumableUpload(
+        metadata: VideoUploadMetadata,
+        totalSize: Int64,
+        mimeType: String
+    ) async throws -> URL {
+        let url = URL(string: "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status")!
+        var request = try await makeAuthorizedRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(mimeType, forHTTPHeaderField: "X-Upload-Content-Type")
+        request.setValue("\(totalSize)", forHTTPHeaderField: "X-Upload-Content-Length")
+
+        let body: [String: Any] = [
+            "snippet": [
+                "title": metadata.title,
+                "description": metadata.description,
+                "tags": metadata.tags,
+                "categoryId": metadata.categoryId
+            ],
+            "status": [
+                "privacyStatus": metadata.privacy.rawValue,
+                "selfDeclaredMadeForKids": false
+            ]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw YouTubeError.invalidResponse
+        }
+        guard http.statusCode == 200 else {
+            if let apiError = try? JSONDecoder().decode(YouTubeAPIError.self, from: data),
+               let reason = apiError.error.errors.first?.reason {
+                throw YouTubeError.googleError("Upload init failed: \(reason) — \(apiError.error.message)")
+            }
+            throw YouTubeError.httpError(statusCode: http.statusCode)
+        }
+
+        // Google returns the session URL in the Location header (case-insensitive)
+        guard let location = http.value(forHTTPHeaderField: "Location") ?? http.value(forHTTPHeaderField: "location"),
+              let sessionURL = URL(string: location) else {
+            throw YouTubeError.googleError("Upload session URL missing from response")
+        }
+        return sessionURL
+    }
+
+    /// Upload chunk size — 8 MiB, a multiple of 256 KiB as required by the Google
+    /// resumable upload protocol. Large enough to keep overhead low, small enough
+    /// to give responsive progress and manageable retry on flaky networks.
+    private static let uploadChunkSize: Int = 8 * 1024 * 1024
+
+    private func uploadResumableChunks(
+        to uploadURL: URL,
+        fileURL: URL,
+        totalSize: Int64,
+        mimeType: String,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> String {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+
+        var offset: Int64 = 0
+        let chunkSize = Int64(Self.uploadChunkSize)
+
+        while offset < totalSize {
+            try Task.checkCancellation()
+
+            let remaining = totalSize - offset
+            let thisChunk = Swift.min(chunkSize, remaining)
+            let endByte = offset + thisChunk - 1
+
+            try handle.seek(toOffset: UInt64(offset))
+            let chunkData = try handle.read(upToCount: Int(thisChunk)) ?? Data()
+            guard chunkData.count == Int(thisChunk) else {
+                throw YouTubeError.googleError("Unexpected read length at offset \(offset)")
+            }
+
+            var request = URLRequest(url: uploadURL)
+            request.httpMethod = "PUT"
+            request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+            request.setValue("\(thisChunk)", forHTTPHeaderField: "Content-Length")
+            request.setValue("bytes \(offset)-\(endByte)/\(totalSize)", forHTTPHeaderField: "Content-Range")
+            request.httpBody = chunkData
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw YouTubeError.invalidResponse
+            }
+
+            switch http.statusCode {
+            case 200, 201:
+                // Terminal success — server returns the full video resource JSON
+                onProgress?(1.0)
+                struct VideoResource: Codable { let id: String }
+                let resource = try JSONDecoder().decode(VideoResource.self, from: data)
+                return resource.id
+
+            case 308:
+                // "Resume Incomplete" — parse Range header to learn how much the server accepted.
+                // Header format: "bytes=0-N" (inclusive end).
+                if let range = http.value(forHTTPHeaderField: "Range") ?? http.value(forHTTPHeaderField: "range"),
+                   let dashIdx = range.firstIndex(of: "-") {
+                    let endStr = range[range.index(after: dashIdx)...]
+                    if let serverEnd = Int64(endStr) {
+                        offset = serverEnd + 1
+                    } else {
+                        offset += thisChunk
+                    }
+                } else {
+                    offset += thisChunk
+                }
+                onProgress?(Double(offset) / Double(totalSize))
+
+            case 401, 403:
+                throw YouTubeError.googleError("Upload unauthorized (HTTP \(http.statusCode)) — token may be missing youtube.upload scope")
+
+            default:
+                if let apiError = try? JSONDecoder().decode(YouTubeAPIError.self, from: data),
+                   let reason = apiError.error.errors.first?.reason {
+                    throw YouTubeError.googleError("Upload chunk failed (HTTP \(http.statusCode)): \(reason)")
+                }
+                throw YouTubeError.httpError(statusCode: http.statusCode)
+            }
+        }
+
+        // Control should only reach here if server sent 308 for the final chunk
+        // without a terminal 200. Treat as a protocol violation.
+        throw YouTubeError.googleError("Upload completed bytes but no video ID returned")
     }
 }
 
