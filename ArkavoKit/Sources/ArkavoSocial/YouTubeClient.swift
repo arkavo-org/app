@@ -130,10 +130,12 @@ public actor YouTubeClient: ObservableObject {
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectUri),
             URLQueryItem(name: "response_type", value: "code"),
-            // `youtube`: account management, broadcasts, liveChat read/write.
+            // Minimum scopes for our usage:
+            // `youtube.force-ssl`: covers liveBroadcasts (create/bind/transition/end),
+            //   liveStreams (list/create), liveChat (read/insert), and reading own
+            //   channel info via `mine=true`. Replaces the broader `youtube` scope.
             // `youtube.upload`: required for video uploads from Library.
-            // `youtube.force-ssl`: required for liveChat message insert.
-            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.force-ssl"),
+            URLQueryItem(name: "scope", value: "https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/youtube.upload"),
             URLQueryItem(name: "access_type", value: "offline"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge", value: challenge),
@@ -507,7 +509,10 @@ public actor YouTubeClient: ObservableObject {
 
     /// Creates a broadcast, binds it to a stream, and returns the broadcast ID.
     /// Call this before starting RTMP streaming to YouTube.
-    public func createAndBindBroadcast(title: String) async throws -> String {
+    /// - Parameter privacyStatus: One of "public", "unlisted", "private". Defaults to "public" for backward compatibility.
+    public func createAndBindBroadcast(title: String, privacyStatus: String = "public") async throws -> String {
+        let allowedPrivacy: Set<String> = ["public", "unlisted", "private"]
+        let validatedPrivacy = allowedPrivacy.contains(privacyStatus) ? privacyStatus : "public"
         // 1. Get or create a live stream
         let url = URL(string: "https://www.googleapis.com/youtube/v3/liveStreams?part=cdn,snippet&mine=true")!
         let listRequest = try await makeAuthorizedRequest(url: url)
@@ -543,7 +548,7 @@ public actor YouTubeClient: ObservableObject {
                 "enableAutoStop": true
             ],
             "status": [
-                "privacyStatus": "public"
+                "privacyStatus": validatedPrivacy
             ]
         ]
         broadcastRequest.httpBody = try JSONSerialization.data(withJSONObject: broadcastBody)

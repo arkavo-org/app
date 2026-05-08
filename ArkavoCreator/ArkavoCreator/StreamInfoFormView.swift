@@ -22,8 +22,8 @@ struct StreamInfoFormView: View {
     @State var isRerun: Bool = false
     @State var isBrandedContent: Bool = false
 
-    // YouTube-specific
-    @State var privacyStatus: String = "public"
+    // YouTube-specific (privacy is bound to view model so it reaches createAndBindBroadcast)
+    @Binding var privacyStatus: String
     @State var youtubeDescription: String = ""
 
     // UI state
@@ -434,8 +434,8 @@ struct StreamInfoFormView: View {
         case .youtube:
             streamTitle = ""
             youtubeDescription = ""
-            privacyStatus = "public"
             language = "en"
+            // privacyStatus is bound from StreamViewModel — preserve user's selection across form re-entries.
 
         default:
             break

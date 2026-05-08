@@ -1,5 +1,5 @@
 {
-  "originHash" : "b83820b1903c2b4e25758a74513a6cf115920ddc7a5730a528e6e691a3c49c6a",
+  "originHash" : "0366ce2b01e3ae8fada8f469cb2ad5bc7009430f7bb1fe2322f7c4c059171bb9",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "a3a85a85214caf642abaa96ae664e4c772a59f6e",
         "version" : "1.4.1"
-      }
-    },
-    {
-      "identity" : "flatbuffers",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/google/flatbuffers.git",
-      "state" : {
-        "revision" : "a2cd1ea3b6d3fee220106b5fed3f7ce8da9eb757",
-        "version" : "24.12.23"
       }
     },
     {

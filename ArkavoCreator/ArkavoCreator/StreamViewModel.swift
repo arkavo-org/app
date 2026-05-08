@@ -46,7 +46,6 @@ final class StreamViewModel {
     struct PlatformConfig {
         var streamKey: String = ""
         var broadcastId: String?
-        var transitionTask: Task<Void, Never>?
         var error: String?
         var isLive: Bool = false
     }
@@ -58,6 +57,13 @@ final class StreamViewModel {
     var customRTMPURL: String = ""
     var title: String = ""
     var isBandwidthTest: Bool = false
+
+    /// YouTube broadcast privacy: "public", "unlisted", or "private". Bound from `StreamInfoFormView`.
+    var youtubePrivacyStatus: String = "public"
+
+    /// Owns the YouTube broadcast transition Task. Stored directly so that copying
+    /// `PlatformConfig` (a value type) cannot duplicate or lose the reference.
+    var youtubeTransitionTask: Task<Void, Never>?
 
     var isStreaming: Bool = false
     var isConnecting: Bool = false
@@ -97,11 +103,6 @@ final class StreamViewModel {
     var youtubeBroadcastId: String? {
         get { platformConfigs[.youtube]?.broadcastId }
         set { platformConfigs[.youtube, default: PlatformConfig()].broadcastId = newValue }
-    }
-
-    var youtubeTransitionTask: Task<Void, Never>? {
-        get { platformConfigs[.youtube]?.transitionTask }
-        set { platformConfigs[.youtube, default: PlatformConfig()].transitionTask = newValue }
     }
 
     // MARK: - Computed Properties
@@ -205,7 +206,7 @@ final class StreamViewModel {
             if !rtmpPlatforms.isEmpty {
                 // YouTube: create broadcast before RTMP
                 if rtmpPlatforms.contains(.youtube), let ytClient = youtubeClient {
-                    let broadcastId = try await ytClient.createAndBindBroadcast(title: title)
+                    let broadcastId = try await ytClient.createAndBindBroadcast(title: title, privacyStatus: youtubePrivacyStatus)
                     platformConfigs[.youtube, default: PlatformConfig()].broadcastId = broadcastId
                     debugLog("[StreamViewModel] Created YouTube broadcast: \(broadcastId)")
                 }
@@ -240,8 +241,8 @@ final class StreamViewModel {
         guard let session = recordingState.getRecordingSession(), isStreaming else { return }
 
         // Cancel YouTube transition task and end broadcast
-        platformConfigs[.youtube]?.transitionTask?.cancel()
-        platformConfigs[.youtube]?.transitionTask = nil
+        youtubeTransitionTask?.cancel()
+        youtubeTransitionTask = nil
         if let ytClient = youtubeClient, let broadcastId = platformConfigs[.youtube]?.broadcastId {
             try? await ytClient.endBroadcast(broadcastId: broadcastId)
             platformConfigs[.youtube]?.broadcastId = nil

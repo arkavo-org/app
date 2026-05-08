@@ -835,7 +835,7 @@ struct RecordView: View {
             if !rtmpPlatforms.isEmpty {
                 // YouTube: create broadcast before RTMP
                 if rtmpPlatforms.contains(.youtube) {
-                    let broadcastId = try await youtubeClient.createAndBindBroadcast(title: streamViewModel.title)
+                    let broadcastId = try await youtubeClient.createAndBindBroadcast(title: streamViewModel.title, privacyStatus: streamViewModel.youtubePrivacyStatus)
                     streamViewModel.platformConfigs[.youtube, default: StreamViewModel.PlatformConfig()].broadcastId = broadcastId
                     debugLog("[RecordView] Created YouTube broadcast: \(broadcastId)")
                 }
@@ -874,7 +874,7 @@ struct RecordView: View {
             // YouTube: transition broadcast to live
             if selectedPlatforms.contains(.youtube),
                let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
-                streamViewModel.platformConfigs[.youtube]?.transitionTask = Task {
+                streamViewModel.youtubeTransitionTask = Task {
                     try? await Task.sleep(for: .seconds(15))
                     guard !Task.isCancelled else { return }
                     for attempt in 1...5 {

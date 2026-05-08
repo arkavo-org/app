@@ -44,6 +44,9 @@ public actor VideoEncoder {
         var sentAudioSequenceHeader: Bool = false
     }
     private var streamDestinations: [String: StreamDestination] = [:]
+    /// Connection errors from the most recent `startStreaming(to:)` call, keyed by destination id.
+    /// Populated when individual destinations fail during simulcast fan-out — surviving destinations continue streaming.
+    public private(set) var streamConnectionErrors: [String: String] = [:]
     private var ntdfStreamingManager: NTDFStreamingManager?
     private var isNTDFStreaming: Bool = false
 
@@ -102,6 +105,19 @@ public actor VideoEncoder {
             else {
                 print("🎥 Auto-detected PERFORMANCE quality (CPU cores: \(cpuCount))")
                 return StreamQuality.performance.config
+            }
+        }
+    }
+
+    // MARK: - Errors
+
+    public enum StreamingError: Error, CustomStringConvertible, Sendable {
+        case allDestinationsFailed(String)
+
+        public var description: String {
+            switch self {
+            case .allDestinationsFailed(let summary):
+                return "All RTMP destinations failed to connect: \(summary)"
             }
         }
     }
@@ -645,33 +661,54 @@ public actor VideoEncoder {
         }
 
         print("📡 Starting RTMP stream to \(destinations.count) destination(s)...")
+        streamConnectionErrors.removeAll()
 
         // Create shared media encoders (encode once, fan out to all destinations)
         let videoEncoder = ArkavoMedia.VideoEncoder(quality: .auto)
         try videoEncoder.start()
         let audioEncoder = try ArkavoMedia.AudioEncoder(bitrate: 128_000)
 
-        // Connect all destinations in parallel
-        try await withThrowingTaskGroup(of: StreamDestination.self) { group in
+        // Connect all destinations in parallel. Per-destination failures are isolated:
+        // surviving destinations continue streaming. Only if ALL fail do we throw.
+        await withTaskGroup(of: (id: String, result: Result<StreamDestination, Error>).self) { group in
             for dest in destinations {
                 group.addTask {
-                    let publisher = RTMPPublisher()
-                    try await publisher.connect(to: dest.destination, streamKey: dest.streamKey)
-                    try await publisher.sendMetadata(
-                        width: self.videoWidth,
-                        height: self.videoHeight,
-                        framerate: Double(self.frameRate),
-                        videoBitrate: Double(self.videoBitrate),
-                        audioBitrate: 128_000
-                    )
-                    print("✅ [\(dest.id)] RTMP connected")
-                    return StreamDestination(id: dest.id, publisher: publisher)
+                    do {
+                        let publisher = RTMPPublisher()
+                        try await publisher.connect(to: dest.destination, streamKey: dest.streamKey)
+                        try await publisher.sendMetadata(
+                            width: self.videoWidth,
+                            height: self.videoHeight,
+                            framerate: Double(self.frameRate),
+                            videoBitrate: Double(self.videoBitrate),
+                            audioBitrate: 128_000
+                        )
+                        print("✅ [\(dest.id)] RTMP connected")
+                        return (dest.id, .success(StreamDestination(id: dest.id, publisher: publisher)))
+                    } catch {
+                        return (dest.id, .failure(error))
+                    }
                 }
             }
 
-            for try await dest in group {
-                streamDestinations[dest.id] = dest
+            for await outcome in group {
+                switch outcome.result {
+                case .success(let destination):
+                    streamDestinations[destination.id] = destination
+                case .failure(let error):
+                    let message = error.localizedDescription
+                    streamConnectionErrors[outcome.id] = message
+                    print("❌ [\(outcome.id)] RTMP connect failed: \(message)")
+                }
             }
+        }
+
+        guard !streamDestinations.isEmpty else {
+            videoEncoder.stop()
+            let summary = streamConnectionErrors
+                .map { "\($0.key): \($0.value)" }
+                .joined(separator: "; ")
+            throw StreamingError.allDestinationsFailed(summary)
         }
 
         // Create per-destination AsyncStreams and send tasks
@@ -845,86 +882,84 @@ public actor VideoEncoder {
     /// Real audio from mic/mixer will supplement this; the silent frames
     /// act as a fallback when no audio source is active.
     private func startSilentAudioGenerator(encoder: ArkavoMedia.AudioEncoder) {
-        silentAudioTask = Task { [weak self] in
-            // 48kHz stereo Int16 PCM, 1024 frames per AAC packet
-            let sampleRate: Double = 48000
-            let channels: UInt32 = 2
-            let framesPerPacket: Int = 1024
-            let bytesPerFrame = Int(channels) * MemoryLayout<Int16>.size
-            let bufferSize = framesPerPacket * bytesPerFrame
-            let silentData = Data(count: bufferSize) // all zeros = silence
-            let interval = Double(framesPerPacket) / sampleRate // ~21.3ms
+        // 48kHz stereo Int16 PCM, 1024 frames per AAC packet
+        let sampleRate: Double = 48000
+        let channels: UInt32 = 2
+        let framesPerPacket: Int = 1024
+        let bytesPerFrame = Int(channels) * MemoryLayout<Int16>.size
+        let bufferSize = framesPerPacket * bytesPerFrame
+        let interval = Double(framesPerPacket) / sampleRate // ~21.3ms
 
+        // Cache the format description once — it never changes for the duration of the stream.
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
+            mBytesPerPacket: UInt32(bytesPerFrame),
+            mFramesPerPacket: 1,
+            mBytesPerFrame: UInt32(bytesPerFrame),
+            mChannelsPerFrame: channels,
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+        var cachedFormatDesc: CMAudioFormatDescription?
+        CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &cachedFormatDesc
+        )
+        guard let formatDesc = cachedFormatDesc else {
+            print("❌ Silent audio generator: failed to create format description")
+            return
+        }
+
+        silentAudioTask = Task { [weak self] in
+            let silentData = Data(count: bufferSize) // all zeros = silence
             var sampleTime: Double = 0
 
             while !Task.isCancelled {
                 guard let self = self, await self.isStreaming else { break }
 
-                // Always generate silent audio as fallback
-                if true {
-                    // Create a CMSampleBuffer with silent PCM data
-                    var formatDesc: CMAudioFormatDescription?
-                    var asbd = AudioStreamBasicDescription(
-                        mSampleRate: sampleRate,
-                        mFormatID: kAudioFormatLinearPCM,
-                        mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
-                        mBytesPerPacket: UInt32(bytesPerFrame),
-                        mFramesPerPacket: 1,
-                        mBytesPerFrame: UInt32(bytesPerFrame),
-                        mChannelsPerFrame: channels,
-                        mBitsPerChannel: 16,
-                        mReserved: 0
-                    )
-                    CMAudioFormatDescriptionCreate(
+                var blockBuffer: CMBlockBuffer?
+                silentData.withUnsafeBytes { rawPtr in
+                    let ptr = UnsafeMutableRawPointer(mutating: rawPtr.baseAddress!)
+                    CMBlockBufferCreateWithMemoryBlock(
                         allocator: kCFAllocatorDefault,
-                        asbd: &asbd,
-                        layoutSize: 0,
-                        layout: nil,
-                        magicCookieSize: 0,
-                        magicCookie: nil,
-                        extensions: nil,
-                        formatDescriptionOut: &formatDesc
+                        memoryBlock: ptr,
+                        blockLength: bufferSize,
+                        blockAllocator: kCFAllocatorNull, // we manage the memory
+                        customBlockSource: nil,
+                        offsetToData: 0,
+                        dataLength: bufferSize,
+                        flags: 0,
+                        blockBufferOut: &blockBuffer
                     )
-
-                    if let formatDesc = formatDesc {
-                        var blockBuffer: CMBlockBuffer?
-                        silentData.withUnsafeBytes { rawPtr in
-                            let ptr = UnsafeMutableRawPointer(mutating: rawPtr.baseAddress!)
-                            CMBlockBufferCreateWithMemoryBlock(
-                                allocator: kCFAllocatorDefault,
-                                memoryBlock: ptr,
-                                blockLength: bufferSize,
-                                blockAllocator: kCFAllocatorNull, // we manage the memory
-                                customBlockSource: nil,
-                                offsetToData: 0,
-                                dataLength: bufferSize,
-                                flags: 0,
-                                blockBufferOut: &blockBuffer
-                            )
-                        }
-
-                        if let blockBuffer = blockBuffer {
-                            let pts = CMTime(seconds: sampleTime, preferredTimescale: CMTimeScale(sampleRate))
-                            var sampleBuffer: CMSampleBuffer?
-                            CMAudioSampleBufferCreateReadyWithPacketDescriptions(
-                                allocator: kCFAllocatorDefault,
-                                dataBuffer: blockBuffer,
-                                formatDescription: formatDesc,
-                                sampleCount: framesPerPacket,
-                                presentationTimeStamp: pts,
-                                packetDescriptions: nil,
-                                sampleBufferOut: &sampleBuffer
-                            )
-
-                            if let sampleBuffer = sampleBuffer {
-                                encoder.feed(sampleBuffer)
-                            }
-                        }
-                    }
-
-                    sampleTime += interval
                 }
 
+                if let blockBuffer = blockBuffer {
+                    let pts = CMTime(seconds: sampleTime, preferredTimescale: CMTimeScale(sampleRate))
+                    var sampleBuffer: CMSampleBuffer?
+                    CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+                        allocator: kCFAllocatorDefault,
+                        dataBuffer: blockBuffer,
+                        formatDescription: formatDesc,
+                        sampleCount: framesPerPacket,
+                        presentationTimeStamp: pts,
+                        packetDescriptions: nil,
+                        sampleBufferOut: &sampleBuffer
+                    )
+
+                    if let sampleBuffer = sampleBuffer {
+                        encoder.feed(sampleBuffer)
+                    }
+                }
+
+                sampleTime += interval
                 try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
             }
         }

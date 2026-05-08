@@ -29,6 +29,7 @@ struct StreamDestinationPicker: View {
                     platform: streamViewModel.selectedPlatform,
                     twitchClient: twitchClient,
                     youtubeClient: youtubeClient,
+                    privacyStatus: $streamViewModel.youtubePrivacyStatus,
                     onBack: { showStreamInfo = false },
                     onStartStream: {
                         await startStream()
