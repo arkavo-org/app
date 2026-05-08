@@ -3,6 +3,13 @@
 # Ensure the script stops on error
 set -e
 
+# Pre-trust Swift macros and SwiftPM plugins so Xcode Cloud can use packages
+# that ship macros (e.g. mlx-swift-lm's MLXHuggingFaceMacros). Without this the
+# build fails with: "Macro '...' from package '...' must be enabled before it
+# can be used." The same trust prompt is approved interactively in local Xcode.
+defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
+defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
+
 # Define the Secrets.swift file path relative to the Git repository root
 SECRETS_FILE="../ArkavoCreator/Secrets.swift"
 
