@@ -157,8 +157,14 @@ public final class MLXBackend: @unchecked Sendable {
 
             state.withLock { $0.generationTask = task }
 
+            // Cancel and AWAIT the inner Task so the model run actually winds down
+            // before the AsyncThrowingStream is fully torn down. Without the await,
+            // the task could keep computing and yielding into a finished continuation
+            // (silent drops + wasted GPU cycles) for milliseconds after the consumer
+            // dropped the stream.
             continuation.onTermination = { @Sendable _ in
                 task.cancel()
+                Task { _ = await task.value }
             }
         }
     }

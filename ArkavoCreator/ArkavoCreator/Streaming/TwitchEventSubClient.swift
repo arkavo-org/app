@@ -22,6 +22,12 @@ final class TwitchEventSubClient {
     private var keepaliveTimer: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
 
+    /// Consecutive reconnect attempts since the last successful connection.
+    /// Used for exponential backoff on `wss://` receive failures.
+    private var reconnectAttempts: Int = 0
+    /// Cap on backoff between reconnect attempts.
+    private static let maxReconnectBackoffSeconds: Int = 60
+
     private let eventContinuation: AsyncStream<StreamEvent>.Continuation
     /// Event stream — created once and preserved across reconnects so existing
     /// consumers keep receiving events without needing to re-subscribe.
@@ -86,7 +92,8 @@ final class TwitchEventSubClient {
 
     /// Tear down transport state without finishing the event stream.
     /// Used internally before reconnecting so existing consumers keep receiving events.
-    private func tearDownConnection() {
+    /// `internal` so tests can verify the stream-survival invariant without standing up a real WebSocket.
+    func tearDownConnection() {
         isConnected = false
         keepaliveTimer?.cancel()
         keepaliveTimer = nil
@@ -121,9 +128,16 @@ final class TwitchEventSubClient {
                 if isConnected {
                     logger.error("EventSub receive error: \(error.localizedDescription)")
                     isConnected = false
-                    // Attempt reconnect after a delay
-                    Task { [weak self] in
-                        try? await Task.sleep(for: .seconds(5))
+                    // Schedule reconnect with bounded exponential backoff.
+                    // 5s → 10s → 20s → 40s → 60s (capped). Reset on next successful welcome.
+                    reconnectAttempts += 1
+                    let delaySeconds = Swift.min(
+                        Self.maxReconnectBackoffSeconds,
+                        5 * (1 << Swift.min(reconnectAttempts - 1, 6))  // 5, 10, 20, 40, 80→capped
+                    )
+                    logger.info("EventSub reconnect in \(delaySeconds)s (attempt \(self.reconnectAttempts))")
+                    Task { [weak self, delaySeconds] in
+                        try? await Task.sleep(for: .seconds(delaySeconds))
                         await self?.reconnect()
                     }
                 }
@@ -174,6 +188,8 @@ final class TwitchEventSubClient {
         if let timeout = session["keepalive_timeout_seconds"] as? Int {
             keepaliveTimeoutSeconds = timeout
         }
+        // Successful welcome means transport is healthy — reset reconnect backoff.
+        reconnectAttempts = 0
 
         logger.info("EventSub session established: \(id)")
         resetKeepaliveTimer()
@@ -409,6 +425,12 @@ final class TwitchEventSubClient {
         // Keep old connection alive until new one sends welcome
         let oldWs = webSocket
         let oldSession = urlSession
+
+        // Cancel the old keepalive timer — the new connection will start its own
+        // when the welcome message arrives. Without this, the old timer keeps
+        // running and may fire mid-handshake on the new transport.
+        keepaliveTimer?.cancel()
+        keepaliveTimer = nil
 
         let session = URLSession(configuration: .default)
         self.urlSession = session

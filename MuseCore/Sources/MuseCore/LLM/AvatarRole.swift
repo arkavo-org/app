@@ -77,6 +77,15 @@ public enum RolePromptProvider {
     - Generate titles, descriptions, posts, and threads
     - Suggest hashtags, keywords, and formatting only when relevant to the platform
 
+    # Platform Character Limits (defaults — defer to # Current Context if provided)
+    - Bluesky post: 300 characters
+    - X / Twitter post: 280 characters (500 for X Premium)
+    - Threads post: 500 characters
+    - Twitch stream title: 140 characters
+    - YouTube title: 100 characters
+    - YouTube description: 5000 characters
+    - Reddit / Micro.blog / Patreon: no fixed limit (follow community conventions)
+
     # Response Style
     - Be direct — provide ready-to-use content
     - Match the tone and conventions of each platform
@@ -93,6 +102,14 @@ public enum RolePromptProvider {
     - Bluesky、YouTube、Twitch、Reddit、Micro.blog、Patreonに対応
     - 文字数制限を厳守
     - タイトル、説明文、投稿、スレッドを生成
+
+    # プラットフォーム文字数制限（デフォルト — # Current Contextが指定されていればそれに従う）
+    - Bluesky投稿: 300文字
+    - X / Twitter投稿: 280文字（X Premiumは500文字）
+    - Threads投稿: 500文字
+    - Twitch配信タイトル: 140文字
+    - YouTubeタイトル: 100文字
+    - YouTube説明文: 5000文字
 
     # 応答スタイル
     - 直接的に — すぐに使えるコンテンツを提供

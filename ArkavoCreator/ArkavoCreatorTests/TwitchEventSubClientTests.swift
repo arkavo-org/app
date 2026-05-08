@@ -15,21 +15,37 @@ final class TwitchEventSubClientTests: XCTestCase {
         )
     }
 
-    /// The event stream is constructed exactly once at init. Consumers
-    /// hold a reference and iterate it across the full lifetime of the client,
-    /// including reconnects. Regression test for the prior bug where reconnect()
-    /// replaced `events` with a new stream and finished the old one, silently
-    /// dropping all consumers.
-    func testEventStreamIsStableAcrossLifecycle() {
+    /// Reconnect path must NOT finish the events stream — consumers should
+    /// keep iterating across transport teardowns. We simulate the underlying
+    /// transport teardown that reconnect() performs (via the internal helper)
+    /// and then race the iterator's next() against a short timer. A finished
+    /// AsyncStream returns nil from next() immediately; a live one suspends
+    /// until cancelled. The timer must win.
+    func testEventStreamSurvivesTransportTeardown() async {
         let client = makeClient()
-        let streamA = client.events
-        let streamB = client.events
-        XCTAssertTrue(type(of: streamA) == type(of: streamB))
-        // There is no public way to rebuild the stream — the property is a `let`.
-        // This test serves as a compile-time contract: if someone reintroduces
-        // a `var events`, the next line would still pass but the subsequent
-        // refactor review should catch it. The real guarantee is in the type.
-        XCTAssertNotNil(client.events)
+        let stream = client.events
+
+        client.tearDownConnection()
+
+        let winner = await withTaskGroup(of: String.self) { group in
+            group.addTask {
+                var iterator = stream.makeAsyncIterator()
+                _ = await iterator.next()
+                return "stream-finished"
+            }
+            group.addTask {
+                try? await Task.sleep(for: .milliseconds(150))
+                return "still-suspended"
+            }
+            let first = await group.next() ?? "no-result"
+            group.cancelAll()
+            // Drain remaining children to avoid leaking the iterator pull task.
+            for await _ in group { }
+            return first
+        }
+
+        XCTAssertEqual(winner, "still-suspended",
+                       "tearDownConnection() must not finish the events stream — \(winner)")
     }
 
     /// After disconnect(), iterating the stream terminates cleanly rather

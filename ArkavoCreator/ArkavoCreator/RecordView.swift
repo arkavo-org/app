@@ -804,96 +804,33 @@ struct RecordView: View {
     // MARK: - Streaming
 
     private func startStreaming(destination: RTMPPublisher.Destination, streamKey: String) async {
-        // Ensure we have an active session
+        // Ensure we have an active session before delegating to the view model.
         if RecordingState.shared.recordingSession == nil {
             await viewModel.startPreviewSession()
         }
 
-        do {
-            guard let session = RecordingState.shared.recordingSession else {
-                streamViewModel.error = "Failed to create streaming session"
-                return
-            }
+        // Wire the platform clients so StreamViewModel can drive YouTube broadcast
+        // creation and the testing→live transition itself.
+        streamViewModel.youtubeClient = youtubeClient
+        streamViewModel.twitchClient = twitchClient
 
-            let selectedPlatforms = streamViewModel.selectedPlatforms
+        // Single source of truth: StreamViewModel handles validation, Arkavo NTDF,
+        // YouTube broadcast lifecycle, and multi-destination RTMP fan-out.
+        let started = await streamViewModel.startStreaming()
+        guard started else { return }
 
-            // Handle Arkavo NTDF separately
-            if selectedPlatforms.contains(.arkavo) {
-                guard let kasURL = URL(string: "https://100.arkavo.net") else {
-                    streamViewModel.error = "Invalid KAS URL"
-                    return
-                }
-                try await session.startNTDFStreaming(
-                    kasURL: kasURL,
-                    rtmpURL: StreamViewModel.StreamPlatform.arkavo.rtmpURL,
-                    streamKey: "live/creator"
-                )
-            }
+        let selectedPlatforms = streamViewModel.selectedPlatforms
 
-            // Build RTMP destinations for all non-Arkavo platforms
-            let rtmpPlatforms = selectedPlatforms.filter { !$0.isEncrypted }
-            if !rtmpPlatforms.isEmpty {
-                // YouTube: create broadcast before RTMP
-                if rtmpPlatforms.contains(.youtube) {
-                    let broadcastId = try await youtubeClient.createAndBindBroadcast(title: streamViewModel.title, privacyStatus: streamViewModel.youtubePrivacyStatus)
-                    streamViewModel.platformConfigs[.youtube, default: StreamViewModel.PlatformConfig()].broadcastId = broadcastId
-                    debugLog("[RecordView] Created YouTube broadcast: \(broadcastId)")
-                }
-
-                // Build destinations array
-                var destinations: [(id: String, destination: RTMPPublisher.Destination, streamKey: String)] = []
-                for platform in rtmpPlatforms {
-                    let config = streamViewModel.platformConfigs[platform] ?? StreamViewModel.PlatformConfig()
-                    let url = platform == .custom ? streamViewModel.customRTMPURL : platform.rtmpURL
-                    let dest = RTMPPublisher.Destination(url: url, platform: platform.rawValue.lowercased())
-                    var key = config.streamKey
-                    if platform == .twitch && streamViewModel.isBandwidthTest {
-                        key += "?bandwidthtest=true"
-                    }
-                    destinations.append((id: platform.rawValue.lowercased(), destination: dest, streamKey: key))
-                }
-
-                try await session.startStreaming(destinations: destinations)
-            }
-
-            streamViewModel.isStreaming = true
-            streamViewModel.startStatisticsPolling()
-
-            // Auto-connect chat for all selected platforms (unified feed)
-            if selectedPlatforms.contains(.twitch) && twitchClient.isAuthenticated {
-                chatViewModel.connectTwitch(twitchClient: twitchClient)
-            }
-            if selectedPlatforms.contains(.youtube),
-               let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
-                chatViewModel.connectYouTube(youtubeClient: youtubeClient, broadcastId: broadcastId)
-            }
-            if selectedPlatforms.contains(.twitch) || selectedPlatforms.contains(.youtube) {
-                withAnimation { showRightPanel = true }
-            }
-
-            // YouTube: transition broadcast to live
-            if selectedPlatforms.contains(.youtube),
-               let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
-                streamViewModel.youtubeTransitionTask = Task {
-                    try? await Task.sleep(for: .seconds(15))
-                    guard !Task.isCancelled else { return }
-                    for attempt in 1...5 {
-                        guard !Task.isCancelled else { return }
-                        do {
-                            try await youtubeClient.transitionBroadcastToLive(broadcastId: broadcastId)
-                            debugLog("[RecordView] YouTube broadcast transitioned to LIVE")
-                            break
-                        } catch {
-                            debugLog("[RecordView] YouTube transition attempt \(attempt)/5: \(error.localizedDescription)")
-                            if attempt < 5 {
-                                try? await Task.sleep(for: .seconds(10))
-                            }
-                        }
-                    }
-                }
-            }
-        } catch {
-            streamViewModel.error = error.localizedDescription
+        // UI-level concerns stay here: chat fan-in and right-panel visibility.
+        if selectedPlatforms.contains(.twitch) && twitchClient.isAuthenticated {
+            chatViewModel.connectTwitch(twitchClient: twitchClient)
+        }
+        if selectedPlatforms.contains(.youtube),
+           let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
+            chatViewModel.connectYouTube(youtubeClient: youtubeClient, broadcastId: broadcastId)
+        }
+        if selectedPlatforms.contains(.twitch) || selectedPlatforms.contains(.youtube) {
+            withAnimation { showRightPanel = true }
         }
     }
 

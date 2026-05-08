@@ -20,6 +20,10 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- network.server: required to host the local OAuth callback HTTP listener
+	     used by the YouTube/Twitch sign-in flow (the Google/Twitch consent page
+	     redirects back to http://127.0.0.1:<port>/callback). Not used for any
+	     inbound traffic from outside the loopback interface. -->
 	<key>com.apple.security.network.server</key>
 	<true/>
 	<key>keychain-access-groups</key>

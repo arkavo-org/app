@@ -52,6 +52,10 @@ public final class ConversationManager {
     /// Dynamic context appended to system prompt (stream state for Producer, platform constraints for Publicist)
     public var contextInjection: String?
 
+    /// One-shot interruption flag — surfaced into the next prompt and then cleared.
+    /// Avoids leaving "[Interrupted by user]" inside the persistent history forever.
+    private var pendingInterruption: Bool = false
+
     /// Switch to a new role, clearing history and context
     public func switchRole(_ role: AvatarRole) {
         activeRole = role
@@ -96,15 +100,32 @@ public final class ConversationManager {
 
         context += "\n\nRecent conversation:\n"
 
-        // Include recent messages for context
-        let recentMessages = messages.suffix(10)
-        for message in recentMessages {
+        // Token-budget-aware history: walk backwards from most recent and include
+        // as many turns as fit within the same budget that buildPromptForMessage uses.
+        let fixedTokens = estimateTokens(context) + 20  // +20 for the trailing "Assistant:" marker
+        let historyBudget = max(0, Self.promptTokenBudget - fixedTokens)
+        var includedLines: [String] = []
+        var usedTokens = 0
+        for message in messages.reversed() {
+            let line: String
             switch message.role {
             case .user:
-                context += "User: \(message.content)\n"
+                line = "User: \(message.content)"
             case .assistant:
-                context += "Assistant: \(message.content)\n"
+                line = "Assistant: \(message.content)"
             }
+            let lineTokens = estimateTokens(line)
+            if usedTokens + lineTokens > historyBudget { break }
+            includedLines.insert(line, at: 0)
+            usedTokens += lineTokens
+        }
+        for line in includedLines {
+            context += line + "\n"
+        }
+
+        if pendingInterruption {
+            context += "[Interrupted by user]\n"
+            pendingInterruption = false
         }
 
         context += "\nAssistant:"
@@ -173,7 +194,11 @@ public final class ConversationManager {
             context += "\n"
         }
 
-        // Add the new user message
+        // Add the new user message (preceded by a one-shot interruption marker if pending)
+        if pendingInterruption {
+            context += "[Interrupted by user]\n"
+            pendingInterruption = false
+        }
         context += "User: \(userMessage)\n"
         context += "Assistant:"
 
@@ -185,12 +210,12 @@ public final class ConversationManager {
         messages.removeAll()
     }
 
-    /// Inject context that user interrupted the avatar.
-    /// Allows LLM to acknowledge the interruption naturally in the next response.
+    /// Flag that the user interrupted the avatar.
+    /// The next call to `buildPromptForMessage` or `buildContextPrompt` will surface
+    /// "[Interrupted by user]" once and then clear the flag — so an unconsumed
+    /// interruption can't accumulate in conversation history.
     public func injectInterruptionContext() {
-        let message = ConversationMessage(role: .assistant, content: "[Interrupted by user]")
-        messages.append(message)
-        pruneHistoryIfNeeded()
+        pendingInterruption = true
     }
 
     /// Build a prompt for the first meeting after name extraction

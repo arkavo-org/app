@@ -170,17 +170,25 @@ final class StreamViewModel {
 
     // MARK: - Actions
 
-    func startStreaming() async {
-        guard canStartStreaming else { return }
+    /// Single source of truth for starting a stream. Handles validation, NTDF setup,
+    /// YouTube broadcast creation, multi-destination RTMP fan-out, and the post-stream
+    /// YouTube `testing → live` transition task.
+    ///
+    /// - Returns: `true` if the stream started successfully (UI can proceed to wire chat,
+    ///            show overlays, etc.). `false` if validation or any setup step failed —
+    ///            in that case `error` is populated.
+    @discardableResult
+    func startStreaming() async -> Bool {
+        guard canStartStreaming else { return false }
 
         if let validationError = validateInputs() {
             error = validationError
-            return
+            return false
         }
 
         guard let session = recordingState.getRecordingSession() else {
             error = "No active recording session. Please start recording first."
-            return
+            return false
         }
 
         error = nil
@@ -192,7 +200,7 @@ final class StreamViewModel {
                 guard let kasURL = URL(string: "https://100.arkavo.net") else {
                     self.error = "Invalid KAS URL"
                     isConnecting = false
-                    return
+                    return false
                 }
                 try await session.startNTDFStreaming(
                     kasURL: kasURL,
@@ -230,10 +238,36 @@ final class StreamViewModel {
             isConnecting = false
             startStatisticsTimer()
 
+            // YouTube broadcast lifecycle: after RTMP is publishing, transition the
+            // broadcast from `testing` → `live`. Stored as a Task on the view model
+            // (round 2 fix) so stopStreaming can cancel it cleanly.
+            if let ytClient = youtubeClient,
+               let broadcastId = platformConfigs[.youtube]?.broadcastId {
+                youtubeTransitionTask = Task {
+                    try? await Task.sleep(for: .seconds(15))
+                    guard !Task.isCancelled else { return }
+                    for attempt in 1...5 {
+                        guard !Task.isCancelled else { return }
+                        do {
+                            try await ytClient.transitionBroadcastToLive(broadcastId: broadcastId)
+                            debugLog("[StreamViewModel] YouTube broadcast transitioned to LIVE")
+                            break
+                        } catch {
+                            debugLog("[StreamViewModel] YouTube transition attempt \(attempt)/5: \(error.localizedDescription)")
+                            if attempt < 5 {
+                                try? await Task.sleep(for: .seconds(10))
+                            }
+                        }
+                    }
+                }
+            }
+
+            return true
         } catch {
             self.error = error.localizedDescription
             isConnecting = false
             isStreaming = false
+            return false
         }
     }
 

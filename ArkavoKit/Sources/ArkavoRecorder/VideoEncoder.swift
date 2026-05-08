@@ -705,6 +705,7 @@ public actor VideoEncoder {
 
         guard !streamDestinations.isEmpty else {
             videoEncoder.stop()
+            audioEncoder.onFrame = nil  // Drop the local reference cleanly so the encoder is freed
             let summary = streamConnectionErrors
                 .map { "\($0.key): \($0.value)" }
                 .joined(separator: "; ")

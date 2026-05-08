@@ -42,6 +42,11 @@ public final class MLXResponseProvider: LLMResponseProvider, @unchecked Sendable
 
     public var priority: Int { 2 }
 
+    /// Hard byte-cap on accumulated generation text. Protects against runaway
+    /// concatenation if `maxTokens` is ever raised significantly. Tokens beyond
+    /// this point are dropped and an OS log warning is emitted.
+    private static let maxAccumulatedBytes = 128 * 1024  // 128 KiB
+
     public func generate(prompt: String) async throws -> ConstrainedResponse {
         let systemPrompt = buildSystemPrompt()
 
@@ -52,7 +57,15 @@ public final class MLXResponseProvider: LLMResponseProvider, @unchecked Sendable
         )
 
         var fullText = ""
+        var truncated = false
         for try await token in stream {
+            if fullText.utf8.count + token.utf8.count > Self.maxAccumulatedBytes {
+                if !truncated {
+                    logger.warning("MLX response exceeded \(Self.maxAccumulatedBytes) bytes — truncating")
+                    truncated = true
+                }
+                continue
+            }
             fullText += token
         }
 

@@ -70,15 +70,32 @@ public enum ModelRegistry {
     }
 
     /// Check if a model's files exist in the local cache.
-    /// MLX uses `Caches/models/<org>/<repo>` via the system caches directory,
-    /// which resolves correctly inside the App Sandbox container.
+    ///
+    /// HuggingFace's `HubCache` lays models out as
+    /// `<cacheDir>/huggingface/hub/models--<org>--<repo>` (slashes in the repo
+    /// id replaced with `--`). Two locations may apply:
+    ///   1. The user's home cache: `~/.cache/huggingface/hub/...`
+    ///   2. The app sandbox cache: `Library/Caches/huggingface/hub/...`
+    /// Either presence counts as cached so we don't redundantly re-download.
     public static func isModelCached(_ model: ModelInfo) -> Bool {
-        guard let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-            return false
+        let folder = "models--" + model.huggingFaceID.replacingOccurrences(of: "/", with: "--")
+        let candidates = cacheCandidateURLs().map {
+            $0.appendingPathComponent("huggingface")
+              .appendingPathComponent("hub")
+              .appendingPathComponent(folder)
         }
-        let modelDir = cachesURL
-            .appendingPathComponent("models")
-            .appendingPathComponent(model.huggingFaceID)
-        return FileManager.default.fileExists(atPath: modelDir.path)
+        return candidates.contains { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    private static func cacheCandidateURLs() -> [URL] {
+        var urls: [URL] = []
+        if let sandbox = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            urls.append(sandbox)
+        }
+        // ~/.cache — used by the system Python HF client; we share this cache
+        // when the user runs models outside the app, per project memory.
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        urls.append(home.appendingPathComponent(".cache"))
+        return urls
     }
 }

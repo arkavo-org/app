@@ -881,6 +881,30 @@ public actor YouTubeClient: ObservableObject {
     /// to give responsive progress and manageable retry on flaky networks.
     private static let uploadChunkSize: Int = 8 * 1024 * 1024
 
+    /// Maximum retry attempts per chunk on transient (5xx / network) failure.
+    private static let uploadMaxAttempts: Int = 5
+
+    /// Dedicated URLSession for resumable uploads with stall protection.
+    /// `timeoutIntervalForRequest` triggers if no bytes flow for the duration;
+    /// `timeoutIntervalForResource` caps total time per chunk PUT.
+    private static let uploadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60   // stalls > 60s are treated as transient errors
+        config.timeoutIntervalForResource = 600 // hard cap per chunk
+        return URLSession(configuration: config)
+    }()
+
+    /// Parse the byte offset of the next chunk from a YouTube `Range` header.
+    /// Header format: `bytes=0-N` (inclusive end). Returns N+1 (next byte to send),
+    /// or nil if the header is missing/unparseable.
+    static func nextOffsetFromRangeHeader(_ header: String?) -> Int64? {
+        guard let header = header,
+              let dashIdx = header.firstIndex(of: "-") else { return nil }
+        let endStr = header[header.index(after: dashIdx)...]
+        guard let serverEnd = Int64(endStr) else { return nil }
+        return serverEnd + 1
+    }
+
     private func uploadResumableChunks(
         to uploadURL: URL,
         fileURL: URL,
@@ -907,57 +931,162 @@ public actor YouTubeClient: ObservableObject {
                 throw YouTubeError.googleError("Unexpected read length at offset \(offset)")
             }
 
-            var request = URLRequest(url: uploadURL)
-            request.httpMethod = "PUT"
-            request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
-            request.setValue("\(thisChunk)", forHTTPHeaderField: "Content-Length")
-            request.setValue("bytes \(offset)-\(endByte)/\(totalSize)", forHTTPHeaderField: "Content-Range")
-            request.httpBody = chunkData
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw YouTubeError.invalidResponse
-            }
-
-            switch http.statusCode {
-            case 200, 201:
-                // Terminal success — server returns the full video resource JSON
-                onProgress?(1.0)
-                struct VideoResource: Codable { let id: String }
-                let resource = try JSONDecoder().decode(VideoResource.self, from: data)
-                return resource.id
-
-            case 308:
-                // "Resume Incomplete" — parse Range header to learn how much the server accepted.
-                // Header format: "bytes=0-N" (inclusive end).
-                if let range = http.value(forHTTPHeaderField: "Range") ?? http.value(forHTTPHeaderField: "range"),
-                   let dashIdx = range.firstIndex(of: "-") {
-                    let endStr = range[range.index(after: dashIdx)...]
-                    if let serverEnd = Int64(endStr) {
-                        offset = serverEnd + 1
-                    } else {
-                        offset += thisChunk
+            // Try this chunk with bounded exponential backoff on transient errors.
+            // 5xx and URLError network issues are retried; 4xx is fatal.
+            var attempt = 0
+            chunkAttempt: while true {
+                attempt += 1
+                let result: ChunkOutcome
+                do {
+                    result = try await sendUploadChunk(
+                        to: uploadURL,
+                        chunk: chunkData,
+                        offset: offset,
+                        endByte: endByte,
+                        totalSize: totalSize,
+                        mimeType: mimeType
+                    )
+                } catch let urlError as URLError where attempt < Self.uploadMaxAttempts {
+                    // Transient network issue (timeout, lost connection, etc.).
+                    let delaySeconds = Double(1 << (attempt - 1))  // 1, 2, 4, 8, 16
+                    try await Task.sleep(for: .seconds(delaySeconds))
+                    // Re-query the server for the byte offset it actually has;
+                    // it may have committed bytes before the error reached us.
+                    if let probed = try? await probeUploadOffset(uploadURL: uploadURL, totalSize: totalSize) {
+                        if let videoId = probed.completedVideoId {
+                            onProgress?(1.0)
+                            return videoId
+                        }
+                        offset = probed.nextOffset ?? offset
                     }
-                } else {
-                    offset += thisChunk
+                    _ = urlError  // silence unused
+                    continue chunkAttempt
                 }
-                onProgress?(Double(offset) / Double(totalSize))
 
-            case 401, 403:
-                throw YouTubeError.googleError("Upload unauthorized (HTTP \(http.statusCode)) — token may be missing youtube.upload scope")
+                switch result {
+                case .completed(let videoId):
+                    onProgress?(1.0)
+                    return videoId
 
-            default:
-                if let apiError = try? JSONDecoder().decode(YouTubeAPIError.self, from: data),
-                   let reason = apiError.error.errors.first?.reason {
-                    throw YouTubeError.googleError("Upload chunk failed (HTTP \(http.statusCode)): \(reason)")
+                case .resumeIncomplete(let serverNextOffset):
+                    offset = serverNextOffset ?? (offset + thisChunk)
+                    onProgress?(Double(offset) / Double(totalSize))
+                    break chunkAttempt
+
+                case .transient(let statusCode):
+                    guard attempt < Self.uploadMaxAttempts else {
+                        throw YouTubeError.googleError("Upload chunk failed after \(attempt) attempts (HTTP \(statusCode))")
+                    }
+                    let delaySeconds = Double(1 << (attempt - 1))
+                    try await Task.sleep(for: .seconds(delaySeconds))
+                    if let probed = try? await probeUploadOffset(uploadURL: uploadURL, totalSize: totalSize) {
+                        if let videoId = probed.completedVideoId {
+                            onProgress?(1.0)
+                            return videoId
+                        }
+                        offset = probed.nextOffset ?? offset
+                    }
+                    continue chunkAttempt
                 }
-                throw YouTubeError.httpError(statusCode: http.statusCode)
             }
         }
 
-        // Control should only reach here if server sent 308 for the final chunk
-        // without a terminal 200. Treat as a protocol violation.
+        // Control should only reach here if the last chunk's response was 308 with
+        // server-reported offset == totalSize (no terminal 200 yet). Probe for it.
+        if let probed = try? await probeUploadOffset(uploadURL: uploadURL, totalSize: totalSize),
+           let videoId = probed.completedVideoId {
+            onProgress?(1.0)
+            return videoId
+        }
         throw YouTubeError.googleError("Upload completed bytes but no video ID returned")
+    }
+
+    private enum ChunkOutcome {
+        case completed(videoId: String)
+        case resumeIncomplete(nextOffset: Int64?)
+        case transient(statusCode: Int)
+    }
+
+    private func sendUploadChunk(
+        to uploadURL: URL,
+        chunk: Data,
+        offset: Int64,
+        endByte: Int64,
+        totalSize: Int64,
+        mimeType: String
+    ) async throws -> ChunkOutcome {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
+        request.setValue("bytes \(offset)-\(endByte)/\(totalSize)", forHTTPHeaderField: "Content-Range")
+        request.httpBody = chunk
+
+        let (data, response) = try await Self.uploadSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw YouTubeError.invalidResponse
+        }
+
+        switch http.statusCode {
+        case 200, 201:
+            struct VideoResource: Codable { let id: String }
+            let resource = try JSONDecoder().decode(VideoResource.self, from: data)
+            return .completed(videoId: resource.id)
+
+        case 308:
+            let header = http.value(forHTTPHeaderField: "Range") ?? http.value(forHTTPHeaderField: "range")
+            return .resumeIncomplete(nextOffset: Self.nextOffsetFromRangeHeader(header))
+
+        case 401, 403:
+            throw YouTubeError.googleError("Upload unauthorized (HTTP \(http.statusCode)) — token may be missing youtube.upload scope")
+
+        case 500, 502, 503, 504:
+            return .transient(statusCode: http.statusCode)
+
+        default:
+            if let apiError = try? JSONDecoder().decode(YouTubeAPIError.self, from: data),
+               let reason = apiError.error.errors.first?.reason {
+                throw YouTubeError.googleError("Upload chunk failed (HTTP \(http.statusCode)): \(reason)")
+            }
+            throw YouTubeError.httpError(statusCode: http.statusCode)
+        }
+    }
+
+    private struct UploadProbeResult {
+        let nextOffset: Int64?
+        let completedVideoId: String?
+    }
+
+    /// Query the upload session for current byte offset. Per the resumable protocol,
+    /// PUT with `Content-Range: bytes *​/<totalSize>` and an empty body returns 308 + Range,
+    /// or 200/201 if the upload already completed server-side.
+    private func probeUploadOffset(uploadURL: URL, totalSize: Int64) async throws -> UploadProbeResult {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.setValue("0", forHTTPHeaderField: "Content-Length")
+        request.setValue("bytes */\(totalSize)", forHTTPHeaderField: "Content-Range")
+        request.httpBody = Data()
+
+        let (data, response) = try await Self.uploadSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw YouTubeError.invalidResponse
+        }
+        switch http.statusCode {
+        case 200, 201:
+            struct VideoResource: Codable { let id: String }
+            if let resource = try? JSONDecoder().decode(VideoResource.self, from: data) {
+                return UploadProbeResult(nextOffset: nil, completedVideoId: resource.id)
+            }
+            return UploadProbeResult(nextOffset: totalSize, completedVideoId: nil)
+        case 308:
+            let header = http.value(forHTTPHeaderField: "Range") ?? http.value(forHTTPHeaderField: "range")
+            return UploadProbeResult(
+                nextOffset: Self.nextOffsetFromRangeHeader(header) ?? 0,
+                completedVideoId: nil
+            )
+        default:
+            throw YouTubeError.httpError(statusCode: http.statusCode)
+        }
     }
 }
 

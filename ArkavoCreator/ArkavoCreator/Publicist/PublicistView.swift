@@ -251,12 +251,17 @@ struct PublicistView: View {
 
                 Spacer()
 
-                if !viewModel.generatedContent.isEmpty {
-                    // Character count
+                // Live character count — visible during streaming AND after final generation,
+                // so the user can watch if they're about to overrun the platform limit.
+                if viewModel.isGenerating || !viewModel.generatedContent.isEmpty {
                     HStack(spacing: 4) {
-                        Text("\(viewModel.characterCount)")
+                        let liveCount = viewModel.isGenerating
+                            ? viewModel.streamingText.count
+                            : viewModel.characterCount
+                        let liveOver = viewModel.selectedPlatform.characterLimit.map { liveCount > $0 } ?? false
+                        Text("\(liveCount)")
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(viewModel.isOverLimit ? .red : .secondary)
+                            .foregroundStyle(liveOver ? .red : .secondary)
                         if let limit = viewModel.selectedPlatform.characterLimit {
                             Text("/ \(limit)")
                                 .font(.caption.monospacedDigit())
@@ -267,6 +272,8 @@ struct PublicistView: View {
             }
 
             if viewModel.isGenerating {
+                let liveOver = viewModel.selectedPlatform.characterLimit
+                    .map { viewModel.streamingText.count > $0 } ?? false
                 VStack(alignment: .leading) {
                     Text(viewModel.streamingText)
                         .font(.body)
@@ -279,6 +286,10 @@ struct PublicistView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary)
                 .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(liveOver ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                )
             } else {
                 Text(viewModel.generatedContent)
                     .font(.body)

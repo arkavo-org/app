@@ -57,11 +57,19 @@ struct StopSequenceBuffer {
     }
 
     /// Flush any remaining text when generation ends naturally (no stop sequence hit).
-    /// Strips any trailing partial stop markers defensively.
+    /// Strips any trailing partial stop markers defensively — only at the suffix,
+    /// never mid-string. A model that legitimately emits a stop token in the
+    /// middle of generation should keep that text intact.
     mutating func flush() -> String {
         var result = pending
-        for stop in stopSequences {
-            result = result.replacingOccurrences(of: stop, with: "")
+        // Strip a single trailing stop sequence if present. Loop in case the
+        // pending tail is literally just multiple stop sequences concatenated.
+        outer: while !result.isEmpty {
+            for stop in stopSequences where result.hasSuffix(stop) {
+                result.removeLast(stop.count)
+                continue outer
+            }
+            break
         }
         pending = ""
         return result

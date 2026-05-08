@@ -210,7 +210,10 @@ public actor RTMPPublisher {
         state = .publishing
         startTime = Date()
 
-        // Start background handler for server messages (pings, acks, etc.)
+        // Start the background server-message handler. The loop reads from the
+        // socket and accepts both .publishing and .connected as live states, so
+        // server messages issued in the brief window around the state flip
+        // can't be missed.
         startServerMessageHandler()
 
         print("✅ RTMP publishing started")
@@ -1268,7 +1271,8 @@ public actor RTMPPublisher {
             print("📡 Server message handler started")
             while !Task.isCancelled {
                 do {
-                    guard await self.state == .publishing else { break }
+                    let connState = await self.state
+                    guard connState == .publishing || connState == .connected else { break }
                     let (messageType, messageData, messageBytes) = try await self.receiveRTMPMessage()
                     await self.addBytesReceived(UInt64(messageBytes))
 
