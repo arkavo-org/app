@@ -1,6 +1,7 @@
 import ArkavoKit
 import ArkavoStreaming
 import AVFoundation
+import MuseCore
 import SwiftUI
 
 struct RecordView: View {
@@ -8,6 +9,7 @@ struct RecordView: View {
 
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
+    var modelManager: ModelManager?
 
     // MARK: - Private State
 
@@ -17,15 +19,19 @@ struct RecordView: View {
     @StateObject private var museAvatarViewModel = MuseAvatarViewModel()
     @State private var enableScreen: Bool = false
     @State private var showStreamSetup: Bool = false
-    @State private var showInspector: Bool = false
-    @State private var showChat: Bool = false
+    @State private var showRightPanel: Bool = false
     @State private var chatViewModel = ChatPanelViewModel()
+    @State private var producerViewModel: ProducerViewModel?
     @State private var pulsing: Bool = false
     @State private var pipOffset: CGSize = .zero
     @State private var lastPipOffset: CGSize = .zero
     // Scene state restoration
     @State private var preSceneMicEnabled: Bool = true
     @State private var preSceneVisualSource: VisualSource? = .face
+    @State private var isLivePulsing: Bool = false
+    @State private var showMicPopover: Bool = false
+    @State private var showAudioPopover: Bool = false
+    @State private var showScenePopover: Bool = false
 
     // Shared state (not part of init)
     @ObservedObject private var previewStore = CameraPreviewStore.shared
@@ -38,14 +44,9 @@ struct RecordView: View {
                 .fill(.white.opacity(0.1))
                 .frame(height: 1)
 
-            // MARK: - Main Stage + Inspector
+            // MARK: - Main Stage + Panels
             HStack(spacing: 0) {
-                // Chat Panel (left side)
-                if showChat {
-                    ChatPanelView(viewModel: chatViewModel, isVisible: $showChat)
-                        .transition(.move(edge: .leading))
-                }
-
+                // Stage
                 ZStack {
                     // Ambient Background
                     LinearGradient(
@@ -53,7 +54,6 @@ struct RecordView: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
-                    .ignoresSafeArea()
 
                     stageCompositionView
                         .clipped()
@@ -63,31 +63,49 @@ struct RecordView: View {
                         SceneOverlayView(scene: studioState.activeScene)
                     }
                 }
+                .clipped()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if showInspector {
-                    InspectorPanel(
-                        visualSource: studioState.visualSource,
-                        recordViewModel: viewModel,
-                        avatarViewModel: avatarViewModel,
-                        isVisible: $showInspector,
-                        onLoadAvatarModel: {
-                            Task { await avatarViewModel.loadSelectedModel() }
-                        }
+                // Producer Panel (unified command center)
+                if showRightPanel, let producerVM = producerViewModel {
+                    ProducerPanelView(
+                        viewModel: producerVM,
+                        isVisible: $showRightPanel,
+                        chatViewModel: chatViewModel
                     )
+                    .frame(width: 300)
+                    .background(.ultraThinMaterial)
+                    .overlay(alignment: .leading) {
+                        Rectangle().frame(width: 1).foregroundStyle(.white.opacity(0.1))
+                    }
                     .transition(.move(edge: .trailing))
                 }
-            }
 
-            // MARK: - Bottom Control Bar
+            }
+            .frame(maxHeight: .infinity)
+
+            // MARK: - Fixed Bottom Control Panel
             studioControlBar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-                .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.1)), alignment: .top)
+                .padding(.horizontal, 24)
+                .frame(height: 68)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundStyle(.white.opacity(0.1))
+                }
         }
         .navigationTitle("Studio")
         .onAppear {
+            if producerViewModel == nil, let mm = modelManager {
+                producerViewModel = ProducerViewModel(modelManager: mm)
+            }
+            // Wire shared ModelManager and initialize Muse avatar for Sidekick
+            if museAvatarViewModel.modelManager == nil {
+                museAvatarViewModel.modelManager = modelManager
+                museAvatarViewModel.setup()
+            }
             syncViewModelState()
             if studioState.visualSource == .face {
                 viewModel.bindPreviewStore(previewStore)
@@ -299,93 +317,87 @@ struct RecordView: View {
     // MARK: - Studio Control Bar
 
     private var studioControlBar: some View {
-        HStack(spacing: 16) {
-            // Left: Visual Source Toggle (Face/Avatar - both can be off for audio-only)
-            HStack(spacing: 4) {
-                ForEach(VisualSource.availableSources) { source in
-                    let isSelected = studioState.visualSource == source
-                    Button {
-                        studioState.toggleVisualSource(source)
-                    } label: {
-                        Image(systemName: source.icon)
-                            .font(.system(size: 14))
-                            .frame(width: 32, height: 32)
-                            .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
-                            .background(.regularMaterial)
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help(isSelected ? "Disable \(source.rawValue)" : "Enable \(source.rawValue)")
-                    .accessibilityIdentifier("Source_\(source.rawValue)")
-                }
-            }
-
-            // Screen Selection
-            HStack(spacing: 4) {
-                ForEach(viewModel.availableScreens) { screen in
-                    let isSelected = enableScreen && viewModel.selectedScreenID == screen.displayID
-                    Button {
-                        if isSelected {
-                            // Deselect (turn off screen share)
-                            enableScreen = false
-                        } else {
-                            // Select this screen
-                            viewModel.selectScreen(screen)
-                            enableScreen = true
-                        }
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: isSelected ? "rectangle.inset.filled.on.rectangle" : "desktopcomputer")
+        HStack {
+            // LEFT: Inputs & Sources
+            HStack(spacing: 8) {
+                // Visual source toggles
+                HStack(spacing: 4) {
+                    ForEach(VisualSource.availableSources) { source in
+                        let isSelected = studioState.visualSource == source
+                        Button {
+                            studioState.toggleVisualSource(source)
+                        } label: {
+                            Image(systemName: source.icon)
                                 .font(.system(size: 14))
-                                .foregroundStyle(isSelected ? Color.accentColor : .primary)
-                                .padding(8)
+                                .frame(width: 32, height: 32)
                                 .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
                                 .background(.regularMaterial)
-                                .cornerRadius(8)
+                                .cornerRadius(6)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
                                 )
+                        }
+                        .buttonStyle(.plain)
+                        .help(isSelected ? "Disable \(source.rawValue)" : "Enable \(source.rawValue)")
+                        .accessibilityIdentifier("Source_\(source.rawValue)")
+                    }
+                }
 
-                            // Primary screen indicator (star badge)
-                            if screen.isPrimary {
-                                Circle()
-                                    .fill(Color.yellow)
-                                    .frame(width: 8, height: 8)
+                // Screen selection
+                HStack(spacing: 4) {
+                    ForEach(viewModel.availableScreens) { screen in
+                        let isSelected = enableScreen && viewModel.selectedScreenID == screen.displayID
+                        Button {
+                            if isSelected {
+                                enableScreen = false
+                            } else {
+                                viewModel.selectScreen(screen)
+                                enableScreen = true
+                            }
+                        } label: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: isSelected ? "rectangle.inset.filled.on.rectangle" : "desktopcomputer")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                                    .padding(8)
+                                    .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+                                    .background(.regularMaterial)
+                                    .cornerRadius(8)
                                     .overlay(
-                                        Image(systemName: "star.fill")
-                                            .font(.system(size: 5))
-                                            .foregroundColor(.black)
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                                     )
-                                    .offset(x: 2, y: -2)
+
+                                if screen.isPrimary {
+                                    Circle()
+                                        .fill(Color.yellow)
+                                        .frame(width: 12, height: 12)
+                                        .overlay(
+                                            Image(systemName: "star.fill")
+                                                .font(.system(size: 8))
+                                                .foregroundColor(.black)
+                                        )
+                                        .offset(x: 2, y: -2)
+                                }
                             }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("Screen_\(screen.id)")
+                        .help(screen.isPrimary ? "\(screen.name) (Primary)" : screen.name)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("Screen_\(screen.id)")
-                    .help(screen.isPrimary ? "\(screen.name) (Primary)" : screen.name)
                 }
+
+                audioAndSceneControls
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            audioAndSceneControls
-
-            Spacer()
-
-            // Center: Dual Action Buttons (REC + LIVE)
+            // CENTER: Broadcasting
             HStack(spacing: 12) {
                 recordingActionButton
                 streamingActionButton
-            }
 
-            Spacer()
-
-            // Right: Recording Duration + Settings
-            HStack(spacing: 12) {
-                // Duration (recording or streaming)
+                // Duration
                 HStack(spacing: 6) {
                     Circle()
                         .fill(viewModel.isRecording ? .red : (streamViewModel.isStreaming ? .purple : .clear))
@@ -393,124 +405,170 @@ struct RecordView: View {
                     Text(activeDuration)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundStyle(isActive ? .primary : .secondary)
+                        .foregroundStyle(.primary)
                 }
                 .frame(width: 90)
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
-                .opacity(isActive ? 1.0 : 0.5)
+                .opacity(isActive ? 1.0 : 0.7)
 
-                // Chat Toggle (Twitch only)
-                if streamViewModel.selectedPlatform == .twitch {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showChat.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "bubble.left.and.bubble.right")
+                // Scene picker
+                Button { showScenePopover.toggle() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: studioState.activeScene.icon)
                             .font(.system(size: 14))
-                            .padding(8)
-                            .foregroundStyle(showChat ? .primary : .secondary)
-                            .background(showChat ? Color.accentColor.opacity(0.2) : Color.clear)
-                            .background(.regularMaterial)
-                            .cornerRadius(8)
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 8, weight: .bold))
                     }
-                    .buttonStyle(.plain)
-                    .help("Toggle Chat Panel")
-                }
-
-                // Inspector Toggle
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showInspector.toggle()
-                    }
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14))
-                        .padding(8)
-                        .foregroundStyle(showInspector ? .primary : .secondary)
-                        .background(showInspector ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
+                    .padding(8)
+                    .background(studioState.isSceneOverlayActive ? Color.orange.opacity(0.3) : Color.clear)
+                    .background(.regularMaterial)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(studioState.isSceneOverlayActive ? Color.orange : Color.clear, lineWidth: 1)
+                    )
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Inspector (⌘I)")
-                .keyboardShortcut("i", modifiers: .command)
+                .help("Scene Presets")
+                .popover(isPresented: $showScenePopover, arrowEdge: .top) {
+                    scenePopoverContent
+                }
+            }
+
+            // RIGHT: Panel Toggle (single button)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    showRightPanel.toggle()
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14))
+                    .padding(8)
+                    .foregroundStyle(showRightPanel ? .primary : .secondary)
+                    .background(showRightPanel ? Color.accentColor.opacity(0.2) : Color.clear)
+                    .background(.regularMaterial)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Panel (⌘P)")
+            .keyboardShortcut("p", modifiers: .command)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private var scenePopoverContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Scene")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            ForEach(ScenePreset.allCases, id: \.self) { scene in
+                Button {
+                    switchScene(to: scene)
+                    showScenePopover = false
+                } label: {
+                    Label(scene.rawValue, systemImage: scene.icon)
+                        .font(.subheadline)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
+        .padding(8)
+        .frame(width: 180)
     }
 
     private var audioAndSceneControls: some View {
         HStack(spacing: 8) {
-            // Mic Toggle
-            Button {
-                viewModel.enableMicrophone.toggle()
-            } label: {
-                Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
-                    .font(.system(size: 14))
-                    .padding(8)
-                    .background(viewModel.enableMicrophone ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .background(.regularMaterial)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(viewModel.enableMicrophone ? Color.accentColor : Color.clear, lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("Toggle_Mic")
-            .help("Toggle Microphone")
-
-            // Desktop Audio Toggle
-            Button {
-                viewModel.toggleDesktopAudio()
-            } label: {
-                Image(systemName: viewModel.enableDesktopAudio ? "speaker.wave.2.fill" : "speaker.slash")
-                    .font(.system(size: 14))
-                    .padding(8)
-                    .background(viewModel.enableDesktopAudio ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .background(.regularMaterial)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(viewModel.enableDesktopAudio ? Color.accentColor : Color.clear, lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("Toggle_DesktopAudio")
-            .help("Toggle Desktop Audio")
-
-            // Scene Picker
-            Menu {
-                ForEach(ScenePreset.allCases) { scene in
-                    Button {
-                        switchScene(to: scene)
-                    } label: {
-                        Label(scene.rawValue, systemImage: scene.icon)
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: studioState.activeScene.icon)
+            // Mic Toggle + Volume Popover
+            HStack(spacing: 2) {
+                Button {
+                    viewModel.enableMicrophone.toggle()
+                } label: {
+                    Image(systemName: viewModel.enableMicrophone ? "mic.fill" : "mic.slash")
                         .font(.system(size: 14))
-                    if studioState.isSceneOverlayActive {
-                        Text(studioState.activeScene.rawValue)
-                            .font(.caption.weight(.medium))
-                    }
+                        .padding(8)
+                        .background(viewModel.enableMicrophone ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .background(.regularMaterial)
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 0, topTrailingRadius: 0))
                 }
-                .padding(8)
-                .background(studioState.isSceneOverlayActive ? Color.orange.opacity(0.3) : Color.clear)
-                .background(.regularMaterial)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(studioState.isSceneOverlayActive ? Color.orange : Color.clear, lineWidth: 1)
-                )
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Toggle_Mic")
+                .help("Toggle Microphone")
+
+                Button { showMicPopover.toggle() } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 8, weight: .bold))
+                        .frame(width: 16, height: 32)
+                        .background(.regularMaterial)
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showMicPopover, arrowEdge: .top) {
+                    VStack(spacing: 8) {
+                        Text("Microphone")
+                            .font(.caption.weight(.semibold))
+                        Slider(value: $viewModel.micVolume, in: 0...1)
+                            .frame(width: 140)
+                        Text("\(Int(viewModel.micVolume * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                }
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Scene Presets")
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(viewModel.enableMicrophone ? Color.accentColor : Color.clear, lineWidth: 1)
+            )
+
+            // Desktop Audio Toggle + Volume Popover
+            HStack(spacing: 2) {
+                Button {
+                    viewModel.toggleDesktopAudio()
+                } label: {
+                    Image(systemName: viewModel.enableDesktopAudio ? "speaker.wave.2.fill" : "speaker.slash")
+                        .font(.system(size: 14))
+                        .padding(8)
+                        .background(viewModel.enableDesktopAudio ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .background(.regularMaterial)
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 0, topTrailingRadius: 0))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("Toggle_DesktopAudio")
+                .help("Toggle Desktop Audio")
+
+                Button { showAudioPopover.toggle() } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 8, weight: .bold))
+                        .frame(width: 16, height: 32)
+                        .background(.regularMaterial)
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showAudioPopover, arrowEdge: .top) {
+                    VStack(spacing: 8) {
+                        Text("Desktop Audio")
+                            .font(.caption.weight(.semibold))
+                        Slider(value: $viewModel.desktopAudioVolume, in: 0...1)
+                            .frame(width: 140)
+                        Text("\(Int(viewModel.desktopAudioVolume * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(viewModel.enableDesktopAudio ? Color.accentColor : Color.clear, lineWidth: 1)
+            )
+
         }
     }
 
@@ -597,7 +655,6 @@ struct RecordView: View {
             }
         } label: {
             HStack(spacing: 6) {
-                // Live indicator dot (always present for consistent width)
                 Circle()
                     .fill(streamViewModel.isStreaming ? .white : .clear)
                     .frame(width: 8, height: 8)
@@ -610,15 +667,25 @@ struct RecordView: View {
             .background(
                 streamViewModel.isStreaming
                     ? AnyShapeStyle(Color.red)
-                    : AnyShapeStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+                    : AnyShapeStyle(.regularMaterial)
             )
-            .foregroundColor(.white)
+            .foregroundColor(streamViewModel.isStreaming ? .white : .primary)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .shadow(color: Color.red.opacity(isLivePulsing ? 0.5 : 0.0), radius: isLivePulsing ? 8 : 0)
         .disabled(streamViewModel.isConnecting)
         .accessibilityIdentifier("Btn_GoLive")
         .frame(width: 120)
+        .onChange(of: streamViewModel.isStreaming) { _, isStreaming in
+            if isStreaming {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isLivePulsing = true
+                }
+            } else {
+                withAnimation { isLivePulsing = false }
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -678,7 +745,7 @@ struct RecordView: View {
             preSceneVisualSource = studioState.visualSource
         }
 
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
             studioState.activeScene = scene
         }
 
@@ -737,48 +804,39 @@ struct RecordView: View {
     // MARK: - Streaming
 
     private func startStreaming(destination: RTMPPublisher.Destination, streamKey: String) async {
-        // Ensure we have an active session (either from recording or create one for streaming)
+        // Ensure we have an active session before delegating to the view model.
         if RecordingState.shared.recordingSession == nil {
-            // Start a preview-mode session for streaming without recording
             await viewModel.startPreviewSession()
         }
 
-        do {
-            guard let session = RecordingState.shared.recordingSession else {
-                streamViewModel.error = "Failed to create streaming session"
-                return
-            }
+        // Wire the platform clients so StreamViewModel can drive YouTube broadcast
+        // creation and the testing→live transition itself.
+        streamViewModel.youtubeClient = youtubeClient
+        streamViewModel.twitchClient = twitchClient
 
-            // Check if this is Arkavo (NTDF-encrypted streaming)
-            if streamViewModel.selectedPlatform == .arkavo {
-                guard let kasURL = URL(string: "https://100.arkavo.net") else {
-                    streamViewModel.error = "Invalid KAS URL"
-                    return
-                }
-                try await session.startNTDFStreaming(
-                    kasURL: kasURL,
-                    rtmpURL: destination.url,
-                    streamKey: "live/creator"
-                )
-            } else {
-                try await session.startStreaming(to: destination, streamKey: streamKey)
-            }
-            streamViewModel.isStreaming = true
-            streamViewModel.startStatisticsPolling()
+        // Single source of truth: StreamViewModel handles validation, Arkavo NTDF,
+        // YouTube broadcast lifecycle, and multi-destination RTMP fan-out.
+        let started = await streamViewModel.startStreaming()
+        guard started else { return }
 
-            // Auto-connect Twitch chat
-            if streamViewModel.selectedPlatform == .twitch {
-                chatViewModel.connect(twitchClient: twitchClient)
-                withAnimation { showChat = true }
-            }
-        } catch {
-            streamViewModel.error = error.localizedDescription
+        let selectedPlatforms = streamViewModel.selectedPlatforms
+
+        // UI-level concerns stay here: chat fan-in and right-panel visibility.
+        if selectedPlatforms.contains(.twitch) && twitchClient.isAuthenticated {
+            chatViewModel.connectTwitch(twitchClient: twitchClient)
+        }
+        if selectedPlatforms.contains(.youtube),
+           let broadcastId = streamViewModel.platformConfigs[.youtube]?.broadcastId {
+            chatViewModel.connectYouTube(youtubeClient: youtubeClient, broadcastId: broadcastId)
+        }
+        if selectedPlatforms.contains(.twitch) || selectedPlatforms.contains(.youtube) {
+            withAnimation { showRightPanel = true }
         }
     }
 
     private func stopStreaming() async {
         chatViewModel.disconnect()
-        showChat = false
+        showRightPanel = false
         await streamViewModel.stopStreaming()
     }
 }

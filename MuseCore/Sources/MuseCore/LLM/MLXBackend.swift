@@ -1,0 +1,216 @@
+import Foundation
+import MLX
+import MLXLMCommon
+import MLXLLM
+import MLXHuggingFace
+import HuggingFace
+import Tokenizers
+import Synchronization
+import OSLog
+
+/// MLX-based streaming LLM provider for on-device inference.
+/// Uses mlx-swift-lm with HuggingFace download and tokenization.
+public final class MLXBackend: @unchecked Sendable {
+    private let state = Mutex(BackendState())
+    private let logger = Logger(subsystem: "com.arkavo.musecore", category: "MLXBackend")
+
+    public let providerName = "MLX Local"
+
+    /// Custom model cache directory (nil = use shared HF cache)
+    public var customCacheDirectory: URL? {
+        get { state.withLock { $0.customCacheDirectory } }
+        set { state.withLock { $0.customCacheDirectory = newValue } }
+    }
+
+    public init() {}
+
+    public var isAvailable: Bool {
+        get async {
+            state.withLock { $0.modelContainer != nil }
+        }
+    }
+
+    /// Load a model by HuggingFace ID (downloads on first use, cached after).
+    public func loadModel(_ huggingFaceID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws {
+        let config = ModelConfiguration(
+            id: huggingFaceID,
+            defaultPrompt: "Hello",
+            extraEOSTokens: ["<end_of_turn>"]
+        )
+
+        // Determine cache location — snapshot under lock to avoid races
+        let cacheLocation: CacheLocationProvider
+        if let customDir = state.withLock({ $0.customCacheDirectory }) {
+            logger.info("Using custom model cache: \(customDir.path)")
+            cacheLocation = .fixed(directory: customDir)
+        } else {
+            logger.info("Using shared HF cache: ~/.cache/huggingface/hub")
+            cacheLocation = .init(path: "~/.cache/huggingface/hub")
+        }
+
+        let sharedCache = HubCache(location: cacheLocation)
+        logger.info("Cache directory resolved to: \(sharedCache.cacheDirectory.path)")
+
+        // Check if model is already in cache
+        let modelDir = sharedCache.cacheDirectory
+            .appendingPathComponent("models--\(huggingFaceID.replacingOccurrences(of: "/", with: "--"))")
+        let isCached = FileManager.default.fileExists(atPath: modelDir.path)
+        logger.info("Model \(huggingFaceID) cached: \(isCached) at \(modelDir.path)")
+
+        let hub = HubClient(cache: sharedCache)
+        let downloader = #hubDownloader(hub)
+        let tokenizerLoader = #huggingFaceTokenizerLoader()
+
+        logger.info("Starting model load: \(huggingFaceID)")
+        let container = try await LLMModelFactory.shared.loadContainer(
+            from: downloader, using: tokenizerLoader,
+            configuration: config
+        ) { progress in
+            let fraction = progress.fractionCompleted
+            debugPrint("Loading \(huggingFaceID): \(Int(fraction * 100))%")
+            onProgress?(fraction)
+        }
+        logger.info("Model loaded successfully: \(huggingFaceID)")
+
+        // Set memory limit to 75% of system RAM for safety
+        let systemMemoryGB = ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)
+        let limitBytes = Int(Double(systemMemoryGB) * 0.75) * 1024 * 1024 * 1024
+        MLX.GPU.set(memoryLimit: limitBytes)
+
+        state.withLock { $0.modelContainer = container }
+    }
+
+    /// Unload the current model to free GPU memory
+    public func unloadModel() {
+        state.withLock { $0.modelContainer = nil }
+        MLX.Memory.clearCache()
+    }
+
+    public func generate(
+        prompt: String,
+        systemPrompt: String,
+        maxTokens: Int
+    ) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish(throwing: StreamingLLMError.modelNotLoaded)
+                    return
+                }
+
+                guard let container = self.state.withLock({ $0.modelContainer }) else {
+                    continuation.finish(throwing: StreamingLLMError.modelNotLoaded)
+                    return
+                }
+
+                do {
+                    let userInput = UserInput(chat: [
+                        .system(systemPrompt),
+                        .user(prompt),
+                    ])
+
+                    let parameters = GenerateParameters(
+                        maxTokens: maxTokens,
+                        temperature: 0.7,
+                        topP: 0.9,
+                        repetitionPenalty: 1.1
+                    )
+
+                    try await container.perform(nonSendable: userInput) { context, userInput in
+                        let lmInput = try await context.processor.prepare(input: userInput)
+                        let stream = try MLXLMCommon.generate(
+                            input: lmInput,
+                            parameters: parameters,
+                            context: context
+                        )
+
+                        var buffer = StopSequenceBuffer(stopSequences: ["<end_of_turn>", "<eos>"])
+                        var terminated = false
+                        for await generation in stream {
+                            if Task.isCancelled { break }
+                            if let chunk = generation.chunk {
+                                switch buffer.append(chunk) {
+                                case .emit(let text):
+                                    if !text.isEmpty { continuation.yield(text) }
+                                case .terminate(let text):
+                                    if !text.isEmpty { continuation.yield(text) }
+                                    terminated = true
+                                }
+                                if terminated { break }
+                            }
+                        }
+                        if !terminated {
+                            let trailing = buffer.flush()
+                            if !trailing.isEmpty { continuation.yield(trailing) }
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    if Task.isCancelled {
+                        continuation.finish(throwing: StreamingLLMError.generationCancelled)
+                    } else {
+                        continuation.finish(throwing: error)
+                    }
+                }
+            }
+
+            state.withLock { $0.generationTask = task }
+
+            // Cancel and AWAIT the inner Task so the model run actually winds down
+            // before the AsyncThrowingStream is fully torn down. Without the await,
+            // the task could keep computing and yielding into a finished continuation
+            // (silent drops + wasted GPU cycles) for milliseconds after the consumer
+            // dropped the stream.
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+                Task { _ = await task.value }
+            }
+        }
+    }
+
+    public func cancelGeneration() async {
+        let task = state.withLock { s -> Task<Void, Never>? in
+            let t = s.generationTask
+            s.generationTask = nil
+            return t
+        }
+        task?.cancel()
+    }
+}
+
+// MARK: - Errors
+
+/// Errors specific to MLX streaming LLM operations
+public enum StreamingLLMError: Error, LocalizedError {
+    case modelNotLoaded
+    case generationCancelled
+    case modelLoadFailed(String)
+    case insufficientMemory(required: Int, available: Int)
+    case downloadFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .modelNotLoaded:
+            "No model is currently loaded"
+        case .generationCancelled:
+            "Generation was cancelled"
+        case .modelLoadFailed(let reason):
+            "Failed to load model: \(reason)"
+        case .insufficientMemory(let required, let available):
+            "Insufficient memory: need \(required)MB, have \(available)MB"
+        case .downloadFailed(let reason):
+            "Download failed: \(reason)"
+        }
+    }
+}
+
+// MARK: - Internal State
+
+private struct BackendState: ~Copyable {
+    var modelContainer: ModelContainer?
+    var generationTask: Task<Void, Never>?
+    var customCacheDirectory: URL?
+
+    init() {}
+}

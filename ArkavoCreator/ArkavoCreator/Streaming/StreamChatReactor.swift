@@ -25,6 +25,9 @@ final class StreamChatReactor {
     /// Active listener tasks
     private var listenerTasks: [Task<Void, Never>] = []
 
+    /// Active role determines event handling behavior
+    var activeRole: AvatarRole = .sidekick
+
     /// Rate limiting: minimum seconds between spoken responses
     var responseInterval: TimeInterval = 8.0
 
@@ -53,6 +56,9 @@ final class StreamChatReactor {
 
     /// Called when the avatar should change expression
     var onExpressionRequest: ((VRMExpressionPreset, Float) -> Void)?
+
+    /// Called when Producer mode receives an event for analysis
+    var onProducerEvent: ((StreamEvent) -> Void)?
 
     // MARK: - Public API
 
@@ -136,6 +142,12 @@ final class StreamChatReactor {
     }
 
     private func handleEvent(_ event: StreamEvent) {
+        // In Producer mode, forward events for analysis instead of avatar reactions
+        if activeRole == .producer {
+            onProducerEvent?(event)
+            return
+        }
+
         // Events get immediate emote reactions
         switch event.type {
         case .subscribe, .newPatron:

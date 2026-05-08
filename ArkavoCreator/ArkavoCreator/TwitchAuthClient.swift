@@ -36,12 +36,13 @@ class TwitchAuthClient: ObservableObject {
     // MARK: - Private Properties
 
     private(set) var accessToken: String?
+    private var refreshToken: String?
     private var cancellables = Set<AnyCancellable>()
     private var notificationObserver: NSObjectProtocol?
     private var authSession: ASWebAuthenticationSession?
 
     // OAuth Configuration
-    private let clientId: String
+    let clientId: String
     private let clientSecret: String
     private var redirectURI: String { ArkavoConfiguration.shared.oauthRedirectURL(for: "twitch") }
     private let authURL = "https://id.twitch.tv/oauth2/authorize"
@@ -50,7 +51,10 @@ class TwitchAuthClient: ObservableObject {
         "user:read:email",
         "channel:read:stream_key",  // Note: This scope may not actually work - Twitch restricts stream key access
         "channel:manage:broadcast",  // Required for updating stream title, category, tags
-        "chat:read"  // Read chat messages for Muse avatar reactions
+        "chat:read",  // Read chat messages for Muse avatar reactions
+        "moderator:read:followers",  // EventSub: channel.follow v2
+        "channel:read:subscriptions",  // EventSub: subscribe & gift sub events
+        "bits:read",  // EventSub: cheer events
     ]
 
     // MARK: - Initialization
@@ -184,6 +188,7 @@ class TwitchAuthClient: ObservableObject {
     func logout() {
         isAuthenticated = false
         accessToken = nil
+        refreshToken = nil
         username = nil
         userId = nil
         followerCount = nil
@@ -486,6 +491,75 @@ class TwitchAuthClient: ObservableObject {
         }
     }
 
+    /// Validates the current token with Twitch and refreshes if expired.
+    /// Returns true if a valid token is available after the call.
+    @discardableResult
+    func ensureValidToken() async -> Bool {
+        guard let token = accessToken else { return false }
+
+        // Validate with Twitch
+        var request = URLRequest(url: URL(string: "https://id.twitch.tv/oauth2/validate")!)
+        request.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                return true
+            }
+        } catch {
+            debugLog("❌ Token validation request failed: \(error.localizedDescription)")
+        }
+
+        // Token invalid — try refresh
+        debugLog("🔄 Access token invalid, attempting refresh")
+        return await refreshAccessToken()
+    }
+
+    /// Uses the stored refresh token to obtain a new access token.
+    private func refreshAccessToken() async -> Bool {
+        guard let refresh = refreshToken else {
+            debugLog("❌ No refresh token available — user must re-authenticate")
+            clearStoredCredentials()
+            isAuthenticated = false
+            return false
+        }
+
+        var bodyComponents = URLComponents()
+        bodyComponents.queryItems = [
+            URLQueryItem(name: "client_id", value: clientId),
+            URLQueryItem(name: "client_secret", value: clientSecret),
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refresh),
+        ]
+
+        var request = URLRequest(url: URL(string: tokenURL)!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = bodyComponents.query?.data(using: .utf8)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                debugLog("❌ Token refresh failed — user must re-authenticate")
+                clearStoredCredentials()
+                isAuthenticated = false
+                return false
+            }
+
+            let tokenResponse = try JSONDecoder().decode(TwitchTokenResponse.self, from: data)
+            self.accessToken = tokenResponse.access_token
+            self.refreshToken = tokenResponse.refresh_token ?? self.refreshToken
+            saveStoredCredentials(token: tokenResponse.access_token, refreshToken: self.refreshToken)
+            debugLog("✅ Token refreshed successfully")
+            return true
+        } catch {
+            debugLog("❌ Token refresh error: \(error.localizedDescription)")
+            clearStoredCredentials()
+            isAuthenticated = false
+            return false
+        }
+    }
+
     // MARK: - Private Methods
 
     private func exchangeCodeForToken(_ code: String) async throws {
@@ -525,9 +599,10 @@ class TwitchAuthClient: ObservableObject {
 
         let tokenResponse = try JSONDecoder().decode(TwitchTokenResponse.self, from: data)
         self.accessToken = tokenResponse.access_token
+        self.refreshToken = tokenResponse.refresh_token
 
-        // Save token
-        saveStoredCredentials(token: tokenResponse.access_token)
+        // Save tokens
+        saveStoredCredentials(token: tokenResponse.access_token, refreshToken: tokenResponse.refresh_token)
 
         // Fetch user info
         try await fetchUserInfo()
@@ -537,41 +612,53 @@ class TwitchAuthClient: ObservableObject {
 
     // MARK: - Keychain Storage
 
-    private func saveStoredCredentials(token: String) {
-        // Migrate from UserDefaults to Keychain for better security
+    private func saveStoredCredentials(token: String, refreshToken: String? = nil) {
         KeychainManager.save(value: token, service: "com.arkavo.twitch", account: "access_token")
+        if let refreshToken {
+            KeychainManager.save(value: refreshToken, service: "com.arkavo.twitch", account: "refresh_token")
+        }
 
         // Clean up old UserDefaults storage if it exists
         UserDefaults.standard.removeObject(forKey: "twitch_access_token")
     }
 
     private func loadStoredCredentials() {
+        // Load refresh token from Keychain
+        if let refreshData = try? KeychainManager.load(service: "com.arkavo.twitch", account: "refresh_token"),
+           let refresh = String(data: refreshData, encoding: .utf8) {
+            self.refreshToken = refresh
+        }
+
         // Try Keychain first (new method)
         if let tokenData = try? KeychainManager.load(service: "com.arkavo.twitch", account: "access_token"),
            let token = String(data: tokenData, encoding: .utf8) {
             self.accessToken = token
             Task {
-                do {
-                    try await fetchUserInfo()
-                    isAuthenticated = true
-                } catch {
-                    // Token might be expired
-                    clearStoredCredentials()
+                // Validate token before trusting it; refresh if expired
+                let valid = await ensureValidToken()
+                if valid {
+                    do {
+                        try await fetchUserInfo()
+                        isAuthenticated = true
+                    } catch {
+                        clearStoredCredentials()
+                    }
                 }
             }
         }
         // Fallback to UserDefaults for existing users (migration path)
         else if let token = UserDefaults.standard.string(forKey: "twitch_access_token") {
             self.accessToken = token
-            // Migrate to Keychain
             saveStoredCredentials(token: token)
             Task {
-                do {
-                    try await fetchUserInfo()
-                    isAuthenticated = true
-                } catch {
-                    // Token might be expired
-                    clearStoredCredentials()
+                let valid = await ensureValidToken()
+                if valid {
+                    do {
+                        try await fetchUserInfo()
+                        isAuthenticated = true
+                    } catch {
+                        clearStoredCredentials()
+                    }
                 }
             }
         }
@@ -579,7 +666,9 @@ class TwitchAuthClient: ObservableObject {
 
     private func clearStoredCredentials() {
         try? KeychainManager.delete(service: "com.arkavo.twitch", account: "access_token")
+        try? KeychainManager.delete(service: "com.arkavo.twitch", account: "refresh_token")
         UserDefaults.standard.removeObject(forKey: "twitch_access_token")
+        self.refreshToken = nil
     }
 }
 

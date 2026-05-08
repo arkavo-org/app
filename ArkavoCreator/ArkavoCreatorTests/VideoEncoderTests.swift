@@ -28,42 +28,22 @@ final class VideoEncoderTests: XCTestCase {
     // MARK: - Video Validation Helper
 
     /// Validates that a video file has a proper moov atom and is playable
-    func validateVideoFile(at url: URL) throws -> (isValid: Bool, duration: Double?, tracks: Int) {
+    func validateVideoFile(at url: URL) async -> (isValid: Bool, duration: Double?, tracks: Int) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return (false, nil, 0)
         }
 
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
 
-        // Check if the asset can load its duration (indicates moov atom is present)
-        let semaphore = DispatchSemaphore(value: 0)
-        var loadedDuration: CMTime?
-        var loadedTracks: [AVAssetTrack] = []
-        var loadError: Error?
-
-        Task {
-            do {
-                loadedDuration = try await asset.load(.duration)
-                loadedTracks = try await asset.load(.tracks)
-            } catch {
-                loadError = error
-            }
-            semaphore.signal()
-        }
-
-        _ = semaphore.wait(timeout: .now() + 10)
-
-        if let error = loadError {
+        do {
+            let duration = try await asset.load(.duration)
+            let tracks = try await asset.load(.tracks)
+            let isValid = duration.isValid && duration.seconds > 0
+            return (isValid, duration.seconds, tracks.count)
+        } catch {
             print("Failed to load asset: \(error)")
             return (false, nil, 0)
         }
-
-        guard let duration = loadedDuration else {
-            return (false, nil, 0)
-        }
-
-        let isValid = duration.isValid && duration.seconds > 0
-        return (isValid, duration.seconds, loadedTracks.count)
     }
 
     // MARK: - Tests
@@ -100,19 +80,19 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertEqual(resultURL.path, outputURL.path, "Should return the expected output path")
     }
 
-    func testValidateCorruptedVideoDetection() throws {
+    func testValidateCorruptedVideoDetection() async throws {
         // Create a fake "corrupted" video file (just random data)
         let corruptURL = tempDirectory.appendingPathComponent("corrupt.mov")
         let randomData = Data((0 ..< 1000).map { _ in UInt8.random(in: 0 ... 255) })
         try randomData.write(to: corruptURL)
 
-        let result = try validateVideoFile(at: corruptURL)
+        let result = await validateVideoFile(at: corruptURL)
 
         XCTAssertFalse(result.isValid, "Corrupt file should not be valid")
         XCTAssertNil(result.duration, "Corrupt file should not have duration")
     }
 
-    func testValidateProperVideoFile() throws {
+    func testValidateProperVideoFile() async throws {
         // This test requires an actual recording session which needs permissions
         // Skip in CI environment
         #if DEBUG
@@ -124,7 +104,7 @@ final class VideoEncoderTests: XCTestCase {
                let files = try? FileManager.default.contentsOfDirectory(at: containerPath, includingPropertiesForKeys: nil),
                let firstMov = files.first(where: { $0.pathExtension == "mov" })
             {
-                let result = try validateVideoFile(at: firstMov)
+                let result = await validateVideoFile(at: firstMov)
                 print("Validated existing recording: \(firstMov.lastPathComponent)")
                 print("  Valid: \(result.isValid)")
                 print("  Duration: \(result.duration ?? 0) seconds")

@@ -1,4 +1,5 @@
 import ArkavoKit
+import MuseCore
 import SwiftUI
 
 // MARK: - Main Content View
@@ -13,33 +14,42 @@ struct ContentView: View {
     @StateObject var blueskyClient: BlueskyClient
     @StateObject var youtubeClient: YouTubeClient
     @ObservedObject var agentService: CreatorAgentService
+    var modelManager: ModelManager
     @StateObject private var twitchClient = TwitchAuthClient(
         clientId: Secrets.twitchClientId,
         clientSecret: Secrets.twitchClientSecret
     )
 
     var body: some View {
-        NavigationSplitView {
-            Sidebar(
-                selectedSection: $selectedSection,
-                patreonClient: patreonClient,
-                redditClient: redditClient,
-                blueskyClient: blueskyClient,
-                youtubeClient: youtubeClient
+        ZStack {
+            LinearGradient(
+                colors: [Color(white: 0.1), Color(white: 0.15), Color(white: 0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-        } detail: {
-            SectionContainer(
-                selectedSection: selectedSection,
-                patreonClient: patreonClient,
-                redditClient: redditClient,
-                micropubClient: micropubClient,
-                blueskyClient: blueskyClient,
-                youtubeClient: youtubeClient,
-                twitchClient: twitchClient,
-                agentService: agentService
-            )
-            .navigationTitle(selectedSection.rawValue)
-            .navigationSubtitle(selectedSection.subtitle)
+            .ignoresSafeArea()
+
+            NavigationSplitView {
+                Sidebar(
+                    selectedSection: $selectedSection,
+                    patreonClient: patreonClient,
+                    redditClient: redditClient,
+                    blueskyClient: blueskyClient,
+                    youtubeClient: youtubeClient
+                )
+            } detail: {
+                SectionContainer(
+                    selectedSection: selectedSection,
+                    patreonClient: patreonClient,
+                    redditClient: redditClient,
+                    micropubClient: micropubClient,
+                    blueskyClient: blueskyClient,
+                    youtubeClient: youtubeClient,
+                    twitchClient: twitchClient,
+                    agentService: agentService,
+                    modelManager: modelManager
+                )
+            }
         }
         .environmentObject(appState)
         .onChange(of: selectedSection) { _, newValue in
@@ -56,27 +66,26 @@ enum NavigationSection: String, CaseIterable, Codable {
     case studio = "Studio"
     case library = "Library"
     case workflow = "Workflow"
-    case assistant = "AI Assistant"
+    case assistant = "Publicist"
     case patrons = "Patron Management"
     case protection = "Protection"
     case social = "Marketing"
     case settings = "Settings"
 
+    /// Five clean sidebar items: Dashboard, Profile, Studio, Library, Settings.
+    /// Other sections are gated behind feature flags (all currently disabled).
     static func availableSections(isCreator: Bool) -> [NavigationSection] {
-        var base = allCases.filter { section in
+        allCases.filter { section in
             switch section {
+            case .dashboard, .profile, .studio, .library, .settings:
+                return true
             case .workflow: return FeatureFlags.workflow
             case .protection: return FeatureFlags.contentProtection
             case .social: return FeatureFlags.social
             case .assistant: return FeatureFlags.aiAgent
             case .patrons: return FeatureFlags.patreon
-            default: return true
             }
         }
-        if !isCreator {
-            base = base.filter { $0 != .patrons }
-        }
-        return base
     }
 
     var systemImage: String {
@@ -86,7 +95,7 @@ enum NavigationSection: String, CaseIterable, Codable {
         case .studio: "video.bubble.left.fill"
         case .library: "rectangle.stack.badge.play"
         case .workflow: "doc.badge.plus"
-        case .assistant: "cpu"
+        case .assistant: "megaphone"
         case .patrons: "person.2.circle"
         case .protection: "lock.shield"
         case .social: "square.and.arrow.up.circle"
@@ -96,12 +105,12 @@ enum NavigationSection: String, CaseIterable, Codable {
 
     var subtitle: String {
         switch self {
-        case .dashboard: "Overview"
+        case .dashboard: "Your Social Command Center"
         case .profile: "Your Creator Profile"
         case .studio: "Record, Stream & Create"
         case .library: "Your Recorded Videos"
         case .workflow: "Manage Your Content"
-        case .assistant: "AI-Powered Creation Tools"
+        case .assistant: "Platform Content Creation"
         case .patrons: "Manage Your Community"
         case .protection: "Protection"
         case .social: "Share Your Content"
@@ -137,7 +146,10 @@ struct SectionContainer: View {
     @ObservedObject var youtubeClient: YouTubeClient
     @ObservedObject var twitchClient: TwitchAuthClient
     @ObservedObject var agentService: CreatorAgentService
+    var modelManager: ModelManager
     @StateObject private var webViewPresenter = WebViewPresenter()
+    @State private var showPublicistPanel = false
+    @State private var publicistViewModel: PublicistViewModel?
     @Namespace private var animation
 
     private var arkavoAuthState: ArkavoAuthState { ArkavoAuthState.shared }
@@ -249,9 +261,10 @@ struct SectionContainer: View {
                                 ForEach(twitchClient.channelTags.prefix(5), id: \.self) { tag in
                                     Text(tag)
                                         .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
-                                        .background(Color.purple.opacity(0.15))
+                                        .background(Color.white.opacity(0.08))
                                         .clipShape(Capsule())
                                 }
                             }
@@ -402,7 +415,7 @@ struct SectionContainer: View {
                     }
                 }
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         twitchCardHovered = hovering
                     }
                 }
@@ -813,7 +826,7 @@ struct SectionContainer: View {
     var body: some View {
         ZStack {
             // Keep RecordView always alive so streaming isn't interrupted by tab switches
-            RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient)
+            RecordView(youtubeClient: youtubeClient, twitchClient: twitchClient, modelManager: modelManager)
                 .opacity(selectedSection == .studio ? 1 : 0)
                 .allowsHitTesting(selectedSection == .studio)
                 .id("studio")
@@ -821,16 +834,43 @@ struct SectionContainer: View {
             if selectedSection != .studio {
                 switch selectedSection {
                 case .dashboard:
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            // Render sorted sections
-                            ForEach(sortedDashboardSections) { section in
-                                DashboardCard(title: section.title) {
-                                    section.content
+                    HStack(spacing: 0) {
+                        ScrollView {
+                            VStack(spacing: 24) {
+                                ForEach(sortedDashboardSections) { section in
+                                    DashboardCard(title: section.title) {
+                                        section.content
+                                    }
                                 }
                             }
+                            .padding()
                         }
-                        .padding()
+                        .frame(maxWidth: .infinity)
+
+                        // Publicist panel (trailing edge)
+                        if FeatureFlags.localAssistant, showPublicistPanel,
+                           let pubVM = publicistViewModel {
+                            PublicistPanelView(viewModel: pubVM, isVisible: $showPublicistPanel)
+                                .transition(.move(edge: .trailing))
+                        }
+                    }
+                    .toolbar {
+                        if FeatureFlags.localAssistant {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button {
+                                    if publicistViewModel == nil {
+                                        publicistViewModel = PublicistViewModel(modelManager: modelManager)
+                                    }
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                        showPublicistPanel.toggle()
+                                    }
+                                } label: {
+                                    Image(systemName: "megaphone")
+                                }
+                                .keyboardShortcut("e", modifiers: [.command])
+                                .help("Publicist (⌘E)")
+                            }
+                        }
                     }
                     .transition(.moveAndFade())
                     .id("dashboard")
@@ -843,7 +883,7 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("patrons")
                 case .library:
-                    RecordingsLibraryView()
+                    RecordingsLibraryView(youtubeClient: youtubeClient)
                         .transition(.moveAndFade())
                         .id("library")
                 case .workflow:
@@ -855,7 +895,7 @@ struct SectionContainer: View {
                         .transition(.moveAndFade())
                         .id("assistant")
                 case .settings:
-                    SettingsContent(agentService: agentService)
+                    SettingsContent(agentService: agentService, modelManager: modelManager)
                         .transition(.moveAndFade())
                         .id("settings")
                 default:
@@ -865,7 +905,7 @@ struct SectionContainer: View {
                 }
             }
         }
-        .animation(.smooth, value: selectedSection)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedSection)
     }
 }
 
@@ -951,8 +991,20 @@ struct DashboardCard<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.25), .white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        )
+        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
     }
 }
 
@@ -1055,7 +1107,7 @@ struct PreviewAlert: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
-        .background(.background.secondary)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -1085,7 +1137,7 @@ struct FeatureCard: View {
         }
         .padding()
         .frame(height: 160)
-        .background(.background.secondary)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -1104,7 +1156,6 @@ extension AnyTransition {
 // MARK: - Icon Rail View (Compact Navigation)
 
 struct IconRail: View {
-    @EnvironmentObject private var appState: AppState
     @Binding var selectedSection: NavigationSection
     @ObservedObject var patreonClient: PatreonClient
     @ObservedObject var redditClient: RedditClient
@@ -1136,22 +1187,6 @@ struct IconRail: View {
             }
 
             Spacer()
-
-            // Feedback button (if enabled)
-            if appState.isFeedbackEnabled {
-                Button {
-                    if let url = URL(string: "mailto:info@arkavo.com") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Image(systemName: "envelope")
-                        .font(.system(size: 18))
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Send Feedback")
-            }
 
             // Settings at bottom
             IconRailButton(
@@ -1192,13 +1227,13 @@ struct IconRail: View {
                 hoverTask = Task {
                     try? await Task.sleep(for: .milliseconds(300))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         isExpanded = true
                     }
                 }
             } else {
                 // Collapse immediately when leaving
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     isExpanded = false
                 }
             }
@@ -1257,36 +1292,17 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            List(selection: $selectedSection) {
-                Section {
-                    ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
-                        NavigationLink(value: section) {
-                            Label(section.rawValue, systemImage: section.systemImage)
-                        }
-                    }
-                }
-                Section {
-                    NavigationLink(value: NavigationSection.settings) {
-                        Label(NavigationSection.settings.rawValue,
-                              systemImage: NavigationSection.settings.systemImage)
-                    }
+        List(selection: $selectedSection) {
+            ForEach(availableSections.filter { $0 != .settings }, id: \.self) { section in
+                NavigationLink(value: section) {
+                    Label(section.rawValue, systemImage: section.systemImage)
                 }
             }
-            if appState.isFeedbackEnabled {
-                Divider()
-                Button(action: {
-                    if let url = URL(string: "mailto:info@arkavo.com") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "envelope")
-                        Text("Send Feedback")
-                    }
+
+            Section {
+                NavigationLink(value: NavigationSection.settings) {
+                    Label("Settings", systemImage: "gear")
                 }
-                .buttonStyle(.plain)
-                .padding(10)
             }
         }
         .listStyle(.sidebar)
@@ -1358,7 +1374,7 @@ struct ContentCard: View {
                     .controlSize(.small)
                 }
                 .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -1369,15 +1385,39 @@ struct ContentCard: View {
 }
 
 struct SettingsContent: View {
-    @EnvironmentObject private var appState: AppState
     @StateObject private var vrmDownloader = VRMDownloader()
     @State private var modelsPath: String = ""
     @State private var libraryPath: String = ""
     var agentService: CreatorAgentService?
+    var modelManager: ModelManager?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                // Send Feedback
+                Button {
+                    if let url = URL(string: "mailto:info@arkavo.com") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "envelope")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Send Feedback")
+                            .font(.subheadline)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
                 // Library Path Section
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
@@ -1406,13 +1446,13 @@ struct SettingsContent: View {
                                     RecordingsFolderAccess.clearBookmark()
                                     updateLibraryPath()
                                 }
-                                .foregroundColor(.red)
+                                .foregroundColor(.secondary)
                             }
                         }
 
                         Text("Select where recordings are saved. The app needs permission to write to this folder.")
-                            .foregroundColor(.secondary)
-                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
                     }
                 } label: {
                     Label("Library", systemImage: "folder")
@@ -1456,30 +1496,19 @@ struct SettingsContent: View {
                             .font(.callout)
                     }
                     .padding()
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                // AI Model Settings Section
+                if let modelManager {
+                    AIModelSettingsSection(modelManager: modelManager)
                 }
 
                 // AI Agent Settings Section
                 if FeatureFlags.aiAgent, let agentService {
                     AgentSettingsSection(agentService: agentService)
                 }
-
-                // Feedback Toggle Section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Feedback")
-                        .font(.headline)
-
-                    Toggle("Show Feedback Button", isOn: $appState.isFeedbackEnabled)
-                        .toggleStyle(.switch)
-
-                    Text("When enabled, shows a feedback button in the toolbar for quick access to send feedback.")
-                        .foregroundColor(.secondary)
-                        .font(.callout)
-                }
-                .padding()
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 Spacer()
             }
@@ -1498,6 +1527,138 @@ struct SettingsContent: View {
 
     private func updateLibraryPath() {
         libraryPath = RecordingsFolderAccess.getBookmarkedFolder()?.path ?? ""
+    }
+}
+
+// MARK: - AI Model Settings Section
+
+struct AIModelSettingsSection: View {
+    @Bindable var modelManager: ModelManager
+    @State private var customCachePath: String = ""
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 16) {
+                // Preferred Model Picker
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Preferred Model")
+                        .font(.subheadline)
+                    Picker("Model", selection: Binding(
+                        get: { modelManager.selectedModel },
+                        set: { model in Task { await modelManager.selectModel(model) } }
+                    )) {
+                        ForEach(ModelRegistry.models) { model in
+                            HStack {
+                                Text(model.displayName)
+                                Text("(\(model.quantization))")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .tag(model)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                // Model State
+                HStack(spacing: 8) {
+                    switch modelManager.state {
+                    case .idle:
+                        Image(systemName: "circle")
+                            .foregroundStyle(.secondary)
+                        Text("Not loaded")
+                            .foregroundStyle(.secondary)
+                    case .downloading(let progress):
+                        ProgressView(value: progress)
+                            .frame(width: 60)
+                        Text("Downloading \(Int(progress * 100))%")
+                    case .loading:
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading into memory...")
+                    case .ready:
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Ready (\(modelManager.selectedModel.parameterCount))")
+                    case .error(let msg):
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(msg)
+                            .lineLimit(2)
+                            .font(.caption)
+                    case .unloaded(let reason):
+                        Image(systemName: "moon.zzz")
+                            .foregroundStyle(.secondary)
+                        Text("Unloaded: \(reason)")
+                    }
+                    Spacer()
+
+                    // Load / Unload button
+                    if modelManager.state == .ready {
+                        Button("Unload") {
+                            Task { await modelManager.unloadModel() }
+                        }
+                        .foregroundStyle(.secondary)
+                    } else if case .idle = modelManager.state {
+                        Button("Load") {
+                            Task { await modelManager.loadSelectedModel() }
+                        }
+                    } else if case .error = modelManager.state {
+                        Button("Retry") {
+                            Task { await modelManager.loadSelectedModel() }
+                        }
+                    }
+                }
+                .font(.subheadline)
+
+                Divider()
+
+                // Model Cache Folder
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Model Cache Folder")
+                                .font(.subheadline)
+                            Text(customCachePath.isEmpty ? "~/.cache/huggingface/hub (default)" : customCachePath)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Spacer()
+
+                        Button("Choose...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Select the folder containing HuggingFace model caches"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                modelManager.customCacheDirectory = url
+                                customCachePath = url.path
+                            }
+                        }
+
+                        if modelManager.customCacheDirectory != nil {
+                            Button("Reset") {
+                                modelManager.customCacheDirectory = nil
+                                customCachePath = ""
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text("Models are downloaded from HuggingFace on first use. Reuse models cached by Python or other tools.")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                }
+            }
+        } label: {
+            Label("AI Model", systemImage: "cpu")
+        }
+        .onAppear {
+            customCachePath = modelManager.customCacheDirectory?.path ?? ""
+        }
     }
 }
 
@@ -1549,7 +1710,7 @@ struct AgentSettingsSection: View {
                 .font(.callout)
         }
         .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

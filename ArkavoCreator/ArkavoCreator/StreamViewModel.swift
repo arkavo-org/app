@@ -1,7 +1,6 @@
 import SwiftUI
 import ArkavoKit
 import ArkavoStreaming
-import ArkavoKit
 
 @Observable
 @MainActor
@@ -9,7 +8,7 @@ final class StreamViewModel {
 
     // MARK: - Stream Configuration
 
-    enum StreamPlatform: String, CaseIterable, Identifiable {
+    enum StreamPlatform: String, CaseIterable, Identifiable, Hashable {
         case arkavo = "Arkavo"
         case twitch = "Twitch"
         case youtube = "YouTube"
@@ -19,51 +18,52 @@ final class StreamViewModel {
 
         var rtmpURL: String {
             switch self {
-            case .arkavo:
-                return "rtmp://100.arkavo.net:1935"
-            case .twitch:
-                return "rtmp://live.twitch.tv/app"
-            case .youtube:
-                return "rtmp://a.rtmp.youtube.com/live2"
-            case .custom:
-                return ""
+            case .arkavo: "rtmp://100.arkavo.net:1935"
+            case .twitch: "rtmp://live.twitch.tv/app"
+            case .youtube: "rtmp://a.rtmp.youtube.com/live2"
+            case .custom: ""
             }
         }
 
         var requiresStreamKey: Bool {
-            switch self {
-            case .arkavo:
-                return false  // Arkavo uses authenticated session, not stream key
-            default:
-                return true
-            }
+            self != .arkavo
         }
 
         var icon: String {
             switch self {
-            case .arkavo:
-                return "lock.shield"
-            case .twitch:
-                return "tv"
-            case .youtube:
-                return "play.rectangle"
-            case .custom:
-                return "server.rack"
+            case .arkavo: "lock.shield"
+            case .twitch: "tv"
+            case .youtube: "play.rectangle"
+            case .custom: "server.rack"
             }
         }
 
-        var isEncrypted: Bool {
-            self == .arkavo
-        }
+        var isEncrypted: Bool { self == .arkavo }
+    }
+
+    // MARK: - Per-Platform Config
+
+    struct PlatformConfig {
+        var streamKey: String = ""
+        var broadcastId: String?
+        var error: String?
+        var isLive: Bool = false
     }
 
     // MARK: - State
 
-    var selectedPlatform: StreamPlatform = .twitch
+    var selectedPlatforms: Set<StreamPlatform> = [.twitch]
+    var platformConfigs: [StreamPlatform: PlatformConfig] = [:]
     var customRTMPURL: String = ""
-    var streamKey: String = ""
     var title: String = ""
-    var isBandwidthTest: Bool = false  // Twitch bandwidth test mode
+    var isBandwidthTest: Bool = false
+
+    /// YouTube broadcast privacy: "public", "unlisted", or "private". Bound from `StreamInfoFormView`.
+    var youtubePrivacyStatus: String = "public"
+
+    /// Owns the YouTube broadcast transition Task. Stored directly so that copying
+    /// `PlatformConfig` (a value type) cannot duplicate or lose the reference.
+    var youtubeTransitionTask: Task<Void, Never>?
 
     var isStreaming: Bool = false
     var isConnecting: Bool = false
@@ -80,18 +80,66 @@ final class StreamViewModel {
 
     private var statisticsTimer: Timer?
     var twitchClient: TwitchAuthClient?
+    var youtubeClient: YouTubeClient?
     private var recordingState = RecordingState.shared
+
+    // MARK: - Backward Compatibility
+
+    /// Primary platform (first selected, for single-platform code paths)
+    var selectedPlatform: StreamPlatform {
+        get { selectedPlatforms.first ?? .twitch }
+        set {
+            selectedPlatforms = [newValue]
+        }
+    }
+
+    /// Stream key for the primary platform
+    var streamKey: String {
+        get { platformConfigs[selectedPlatform]?.streamKey ?? "" }
+        set { platformConfigs[selectedPlatform, default: PlatformConfig()].streamKey = newValue }
+    }
+
+    /// YouTube broadcast ID (from primary or YouTube-specific config)
+    var youtubeBroadcastId: String? {
+        get { platformConfigs[.youtube]?.broadcastId }
+        set { platformConfigs[.youtube, default: PlatformConfig()].broadcastId = newValue }
+    }
 
     // MARK: - Computed Properties
 
     var canStartStreaming: Bool {
-        let hasValidKey = selectedPlatform == .arkavo || !streamKey.isEmpty
-        return hasValidKey && !isStreaming && !isConnecting &&
-        (selectedPlatform != .custom || !customRTMPURL.isEmpty)
+        guard !isStreaming, !isConnecting else { return false }
+        // All selected platforms must have valid keys (or not require one)
+        for platform in selectedPlatforms {
+            if platform.requiresStreamKey {
+                let key = platformConfigs[platform]?.streamKey ?? ""
+                if key.isEmpty { return false }
+            }
+            if platform == .custom && customRTMPURL.isEmpty { return false }
+        }
+        return !selectedPlatforms.isEmpty
     }
 
     var effectiveRTMPURL: String {
         selectedPlatform == .custom ? customRTMPURL : selectedPlatform.rtmpURL
+    }
+
+    /// Estimated total upload bitrate for all selected platforms
+    var estimatedTotalBitrate: String {
+        let perStream = Double(videoBitrate) + 128_000 // video + audio
+        let total = perStream * Double(selectedPlatforms.count)
+        if total < 1_000_000 {
+            return String(format: "%.0f Kbps", total / 1000)
+        }
+        return String(format: "%.1f Mbps", total / 1_000_000)
+    }
+
+    private var videoBitrate: Int {
+        // Match the auto-detected bitrate from VideoEncoder
+        let cores = ProcessInfo.processInfo.activeProcessorCount
+        if cores >= 8 { return 4_500_000 }
+        if cores >= 4 { return 3_000_000 }
+        return 1_500_000
     }
 
     var formattedBitrate: String {
@@ -122,82 +170,137 @@ final class StreamViewModel {
 
     // MARK: - Actions
 
-    func startStreaming() async {
-        guard canStartStreaming else { return }
+    /// Single source of truth for starting a stream. Handles validation, NTDF setup,
+    /// YouTube broadcast creation, multi-destination RTMP fan-out, and the post-stream
+    /// YouTube `testing → live` transition task.
+    ///
+    /// - Returns: `true` if the stream started successfully (UI can proceed to wire chat,
+    ///            show overlays, etc.). `false` if validation or any setup step failed —
+    ///            in that case `error` is populated.
+    @discardableResult
+    func startStreaming() async -> Bool {
+        guard canStartStreaming else { return false }
 
-        // Validate inputs before streaming
         if let validationError = validateInputs() {
             error = validationError
-            return
+            return false
         }
 
         guard let session = recordingState.getRecordingSession() else {
             error = "No active recording session. Please start recording first."
-            return
+            return false
         }
 
         error = nil
         isConnecting = true
 
         do {
-            if selectedPlatform == .arkavo {
-                // Use NTDF-encrypted streaming for Arkavo
+            // Handle Arkavo NTDF separately (not part of simulcast)
+            if selectedPlatforms.contains(.arkavo) {
                 guard let kasURL = URL(string: "https://100.arkavo.net") else {
                     self.error = "Invalid KAS URL"
                     isConnecting = false
-                    return
+                    return false
                 }
                 try await session.startNTDFStreaming(
                     kasURL: kasURL,
-                    rtmpURL: effectiveRTMPURL,
-                    streamKey: "live/creator"  // Default stream key for Arkavo
+                    rtmpURL: StreamPlatform.arkavo.rtmpURL,
+                    streamKey: "live/creator"
                 )
-            } else {
-                // Create RTMP destination for other platforms
-                let destination = RTMPPublisher.Destination(
-                    url: effectiveRTMPURL,
-                    platform: selectedPlatform.rawValue.lowercased()
-                )
+            }
 
-                // Connect and start streaming
-                // Append bandwidth test flag if enabled (Twitch-specific)
-                let effectiveStreamKey = isBandwidthTest ? "\(streamKey)?bandwidthtest=true" : streamKey
-                try await session.startStreaming(to: destination, streamKey: effectiveStreamKey)
+            // Build RTMP destinations for non-Arkavo platforms
+            let rtmpPlatforms = selectedPlatforms.filter { !$0.isEncrypted }
+            if !rtmpPlatforms.isEmpty {
+                // YouTube: create broadcast before RTMP
+                if rtmpPlatforms.contains(.youtube), let ytClient = youtubeClient {
+                    let broadcastId = try await ytClient.createAndBindBroadcast(title: title, privacyStatus: youtubePrivacyStatus)
+                    platformConfigs[.youtube, default: PlatformConfig()].broadcastId = broadcastId
+                    debugLog("[StreamViewModel] Created YouTube broadcast: \(broadcastId)")
+                }
+
+                var destinations: [(id: String, destination: RTMPPublisher.Destination, streamKey: String)] = []
+                for platform in rtmpPlatforms {
+                    let config = platformConfigs[platform] ?? PlatformConfig()
+                    let url = platform == .custom ? customRTMPURL : platform.rtmpURL
+                    let dest = RTMPPublisher.Destination(url: url, platform: platform.rawValue.lowercased())
+                    var key = config.streamKey
+                    if platform == .twitch && isBandwidthTest {
+                        key += "?bandwidthtest=true"
+                    }
+                    destinations.append((id: platform.rawValue.lowercased(), destination: dest, streamKey: key))
+                }
+
+                try await session.startStreaming(destinations: destinations)
             }
 
             isStreaming = true
             isConnecting = false
-
-            // Start statistics polling
             startStatisticsTimer()
 
+            // YouTube broadcast lifecycle: after RTMP is publishing, transition the
+            // broadcast from `testing` → `live`. Stored as a Task on the view model
+            // (round 2 fix) so stopStreaming can cancel it cleanly.
+            if let ytClient = youtubeClient,
+               let broadcastId = platformConfigs[.youtube]?.broadcastId {
+                youtubeTransitionTask = Task {
+                    try? await Task.sleep(for: .seconds(15))
+                    guard !Task.isCancelled else { return }
+                    for attempt in 1...5 {
+                        guard !Task.isCancelled else { return }
+                        do {
+                            try await ytClient.transitionBroadcastToLive(broadcastId: broadcastId)
+                            debugLog("[StreamViewModel] YouTube broadcast transitioned to LIVE")
+                            break
+                        } catch {
+                            debugLog("[StreamViewModel] YouTube transition attempt \(attempt)/5: \(error.localizedDescription)")
+                            if attempt < 5 {
+                                try? await Task.sleep(for: .seconds(10))
+                            }
+                        }
+                    }
+                }
+            }
+
+            return true
         } catch {
             self.error = error.localizedDescription
             isConnecting = false
             isStreaming = false
+            return false
         }
     }
 
     func stopStreaming() async {
         guard let session = recordingState.getRecordingSession(), isStreaming else { return }
 
+        // Cancel YouTube transition task and end broadcast
+        youtubeTransitionTask?.cancel()
+        youtubeTransitionTask = nil
+        if let ytClient = youtubeClient, let broadcastId = platformConfigs[.youtube]?.broadcastId {
+            try? await ytClient.endBroadcast(broadcastId: broadcastId)
+            platformConfigs[.youtube]?.broadcastId = nil
+            debugLog("[StreamViewModel] Ended YouTube broadcast")
+        }
+
         await session.stopStreaming()
 
         isStreaming = false
         isConnecting = false
-
-        // Stop statistics polling
         stopStatisticsTimer()
-
-        // Reset statistics
         bitrate = 0
         fps = 0
         framesSent = 0
         bytesSent = 0
         duration = 0
+
+        // Clear per-platform live state
+        for platform in platformConfigs.keys {
+            platformConfigs[platform]?.isLive = false
+            platformConfigs[platform]?.error = nil
+        }
     }
 
-    /// Start polling stream statistics (duration, bitrate, etc.)
     func startStatisticsPolling() {
         startStatisticsTimer()
     }
@@ -229,7 +332,6 @@ final class StreamViewModel {
         bytesSent = stats.bytesSent
         duration = stats.duration
 
-        // Calculate FPS from frames sent over duration
         if duration > 0 {
             fps = Double(framesSent) / duration
         }
@@ -238,49 +340,47 @@ final class StreamViewModel {
     // MARK: - Stream Key Management
 
     func loadStreamKey() {
-        // Clear current key before loading platform-specific key
-        streamKey = ""
-
-        // Load stream key from Keychain for selected platform
-        if let savedKey = KeychainManager.getStreamKey(for: selectedPlatform.rawValue) {
-            // Validate it's not a URL (bad cached value)
-            if !savedKey.hasPrefix("http://") && !savedKey.hasPrefix("https://") {
-                streamKey = savedKey
-                debugLog("[StreamViewModel] Loaded stream key for \(selectedPlatform.rawValue)")
-            } else {
-                // Clear invalid cached URL
-                debugLog("[StreamViewModel] Clearing invalid cached stream key (was URL)")
-                KeychainManager.deleteStreamKey(for: selectedPlatform.rawValue)
+        // Load keys for all selected platforms
+        for platform in selectedPlatforms {
+            var config = platformConfigs[platform] ?? PlatformConfig()
+            config.streamKey = ""
+            if let savedKey = KeychainManager.getStreamKey(for: platform.rawValue) {
+                if !savedKey.hasPrefix("http://") && !savedKey.hasPrefix("https://") {
+                    config.streamKey = savedKey
+                    debugLog("[StreamViewModel] Loaded stream key for \(platform.rawValue)")
+                } else {
+                    KeychainManager.deleteStreamKey(for: platform.rawValue)
+                }
             }
+            platformConfigs[platform] = config
         }
 
-        // Handle custom RTMP URL
-        if selectedPlatform == .custom {
-            customRTMPURL = ""
-            if let savedURL = KeychainManager.getCustomRTMPURL() {
-                customRTMPURL = savedURL
-            }
+        if selectedPlatforms.contains(.custom) {
+            customRTMPURL = KeychainManager.getCustomRTMPURL() ?? ""
         }
     }
 
     func saveStreamKey() {
-        // Save stream key to Keychain (but never save URLs)
-        if !streamKey.isEmpty && !streamKey.hasPrefix("http://") && !streamKey.hasPrefix("https://") {
-            try? KeychainManager.saveStreamKey(streamKey, for: selectedPlatform.rawValue)
-            debugLog("[StreamViewModel] Saved stream key for \(selectedPlatform.rawValue)")
+        for platform in selectedPlatforms {
+            let key = platformConfigs[platform]?.streamKey ?? ""
+            if !key.isEmpty && !key.hasPrefix("http://") && !key.hasPrefix("https://") {
+                try? KeychainManager.saveStreamKey(key, for: platform.rawValue)
+                debugLog("[StreamViewModel] Saved stream key for \(platform.rawValue)")
+            }
         }
 
-        // Save custom RTMP URL if custom platform
-        if selectedPlatform == .custom && !customRTMPURL.isEmpty {
+        if selectedPlatforms.contains(.custom) && !customRTMPURL.isEmpty {
             try? KeychainManager.saveCustomRTMPURL(customRTMPURL)
         }
     }
 
     func clearStreamKey() {
-        KeychainManager.deleteStreamKey(for: selectedPlatform.rawValue)
-        streamKey = ""
+        for platform in selectedPlatforms {
+            KeychainManager.deleteStreamKey(for: platform.rawValue)
+            platformConfigs[platform]?.streamKey = ""
+        }
 
-        if selectedPlatform == .custom {
+        if selectedPlatforms.contains(.custom) {
             KeychainManager.deleteCustomRTMPURL()
             customRTMPURL = ""
         }
@@ -288,111 +388,54 @@ final class StreamViewModel {
 
     // MARK: - Input Validation
 
-    /// Validates stream key, RTMP URL, and title
-    /// - Returns: Error message if validation fails, nil if all inputs are valid
     private func validateInputs() -> String? {
-        // Validate stream key
-        if let error = validateStreamKey(streamKey) {
-            return error
-        }
-
-        // Validate custom RTMP URL if custom platform
-        if selectedPlatform == .custom {
-            if let error = validateRTMPURL(customRTMPURL) {
-                return error
+        for platform in selectedPlatforms {
+            if platform.requiresStreamKey {
+                let key = platformConfigs[platform]?.streamKey ?? ""
+                if let error = validateStreamKey(key, platform: platform) {
+                    return "[\(platform.rawValue)] \(error)"
+                }
+            }
+            if platform == .custom {
+                if let error = validateRTMPURL(customRTMPURL) {
+                    return error
+                }
             }
         }
 
-        // Validate stream title
         if let error = validateTitle(title) {
             return error
         }
-
         return nil
     }
 
-    /// Validates stream key format and length
-    private func validateStreamKey(_ key: String) -> String? {
-        // Arkavo doesn't require a stream key
-        if selectedPlatform == .arkavo {
-            return nil
+    private func validateStreamKey(_ key: String, platform: StreamPlatform) -> String? {
+        if platform == .arkavo { return nil }
+        if key.trimmingCharacters(in: .whitespaces).isEmpty { return "Stream key cannot be empty" }
+        if key.count < 10 { return "Stream key is too short (minimum 10 characters)" }
+        if key.count > 200 { return "Stream key is too long (maximum 200 characters)" }
+        let validChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        if key.rangeOfCharacter(from: validChars.inverted) != nil {
+            return "Stream key contains invalid characters"
         }
-
-        // Check if empty
-        if key.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "Stream key cannot be empty"
-        }
-
-        // Check minimum length (most platforms require at least 10 characters)
-        if key.count < 10 {
-            return "Stream key is too short (minimum 10 characters)"
-        }
-
-        // Check maximum length (reasonable limit for stream keys)
-        if key.count > 200 {
-            return "Stream key is too long (maximum 200 characters)"
-        }
-
-        // Check for valid characters (alphanumeric, hyphens, underscores)
-        let validCharacterSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        if key.rangeOfCharacter(from: validCharacterSet.inverted) != nil {
-            return "Stream key contains invalid characters (only letters, numbers, hyphens, and underscores allowed)"
-        }
-
         return nil
     }
 
-    /// Validates RTMP URL format and protocol
     private func validateRTMPURL(_ urlString: String) -> String? {
-        // Check if empty
-        if urlString.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "RTMP URL cannot be empty"
+        if urlString.trimmingCharacters(in: .whitespaces).isEmpty { return "RTMP URL cannot be empty" }
+        guard let url = URL(string: urlString) else { return "Invalid RTMP URL format" }
+        guard let scheme = url.scheme?.lowercased(), scheme == "rtmp" || scheme == "rtmps" else {
+            return "RTMP URL must use rtmp:// or rtmps://"
         }
-
-        // Check if valid URL
-        guard let url = URL(string: urlString) else {
-            return "Invalid RTMP URL format"
-        }
-
-        // Check protocol
-        guard let scheme = url.scheme?.lowercased() else {
-            return "RTMP URL must specify a protocol (rtmp:// or rtmps://)"
-        }
-
-        guard scheme == "rtmp" || scheme == "rtmps" else {
-            return "RTMP URL must use rtmp:// or rtmps:// protocol"
-        }
-
-        // Check host
-        guard let host = url.host, !host.isEmpty else {
-            return "RTMP URL must include a valid host"
-        }
-
-        // Check overall length
-        if urlString.count > 500 {
-            return "RTMP URL is too long (maximum 500 characters)"
-        }
-
+        guard let host = url.host, !host.isEmpty else { return "RTMP URL must include a host" }
+        if urlString.count > 500 { return "RTMP URL is too long" }
         return nil
     }
 
-    /// Validates stream title length and characters
     private func validateTitle(_ title: String) -> String? {
-        // Allow empty title (optional field)
-        if title.isEmpty {
-            return nil
-        }
-
-        // Check maximum length
-        if title.count > 200 {
-            return "Stream title is too long (maximum 200 characters)"
-        }
-
-        // Check for control characters
-        if title.rangeOfCharacter(from: .controlCharacters) != nil {
-            return "Stream title contains invalid control characters"
-        }
-
+        if title.isEmpty { return nil }
+        if title.count > 200 { return "Stream title is too long (maximum 200 characters)" }
+        if title.rangeOfCharacter(from: .controlCharacters) != nil { return "Stream title contains invalid characters" }
         return nil
     }
 }

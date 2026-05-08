@@ -6,6 +6,8 @@ import CryptoKit
 import OpenTDFKit
 
 struct RecordingsLibraryView: View {
+    var youtubeClient: YouTubeClient?
+
     @StateObject private var manager = RecordingsManager()
     @State private var selectedRecording: Recording?
     @State private var playerRecording: Recording?  // Dedicated state for video player sheet
@@ -16,7 +18,7 @@ struct RecordingsLibraryView: View {
     @State private var protectionError: String?
     @State private var showingProtectionError = false
     @State private var recordingToDelete: Recording?
-    @State private var gridColumns = [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)]
+    @State private var gridColumns = [GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 20)]
 
     // Iroh publishing state
     @State private var isPublishing = false
@@ -25,21 +27,24 @@ struct RecordingsLibraryView: View {
     @State private var publishedTicket: ContentTicket?
     @State private var showingPublishSuccess = false
 
+    // YouTube upload state
+    @State private var uploadRecording: Recording?
+    @State private var uploadProgress: Double = 0
+    @State private var uploadedVideoID: String?
+    @State private var showingUploadSuccess = false
+    @State private var uploadError: String?
+    @State private var showingUploadError = false
+    @State private var uploadTask: Task<Void, Never>?
+
     private let kasURL = URL(string: "https://100.arkavo.net")!
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            headerView
-
-            Divider()
-
-            // Content
             if manager.recordings.isEmpty {
                 emptyStateView
             } else {
                 ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                    LazyVGrid(columns: gridColumns, spacing: 20) {
                         ForEach(manager.recordings) { recording in
                             RecordingCard(recording: recording)
                                 .accessibilityIdentifier("RecordingCard_\(recording.id)")
@@ -53,6 +58,16 @@ struct RecordingsLibraryView: View {
                     }
                     .padding()
                 }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await manager.loadRecordings() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh")
             }
         }
         .sheet(item: $playerRecording) { recording in
@@ -112,6 +127,44 @@ struct RecordingsLibraryView: View {
         } message: {
             Text("Content published successfully. Share the ticket to allow others to access this content.")
         }
+        .sheet(item: $uploadRecording) { recording in
+            if let client = youtubeClient {
+                UploadToYouTubeSheet(recording: recording, youtubeClient: client) { task in
+                    // Track the in-flight task so the overlay's cancel button works
+                    uploadTask = task
+                } onProgress: { fraction in
+                    uploadProgress = fraction
+                } onSuccess: { videoID in
+                    uploadTask = nil
+                    uploadRecording = nil
+                    uploadProgress = 0
+                    uploadedVideoID = videoID
+                    showingUploadSuccess = true
+                } onFailure: { message in
+                    uploadTask = nil
+                    uploadRecording = nil
+                    uploadProgress = 0
+                    uploadError = message
+                    showingUploadError = true
+                }
+            }
+        }
+        .alert("Uploaded to YouTube", isPresented: $showingUploadSuccess) {
+            Button("Open Video") {
+                if let id = uploadedVideoID,
+                   let url = URL(string: "https://studio.youtube.com/video/\(id)/edit") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) { uploadedVideoID = nil }
+        } message: {
+            Text("Your video is uploaded. It may take a few minutes for YouTube to finish processing before it's visible.")
+        }
+        .alert("Upload Error", isPresented: $showingUploadError) {
+            Button("OK") { uploadError = nil }
+        } message: {
+            if let error = uploadError { Text(error) }
+        }
         .overlay {
             if isProtecting || isPublishing {
                 ZStack {
@@ -137,36 +190,13 @@ struct RecordingsLibraryView: View {
 
     // MARK: - View Components
 
-    private var headerView: some View {
-        HStack {
-            Text("Recordings")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Spacer()
-
-            Text("\(manager.recordings.count) recording\(manager.recordings.count == 1 ? "" : "s")")
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-
-            Button {
-                Task {
-                    await manager.loadRecordings()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Refresh")
-        }
-        .padding()
-    }
-
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             if manager.needsFolderSelection {
                 Image(systemName: "folder.badge.questionmark")
                     .font(.system(size: 60))
                     .foregroundColor(.blue)
+                    .shadow(color: .blue.opacity(0.15), radius: 20)
 
                 Text("Choose Recordings Folder")
                     .font(.title2)
@@ -185,6 +215,7 @@ struct RecordingsLibraryView: View {
                 Image(systemName: "video.slash")
                     .font(.system(size: 60))
                     .foregroundColor(.secondary)
+                    .shadow(color: .blue.opacity(0.15), radius: 20)
 
                 Text("No Recordings Yet")
                     .font(.title2)
@@ -238,6 +269,16 @@ struct RecordingsLibraryView: View {
             if let view = NSApp.keyWindow?.contentView {
                 picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
             }
+        }
+
+        if let client = youtubeClient, client.isAuthenticated {
+            Divider()
+            Button {
+                uploadRecording = recording
+            } label: {
+                Label("Upload to YouTube…", systemImage: "arrow.up.circle")
+            }
+            .accessibilityIdentifier("UploadToYouTube_\(recording.id)")
         }
 
         Divider()
@@ -379,8 +420,8 @@ struct RecordingCard: View {
     @State private var tdfStatus: Recording.TDFProtectionStatus?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
+        VStack(alignment: .leading, spacing: 0) {
+            // Thumbnail (flush to card edges — outer clipShape handles corners)
             ZStack {
                 if let thumbnail = thumbnail {
                     Image(nsImage: thumbnail)
@@ -388,12 +429,10 @@ struct RecordingCard: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(height: 150)
                         .clipped()
-                        .cornerRadius(8)
                 } else {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.2))
                         .frame(height: 150)
-                        .cornerRadius(8)
                         .overlay {
                             ProgressView()
                         }
@@ -402,7 +441,6 @@ struct RecordingCard: View {
                 // Badges (top-left)
                 VStack {
                     HStack(spacing: 4) {
-                        // TDF Badge
                         if let status = tdfStatus, status.isProtected {
                             HStack(spacing: 4) {
                                 Image(systemName: "lock.shield.fill")
@@ -419,7 +457,6 @@ struct RecordingCard: View {
                             .accessibilityIdentifier("TDF3Badge")
                         }
 
-                        // C2PA Badge
                         if let status = c2paStatus, status.isSigned {
                             HStack(spacing: 4) {
                                 Image(systemName: status.isValid ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
@@ -458,28 +495,33 @@ struct RecordingCard: View {
                 }
             }
 
-            // Title
-            Text(recording.title)
-                .font(.headline)
-                .lineLimit(1)
+            // Title + Metadata (with padding)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(recording.title)
+                    .font(.headline)
+                    .lineLimit(1)
 
-            // Metadata
-            HStack(spacing: 12) {
-                Label(recording.formattedDate, systemImage: "calendar")
+                Text(recording.formattedCardSubtitle)
                     .font(.caption)
                     .foregroundColor(.secondary)
-
-                Spacer()
-
-                Label(recording.formattedFileSize, systemImage: "doc")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
+            .padding(12)
         }
-        .padding(12)
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.25), .white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        )
+        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
         .task {
             await loadThumbnail()
         }
@@ -1726,6 +1768,234 @@ struct InfoRow: View {
             Text(value)
                 .fontWeight(.medium)
             Spacer()
+        }
+    }
+}
+
+// MARK: - Upload to YouTube Sheet
+
+struct UploadToYouTubeSheet: View {
+    let recording: Recording
+    let youtubeClient: YouTubeClient
+    let onTaskCreated: (Task<Void, Never>) -> Void
+    let onProgress: (Double) -> Void
+    let onSuccess: (String) -> Void
+    let onFailure: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var description: String = ""
+    @State private var tagsText: String = ""
+    @State private var privacy: YouTubeClient.VideoPrivacy = .privateVideo
+    @State private var progress: Double = 0
+    @State private var isUploading = false
+    @State private var activeTask: Task<Void, Never>?
+
+    init(
+        recording: Recording,
+        youtubeClient: YouTubeClient,
+        onTaskCreated: @escaping (Task<Void, Never>) -> Void,
+        onProgress: @escaping (Double) -> Void,
+        onSuccess: @escaping (String) -> Void,
+        onFailure: @escaping (String) -> Void
+    ) {
+        self.recording = recording
+        self.youtubeClient = youtubeClient
+        self.onTaskCreated = onTaskCreated
+        self.onProgress = onProgress
+        self.onSuccess = onSuccess
+        self.onFailure = onFailure
+        self._title = State(initialValue: recording.title)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.red)
+                Text("Upload to YouTube")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button {
+                    cancel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("UploadSheet_Close")
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    labeled("Title") {
+                        TextField("Video title", text: $title)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isUploading)
+                            .accessibilityIdentifier("UploadSheet_Title")
+                    }
+
+                    labeled("Description") {
+                        TextEditor(text: $description)
+                            .frame(minHeight: 80, maxHeight: 140)
+                            .padding(6)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                            .disabled(isUploading)
+                            .accessibilityIdentifier("UploadSheet_Description")
+                    }
+
+                    labeled("Tags (comma-separated)") {
+                        TextField("gaming, tutorial, swift", text: $tagsText)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isUploading)
+                    }
+
+                    labeled("Privacy") {
+                        Picker("Privacy", selection: $privacy) {
+                            ForEach(YouTubeClient.VideoPrivacy.allCases, id: \.self) { option in
+                                Text(option.displayName).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(isUploading)
+                        .accessibilityIdentifier("UploadSheet_Privacy")
+                    }
+
+                    // Recording summary
+                    HStack(spacing: 12) {
+                        Image(systemName: "film")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(recording.url.lastPathComponent)
+                                .font(.caption)
+                                .lineLimit(1)
+                            Text("\(recording.formattedDuration) \u{2022} \(recording.formattedFileSize)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+
+                    if isUploading {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ProgressView(value: progress)
+                            Text("\(Int(progress * 100))%")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding()
+            }
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button(isUploading ? "Cancel" : "Close") {
+                    cancel()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button("Upload") {
+                    startUpload()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isUploading || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityIdentifier("UploadSheet_Upload")
+            }
+            .padding()
+        }
+        .frame(minWidth: 480, minHeight: 520)
+    }
+
+    @ViewBuilder
+    private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    private func startUpload() {
+        guard !isUploading else { return }
+        isUploading = true
+        progress = 0
+        onProgress(0)
+
+        let tags = tagsText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let metadata = YouTubeClient.VideoUploadMetadata(
+            title: title.trimmingCharacters(in: .whitespaces),
+            description: description,
+            tags: tags,
+            privacy: privacy
+        )
+
+        let fileURL = recording.url
+        let mime = Self.mimeType(for: fileURL)
+        let client = youtubeClient
+
+        let task = Task {
+            // Start security-scoped access so the user's sandboxed sandbox can read the file
+            let folder = RecordingsFolderAccess.getBookmarkedFolder()
+            let accessed = folder?.startAccessingSecurityScopedResource() ?? false
+            defer {
+                if accessed { folder?.stopAccessingSecurityScopedResource() }
+            }
+
+            do {
+                let id = try await client.uploadVideo(
+                    fileURL: fileURL,
+                    metadata: metadata,
+                    mimeType: mime
+                ) { fraction in
+                    Task { @MainActor in
+                        progress = fraction
+                        onProgress(fraction)
+                    }
+                }
+                await MainActor.run {
+                    onSuccess(id)
+                }
+            } catch is CancellationError {
+                await MainActor.run { isUploading = false }
+            } catch {
+                await MainActor.run {
+                    onFailure((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                }
+            }
+        }
+        activeTask = task
+        onTaskCreated(task)
+    }
+
+    private func cancel() {
+        activeTask?.cancel()
+        activeTask = nil
+        isUploading = false
+        dismiss()
+    }
+
+    private static func mimeType(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "mp4", "m4v": "video/mp4"
+        case "mov", "qt": "video/quicktime"
+        default: "video/quicktime"
         }
     }
 }

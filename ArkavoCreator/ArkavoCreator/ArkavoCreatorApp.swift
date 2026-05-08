@@ -2,6 +2,7 @@ import ArkavoKit
 import ArkavoSocial
 import AuthenticationServices
 import LocalAuthentication
+import MuseCore
 import SwiftData
 import SwiftUI
 
@@ -17,6 +18,8 @@ class WindowAccessor: ObservableObject {
 struct ArkavoCreatorApp: App {
     @StateObject private var windowAccessor = WindowAccessor.shared
     @StateObject private var agentService = CreatorAgentService()
+
+    @State private var modelManager = ModelManager()
 
     let patreonClient = PatreonClient(clientId: Secrets.patreonClientId, clientSecret: Secrets.patreonClientSecret)
     let redditClient = RedditClient(clientId: Secrets.redditClientId)
@@ -53,7 +56,8 @@ struct ArkavoCreatorApp: App {
                 micropubClient: micropubClient,
                 blueskyClient: blueskyClient,
                 youtubeClient: youtubeClient,
-                agentService: agentService
+                agentService: agentService,
+                modelManager: modelManager
             )
             .onAppear {
                 // Load stored tokens
