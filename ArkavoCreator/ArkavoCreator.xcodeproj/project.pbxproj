@@ -217,7 +217,7 @@
 				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
 				REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */,
 				DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
-				DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */,
+				DAMC00012EE7000000000003 /* XCRemoteSwiftPackageReference "MuseCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA91A9BB2CFB625000BE9912 /* Products */;
@@ -642,10 +642,6 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoMediaKit;
 		};
-		DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../MuseCore;
-		};
 		REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoKit;
@@ -659,6 +655,14 @@
 			requirement = {
 				kind = upToNextMinorVersion;
 				minimumVersion = 0.9.1;
+			};
+		};
+		DAMC00012EE7000000000003 /* XCRemoteSwiftPackageReference "MuseCore" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arkavo-org/MuseCore";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -683,7 +687,7 @@
 		};
 		DAMC00012EE7000000000002 /* MuseCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */;
+			package = DAMC00012EE7000000000003 /* XCRemoteSwiftPackageReference "MuseCore" */;
 			productName = MuseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
