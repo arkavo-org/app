@@ -618,7 +618,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DABFC28E2C34F54E00232D79 /* XCRemoteSwiftPackageReference "OpenTDFKit" */,
 				DAEE13852CA0FBEB00DCB5EC /* XCRemoteSwiftPackageReference "flatbuffers" */,
 				DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */,
-				DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
+				DA0000012EF7A00000000001 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */,
 			);
 			productRefGroup = DAC1F9E42C34DA7000499631 /* Products */;
 			projectDirPath = "";
@@ -1212,10 +1212,6 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoMediaKit;
-		};
 		DAF7A3A32EC2D80A00A59F0C /* XCLocalSwiftPackageReference "../ArkavoKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ArkavoKit;
@@ -1239,12 +1235,20 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				version = 24.12.23;
 			};
 		};
+		DA0000012EF7A00000000001 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arkavo-org/ArkavoMediaKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		DA0000022EF7A00000000002 /* ArkavoMediaKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DA0000012EF7A00000000001 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
+			package = DA0000012EF7A00000000001 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */;
 			productName = ArkavoMediaKit;
 		};
 		DA34603C2EE4B78B00A1D638 /* ArkavoStore */ = {

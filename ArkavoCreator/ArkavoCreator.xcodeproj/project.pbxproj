@@ -216,7 +216,7 @@
 			packageReferences = (
 				DAVRM0032CFE9B4C00814332 /* XCRemoteSwiftPackageReference "VRMMetalKit" */,
 				REFAC00000000000000000001 /* XCLocalSwiftPackageReference "../ArkavoKit" */,
-				DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */,
+				DAHLS0012EE6000000000003 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */,
 				DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -638,10 +638,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ArkavoMediaKit;
-		};
 		DAMC00012EE7000000000003 /* XCLocalSwiftPackageReference "../MuseCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MuseCore;
@@ -661,6 +657,14 @@
 				minimumVersion = 0.9.1;
 			};
 		};
+		DAHLS0012EE6000000000003 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arkavo-org/ArkavoMediaKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -678,7 +682,7 @@
 		};
 		DAHLS0012EE6000000000002 /* ArkavoMediaKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DAHLS0012EE6000000000003 /* XCLocalSwiftPackageReference "../ArkavoMediaKit" */;
+			package = DAHLS0012EE6000000000003 /* XCRemoteSwiftPackageReference "ArkavoMediaKit" */;
 			productName = ArkavoMediaKit;
 		};
 		DAMC00012EE7000000000002 /* MuseCore */ = {
