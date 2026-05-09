@@ -1,6 +1,15 @@
 {
-  "originHash" : "84e3417ef77853d734053b9ffc1375eca408a4a0ca68316097deeed4040b42a2",
+  "originHash" : "86c5cc75ce61fead93da7194382c7e5efe3de361ba1b93d3d072e6ff6147042f",
   "pins" : [
+    {
+      "identity" : "arkavokit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkavo-org/ArkavoKit",
+      "state" : {
+        "revision" : "229b8b54c7ef42c71461717adc43e3cf91ed4a54",
+        "version" : "0.1.0"
+      }
+    },
     {
       "identity" : "arkavomediakit",
       "kind" : "remoteSourceControl",
@@ -33,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/arkavo-org/iroh-swift",
       "state" : {
-        "revision" : "4b3632cba5de6cb47d6c185ac9e569f1e271bd7c",
-        "version" : "0.3.0"
+        "revision" : "e6fa5aaa72f75682074f2cd38adc13e03cf78ece",
+        "version" : "0.4.0"
       }
     },
     {
