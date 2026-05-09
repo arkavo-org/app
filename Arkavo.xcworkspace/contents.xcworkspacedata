@@ -4,9 +4,6 @@
    <FileRef
       location = "group:Arkavo/Arkavo.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:ArkavoCreator/ArkavoCreator.xcodeproj">
-   </FileRef>
    <Group
       location = "group:HYPERforum"
       name = "HYPERforum">
