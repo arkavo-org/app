@@ -286,7 +286,7 @@
 //            guard let kasPublicKey else {
 //                throw EncryptionError.missingKasPublicKey
 //            }
-//            let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+//            let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!
 //            let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 //
 //            // Smart contract

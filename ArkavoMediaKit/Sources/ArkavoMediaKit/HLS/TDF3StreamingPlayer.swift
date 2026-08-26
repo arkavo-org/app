@@ -126,7 +126,7 @@ public class TDF3StreamingPlayer: ObservableObject {
 
         // Extract HLS from TDF
         let extractor = HLSTDFExtractor(
-            kasURL: URL(string: "https://100.arkavo.net")! // Default KAS
+            kasURL: URL(string: "https://platform.arkavo.net")! // Default KAS
         )
         let localAsset = try await extractor.extract(
             tdfData: tdfData,

@@ -14,7 +14,7 @@ final class LiveStreamEventHandler: ObservableObject {
 
     // MARK: - Private Properties
 
-    private let defaultRTMPURL = "rtmp://100.arkavo.net:1935"
+    private let defaultRTMPURL = "rtmp://platform.arkavo.net:1935"
     private let defaultStreamName = "live/creator"
     private var checkTask: Task<Void, Never>?
 

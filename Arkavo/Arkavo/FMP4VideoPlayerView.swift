@@ -325,7 +325,7 @@ enum FMP4PlayerError: Error, LocalizedError {
     FMP4VideoPlayerView(
         tdfData: Data(),
         manifest: TDFManifestLite(
-            kasURL: "https://100.arkavo.net",
+            kasURL: "https://platform.arkavo.net",
             wrappedKey: "test",
             algorithm: "AES-128-CBC",
             iv: "test",

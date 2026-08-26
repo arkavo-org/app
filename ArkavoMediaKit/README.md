@@ -135,7 +135,7 @@ import ArkavoMediaKit
 import OpenTDFKit
 
 // Setup KAS configuration
-let kasURL = URL(string: "https://kas.arkavo.net")!
+let kasURL = URL(string: "https://platform.arkavo.net")!
 let kasPublicKeyPEM = """
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
@@ -191,7 +191,7 @@ for (index, result) in results.enumerated() {
 
 // Generate playlist (points to .tdf files)
 let generator = HLSPlaylistGenerator(
-    kasBaseURL: URL(string: "https://kas.arkavo.net")!,
+    kasBaseURL: URL(string: "https://platform.arkavo.net")!,
     cdnBaseURL: URL(string: "https://cdn.arkavo.net")!
 )
 

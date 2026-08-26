@@ -15,7 +15,7 @@ final class RecordingProtectionServiceTests: XCTestCase {
     /// Test that KAS endpoint is reachable and returns valid response
     /// This would have caught the `publicKey` vs `public_key` bug
     func testKASEndpointReturnsValidPublicKey() async throws {
-        let kasURL = URL(string: "https://100.arkavo.net")!
+        let kasURL = URL(string: "https://platform.arkavo.net")!
         var components = URLComponents(url: kasURL, resolvingAgainstBaseURL: true)!
         components.path = "/kas/v2/kas_public_key"
         components.queryItems = [URLQueryItem(name: "algorithm", value: "rsa")]
@@ -56,7 +56,7 @@ final class RecordingProtectionServiceTests: XCTestCase {
 
     /// Test full protection flow creates valid TDF archive
     func testProtectVideoCreatesValidTDFArchive() async throws {
-        let kasURL = URL(string: "https://100.arkavo.net")!
+        let kasURL = URL(string: "https://platform.arkavo.net")!
         let service = RecordingProtectionService(kasURL: kasURL)
 
         // Create small test video data (just random bytes for testing)
@@ -120,7 +120,7 @@ final class RecordingProtectionServiceTests: XCTestCase {
 
     /// Test that TDFArchiveReader correctly extracts manifest
     func testTDFArchiveReaderExtractsManifest() async throws {
-        let kasURL = URL(string: "https://100.arkavo.net")!
+        let kasURL = URL(string: "https://platform.arkavo.net")!
         let service = RecordingProtectionService(kasURL: kasURL)
 
         let testData = Data(repeating: 0x42, count: 512)
@@ -178,7 +178,7 @@ final class TDFProtectionIntegrationTests: XCTestCase {
 
     /// Full end-to-end test: protect video, verify TDF, extract manifest
     func testEndToEndProtectionFlow() async throws {
-        let kasURL = URL(string: "https://100.arkavo.net")!
+        let kasURL = URL(string: "https://platform.arkavo.net")!
         let service = RecordingProtectionService(kasURL: kasURL)
 
         // Simulate a small video file

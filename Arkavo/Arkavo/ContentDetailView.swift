@@ -315,7 +315,7 @@ private struct ContentInfoRow: View {
             contentID: Data(repeating: 0, count: 32),
             creatorPublicID: Data(repeating: 1, count: 32),
             manifest: TDFManifestLite(
-                kasURL: "https://100.arkavo.net/kas",
+                kasURL: "https://platform.arkavo.net/kas",
                 wrappedKey: "base64key",
                 algorithm: "AES-128-CBC",
                 iv: "base64iv",

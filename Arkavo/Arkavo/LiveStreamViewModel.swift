@@ -29,7 +29,7 @@ class LiveStreamViewModel: ObservableObject {
         private var subscriber: NTDFStreamingSubscriber?
     #endif
 
-    private let kasURL = URL(string: "https://100.arkavo.net/kas")!
+    private let kasURL = URL(string: "https://platform.arkavo.net/kas")!
 
     /// NTDF token for KAS authentication (must be set before connecting)
     var ntdfToken: String?

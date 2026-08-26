@@ -1399,7 +1399,7 @@ final class VideoRecordingViewModel: ViewModel, ObservableObject {
         print("🔐 Protecting video: \(videoData.count) bytes")
 
         // Create protection service
-        let kasURL = URL(string: "https://kas.arkavo.net")!
+        let kasURL = URL(string: "https://platform.arkavo.net")!
         let protectionService = VideoProtectionService(kasURL: kasURL)
 
         // Generate asset ID

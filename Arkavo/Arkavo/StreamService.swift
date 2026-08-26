@@ -113,7 +113,7 @@
 //        // END ***** debug
 //        let nanoPayload = builder.data
 //        // Create Nano
-//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!
 //        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 //        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.streamProfile.rawValue)!
 //        var policy = Policy(type: .remote, body: nil, remote: remotePolicy, binding: nil)

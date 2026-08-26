@@ -176,12 +176,12 @@ public final class TDFContentKeyDelegate<Manifest: FairPlayManifestProtocol>: NS
     ///   - manifest: The TDF manifest containing encryption info
     ///   - authToken: Optional authentication token for server requests
     ///   - userId: User identifier for session (defaults to "anonymous")
-    ///   - serverURL: FairPlay server URL (defaults to 100.arkavo.net)
+    ///   - serverURL: FairPlay server URL (defaults to platform.arkavo.net)
     public init(
         manifest: Manifest,
         authToken: String? = nil,
         userId: String = "anonymous",
-        serverURL: URL = URL(string: "https://100.arkavo.net")!
+        serverURL: URL = URL(string: "https://platform.arkavo.net")!
     ) {
         self.manifest = manifest
         self.authToken = authToken

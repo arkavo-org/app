@@ -426,7 +426,7 @@ The NTDF token (OAuth access token from `identity.arkavo.net`) is:
    - Subscriber logs: `🔐 [DEBUG] Ephemeral public key (33 bytes): <HEX>`
 3. Compare KAS public keys:
    - Publisher logs: `🔐 [NTDFStreamingManager] Using KAS public key (33 bytes): <HEX>`
-   - Fetch from KAS: `curl https://100.arkavo.net/kas/v2/kas_public_key?algorithm=ec`
+   - Fetch from KAS: `curl https://platform.arkavo.net/kas/v2/kas_public_key?algorithm=ec`
 
 **Root Cause (Under Investigation - Dec 2024):**
 The symmetric key derived by the publisher differs from the key returned by KAS rewrap. This indicates:

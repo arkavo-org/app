@@ -81,7 +81,7 @@ public class StandardTDFContentKeyDelegate: NSObject, AVContentKeySessionDelegat
         }
 
         // Parse segment index from URL
-        // Expected format: tdf3://kas.arkavo.net/key?segment=N&asset=ID&user=UID
+        // Expected format: tdf3://platform.arkavo.net/key?segment=N&asset=ID&user=UID
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let segmentParam = components.queryItems?.first(where: { $0.name == "segment" }),
               let segmentIndexString = segmentParam.value,

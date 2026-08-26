@@ -31,7 +31,7 @@ import OpenTDFKit
 
 ```swift
 // Configure KAS with RSA public key
-let kasURL = URL(string: "https://kas.arkavo.net")!
+let kasURL = URL(string: "https://platform.arkavo.net")!
 let kasPublicKeyPEM = """
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
@@ -215,7 +215,7 @@ for (index, result) in results.enumerated() {
 ```swift
 // Create playlist generator
 let generator = HLSPlaylistGenerator(
-    kasBaseURL: URL(string: "https://kas.arkavo.net")!,
+    kasBaseURL: URL(string: "https://platform.arkavo.net")!,
     cdnBaseURL: URL(string: "https://cdn.arkavo.net")!
 )
 
@@ -296,7 +296,7 @@ See `TDF3_MEDIA_DRM_TESTING_PLAN.md` for complete API specification.
 
 ```bash
 # KAS Configuration
-export KAS_URL=https://kas.arkavo.net
+export KAS_URL=https://platform.arkavo.net
 export KAS_PUBLIC_KEY_PATH=/path/to/kas_public.pem
 export KAS_PRIVATE_KEY_PATH=/path/to/kas_private.pem
 

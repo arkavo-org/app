@@ -14,7 +14,7 @@ public actor FMP4RecordingProtectionService {
     private let kasURL: URL
 
     /// Initialize with KAS URL for key fetching and wrapping
-    /// - Parameter kasURL: KAS server URL (e.g., https://kas.arkavo.net)
+    /// - Parameter kasURL: KAS server URL (e.g., https://platform.arkavo.net)
     public init(kasURL: URL) {
         self.kasURL = kasURL
     }

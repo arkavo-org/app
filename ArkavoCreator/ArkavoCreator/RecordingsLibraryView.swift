@@ -36,7 +36,7 @@ struct RecordingsLibraryView: View {
     @State private var showingUploadError = false
     @State private var uploadTask: Task<Void, Never>?
 
-    private let kasURL = URL(string: "https://100.arkavo.net")!
+    private let kasURL = URL(string: "https://platform.arkavo.net")!
 
     var body: some View {
         VStack(spacing: 0) {

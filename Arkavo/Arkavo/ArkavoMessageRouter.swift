@@ -17,6 +17,18 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         client.delegate = self
     }
 
+    /// NanoTDF KAS locator bodies that rewrap at the shared platform KAS.
+    /// `kas.arkavo.net` / `100.arkavo.net` remain so already-minted objects decrypt.
+    private static let centralKasLocators: Set<String> = [
+        "platform.arkavo.net",
+        "kas.arkavo.net",
+        "100.arkavo.net",
+    ]
+
+    private static func isCentralKasLocator(_ body: String) -> Bool {
+        centralKasLocators.contains(body)
+    }
+
     // MARK: - ArkavoClientDelegate Methods
 
     func clientDidChangeState(_: ArkavoClient, state: ArkavoClientState) {
@@ -268,9 +280,9 @@ class ArkavoMessageRouter: ObservableObject, ArkavoClientDelegate {
         let kasIdentifier = header.payloadKeyAccess.kasLocator.body
         print("   KAS Identifier from NATS message header: \(kasIdentifier)")
 
-        if kasIdentifier == "kas.arkavo.net" {
+        if Self.isCentralKasLocator(kasIdentifier) {
             // --- Path A: Use Central KAS (Request Rewrap) ---
-            print("   KAS matches default kas.arkavo.net. Requesting rewrap...")
+            print("   KAS \(kasIdentifier) is central. Requesting rewrap...")
             // Store message data with detailed logging
             pendingMessages[epk] = (header, payload, nano)
             print("Stored pending message with EPK: \(epk.hexEncodedString())")

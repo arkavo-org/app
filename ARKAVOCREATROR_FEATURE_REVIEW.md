@@ -122,7 +122,7 @@ User enters any `rtmp://` or `rtmps://` URL. URL validation checks scheme, host 
 **Location:** `StreamViewModel.swift` (`.arkavo` case), `RecordView.swift` (`startStreaming`)
 **Status:** WIRE OFF
 
-RTMP to `rtmp://100.arkavo.net:1935` with NanoTDF encryption via `session.startNTDFStreaming`. Requires Arkavo WebAuthn authentication. Uses hardcoded KAS URL `https://100.arkavo.net`. Stream key is fixed to `"live/creator"`.
+RTMP to `rtmp://platform.arkavo.net:1935` with NanoTDF encryption via `session.startNTDFStreaming`. Requires Arkavo WebAuthn authentication. Uses hardcoded KAS URL `https://platform.arkavo.net`. Stream key is fixed to `"live/creator"`.
 
 - Dashboard card shows "End-to-end encrypted streaming is available" when authed
 - `StreamDestinationPicker` disables Arkavo option if not authenticated
@@ -270,7 +270,7 @@ Polls YouTube Data API v3 `liveChatMessages.list` endpoint. Respects `pollingInt
 **Location:** `RecordingProtectionService.swift`
 **Status:** SHIP (background feature)
 
-Encrypts recordings using Standard TDF format (ZIP: `manifest.json` + `0.payload`). AES-128-CBC content encryption, RSA-2048 OAEP (SHA-1) key wrapping. Fetches KAS RSA public key from `https://100.arkavo.net/kas/v2/kas_public_key`. Creates proper TDF ZIP archive via ZIPFoundation.
+Encrypts recordings using Standard TDF format (ZIP: `manifest.json` + `0.payload`). AES-128-CBC content encryption, RSA-2048 OAEP (SHA-1) key wrapping. Fetches KAS RSA public key from `https://platform.arkavo.net/kas/v2/kas_public_key`. Creates proper TDF ZIP archive via ZIPFoundation.
 
 Also includes `TDFArchiveReader` for extracting manifests and files from TDF archives.
 
@@ -402,7 +402,7 @@ Editable profile with: display name, bio, avatar image (file picker), banner ima
 Grid view of recorded files. Per-recording: thumbnail, title, date, duration, file size. Context menu: Play, Verify Provenance, Protect (TDF), Protect (HLS), Publish (Iroh), Delete.
 
 Caveats:
-- "Protect" actions require KAS backend at `https://100.arkavo.net`
+- "Protect" actions require KAS backend at `https://platform.arkavo.net`
 - "Publish to Iroh" requires Iroh node
 - These fail gracefully with error alerts
 

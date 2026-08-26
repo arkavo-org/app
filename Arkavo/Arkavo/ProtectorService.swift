@@ -21,7 +21,7 @@
 //        print("Sending Content signature compressed: \(compressed)")
 //        print("Creator public ID: \(creatorPublicID.base58EncodedString)")
 //        // Create Nano
-//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!
 //        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 //        // FIXME: fix this hack - accountProfile is being used for content signature
 //        let remotePolicy = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: ArkavoPolicy.PolicyType.accountProfile.rawValue)!

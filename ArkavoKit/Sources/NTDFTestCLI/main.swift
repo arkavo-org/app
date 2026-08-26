@@ -16,9 +16,9 @@ struct NTDFTestCLI {
         setbuf(stdout, nil)
         setbuf(stderr, nil)
     }
-    static let kasURL = URL(string: "https://100.arkavo.net")!
+    static let kasURL = URL(string: "https://platform.arkavo.net")!
     static let rtmpURL = "rtmp://localhost:1935"
-    static let remoteRtmpURL = "rtmp://100.arkavo.net:1935"
+    static let remoteRtmpURL = "rtmp://platform.arkavo.net:1935"
     static let remoteStreamName = "live/creator"
 
     static func main() async {
@@ -302,7 +302,7 @@ struct NTDFTestCLI {
             scopes: ["openid", "profile"],
             iat: Int64(Date().timeIntervalSince1970),
             exp: Int64(Date().timeIntervalSince1970) + 3600,  // 1 hour expiry
-            aud: "https://kas.arkavo.net"
+            aud: "https://platform.arkavo.net"
         )
         let ntdfToken = try await tokenBuilder.build(payload: payload)
         print("  NTDF token generated: \(ntdfToken.count) chars")
@@ -463,7 +463,7 @@ extension NTDFTestCLI {
             scopes: ["openid", "profile"],
             iat: Int64(Date().timeIntervalSince1970),
             exp: Int64(Date().timeIntervalSince1970) + 3600,
-            aud: "https://kas.arkavo.net"
+            aud: "https://platform.arkavo.net"
         )
         let ntdfToken = try await tokenBuilder.build(payload: payload)
         print("  NTDF token: \(ntdfToken.prefix(50))...")
@@ -492,7 +492,7 @@ extension NTDFTestCLI {
         let parsedHeader = try parser.parseHeader()
 
         // Do KAS rewrap (note: KASRewrapClient appends v2/rewrap, so we need /kas in the URL)
-        let kasRewrapURL = URL(string: "https://100.arkavo.net/kas")!
+        let kasRewrapURL = URL(string: "https://platform.arkavo.net/kas")!
         let kasClient = KASRewrapClient(kasURL: kasRewrapURL, oauthToken: ntdfToken)
         let (wrappedKey, sessionPublicKey) = try await kasClient.rewrapNanoTDF(
             header: headerBytes,
@@ -642,7 +642,7 @@ extension NTDFTestCLI {
             scopes: ["openid", "profile"],
             iat: Int64(Date().timeIntervalSince1970),
             exp: Int64(Date().timeIntervalSince1970) + 3600,
-            aud: "https://kas.arkavo.net"
+            aud: "https://platform.arkavo.net"
         )
         let ntdfToken = try await tokenBuilder.build(payload: payload)
         print("  Token: \(ntdfToken.prefix(40))...")

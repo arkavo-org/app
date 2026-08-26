@@ -18,7 +18,7 @@ final class StreamViewModel {
 
         var rtmpURL: String {
             switch self {
-            case .arkavo: "rtmp://100.arkavo.net:1935"
+            case .arkavo: "rtmp://platform.arkavo.net:1935"
             case .twitch: "rtmp://live.twitch.tv/app"
             case .youtube: "rtmp://a.rtmp.youtube.com/live2"
             case .custom: ""
@@ -197,7 +197,7 @@ final class StreamViewModel {
         do {
             // Handle Arkavo NTDF separately (not part of simulcast)
             if selectedPlatforms.contains(.arkavo) {
-                guard let kasURL = URL(string: "https://100.arkavo.net") else {
+                guard let kasURL = URL(string: "https://platform.arkavo.net") else {
                     self.error = "Invalid KAS URL"
                     isConnecting = false
                     return false
