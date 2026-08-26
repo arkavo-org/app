@@ -1,3 +1,4 @@
+import ArkavoSocial
 import Combine
 import CryptoKit
 import Foundation
@@ -36,10 +37,7 @@ final class WebSocketManager: ObservableObject {
 
     /// Sets up the WebSocket with the provided token.
     func setupWebSocket(token: String) {
-        guard let url = URL(string: "wss://kas.arkavo.net") else {
-            lastError = "Invalid WebSocket URL."
-            return
-        }
+        let url = ArkavoConfiguration.shared.websocketURL
 
         print("Connecting to: \(url)")
         print("Token: \(token)")

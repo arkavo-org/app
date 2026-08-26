@@ -218,7 +218,7 @@ public actor NTDFTokenBuilder {
         print("📦 Payload serialized: \(plaintext.count) bytes")
 
         // 2. Create KasMetadata
-        let host = URL(string: kasURL)?.host ?? "kas.arkavo.net"
+        let host = URL(string: kasURL)?.host ?? "platform.arkavo.net"
         guard let resourceLocator = ResourceLocator(protocolEnum: .https, body: host) else {
             throw NTDFTokenError.invalidKeyFormat("Failed to create ResourceLocator for \(host)")
         }

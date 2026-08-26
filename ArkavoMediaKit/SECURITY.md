@@ -314,7 +314,7 @@ if isDebuggerAttached() {
 All communication must use TLS 1.3:
 
 ```swift
-let kasURL = URL(string: "https://kas.arkavo.net")!
+let kasURL = URL(string: "https://platform.arkavo.net")!
 // Never use http:// in production
 ```
 

@@ -3,7 +3,7 @@ import ArkavoSocial
 import XCTest
 
 /// Integration tests that verify connectivity to the Arkavo backend server
-/// These tests require network access and a running server at wss://100.arkavo.net
+/// These tests require network access and a running server at wss://platform.arkavo.net
 class ServerConnectivityIntegrationTests: XCTestCase {
     // MARK: - Properties
 
@@ -108,7 +108,7 @@ class ServerConnectivityIntegrationTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_INTEGRATION_TESTS"] == "true",
                           "Integration tests are disabled. Set RUN_INTEGRATION_TESTS=true to run.")
 
-        let host = "100.arkavo.net"
+        let host = "platform.arkavo.net"
         let hostRef = CFHostCreateWithName(nil, host as CFString).takeRetainedValue()
 
         var resolved = false

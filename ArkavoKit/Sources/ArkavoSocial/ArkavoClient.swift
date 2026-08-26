@@ -1065,7 +1065,7 @@ public final class ArkavoClient: NSObject {
         remotePolicyBody: String
     ) async throws -> Data {
         // Create Nano
-        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!
         let kasMetadata = try KasMetadata(
             resourceLocator: kasRL,
             publicKey: kasPublicKey as Any,
@@ -1100,7 +1100,7 @@ public final class ArkavoClient: NSObject {
         kasMetadata: KasMetadata? = nil
     ) async throws -> Data {
         let kasMetadataDefault = try KasMetadata(
-            resourceLocator: ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!,
+            resourceLocator: ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!,
             publicKey: kasPublicKey as Any,
             curve: .secp256r1
         )

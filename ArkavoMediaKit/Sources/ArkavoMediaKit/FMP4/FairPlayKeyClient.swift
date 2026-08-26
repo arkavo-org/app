@@ -49,7 +49,7 @@ public final class FairPlayKeyClient {
 
     /// Initialize FairPlay key client
     /// - Parameters:
-    ///   - serverURL: Base URL of the media server (e.g., https://100.arkavo.net)
+    ///   - serverURL: Base URL of the media server (e.g., https://platform.arkavo.net)
     ///   - authToken: Optional Bearer token for authenticated requests
     public init(serverURL: URL, authToken: String? = nil) {
         self.serverURL = serverURL

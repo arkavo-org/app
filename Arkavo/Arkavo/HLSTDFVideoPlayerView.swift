@@ -378,7 +378,7 @@ enum HLSPlayerError: Error, LocalizedError {
 #Preview {
     HLSTDFVideoPlayerView(
         tdfData: Data(),
-        kasURL: URL(string: "https://100.arkavo.net")!,
+        kasURL: URL(string: "https://platform.arkavo.net")!,
         assetID: UUID().uuidString,
         ntdfToken: "preview-token"
     )

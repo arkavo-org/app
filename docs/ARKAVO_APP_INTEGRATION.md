@@ -21,7 +21,7 @@ This document describes the registration flow, verification checkpoints, and int
 | Service | URL | Purpose |
 |---------|-----|---------|
 | Identity Server | `https://identity.arkavo.net` | WebAuthn registration/authentication |
-| WebSocket | `wss://100.arkavo.net/ws` | Real-time P2P communication |
+| WebSocket | `wss://platform.arkavo.net/ws` | Real-time P2P communication |
 | Handle Check | `https://xrpc.arkavo.net` | ATProto handle availability |
 | Arkavo Node | `ws://localhost:9944` | Blockchain RPC (local dev) |
 
@@ -198,7 +198,7 @@ print("Streams count: \(account.streams.count)") // Should be 3
 **App Action:** Establish authenticated WebSocket connection
 
 ```
-wss://100.arkavo.net/ws
+wss://platform.arkavo.net/ws
 Authorization: Bearer <NanoTDF-token>
 ```
 

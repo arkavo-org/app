@@ -183,7 +183,7 @@ struct TDFVideoPlayerView: View {
     TDFVideoPlayerView(
         payloadURL: URL(fileURLWithPath: "/tmp/test.ts"),
         manifest: TDFManifestLite(
-            kasURL: "https://100.arkavo.net/kas",
+            kasURL: "https://platform.arkavo.net/kas",
             wrappedKey: "test",
             algorithm: "AES-128-CBC",
             iv: "test",

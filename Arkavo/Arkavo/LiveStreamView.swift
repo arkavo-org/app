@@ -12,7 +12,7 @@ struct LiveStreamView: View {
 
     /// Initialize with stream details and NTDF token for decryption
     /// - Parameters:
-    ///   - streamURL: RTMP URL (e.g., rtmp://100.arkavo.net:1935)
+    ///   - streamURL: RTMP URL (e.g., rtmp://platform.arkavo.net:1935)
     ///   - streamName: Stream name/key (e.g., live/creator)
     ///   - ntdfToken: NTDF token for KAS authentication and key rewrap
     init(streamURL: String, streamName: String, ntdfToken: String) {

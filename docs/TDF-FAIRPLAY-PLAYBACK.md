@@ -37,7 +37,7 @@ Content protected with OpenTDF Standard TDF format is played back using FairPlay
 │                              ▼                                               │
 │   ┌──────────────────────────────────────────────────────────────────────┐  │
 │   │                                                                       │  │
-│   │  Arkavo Server (https://100.arkavo.net)                              │  │
+│   │  Arkavo Server (https://platform.arkavo.net)                              │  │
 │   │     │                                                                 │  │
 │   │     ├─ Parse TDF manifest                                            │  │
 │   │     ├─ Extract RSA-wrapped DEK (wrappedKey)                          │  │
@@ -145,7 +145,7 @@ content.tdf (ZIP archive)
     "type": "split",
     "keyAccess": [{
       "type": "wrapped",
-      "url": "https://100.arkavo.net/kas",
+      "url": "https://platform.arkavo.net/kas",
       "wrappedKey": "BASE64_RSA_OAEP_WRAPPED_DEK"
     }],
     "method": {

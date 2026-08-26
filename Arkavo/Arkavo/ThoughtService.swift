@@ -141,7 +141,7 @@
 //        // Create thought payload
 //        let payload = try createPayload(viewModel: viewModel)
 //        // Create a NanoTDF
-//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "kas.arkavo.net")!
+//        let kasRL = ResourceLocator(protocolEnum: .sharedResourceDirectory, body: "platform.arkavo.net")!
 //        let kasMetadata = try KasMetadata(resourceLocator: kasRL, publicKey: kasPublicKey, curve: .secp256r1)
 //        let nanoTDF = try await createNanoTDF(kas: kasMetadata, policy: &policy, plaintext: payload)
 //        print("nanoTDF: \(nanoTDF.toData().base64EncodedString())")

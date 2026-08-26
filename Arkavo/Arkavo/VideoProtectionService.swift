@@ -23,7 +23,7 @@ public actor VideoProtectionService {
     }
 
     /// Initialize with KAS URL for key fetching
-    /// - Parameter kasURL: KAS server URL (e.g., https://kas.arkavo.net)
+    /// - Parameter kasURL: KAS server URL (e.g., https://platform.arkavo.net)
     public init(kasURL: URL) {
         self.kasURL = kasURL
     }
