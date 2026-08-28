@@ -239,6 +239,10 @@ public final class ArkavoClient: NSObject {
         webSocket = nil
         session = nil
         KeychainManager.deleteAuthenticationToken()
+        // The device CWT is a live platform credential too: clearing only the
+        // human token would leave a signed-out app able to pass a token check,
+        // and would let the next user present the previous user's device CWT.
+        KeychainManager.deleteDeviceAttestationToken()
     }
 
     /// Deletes the user's account from the server
@@ -269,6 +273,14 @@ public final class ArkavoClient: NSObject {
 
         // Disconnect and clear local auth state
         await disconnect()
+
+        // `disconnect()` returns early when the socket was not connected, so the
+        // account-scoped credentials are cleared explicitly here as well; both
+        // calls are idempotent. The App Attest key id is only dropped on account
+        // deletion -- a plain sign-out keeps it, and it self-heals through the
+        // unknown-key-id re-attest path.
+        KeychainManager.deleteDeviceAttestationToken()
+        KeychainManager.deleteAppAttestKeyId()
     }
 
     public func sendMessage(_ data: Data) async throws {
@@ -640,8 +652,8 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.invalidState
         }
 
-        print("ArkavoClient: Reading authentication token from Keychain (com.arkavo.webauthn/authentication_token)")
-        guard let token = KeychainManager.getAuthenticationToken() else {
+        print("ArkavoClient: Reading platform bearer token from Keychain (device attestation, falling back to com.arkavo.webauthn/authentication_token)")
+        guard let token = PlatformTokenProvider.bearerForPlatform() else {
             print("ArkavoClient: No authentication token found in Keychain (treating as signed-out state)")
             currentState = .error(ArkavoError.authenticationFailed("No authentication token"))
             throw ArkavoError.authenticationFailed("No authentication token")

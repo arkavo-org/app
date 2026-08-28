@@ -15,6 +15,7 @@ struct ArkavoApp: App {
     @StateObject private var sharedState = SharedState()
     @StateObject private var messageRouter: ArkavoMessageRouter
     @StateObject private var agentService = AgentService()
+    @StateObject private var deviceAttestationService = DeviceAttestationService()
     @StateObject private var remoteStreamer = RemoteCameraStreamer()
     // BEGIN screenshots
 //    @StateObject private var windowAccessor = WindowAccessor.shared
@@ -425,6 +426,7 @@ struct ArkavoApp: App {
                     try await persistenceController.saveChanges()
                     selectedView = .main // Only change view on complete success
                     regLogger.log("[Registration] Connected and saved; switching to main view")
+                    deviceAttestationService.start()
                     return true
                 }
             } catch {
@@ -747,6 +749,7 @@ struct ArkavoApp: App {
                     try await client.connect(accountName: accountName)
                     print("checkAccountStatus: Connected with existing token")
                     sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
+                    deviceAttestationService.start()
                 } catch {
                     print("Connection failed, but continuing in offline mode: \(error.localizedDescription)")
                     // Allow the app to function without network features
@@ -759,6 +762,7 @@ struct ArkavoApp: App {
                     try await client.connect(accountName: accountName)
                     print("checkAccountStatus: Connected with fresh connection")
                     sharedState.nextAllowedAccountCheck = nil  // Reset backoff on success
+                    deviceAttestationService.start()
                 } catch let error as ArkavoError {
                     if case let .authenticationFailed(message) = error, message.contains("User Not Found") {
                         // User exists locally but not on server, go to registration
@@ -766,6 +770,10 @@ struct ArkavoApp: App {
 
                         // Clear the invalid account data
                         KeychainManager.deleteAuthenticationToken()
+                        // The device CWT is bound to the account the server no
+                        // longer knows; leaving it behind would let a stale
+                        // device credential pass a signed-in token check.
+                        KeychainManager.deleteDeviceAttestationToken()
 
                         // Reset account state so registration can create a new one
                         account.profile = nil
@@ -1014,7 +1022,6 @@ class SharedState: ObservableObject {
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
     @Published var skipRegistration: Bool = false
-    @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
     @Published var selectedNetworkDomain: String = "arkavo.social"
     @Published var newlyAddedContactDID: String?  // For Liquid Glass highlight effect
 

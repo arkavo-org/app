@@ -76,6 +76,13 @@ actor AgentRPCRegistrationService {
 /// Protocol for transport abstraction (enables testing)
 protocol AgentTransportProtocol: Sendable {
     func sendRequest(_ request: AgentRequest) async throws -> AgentResponse
+    func close() async
+}
+
+extension AgentTransportProtocol {
+    /// Default no-op so mocks that don't own a real connection don't need to
+    /// implement teardown.
+    func close() async {}
 }
 
 extension AgentWebSocketTransport: AgentTransportProtocol {}

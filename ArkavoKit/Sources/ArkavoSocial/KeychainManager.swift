@@ -307,6 +307,72 @@ public class KeychainManager {
                    account: "authentication_token",
                    accessGroup: sharedAccessGroup)
     }
+
+    // MARK: - Device Attestation (App Attest device CWT, separate slot from human authentication)
+
+    /// Stores the device attestation CWT together with its expiry as "<epoch>|<token>".
+    /// Kept in a dedicated account (`device_attestation_token`) — never in `authentication_token` —
+    /// because its `aud` is `arkavo:devicecheck`, which the identity server rejects for normal auth.
+    public static func saveDeviceAttestationToken(_ token: String, expiresAt: Date) throws {
+        let encoded = "\(expiresAt.timeIntervalSince1970)|\(token)"
+        try save(encoded.data(using: .utf8)!,
+                 service: "com.arkavo.webauthn",
+                 account: "device_attestation_token",
+                 accessGroup: sharedAccessGroup)
+    }
+
+    public static func getDeviceAttestationToken() -> (token: String, expiresAt: Date)? {
+        do {
+            let data = try load(service: "com.arkavo.webauthn",
+                               account: "device_attestation_token",
+                               accessGroup: sharedAccessGroup)
+            guard let raw = String(data: data, encoding: .utf8) else { return nil }
+            // Split on the FIRST "|" only: a CWT is base64url text and won't contain "|",
+            // but we don't rely on that silently -- a malformed/legacy value must yield nil, not mis-parse.
+            guard let separatorIndex = raw.firstIndex(of: "|") else { return nil }
+            let epochString = raw[raw.startIndex..<separatorIndex]
+            let token = String(raw[raw.index(after: separatorIndex)...])
+            guard let epoch = TimeInterval(epochString), !token.isEmpty else { return nil }
+            return (token: token, expiresAt: Date(timeIntervalSince1970: epoch))
+        } catch {
+            return nil
+        }
+    }
+
+    public static func deleteDeviceAttestationToken() {
+        try? delete(service: "com.arkavo.webauthn",
+                   account: "device_attestation_token",
+                   accessGroup: sharedAccessGroup)
+    }
+
+    // MARK: - App Attest Key ID (persisted result of DCAppAttestService.generateKey())
+
+    /// The App Attest key id is minted once per device/app install and then
+    /// reused for every assertion; kept in its own slot, separate from both
+    /// token accounts, so it survives independently of them.
+    public static func saveAppAttestKeyId(_ keyId: String) throws {
+        try save(keyId.data(using: .utf8)!,
+                 service: "com.arkavo.webauthn",
+                 account: "app_attest_key_id",
+                 accessGroup: sharedAccessGroup)
+    }
+
+    public static func getAppAttestKeyId() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.webauthn",
+                               account: "app_attest_key_id",
+                               accessGroup: sharedAccessGroup)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    public static func deleteAppAttestKeyId() {
+        try? delete(service: "com.arkavo.webauthn",
+                   account: "app_attest_key_id",
+                   accessGroup: sharedAccessGroup)
+    }
 }
 
 public extension KeychainManager {

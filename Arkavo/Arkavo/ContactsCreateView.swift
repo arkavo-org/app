@@ -141,8 +141,14 @@ struct ContactsCreateView: View {
         .sheet(isPresented: $showAgentScanner) {
             AgentQRScannerView { request in
                 showAgentScanner = false
-                // Handle the authorization request
-                sharedState.pendingAgentAuthRequest = request
+                // AgentQRScannerView already ran the full (now cloud-first)
+                // authorization flow inline before invoking this callback, so
+                // there is nothing left to authorize here -- mirror the same
+                // post-authorize side effects the deep-link path in
+                // ArkavoApp uses (Liquid Glass highlight + closing this
+                // "New Conversation" overlay).
+                sharedState.newlyAddedContactDID = request.did
+                sharedState.showCreateView = false
             }
         }
         .sheet(isPresented: $showAgentDiscovery) {

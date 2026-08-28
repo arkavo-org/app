@@ -50,6 +50,69 @@ final class AgentAuthorizationTests: XCTestCase {
         XCTAssertEqual(request?.rpcEndpoint, "wss://secure.example.com:443")
     }
 
+    // MARK: - Authorization Flow Tests (cloud-first, RPC best-effort)
+
+    func test_authorize_alwaysCallsCloudAndRPCWhenEndpointPresent() async throws {
+        let identity = MockAgentAuthorizing(); let transport = MockAgentWebSocketTransport()
+        let flow = AgentAuthorizationFlow(identity: identity, transportFactory: { _ in transport })
+        try await flow.run(request: AgentAuthorizationRequest.from(components: URLComponents(string: "arkavo://agent/authorize?did=did:key:z6Mk&name=n&rpc=ws://1.2.3.4:1&entitlements=agent.capability.chat")!)!,
+                           deviceDID: "did:key:phone")
+        XCTAssertEqual(identity.calls.first?.entitlements, ["https://arkavo.ai/attr/action/value/read", "https://arkavo.ai/attr/action/value/write"])
+        XCTAssertNotNil(transport.lastVerifyChallengeId)
+    }
+    func test_authorize_emptyEntitlementsFailsBeforeNetwork() async {
+        let identity = MockAgentAuthorizing()
+        let flow = AgentAuthorizationFlow(identity: identity, transportFactory: { _ in MockAgentWebSocketTransport() })
+        let req = AgentAuthorizationRequest.from(components: URLComponents(string: "arkavo://agent/authorize?did=did:key:z6Mk&entitlements=banana")!)!
+        do { try await flow.run(request: req, deviceDID: "d"); XCTFail() } catch { XCTAssertTrue(identity.calls.isEmpty) }
+    }
+
+    func test_authorize_cloudFailureAbortsFlow_noRPCAttempted() async {
+        let identity = MockAgentAuthorizing()
+        identity.error = ArkavoIdentityError.unauthorized
+        let transport = MockAgentWebSocketTransport()
+        let flow = AgentAuthorizationFlow(identity: identity, transportFactory: { _ in transport })
+        let req = AgentAuthorizationRequest.from(components: URLComponents(string: "arkavo://agent/authorize?did=did:key:z6Mk&rpc=ws://1.2.3.4:1&entitlements=chat")!)!
+
+        do {
+            try await flow.run(request: req, deviceDID: "did:key:phone")
+            XCTFail("Expected cloud failure to abort the flow")
+        } catch {
+            XCTAssertNil(transport.lastChallengeMethod, "RPC pairing should never be attempted after a cloud failure")
+        }
+    }
+
+    func test_authorize_rpcFailureAfterCloudSuccessIsWarningNotThrow() async throws {
+        let identity = MockAgentAuthorizing()
+        // Default MockAgentWebSocketTransport challenge/verify responses are
+        // valid, so force a failure by leaving verifyResponse unsuccessful.
+        let transport = MockAgentWebSocketTransport()
+        transport.verifyResponse = ["success": false]
+        let flow = AgentAuthorizationFlow(identity: identity, transportFactory: { _ in transport })
+        let req = AgentAuthorizationRequest.from(components: URLComponents(string: "arkavo://agent/authorize?did=did:key:z6Mk&rpc=ws://1.2.3.4:1&entitlements=chat")!)!
+
+        let result = try await flow.run(request: req, deviceDID: "did:key:phone")
+
+        XCTAssertEqual(identity.calls.count, 1, "Cloud authorization should have succeeded before the RPC failure")
+        if case .failed = result.rpcOutcome {
+            // expected
+        } else {
+            XCTFail("Expected RPC outcome to be reported as a warning, got \(result.rpcOutcome)")
+        }
+    }
+
+    func test_authorize_noRPCEndpointSkipsLocalPairing() async throws {
+        let identity = MockAgentAuthorizing()
+        let transport = MockAgentWebSocketTransport()
+        let flow = AgentAuthorizationFlow(identity: identity, transportFactory: { _ in transport })
+        let req = AgentAuthorizationRequest.from(components: URLComponents(string: "arkavo://agent/authorize?did=did:key:z6Mk&entitlements=chat")!)!
+
+        let result = try await flow.run(request: req, deviceDID: "did:key:phone")
+
+        XCTAssertEqual(result.rpcOutcome, .skipped)
+        XCTAssertNil(transport.lastChallengeMethod)
+    }
+
     // MARK: - RPC Registration Service Tests
 
     func test_rpcRegistration_buildsCorrectChallengeRequest() async throws {
@@ -226,8 +289,14 @@ final class AgentAuthorizationTests: XCTestCase {
 // MARK: - Mock Transport
 
 final class MockAgentWebSocketTransport: AgentTransportProtocol, @unchecked Sendable {
-    var challengeResponse: [String: Any] = [:]
-    var verifyResponse: [String: Any] = [:]
+    // Working defaults so a transport can be used unconfigured (e.g. by flow
+    // tests that only care about the cloud call ordering). Tests that need
+    // specific challenge/verify behavior override these explicitly.
+    var challengeResponse: [String: Any] = [
+        "challenge_id": "default-challenge-id",
+        "challenge": Data("default-challenge".utf8).base64EncodedString()
+    ]
+    var verifyResponse: [String: Any] = ["success": true]
 
     var lastChallengeMethod: String?
     var lastChallengeDeviceId: String?
@@ -256,5 +325,26 @@ final class MockAgentWebSocketTransport: AgentTransportProtocol, @unchecked Send
             return .success(id: request.id, result: AnyCodable(verifyResponse))
         }
         throw AgentError.webSocketError("Unexpected method: \(request.method)")
+    }
+}
+
+// MARK: - Mock Identity Client
+
+final class MockAgentAuthorizing: AgentAuthorizing, @unchecked Sendable {
+    struct Call: Equatable {
+        let did: String
+        let name: String
+        let entitlements: [String]
+    }
+
+    var calls: [Call] = []
+    /// When set, `authorizeAgent` throws this instead of recording a call.
+    var error: Error?
+
+    func authorizeAgent(did: String, name: String, entitlements: [String]) async throws {
+        if let error {
+            throw error
+        }
+        calls.append(Call(did: did, name: name, entitlements: entitlements))
     }
 }
