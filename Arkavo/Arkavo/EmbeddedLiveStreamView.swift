@@ -19,7 +19,7 @@ struct EmbeddedLiveStreamView: View {
 
     /// Get the NTDF token from keychain for encrypted stream playback
     private var ntdfToken: String? {
-        KeychainManager.getAuthenticationToken()
+        PlatformTokenProvider.bearerForPlatform()
     }
 
     var body: some View {

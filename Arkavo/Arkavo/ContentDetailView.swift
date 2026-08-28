@@ -23,9 +23,9 @@ struct ContentDetailView: View {
 
     /// Get NTDF token for KAS authentication
     /// This token is issued by authnz-rs during WebAuthn registration
-    /// and can be validated by KAS for rewrap requests
+    /// (or App Attest, once Task 6 lands) and can be validated by KAS for rewrap requests
     private var ntdfToken: String {
-        KeychainManager.getAuthenticationToken() ?? ""
+        PlatformTokenProvider.bearerForPlatform() ?? ""
     }
 
     var body: some View {

@@ -640,8 +640,8 @@ public final class ArkavoClient: NSObject {
             throw ArkavoError.invalidState
         }
 
-        print("ArkavoClient: Reading authentication token from Keychain (com.arkavo.webauthn/authentication_token)")
-        guard let token = KeychainManager.getAuthenticationToken() else {
+        print("ArkavoClient: Reading platform bearer token from Keychain (device attestation, falling back to com.arkavo.webauthn/authentication_token)")
+        guard let token = PlatformTokenProvider.bearerForPlatform() else {
             print("ArkavoClient: No authentication token found in Keychain (treating as signed-out state)")
             currentState = .error(ArkavoError.authenticationFailed("No authentication token"))
             throw ArkavoError.authenticationFailed("No authentication token")
