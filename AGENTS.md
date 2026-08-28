@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Arkavo iOS target and app lifecycle code live in `Arkavo/Arkavo`. Unit tests reside in `Arkavo/ArkavoTests`; UI regression suites live in `Arkavo/ArkavoUITests`. The Swift packages `ArkavoContent`, `ArkavoCreator`, and `ArkavoSocial` hold reusable content, creator tooling, and peer-to-peer utilities; keep package-specific tests alongside their sources. Shared automation and IDB helpers are in `automation/`, and simulator artifacts should land in `test_results/`.
+Arkavo iOS target and app lifecycle code live in `Arkavo/Arkavo`. Unit tests reside in `Arkavo/ArkavoTests`; UI regression suites live in `Arkavo/ArkavoUITests`. The ArkavoKit package contains ArkavoContent and ArkavoSocial targets for reusable content and peer-to-peer utilities; ArkavoCreator provides macOS creator tooling. Keep package-specific tests alongside their sources. Shared automation and IDB helpers are in `automation/`, and simulator artifacts should land in `test_results/`.
 
 ## Key Features
 
@@ -33,10 +33,10 @@ Secure peer-to-peer group messaging with the following features:
 
 ## Build, Test, and Development Commands
 - `open Arkavo.xcworkspace` opens the workspace in Xcode for iterative development.
-- `xcodebuild -workspace Arkavo.xcworkspace -scheme Arkavo -destination "platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64" -quiet build` performs a clean command-line build of the main app.
-- `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max,OS=18.4,arch=arm64'` runs the full simulator test suite; append `-only-testing:ArkavoTests/Name` to focus on a case.
+- `xcodebuild -workspace Arkavo.xcworkspace -scheme Arkavo -destination "platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5" -quiet build` performs a clean command-line build of the main app.
+- `xcodebuild test -workspace Arkavo.xcworkspace -scheme Arkavo -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'` runs the full simulator test suite; append `-only-testing:ArkavoTests/Name` to focus on a case.
 - `swiftformat --swiftversion 6.2 .` enforces repository formatting before review.
-- `cd ArkavoSocial && swift test` validates the social package in isolation.
+- `cd ArkavoKit && swift test` validates the package and its targets.
 
 ## Coding Style & Naming Conventions
 Adopt Swift 6 defaults: four-space indentation, trailing commas only where SwiftFormat permits, and `UpperCamelCase` for types, `lowerCamelCase` for functions, properties, and test methods. Keep public APIs documented briefly; avoid temporary or conversational comments. Run SwiftFormat before pushing to guarantee consistent diffs.
@@ -48,4 +48,4 @@ Add unit tests beside each feature in `ArkavoTests` and instrumented scenarios u
 Write commit subjects in present tense (`Fix Sendable conformance warnings`), keep bodies focused on intent, and reference GitHub issues when applicable. Pull requests should summarize changes, link tracking issues, note testing performed, and attach relevant simulator screenshots. Flag configuration updates or security-sensitive changes explicitly and request targeted reviews.
 
 ## Simulator & Tooling Notes
-Boot the iPhone 16 Pro Max simulator with `xcrun simctl boot "iPhone 16 Pro Max"` before running commands. Keep IDB companion running when using automation (`automation/idb_automation_fix.sh` provides tap helpers). Store screenshots and logs under `test_results/` rather than personal folders to keep history auditable.
+Boot the iPhone 17 Pro simulator with `xcrun simctl boot "iPhone 17 Pro"` before running commands. Keep IDB companion running when using automation (`automation/idb_automation_fix.sh` provides tap helpers). Store screenshots and logs under `test_results/` rather than personal folders to keep history auditable.
