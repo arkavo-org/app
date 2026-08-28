@@ -52,8 +52,11 @@ final class ArkavoAuthState {
             debugLog("[ArkavoAuthState] Auto-login successful")
         } catch {
             debugLog("[ArkavoAuthState] Auto-login failed: \(error)")
-            // Clear invalid credentials
+            // Clear invalid credentials. The device CWT lives in the same shared
+            // keychain access group and is just as much a live platform
+            // credential, so it goes with the human token.
             KeychainManager.deleteAuthenticationToken()
+            KeychainManager.deleteDeviceAttestationToken()
             UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
             errorMessage = error.localizedDescription
         }
@@ -137,6 +140,9 @@ final class ArkavoAuthState {
         await client.disconnect()
 
         KeychainManager.deleteAuthenticationToken()
+        // Sign-out clears the device CWT as well -- it is shared across Arkavo
+        // apps via the shared access group and must not survive a sign-out.
+        KeychainManager.deleteDeviceAttestationToken()
         UserDefaults.standard.removeObject(forKey: "arkavo_account_name")
 
         isAuthenticated = false

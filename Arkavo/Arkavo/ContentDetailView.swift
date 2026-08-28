@@ -22,8 +22,9 @@ struct ContentDetailView: View {
     @State private var showingFMP4VideoPlayer = false
 
     /// Get NTDF token for KAS authentication
-    /// This token is issued by authnz-rs during WebAuthn registration
-    /// (or App Attest, once Task 6 lands) and can be validated by KAS for rewrap requests
+    /// Prefers the human token issued by authnz-rs during WebAuthn registration,
+    /// falling back to the unexpired App Attest device token when signed out.
+    /// Either can be validated by KAS for rewrap requests.
     private var ntdfToken: String {
         PlatformTokenProvider.bearerForPlatform() ?? ""
     }

@@ -314,6 +314,11 @@ struct AccountView: View {
     private func clearLocalData() async {
         // Clear keychain data
         KeychainManager.deleteAuthenticationToken()
+        // The device CWT is a live platform credential: it must not outlive the
+        // account. The App Attest key id goes too -- it legitimately survives a
+        // plain sign-out, but not the deletion of the account it was bound to.
+        KeychainManager.deleteDeviceAttestationToken()
+        KeychainManager.deleteAppAttestKeyId()
         KeychainManager.deleteArkavoHandle()
         KeychainManager.deleteAppleAccount()
         KeychainManager.deleteTokens()

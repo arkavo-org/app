@@ -119,6 +119,11 @@ final class DeviceAttestationService: ObservableObject {
     @Published var lastError: Error?
 
     private var isForeground = true
+    /// Guards against two refreshes running at once -- the timer tick, the
+    /// startup attestation, and the foreground-return refresh all funnel through
+    /// `refreshIfIdle()`. Safe as a plain `Bool` because the type is
+    /// `@MainActor`: the check and the set happen with no suspension between them.
+    private var isRefreshing = false
     private var loopTask: Task<Void, Never>?
     private var foregroundObservationTask: Task<Void, Never>?
     private var backgroundObservationTask: Task<Void, Never>?
@@ -234,11 +239,15 @@ final class DeviceAttestationService: ObservableObject {
     }
 
     private func runLoop() async {
-        do {
-            try await ensureAttested()
-            try await refreshAssertion()
-        } catch {
-            lastError = error
+        if !isRefreshing {
+            isRefreshing = true
+            do {
+                try await ensureAttested()
+                try await refreshAssertion()
+            } catch {
+                lastError = error
+            }
+            isRefreshing = false
         }
         while !Task.isCancelled {
             do {
@@ -247,18 +256,38 @@ final class DeviceAttestationService: ObservableObject {
                 break // cancelled during sleep
             }
             guard !Task.isCancelled, isForeground else { continue }
-            do {
-                try await refreshAssertion()
-            } catch {
-                lastError = error
-            }
+            await refreshIfIdle()
+        }
+    }
+
+    /// Single attempt at `refreshAssertion()`, skipped entirely when another
+    /// refresh (or the startup attestation) is still in flight, with any failure
+    /// surfaced through `lastError` exactly as the timer path does -- one try,
+    /// never a retry loop.
+    private func refreshIfIdle() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            try await refreshAssertion()
+        } catch {
+            lastError = error
         }
     }
 
     private func observeForegroundState() {
         foregroundObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
-                self?.isForeground = true
+                guard let self else { return }
+                self.isForeground = true
+                // Refresh immediately rather than waiting for the next tick: a
+                // long background leaves the stored device CWT unexpired (1
+                // hour) while its assertion is already past the server's
+                // 15-minute attestation TTL, which silently downgrades the
+                // device class. `refreshIfIdle()` is a no-op when a refresh is
+                // already running, and `refreshAssertion()` itself returns
+                // immediately when App Attest is unsupported.
+                await self.refreshIfIdle()
             }
         }
         backgroundObservationTask = Task { @MainActor [weak self] in

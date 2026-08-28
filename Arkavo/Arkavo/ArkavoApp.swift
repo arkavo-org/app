@@ -770,6 +770,10 @@ struct ArkavoApp: App {
 
                         // Clear the invalid account data
                         KeychainManager.deleteAuthenticationToken()
+                        // The device CWT is bound to the account the server no
+                        // longer knows; leaving it behind would let a stale
+                        // device credential pass a signed-in token check.
+                        KeychainManager.deleteDeviceAttestationToken()
 
                         // Reset account state so registration can create a new one
                         account.profile = nil
