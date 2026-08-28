@@ -110,6 +110,7 @@ struct AccountView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                NavigationLink("Delegated Agents") { AgentDelegationsView() }
             }
 
             Section(header: Text("Account Management")) {
