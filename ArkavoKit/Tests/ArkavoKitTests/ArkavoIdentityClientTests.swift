@@ -186,7 +186,7 @@ final class ArkavoIdentityClientTests: XCTestCase {
         XCTAssertEqual(body["client_data_hash"] as? String, clientDataHash.base64EncodedString())
     }
 
-    func test_deviceCheckAttest_successFalseThrows() async {
+    func test_deviceCheckAttest_successFalseThrowsAttestationRejected() async {
         URLProtocolStub.handler = { req in
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
              Data(#"{"success":false,"message":"attestation invalid"}"#.utf8))
@@ -196,9 +196,9 @@ final class ArkavoIdentityClientTests: XCTestCase {
             try await client.deviceCheckAttest(keyId: "key-1", attestationObject: Data(), clientDataHash: Data())
             XCTFail("expected throw when success is false")
         } catch {
-            // Just require *some* thrown error carrying the server message; exact
-            // case is an implementation choice documented in the task report.
-            XCTAssertTrue("\(error)".contains("attestation invalid"))
+            // A 200-status logical rejection must surface as .attestationRejected,
+            // NOT .server -- .server is reserved for genuine non-2xx responses.
+            XCTAssertEqual(error as? ArkavoIdentityError, .attestationRejected("attestation invalid"))
         }
     }
 

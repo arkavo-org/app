@@ -31,6 +31,10 @@ public enum ArkavoIdentityError: LocalizedError, Equatable, Sendable {
     case forbidden(String)
     case notFound
     case server(Int, String)
+    /// The server responded 2xx but logically rejected the device attestation
+    /// (`{"success": false, "message": ...}`). Kept distinct from `.server`,
+    /// which is reserved for genuine non-2xx responses.
+    case attestationRejected(String)
 
     public var errorDescription: String? {
         switch self {
@@ -40,6 +44,7 @@ public enum ArkavoIdentityError: LocalizedError, Equatable, Sendable {
         case .forbidden(let body): return "Forbidden: \(body)"
         case .notFound: return "Not found."
         case .server(let code, let body): return "Identity server error \(code): \(body)"
+        case .attestationRejected(let message): return "Device attestation rejected: \(message)"
         }
     }
 }
@@ -127,10 +132,10 @@ public actor ArkavoIdentityClient {
             attestationObject: attestationObject.base64EncodedString(),
             clientDataHash: clientDataHash.base64EncodedString()
         ))
-        let (data, status) = try await send(method: "POST", path: "/device-check/attest", body: body, requiresAuth: false)
+        let (data, _) = try await send(method: "POST", path: "/device-check/attest", body: body, requiresAuth: false)
         let response = try JSONDecoder().decode(Response.self, from: data)
         guard response.success else {
-            throw ArkavoIdentityError.server(status, response.message)
+            throw ArkavoIdentityError.attestationRejected(response.message)
         }
     }
 
