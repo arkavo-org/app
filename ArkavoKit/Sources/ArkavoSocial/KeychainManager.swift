@@ -344,6 +344,35 @@ public class KeychainManager {
                    account: "device_attestation_token",
                    accessGroup: sharedAccessGroup)
     }
+
+    // MARK: - App Attest Key ID (persisted result of DCAppAttestService.generateKey())
+
+    /// The App Attest key id is minted once per device/app install and then
+    /// reused for every assertion; kept in its own slot, separate from both
+    /// token accounts, so it survives independently of them.
+    public static func saveAppAttestKeyId(_ keyId: String) throws {
+        try save(keyId.data(using: .utf8)!,
+                 service: "com.arkavo.webauthn",
+                 account: "app_attest_key_id",
+                 accessGroup: sharedAccessGroup)
+    }
+
+    public static func getAppAttestKeyId() -> String? {
+        do {
+            let data = try load(service: "com.arkavo.webauthn",
+                               account: "app_attest_key_id",
+                               accessGroup: sharedAccessGroup)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+
+    public static func deleteAppAttestKeyId() {
+        try? delete(service: "com.arkavo.webauthn",
+                   account: "app_attest_key_id",
+                   accessGroup: sharedAccessGroup)
+    }
 }
 
 public extension KeychainManager {
