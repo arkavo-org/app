@@ -2,7 +2,7 @@ import Foundation
 
 /// Represents a pending authorization request for a local agent scanned via QR or deep link.
 /// Expected URL format: arkavo://agent/authorize?did=...&name=...&entitlements=scope1,scope2&rpc=ws://host:port
-public struct AgentAuthorizationRequest: Identifiable, Equatable {
+public struct AgentAuthorizationRequest: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let did: String
     public let name: String?

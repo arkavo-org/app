@@ -1014,7 +1014,6 @@ class SharedState: ObservableObject {
     @Published var nextAllowedAccountCheck: Date? = nil
     @Published var shouldShowRegistration: Bool = false
     @Published var skipRegistration: Bool = false
-    @Published var pendingAgentAuthRequest: AgentAuthorizationRequest?
     @Published var selectedNetworkDomain: String = "arkavo.social"
     @Published var newlyAddedContactDID: String?  // For Liquid Glass highlight effect
 

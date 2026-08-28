@@ -18,6 +18,7 @@ struct AgentAuthorizationView: View {
     let request: AgentAuthorizationRequest
     let onAuthorize: () -> Void
     let onCancel: () -> Void
+    var identity: any AgentAuthorizing = ArkavoIdentityClient()
 
     @State private var isAuthorizing = false
     @State private var error: String?
@@ -133,25 +134,29 @@ struct AgentAuthorizationView: View {
         // Extract values for sendability
         let agentDID = request.did
         let agentName = request.name ?? "Authorized Agent"
-        let agentEntitlements = request.entitlements
         let rpcEndpoint = request.rpcEndpoint
+        // A missing device DID can't abort cloud authorization -- it only
+        // matters for the best-effort local RPC pairing step below, which is
+        // never allowed to fail the whole flow.
+        let deviceDID = (try? KeychainManager.getDIDKey().did) ?? ""
 
         logger.log("[AgentAuth] Authorizing agent: \(agentDID)")
 
         Task {
             do {
-                if let rpcEndpoint = rpcEndpoint {
-                    // Use local RPC registration for agents with rpc endpoint
-                    try await authorizeViaRPC(endpoint: rpcEndpoint, agentDID: agentDID)
-                    logger.log("[AgentAuth] Agent authorized via local RPC")
-                } else {
-                    // Fallback: Use cloud authorization for agents without rpc endpoint
-                    try await AgentAuthorizationService.shared.authorizeAgent(
-                        did: agentDID,
-                        name: agentName,
-                        entitlements: agentEntitlements
-                    )
-                    logger.log("[AgentAuth] Agent authorized via cloud")
+                // Cloud authorization always happens first and is mandatory;
+                // local RPC pairing (if the QR code advertised an endpoint)
+                // is attempted afterwards on a best-effort basis.
+                let flow = AgentAuthorizationFlow(identity: identity, transportFactory: AgentAuthorizationFlow.defaultTransportFactory)
+                let result = try await flow.run(request: request, deviceDID: deviceDID)
+
+                switch result.rpcOutcome {
+                case .succeeded:
+                    logger.log("[AgentAuth] Agent paired via local RPC")
+                case .skipped:
+                    logger.log("[AgentAuth] Agent authorized via cloud (no RPC endpoint)")
+                case .failed(let message):
+                    logger.warning("[AgentAuth] Local RPC pairing failed after cloud authorization; delegation stands: \(message)")
                 }
 
                 // Configure contact service if needed
@@ -159,7 +164,7 @@ struct AgentAuthorizationView: View {
 
                 // Create a Profile contact for this delegated agent
                 // Pass the RPC endpoint so we can connect directly later
-                let entitlements = AgentEntitlements(from: agentEntitlements)
+                let entitlements = AgentEntitlements(from: result.canonicalEntitlements)
                 try await contactService.addDelegatedAgent(
                     agentID: agentDID, // Use DID as agent ID for delegated agents
                     name: agentName,
@@ -170,6 +175,7 @@ struct AgentAuthorizationView: View {
                 logger.log("[AgentAuth] Created contact for delegated agent with endpoint: \(rpcEndpoint ?? "none")")
 
                 await MainActor.run {
+                    isAuthorizing = false
                     onAuthorize()
                 }
             } catch {
@@ -179,34 +185,6 @@ struct AgentAuthorizationView: View {
                     self.isAuthorizing = false
                 }
             }
-        }
-    }
-
-    private func authorizeViaRPC(endpoint: String, agentDID: String) async throws {
-        // Create endpoint for the agent
-        let agentEndpoint = AgentEndpoint(
-            id: agentDID,
-            url: endpoint,
-            metadata: AgentMetadata(name: request.name ?? "Agent", purpose: "", model: "")
-        )
-
-        // Connect via WebSocket
-        let transport = AgentWebSocketTransport()
-        try await transport.connect(to: agentEndpoint)
-
-        defer {
-            Task { await transport.close() }
-        }
-
-        // Get or create device DID for registration
-        let deviceDID = try KeychainManager.getDIDKey().did
-
-        // Perform RPC registration
-        let registrationService = AgentRPCRegistrationService(transport: transport)
-        let success = try await registrationService.register(deviceId: deviceDID)
-
-        if !success {
-            throw RegistrationError.registrationFailed
         }
     }
 
@@ -231,82 +209,6 @@ struct AgentAuthorizationView: View {
             return String(last).capitalized
         }
         return entitlement
-    }
-}
-
-/// Service for authorizing agents via the authnz-rs API
-actor AgentAuthorizationService {
-    static let shared = AgentAuthorizationService()
-
-    private let logger = Logger(subsystem: "com.arkavo.Arkavo", category: "AgentAuthService")
-
-    private init() { /* Singleton - no initialization needed */ }
-
-    private var baseURL: URL {
-        ArkavoConfiguration.shared.apiURL
-    }
-
-    /// Authorize an agent by registering it with the authnz-rs service
-    func authorizeAgent(did: String, name: String, entitlements: [String]) async throws {
-        logger.log("[AgentAuthService] Authorizing agent DID: \(did)")
-
-        let url = baseURL.appendingPathComponent("agents/authorize")
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Get auth token if available
-        if let token = KeychainManager.getAuthenticationToken() {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        let body: [String: Any] = [
-            "did": did,
-            "name": name,
-            "entitlements": entitlements
-        ]
-
-        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AgentAuthorizationError.invalidResponse
-        }
-
-        logger.log("[AgentAuthService] Response status: \(httpResponse.statusCode)")
-
-        switch httpResponse.statusCode {
-        case 200, 201:
-            logger.log("[AgentAuthService] Agent authorized successfully")
-            return
-        case 401:
-            throw AgentAuthorizationError.unauthorized
-        case 409:
-            // Agent already authorized - treat as success
-            logger.log("[AgentAuthService] Agent already authorized")
-            return
-        default:
-            let message = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AgentAuthorizationError.serverError(httpResponse.statusCode, message)
-        }
-    }
-}
-
-enum AgentAuthorizationError: LocalizedError {
-    case invalidResponse
-    case unauthorized
-    case serverError(Int, String)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            return "Invalid response from server"
-        case .unauthorized:
-            return "Please sign in to authorize agents"
-        case .serverError(let code, let message):
-            return "Server error (\(code)): \(message)"
-        }
     }
 }
 

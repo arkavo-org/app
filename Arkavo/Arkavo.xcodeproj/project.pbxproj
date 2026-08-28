@@ -126,6 +126,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAEADA7A2F1D4935007F1CB1 /* AgentAuthorizationRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEADA792F1D4935007F1CB1 /* AgentAuthorizationRequest.swift */; };
 		DAEADA7C2F1D4977007F1CB1 /* AgentAuthorizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */; };
 		24AE6A8BD0DA4B498C18A7B5 /* AgentRPCRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF044E7712EE426694E0BA93 /* AgentRPCRegistrationService.swift */; };
+		71741CD86AC54C9C88FB05A8 /* AgentAuthorizationFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEEE65C58F20427BB79460AE /* AgentAuthorizationFlow.swift */; };
 		DAEE13872CA101D300DCB5EC /* EventServiceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */; };
 		DAEE138A2CA1021500DCB5EC /* FlatBuffers in Frameworks */ = {isa = PBXBuildFile; productRef = DAEE13892CA1021500DCB5EC /* FlatBuffers */; };
 		DAEE3C3B2D19EBB50016DC1C /* ArkavoMessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */; };
@@ -280,6 +281,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 		DAEADA792F1D4935007F1CB1 /* AgentAuthorizationRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuthorizationRequest.swift; sourceTree = "<group>"; };
 		DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuthorizationView.swift; sourceTree = "<group>"; };
 		EF044E7712EE426694E0BA93 /* AgentRPCRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRPCRegistrationService.swift; sourceTree = "<group>"; };
+		DEEE65C58F20427BB79460AE /* AgentAuthorizationFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAuthorizationFlow.swift; sourceTree = "<group>"; };
 		DAEE13862CA101D300DCB5EC /* EventServiceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventServiceModel.swift; sourceTree = "<group>"; };
 		DAEE3C3A2D19EBB50016DC1C /* ArkavoMessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkavoMessageRouter.swift; sourceTree = "<group>"; };
 		DAF00001VPS00001 /* VideoProtectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProtectionService.swift; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				479D56E12F1DBB97009600B0 /* UnifiedContactService.swift */,
 				DAEADA7B2F1D4977007F1CB1 /* AgentAuthorizationView.swift */,
 				EF044E7712EE426694E0BA93 /* AgentRPCRegistrationService.swift */,
+				DEEE65C58F20427BB79460AE /* AgentAuthorizationFlow.swift */,
 				DAAC24272EA3D99000E06FE1 /* AgentChatListView.swift */,
 				DAAC24282EA3D99000E06FE1 /* AgentChatView.swift */,
 				DAAC24292EA3D99000E06FE1 /* AgentDetailView.swift */,
@@ -715,6 +718,7 @@ E5D86638127846B8989BFA94 /* ConnectedAccountsView.swift in Sources */ = {isa = P
 				DA4937A72CC5DCDA00E1F6BC /* LocationManager.swift in Sources */,
 				DAEADA7C2F1D4977007F1CB1 /* AgentAuthorizationView.swift in Sources */,
 				24AE6A8BD0DA4B498C18A7B5 /* AgentRPCRegistrationService.swift in Sources */,
+				71741CD86AC54C9C88FB05A8 /* AgentAuthorizationFlow.swift in Sources */,
 				DA7598BF2C95EE540021A8FC /* ThoughtService.swift in Sources */,
 				DAAFCBF82D091A51003FC56F /* PostFeedView.swift in Sources */,
 				DA1C90692CB3260E00806E8A /* ThoughtView.swift in Sources */,
